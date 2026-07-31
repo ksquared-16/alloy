@@ -598,6 +598,7 @@ async function refreshDisk({ act = false } = {}) {
  */
 const autoResumeTries = new Map(); // mission_id -> resume attempts (in-memory, resets on restart)
 const conductCooldown = new Map(); // capability_id -> last re-launch attempt (avoid spamming a failing phase)
+let silentRecoverInFlight = false;
 function conductorTick() {
   try {
     // Host protection: terminate raw tsc / next build that bypassed the validation
@@ -622,6 +623,40 @@ function conductorTick() {
         }, 4000);
       }
     } catch { /* never break conductor */ }
+
+    // V2 missions: silent workers → Director auto-resume (no operator babysitting).
+    // Also auto-dispatch ready queues when VACILANDO_AUTO_DISPATCH is on (default).
+    if (!silentRecoverInFlight) {
+      silentRecoverInFlight = true;
+      import("./vacilando/silent-worker-recover.mjs")
+        .then(({ recoverSilentWorkers }) => recoverSilentWorkers())
+        .then((out) => {
+          if (out?.recovered?.length) {
+            console.log(`[director] auto-resumed ${out.recovered.length} silent worker mission(s)`);
+          }
+          if (out?.escalated?.length) {
+            console.log(`[director] silent recovery exhausted for ${out.escalated.length} mission(s) — Needs You`);
+          }
+        })
+        .catch(() => {})
+        .finally(() => { silentRecoverInFlight = false; });
+    }
+    if (process.env.VACILANDO_AUTO_DISPATCH !== "0") {
+      import("./vacilando/director-summary.mjs")
+        .then(async ({ listMissionsV2 }) => {
+          const { deriveMissionPosture } = await import("./vacilando/mission-posture.mjs");
+          const { scheduleDispatchAfterKickoff } = await import("./vacilando/assignment-dispatch.mjs");
+          for (const row of listMissionsV2({ includeArchived: false })) {
+            const mid = row.mission_id || row.missionId;
+            if (!mid) continue;
+            const posture = deriveMissionPosture(mid);
+            if (posture.id === "ready_to_start") {
+              scheduleDispatchAfterKickoff(mid, { actor: "director" });
+            }
+          }
+        })
+        .catch(() => {});
+    }
 
     const autoObjectives = new Set();
     // Prefer durable objective records so an idle autonomous objective (no recent

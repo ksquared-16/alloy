@@ -2047,13 +2047,28 @@ setInterval(fetchResources, 9000);
 // First Mission Control paint immediately (shell interactive before board hydrate).
 render(true);
 
-// ---- Operator notifications: pulled in when Director needs you, not by checking.
-// Fires a native (Electron) desktop notification the moment a conversation newly
-// enters a state that needs the operator — a question to answer, a package to
-// review, or work ready for acceptance — and stays quiet otherwise. Same signal a
-// future Mac-mini + mobile push would ride; only the transport differs.
+// ---- Operator notifications: Needs You + legacy Director conversations.
+// Fires a native desktop notification when something newly needs the operator
+// (decision, kickoff, exhausted silent recovery, etc.) and updates the dock badge.
 const NOTIFY_ACTIONS = { Answer: "has a question for you", Review: "prepared work to review", Accept: "finished work — ready for your acceptance", Continue: "is blocked and needs you" };
 const _notifySeen = new Map(); // conversation_id -> last action (only notify on transitions, never on first load)
+const _needsNotifySeen = new Set(); // item keys seen; first poll seeds silently
+let _needsNotifyPrimed = false;
+
+function setNativeDockBadge(count) {
+  try {
+    const n = Math.max(0, Number(count) || 0);
+    if (window.vacilandoNative?.setDockBadge) window.vacilandoNative.setDockBadge(n);
+  } catch { /* ignore */ }
+}
+
+function ensureNotifyPermission() {
+  if (typeof Notification === "undefined") return;
+  if (Notification.permission === "default") {
+    try { Notification.requestPermission().catch(() => {}); } catch { /* */ }
+  }
+}
+
 function notifyOperator(convos) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   for (const c of (convos || [])) {
@@ -2069,9 +2084,66 @@ function notifyOperator(convos) {
     } catch { /* notifications unavailable */ }
   }
 }
-async function notifyPoll() { try { const r = await fetch("/api/director/conversations"); notifyOperator((await r.json()).conversations || []); } catch { /* keep last */ } }
-if (typeof Notification !== "undefined" && Notification.permission === "default") { try { Notification.requestPermission().catch(() => {}); } catch {} }
+
+function needsYouKey(item) {
+  return [item.type, item.missionId || "", item.decisionId || item.id || item.title || ""].join(":");
+}
+
+function notifyNeedsYou(items) {
+  const list = Array.isArray(items) ? items : [];
+  setNativeDockBadge(list.length);
+  const keys = new Set(list.map(needsYouKey));
+  if (!_needsNotifyPrimed) {
+    for (const k of keys) _needsNotifySeen.add(k);
+    _needsNotifyPrimed = true;
+    return;
+  }
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") {
+    for (const k of keys) _needsNotifySeen.add(k);
+    return;
+  }
+  for (const item of list) {
+    const key = needsYouKey(item);
+    if (_needsNotifySeen.has(key)) continue;
+    _needsNotifySeen.add(key);
+    const title = item.title || "Needs you";
+    const body = item.urgency || item.recommendation || item.body || "Director needs your attention.";
+    try {
+      const n = new Notification(`Vacilando · ${title}`, {
+        body: String(body).slice(0, 180),
+        tag: key,
+        requireInteraction: item.type === "decision" || item.type === "completion" || item.type === "worker_silent",
+      });
+      n.onclick = () => {
+        try {
+          window.focus();
+          const href = item.action?.href || (item.missionId ? `missions/${item.missionId}` : "needs-you");
+          location.hash = `#/${href.replace(/^#\/?/, "")}`;
+        } catch { /* */ }
+      };
+    } catch { /* notifications unavailable */ }
+  }
+  // Drop keys that cleared so a recurrence can notify again
+  for (const k of [..._needsNotifySeen]) {
+    if (!keys.has(k)) _needsNotifySeen.delete(k);
+  }
+}
+
+async function notifyPoll() {
+  try {
+    const r = await fetch("/api/director/conversations");
+    notifyOperator((await r.json()).conversations || []);
+  } catch { /* keep last */ }
+  try {
+    const r = await fetch("/api/v2/views/needs-you");
+    const j = await r.json();
+    notifyNeedsYou(j.items || []);
+  } catch { /* keep last */ }
+}
+ensureNotifyPermission();
 notifyPoll(); setInterval(notifyPoll, 15000);
+// Also re-check permission when the window gains focus (macOS often prompts then).
+window.addEventListener("focus", () => { ensureNotifyPermission(); });
 // Poll the selected worker's Director requests while any is still running, so
 // status advances live and the elapsed timer ticks. Server store is authoritative.
 setInterval(() => { const slot = state.sel; if (slot == null || document.hidden) return; const rs = state.requests[slot]; if (rs && rs.some((r) => !REQ_TERMINAL.has(r.status))) fetchRequests(slot); }, 2500);
