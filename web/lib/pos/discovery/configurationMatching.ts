@@ -95,6 +95,18 @@ const CANONICAL_CONCEPT_BINDINGS: Record<string, { entity_type: string; field_ke
     "household.address": { entity_type: "customer", field_key: "address", band: "review" },
 };
 
+/**
+ * A person's name is CAPTURED as separate first + last fields, even though the concept matches one
+ * canonical name field. Saying only "matched to display_name" understated what the operator is
+ * approving — the generated form has always split it (see expandQuestionsForDraftSave), so the
+ * explanation now says so rather than leaving them to discover it after generating.
+ */
+function nameCaptureNote(fieldKey: string): string {
+    return /(^|_)(display_name|full_name|name)$/i.test(fieldKey)
+        ? " Captured as separate first and last name fields."
+        : "";
+}
+
 const SCREENING_SECTION_RE = /chronic|health history|nature of reaction|recurring/i;
 const DURABLE_ATTR_RE = /nickname|doctor|dentist|physician|provider|practice|hospital|clinic/i;
 const FORM_ONLY_LABEL_RE = /please\s+(list|describe|explain)|\bactivities\b|^other$/i;
@@ -143,7 +155,7 @@ function reuseFieldProposal(
         target_field_source: field_source,
         confidence: conf(band, [`matched to ${field_source.entity_type}.${field_source.field_key}`, ...(note ? [note] : [])]),
         alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
-        explanation: `Matched "${concept.label}" to the canonical ${field_source.entity_type} field ${field_source.field_key} — reuse the existing field rather than create a duplicate.`,
+        explanation: `Matched "${concept.label}" to the canonical ${field_source.entity_type} field ${field_source.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(field_source.field_key)}`,
     };
 }
 
@@ -231,7 +243,7 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
             target_field_source: { entity_type: semantic.entity_type, field_key: semantic.field_key },
             confidence: conf(semantic.band, [`matched by concept "${concept.concept_key}" to ${semantic.entity_type}.${semantic.field_key}`]),
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
-            explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.`,
+            explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(semantic.field_key)}`,
         };
     }
 
@@ -268,7 +280,7 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
                 ...(binding.note ? [binding.note] : []),
             ]),
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
-            explanation: `Matched "${concept.label}" to the canonical ${binding.field_source.entity_type} field ${binding.field_source.field_key} — reuse the existing field rather than create a duplicate.`,
+            explanation: `Matched "${concept.label}" to the canonical ${binding.field_source.entity_type} field ${binding.field_source.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(binding.field_source.field_key)}`,
         };
     }
 

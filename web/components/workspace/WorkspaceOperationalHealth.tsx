@@ -101,14 +101,14 @@ export default function WorkspaceOperationalHealth({
                     return (
                         <div key={item.key} role="listitem" className="min-w-[5.5rem] shrink-0">
                             <p className="leading-tight">
-                                <span className={`text-[18px] font-semibold tabular-nums leading-none ${valueTone}`}>
+                                <span className={`text-[22px] font-semibold tabular-nums leading-none ${valueTone}`}>
                                     {displayValue}
                                 </span>
-                                <span className={`ml-1.5 text-[11px] font-medium ${WS_TEXT_SECONDARY}`}>{item.label}</span>
+                                <span className={`ml-1.5 text-[13px] font-medium ${WS_TEXT_SECONDARY}`}>{item.label}</span>
                             </p>
                             {item.trend ? (
                                 <p
-                                    className={`mt-0.5 text-[10px] font-medium leading-tight ${TREND_TONE[resolveTrendTone(item, item.trend)]}`}
+                                    className={`mt-0.5 text-[12px] font-medium leading-tight ${TREND_TONE[resolveTrendTone(item, item.trend)]}`}
                                     data-workspace-operational-health-trend={item.trend.direction}
                                 >
                                     {item.trend.direction !== "none" ? (
@@ -122,7 +122,7 @@ export default function WorkspaceOperationalHealth({
                                 </p>
                             ) : (
                                 <p
-                                    className="mt-0.5 text-[10px] leading-tight text-transparent"
+                                    className="mt-0.5 text-[12px] leading-tight text-transparent"
                                     aria-hidden
                                 >
                                     —
