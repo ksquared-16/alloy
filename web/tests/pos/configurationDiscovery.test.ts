@@ -89,7 +89,9 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
             expect(p?.disposition, `${labelRe} should reuse a canonical field`).toBe("reuse_canonical_field");
             expect(p?.target_field_source).toEqual(expect.objectContaining({ entity_type: entity, field_key: key }));
         };
-        expectMatch(/Child's Name/, "customer_member", "display_name");
+        // A person's name resolves to the REGISTERED split field, not an unregistered display_name —
+        // this is what the generated form actually builds.
+        expectMatch(/Child's Name/, "child", "child_first_name");
         expectMatch(/Date of Birth/, "customer_member", "dob");
         expectMatch(/Allergies/, "customer_member", "allergies");
         expectMatch(/Best Email Address/, "person", "email");

@@ -37,6 +37,34 @@ interface Rule {
 
 const cm = (field_key: string, confidence: BindingSuggestion["confidence"] = "high"): BindingSuggestion => ({ field_source: { entity_type: "customer_member", field_key }, scope: "child", confidence });
 const person = (field_key: string, confidence: BindingSuggestion["confidence"] = "high"): BindingSuggestion => ({ field_source: { entity_type: "person", field_key }, scope: "household", confidence });
+
+/**
+ * Person NAMES bind to the registered system fields, which are split.
+ *
+ * `OPERATIONAL_FORM_SYSTEM_FIELDS` registers child_first_name / child_last_name (entity "child") and
+ * guardian_first_name / guardian_last_name (entity "guardian"). It registers NO person-level
+ * display_name or full_name — the only display_name in the registry belongs to the household.
+ *
+ * These rules used to suggest `customer_member.display_name` / `person.full_name`, carrying the note
+ * "split into first/last not yet supported". That note was false: form generation has always
+ * expanded a person name into first + last against exactly these registered fields. So the concept
+ * review promised the operator a binding to a field the registry does not have, while the generated
+ * form built a different (correct) pair — two layers describing the same thing differently.
+ *
+ * The FIRST-name field is the anchor a name concept resolves to; generation adds the last-name field
+ * alongside it. Callers that surface this to an operator should say the name is captured as first +
+ * last rather than implying a single field.
+ */
+const childName = (which: "first" | "last"): BindingSuggestion => ({
+    field_source: { entity_type: "child", field_key: `child_${which}_name`, shared_value_key: `child_${which}_name` },
+    scope: "child",
+    confidence: "high",
+});
+const guardianName = (which: "first" | "last"): BindingSuggestion => ({
+    field_source: { entity_type: "guardian", field_key: `guardian_${which}_name`, shared_value_key: `guardian_${which}_name` },
+    scope: "household",
+    confidence: "high",
+});
 const household = (entity_type: string, field_key: string, confidence: BindingSuggestion["confidence"] = "medium"): BindingSuggestion => ({ field_source: { entity_type, field_key }, scope: "household", confidence });
 
 /**
@@ -45,20 +73,20 @@ const household = (entity_type: string, field_key: string, confidence: BindingSu
  */
 const RULES: Rule[] = [
     // Child split-name (only if first/last explicit)
-    { test: /\b(child|student|pupil)\b.*\bfirst\s*name\b|\bfirst\s*name\b.*\b(child|student)\b/i, suggest: cm("first_name") },
-    { test: /\b(child|student|pupil)\b.*\blast\s*name\b|\blast\s*name\b.*\b(child|student)\b/i, suggest: cm("last_name") },
+    { test: /\b(child|student|pupil)\b.*\bfirst\s*name\b|\bfirst\s*name\b.*\b(child|student)\b/i, suggest: childName("first") },
+    { test: /\b(child|student|pupil)\b.*\blast\s*name\b|\blast\s*name\b.*\b(child|student)\b/i, suggest: childName("last") },
     // Child / student full name
-    { test: /\b(child|student|pupil)('?s)?\s*name\b|\bname\s*of\s*(child|student)\b/i, suggest: { ...cm("display_name"), note: "Bound to display_name; split into first/last not yet supported." } },
+    { test: /\b(child|student|pupil)('?s)?\s*name\b|\bname\s*of\s*(child|student)\b/i, suggest: { ...childName("first"), note: "Captured as separate first and last name fields." } },
     // DOB (before generic date)
     { test: /\b(date\s*of\s*birth|birth\s*date|birthdate|d\.?o\.?b\.?)\b/i, suggest: cm("dob") },
     // Child attributes
     { test: /\ballerg/i, suggest: cm("allergies", "medium") },
     { test: /\b(medical|medications?|immuniz|health\s*condition)/i, suggest: cm("medical_notes", "low") },
     // Parent / guardian split-name
-    { test: /\b(parent|guardian|mother|father|caregiver)\b.*\bfirst\s*name\b/i, suggest: person("first_name") },
-    { test: /\b(parent|guardian|mother|father|caregiver)\b.*\blast\s*name\b/i, suggest: person("last_name") },
+    { test: /\b(parent|guardian|mother|father|caregiver)\b.*\bfirst\s*name\b/i, suggest: guardianName("first") },
+    { test: /\b(parent|guardian|mother|father|caregiver)\b.*\blast\s*name\b/i, suggest: guardianName("last") },
     // Parent / guardian full name
-    { test: /\b(parent|guardian|mother|father|caregiver|emergency\s*contact)('?s)?\s*name\b/i, suggest: person("full_name") },
+    { test: /\b(parent|guardian|mother|father|caregiver|emergency\s*contact)('?s)?\s*name\b/i, suggest: { ...guardianName("first"), note: "Captured as separate first and last name fields." } },
     // Contact
     { test: /\bemail\b/i, suggest: person("email") },
     { test: /\b(phone|telephone|mobile|cell)\b/i, suggest: person("phone") },

@@ -58,7 +58,7 @@ describe("M5C — apply approved configuration", () => {
         expect((applied?.bound_field_ids ?? []).length).toBe(1);
         // the binding is written onto the draft (drives the published form)
         const boundField = updatedDraft.fields.find((f) => applied!.bound_field_ids!.includes(f.id));
-        expect(boundField?.field_source).toEqual(expect.objectContaining({ entity_type: "customer_member", field_key: "display_name" }));
+        expect(boundField?.field_source).toEqual(expect.objectContaining({ entity_type: "child", field_key: "child_first_name" }));
     });
 
     it("projects relationships through the canonical collection provider (not flat fields)", () => {
