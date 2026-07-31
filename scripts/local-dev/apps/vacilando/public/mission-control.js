@@ -352,8 +352,11 @@ We'll capture the context automatically.</p>
     if (action.kind === "reopen_work" && action.missionId) {
       return `<button class="btn" data-mc-reopen-work="${esc(action.missionId)}">${esc(action.label || "Send back for more work")}</button>`;
     }
-    if (action.kind === "review_outcome" && action.missionId) {
-      return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review outcome")}</button>`;
+    if ((action.kind === "review_outcome" || action.kind === "review_deliverable") && action.missionId) {
+      return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review deliverable")}</button>`;
+    }
+    if (action.kind === "ask_director_deliverable" && action.missionId) {
+      return `<button class="btn ghost" type="button" data-drev-ask="${esc(action.reviewId || "")}" data-mission="${esc(action.missionId)}">${esc(action.label || "Ask Director")}</button>`;
     }
     if (action.kind === "advance_implementation" && action.missionId) {
       return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Advance to implementation")}</button>`;
@@ -396,8 +399,12 @@ We'll capture the context automatically.</p>
   V2.fetchNeedsYou = async () => {
     try {
       V2.state.needsYou = await get("/api/v2/views/needs-you");
+      const items = V2.state.needsYou.items || [];
       const el = document.getElementById("nb-needs");
-      if (el) el.textContent = String((V2.state.needsYou.items || []).length);
+      if (el) el.textContent = String(items.length);
+      try {
+        if (window.vacilandoNative?.setDockBadge) window.vacilandoNative.setDockBadge(items.length);
+      } catch { /* */ }
       markFetched("needsYou");
       bump(); schedulePaint();
     } catch { /* keep */ }
@@ -637,7 +644,7 @@ We'll capture the context automatically.</p>
 
     const outcome = dash.outcome;
     const showOutcome = Boolean(outcome) && (V2.state.showOutcome !== false);
-    const choices = (outcome?.choices || s.choices || []).map((c) => {
+    const missionChoices = (outcome?.missionChoices || outcome?.choices || (!outcome?.kind || outcome.kind === "mission_outcome_legacy" ? s.choices : []) || []).map((c) => {
       const kindAttr = c.kind === "certify_completion" ? "data-mc-certify"
         : c.kind === "reopen_work" ? "data-mc-reopen-work"
           : c.kind === "park_outcome" ? "data-mc-park-outcome"
@@ -651,26 +658,103 @@ We'll capture the context automatically.</p>
         <button class="${primary}" ${kindAttr}="${esc(c.missionId || id)}">${esc(c.label)}</button>
       </article>`;
     }).join("");
-    const outcomeSec = outcome ? `<section class="mc-sec mc-outcome" id="mc-outcome">
+
+    function renderDeliverableReview(o) {
+      if (!o || o.kind !== "deliverable_review") return null;
+      const checks = (o.verification?.checks || []).map((c) => {
+        const pill = c.status === "pass" ? "ok" : c.status === "fail" ? "bad" : "warn";
+        return `<li class="drev-check"><span class="mc-pill ${pill}">${esc(c.status)}</span>
+          <div><b>${esc(c.label)}</b><div class="muted">${esc(c.detail || "")}</div>
+          ${c.source === "judgment" ? `<div class="muted">Requires your judgment</div>` : ""}
+          ${c.source === "worker_claim+automatic" || c.claim ? `<div class="muted">Worker claim cross-checked</div>` : ""}
+          </div></li>`;
+      }).join("");
+      const evidence = (o.evidence || []).map((e) => `<article class="mc-card drev-ev">
+        <div class="mc-card-h"><b>${esc(e.title)}</b><span class="mc-pill ${e.result === "failed" ? "bad" : "ok"}">${esc(e.result || "recorded")}</span></div>
+        <p><b>Proves:</b> ${esc(e.proves)}</p>
+        ${(e.acceptanceCriteriaCovered || []).length ? `<p class="muted">Criteria: ${esc(e.acceptanceCriteriaCovered.join(", "))}</p>` : ""}
+        <p class="muted">Source: ${esc(e.source || "—")}${e.timestamp ? ` · ${esc(e.timestamp)}` : ""}${e.commit ? ` · ${esc(e.commit)}` : ""}</p>
+        ${e.fileUri ? `<button class="btn ghost" type="button" data-nav="evidence/${esc(id)}">Open evidence</button>` : ""}
+      </article>`).join("");
+      const meaning = o.approvalMeaning || {};
+      const actions = [];
+      if (o.actions?.approve) {
+        actions.push(`<button class="btn" type="button" data-drev-approve="${esc(o.reviewId)}" data-mission="${esc(id)}">Approve deliverable</button>`);
+      }
+      if (o.actions?.requestChanges) {
+        actions.push(`<button class="btn ghost" type="button" data-drev-changes="${esc(o.reviewId)}" data-mission="${esc(id)}">Request changes</button>`);
+      }
+      if (o.actions?.askDirector) {
+        actions.push(`<button class="btn ghost" type="button" data-drev-ask="${esc(o.reviewId)}" data-mission="${esc(id)}">Ask Director</button>`);
+      }
+      const changed = (o.whatChanged || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
+      const notChanged = (o.whatDidNotChange || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
+      const risks = (o.residualRisks || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">None recorded</li>";
+      const deferred = (o.deferredWork || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      return `<section class="mc-sec mc-outcome mc-drev" id="mc-outcome">
+        <h3>${esc(o.headline)}</h3>
+        <p class="muted">${esc(o.assignment?.title || "")}</p>
+        ${o.verification?.incomplete ? `<div class="mc-card" style="border-color:#c2703f"><p><b>Director could not certify this deliverable.</b></p><p>${esc(o.verification.detail || o.recommendation?.detail || "")}</p></div>` : ""}
+
+        <h4>Assignment</h4>
+        <p>${esc(o.assignment?.objective || "")}</p>
+
+        <h4>Why this work existed</h4>
+        <p>${esc(o.why || "")}</p>
+
+        <h4>What changed</h4>
+        <ul>${changed}</ul>
+        <p>${esc(o.outcomeSummary || "")}</p>
+
+        <h4>What this protects or enables</h4>
+        <p>${esc(o.protectsOrEnables || "")}</p>
+
+        <h4>What did not change</h4>
+        <ul>${notChanged}</ul>
+
+        <h4>Director’s verification</h4>
+        <ul class="drev-checks">${checks || "<li class=\"muted\">No checks recorded</li>"}</ul>
+
+        <h4>Evidence</h4>
+        <div class="drev-ev-grid">${evidence || "<p class=\"muted\">No translated evidence</p>"}</div>
+
+        <h4>Remaining risk</h4>
+        <ul>${risks}</ul>
+        ${deferred ? `<h4>Deferred work</h4><ul>${deferred}</ul>` : ""}
+
+        <h4>Director recommendation</h4>
+        <p><b>${esc(String(o.recommendation?.action || "").replace(/_/g, " "))}</b> — ${esc(o.recommendation?.detail || "")}</p>
+
+        <h4>What your approval means</h4>
+        <ul>
+          <li>Accepts assignment: <b>${esc(o.assignment?.title || "")}</b></li>
+          <li>Criteria satisfied: ${esc((meaning.criteria_satisfied || []).join("; ") || "—")}</li>
+          <li>Dependent work eligible: ${esc(meaning.dependent_work_eligible || "—")}</li>
+          ${(meaning.does_not_imply || []).map((x) => `<li>Does <b>not</b> imply: ${esc(x)}</li>`).join("")}
+        </ul>
+        <p class="muted">If you request changes: ${esc(o.rejectionConsequence || "")}</p>
+
+        <div class="mc-actions" style="margin-top:16px">${actions.join("")}</div>
+
+        <details class="mc-diag" style="margin-top:18px">
+          <summary>Technical details</summary>
+          <p class="muted">Worker claim (not Director-confirmed truth):</p>
+          <p style="white-space:pre-wrap">${esc(o.technical?.workerClaimSummary || "—")}</p>
+          ${(o.technical?.files || []).length ? `<div class="mc-stat-k">Files touched</div><ul>${o.technical.files.map((f) => `<li class="mono">${esc(f)}</li>`).join("")}</ul>` : ""}
+          <p class="muted">Verified ${esc(o.technical?.verifiedAt || "—")} by ${esc(o.technical?.verifiedBy || "—")}</p>
+          <button class="btn ghost" data-nav="evidence/${esc(id)}">Open Evidence gallery</button>
+          <button class="btn ghost" data-nav="timeline/${esc(id)}">Open Timeline</button>
+        </details>
+        ${missionChoices ? `<h4 style="margin-top:22px">Mission next steps</h4>${missionChoices}` : ""}
+      </section>`;
+    }
+
+    const drevSec = outcome?.kind === "deliverable_review" ? renderDeliverableReview(outcome) : null;
+    const outcomeSec = drevSec || (outcome ? `<section class="mc-sec mc-outcome" id="mc-outcome">
       <h3>${esc(outcome.headline)}</h3>
-      <p class="muted">Reviewing does not change the mission. Pick one choice below when you are ready.</p>
-      ${outcome.assignmentTitle ? `<p class="muted">${esc(outcome.assignmentTitle)}${outcome.finishedAt ? ` · finished ${esc(outcome.finishedAt)}` : ""}</p>` : ""}
-      <div class="mc-card" style="margin:12px 0">
-        <p style="white-space:pre-wrap">${esc(outcome.summary)}</p>
-      </div>
-      ${outcome.filesChanged?.length ? `<div>
-        <div class="mc-stat-k">Files touched</div>
-        <ul>${outcome.filesChanged.map((f) => `<li class="mono">${esc(f)}</li>`).join("")}</ul>
-      </div>` : `<p class="muted">No file list recorded.</p>`}
-      ${outcome.evidence?.length ? `<div style="margin-top:12px">
-        <div class="mc-stat-k">Evidence</div>
-        <ul>${outcome.evidence.map((e) => `<li><b>${esc(e.type)}</b> — ${esc(e.title)}</li>`).join("")}</ul>
-        <button class="btn ghost" data-nav="evidence/${esc(id)}">Open Evidence</button>
-        <button class="btn ghost" data-nav="timeline/${esc(id)}">Open Timeline</button>
-      </div>` : ""}
-      <h3 style="margin-top:20px">Choose next step</h3>
-      ${choices || `<p class="muted">No choices available.</p>`}
-    </section>` : "";
+      <p>${esc(outcome.summary || "")}</p>
+      ${missionChoices || ""}
+    </section>` : "");
 
     const local = dash.localServer || {};
     const localActions = [];
@@ -1358,6 +1442,13 @@ We'll capture the context automatically.</p>
             `<li><code>${esc(f.id)}</code> — ${esc(typeof f.reason === "object" ? (f.reason.code || JSON.stringify(f.reason)) : (f.reason || "failed"))}</li>`).join("")}</ul></div>` : ""}
           ` : ""}
         </article>
+        <article class="mc-card" style="margin-top:12px">
+          <div class="mc-card-h"><b>Desktop notifications</b><span class="mc-pill ${typeof Notification === "undefined" ? "bad" : (Notification.permission === "granted" ? "ok" : Notification.permission === "denied" ? "bad" : "warn")}">${esc(typeof Notification === "undefined" ? "Unavailable" : Notification.permission === "granted" ? "Enabled" : Notification.permission === "denied" ? "Blocked" : "Not enabled")}</span></div>
+          <p class="muted">Alerts when Needs You changes — decisions, approvals, and failed silent recoveries. Dock badge mirrors the Needs You count.</p>
+          ${typeof Notification !== "undefined" && Notification.permission !== "granted"
+            ? `<button class="btn" type="button" data-notify-enable>Enable notifications</button>`
+            : `<p class="muted">You'll get a notification when something new needs you (not on every refresh).</p>`}
+        </article>
         ${(diag?.sessions?.recent || []).length ? `<div style="margin-top:12px">
           <div class="mc-stat-k">Recent execution sessions</div>
           <ul>${diag.sessions.recent.map((s) => `<li><code>${esc(s.sessionId)}</code> — ${esc(s.status)} — ${esc(s.activity || "")}</li>`).join("")}</ul>
@@ -1490,6 +1581,9 @@ We'll capture the context automatically.</p>
       const n = (j.items || []).length;
       const el = document.getElementById("nb-needs");
       if (el) el.textContent = String(n);
+      try {
+        if (window.vacilandoNative?.setDockBadge) window.vacilandoNative.setDockBadge(n);
+      } catch { /* */ }
       bump();
     } catch { /* keep */ }
   }
@@ -1516,6 +1610,60 @@ We'll capture the context automatically.</p>
     } catch (e) {
       V2.state.kickoffBusy = null;
       V2.state.kickoffError = e;
+      bump(); schedulePaint();
+    }
+  }
+
+  function openDirectorTextDialog({ title, lead, confirmLabel, onSubmit }) {
+    document.querySelectorAll(".ov.drev-dialog").forEach((el) => el.remove());
+    const ov = document.createElement("div");
+    ov.className = "ov drev-dialog";
+    ov.innerHTML = `<div class="ov-card wide" role="dialog" aria-label="${esc(title)}">
+      <h3>${esc(title)}</h3>
+      <p class="mc-lead">${esc(lead || "")}</p>
+      <label class="ci-q">Your message
+        <textarea id="drev-msg" rows="5" autofocus placeholder="Write direction for Director…"></textarea>
+      </label>
+      <div class="ov-actions">
+        <button type="button" class="btn ghost" data-drev-cancel>Cancel</button>
+        <button type="button" class="btn" data-drev-send>${esc(confirmLabel || "Send")}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (ev) => {
+      if (ev.target === ov || ev.target.closest("[data-drev-cancel]")) ov.remove();
+    });
+    ov.querySelector("[data-drev-send]")?.addEventListener("click", async () => {
+      const msg = ov.querySelector("#drev-msg")?.value?.trim();
+      if (!msg) { toast("Enter a message for Director.", "err"); return; }
+      try {
+        await onSubmit(msg);
+        ov.remove();
+      } catch (e) {
+        toast(String(e.message || e), "err");
+      }
+    });
+    setTimeout(() => ov.querySelector("#drev-msg")?.focus(), 30);
+  }
+
+  async function acceptDeliverable(missionId, reviewId) {
+    V2.state.kickoffBusy = "Recording approval";
+    bump(); schedulePaint();
+    try {
+      await post("/api/v2/deliverable-reviews/accept", {
+        mission_id: missionId,
+        review_id: reviewId,
+        response: "Operator approved deliverable from Mission Control",
+      });
+      V2.state.overview = null;
+      V2.state.kickoffBusy = null;
+      await refreshNeedsBadge();
+      toast("Deliverable approved.");
+      bump(); schedulePaint();
+      V2.fetchOverview(missionId);
+    } catch (e) {
+      V2.state.kickoffBusy = null;
+      toast(String(e.message || e), "err");
       bump(); schedulePaint();
     }
   }
@@ -1792,6 +1940,64 @@ We'll capture the context automatically.</p>
   document.addEventListener("click", (ev) => {
     if (ev.target.closest("#improve-vacilando-btn") || ev.target.closest("[data-ci-open]")) {
       openImproveDialog();
+      return;
+    }
+    if (ev.target.closest("[data-notify-enable]")) {
+      if (typeof Notification === "undefined") {
+        toast("Notifications are unavailable in this environment.", "err");
+        return;
+      }
+      Notification.requestPermission().then((p) => {
+        toast(p === "granted" ? "Notifications enabled." : p === "denied" ? "Notifications blocked — enable in System Settings → Notifications." : "Permission not granted.");
+        bump(); schedulePaint();
+      }).catch(() => toast("Could not request notification permission.", "err"));
+      return;
+    }
+    const drevApprove = ev.target.closest("[data-drev-approve]");
+    if (drevApprove) {
+      acceptDeliverable(drevApprove.dataset.mission, drevApprove.dataset.drevApprove);
+      return;
+    }
+    const drevChanges = ev.target.closest("[data-drev-changes]");
+    if (drevChanges) {
+      const missionId = drevChanges.dataset.mission;
+      const reviewId = drevChanges.dataset.drevChanges;
+      openDirectorTextDialog({
+        title: "Request changes",
+        lead: "Director will reopen this assignment with your direction. Prior evidence and review history stay recorded.",
+        confirmLabel: "Send to Director",
+        onSubmit: async (direction) => {
+          await post("/api/v2/deliverable-reviews/request-changes", {
+            mission_id: missionId,
+            review_id: reviewId,
+            direction,
+          });
+          V2.state.overview = null;
+          await refreshNeedsBadge();
+          toast("Changes requested — Director will relaunch.");
+          V2.fetchOverview(missionId);
+        },
+      });
+      return;
+    }
+    const drevAsk = ev.target.closest("[data-drev-ask]");
+    if (drevAsk) {
+      const missionId = drevAsk.dataset.mission;
+      const reviewId = drevAsk.dataset.drevAsk;
+      openDirectorTextDialog({
+        title: "Ask Director",
+        lead: "Your question is persisted on the mission. Director will interpret and respond.",
+        confirmLabel: "Ask Director",
+        onSubmit: async (message) => {
+          await post("/api/v2/deliverable-reviews/ask", {
+            mission_id: missionId,
+            review_id: reviewId,
+            message,
+          });
+          toast("Message sent to Director.");
+          V2.fetchOverview(missionId);
+        },
+      });
       return;
     }
     const filterBtn = ev.target.closest("[data-missions-filter],[data-imp-status],[data-imp-scope]");

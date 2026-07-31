@@ -242,7 +242,7 @@ export function getAssignment(missionId, assignmentId) {
   return listAssignments(missionId).find((a) => a.assignmentId === assignmentId) || null;
 }
 
-function updateAssignment(missionId, assignmentId, mutator, { nowMs } = {}) {
+export function updateAssignment(missionId, assignmentId, mutator, { nowMs } = {}) {
   const store = readStore(missionId);
   const a = store.assignments.find((x) => x.assignmentId === assignmentId);
   if (!a) return null;
@@ -591,16 +591,19 @@ export function validateAssignmentCompletion(missionId, assignmentId, { actor = 
   }, { nowMs });
 
   if (passed) {
+    const short = (a.title || "").match(/\b(W-\d+)\b/i)?.[1] || a.title || "assignment";
     appendTimelineEvent(missionId, {
       type: "assignment_completed",
-      summary: `Assignment complete — ${a.title}`,
+      headline: `Claude completed ${short}`,
+      summary: `Worker finished ${a.title}. Director will verify before operator approval.`,
       visibility: "summary",
       phaseId: a.phaseId,
       assignmentId,
       actor,
       nowMs,
     });
-    unlockDependents(missionId, assignmentId, { nowMs });
+    // Dependent unlock moves to Deliverable Review acceptance.
+    // Callers must invoke createDeliverableReview after a successful validate.
   }
 
   return { ok: true, validation, assignment: getAssignment(missionId, assignmentId) };
@@ -656,6 +659,83 @@ export function resumeAssignments(missionId, assignmentIds, { reason = null, now
   }
   writeStore(store);
   return listAssignments(missionId).filter((a) => ids.has(a.assignmentId));
+}
+
+/**
+ * Clear stale completion/dispatch so a ready assignment can be launched again.
+ */
+export function clearAssignmentDispatchState(missionId, assignmentIds = null, { nowMs } = {}) {
+  const ids = assignmentIds ? new Set(assignmentIds) : null;
+  const store = readStore(missionId);
+  for (const a of store.assignments) {
+    if (ids && !ids.has(a.assignmentId)) continue;
+    if (!["ready", "paused", "waiting"].includes(a.status) && a.status !== "complete") continue;
+    if (a.status === "complete") a.status = "ready";
+    a.dispatch = null;
+    a.completionReport = null;
+    a.contextAcknowledgement = null;
+    a.workerId = null;
+    a.pause_reason = null;
+    a.paused_reason = null;
+    a.updated_at = iso(nowMs);
+  }
+  writeStore(store);
+  return listAssignments(missionId);
+}
+
+/** Reopen completed assignments for another execution pass. */
+export function reopenAssignmentsForMoreWork(missionId, {
+  reason = "Operator sent work back for another pass",
+  nowMs,
+} = {}) {
+  const store = readStore(missionId);
+  const touched = [];
+  for (const a of store.assignments) {
+    if (a.status !== "complete" && a.status !== "paused" && a.status !== "ready") continue;
+    a.status = "ready";
+    a.dispatch = null;
+    a.completionReport = null;
+    a.contextAcknowledgement = null;
+    a.workerId = null;
+    a.pause_reason = null;
+    a.paused_reason = null;
+    a.reopen_reason = reason;
+    a.updated_at = iso(nowMs);
+    touched.push(a.assignmentId);
+  }
+  writeStore(store);
+  return { ok: true, missionId, reopened: touched, assignments: listAssignments(missionId) };
+}
+
+/**
+ * Reset claimed-running assignments that have no live worker so they can relaunch.
+ * Does not touch complete/waiting/paused rows.
+ */
+export function resetStalledRunningAssignments(missionId, {
+  assignmentIds = null,
+  reason = "Worker went silent — reset for relaunch",
+  nowMs,
+} = {}) {
+  const ids = assignmentIds ? new Set(assignmentIds) : null;
+  const store = readStore(missionId);
+  const touched = [];
+  for (const a of store.assignments) {
+    if (ids && !ids.has(a.assignmentId)) continue;
+    if (!["running", "verification"].includes(a.status)) continue;
+    a.status = "ready";
+    a.dispatch = null;
+    a.completionReport = null;
+    a.contextAcknowledgement = null;
+    a.workerId = null;
+    a.provider = null;
+    a.pause_reason = null;
+    a.paused_reason = null;
+    a.stalled_reset_reason = reason;
+    a.updated_at = iso(nowMs);
+    touched.push(a.assignmentId);
+  }
+  writeStore(store);
+  return { ok: true, missionId, reset: touched, assignments: listAssignments(missionId) };
 }
 
 /** Invalidate acknowledgements after brief re-version; mark assignments for refresh. */

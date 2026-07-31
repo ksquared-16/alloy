@@ -484,28 +484,11 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
   }, { nowMs });
 
   if (validated.validation?.passed) {
-    story(missionId, {
-      type: "assignment_completed",
-      headline: "Deliverable accepted",
-      summary: `Director accepted ${assignment.title}`,
-      assignmentId,
-      phaseId: assignment.phaseId,
-      actor,
-      nowMs,
-    });
-    const next = listAssignments(missionId).find((a) => a.status === "ready");
-    if (next) {
-      story(missionId, {
-        type: "phase_started",
-        headline: `Director dispatched ${next.title}`,
-        summary: `Director dispatching next workstream: ${next.title}`,
-        assignmentId: next.assignmentId,
-        phaseId: next.phaseId,
-        actor,
-        nowMs,
-      });
-      await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
-    }
+    try {
+      const { createDeliverableReview } = await import("./deliverable-review.mjs");
+      createDeliverableReview(missionId, assignmentId, { actor, nowMs });
+    } catch { /* review layer best-effort */ }
+    // Do not auto-chain dependents here — operator must approve the Deliverable Review first.
     return {
       ok: true,
       assignmentId,
@@ -513,6 +496,7 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
       workerId: wid,
       sessionId: finished.sessionId,
       lifecycle: "completed",
+      awaitingDeliverableReview: true,
     };
   }
 
@@ -802,31 +786,11 @@ async function dispatchAssignmentInner(missionId, assignmentId, { slot, actor, n
       }, { nowMs });
 
       if (validated.validation?.passed) {
-        story(missionId, {
-          type: "assignment_completed",
-          headline: "Deliverable accepted",
-          summary: `Director accepted ${assignment.title}`,
-          assignmentId,
-          phaseId: assignment.phaseId,
-          actor,
-          nowMs,
-        });
-
-        // Dispatch next ready assignment
-        const next = listAssignments(missionId).find((a) => a.status === "ready");
-        if (next) {
-          story(missionId, {
-            type: "phase_started",
-            headline: `Dispatching ${next.title}`,
-            summary: `Director dispatching next workstream: ${next.title}`,
-            assignmentId: next.assignmentId,
-            phaseId: next.phaseId,
-            actor,
-            nowMs,
-          });
-          // Fire-and-follow for chain (await so tests see full progress)
-          await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
-        }
+        try {
+          const { createDeliverableReview } = await import("./deliverable-review.mjs");
+          createDeliverableReview(missionId, assignmentId, { actor, nowMs });
+        } catch { /* review layer best-effort */ }
+        // Dependents unlock + chain only after operator accepts the Deliverable Review.
         return {
           ok: true,
           assignmentId,
@@ -972,25 +936,10 @@ export async function resumeAfterDecisionAnswer({
         sessionId: finished.sessionId,
       }, { nowMs });
       if (validated.validation?.passed) {
-        // Chain next assignment through schedule helper so callers outside the
-        // desktop-owned server (e.g. tooling) cannot silently run mock failover.
-        const next = listAssignments(missionId).find((a) => a.status === "ready");
-        if (next) {
-          if (process.env.VACILANDO_DESKTOP_OWNED === "1"
-              || process.env.VACILANDO_EXECUTION_PROVIDER === "auto"
-              || process.env.VACILANDO_EXECUTION_PROVIDER === "claude") {
-            await dispatchAssignment(missionId, next.assignmentId, { slot, actor, nowMs });
-          } else {
-            story(missionId, {
-              type: "blocker",
-              headline: "Next assignment not auto-chained",
-              summary: `Director completed resume but will not chain ${next.title} from a non-Claude process. Approve dispatch from Vacilando.app.`,
-              assignmentId: next.assignmentId,
-              actor,
-              nowMs,
-            });
-          }
-        }
+        try {
+          const { createDeliverableReview } = await import("./deliverable-review.mjs");
+          createDeliverableReview(missionId, assignmentId, { actor, nowMs });
+        } catch { /* review layer best-effort */ }
       }
       results.push({ ok: Boolean(validated.validation?.passed), sessionId: finished.sessionId, resumed: true });
     } finally {

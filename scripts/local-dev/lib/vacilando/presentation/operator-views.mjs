@@ -26,6 +26,8 @@ import {
   listMissionsV2,
   projectMissionRow,
 } from "../director-summary.mjs";
+import { deriveMissionPosture } from "../mission-posture.mjs";
+import { missionLocalServerVm } from "../mission-local-server.mjs";
 import {
   getKickoffState,
   reviewMissionReadiness,
@@ -47,14 +49,21 @@ import {
   decisionTimelineCopy,
   resolveRecommendedOption,
 } from "./decision-summary.mjs";
+import {
+  ensureDeliverableReviewsForMission,
+  deliverableReviewVm,
+  getOpenDeliverableReview,
+} from "../deliverable-review.mjs";
 
 
 const STATUS_COPY = {
   decision_required: "Decision required",
-  awaiting_kickoff_approval: "Waiting for kickoff approval",
-  awaiting_completion_approval: "Ready for your completion review",
+  awaiting_kickoff_approval: "Waiting for kickoff",
+  awaiting_completion_approval: "Ready for your review",
+  waiting_for_operator: "Waiting on you",
+  completed: "Completed",
   blocked: "Blocked",
-  paused: "Paused — waiting on a decision",
+  paused: "Paused",
   executing: "In progress",
   validation: "Validating work",
   draft: "Draft",
@@ -82,7 +91,10 @@ const TIMELINE_HEADLINES = {
   phase_started: "Director assigned the first workstream",
   phase_completed: "A workstream finished",
   assignment_started: "A worker began the assignment",
-  assignment_completed: "A deliverable was accepted",
+  assignment_completed: "Claude completed an assignment",
+  deliverable_verified: "Director verified a deliverable",
+  deliverable_accepted: "You accepted a deliverable",
+  deliverable_changes_requested: "You requested changes on a deliverable",
   progress: "A worker reported progress",
   discovery: "Director surfaced a risk",
   blocker: "Work hit a blocker",
@@ -124,30 +136,50 @@ export function deriveWorkerLifecycle(assignment, telemetry = null) {
     ? String(providerName).charAt(0).toUpperCase() + String(providerName).slice(1)
     : "worker";
 
-  // Director dispatch state is authoritative when present.
-  if (pl === "queued") {
+  // Stale dispatch lifecycle from a prior run must not override a reopened assignment.
+  const dispatchLive = !["ready", "paused", "waiting", "blocked"].includes(status);
+  const telSilent = ["unresponsive", "stalled", "failed", "stopped"].includes(telStatus);
+
+  // Dead/silent workers beat stale "running" dispatch labels.
+  if ((status === "running" || status === "verification" || (dispatchLive && pl === "running")) && telSilent) {
+    return {
+      state: "stalled",
+      label: "Worker silent",
+      explanation: "This assignment is marked in progress, but the worker is not reporting. Nothing is live.",
+    };
+  }
+  if ((status === "running" || status === "verification") && !telStatus && !hasWorker) {
+    return {
+      state: "stalled",
+      label: "Worker silent",
+      explanation: "Marked in progress with no live worker attached.",
+    };
+  }
+
+  // Director dispatch state is authoritative when present AND assignment is still in flight.
+  if (dispatchLive && pl === "queued") {
     return { state: "queued", label: "Queued", explanation: "Director queued this deliverable for launch." };
   }
-  if (pl === "launching") {
+  if (dispatchLive && pl === "launching") {
     return { state: "starting", label: `Launching ${providerLabel}`, explanation: `Director is launching ${providerLabel}.` };
   }
-  if (pl === "acknowledged") {
+  if (dispatchLive && pl === "acknowledged") {
     return { state: "waiting_ack", label: "Waiting for acknowledgement", explanation: `${providerLabel} accepted the assignment.` };
   }
-  if (pl === "running") {
+  if (dispatchLive && pl === "running") {
     return { state: "active", label: "Executing", explanation: `${providerLabel} is executing this deliverable.` };
   }
-  if (pl === "awaiting_decision") {
+  if (dispatchLive && pl === "awaiting_decision") {
     return {
       state: "blocked",
       label: "Waiting for approval",
       explanation: `${providerLabel} paused — a product decision is required.`,
     };
   }
-  if (pl === "producing_evidence") {
+  if (dispatchLive && pl === "producing_evidence") {
     return { state: "active", label: "Producing evidence", explanation: "Director is collecting evidence from the worker." };
   }
-  if (pl === "completed" || status === "complete") {
+  if (status === "complete" || (dispatchLive && pl === "completed")) {
     return { state: "complete", label: "Completed", explanation: "Deliverable accepted." };
   }
   if (pl === "retrying") {
@@ -172,8 +204,15 @@ export function deriveWorkerLifecycle(assignment, telemetry = null) {
   if (status === "verification") {
     return { state: "active", label: "Producing evidence", explanation: "Work is under validation." };
   }
-  if (status === "running" || telStatus === "healthy") {
+  if (telStatus === "healthy" || telStatus === "starting" || telStatus === "recovering") {
     return { state: "active", label: "Executing", explanation: "Worker is executing this deliverable." };
+  }
+  if (status === "running") {
+    return {
+      state: "stalled",
+      label: "Worker silent",
+      explanation: "Marked in progress without a healthy worker heartbeat.",
+    };
   }
   if (status === "ready" && !hasWorker) {
     return { state: "queued", label: "Queued", explanation: "Director will launch a worker for this deliverable." };
@@ -243,45 +282,80 @@ function optionLabel(decision, optionId) {
   return opt?.label || optionId || "Recommendation";
 }
 
+/**
+ * Operator outcome surface — Director Deliverable Review when present.
+ * Never dumps raw worker prose as the primary review.
+ */
+export function missionOutcomeVm(missionId) {
+  const posture = deriveMissionPosture(missionId);
+  ensureDeliverableReviewsForMission(missionId);
+  const reviewVm = deliverableReviewVm(missionId);
+  if (reviewVm) {
+    return {
+      ...reviewVm,
+      postureId: posture.id,
+      // Mission-level choices only after the open deliverable is accepted
+      choices: reviewVm.certificationState === "accepted" ? (posture.choices || []) : [],
+      missionChoices: !getOpenDeliverableReview(missionId) ? (posture.choices || []) : [],
+    };
+  }
+  if (!["operator_review", "awaiting_completion", "completed", "deliverable_review"].includes(posture.id)) {
+    return null;
+  }
+  // Fallback only when no review object exists yet (legacy missions).
+  return {
+    kind: "mission_outcome_legacy",
+    missionId,
+    postureId: posture.id,
+    headline: "Director is preparing the Deliverable Review",
+    summary: "Worker completion was recorded. Director verification is required before you approve.",
+    assignmentTitle: null,
+    choices: posture.choices || [],
+    actions: {
+      primary: posture.primaryAction,
+      secondary: posture.secondaryAction,
+      certify: posture.certifyAction || null,
+    },
+  };
+}
+
 /** Mission list card view model */
 export function missionListCardVm(row) {
   const r = typeof row === "string" ? projectMissionRow(row) : row;
-  const openDecisions = listDecisions(r.mission_id, { status: "open" });
-  const top = openDecisions[0] || null;
-  const workers = listWorkerTelemetry().filter((w) => w.missionId === r.mission_id);
-  const unhealthy = workers.filter((w) => ["unresponsive", "stalled", "failed", "recovering"].includes(w.status));
-  const paused = (r.workers?.waiting || 0);
-  const phase = r.current_phase;
+  const missionId = r.mission_id || r.missionId;
+  const posture = deriveMissionPosture(missionId);
   const progress = r.progress || {};
-  const primaryAction = top
-    ? { kind: "open_decision", label: "Open decision", href: `decisions/${top.decisionId}`, decisionId: top.decisionId }
-    : r.status === "awaiting_kickoff_approval"
-      ? { kind: "open_kickoff", label: "Review kickoff", href: `kickoff/${r.mission_id}` }
-      : { kind: "open_mission", label: "Open mission", href: `missions/${r.mission_id}` };
+  const phase = r.current_phase;
+
+  const deliverablesLabel = posture.id === "deliverable_review"
+    ? "Deliverable ready for approval"
+    : posture.id === "operator_review" || posture.id === "awaiting_completion"
+      ? "Deliverable ready for approval"
+      : posture.busy
+        ? `${progress.accepted_deliverables ?? 0} of ${progress.total_deliverables ?? 0} deliverables accepted`
+        : `${progress.accepted_deliverables ?? 0} of ${progress.total_deliverables ?? 0} assignments closed`;
 
   return {
     kind: "mission_list_card",
-    missionId: r.mission_id,
+    missionId,
     title: r.title,
-    status: r.status,
-    statusLabel: STATUS_COPY[r.status] || r.status_label || r.status,
+    status: posture.status,
+    statusLabel: posture.label,
+    postureId: posture.id,
+    postureDetail: posture.detail,
     phaseLabel: phase
       ? `Phase ${phase.index} of ${phase.total} · ${phase.title}`
-      : "No active phase yet",
-    deliverablesLabel: `${progress.accepted_deliverables ?? 0} of ${progress.total_deliverables ?? 0} deliverables accepted`,
-    directorState: r.director_state || "Director is monitoring this mission",
-    workersLine: (() => {
-      const bits = [];
-      if (unhealthy.length) bits.push(`${unhealthy.length} worker${unhealthy.length === 1 ? "" : "s"} need attention`);
-      if (paused) bits.push(`${paused} paused`);
-      if ((r.workers?.running || 0) > 0) bits.push(`${r.workers.running} working`);
-      return bits.join(" · ") || "No active workers";
-    })(),
-    openDecisionCount: openDecisions.length,
-    latestUpdate: r.latest_update || "No updates yet",
+      : (posture.busy ? "Active phase" : "No worker running"),
+    deliverablesLabel,
+    directorState: posture.next,
+    workersLine: posture.workersLine,
+    openDecisionCount: listDecisions(missionId, { status: "open" }).length,
+    latestUpdate: r.latest_update || posture.detail,
     updatedAt: r.updated_at,
     updatedLabel: relTime(r.updated_at),
-    primaryAction,
+    primaryAction: posture.primaryAction,
+    secondaryAction: posture.secondaryAction,
+    needsYou: posture.needsYou,
   };
 }
 
@@ -635,7 +709,7 @@ export function workerDetailVm(workerId) {
 }
 
 /** Needs You item */
-export function needsYouItemVm({ type, missionId, title, body, urgency, action, recommendation }) {
+export function needsYouItemVm({ type, missionId, title, body, urgency, action, recommendation, secondaryAction = null }) {
   const brief = getBrief(missionId);
   return {
     kind: "needs_you_item",
@@ -647,6 +721,7 @@ export function needsYouItemVm({ type, missionId, title, body, urgency, action, 
     urgency: urgency || "Attention needed",
     recommendation: recommendation || null,
     primaryAction: action,
+    secondaryAction,
   };
 }
 
@@ -710,31 +785,93 @@ export function listNeedsYou() {
       action: { label: "Open worker", href: `workers/${w.workerId}` },
     }));
   }
-  // 3) Kickoff / completion / merge / deployment approvals
+  // 3) Mission postures that require the operator (kickoff / start / review / certify)
   for (const row of listMissionsV2({ includeArchived: false })) {
-    if (row.status === "awaiting_completion_approval") {
+    const missionId = row.mission_id || row.missionId;
+    if (isArchivedMission(missionId)) continue;
+    const posture = deriveMissionPosture(missionId);
+    if (!posture.needsYou) continue;
+    // Decisions already covered above
+    if (posture.id === "decision_required") continue;
+
+    if (posture.id === "deliverable_review") {
       items.push(needsYouItemVm({
-        type: "completion",
-        missionId: row.mission_id,
-        title: "Completion approval needed",
-        body: "Director believes deliverables are ready for your review.",
-        urgency: "Approval",
-        recommendation: "Review evidence and accept or send back",
-        action: { label: "Open mission", href: `missions/${row.mission_id}` },
+        type: "deliverable_review",
+        missionId,
+        title: posture.label,
+        body: posture.detail,
+        urgency: "Deliverable review",
+        recommendation: posture.next,
+        action: posture.primaryAction,
       }));
+      continue;
     }
-    if (row.status === "awaiting_kickoff_approval") {
+    if (posture.id === "awaiting_kickoff") {
       items.push(needsYouItemVm({
         type: "kickoff",
-        missionId: row.mission_id,
+        missionId,
         title: "Kickoff approval needed",
-        body: "Director prepared an execution plan and is waiting for you to start the mission.",
+        body: posture.detail,
         urgency: "Kickoff",
-        recommendation: "Review readiness and start the mission",
-        action: { label: "Review kickoff", href: `kickoff/${row.mission_id}` },
+        recommendation: posture.next,
+        action: posture.primaryAction,
+      }));
+      continue;
+    }
+    if (posture.id === "ready_to_start" && posture.needsYou) {
+      items.push(needsYouItemVm({
+        type: "start_work",
+        missionId,
+        title: "Start work",
+        body: posture.detail,
+        urgency: "Start",
+        recommendation: posture.next,
+        action: posture.primaryAction,
+      }));
+      continue;
+    }
+    if (posture.id === "ready_to_start") continue;
+    if (posture.id === "awaiting_completion") {
+      items.push(needsYouItemVm({
+        type: "completion",
+        missionId,
+        title: "Completion approval needed",
+        body: posture.detail,
+        urgency: "Approval",
+        recommendation: posture.next,
+        action: posture.primaryAction,
+        secondaryAction: posture.secondaryAction,
+      }));
+      continue;
+    }
+    if (posture.id === "operator_review" || posture.id === "paused" || posture.id === "idle_after_kickoff" || posture.id === "blocked" || posture.id === "interrupted_idle") {
+      items.push(needsYouItemVm({
+        type: "operator_review",
+        missionId,
+        title: posture.label,
+        body: posture.detail,
+        urgency: "Needs you",
+        recommendation: posture.next,
+        action: posture.primaryAction,
+        secondaryAction: posture.secondaryAction,
       }));
     }
-    // Merge / deployment — reserved when mission flags them (future completion package)
+    // worker_silent only escalates after Director auto-resume is exhausted
+    if (posture.id === "worker_silent" && posture.needsYou) {
+      items.push(needsYouItemVm({
+        type: "worker_silent",
+        missionId,
+        title: posture.label,
+        body: posture.detail,
+        urgency: "Worker silent",
+        recommendation: posture.next,
+        action: posture.primaryAction,
+        secondaryAction: posture.secondaryAction,
+      }));
+    }
+  }
+  // Merge / deployment flags (rare)
+  for (const row of listMissionsV2({ includeArchived: false })) {
     if (row.merge_approval_required) {
       items.push(needsYouItemVm({
         type: "merge",
@@ -943,42 +1080,68 @@ export function missionDashboardVm(missionId) {
   const lifecycleActive = currentWork.filter((w) => ["active", "starting", "waiting_ack", "retrying"].includes(w.lifecycleState));
   const lifecyclePending = currentWork.filter((w) => ["assigning", "waiting_capacity"].includes(w.lifecycleState));
 
-  const providerRollup = { Claude: { active: 0, waiting: 0 }, Cursor: { active: 0, waiting: 0 } };
+  const providerRollup = { Claude: { active: 0, waiting: 0, ready: 0 }, Cursor: { active: 0, waiting: 0, ready: 0 } };
   for (const w of currentWork) {
     if (!w.handledBy || !providerRollup[w.handledBy]) continue;
-    if (["running", "verification"].includes(w.status)) providerRollup[w.handledBy].active += 1;
-    else if (["waiting", "ready", "paused"].includes(w.status)) providerRollup[w.handledBy].waiting += 1;
+    if (["active", "starting", "waiting_ack", "retrying"].includes(w.lifecycleState)) providerRollup[w.handledBy].active += 1;
+    else if (w.status === "ready" || w.lifecycleState === "queued") providerRollup[w.handledBy].ready += 1;
+    else if (["waiting", "paused"].includes(w.status) || w.lifecycleState === "waiting_dependency") providerRollup[w.handledBy].waiting += 1;
   }
-  if (!Object.values(providerRollup).some((v) => v.active || v.waiting)) {
+  if (!Object.values(providerRollup).some((v) => v.active || v.waiting || v.ready)) {
     for (const tel of workers) {
+      if (["stopped", "complete", "failed"].includes(tel.status)) continue;
       const p = providerLabel(tel.workerId);
       if (!p) continue;
-      if (["healthy", "starting", "recovering", "unresponsive", "stalled"].includes(tel.status)) {
+      if (["healthy", "starting", "recovering"].includes(tel.status)) {
         providerRollup[p].active += 1;
       } else if (["waiting", "idle", "blocked"].includes(tel.status)) {
         providerRollup[p].waiting += 1;
       }
+      // unresponsive/stalled without an active assignment are ghosts — omit from rollup
     }
   }
   const providers = Object.entries(providerRollup)
-    .filter(([, v]) => v.active || v.waiting)
+    .filter(([, v]) => v.active || v.waiting || v.ready)
     .map(([name, v]) => {
       const bits = [];
       if (v.active) bits.push(`${v.active} active`);
+      if (v.ready) bits.push(`${v.ready} ready`);
       if (v.waiting) bits.push(`${v.waiting} waiting`);
-      return { provider: name, active: v.active, waiting: v.waiting, label: `${name}: ${bits.join(", ")}` };
+      return { provider: name, active: v.active, waiting: v.waiting, ready: v.ready, label: `${name}: ${bits.join(", ")}` };
     });
 
-  const recovering = workers.filter((w) => ["unresponsive", "stalled", "recovering", "failed"].includes(w.status));
-  const directorManagedRecoveries = recovering.filter((w) => !recoveryNeedsOperator(w));
-  const operatorRecoveries = recovering.filter((w) => recoveryNeedsOperator(w));
-  const runningAsg = assignments.filter((a) => a.status === "running");
-  const directorFocus = runningAsg.map((a) => {
-    const tel = workers.find((w) => w.assignmentId === a.assignmentId);
-    const who = providerLabel(tel?.workerId || a.workerId, a.provider) || "Worker";
-    return `${who} on ${a.title}`;
+  const recovering = workers.filter((w) => {
+    if (!["unresponsive", "stalled", "recovering", "failed"].includes(w.status)) return false;
+    // Ghost telemetry after assignment closed is not a live recovery.
+    const asg = w.assignmentId ? getAssignment(missionId, w.assignmentId) : null;
+    if (asg && asg.status === "complete") return false;
+    return true;
   });
-  if (!directorFocus.length) {
+  const RECENT_RECOVERY_MS = 15 * 60 * 1000;
+  const recoveryIsRecent = (w) => {
+    const ts = w.last_recovery?.at || w.last_recovery?.updated_at || w.lastHeartbeatAt;
+    if (!ts) return false;
+    const age = Date.now() - Date.parse(ts);
+    return Number.isFinite(age) && age >= 0 && age < RECENT_RECOVERY_MS;
+  };
+  const directorManagedRecoveries = recovering.filter((w) =>
+    !recoveryNeedsOperator(w) && w.status === "recovering" && recoveryIsRecent(w));
+  const operatorRecoveries = recovering.filter((w) => recoveryNeedsOperator(w));
+  const silentWorkers = recovering.filter((w) =>
+    !recoveryNeedsOperator(w) && !(w.status === "recovering" && recoveryIsRecent(w)));
+
+  const posture = deriveMissionPosture(missionId);
+  const runningAsg = posture.busy
+    ? assignments.filter((a) => ["running", "verification"].includes(a.status))
+    : [];
+  const directorFocus = posture.busy
+    ? runningAsg.map((a) => {
+      const tel = workers.find((w) => w.assignmentId === a.assignmentId);
+      const who = providerLabel(tel?.workerId || a.workerId, a.provider) || "Worker";
+      return `${who} on ${a.title}`;
+    })
+    : [posture.next];
+  if (posture.busy && !directorFocus.length) {
     const ready = assignments.find((a) => a.status === "ready" || a.status === "paused");
     if (ready) {
       const who = providerLabel(ready.workerId, ready.provider);
@@ -995,6 +1158,9 @@ export function missionDashboardVm(missionId) {
     const who = providerLabel(w.workerId) || "Worker";
     risks.push(`${who} unhealthy on ${(getAssignment(missionId, w.assignmentId)?.title) || "assignment"}`);
   }
+  if (posture.id === "worker_silent") {
+    risks.push("No live worker — status was stale overnight");
+  }
 
   const recoveries = [
     ...directorManagedRecoveries.map((w) => {
@@ -1008,29 +1174,16 @@ export function missionDashboardVm(missionId) {
       const title = getAssignment(missionId, w.assignmentId)?.title || "Worker";
       return `${title}: Recovery needs your approval`;
     }),
+    ...silentWorkers.map((w) => {
+      const title = getAssignment(missionId, w.assignmentId)?.title || "Worker";
+      if (posture.needsYou) {
+        return `${title}: Silent — Director could not relaunch. Resume work when ready.`;
+      }
+      return `${title}: Silent — Director is relaunching (no action needed from you).`;
+    }),
   ];
 
-  const assessment = (() => {
-    if (openDecisions.length) return "I need a product call from you before this work can continue.";
-    if (operatorRecoveries.length) return "I need your approval before a recovery can proceed.";
-    if (directorManagedRecoveries.length) return "I am intervening on an unhealthy worker and preserving uncommitted work.";
-    if (lifecyclePending.length && !lifecycleActive.length) {
-      return `I am ${lifecyclePending[0].lifecycleLabel.toLowerCase()} for ${lifecyclePending[0].title}.`;
-    }
-    if (currentWork.some((w) => w.lifecycleState === "waiting_ack")) {
-      return "A worker is assigned and waiting to acknowledge the package before work begins.";
-    }
-    if (currentWork.some((w) => w.lifecycleState === "starting")) {
-      return "A worker is starting — you should see progress shortly.";
-    }
-    if (runningAsg.length || lifecycleActive.length) return "Everything is progressing normally.";
-    if (assignments.some((a) => a.status === "verification")) return "I am validating completed work.";
-    if (card.status === "awaiting_kickoff_approval") return "Waiting for you to approve kickoff.";
-    if (assignments.every((a) => a.status === "complete") && assignments.length) {
-      return "Deliverables are complete — ready for your review.";
-    }
-    return summary.questions?.find((q) => q.id === "where")?.answer || card.directorState;
-  })();
+  const assessment = posture.detail;
 
   const usageSummary = summarizeUsage({ missionId });
   const usageEvents = listUsageEvents({ missionId, limit: 50 });
@@ -1081,52 +1234,61 @@ export function missionDashboardVm(missionId) {
     note: f.note,
     weight: Math.round((confidence.weights?.[id] || 0) * 100),
   }));
-  const workerCountLabel = lifecycleActive.length
+  const workerCountLabel = posture.busy && lifecycleActive.length
     ? `${lifecycleActive.length} active`
-    : lifecyclePending.length
-      ? lifecyclePending[0].lifecycleLabel
-      : currentWork.some((w) => w.lifecycleState === "waiting_dependency")
-        ? "Waiting on upstream work"
-        : `${activeWorkers.length} active`;
+    : posture.id === "worker_silent"
+      ? "0 active — worker silent"
+      : lifecyclePending.length
+        ? lifecyclePending[0].lifecycleLabel
+        : currentWork.some((w) => w.lifecycleState === "waiting_dependency")
+          ? "Waiting on upstream work"
+          : posture.busy
+            ? `${Math.max(lifecycleActive.length, 1)} active`
+            : "0 active";
 
   return {
     kind: "mission_dashboard",
     missionId,
     summary: {
       title: card.title,
-      statusLabel: card.statusLabel,
-      status: card.status,
-      phase: phaseTitle,
+      statusLabel: posture.label,
+      status: posture.status,
+      postureId: posture.id,
+      postureDetail: posture.detail,
+      phase: posture.busy ? phaseTitle : (posture.id === "worker_silent" ? "Worker silent — not live" : "No worker running"),
       phaseLabel: card.phaseLabel,
       deliverablesAccepted: progress.accepted_deliverables ?? 0,
       deliverablesTotal: progress.total_deliverables ?? 0,
-      deliverablesLabel: `${progress.accepted_deliverables ?? 0} / ${progress.total_deliverables ?? 0} accepted`,
-      activeWorkers: lifecycleActive.length,
+      deliverablesLabel: card.deliverablesLabel,
+      activeWorkers: posture.busy ? Math.max(lifecycleActive.length, 1) : 0,
       workerCountLabel,
-      executionLifecycle: lifecyclePending[0]?.lifecycleLabel
-        || lifecycleActive[0]?.lifecycleLabel
-        || (currentWork[0]?.lifecycleLabel || "No workers yet"),
+      executionLifecycle: posture.label,
       confidencePercent: confidence.percent,
       confidenceBand: confidence.bandLabel,
-      nextCheckpoint: checkpoint.label,
-      primaryAction: card.primaryAction,
+      nextCheckpoint: posture.next,
+      primaryAction: posture.primaryAction,
+      secondaryAction: posture.secondaryAction,
+      certifyAction: posture.certifyAction || null,
+      choices: posture.choices || [],
     },
     director: {
-      assessment,
-      focus: directorFocus.length
-        ? directorFocus
-        : (lifecyclePending.length
-          ? [`${lifecyclePending[0].lifecycleLabel}: ${lifecyclePending[0].title}`]
-          : ["Monitoring mission state"]),
+      assessment: posture.detail,
+      focus: posture.busy
+        ? (directorFocus.length ? directorFocus : ["Worker executing"])
+        : directorFocus,
       risks: risks.length ? risks : ["None"],
       recoveries: recoveries.length ? recoveries : ["None"],
-      next: summary.questions?.find((q) => q.id === "next")?.answer || checkpoint.label,
-      recommendation: openDecisions[0]
-        ? `Recommend: ${openDecisions[0].recommendation}`
-        : (summary.questions?.find((q) => q.id === "next")?.answer || "Continue as planned"),
+      next: posture.next,
+      recommendation: posture.next,
     },
     needsMe,
     providers,
+    posture,
+    localServer: missionLocalServerVm(missionId),
+    outcome: ["operator_review", "awaiting_completion", "deliverable_review", "completed"].includes(posture.id)
+      || getOpenDeliverableReview(missionId)
+      ? missionOutcomeVm(missionId)
+      : null,
     resourcesUsage: {
       byProvider: usageByProvider.length ? usageByProvider : [
         { provider: "Claude", activeWorkers: 0, sessionDuration: "Unavailable", tokens: "Unavailable", estimatedCost: "Unavailable" },
@@ -1171,22 +1333,99 @@ export function missionOverviewVm(missionId) {
   return { ...dash, kind: "mission_overview" };
 }
 
+/** Fleet-level strip for the Missions landing page. */
+export function controlPlaneSummaryVm() {
+  const activeRows = listMissionsV2({ includeArchived: false })
+    .filter((r) => r.status !== "completed");
+  const missionCards = activeRows.map((r) => missionListCardVm(r));
+  const needsYou = listNeedsYou();
+  const workers = listWorkerTelemetry()
+    .filter((w) => {
+      if (!w.missionId) return true;
+      return getMission(w.missionId)?.archived !== true;
+    })
+    .map(workerCardVm);
+
+  const byPosture = new Map();
+  for (const m of missionCards) {
+    const key = m.statusLabel || m.postureId || "Unknown";
+    if (!byPosture.has(key)) byPosture.set(key, { label: key, count: 0, postureId: m.postureId });
+    byPosture.get(key).count += 1;
+  }
+
+  const running = missionCards.filter((m) => m.postureId === "executing").length;
+  const ready = missionCards.filter((m) => m.postureId === "ready_to_start").length;
+  const waitingOnYou = missionCards.filter((m) => m.needsYou).length;
+  const workersActive = workers.filter((w) =>
+    ["healthy", "active", "running", "working", "busy"].includes(String(w.health || "").toLowerCase())).length;
+  const workersAttention = workers.filter((w) =>
+    ["unresponsive", "stalled", "recovering", "failed", "unhealthy"].includes(String(w.health || "").toLowerCase())).length;
+  const workersOther = Math.max(0, workers.length - workersActive - workersAttention);
+
+  return {
+    kind: "control_plane_summary",
+    generatedAt: new Date().toISOString(),
+    missions: {
+      active: missionCards.length,
+      needingYou: waitingOnYou,
+      readyToStart: ready,
+      running,
+      byStatus: [...byPosture.values()].sort((a, b) => b.count - a.count),
+    },
+    workers: {
+      total: workers.length,
+      active: workersActive,
+      attention: workersAttention,
+      idleOrOther: workersOther,
+      rows: workers.slice(0, 12).map((w) => ({
+        workerId: w.workerId,
+        health: w.health,
+        healthLabel: w.healthLabel,
+        missionId: w.missionId,
+        missionTitle: w.missionTitle,
+        deliverable: w.deliverable,
+        slotLabel: w.slotLabel,
+      })),
+    },
+    needsYouCount: needsYou.length,
+    needsYouPreview: needsYou.slice(0, 5).map((n) => ({
+      title: n.title,
+      missionId: n.missionId,
+      missionTitle: n.missionTitle,
+      urgency: n.urgency,
+      type: n.type,
+    })),
+  };
+}
+
 export function missionsHomeVm({ filter = "active" } = {}) {
   const includeArchived = filter === "archived" || filter === "history" || filter === "all";
   let rows = listMissionsV2({ includeArchived: true });
   if (filter === "active" || !filter) {
-    rows = rows.filter((r) => getMission(r.mission_id)?.archived !== true);
+    rows = rows.filter((r) => {
+      const m = getMission(r.mission_id);
+      return m?.archived !== true && r.status !== "completed";
+    });
   } else if (filter === "archived" || filter === "history") {
-    rows = rows.filter((r) => getMission(r.mission_id)?.archived === true);
+    // History = archived + certified-complete (so closeout never hides a mission).
+    rows = rows.filter((r) => {
+      const m = getMission(r.mission_id);
+      return m?.archived === true || r.status === "completed";
+    });
   }
-  const activeCount = listMissionsV2({ includeArchived: false }).length;
+  const activeCount = listMissionsV2({ includeArchived: false })
+    .filter((r) => r.status !== "completed").length;
   const archivedCount = listMissionsV2({ includeArchived: true })
-    .filter((r) => getMission(r.mission_id || r.missionId)?.archived === true).length;
+    .filter((r) => {
+      const m = getMission(r.mission_id || r.missionId);
+      return m?.archived === true || r.status === "completed";
+    }).length;
   return {
     kind: "missions_home",
     filter: filter || "active",
     activeCount,
     archivedCount,
+    summary: controlPlaneSummaryVm(),
     emptyState: activeCount === 0 && (filter === "active" || !filter)
       ? {
           title: "No active missions",

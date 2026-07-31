@@ -93,6 +93,17 @@ import {
 } from "./usage-ledger.mjs";
 import { submitOperatorDirectorMessage, listDirectorMessages } from "./director-comms.mjs";
 import {
+  createDeliverableReview,
+  ensureDeliverableReviewsForMission,
+  listDeliverableReviews,
+  getDeliverableReview,
+  getOpenDeliverableReview,
+  acceptDeliverableReview,
+  requestDeliverableChanges,
+  askDirectorAboutDeliverable,
+  deliverableReviewVm,
+} from "./deliverable-review.mjs";
+import {
   captureImprovement,
   listImprovements,
   getImprovement,
@@ -122,6 +133,44 @@ export async function handleV2Post(path, body) {
     });
     return { status: out.ok ? 200 : 409, body: out };
   }
+  if (path === "/api/v2/deliverable-reviews/accept") {
+    const mid = v.mission_id || v.missionId;
+    const rid = v.review_id || v.reviewId;
+    const out = acceptDeliverableReview(mid, rid, {
+      actor: v.actor || "operator",
+      response: v.response || v.note || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+  if (path === "/api/v2/deliverable-reviews/request-changes") {
+    const mid = v.mission_id || v.missionId;
+    const rid = v.review_id || v.reviewId;
+    const out = requestDeliverableChanges(mid, rid, {
+      direction: v.direction || v.message || v.response,
+      actor: v.actor || "operator",
+    });
+    return { status: out.ok ? 200 : 400, body: out };
+  }
+  if (path === "/api/v2/deliverable-reviews/ask") {
+    const mid = v.mission_id || v.missionId;
+    const rid = v.review_id || v.reviewId;
+    const out = askDirectorAboutDeliverable(mid, rid, {
+      message: v.message || v.response,
+      actor: v.actor || "operator",
+    });
+    return { status: out.ok ? 200 : 400, body: out };
+  }
+  if (path === "/api/v2/deliverable-reviews/create" || path === "/api/v2/deliverable-reviews/ensure") {
+    const mid = v.mission_id || v.missionId;
+    const aid = v.assignment_id || v.assignmentId;
+    if (aid) {
+      const out = createDeliverableReview(mid, aid, { actor: v.actor || "director", force: Boolean(v.force) });
+      return { status: out.ok ? 200 : 400, body: out };
+    }
+    const out = ensureDeliverableReviewsForMission(mid);
+    return { status: 200, body: out };
+  }
+
   if (path === "/api/v2/missions/complete" || path === "/api/v2/missions/certify") {
     const mid = v.mission_id || v.missionId;
     const out = certifyMissionCompletion(mid, {
@@ -573,6 +622,28 @@ export async function handleV2Get(path, url) {
     const dashboard = missionDashboardVm(id);
     if (!dashboard) return { status: 404, body: { ok: false, error: "mission_not_found" } };
     return { status: 200, body: { ok: true, dashboard, overview: dashboard } };
+  }
+  if (path === "/api/v2/deliverable-reviews" || path === "/api/v2/views/deliverable-reviews") {
+    const mid = q("mission_id") || q("id");
+    if (!mid) return { status: 400, body: { ok: false, error: "missing_mission_id" } };
+    ensureDeliverableReviewsForMission(mid);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        reviews: listDeliverableReviews(mid, { includeSuperseded: q("all") === "1" }),
+        open: getOpenDeliverableReview(mid),
+        view: deliverableReviewVm(mid),
+      },
+    };
+  }
+  if (path === "/api/v2/deliverable-reviews/one" || path === "/api/v2/views/deliverable-review") {
+    const mid = q("mission_id") || q("id");
+    const rid = q("review_id") || q("reviewId");
+    if (!mid || !rid) return { status: 400, body: { ok: false, error: "missing_ids" } };
+    const review = getDeliverableReview(mid, rid);
+    if (!review) return { status: 404, body: { ok: false, error: "review_not_found" } };
+    return { status: 200, body: { ok: true, review, view: deliverableReviewVm(mid, review) } };
   }
   if (path === "/api/v2/views/mission/outcome") {
     const id = q("id") || q("mission_id");
