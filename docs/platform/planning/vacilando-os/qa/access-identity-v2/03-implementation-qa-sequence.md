@@ -161,16 +161,41 @@ Five read-only queries against the deployed database. Produces a JSON evidence f
 | Q3 | How many `user_roles.role` values have no `role_definitions` row for that org? | anti-join `user_roles` → `role_definitions` on `(org_id, role_key)` | W-16 (L3) |
 | Q4 | How many memberships lack an access profile? | anti-join `user_roles` → `user_access_profiles` on `(user_id, org_id)` | W-6 (L1) |
 | Q5 | Does every org with an `admin`/`ops` membership have the matching `role_definitions` row? | per-org anti-join | W-13 (L2) |
+| Q6 | How many `admin`/`ops` principals hold an explicit `department_scope = 'restricted'` profile? | `user_access_profiles` ∩ `user_roles` | W-8 (C8) |
 
 Q3 and Q5 are the same anti-join read two ways, and together they are the reason W-13 is not a one-line
 change: `user_roles.role` is unconstrained text, so a membership can name a role the org never defined.
 
-**Exit criteria.** `qa/access-identity-v2/w0-live-census.json` committed, with counts and the query text for
-each of Q1–Q5. Every one of L1–L4 cites it before proceeding.
+**Q6 is the sixth query §6/W-8 anticipated.** W-8 is scheduled in wave 2, so it is folded in here rather than
+requiring a second live-access authorization later. It costs one more `SELECT`.
+
+**Exit criteria.** [`qa/access-identity-v2/wave0-authority-census.json`](./wave0-authority-census.json)
+committed, with counts and the query text for each of Q1–Q6. Every one of L1–L4 cites it before proceeding.
 
 **If Q2, Q3, Q4 or Q5 is non-zero**, the corresponding workstream gains a *remediation* step ahead of its
 switch, and that step is scheduled explicitly rather than absorbed. A non-zero Q1 (trigger attached) promotes
-G1 from latent to live and moves W-20 into wave 2.
+G1 from latent to live and moves W-20 into wave 2. A non-zero Q6 makes W-8 a behaviour change for a named
+population rather than a no-op.
+
+### W-0 execution record
+
+| Field | Value |
+|---|---|
+| Evidence file | [`wave0-authority-census.json`](./wave0-authority-census.json) — queries prepared, **counts not yet recorded** |
+| Queries | Q1–Q6 written and schema-verified against `supabase/migrations` in this worktree, plus one combined single-statement form that returns all answers as one JSON row |
+| Executed | **No** — blocked on live database access |
+| Blocker | A managed agent worktree holds no database credential by design. `web/.env.local.agent` carries public values only; the privileged tier (`ALLOY_SERVER_ENV_SOURCE`) is injected into the toolkit-owned Next process and never into the worktree (`alloy-config.example:70-73`, `lib/verify.sh:293-335`); `alloy-ro` declares `credential_access: false` and exposes no database verb; and no arbitrary-SQL RPC exists in `supabase/migrations`, so Q1's `pg_trigger` read is unreachable through PostgREST even with a service-role key. |
+| Resolution | Operator decision — run the combined query in the Supabase SQL editor and return the JSON row, authorize one read-only `psql` session against the trusted `DATABASE_URL`, or provision a read-only Postgres role for this run. |
+
+Two things were fixed while writing the queries, both of which would have produced a wrong number:
+
+1. **Q4's grain.** `user_roles` is per `(user, org, role)`; `user_access_profiles` is `UNIQUE (user_id, org_id)`.
+   M1's preflight rule "row count == W-0 Q4" means **distinct `(user, org)` pairs**, not membership rows. The
+   census reports both, and names which one M1 must equal.
+2. **Q2's scope.** The legacy fallback fires **only** when the principal has *zero* `user_roles` rows
+   (`resolveAdminAccessCore.ts:111-140`), and `user_profiles` has no `org_id` — the org is recovered from
+   `app_users` by `id`, then `auth_user_id`. Q2 reproduces that precedence rather than counting "anyone with a
+   legacy role", which would overstate the L4 population.
 
 ---
 
