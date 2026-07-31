@@ -56,7 +56,7 @@ describe("Phase 0 harness — route invocation", () => {
 
         expect(res.status).toBe(401);
         expect(res.ok).toBe(false);
-        expect(res.body).toMatchObject({ ok: false, code: "AUTH" });
+        expect(res.body).toMatchObject({ ok: false, code: "UNAUTHENTICATED" });
     });
 
     it("distinguishes unauthenticated (401) from no-org-membership (403)", async () => {
@@ -125,15 +125,18 @@ describe("Phase 0 harness — actor matrix", () => {
         }
     });
 
-    it("BASELINE (pre-P0-2): a viewer is not refused by the route's auth gate", async () => {
-        // Documents the defect P0-2 closes. `ctx.ok` is the route's ONLY check
-        // (documents/[id]/signed-url/route.ts:10-16), so a viewer gets past it
-        // and reaches the row lookup. After P0-2 this must become a 403, and
-        // this expectation will be inverted in that commit.
+    it("a viewer IS refused by the route's auth gate (P0-2 closed)", async () => {
+        // Inverted from the commit-0 baseline, as planned there. Before commit 6
+        // `ctx.ok` was the route's ONLY check, so a viewer got past it and
+        // reached the row lookup. Authorization now lives in
+        // assertDocumentAccess and a non-privileged role is refused outright.
+        //
+        // Full coverage lives in tests/documents/documentAccessAuthorization.test.ts;
+        // this case stays here as the before/after record.
         mockGetAdminContextCached.mockResolvedValue(adminContextFor(ACTORS.orgAViewer));
 
         const res = await invokeRoute(documentSignedUrlGET, request(), routeParams({ id: DOC_ID }));
 
-        expect(res.status).not.toBe(403);
+        expect(res.status).toBe(403);
     });
 });
