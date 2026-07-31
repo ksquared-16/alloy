@@ -16,6 +16,11 @@ import { getAssignment, listAssignments, updateAssignment } from "./worker-assig
 import { listEvidence } from "./evidence.mjs";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { submitOperatorDirectorMessage } from "./director-comms.mjs";
+import {
+  parseTestEvidenceSemantics,
+  reconcileDeliverableEvidence,
+  resolveDeliverableCommit,
+} from "./deliverable-evidence.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -114,7 +119,8 @@ function curatedBrief(assignment) {
       ],
       recommendation: "approve",
       recommendation_detail:
-        "Approve only the enforcement guard and baseline inventory — not permanent acceptance of all current exceptions.",
+        "The build-time principal-resolution guard is active, its negative scenarios passed, and the current exception baseline is recorded for W-15 remediation. Approval accepts the enforcement guard only — it does not permanently approve the existing exceptions.",
+      recommendation_headline: "Approve W-4",
       approval_meaning: {
         assignment_accepted: true,
         criteria_satisfied: ["AC_W1B — build-time principal check + baseline inventory"],
@@ -134,9 +140,9 @@ function curatedBrief(assignment) {
           proves: "The current reviewed exception set is recorded for later remediation (W-15).",
         },
         {
-          match: /serviceClientPrincipalCheck\.test|Tests executed|check:service-client/i,
+          match: /Tests executed|serviceClientPrincipalCheck\.test\.ts —|\bvitest run\b|check:service-client-principal/i,
           title: "Automated enforcement tests",
-          proves: "Unreviewed routes and stale exceptions fail validation; the check is not vacuous.",
+          proves: "Unreviewed service-role routes and stale exception entries fail validation.",
         },
         {
           match: /package\.json|prebuild|checkServiceClientPrincipal\.mjs/i,
@@ -154,25 +160,41 @@ function curatedBrief(assignment) {
   return null;
 }
 
-function translateEvidence(ev, curated) {
+function translateEvidence(ev, curated, { deliverableCommit = null } = {}) {
   const blob = `${ev.title || ""} ${ev.description || ""} ${ev.fileUri || ""} ${ev.type || ""}`;
   const hit = (curated?.evidence_translations || []).find((t) => t.match.test(blob));
+  const isTest = ev.type === "test" || /Tests executed|vitest|check:service-client/i.test(blob);
+  const semantics = isTest
+    ? parseTestEvidenceSemantics(ev.description || ev.title || "", { exitCode: ev.exitCode })
+    : null;
+  const commit = (ev.description || ev.title || "").match(/\b([0-9a-f]{7,40})\b/)?.[1]
+    || deliverableCommit
+    || null;
+
   if (hit) {
+    const status = semantics
+      ? semantics.test_run_status
+      : (ev.type === "commit" || /commit/i.test(hit.title)
+        ? "passed"
+        : "passed");
     return {
       evidenceId: ev.evidenceId,
       title: hit.title,
       proves: hit.proves,
-      result: /fail|error|exit 1/i.test(ev.description || "") ? "failed" : "passed",
+      result: status === "failed" ? "failed" : status === "incomplete" || status === "not_run" ? status : "passed",
+      test_run_status: semantics?.test_run_status || null,
+      assertion_behavior: semantics?.assertion_behavior || [],
+      result_summary: semantics?.result_summary
+        || (status === "passed" ? "Recorded and verified" : String(status)),
       acceptanceCriteriaCovered: ev.acceptanceCriteriaIds || [],
       source: ev.fileUri || ev.type || "worker evidence",
       timestamp: ev.createdAt,
-      commit: (ev.description || "").match(/\b([0-9a-f]{7,40})\b/)?.[1] || null,
+      commit,
       type: ev.type,
-      openHref: ev.fileUri ? null : null,
       fileUri: ev.fileUri || null,
     };
   }
-  // Never render "document — document" style labels.
+
   const type = String(ev.type || "artifact");
   const rawTitle = String(ev.title || "").trim();
   const looksRaw = !rawTitle
@@ -180,9 +202,7 @@ function translateEvidence(ev, curated) {
     || new RegExp(`^${type}\\s*[—-]\\s*${type}$`, "i").test(rawTitle)
     || new RegExp(`^${type}\\s*[—-]`, "i").test(rawTitle);
   const title = looksRaw
-    ? (ev.fileUri
-      ? `Artifact: ${ev.fileUri.split("/").pop()}`
-      : `Supporting ${type} evidence`)
+    ? (ev.fileUri ? `Artifact: ${ev.fileUri.split("/").pop()}` : `Supporting ${type} evidence`)
     : rawTitle;
   const proves = ev.description
     ? String(ev.description).split(/[.!?]/)[0].slice(0, 160)
@@ -191,13 +211,16 @@ function translateEvidence(ev, curated) {
     evidenceId: ev.evidenceId,
     title,
     proves,
-    result: type === "test"
-      ? (/fail|0 passed|failed/i.test(ev.description || "") ? "failed" : "passed")
+    result: semantics
+      ? (semantics.test_run_status === "failed" ? "failed" : semantics.test_run_status === "passed" ? "passed" : semantics.test_run_status)
       : "recorded",
+    test_run_status: semantics?.test_run_status || null,
+    assertion_behavior: semantics?.assertion_behavior || [],
+    result_summary: semantics?.result_summary || "Recorded",
     acceptanceCriteriaCovered: ev.acceptanceCriteriaIds || [],
     source: ev.fileUri || type,
     timestamp: ev.createdAt,
-    commit: null,
+    commit,
     type,
     fileUri: ev.fileUri || null,
   };
@@ -205,6 +228,10 @@ function translateEvidence(ev, curated) {
 
 function checkItem(id, label, status, detail, { source = "automatic", claim = null } = {}) {
   return { id, label, status, detail, source, claim };
+}
+
+function judgmentItem(id, label, detail) {
+  return { id, label, detail, kind: "judgment" };
 }
 
 /**
@@ -268,17 +295,19 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
     { claim: report.summary ? "Worker claimed scope was respected." : null },
   ));
 
-  // Tests
-  const testEv = artifacts.filter((e) => e.type === "test" || /test/i.test(e.title || ""));
-  const testsPassed = testEv.some((e) => /passed|ok:true|exit 0/i.test(e.description || ""))
-    || (report.tests || []).some((t) => t.passed !== false);
+  // Tests — use structured semantics (never naive /fail/i)
+  const testEv = artifacts.filter((e) => e.type === "test" || /^Tests executed$/i.test(e.title || ""));
+  const testSemantics = testEv.map((e) =>
+    parseTestEvidenceSemantics(e.description || e.title || "", { exitCode: e.exitCode }));
+  const suiteFailed = testSemantics.some((s) => s.test_run_status === "failed");
+  const suitePassed = testSemantics.some((s) => s.test_run_status === "passed") && !suiteFailed;
   checks.push(checkItem(
     "tests_passed",
     "Required tests ran and passed",
-    testEv.length === 0 ? "fail" : (testsPassed ? "pass" : "fail"),
+    testEv.length === 0 ? "fail" : (suiteFailed ? "fail" : suitePassed ? "pass" : "fail"),
     testEv.length === 0
       ? "No test evidence attached."
-      : (testsPassed ? "Test evidence reports a passing run." : "Test evidence does not show a clear pass."),
+      : (testSemantics[0]?.result_summary || (suitePassed ? "Test evidence reports a passing run." : "Test evidence does not show a clear pass.")),
   ));
 
   // Evidence presence
@@ -303,7 +332,6 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
     acIds.length
       ? `Criteria in scope: ${acIds.join(", ")}. ${acCovered ? "Evidence references them." : "Coverage not explicit."}`
       : "No formal criteria IDs on the assignment — judged from deliverables and tests.",
-    { source: acResults.length ? "worker_claim+automatic" : "automatic" },
   ));
 
   // Claims vs git
@@ -322,33 +350,81 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
     { claim: commitEv ? commitEv.title : null },
   ));
 
-  // Dependent work safety
+  // Evidence reconciliation (claims vs proof)
+  const evidenceCards = artifacts.map((e) => translateEvidence(e, curated, { deliverableCommit: sha }));
+  const reconciliation = reconcileDeliverableEvidence({
+    assignment,
+    report,
+    artifacts,
+    evidenceCards,
+    deliverableCommit: sha || resolveDeliverableCommit(artifacts, report),
+    nowMs,
+  });
+  checks.push(checkItem(
+    "evidence_reconciled",
+    "Worker claims agree with structured evidence",
+    reconciliation.reconciliation_state === "consistent" ? "pass" : "fail",
+    reconciliation.blocking_discrepancies.length
+      ? reconciliation.blocking_discrepancies.map((d) => d.detail).join(" ")
+      : "Claims and evidence are consistent.",
+  ));
+
+  // Director-verified facts (no judgment badges)
+  const verifiedFacts = [
+    {
+      id: "risks_documented",
+      label: "Remaining risks are documented",
+      detail: (curated?.residual_risks || report.residualRisks || ["None recorded"]).slice(0, 3).join("; "),
+    },
+    {
+      id: "scope_boundaries_clear",
+      label: "Scope boundaries are clear",
+      detail: (curated?.behavior_not_changed || ["Out-of-scope work is not claimed"]).slice(0, 2).join("; "),
+    },
+    {
+      id: "evidence_complete",
+      label: "Evidence set is complete for this assignment",
+      detail: reconciliation.reconciliation_state === "consistent"
+        ? "Required evidence is present and consistent."
+        : "Evidence set has blocking gaps or contradictions.",
+    },
+  ];
+
+  // Operator judgment (never pass/fail)
   const dependents = listAssignments(missionId).filter((a) =>
     (a.dependencies || []).includes(assignmentId) && a.status === "waiting");
-  checks.push(checkItem(
-    "dependents_safe",
-    "Dependent work may safely continue after approval",
-    "pass",
-    dependents.length
-      ? `${dependents.length} dependent assignment(s) become eligible when you approve.`
-      : "No waiting dependents blocked on this assignment right now.",
-    { source: "judgment" },
-  ));
-
-  // Residual risks (judgment)
-  checks.push(checkItem(
-    "residual_risks_identified",
-    "Unresolved risks identified",
-    "pass",
-    (curated?.residual_risks || report.residualRisks || ["None recorded"]).slice(0, 3).join("; "),
-    { source: "judgment" },
-  ));
+  const yourJudgment = [
+    judgmentItem(
+      "accept_exception_baseline",
+      "Accept the current exception baseline as temporary debt until W-15",
+      curated?.residual_risks?.[0]
+        || "Existing allowlisted exceptions remain until a later remediation wave.",
+    ),
+    judgmentItem(
+      "residual_risk_ok",
+      "Decide whether the residual risk is acceptable",
+      (curated?.residual_risks || report.residualRisks || ["No residual risks listed"]).join("; "),
+    ),
+    judgmentItem(
+      "behavior_matches_intent",
+      "Decide whether the delivered behavior matches product intent",
+      curated?.assignment_objective || assignment.objective || assignment.title,
+    ),
+  ];
+  if (dependents.length) {
+    yourJudgment.push(judgmentItem(
+      "dependents_continue",
+      "Allow dependent work to continue after this approval",
+      `${dependents.length} dependent assignment(s) become eligible when you approve.`,
+    ));
+  }
 
   const hardFails = checks.filter((c) => c.status === "fail");
-  const canRecommend = hardFails.length === 0;
+  const blocking = reconciliation.blocking_discrepancies || [];
+  const canRecommend = hardFails.length === 0 && blocking.length === 0;
   const recommendation = !canRecommend
     ? "not_ready"
-    : (curated?.recommendation || report.recommendation || "approve");
+    : (curated?.recommendation || "approve");
 
   return {
     ok: true,
@@ -357,6 +433,10 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
     can_recommend_approval: canRecommend && recommendation === "approve",
     recommendation,
     checks,
+    verified_facts: verifiedFacts,
+    your_judgment: yourJudgment,
+    reconciliation,
+    evidence_cards: evidenceCards,
     worker_claims: {
       summary: report.summary || null,
       files: changed,
@@ -370,20 +450,27 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
 function buildReviewFields(assignment, verification, { nowMs } = {}) {
   const curated = curatedBrief(assignment);
   const report = assignment.completionReport || {};
-  const artifacts = listEvidence(assignment.missionId, { assignmentId: assignment.assignmentId });
-  const evidence_summary = artifacts.map((e) => translateEvidence(e, curated));
+  const reconciliation = verification.reconciliation
+    || { reconciliation_state: "pending", blocking_discrepancies: [], discrepancies: [] };
 
-  // Deduplicate evidence cards by title
+  // Prefer cards already built during verification (same semantics)
+  let evidenceDeduped = [];
   const seen = new Set();
-  const evidenceDeduped = [];
-  for (const e of evidence_summary) {
+  for (const e of (verification.evidence_cards || [])) {
     const key = e.title.toLowerCase();
     if (seen.has(key)) continue;
-    // Skip raw filler duplicates
     if (/^supporting (log|notes|document)/i.test(e.title) && evidenceDeduped.length >= 3) continue;
+    // Prefer the test-run card over a file-path "Present …test.ts" card
     seen.add(key);
     evidenceDeduped.push(e);
   }
+  // Prefer Automated enforcement tests that came from type=test
+  evidenceDeduped = evidenceDeduped.filter((e, idx, arr) => {
+    if (e.title !== "Automated enforcement tests") return true;
+    const testOnes = arr.filter((x) => x.title === e.title && x.type === "test");
+    if (testOnes.length && e.type !== "test") return false;
+    return true;
+  });
 
   const acResults = (report.acceptanceCriteriaResults || []).length
     ? report.acceptanceCriteriaResults
@@ -393,9 +480,34 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
       source: verification.can_recommend_approval ? "director_verified" : "pending",
     }));
 
-  const certState = verification.can_recommend_approval || verification.recommendation === "approve"
-    ? "ready_for_review"
-    : "cannot_verify";
+  const blocking = reconciliation.blocking_discrepancies || [];
+  let certState = "cannot_verify";
+  let recommendation = "not_ready";
+  let recommendationHeadline = "Not ready for approval";
+  let recommendationDetail = "Director could not certify this deliverable.";
+
+  if (reconciliation.reconciliation_state === "inconsistent" || blocking.length) {
+    certState = "evidence_discrepancy";
+    recommendation = "not_ready";
+    recommendationHeadline = "Not ready for approval";
+    recommendationDetail = blocking.length === 1
+      ? `One evidence discrepancy must be resolved:\n${blocking[0].detail}`
+      : `${blocking.length} evidence discrepancies must be resolved:\n${blocking.map((d) => `• ${d.detail}`).join("\n")}`;
+  } else if (verification.can_recommend_approval && verification.recommendation === "approve") {
+    certState = "ready_for_review";
+    recommendation = "approve";
+    recommendationHeadline = curated?.recommendation_headline || "Approve deliverable";
+    recommendationDetail = curated?.recommendation_detail
+      || "All required evidence is consistent and Director recommends approval.";
+  } else {
+    certState = "cannot_verify";
+    recommendation = "not_ready";
+    recommendationHeadline = "Not ready for approval";
+    recommendationDetail = "Director verification is incomplete or failed required checks.";
+  }
+
+  const passedChecks = (verification.checks || []).filter((c) => c.status === "pass").length;
+  const totalChecks = (verification.checks || []).length;
 
   return {
     schema_version: SCHEMA,
@@ -410,8 +522,8 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     expected_outcome: curated?.expected_outcome
       || (assignment.expectedDeliverables || []).map((d) => (typeof d === "string" ? d : d.title || d.path)).filter(Boolean).join("; ")
       || "Complete the assignment per its acceptance criteria.",
-    outcome_summary: curated?.outcome_summary
-      || "Director reviewed the worker completion report and verification checks below.",
+    // Keep short — do not duplicate "What changed" bullets
+    outcome_summary: null,
     behavior_changed: curated?.behavior_changed || summarizeChanged(report, assignment),
     behavior_not_changed: curated?.behavior_not_changed || [
       "Anything outside the assignment’s expected deliverables",
@@ -421,17 +533,20 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     acceptance_criteria_results: acResults,
     director_verification: {
       checks: verification.checks,
+      passed: passedChecks,
+      total: totalChecks,
+      verified_facts: verification.verified_facts || [],
+      your_judgment: verification.your_judgment || [],
       worker_claims: verification.worker_claims,
       can_recommend_approval: verification.can_recommend_approval,
     },
+    evidence_reconciliation: reconciliation,
     evidence_summary: evidenceDeduped,
     residual_risks: curated?.residual_risks || report.residualRisks || [],
     deferred_work: curated?.deferred_work || report.followUpItems || [],
-    recommendation: verification.recommendation,
-    recommendation_detail: curated?.recommendation_detail
-      || (verification.recommendation === "approve"
-        ? "Director recommends approving this deliverable."
-        : "Director could not certify this deliverable."),
+    recommendation,
+    recommendation_headline: recommendationHeadline,
+    recommendation_detail: recommendationDetail,
     approval_meaning: curated?.approval_meaning || {
       assignment_accepted: true,
       criteria_satisfied: assignment.acceptanceCriteriaIds || [],
@@ -477,10 +592,12 @@ export function getReviewForAssignment(missionId, assignmentId, { includeSuperse
 
 export function getOpenDeliverableReview(missionId) {
   const open = listDeliverableReviews(missionId).filter((r) =>
-    ["ready_for_review", "director_verifying", "cannot_verify", "changes_requested"].includes(r.certification_state));
-  // Prefer newest ready_for_review (latest finished assignment), then cannot_verify.
+    ["ready_for_review", "director_verifying", "cannot_verify", "changes_requested",
+      "evidence_discrepancy", "evidence_repair"].includes(r.certification_state));
   const byNewest = [...open].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   return byNewest.find((r) => r.certification_state === "ready_for_review")
+    || byNewest.find((r) => r.certification_state === "evidence_discrepancy")
+    || byNewest.find((r) => r.certification_state === "evidence_repair")
     || byNewest.find((r) => r.certification_state === "cannot_verify")
     || byNewest.find((r) => r.certification_state === "director_verifying")
     || byNewest[0]
@@ -490,7 +607,12 @@ export function getOpenDeliverableReview(missionId) {
 /**
  * Create (or refresh) a Director Deliverable Review after worker completion validation.
  */
-export function createDeliverableReview(missionId, assignmentId, { actor = "director", nowMs, force = false } = {}) {
+export function createDeliverableReview(missionId, assignmentId, {
+  actor = "director",
+  nowMs,
+  force = false,
+  autoRepair = true,
+} = {}) {
   const assignment = getAssignment(missionId, assignmentId);
   if (!assignment) return { ok: false, error: "assignment_not_found" };
   if (!assignment.completionReport && assignment.status !== "complete") {
@@ -508,8 +630,6 @@ export function createDeliverableReview(missionId, assignmentId, { actor = "dire
     existing.superseded_at = iso(nowMs);
   }
 
-  // Persist transitional verifying state only inside the build — operator never sees
-  // "review before you certify" without verification results.
   const verification = runDirectorVerification(missionId, assignmentId, { nowMs });
   if (!verification.ok) return verification;
 
@@ -518,18 +638,50 @@ export function createDeliverableReview(missionId, assignmentId, { actor = "dire
   writeStore(store);
 
   const shortTitle = shortDeliverableName(review.deliverable_title);
-  appendTimelineEvent(missionId, {
-    type: "deliverable_verified",
-    headline: `Director verified ${shortTitle} and ${review.recommendation === "approve" ? "recommends approval" : "could not certify it"}`,
-    summary: review.outcome_summary,
-    visibility: "summary",
-    assignmentId,
-    actor,
-    detail: { review_id: review.review_id, recommendation: review.recommendation },
-    nowMs,
-  });
+  if (review.certification_state === "evidence_discrepancy") {
+    appendTimelineEvent(missionId, {
+      type: "deliverable_evidence_discrepancy",
+      headline: `Director found a mismatch between the worker report and evidence for ${shortTitle}`,
+      summary: review.recommendation_detail,
+      visibility: "summary",
+      assignmentId,
+      actor,
+      detail: {
+        review_id: review.review_id,
+        blocking: review.evidence_reconciliation?.blocking_discrepancies || [],
+      },
+      nowMs,
+    });
+    if (autoRepair) {
+      try {
+        startEvidenceRepair(missionId, review.review_id, { actor: "director", nowMs, auto: true });
+      } catch { /* best-effort */ }
+    }
+  } else if (review.recommendation === "approve") {
+    appendTimelineEvent(missionId, {
+      type: "deliverable_verified",
+      headline: `Director verified ${shortTitle} and recommends approval`,
+      summary: review.recommendation_detail,
+      visibility: "summary",
+      assignmentId,
+      actor,
+      detail: { review_id: review.review_id, recommendation: review.recommendation },
+      nowMs,
+    });
+  } else {
+    appendTimelineEvent(missionId, {
+      type: "deliverable_verified",
+      headline: `Director could not certify ${shortTitle}`,
+      summary: review.recommendation_detail,
+      visibility: "summary",
+      assignmentId,
+      actor,
+      detail: { review_id: review.review_id, recommendation: review.recommendation },
+      nowMs,
+    });
+  }
 
-  return { ok: true, review, reused: false };
+  return { ok: true, review: getDeliverableReview(missionId, review.review_id) || review, reused: false };
 }
 
 export function ensureDeliverableReviewsForMission(missionId, { nowMs } = {}) {
@@ -568,6 +720,82 @@ function unlockDependents(missionId, completedId, { nowMs } = {}) {
 }
 
 /**
+ * Reopen assignment in evidence-repair mode with precise Director instructions.
+ */
+export function startEvidenceRepair(missionId, reviewId, {
+  actor = "director",
+  nowMs,
+  auto = false,
+} = {}) {
+  const store = readStore(missionId);
+  const review = store.reviews.find((r) => r.review_id === reviewId);
+  if (!review) return { ok: false, error: "review_not_found" };
+  const blocking = review.evidence_reconciliation?.blocking_discrepancies || [];
+  if (!blocking.length && review.certification_state !== "evidence_discrepancy") {
+    return { ok: false, error: "no_blocking_discrepancy" };
+  }
+
+  review.certification_state = "evidence_repair";
+  review.evidence_repair = {
+    started_at: iso(nowMs),
+    started_by: actor,
+    auto: Boolean(auto),
+    instructions: blocking.map((d) => d.detail),
+  };
+  review.history = review.history || [];
+  review.history.push({ at: iso(nowMs), actor, action: "evidence_repair_started", note: blocking.map((d) => d.id).join(",") });
+  writeStore(store);
+
+  const direction = [
+    "EVIDENCE REPAIR — do not change product behavior unless a check is actually failing.",
+    "Director found blocking evidence discrepancies:",
+    ...blocking.map((d, i) => `${i + 1}. ${d.detail}`),
+    "Rerun only the required validation, attach replacement evidence with structured pass/fail counts,",
+    "and do not leave contradictory artifacts. Negative fixtures that correctly reject must still report suite Passed.",
+  ].join("\n");
+
+  updateAssignment(missionId, review.assignment_id, (asg) => {
+    asg.status = "ready";
+    asg.dispatch = null;
+    asg.workerId = null;
+    asg.contextAcknowledgement = null;
+    asg.priorCompletionReports = [
+      ...(asg.priorCompletionReports || []),
+      asg.completionReport,
+    ].filter(Boolean);
+    // Keep completionReport for claim history; repair worker will submit a new one
+    asg.reopen_reason = direction;
+    asg.evidence_repair = true;
+  }, { nowMs });
+
+  submitOperatorDirectorMessage({
+    missionId,
+    kind: "reject_direction",
+    message: direction,
+    actor,
+    nowMs,
+  });
+
+  const short = shortDeliverableName(review.deliverable_title);
+  appendTimelineEvent(missionId, {
+    type: "deliverable_evidence_repair",
+    headline: `Director returned ${short} for evidence repair`,
+    summary: blocking.map((d) => d.detail).join(" "),
+    visibility: "summary",
+    assignmentId: review.assignment_id,
+    actor,
+    detail: { review_id: reviewId, auto },
+    nowMs,
+  });
+
+  import("./assignment-dispatch.mjs")
+    .then(({ scheduleDispatchAfterKickoff }) => scheduleDispatchAfterKickoff(missionId, { actor: "director" }))
+    .catch(() => {});
+
+  return { ok: true, review: getDeliverableReview(missionId, reviewId), direction };
+}
+
+/**
  * Operator approves a Director Deliverable Review.
  */
 export function acceptDeliverableReview(missionId, reviewId, {
@@ -581,10 +809,18 @@ export function acceptDeliverableReview(missionId, reviewId, {
   if (review.certification_state === "director_verifying") {
     return { ok: false, error: "still_verifying", detail: "Director has not finished verification." };
   }
-  if (!["ready_for_review", "changes_requested"].includes(review.certification_state)) {
+  if (["evidence_discrepancy", "evidence_repair"].includes(review.certification_state)) {
+    return {
+      ok: false,
+      error: "evidence_not_reconciled",
+      detail: review.recommendation_detail || "Evidence discrepancies block approval.",
+    };
+  }
+  if (!["ready_for_review"].includes(review.certification_state)) {
     return { ok: false, error: "not_approvable", state: review.certification_state };
   }
-  if (review.certification_state === "cannot_verify" || review.recommendation === "not_ready") {
+  if (review.recommendation === "not_ready"
+    || review.evidence_reconciliation?.reconciliation_state === "inconsistent") {
     return { ok: false, error: "director_could_not_certify", detail: review.recommendation_detail };
   }
 
@@ -721,9 +957,17 @@ export function deliverableReviewVm(missionId, review = null) {
   const r = review || getOpenDeliverableReview(missionId);
   if (!r) return null;
 
-  const verifying = r.certification_state === "director_verifying";
-  const cannot = r.certification_state === "cannot_verify" || r.recommendation === "not_ready";
-  const ready = r.certification_state === "ready_for_review";
+  const state = r.certification_state;
+  const recon = r.evidence_reconciliation || {};
+  const blocking = recon.blocking_discrepancies || [];
+  const inconsistent = state === "evidence_discrepancy"
+    || state === "evidence_repair"
+    || recon.reconciliation_state === "inconsistent"
+    || blocking.length > 0;
+  const verifying = state === "director_verifying";
+  const ready = state === "ready_for_review"
+    && r.recommendation === "approve"
+    && !inconsistent;
 
   const checks = (r.director_verification?.checks || []).map((c) => ({
     id: c.id,
@@ -732,25 +976,34 @@ export function deliverableReviewVm(missionId, review = null) {
     detail: c.detail,
     source: c.source,
   }));
+  const passed = r.director_verification?.passed
+    ?? checks.filter((c) => c.status === "pass").length;
+  const total = r.director_verification?.total ?? checks.length;
+
+  let headline = "Deliverable review";
+  if (verifying) headline = "Director is verifying this deliverable";
+  else if (state === "evidence_repair") headline = "Evidence repair in progress";
+  else if (state === "evidence_discrepancy" || inconsistent) headline = "Director found an evidence discrepancy";
+  else if (ready) headline = "Ready for your approval";
+  else if (state === "cannot_verify") headline = "Director could not certify this deliverable";
+  else if (state === "accepted") headline = "Deliverable accepted";
+  else if (state === "changes_requested") headline = "Changes requested";
 
   return {
     kind: "deliverable_review",
     reviewId: r.review_id,
     missionId: r.mission_id,
     assignmentId: r.assignment_id,
-    certificationState: r.certification_state,
-    headline: verifying
-      ? "Director is verifying this deliverable"
-      : cannot
-        ? "Director could not certify this deliverable"
-        : ready
-          ? "Ready for your approval"
-          : r.certification_state === "accepted"
-            ? "Deliverable accepted"
-            : r.certification_state === "changes_requested"
-              ? "Changes requested"
-              : "Deliverable review",
-    operatorMayApprove: ready && r.recommendation === "approve",
+    certificationState: state,
+    headline,
+    operatorMayApprove: ready,
+    recommendation: {
+      action: ready ? "approve" : "not_ready",
+      headline: r.recommendation_headline
+        || (ready ? "Approve deliverable" : "Not ready for approval"),
+      detail: r.recommendation_detail || "",
+      discrepancies: blocking,
+    },
     assignment: {
       title: r.deliverable_title,
       objective: r.assignment_objective,
@@ -760,24 +1013,28 @@ export function deliverableReviewVm(missionId, review = null) {
     whatChanged: r.behavior_changed,
     protectsOrEnables: r.protects_or_enables,
     whatDidNotChange: r.behavior_not_changed,
-    outcomeSummary: r.outcome_summary,
     verification: {
       checks,
-      incomplete: cannot,
-      detail: cannot ? r.recommendation_detail : null,
+      passed,
+      total,
+      summary: `${passed} of ${total} checks passed`,
+      incomplete: !ready,
+      detail: !ready ? r.recommendation_detail : null,
+      verifiedFacts: r.director_verification?.verified_facts || [],
+      yourJudgment: r.director_verification?.your_judgment || [],
+    },
+    reconciliation: {
+      state: recon.reconciliation_state || "pending",
+      blocking,
     },
     evidence: r.evidence_summary || [],
     residualRisks: r.residual_risks || [],
     deferredWork: r.deferred_work || [],
-    recommendation: {
-      action: r.recommendation,
-      detail: r.recommendation_detail,
-    },
     approvalMeaning: r.approval_meaning,
     rejectionConsequence: r.rejection_consequence,
     actions: {
-      approve: ready && r.recommendation === "approve",
-      requestChanges: ["ready_for_review", "cannot_verify"].includes(r.certification_state),
+      approve: ready,
+      requestChanges: ["ready_for_review", "cannot_verify", "evidence_discrepancy"].includes(state),
       askDirector: true,
     },
     technical: {

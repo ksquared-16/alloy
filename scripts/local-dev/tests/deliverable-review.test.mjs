@@ -19,16 +19,17 @@ const aid = "asg_d203f547736c16";
 const ensured = ensureDeliverableReviewsForMission(mid);
 assert.ok(ensured.ok);
 
-const created = createDeliverableReview(mid, aid, { force: true });
+const created = createDeliverableReview(mid, aid, { force: true, autoRepair: false });
 assert.ok(created.ok, "create W-4 review");
 assert.equal(created.review.assignment_id, aid);
 assert.equal(created.review.certification_state, "ready_for_review");
 assert.match(created.review.deliverable_title, /W-4|principal/i);
-assert.match(created.review.outcome_summary, /enforcement|guard|prebuild/i);
+assert.match(created.review.recommendation_detail || "", /enforcement|guard|W-15/i);
 assert.ok(created.review.behavior_not_changed.some((x) => /route|schema|UI/i.test(x)));
 assert.ok(created.review.deferred_work.some((x) => /W-15/i.test(x)));
 assert.equal(created.review.recommendation, "approve");
 assert.ok(created.review.approval_meaning.does_not_imply.some((x) => /exception/i.test(x)));
+assert.equal(created.review.evidence_reconciliation.reconciliation_state, "consistent");
 
 const verification = runDirectorVerification(mid, aid);
 assert.ok(verification.ok);
@@ -70,7 +71,7 @@ const accepted = acceptDeliverableReview(mid, open.review_id, {
 assert.ok(accepted.ok, "accept");
 assert.equal(accepted.review.certification_state, "accepted");
 
-const restored = createDeliverableReview(mid, aid, { force: true });
+const restored = createDeliverableReview(mid, aid, { force: true, autoRepair: false });
 assert.ok(restored.ok);
 assert.equal(restored.review.certification_state, "ready_for_review");
 

@@ -25,6 +25,8 @@ export const TIMELINE_EVENT_TYPES = new Set([
   "deliverable_verified",
   "deliverable_accepted",
   "deliverable_changes_requested",
+  "deliverable_evidence_discrepancy",
+  "deliverable_evidence_repair",
   "discovery",
   "progress",
   "blocker",

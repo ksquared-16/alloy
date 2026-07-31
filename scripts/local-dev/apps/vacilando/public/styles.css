@@ -848,6 +848,13 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .drev-check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid rgba(0,0,0,.05)}
 .drev-ev-grid{display:grid;gap:10px;margin-top:8px}
 .drev-ev p{margin:6px 0}
+.drev-rec{margin:12px 0 18px}
+.drev-rec.ok{border-color:#2f6b45;background:rgba(47,107,69,.06)}
+.drev-rec.blocked{border-color:#c2703f;background:rgba(194,112,63,.08)}
+.drev-rec-headline{font-size:20px;font-weight:700;margin:4px 0 8px;letter-spacing:-0.02em}
+.drev-verify{margin:14px 0}
+.drev-judgment li{margin:8px 0}
+.drev-judgment .mc-pill{display:none}
 .mc-conf-big{font-size:42px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin:4px 0 8px}
 .mc-conf-why{margin:8px 0 12px;padding-left:18px}
 .mc-conf-why li{margin:4px 0}

@@ -661,21 +661,33 @@ We'll capture the context automatically.</p>
 
     function renderDeliverableReview(o) {
       if (!o || o.kind !== "deliverable_review") return null;
+      const ready = Boolean(o.operatorMayApprove);
+      const rec = o.recommendation || {};
+      const discList = (rec.discrepancies || o.reconciliation?.blocking || [])
+        .map((d) => `<li>${esc(d.detail || d)}</li>`).join("");
       const checks = (o.verification?.checks || []).map((c) => {
         const pill = c.status === "pass" ? "ok" : c.status === "fail" ? "bad" : "warn";
         return `<li class="drev-check"><span class="mc-pill ${pill}">${esc(c.status)}</span>
-          <div><b>${esc(c.label)}</b><div class="muted">${esc(c.detail || "")}</div>
-          ${c.source === "judgment" ? `<div class="muted">Requires your judgment</div>` : ""}
-          ${c.source === "worker_claim+automatic" || c.claim ? `<div class="muted">Worker claim cross-checked</div>` : ""}
-          </div></li>`;
+          <div><b>${esc(c.label)}</b><div class="muted">${esc(c.detail || "")}</div></div></li>`;
       }).join("");
-      const evidence = (o.evidence || []).map((e) => `<article class="mc-card drev-ev">
-        <div class="mc-card-h"><b>${esc(e.title)}</b><span class="mc-pill ${e.result === "failed" ? "bad" : "ok"}">${esc(e.result || "recorded")}</span></div>
-        <p><b>Proves:</b> ${esc(e.proves)}</p>
-        ${(e.acceptanceCriteriaCovered || []).length ? `<p class="muted">Criteria: ${esc(e.acceptanceCriteriaCovered.join(", "))}</p>` : ""}
-        <p class="muted">Source: ${esc(e.source || "—")}${e.timestamp ? ` · ${esc(e.timestamp)}` : ""}${e.commit ? ` · ${esc(e.commit)}` : ""}</p>
-        ${e.fileUri ? `<button class="btn ghost" type="button" data-nav="evidence/${esc(id)}">Open evidence</button>` : ""}
-      </article>`).join("");
+      const verifiedFacts = (o.verification?.verifiedFacts || []).map((f) =>
+        `<li><b>${esc(f.label)}</b><div class="muted">${esc(f.detail || "")}</div></li>`).join("");
+      const judgment = (o.verification?.yourJudgment || []).map((f) =>
+        `<li><b>${esc(f.label)}</b><div class="muted">${esc(f.detail || "")}</div></li>`).join("");
+      const evidence = (o.evidence || []).map((e) => {
+        const status = e.test_run_status || e.result || "recorded";
+        const pill = status === "failed" ? "bad" : status === "passed" ? "ok" : "warn";
+        const statusLabel = status === "passed" ? "Passed" : status === "failed" ? "Failed" : status;
+        return `<article class="mc-card drev-ev">
+          <div class="mc-card-h"><b>${esc(e.title)}</b><span class="mc-pill ${pill}">${esc(statusLabel)}</span></div>
+          <p><b>Proves</b><br/>${esc(e.proves)}</p>
+          <p><b>Result</b><br/>${esc(e.result_summary || statusLabel)}</p>
+          ${(e.acceptanceCriteriaCovered || []).length ? `<p><b>Criteria</b><br/>${esc(e.acceptanceCriteriaCovered.join(", "))}</p>` : ""}
+          ${e.commit ? `<p><b>Commit</b><br/><code>${esc(e.commit)}</code></p>` : ""}
+          <p class="muted">${esc(e.timestamp || "")}${e.source ? ` · ${esc(e.source)}` : ""}</p>
+          <button class="btn ghost" type="button" data-nav="evidence/${esc(id)}">Open details</button>
+        </article>`;
+      }).join("");
       const meaning = o.approvalMeaning || {};
       const actions = [];
       if (o.actions?.approve) {
@@ -691,10 +703,18 @@ We'll capture the context automatically.</p>
       const notChanged = (o.whatDidNotChange || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
       const risks = (o.residualRisks || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">None recorded</li>";
       const deferred = (o.deferredWork || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      const recCardClass = ready ? "drev-rec ok" : "drev-rec blocked";
       return `<section class="mc-sec mc-outcome mc-drev" id="mc-outcome">
         <h3>${esc(o.headline)}</h3>
         <p class="muted">${esc(o.assignment?.title || "")}</p>
-        ${o.verification?.incomplete ? `<div class="mc-card" style="border-color:#c2703f"><p><b>Director could not certify this deliverable.</b></p><p>${esc(o.verification.detail || o.recommendation?.detail || "")}</p></div>` : ""}
+
+        <article class="mc-card ${recCardClass}">
+          <h4 style="margin-top:0">Director recommendation</h4>
+          <p class="drev-rec-headline">${esc(rec.headline || (ready ? "Approve" : "Not ready for approval"))}</p>
+          <p style="white-space:pre-wrap">${esc(rec.detail || "")}</p>
+          ${discList ? `<ul>${discList}</ul>` : ""}
+          <div class="mc-actions" style="margin-top:12px">${actions.join("") || `<span class="muted">Approval disabled until evidence is consistent</span>`}</div>
+        </article>
 
         <h4>Assignment</h4>
         <p>${esc(o.assignment?.objective || "")}</p>
@@ -704,7 +724,6 @@ We'll capture the context automatically.</p>
 
         <h4>What changed</h4>
         <ul>${changed}</ul>
-        <p>${esc(o.outcomeSummary || "")}</p>
 
         <h4>What this protects or enables</h4>
         <p>${esc(o.protectsOrEnables || "")}</p>
@@ -712,8 +731,11 @@ We'll capture the context automatically.</p>
         <h4>What did not change</h4>
         <ul>${notChanged}</ul>
 
-        <h4>Director’s verification</h4>
-        <ul class="drev-checks">${checks || "<li class=\"muted\">No checks recorded</li>"}</ul>
+        <details class="mc-diag drev-verify">
+          <summary>Director verification — ${esc(o.verification?.summary || `${o.verification?.passed || 0} of ${o.verification?.total || 0} checks passed`)}</summary>
+          <ul class="drev-checks">${checks || "<li class=\"muted\">No checks recorded</li>"}</ul>
+          ${verifiedFacts ? `<h4>Director verified</h4><ul>${verifiedFacts}</ul>` : ""}
+        </details>
 
         <h4>Evidence</h4>
         <div class="drev-ev-grid">${evidence || "<p class=\"muted\">No translated evidence</p>"}</div>
@@ -722,8 +744,7 @@ We'll capture the context automatically.</p>
         <ul>${risks}</ul>
         ${deferred ? `<h4>Deferred work</h4><ul>${deferred}</ul>` : ""}
 
-        <h4>Director recommendation</h4>
-        <p><b>${esc(String(o.recommendation?.action || "").replace(/_/g, " "))}</b> — ${esc(o.recommendation?.detail || "")}</p>
+        ${judgment ? `<h4>Your judgment</h4><ul class="drev-judgment">${judgment}</ul>` : ""}
 
         <h4>What your approval means</h4>
         <ul>
@@ -733,8 +754,6 @@ We'll capture the context automatically.</p>
           ${(meaning.does_not_imply || []).map((x) => `<li>Does <b>not</b> imply: ${esc(x)}</li>`).join("")}
         </ul>
         <p class="muted">If you request changes: ${esc(o.rejectionConsequence || "")}</p>
-
-        <div class="mc-actions" style="margin-top:16px">${actions.join("")}</div>
 
         <details class="mc-diag" style="margin-top:18px">
           <summary>Technical details</summary>

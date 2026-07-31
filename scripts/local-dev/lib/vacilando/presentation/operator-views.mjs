@@ -95,6 +95,8 @@ const TIMELINE_HEADLINES = {
   deliverable_verified: "Director verified a deliverable",
   deliverable_accepted: "You accepted a deliverable",
   deliverable_changes_requested: "You requested changes on a deliverable",
+  deliverable_evidence_discrepancy: "Director found an evidence mismatch",
+  deliverable_evidence_repair: "Director returned work for evidence repair",
   progress: "A worker reported progress",
   discovery: "Director surfaced a risk",
   blocker: "Work hit a blocker",
@@ -328,7 +330,9 @@ export function missionListCardVm(row) {
   const phase = r.current_phase;
 
   const deliverablesLabel = posture.id === "deliverable_review"
-    ? "Deliverable ready for approval"
+    ? (posture.status === "evidence_repair"
+      ? "Evidence repair in progress"
+      : posture.label)
     : posture.id === "operator_review" || posture.id === "awaiting_completion"
       ? "Deliverable ready for approval"
       : posture.busy

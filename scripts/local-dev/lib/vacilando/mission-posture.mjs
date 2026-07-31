@@ -199,23 +199,44 @@ export function deriveMissionPosture(missionId) {
     };
   }
 
-  // Director-owned Deliverable Review ready (or verification failed) — before generic cert copy.
+  // Director-owned Deliverable Review — before generic cert copy.
   const openReview = getOpenDeliverableReview(missionId);
-  if (openReview && ["ready_for_review", "cannot_verify"].includes(openReview.certification_state)) {
-    const cannot = openReview.certification_state === "cannot_verify";
+  if (openReview && ["ready_for_review", "cannot_verify", "evidence_discrepancy", "evidence_repair", "director_verifying"].includes(openReview.certification_state)) {
+    const state = openReview.certification_state;
+    const repair = state === "evidence_repair" || state === "evidence_discrepancy";
+    const cannot = state === "cannot_verify";
+    const verifying = state === "director_verifying";
+    const ready = state === "ready_for_review" && openReview.recommendation === "approve";
     return {
       ...base,
       id: "deliverable_review",
-      status: cannot ? "deliverable_unverified" : "deliverable_ready_for_approval",
-      label: cannot ? "Director could not certify" : "Deliverable ready for approval",
-      detail: cannot
-        ? (openReview.recommendation_detail || "Director could not certify this deliverable.")
-        : `${openReview.deliverable_title} is verified and waiting for your approval.`,
-      next: cannot
-        ? "Request changes or ask Director"
-        : "Review the Deliverable Review, then approve or request changes",
-      needsYou: true,
-      primaryAction: action("review_deliverable", cannot ? "Open review" : "Review deliverable", {
+      status: repair
+        ? "evidence_repair"
+        : verifying
+          ? "director_verifying"
+          : cannot
+            ? "deliverable_unverified"
+            : "deliverable_ready_for_approval",
+      label: repair
+        ? "Evidence repair in progress"
+        : verifying
+          ? "Director verifying"
+          : cannot
+            ? "Director could not certify"
+            : "Deliverable ready for approval",
+      detail: repair
+        ? (openReview.recommendation_detail
+          || "Director is reconciling evidence before asking for approval.")
+        : cannot
+          ? (openReview.recommendation_detail || "Director could not certify this deliverable.")
+          : `${openReview.deliverable_title} is verified and waiting for your approval.`,
+      next: repair
+        ? "Wait for evidence repair — or open the review"
+        : cannot
+          ? "Request changes or ask Director"
+          : "Review the Deliverable Review, then approve or request changes",
+      needsYou: ready || cannot || repair,
+      primaryAction: action("review_deliverable", ready ? "Review deliverable" : "Open review", {
         href: `missions/${missionId}`,
         missionId,
         reviewId: openReview.review_id,
