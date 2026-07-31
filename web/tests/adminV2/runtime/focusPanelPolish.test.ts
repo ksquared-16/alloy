@@ -336,6 +336,20 @@ describe("Surface Builder composer chrome", () => {
         expect(css).not.toMatch(
             /\.alloy-os-focus-panel-linked-host\s*\{[^}]*place-items:\s*center/,
         );
+        // Linked host matches Visible Focus Card frost (not a dark modal dim).
+        expect(css).toMatch(
+            /\.alloy-os-focus-panel-linked-host__backdrop\s*\{[^}]*rgba\(255,\s*255,\s*255/,
+        );
+        expect(css).not.toMatch(
+            /\.alloy-os-focus-panel-linked-host__backdrop\s*\{[^}]*alloy-os-midnight/,
+        );
+    });
+
+    it("Assignments work surface uses Focus Card back chrome, not a modal close ✕", () => {
+        const card = readSrc("components/admin/focusPanel/cards/SchedulingCard.tsx");
+        expect(card).not.toContain('data-schedule-close="true"');
+        expect(card).toContain("data-schedule-back");
+        expect(card).toContain("alloy-os-ucard__action--system5");
     });
 });
 

@@ -456,7 +456,6 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         truth={context.truth as Record<string, unknown>}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
                         coordination={coordination}
-                        onClose={() => setActiveChildId(null)}
                         onBack={() => {
                             setActiveChildId(null);
                             coordination?.back?.();
@@ -562,7 +561,6 @@ function ScheduleWorkSurface({
     truth,
     reloadChild,
     coordination,
-    onClose,
     onBack,
 }: {
     child: SchedChild;
@@ -572,7 +570,6 @@ function ScheduleWorkSurface({
     truth: Record<string, unknown>;
     reloadChild: () => Promise<ChildProj | null>;
     coordination?: FocusPanelCoordination;
-    onClose: () => void;
     onBack: () => void;
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
@@ -595,10 +592,9 @@ function ScheduleWorkSurface({
     const previousFocus = coordination?.previousFocus ?? null;
 
     /**
-     * ONE header Back affordance per drill-in state — its target changes with depth
-     * (Children → Assignments → Assignment Detail → Edit), it never stacks with a
-     * second back control in the body. Edit/create/pick-type surfaces resolve to
-     * "Cancel" (always lands on the Assignments list, never all the way out).
+     * Depth chrome matches Household/Children: ← Back in the body (not a modal ✕),
+     * form abandon via footer Cancel, dismiss elevation via scrim / ESC.
+     * Edit/create/pick-type do NOT put Cancel in the header (footer owns that).
      */
     const cancelToDetail = () => {
         setPendingTypeId(null);
@@ -606,66 +602,39 @@ function ScheduleWorkSurface({
         setActiveAssignmentId(null);
         setMode("detail");
     };
-    const headerBack: { label: string; kind: "back" | "cancel"; onClick: () => void } | null =
+    const headerBack: { label: string; onClick: () => void } | null =
         mode === "assignment"
             ? {
                   label: "Assignments",
-                  kind: "back",
                   onClick: () => {
                       setActiveAssignmentId(null);
                       setMode("detail");
                   },
               }
             : mode === "edit" || mode === "create" || mode === "pick-type"
-              ? { label: "Cancel", kind: "cancel", onClick: cancelToDetail }
+              ? null
               : previousFocus
-                ? { label: focusPanelCardBackLabel(previousFocus.card), kind: "back", onClick: onBack }
+                ? { label: focusPanelCardBackLabel(previousFocus.card), onClick: onBack }
                 : null;
 
-    const header = (
+    const header = headerBack ? (
         <div
-            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}
+            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
             data-schedule-nav="true"
         >
-            {headerBack ? (
-                <button
-                    type="button"
-                    onClick={headerBack.onClick}
-                    aria-label={headerBack.kind === "cancel" ? "Cancel" : `Back to ${headerBack.label}`}
-                    data-schedule-back="true"
-                    data-schedule-back-target={headerBack.label}
-                    style={{
-                        all: "unset",
-                        cursor: "pointer",
-                        color: T.slate,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        lineHeight: 1.2,
-                        padding: "2px 0",
-                    }}
-                >
-                    {headerBack.kind === "cancel" ? "Cancel" : `← ${headerBack.label}`}
-                </button>
-            ) : null}
             <button
                 type="button"
-                onClick={onClose}
-                aria-label="Close"
-                data-schedule-close="true"
-                style={{
-                    all: "unset",
-                    marginLeft: "auto",
-                    cursor: "pointer",
-                    color: T.mid40,
-                    fontSize: 15,
-                    lineHeight: 1,
-                    padding: 2,
-                }}
+                onClick={headerBack.onClick}
+                aria-label={`Back to ${headerBack.label}`}
+                data-schedule-back="true"
+                data-schedule-back-target={headerBack.label}
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                style={{ padding: "2px 0" }}
             >
-                ✕
+                ← {headerBack.label}
             </button>
         </div>
-    );
+    ) : null;
 
     const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean }) => {
         const fresh = await reloadChild();
