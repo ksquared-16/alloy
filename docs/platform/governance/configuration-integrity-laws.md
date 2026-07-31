@@ -267,15 +267,36 @@ Firefly is repaired only after the platform enforces these. Do not optimize for 
 
 ---
 
-# Open decisions for Kelly
+# Decision register
 
-1. **Code defaults as authority.** `defaultEnrollmentStageOperatingPlans.ts` currently acts as a
-   runtime fallback authority for transitions. Demoting it to a one-time seed template is the Law 2
-   answer, but it will make currently-"working" tenants visibly unconfigured. Demote, or keep as
-   explicit opt-in compatibility with a migration path?
-2. **Stage vocabulary reconciliation.** Two template vocabularies disagree (13 keys vs 8). One must
-   win. This is a product decision about what Alloy's default enrollment process *is*.
-3. **Blocking severity for pre-existing violations.** The existing validator already 422s the whole
-   builder save when any dangling reference exists, so legacy tenants can become unable to save
-   anything. Proposal: block only on references *touched by the current change*, plus a full report;
-   full-graph blocking applies at publish.
+Resolved by Kelly, 2026-07-30. These are binding for implementation.
+
+### D1 — Code defaults are a seed template, never a runtime authority
+
+`defaultEnrollmentStageOperatingPlans.ts` is demoted to a one-time template applied at process
+creation. It is **never consulted at runtime**. Law 2 is satisfied: transition identity has exactly
+one owner, the persisted tenant config.
+
+*Accepted consequence:* tenants currently relying on the fallback become visibly unconfigured until
+migrated. This surfaces the truth rather than regressing behavior — a process whose transitions were
+only ever supplied by code defaults was never actually configured, and the Lead→Tour failure is what
+that looks like at runtime. Migration must therefore materialize defaults into tenant config as an
+explicit, audited publish before the fallback is removed.
+
+### D2 — The 8-key vocabulary is canonical
+
+`lead / tour / decision / waitlist / enrolling / enrolled` (+2) wins.
+`defaultEnrollmentBusinessProcessV1Stages.ts` (13 keys: `new_lead`, `tour_scheduled`, …) is retired.
+
+This matches Firefly's actually-persisted stages and eliminates the `qualification` ghost at its
+source. Every reference site to the 13-key set must be migrated or deleted.
+
+### D3 — Draft blocks only what the change touches; publish blocks the full graph
+
+While drafting: block only references **touched by the current edit**; report the rest of the graph
+as warnings. At publish/activation: full-graph blocking, no warnings-with-success for
+execution-critical dangling references.
+
+*Rationale:* the current all-or-nothing 422 can freeze a legacy tenant out of editing entirely,
+which pushes operators onto exactly the unvalidated write paths that caused this defect. The hard
+integrity boundary belongs at publish.
