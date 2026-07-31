@@ -106,7 +106,18 @@
       "plan_said": "Point the grid row at the existing ops.workflows.read / ops.workflows.write keys.",
       "reality": "Those keys are seeded only into permission_keys (remote_schema.sql:731-732, inside seed_default_rbac). They are absent from permissions and permission_definitions. PUT /api/admin/rbac/grants:61-67 validates against permission_definitions, so the save would still 400 and still destroy the operator's other selections; and role_permission_grants_permissions_fkey (remote_schema.sql:6508) points at permissions, so the insert would fail at the database.",
       "resolution": "Row removed instead. Seeding the bare keys is a migration, which wave 1 excludes. No route enforces workflows.* — the only references call it explicitly insufficient — so the row granted nothing and could only destroy input. W-10 regenerates the grid from the catalog, so the row returns once W-11 seeds an enforced workflows key.",
-      "operator_decision_required": true
+      "operator_decision_required": true,
+      "operator_decision": {
+        "raised_utc": "2026-07-31",
+        "resolved_utc": "2026-07-31",
+        "chosen_option": "a",
+        "chosen_label": "Confirm removal (shipped)",
+        "rejected_options": [
+          "b — keep the row and schedule a migration seeding workflows.read/write into permissions, permission_keys and permission_definitions",
+          "c — keep the row visible but disabled with an explanatory state"
+        ],
+        "consequence": "The W-3 remedy of record is removal, not the repoint the plan text recommends. No migration is owed. §11 remains a nine-migration register."
+      }
     }
   ],
 

@@ -419,7 +419,11 @@ after**. Before: `['workflows.read', 'workflows.write']` were the *only* two of 
 from `permission_definitions`, reproducing C5 exactly and confirming the parser is not vacuous. The
 full-grid round-trip assertion covers the plan's second exit clause.
 
-**This deviates from an accepted plan and was raised as a decision to the operator rather than absorbed.**
+**This deviates from an accepted plan; it was raised as a decision rather than absorbed, and the operator
+ratified the removal on 2026-07-31** (option (a) — confirm removal; the alternatives were a migration
+seeding `workflows.*` into all three catalog tables, or a visible-but-disabled row). **The W-3 remedy of
+record is therefore removal, not the repoint written above** — a future contributor reading only the
+recommendation would reintroduce the 400.
 
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
