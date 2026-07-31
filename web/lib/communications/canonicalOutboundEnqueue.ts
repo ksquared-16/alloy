@@ -25,6 +25,8 @@ import {
     evaluateEligibility,
 } from "@/lib/communications/eligibility/evaluateEligibility";
 import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
+import { renderOutboundMessage } from "@/lib/communications/render/renderOutboundMessage";
+import type { RenderContext, RenderSnapshot } from "@/lib/communications/render/renderOutboundMessage";
 import {
     ELIGIBILITY_SNAPSHOT_VERSION,
     recordCategoryFallback,
@@ -120,6 +122,7 @@ async function insertCommunicationMessageRow(params: {
     category?: string;
     purpose?: string | null;
     eligibility_snapshot?: unknown;
+    rendered_snapshot?: unknown;
 }): Promise<{ messageId?: string | null; error?: { message?: string; code?: string } }> {
     const insertPayload: Record<string, unknown> = {
         org_id: params.org_id,
@@ -136,6 +139,7 @@ async function insertCommunicationMessageRow(params: {
     if (params.category) insertPayload.category = params.category;
     if (params.purpose != null) insertPayload.purpose = params.purpose;
     if (params.eligibility_snapshot != null) insertPayload.eligibility_snapshot = params.eligibility_snapshot;
+    if (params.rendered_snapshot != null) insertPayload.rendered_snapshot = params.rendered_snapshot;
     if (params.channel === "email") {
         insertPayload.subject = params.subject ?? null;
     }
@@ -162,6 +166,8 @@ export type CanonicalEnqueueResult = {
     communicationMessageId: string | null;
     threadId: string | null;
     skippedReason?: string;
+    /** Operator-safe explanation when a render or policy check refused the send. */
+    blockedMessage?: string;
 };
 
 /**
@@ -212,6 +218,16 @@ export async function enqueueCanonicalOutboundMessage(params: {
     quietHours?: QuietHoursWindow | null;
     /** Names the caller in fallback telemetry. */
     callSite?: string;
+
+    // ---- Phase 0 canonical rendering ---------------------------------------
+    /** Owner-scoped token values. Absent = free-text send with no tokens to resolve. */
+    renderContext?: RenderContext["values"];
+    /** Template lineage, retained in the immutable snapshot. */
+    template?: { id: string; version: number } | null;
+    /** True when bodyRaw is rich content (email only). */
+    bodyIsHtml?: boolean;
+    /** Fingerprint from the operator's preview; a mismatch blocks as stale. */
+    expectedRenderFingerprint?: string | null;
 }): Promise<CanonicalEnqueueResult> {
     const ch = params.channelRaw.toLowerCase();
     const mc = metaChannel(ch);
@@ -252,6 +268,42 @@ export async function enqueueCanonicalOutboundMessage(params: {
 
     const emailSubjectResolved =
         mc === "email" ? resolveOutboundEmailSubject(params.primaryEntityType, params.emailSubjectRaw ?? null) : null;
+
+    // ---- CANONICAL RENDER ---------------------------------------------------
+    // Runs at the same choke point as the eligibility gate, so no TypeScript
+    // path can enqueue unrendered or partially-rendered content. Client-supplied
+    // "already rendered" text is re-validated here rather than trusted.
+    //
+    // Callers that pass no renderContext are treated as free-text: the body is
+    // still validated (no surviving `{{`, channel-appropriate output), it simply
+    // has no token context to resolve against.
+    const renderResult = renderOutboundMessage({
+        subject: emailSubjectResolved,
+        body: params.bodyRaw,
+        bodyIsHtml: params.bodyIsHtml === true,
+        context: {
+            values: params.renderContext ?? {},
+            channel: mc,
+            template: params.template ?? null,
+        },
+        expectedFingerprint: params.expectedRenderFingerprint ?? null,
+    });
+
+    if (!renderResult.ok) {
+        console.warn("[communications] send blocked by renderer", {
+            org_id: orgIdTrim,
+            channel: mc,
+            code: renderResult.block.code,
+        });
+        return {
+            communicationMessageId: null,
+            threadId,
+            skippedReason: `render_blocked:${renderResult.block.code}`,
+            blockedMessage: renderResult.block.message,
+        };
+    }
+
+    const rendered = renderResult.output;
 
     // ---- ELIGIBILITY GATE ---------------------------------------------------
     // Evaluated immediately before the insert, so no TypeScript path can create
@@ -335,8 +387,8 @@ export async function enqueueCanonicalOutboundMessage(params: {
         thread_id: threadId,
         channel: mc,
         direction: "outbound",
-        body: params.bodyRaw,
-        subject: emailSubjectResolved,
+        body: rendered.text,
+        subject: rendered.subject,
         workflow_run_id: workflowRunUuid,
         metadata: meta,
         to_address: toAddress,
@@ -348,6 +400,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
         category,
         purpose: params.purpose ?? null,
         eligibility_snapshot: snapshot,
+        rendered_snapshot: renderResult.snapshot,
     });
 
     if (error?.message) {
