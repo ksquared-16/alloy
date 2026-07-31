@@ -4,6 +4,7 @@ import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { resolveLatestProfilePhotoDocumentForPerson } from "@/lib/admin/person/resolvePersonProfilePhotoDocument";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertNoCredentialInMetadata, classifyLegacyPhotoUrl } from "@/lib/documents/profilePhotoPresentation";
 import {
     assertDocumentAccess,
     documentAccessHttp,
@@ -97,7 +98,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     // No documents-backed photo — fall back to whatever URL (if any) metadata already carries.
     const meta = metadataOf(person);
-    const cachedUrl = typeof meta.photo_url === "string" ? meta.photo_url.trim() || null : null;
+    // Legacy fallback only. A stored value is NOT trusted as a live signed URL:
+    // signed values are classified and discarded, so a stale bearer credential
+    // is never handed back. Stable external URLs are still honored.
+    const rawCached = typeof meta.photo_url === "string" ? meta.photo_url.trim() || null : null;
+    const cachedUrl =
+        rawCached && classifyLegacyPhotoUrl(rawCached) === "external_stable_url" ? rawCached : null;
     return NextResponse.json({
         photoUrl: cachedUrl,
         documentId: typeof meta.profile_photo_document_id === "string" ? meta.profile_photo_document_id : null,
@@ -153,11 +159,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: classified.message, code: classified.code }, { status: classified.httpStatus });
     }
 
-    const nextMetadata = {
-        ...metadataOf(person),
+    // The stable reference is persisted; the signed URL is NOT.
+    //
+    // A signed URL is actor-specific, expiry-bound authorization material.
+    // Persisting it made one actor's credential durable person metadata shared
+    // with every other actor, and it is why this route needed a seven-day
+    // expiry to stay useful. Callers resolve a short-lived URL per request via
+    // resolveProfilePhotosForActor.
+    const priorMetadata = metadataOf(person);
+    const nextMetadata: Record<string, unknown> = {
+        ...priorMetadata,
         profile_photo_document_id: documentId,
-        photo_url: signed.signedUrl,
     };
+    delete nextMetadata.photo_url;
+    assertNoCredentialInMetadata(nextMetadata);
     const { error: updateErr } = await supabase
         .from("persons")
         .update({ metadata: nextMetadata })
