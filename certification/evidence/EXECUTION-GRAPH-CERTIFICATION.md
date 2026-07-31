@@ -117,3 +117,8 @@ class specifically: preflight refuses before the first write, so no compensation
   allowances; no assertion was weakened.
 - **Do not run vitest and Playwright concurrently** on this workstation — they starve each other
   and the killed process looks like a product failure.
+- **The full-project typecheck could not be completed on this machine.** Two attempts were
+  OOM-killed (exit 137 and 144) with 0-byte output, after Docker, the app and the cert stack were
+  all stopped. Nothing is inferred from those empty files. The authoritative signal for this slice
+  is the four narrowed graphs — `stageui`, `stagesave`, `execgraph`, `execgraphui` — which cover
+  the files it touches and all report **rc=0, 0 errors**.
