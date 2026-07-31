@@ -1,0 +1,4 @@
+node_modules/
+dist/
+checkout-path.txt
+*.log

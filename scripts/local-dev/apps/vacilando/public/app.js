@@ -12,6 +12,16 @@ const el = (t, c, h) => { const n = document.createElement(t); if (c) n.classNam
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const glyph = (g) => `<svg class="i"><use href="#g-${g || "compass"}"></use></svg>`;
 const STATUS_ACC = { running: "var(--run)", review: "var(--review)", blocked: "var(--blocked)", complete: "var(--green-ink)", planning: "var(--plan)", paused: "var(--paused)", idle: "var(--idle)" };
+// Per-worker activity — is claude/cursor working, idle, done, or paused? Server
+// derives it from local git-recency + metadata (see sprint.mjs deriveActivity),
+// so it stays meaningful even when the projection is degraded under load.
+const ACTIVITY = { working: { label: "Working", k: "run" }, idle: { label: "Idle", k: "idle" }, done: { label: "Done", k: "ok" }, paused: { label: "Paused", k: "paused" } };
+function activityPill(sp) {
+  const a = ACTIVITY[sp.activity];
+  if (!a) return ""; // unknown / not yet enriched — show nothing rather than guess
+  const when = sp.activity === "working" && sp.last_activity_ms ? ` · ${ago(sp.last_activity_ms)}` : "";
+  return `<span class="apill ${a.k}" title="${esc(sp.provider || "worker")} — ${a.label.toLowerCase()}${when ? ` (last activity ${ago(sp.last_activity_ms)} ago)` : ""}"><span class="adot"></span>${a.label}${when}</span>`;
+}
 function ago(ms) { if (!ms) return "—"; const s = Math.max(0, (Date.now() - ms) / 1000); if (s < 60) return `${s | 0}s`; if (s < 3600) return `${(s / 60) | 0}m`; if (s < 86400) return `${(s / 3600) | 0}h`; return `${(s / 86400) | 0}d`; }
 const shortBranch = (b, wt) => (b ? b.replace(/^agent\/[^/]+\//, "") : wt || "—");
 
@@ -53,7 +63,8 @@ const READY_K = { ready: "ok", draft: "muted", blocked: "err", awaiting_operator
 // Director Review — six-state verdict badge colouring (operator language).
 const VERDICT_K = { "Ready": "ok", "Needs Product Decisions": "auth", "Needs Clarification": "auth", "Needs References": "warn", "Needs Acceptance Criteria": "warn", "Needs Review": "warn" };
 const verdictBadgeClass = (v) => VERDICT_K[v] || "muted";
-const DIRECTOR_SLOT = 6; // where a prepared mission will run (a detail, not the operator's concern)
+// The Director no longer pins a slot — it dispatches each mission to a worker
+// (operator's run-target, or "auto"). See prepareDirectorMission + resolveRunSlot.
 
 async function fetchMissions(slot) { try { const r = await fetch(`/api/missions?slot=${slot}`); state.missions[slot] = (await r.json()).missions || []; render(true); } catch { /* keep last */ } }
 // Loading is explicit: while a mission's detail is in flight we render a loading
@@ -195,23 +206,124 @@ document.addEventListener("input", (e) => {
   }
   // Director conversation: keep the intent box + reply composer intact across polls.
   if (t && t.id === "d-intent") state._dirIntent = t.value;
+  if (t && t.id === "d-runtarget") state._runTarget = t.value; // which worker runs the next mission
   if (t && t.id === "cv-reply") state._cvReply = t.value;
 });
 
-// -------- routing (Command Center / Work History / Settings) --------
-function parseRoute() { const p = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean); return { name: p[0] || "command", sub: p[1], param: p[2] }; }
-function route() { return parseRoute().name; }
-function go(r) { location.hash = "#/" + r; }
-const CRUMBS = { director: "Director", command: "Command Center", history: "Work History", policies: "Policies", settings: "Settings", trust: "Runtime Trust" };
-function setActiveNav(name) {
-  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === name));
-  $("#crumb").textContent = CRUMBS[name] || "Command Center";
+// -------- routing (Mission Control primary; legacy board is compatibility-only) --------
+const MC_ROUTES = new Set(["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"]);
+const LEGACY_ROUTES = new Set(["command", "director", "history", "policies", "trust"]);
+
+function legacyMode() {
+  return new URLSearchParams(location.search).get("legacy") === "1";
 }
 
-let lastKey = null;
-function render(force) {
-  if (document.querySelector(".ov")) return;
+function parseRoute() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  const [pathPart, queryPart] = raw.split("?");
+  const p = (pathPart || "").split("/").filter(Boolean);
+  const qs = new URLSearchParams(queryPart || "");
+  return { name: p[0] || "missions", sub: p[1], param: p[2], query: qs };
+}
+function route() { return parseRoute().name; }
+function go(r) { location.hash = "#/" + r; }
+const CRUMBS = {
+  missions: "Missions", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
+  decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", improvements: "Improvements",
+  settings: "Settings",
+  director: "Legacy Director", command: "Legacy Board", history: "Work History",
+  policies: "Policies", trust: "Runtime Trust",
+};
+function setActiveNav(name) {
+  const active = (name === "kickoff" || name === "timeline" || name === "decisions" || name === "evidence")
+    ? (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name)
+    : name;
+  const navActive = ["missions", "needs-you", "workers", "improvements", "settings"].includes(name)
+    ? name
+    : (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name === "timeline" || name === "evidence" ? "missions" : name);
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === navActive));
+  $("#crumb").textContent = CRUMBS[name] || "Missions";
+}
+
+/**
+ * Cutover: empty hash and legacy home routes land in Mission Control Missions
+ * unless the operator explicitly requested ?legacy=1.
+ * Desktop historically opened #/director — that must not remain the landing page.
+ */
+const LEGACY_HOME_ROUTES = new Set(["director", "command", "history", "policies", "trust"]);
+function enforceMissionControlHome() {
+  const hash = location.hash || "";
+  const empty = !hash || hash === "#" || hash === "#/";
+  if (empty) {
+    location.hash = "#/missions";
+    return;
+  }
+  if (legacyMode()) return;
   const r = parseRoute();
+  // Top-level legacy shells only (keep #/command/worker/N reachable via Settings → Legacy).
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) {
+    location.hash = "#/missions";
+  }
+}
+window.addEventListener("hashchange", () => {
+  if (legacyMode()) return;
+  const r = parseRoute();
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = "#/missions";
+});
+
+let lastKey = null;
+function renderMcView(r, V2) {
+  setActiveNav(r.name);
+  const V = $("#view");
+  let html = "";
+  const missionQ = r.query?.get("mission") || null;
+  if (r.name === "settings") html = V2.viewSettings ? V2.viewSettings() : `<div class="mc-wrap"><h2>Settings</h2></div>`;
+  else if (r.name === "needs-you") html = V2.viewNeedsYou();
+  else if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
+  else if (r.name === "missions") html = V2.viewMissions();
+  else if (r.name === "timeline") html = V2.viewTimeline(r.sub || missionQ);
+  else if (r.name === "workers") html = r.sub ? V2.viewWorkerDetail(r.sub) : V2.viewWorkers();
+  else if (r.name === "decisions") html = r.sub ? V2.viewDecisionDetail(r.sub) : V2.viewDecisions(missionQ);
+  else if (r.name === "evidence") html = V2.viewEvidence(r.sub || missionQ);
+  else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
+  else if (r.name === "improvements") html = r.sub ? V2.viewImprovementDetail(r.sub) : V2.viewImprovements();
+  V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
+  try {
+    // Mission Control badge is V2 Needs You only — never fall back to legacy board counts.
+    const items = window.VacilandoV2?.state?.needsYou?.items;
+    if (Array.isArray(items)) $("#nb-needs").textContent = String(items.length);
+    else if (typeof window.VacilandoV2?.fetchNeedsYou === "function") {
+      window.VacilandoV2.fetchNeedsYou();
+    } else {
+      $("#nb-needs").textContent = "0";
+    }
+  } catch { /* */ }
+}
+
+function render(force) {
+  // A leftover modal must not permanently lock Mission Control navigation.
+  const ov = document.querySelector(".ov");
+  if (ov && !force) {
+    // Still allow hash-driven MC navigation to dismiss a stuck overlay.
+    const r0 = parseRoute();
+    if (MC_ROUTES.has(r0.name) && window.VacilandoV2?.enabled) {
+      try { ov.remove(); } catch { /* */ }
+    } else {
+      return;
+    }
+  }
+  const r = parseRoute();
+  const V2 = window.VacilandoV2;
+
+  // Mission Control is the authoritative shell — never wait on board compose.
+  if (V2?.enabled && MC_ROUTES.has(r.name)) {
+    const mcKey = location.hash + "|mc|" + (V2.state?._rev || 0);
+    if (!force && mcKey === lastKey) return;
+    lastKey = mcKey;
+    renderMcView(r, V2);
+    return;
+  }
+
   // URL drives the center: #/command → Team Dashboard; #/command/worker/N → that worker.
   if (r.name === "command" && r.sub === "worker" && r.param) {
     const n = Number(r.param);
@@ -224,9 +336,7 @@ function render(force) {
   if (!force && key === lastKey) return;
   setActiveNav(r.name);
   const V = $("#view");
-  // Only a genuinely empty runtime blanks the app. A pending/degraded projection
-  // still has a registry-backed board, and must render it rather than hiding
-  // every worker behind "Connecting…".
+  // Only a genuinely empty runtime blanks the LEGACY board. Mission Control never hits this path.
   if (!state.snap || (!state.snap.headline && !(state.snap.sprints || []).length)) {
     // NOTE: lastKey is deliberately NOT set here. Marking this key as rendered
     // would make the next identical key short-circuit, leaving the operator
@@ -246,6 +356,7 @@ function render(force) {
   }
   $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
 }
+window.render = render;
 
 // -------- Runtime Trust: every trust property, measurable --------
 async function fetchTrust() { try { const r = await fetch("/api/trust"); state._trust = await r.json(); render(true); } catch { /* keep last */ } }
@@ -310,6 +421,7 @@ function viewCommand() {
   return `<div class="room">
     <section class="board">
       <div class="board-h"><span>Worker Dock</span><button class="btn primary sm" data-start>+ Start Work</button></div>
+      ${championCard()}
       ${boardBanner()}
       ${state.snap.sprints.length ? state.snap.sprints.map(workerCard).join("") : `<div class="empty sm">No workers are configured.</div>`}
       ${resourcesCard()}
@@ -325,6 +437,18 @@ function needsYouHtml() {
 }
 
 function resFor(slot) { return (state.res?.workers || []).find((w) => w.slot === slot) || null; }
+
+// Vacilando itself — the CHAMPION — sits above the worker slots as the app that
+// stands them up. It is infrastructure, not a worker: no work is dispatched to it.
+function championCard() {
+  const c = state.snap?.champion;
+  if (!c) return "";
+  return `<div class="champ">
+    <div class="champ-top"><span class="gl">${glyph(c.glyph)}</span>
+      <div class="champ-id"><b>Vacilando</b> · app<div class="champ-sub trunc mono">${esc(c.branch || c.worktree || "")}</div></div>
+      <span class="apill dir" title="The control plane you're using — stands up the workers, not a worker itself"><span class="adot"></span>Champion</span></div>
+  </div>`;
+}
 
 function workerCard(sp) {
   // A slot whose worktree was deleted: tell the truth and offer to free it,
@@ -344,7 +468,7 @@ function workerCard(sp) {
   const pend = sp.question_count || 0;
   return `<div class="wcard ${sp.slot === state.sel ? "sel" : ""}" data-sel="${sp.slot}" style="--acc:${STATUS_ACC[sp.status] || "var(--green)"}">
     <div class="wc-top"><span class="gl">${glyph(sp.glyph)}</span>
-      <div class="wc-id"><b>slot ${sp.slot}</b> · ${esc(sp.provider)}</div>
+      <div class="wc-id"><b>slot ${sp.slot}</b> · ${esc(sp.provider)}${activityPill(sp)}</div>
       <span class="chip ${sp.enriched === false ? "idle" : sp.status}">${esc(sp.enriched === false ? "detail refreshing" : sp.status)}</span>${pend ? `<span class="pend">${pend}</span>` : ""}</div>
     <div class="wc-obj trunc">${esc(sp.title)}</div>
     <div class="wc-meta trunc mono">${esc(shortBranch(sp.branch, sp.worktree))}${sp.git ? ` · ↑${sp.git.ahead}↓${sp.git.behind}${sp.git.state === "dirty" ? "·dirty" : ""}` : ` · <span class="muted">git detail pending</span>`}</div>
@@ -395,6 +519,30 @@ function memoryBlock(mem) {
     <div class="muted src">Vacilando reclaims <b>idle</b> dev servers automatically when the host thrashes (never active work). External apps (Chrome, VMs, editors) are outside its control — the biggest hogs there are yours to close.</div></div>`;
 }
 
+// Disk hygiene — Vacilando reclaims build bloat from merged+clean worktrees so
+// the operator manages WORK, not disk. Mirror of memoryBlock, one resource over.
+function diskBlock(disk) {
+  const sig = disk.signal || {};
+  const pol = disk.policy || {};
+  const auto = !!pol.auto_gc;
+  const free = sig.free_gb;
+  const low = typeof free === "number" && free < (pol.low_water_gb || 8);
+  const kr = sig.kept_reasons || {};
+  const keptParts = Object.entries(kr).map(([k, n]) => `${n} ${k.replace(/_/g, "-")}`).join(", ");
+  const rMb = sig.reclaimable_mb;
+  const la = (disk.auto_actions || [])[0];
+  return `<div class="dsec"><div class="dsh">Disk hygiene · managed by Vacilando
+      <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· auto-reclaim ${auto ? "on" : "off"}${low ? " · LOW DISK" : ""}</span></div>
+    <div class="memhead"><span><b class="${low ? "warn" : "clean"}">${free != null ? free + " GB free" : "—"}</b> · ${sig.worktrees ?? "—"} worktrees</span>
+      <span>${rMb ? `<span class="clean">${(rMb / 1024).toFixed(1)}G reclaimable now</span>` : `<span class="muted">nothing reclaimable</span>`}</span></div>
+    <div class="memrow"><span class="memk">${sig.reclaimable ?? 0} merged+clean → reclaimable · ${sig.kept ?? 0} kept${keptParts ? ` (${keptParts})` : ""}</span>
+      <button class="btn sm" data-disk-reclaim="1" title="Reclaim node_modules/.next from merged+clean worktrees only — safe">Reclaim now</button></div>
+    <div class="memrow"><span class="memk">Reactive auto-reclaim when free disk < ${pol.low_water_gb || 8} GB</span>
+      <button class="btn sm ${auto ? "warn" : ""}" data-disk-auto="${auto ? "0" : "1"}">${auto ? "Turn off" : "Turn on"}</button></div>
+    ${la ? `<div class="muted src">Last reclaim: ${la.ok ? `freed ${la.reclaim_mb != null ? (la.reclaim_mb / 1024).toFixed(1) + "G" : "—"} across ${la.reclaimed ?? 0} worktree(s)${la.trigger ? ` · ${esc(la.trigger)}` : ""}` : `failed — ${esc(la.error || "")}`}</div>` : ""}
+    <div class="muted src">Reclaims only <b>regenerable</b> artifacts (node_modules/.next) from worktrees that are <b>merged + clean</b>. Never touches source, history, uncommitted work, the canonical repo, the current checkout, or a live server — restored by npm install on revisit.</div></div>`;
+}
+
 // -------- Team Dashboard (default center) --------
 function dashboardCenter() {
   const d = state._dash;
@@ -403,6 +551,7 @@ function dashboardCenter() {
   const stat = (l, v, sub) => `<div class="dstat"><div class="dl">${l}</div><div class="dv">${v}</div>${sub ? `<div class="ds">${sub}</div>` : ""}</div>`;
   const c = sc.counts || {};
   const memHtml = memoryBlock(d.memory || {});
+  const diskHtml = diskBlock(d.disk || {});
   return `<div class="dash">
     <div class="dash-h"><div class="dt">${esc(d.team?.project || "Alloy")} · Team Dashboard</div><div class="muted mono">${d.team?.base_sha || ""}</div></div>
 
@@ -435,6 +584,7 @@ function dashboardCenter() {
     </div>
 
     ${memHtml}
+    ${diskHtml}
 
     <div class="dgrid2">
       <div class="dsec"><div class="dsh">Scheduler <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· deterministic · auto-scheduling ${sc.auto_scheduling ? "on" : "off"}</span></div>
@@ -795,7 +945,47 @@ function tabMission(sp) {
     </div>` : ""}
   </div>`;
 
-  return `<div class="mission">${compileBox}${reviewPanel}${pkgPanel}${statusPanel}</div>`;
+  return `<div class="mission">${compileBox}${reviewPanel}${pkgPanel}${progressPanel(m, pkg)}${statusPanel}</div>`;
+}
+
+// Completion tracking — the mission's tasks (deliverables + acceptance criteria)
+// with LIVE status pulled from the durable per-turn report, plus current blocks.
+// This is how the operator watches a worker's work close out, criterion by
+// criterion, without reading raw output.
+const TK_MARK = { produced: "✓", met: "✓", partial: "◐", unmet: "✗", not_evidenced: "○", pending: "○" };
+const TK_K = { produced: "ok", met: "ok", partial: "warn", unmet: "err", not_evidenced: "muted", pending: "muted" };
+function progressPanel(m, pkg) {
+  const exp = pkg.expected_deliverables || [];
+  const crit = pkg.acceptance_criteria || [];
+  if (!exp.length && !crit.length && m.status === "ready") return "";
+  const rep = m.completion_report || {};
+  const repDel = rep.deliverables || [];
+  const gateCrit = m.acceptance_gate?.criteria || rep.criterion_evidence || [];
+  const row = (mark, k, text, tail) => `<li class="tk ${k}"><span class="tkm">${mark}</span><span class="tkt">${esc(text)}</span>${tail || ""}</li>`;
+  const delRows = exp.map((d) => {
+    const r = repDel.find((x) => x.id === d.id);
+    const st = r ? (r.produced ? "produced" : "pending") : "pending";
+    const path = r?.path || d.path;
+    return row(TK_MARK[st], TK_K[st], d.description || d.id, path ? `<span class="tkp mono">${esc(path)}</span>` : "");
+  }).join("");
+  const critRows = crit.map((c) => {
+    const r = gateCrit.find((x) => (x.criterion_id || x.id) === c.id);
+    const st = r?.status || "not_evidenced";
+    return row(TK_MARK[st] || "○", TK_K[st] || "muted", c.statement || c.id, `<span class="tks ${TK_K[st] || "muted"}">${esc(st.replace(/_/g, " "))}</span>`);
+  }).join("");
+  const blocks = [];
+  if (m.status === "blocked" && m.error_message) blocks.push(m.error_message);
+  (rep.unresolved_items || []).forEach((u) => blocks.push(typeof u === "string" ? u : u.item || u.description || JSON.stringify(u)));
+  const t = rep.tests;
+  const doneDel = exp.filter((d) => repDel.find((x) => x.id === d.id)?.produced).length;
+  const doneCrit = crit.filter((c) => gateCrit.find((x) => (x.criterion_id || x.id) === c.id)?.status === "met").length;
+  return `<div class="sec">
+    <div class="m-head"><h5>Progress</h5><span class="mbadge muted">${doneDel}/${exp.length} deliverables · ${doneCrit}/${crit.length} criteria met</span></div>
+    ${exp.length ? `<div class="tkg-h">Deliverables</div><ul class="tkg">${delRows}</ul>` : ""}
+    ${crit.length ? `<div class="tkg-h">Acceptance criteria</div><ul class="tkg">${critRows}</ul>` : ""}
+    ${t && (t.ran || t.results) ? `<div class="tkg-h">Tests</div><div class="tkn">${t.ran ? "ran" : "not run"}${t.results ? ` — ${esc(String(t.results).slice(0, 200))}` : ""}</div>` : ""}
+    ${blocks.length ? `<div class="tkg-h err">Blocks</div><ul class="tkg">${blocks.map((b) => row("⛔", "err", b)).join("")}</ul>` : ""}
+  </div>`;
 }
 
 // Read-only mission overlay (package review / outputs / evidence).
@@ -945,6 +1135,44 @@ async function fetchCommands() { try { const r = await fetch("/api/commands"); s
 async function fetchPolicies() { try { const r = await fetch("/api/policies"); state._pol = await r.json(); render(true); } catch {} }
 async function fetchResources() { try { const r = await fetch("/api/resources"); state.res = await r.json(); render(); } catch {} }
 async function fetchDashboard() { try { const r = await fetch("/api/dashboard"); state._dash = await r.json(); render(true); } catch {} }
+async function diskReclaim() {
+  toast("idle", "Reclaiming disk…", "merged + clean worktrees only — safe");
+  try {
+    const { data } = await api("/api/disk/reclaim", {});
+    const r = (data && data.result) || {};
+    toast(data && data.ok ? "ok" : "err", data && data.ok ? "Disk reclaimed" : "Reclaim failed",
+      data && data.ok ? `freed ${r.reclaim_mb != null ? (r.reclaim_mb / 1024).toFixed(1) + "G" : "—"} · ${r.reclaimed ?? 0} worktree(s)` : (r.error || ""));
+  } catch { toast("err", "Reclaim failed", ""); }
+  fetchDashboard();
+}
+async function diskSetAuto(on) {
+  try { await api("/api/disk/policy", { auto_gc: on }); toast("ok", `Auto-reclaim ${on ? "on" : "off"}`, on ? "reclaims when free disk drops below the low-water mark" : ""); }
+  catch { toast("err", "Couldn't change policy", ""); }
+  fetchDashboard();
+}
+// Conductor controls: hand the objective to Director (autonomous) or take it back,
+// and prepare the next phase (gated).
+async function copyBubble(btn) {
+  const bub = btn.closest(".cvbub"); if (!bub) return;
+  const clone = bub.cloneNode(true); clone.querySelectorAll(".cvcopy").forEach((b) => b.remove());
+  const text = (clone.innerText || clone.textContent || "").trim();
+  try { await navigator.clipboard.writeText(text); toast("ok", "Copied to clipboard", ""); }
+  catch { try { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast("ok", "Copied", ""); } catch { toast("err", "Couldn't copy", ""); } }
+}
+async function objSetMode(cap, mode) {
+  try { await api("/api/director/objective/mode", { capability_id: cap, mode }); toast("ok", mode === "autonomous" ? "Handed off to Director" : "Taken back", mode === "autonomous" ? "Director conducts the remaining phases; you're pulled in only for a decision or blocker." : "You approve each phase."); }
+  catch { toast("err", "Couldn't change mode", ""); }
+  fetchConversations();
+  for (const id in (state._objective || {})) { if (state._objective[id] && state._objective[id].capability_id === cap) fetchConversation(id); }
+}
+async function objPrepareNext(cap) {
+  toast("idle", "Preparing next phase…", "");
+  try {
+    const { data } = await api("/api/director/objective/prepare-next", { capability_id: cap });
+    if (data && data.ok) { toast("ok", "Next phase prepared — review & start", (data.phase && data.phase.title) || ""); fetchConversations(); if (data.mission && data.mission.mission_id) state._openConvo = data.mission.mission_id; }
+    else toast("err", "Couldn't prepare next", (data && data.error) || "");
+  } catch { toast("err", "Couldn't prepare next", ""); }
+}
 async function fetchProviders() { try { const r = await fetch("/api/providers"); state._providers = await r.json(); render(true); } catch {} }
 // A worker's provider status is READ from the Provider Runtime (shared), never owned by the worker.
 function providerRt(id) { return (state._providers?.providers || state._dash?.provider_runtime?.providers || []).find((p) => p.id === id) || null; }
@@ -990,7 +1218,24 @@ async function execute(command, input, confirm, confirmText) {
     if (command === "director.ask") msg = d?.response_ok ? `${d.provider}: ${d.response}` : `${d?.provider || "provider"}: ${d?.error || "no response"}`;
     else if (command === "director.route") msg = "recorded + copied to clipboard";
     else if (command === "review.resolve") msg = `review ${d?.disposition}`;
-    toast(okc ? "ok" : "err", `${command.replace(/\./g, " ")} ${okc ? "done" : "failed"}`, String(msg).split("\n").slice(0, 4).join("\n"));
+    // Server START is truthful about COMPILING vs READY: alloy-dev-start spawns
+    // Next and returns after a 1s liveness check — the app is NOT yet listening.
+    // Never claim "done" (the old "it says it happened but it didn't"); say
+    // "starting" and watch the port actually come up before confirming.
+    if (command === "server.start") {
+      if (okc) {
+        const sp0 = state.snap?.sprints.find((x) => x.slot === input.slot);
+        toast("ok", `slot ${input.slot} server starting…`, "compiling — it opens when the port is actually listening");
+        watchServerReady(input.slot, sp0?.port);
+      } else {
+        toast("err", "server start failed", String(msg).split("\n").slice(0, 4).join("\n"));
+      }
+    } else {
+      // server.stop is now port-authoritative: exit 0 means the port is genuinely
+      // free, so "stopped" is truthful (it refuses success while a listener holds).
+      const word = okc ? (command === "server.stop" ? "stopped" : "done") : "failed";
+      toast(okc ? "ok" : "err", `${command.replace(/\./g, " ")} ${word}`, String(msg).split("\n").slice(0, 4).join("\n"));
+    }
     // Clear the draft ONLY on a genuinely completed send: a real worker response
     // (director.ask) or a successful copy (director.route). Never on failure,
     // authentication error, validation error, or a cancelled confirmation.
@@ -1004,6 +1249,23 @@ async function execute(command, input, confirm, confirmText) {
     if (input.slot != null && state._closeout) { delete state._closeout[input.slot]; if (state.tab === "closeout") fetchCloseout(input.slot); }
     render(true);
   } else { toast("err", `${command.replace(/\./g, " ")} not run`, data.reason || (data.errors || []).join("; ") || data.code); }
+}
+// After a server.start, the process is spawned but Next is still compiling. Watch
+// the LIVE projection (which counts the real port listener) until the slot is
+// actually serving, then confirm truthfully — or report it never came up. This is
+// what turns "it says it happened but it didn't" into an honest ready signal.
+function watchServerReady(slot, port) {
+  const deadline = Date.now() + 75000;
+  const iv = setInterval(() => {
+    const sp = state.snap?.sprints?.find((x) => x.slot === slot);
+    if (sp && sp.server === "running") {
+      clearInterval(iv);
+      toast("ok", `slot ${slot} app is up`, `${port ? `listening on :${port} — ` : ""}click Open App`);
+    } else if (Date.now() > deadline) {
+      clearInterval(iv);
+      toast("err", `slot ${slot} app still not listening`, "still compiling under load, or it failed to start — try Diagnose");
+    }
+  }, 2000);
 }
 function loadAuditIfOpen() { if (route() === "history") { state._audit = null; fetchAudit(); } }
 function showConfirm(pv, onConfirm) {
@@ -1184,7 +1446,24 @@ const DIR_MARK = { done: "✓", current: "•", review: "!", blocked: "⛔", pen
 
 async function fetchConversations() { try { const r = await fetch("/api/director/conversations"); state._convos = (await r.json()).conversations || []; render(true); } catch { /* keep last */ } }
 async function fetchCapabilities() { try { const r = await fetch("/api/capabilities"); state._caps = (await r.json()).capabilities || []; render(true); } catch { /* keep last */ } }
-async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); (state._convo = state._convo || {})[id] = (await r.json()).conversation; render(true); } catch { /* keep last */ } }
+async function fetchConversation(id) { try { const r = await fetch("/api/director/conversation?id=" + encodeURIComponent(id)); const j = await r.json(); (state._convo = state._convo || {})[id] = j.conversation; (state._objective = state._objective || {})[id] = j.objective || null; render(true); } catch { /* keep last */ } }
+// The conductor strip: shows Director conducting the objective as a phase spine,
+// a hand-off toggle (gated ⇄ autonomous), and — after an Accept — a one-click
+// "Prepare next phase" so the operator never returns to a blank box.
+function objectiveStrip(id) {
+  const o = (state._objective || {})[id];
+  if (!o || !(o.phases || []).length) return "";
+  const done = o.phases.filter((p) => p.status === "done").length;
+  const auto = o.mode === "autonomous";
+  const spine = o.phases.map((p) => `<span class="ophase ${p.status}" title="${esc(p.title)}">${p.status === "done" ? "✓" : "○"} ${esc(p.title)}</span>`).join('<span class="oarrow">→</span>');
+  const pn = o.proposed_next;
+  return `<div class="objstrip">
+    <div class="objhead"><b>${esc(o.title)}</b> · ${done}/${o.phases.length} phases · <span class="${auto ? "clean" : "muted"}">${auto ? "Director is conducting (autonomous)" : "operator-gated"}</span>
+      <button class="btn sm ${auto ? "warn" : ""}" data-obj-mode="${auto ? "gated" : "autonomous"}" data-cap="${esc(o.capability_id)}">${auto ? "Take back" : "Hand off to Director"}</button></div>
+    <div class="ospine">${spine}</div>
+    ${pn && !auto ? `<div class="objnext">Next: <b>${esc(pn.phase.title)}</b> <button class="btn sm go" data-obj-prepare="${esc(o.capability_id)}">Prepare it</button></div>` : ""}
+  </div>`;
+}
 
 function viewDirector() {
   const r = parseRoute();
@@ -1213,6 +1492,10 @@ function conversationInbox() {
       <h2>What are we working on?</h2>
       <p class="dsub">Tell Director about a piece of work — you'll talk it through together.</p>
       <div class="dintent"><input id="d-intent" class="d-intent" placeholder="e.g. Improve Scheduling   ·   Redesign Financials   ·   Access &amp; Roles V2" value="${intent}" />
+        <select id="d-runtarget" class="d-runtarget" title="Which worker runs this — Auto picks a free one">
+          <option value="auto"${!state._runTarget || state._runTarget === "auto" ? " selected" : ""}>Auto worker</option>
+          ${(state.snap?.sprints || []).map((s) => `<option value="${s.slot}"${state._runTarget === String(s.slot) ? " selected" : ""}>slot ${s.slot} · ${esc(shortBranch(s.branch, s.worktree))}${s.activity === "working" ? " (busy)" : ""}</option>`).join("")}
+        </select>
         <button class="btn go" data-dprepare>Start</button></div>
       ${def ? `<div class="ddefine"><span>Director hasn't worked on <b>${esc(def.name || def.intent)}</b> before.</span>
         <button class="btn go sm" data-ddefine="${esc(def.intent)}">Start it anyway</button>
@@ -1286,12 +1569,12 @@ function opReview(o) {
   const ev = (r.evidence || []).map((e) => `<div class="opev"><span class="opev-b ${cls(e.status)}">${mark(e.status)}</span><div><span>${esc(e.criterion)}</span>${e.detail ? `<div class="su-why">${esc(e.detail)}</div>` : ""}</div></div>`).join("");
   const changed = (r.what_changed || []).length ? r.what_changed.map(opFileRow).join("") : `<span class="muted">—</span>`;
   const risks = (r.risks || []).length ? `<div class="opsec"><div class="dlabel">Remaining risks</div>${r.risks.map((x) => `<div class="oprisk">• ${esc(x)}</div>`).join("")}</div>` : "";
+  // Summary + Director's read now live in the conversation thread (copy-pasteable);
+  // here we keep only the structured verification detail.
   return `<div class="opband review"><span class="opstate ${o.state.tone}">${esc(o.state.label)}</span>
-    ${r.summary ? `<p class="opsum">${esc(r.summary)}</p>` : ""}
     <div class="opsec"><div class="dlabel">What changed</div>${changed}</div>
     <div class="opsec"><div class="dlabel">Evidence vs. acceptance</div>${ev || `<span class="muted">—</span>`}</div>
     ${risks}
-    <div class="oprec"><b>Director's read.</b> ${esc(r.recommendation)}</div>
   </div>`;
 }
 function opBand(c) {
@@ -1342,12 +1625,12 @@ function opFooter(c, id) {
   // UNDERSTANDING: the operator simply answers Director's questions — they do not
   // rewrite the objective. The answer continues the conversation.
   if (stage === "understanding") {
-    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director…" />
-      <button class="btn go sm" data-cvanswer="${id}">Answer</button></div>`;
+    return `<div class="cvcompose big"><input id="cv-reply" class="cv-reply" placeholder="Message Director…" value="${esc(state._cvReply || "")}" />
+      <button class="btn go" data-cvanswer="${id}">Send</button></div>`;
   }
   // Needs-operator during execution: the answer STEERS the running work.
   if (acts.includes("reply")) {
-    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" />
+    return `<div class="cvcompose"><input id="cv-reply" class="cv-reply" placeholder="Answer Director to continue this work…" value="${esc(state._cvReply || "")}" />
       <button class="btn go sm" data-cvsteer="${id}">Send</button>${acts.includes("stop") ? `<button class="btn warn sm" data-dstop="${id}">Stop</button>` : ""}</div>`;
   }
   // A "Needs Product Decisions" send-back needs a capability-level DECISION.
@@ -1387,15 +1670,11 @@ const STAGE_TONE = { understanding: "run", preparing: "ok", launching: "run", ex
 // preparation. Each question says why it matters, whether it blocks, and what it tests.
 function understandingPanel(c) {
   const o = c.operations, qs = o.questions || [];
-  const items = qs.map((q) => `<div class="uq${q.blocks ? " blocks" : ""}">
-    <div class="uq-q">${esc(q.question)}</div>
-    <div class="uq-meta"><span class="uq-badge${q.blocks ? " blocks" : ""}">${q.blocks ? "needs an answer" : "worth confirming"}</span>${q.tests ? `<span class="uq-tests">tests ${esc(q.tests)}</span>` : ""}</div>
-    ${q.why ? `<div class="uq-why">${esc(q.why)}</div>` : ""}
-  </div>`).join("");
   const n = qs.length;
+  // The questions now live IN the conversation thread (left). Here we only say what
+  // this stage means, so there's no duplicate list to hunt.
   return `<div class="opband run"><span class="opstate run">Understanding</span>
-    <p class="opsum">${n ? `Director is still understanding this work — it has ${n} ${n === 1 ? "question" : "questions"} before it prepares anything. Answer below and it will continue.` : "Director is still understanding this work."}</p>
-    <div class="uqlist">${items || `<span class="muted">Working it through…</span>`}</div></div>`;
+    <p class="opsum">${n ? `Director has ${n} ${n === 1 ? "question" : "questions"} in the conversation — answer ${n === 1 ? "it" : "them"} and it will prepare the work.` : "Director is still understanding this work."}</p></div>`;
 }
 
 function conversationWorkspace(id) {
@@ -1406,8 +1685,13 @@ function conversationWorkspace(id) {
   const list = (arr, f) => (arr && arr.length ? `<ul class="dul">${arr.slice(0, 6).map((x) => `<li>${esc(f(x))}</li>`).join("")}</ul>` : `<span class="muted">—</span>`);
 
   // LEFT — the conversation, as a dialogue, with the stage-aware next-action footer.
-  const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub">${esc(msg.text)}</div></div>`).join("");
-  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}</div>${opFooter(c, id)}</div>`;
+  const bubbles = c.messages.map((msg) => `<div class="cvmsg ${msg.from}"><div class="cvbub sel">${esc(msg.text)}<button class="cvcopy" data-copy title="Copy">Copy</button></div></div>`).join("");
+  const qbubbles = (stage === "understanding" ? (o?.questions || []) : []).map((q) => `<div class="cvmsg director q${q.blocks ? " blocks" : ""}"><div class="cvbub"><span class="qbadge">${q.blocks ? "needs an answer" : "worth confirming"}</span>${esc(q.question)}${q.why ? `<div class="qwhy">${esc(q.why)}</div>` : ""}</div></div>`).join("");
+  // When work is ready for review, Director's summary + read belong IN the thread as
+  // plain, selectable/copy-pasteable text — not boxed in "the work".
+  const rev = (stage === "reviewing" ? o?.review : null);
+  const reviewBubble = rev && rev.summary ? `<div class="cvmsg director review"><div class="cvbub sel">${esc(rev.summary)}${rev.recommendation ? `<div class="qwhy" style="margin-top:8px"><b>Director's read:</b> ${esc(rev.recommendation)}</div>` : ""}<button class="cvcopy" data-copy title="Copy">Copy</button></div></div>` : "";
+  const left = `<div class="cvcol cvhistory"><div class="cvcol-h">Conversation</div><div class="cvthread">${bubbles}${qbubbles}${reviewBubble}</div>${opFooter(c, id)}</div>`;
 
   // CENTER — gated by stage: while Director is still Understanding, it shows the
   // OPEN QUESTIONS and nothing else; preparation artifacts appear only afterward.
@@ -1442,6 +1726,7 @@ function conversationWorkspace(id) {
     <div class="dmhead"><button class="btn sm" data-dback>← Conversations</button>
       <div class="dmtitle"><h2>${esc(c.title)}</h2><span class="dmintent">${esc(stageLabel)}</span></div>
       ${o ? `<span class="mbadge ${STAGE_TONE[headStage] || o.state.tone} big">${esc(stageLabel)}</span>` : ""}</div>
+    ${objectiveStrip(id)}
     <div class="cvgrid">${left}${center}${right}</div>
   </div>`;
 }
@@ -1463,15 +1748,20 @@ async function replyToDirector(id, cap) {
 async function prepareDirectorMission() {
   const intent = (state._dirIntent || document.getElementById("d-intent")?.value || "").trim();
   if (!intent) { toast("err", "Tell Director what you want to build"); return; }
-  const { status, data } = await api("/api/missions/compile", { slot: DIRECTOR_SLOT, intent });
+  // Director dispatches to a worker: the operator's run-target, or "auto".
+  const target = state._runTarget && state._runTarget !== "auto" ? Number(state._runTarget) : "auto";
+  const { status, data } = await api("/api/missions/compile", { slot: target, intent });
   if (!data.ok) {
     if (data.reason === "no_capability") { state._dirDefine = { intent, name: dirCapName(intent) }; render(true); return; }
-    toast("err", "Couldn't prepare", data.error || status); return;
+    if (data.error === "all_workers_busy" || data.error === "no_workers") { toast("err", "No free worker", data.detail || "every worker is busy — pick one explicitly or wait"); return; }
+    if (data.error === "slot_not_occupied") { toast("err", "No worker there", data.detail); return; }
+    toast("err", "Couldn't prepare", data.detail || data.error || status); return;
   }
   state._dirIntent = ""; state._dirDefine = null;
   await fetchConversations();
   go("director/mission/" + data.mission.mission_id);
-  toast("ok", "Director is on it", data.verdict?.verdict || "");
+  const sp = (state.snap?.sprints || []).find((x) => x.slot === data.assigned_slot);
+  toast("ok", `Director is on it${data.assigned_slot ? ` — slot ${data.assigned_slot}` : ""}`, sp ? shortBranch(sp.branch, sp.worktree) : (data.verdict?.verdict || ""));
 }
 async function defineDirectorCapability(intent) {
   const { data } = await api("/api/director/define-capability", { intent });
@@ -1497,10 +1787,11 @@ async function convMissionAct(action, id, okMsg) {
 // The answer is recorded and the conversation continues — no objective rewriting.
 async function answerDirector(id) {
   const el2 = document.getElementById("cv-reply");
-  const text = (el2?.value || "").trim();
+  const text = ((el2?.value || state._cvReply || "")).trim();
   if (!text) { toast("err", "Type your answer to Director"); return; }
   const { data } = await api("/api/missions/answer", { mission_id: id, answer: text });
   if (!data.ok) { toast("err", "Couldn't send that", data.detail || data.error); return; }
+  state._cvReply = ""; // consumed — don't let it pre-fill the next question
   await fetchConversations(); await fetchConversation(id);
   toast("ok", data.verdict?.verdict === "Ready" ? "Director has what it needs — preparing the work" : "Answer sent", "");
 }
@@ -1508,10 +1799,11 @@ async function answerDirector(id) {
 // the authoritative objective (recompiled), not a side decision.
 async function reframeWork(id) {
   const el2 = document.getElementById("cv-reply");
-  const text = (el2?.value || "").trim();
+  const text = ((el2?.value || state._cvReply || "")).trim();
   if (!text) { toast("err", "Describe what this mission should do"); return; }
   const { data } = await api("/api/missions/reframe", { mission_id: id, direction: text });
   if (!data.ok) { toast("err", "Couldn't set the objective", data.detail || data.error); return; }
+  state._cvReply = ""; // consumed
   await fetchConversations(); await fetchConversation(id);
   toast("ok", "Objective updated", data.diff?.verdict_change || (data.package ? "v" + data.package.version : ""));
 }
@@ -1519,8 +1811,9 @@ async function reframeWork(id) {
 // than recording a product decision.
 async function steerWork(id) {
   const el2 = document.getElementById("cv-reply");
-  const text = (el2?.value || "").trim();
+  const text = ((el2?.value || state._cvReply || "")).trim();
   if (!text) { toast("err", "Type your answer to Director"); return; }
+  state._cvReply = ""; // consumed
   await missionAct("steer", id, { instruction: text }, "Sent — Director is continuing the work");
   await fetchConversations(); await fetchConversation(id);
 }
@@ -1587,6 +1880,11 @@ document.addEventListener("click", (e) => {
   // be the LAST fallback — otherwise every button click just selects the card.
   if ((n = t("[data-tab]"))) { state.tab = n.dataset.tab; render(true); return; }
   if ((n = t("[data-cmd]"))) { e.stopPropagation(); startCommand(n.dataset.cmd, n.dataset.slot ? { slot: Number(n.dataset.slot) } : {}); return; }
+  if ((n = t("[data-disk-reclaim]"))) { e.stopPropagation(); diskReclaim(); return; }
+  if ((n = t("[data-disk-auto]"))) { e.stopPropagation(); diskSetAuto(n.dataset.diskAuto === "1"); return; }
+  if ((n = t("[data-copy]"))) { e.stopPropagation(); copyBubble(n); return; }
+  if ((n = t("[data-obj-mode]"))) { e.stopPropagation(); objSetMode(n.dataset.cap, n.dataset.objMode); return; }
+  if ((n = t("[data-obj-prepare]"))) { e.stopPropagation(); objPrepareNext(n.dataset.objPrepare); return; }
   if ((n = t("[data-end]"))) { e.stopPropagation(); showEndWork(Number(n.dataset.end)); return; }
   if (t("[data-start]")) { showStartWork(); return; }
   if ((n = t("[data-startserver]"))) { e.stopPropagation(); showStartServer(Number(n.dataset.startserver)); return; }
@@ -1615,7 +1913,26 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-prov-disconnect]"))) { e.stopPropagation(); showProviderAction(n.dataset.provDisconnect, "disconnect"); return; }
   if ((n = t("[data-prov-diag]"))) { e.stopPropagation(); showProviderDiagnostics(n.dataset.provDiag); return; }
   if ((n = t("[data-nav]"))) { go(n.dataset.nav); return; }
-  if ((n = t("[data-route]"))) { e.preventDefault(); go(n.dataset.route); return; }
+  if ((n = t("[data-route]"))) {
+    e.preventDefault();
+    if (n.dataset.legacy === "1") {
+      const u = new URL(location.href);
+      u.searchParams.set("legacy", "1");
+      u.hash = "#/" + n.dataset.route;
+      location.href = u.pathname + u.search + u.hash;
+      return;
+    }
+    // Leaving legacy mode when returning to Mission Control primary routes
+    if (MC_ROUTES.has(n.dataset.route) && legacyMode()) {
+      const u = new URL(location.href);
+      u.searchParams.delete("legacy");
+      u.hash = "#/" + n.dataset.route;
+      location.href = u.pathname + u.search + u.hash;
+      return;
+    }
+    go(n.dataset.route);
+    return;
+  }
   if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
 });
 function showReview(initiative_key) {
@@ -1668,7 +1985,25 @@ function showDelete(slot) {
   };
   document.body.appendChild(ov);
 }
-$("#refresh-btn").addEventListener("click", async (ev) => { ev.target.disabled = true; const x = ev.target.textContent; ev.target.textContent = "↻ …"; await execute("runtime.refresh", {}, false); fetchResources(); ev.target.disabled = false; ev.target.textContent = x; });
+$("#refresh-btn").addEventListener("click", async (ev) => {
+  ev.target.disabled = true;
+  const x = ev.target.textContent;
+  ev.target.textContent = "↻ …";
+  try {
+    await execute("runtime.refresh", {}, false);
+    fetchResources();
+    // Mission Control caches decision/Needs You clientside — Director may have
+    // answered via Trusted Host outside this window. Drop caches and re-render.
+    if (typeof window.VacilandoV2?.invalidatePresentationCaches === "function") {
+      window.VacilandoV2.invalidatePresentationCaches();
+    }
+    lastKey = null;
+    render(true);
+  } finally {
+    ev.target.disabled = false;
+    ev.target.textContent = x;
+  }
+});
 window.addEventListener("hashchange", () => render(true));
 
 // -------- data loop --------
@@ -1688,13 +2023,55 @@ function adoptSnapshot(s) {
   if (!s.headline && incoming === 0) return false; // nothing useful to show
   state.snap = s; return true;
 }
-function onSnap(s) { if (adoptSnapshot(s)) { chrome(); render(); } }
+function onSnap(s) {
+  if (!adoptSnapshot(s)) return;
+  chrome();
+  // On Mission Control routes, board SSE must not thrash #view — but it SHOULD
+  // poke the V2 revision sync so Director/worker mutations surface promptly.
+  const r = parseRoute();
+  if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
+    window.VacilandoV2.syncPresentationRevision?.();
+    return;
+  }
+  render();
+}
 async function poll() { try { const r = await fetch("/api/state", { cache: "no-store" }); onSnap(await r.json()); setLive(sseOk ? "live" : "polling"); } catch { setLive("offline"); } }
 function connect() { try { const es = new EventSource("/api/events"); es.addEventListener("snapshot", (ev) => { try { onSnap(JSON.parse(ev.data)); } catch {} sseOk = true; setLive("live"); }); es.addEventListener("hello", () => { sseOk = true; setLive("live"); }); es.onerror = () => { sseOk = false; }; } catch { sseOk = false; } }
-if (!location.hash) location.hash = "#/command";
-connect(); poll(); fetchResources();
+enforceMissionControlHome();
+if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = "#/missions";
+connect();
+// Board poll is background telemetry — Mission Control does not wait on it.
+poll(); fetchResources();
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
+// First Mission Control paint immediately (shell interactive before board hydrate).
+render(true);
+
+// ---- Operator notifications: pulled in when Director needs you, not by checking.
+// Fires a native (Electron) desktop notification the moment a conversation newly
+// enters a state that needs the operator — a question to answer, a package to
+// review, or work ready for acceptance — and stays quiet otherwise. Same signal a
+// future Mac-mini + mobile push would ride; only the transport differs.
+const NOTIFY_ACTIONS = { Answer: "has a question for you", Review: "prepared work to review", Accept: "finished work — ready for your acceptance", Continue: "is blocked and needs you" };
+const _notifySeen = new Map(); // conversation_id -> last action (only notify on transitions, never on first load)
+function notifyOperator(convos) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  for (const c of (convos || [])) {
+    const action = (c.state && c.state.action) || "";
+    const id = c.conversation_id;
+    const prev = _notifySeen.has(id) ? _notifySeen.get(id) : null;
+    _notifySeen.set(id, action);
+    if (prev === null || prev === action) continue;         // first sight or unchanged → no notification
+    if (!NOTIFY_ACTIONS[action]) continue;                   // only the states that need a human
+    try {
+      const n = new Notification(`Vacilando · ${c.title || "Director"}`, { body: `Director ${NOTIFY_ACTIONS[action]}.`, tag: id, requireInteraction: action === "Accept" || action === "Continue" });
+      n.onclick = () => { try { window.focus(); location.hash = "#/director"; state._openConvo = id; render(true); } catch {} };
+    } catch { /* notifications unavailable */ }
+  }
+}
+async function notifyPoll() { try { const r = await fetch("/api/director/conversations"); notifyOperator((await r.json()).conversations || []); } catch { /* keep last */ } }
+if (typeof Notification !== "undefined" && Notification.permission === "default") { try { Notification.requestPermission().catch(() => {}); } catch {} }
+notifyPoll(); setInterval(notifyPoll, 15000);
 // Poll the selected worker's Director requests while any is still running, so
 // status advances live and the elapsed timer ticks. Server store is authoritative.
 setInterval(() => { const slot = state.sel; if (slot == null || document.hidden) return; const rs = state.requests[slot]; if (rs && rs.some((r) => !REQ_TERMINAL.has(r.status))) fetchRequests(slot); }, 2500);

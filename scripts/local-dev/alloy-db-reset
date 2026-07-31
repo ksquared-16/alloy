@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Local supabase db reset with Docker gate + transient 502 retries.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/verify.sh
+source "${SCRIPT_DIR}/lib/verify.sh"
+# shellcheck source=lib/docker-ops.sh
+source "${SCRIPT_DIR}/lib/docker-ops.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: alloy-db-reset [workdir] [--recover-docker] [--force-docker] [--retries N] [--debug]
+
+Runs `supabase db reset` against a LOCAL disposable stack only.
+
+Why this exists:
+  Raw `supabase db reset` fails intermittently with Docker Desktop wedges and
+  transient 502/gateway errors. Workers were burning turns inventing kill loops
+  and re-pasting the same command. This wrapper is the agreed toolkit path.
+
+  --recover-docker   if Docker is unhealthy, run Desktop recover first
+  --force-docker     recover with force-kill (wedged daemon)
+  --retries N        default 3 (backoff between transient failures)
+  --debug            pass --debug to supabase (also used automatically on last try)
+
+Examples:
+  alloy-db-reset
+  alloy-db-reset /path/to/worktree --recover-docker
+  alloy-db-reset --force-docker --retries 4
+EOF
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+  alloy_supabase_db_reset "$@"
+}
+
+main "$@"

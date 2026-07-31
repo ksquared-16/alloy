@@ -1,212 +1,744 @@
 /**
- * Vacilando — Mission Compiler V1 (minimal).
+ * Vacilando — Mission Compiler V1 (Brief → Compiled Mission).
  *
- * Deterministic ASSEMBLY only. It does not execute, does not reason
- * independently, does not retrieve in substance — it composes a complete Mission
- * Package from: the Capability object (truth), the Knowledge snapshot
- * (retrieval), the capability's accepted decisions + rejected patterns, and a
- * governance policy. It records a compiler_trace (what sources/decisions/
- * references were used) and binds the immutable knowledge_snapshot, so the
- * package is reproducible. Readiness is computed by the package store.
+ * Responsibilities:
+ *   Mission Brief (human) → Mission Compiler → Compiled Mission → Director → Workers
  *
- * V1 compiles ONE mission class: the capability's next planning mission — a
- * bounded, safe "produce the V2 implementation proposal" mission. That exercises
- * the whole slice (Capability → Knowledge → Compile → Execute → Acceptance)
- * with an objectively-checkable, source-safe deliverable.
+ * Director executes compiled missions. It must not discover contradictory
+ * instructions after execution has begun — the compiler surfaces conflicts first.
+ *
+ * Legacy capability → Mission Package compilation lives in
+ * `mission-package-compiler.mjs` (re-exported below for compatibility).
  */
-import { createPackage, revisePackage } from "./commands/mission-packages.mjs";
+import { existsSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { getBrief } from "./mission-brief.mjs";
+import { getMission, updateMission } from "./commands/missions.mjs";
+import { appendTimelineEvent } from "./timeline.mjs";
+import { createDecision } from "./decisions.mjs";
+import {
+  emptyCompiledMission,
+  saveCompiledMission,
+  getCompiledMission,
+  buildCompilationReport,
+  compiledMissionReady,
+  MISSION_COMPILER_VERSION,
+} from "./compiled-mission.mjs";
 
-const COMPILER_VERSION = "vacilando.compiler.v1";
+export {
+  compile,
+  compile as compileCapabilityPackage,
+  isOperatorDirected,
+  proposalPath,
+  PROPOSAL_SECTIONS,
+  COMPILER_VERSION,
+} from "./mission-package-compiler.mjs";
 
-// Required proposal sections — Acceptance checks these headings exist.
-export const PROPOSAL_SECTIONS = [
-  "Current-State Analysis", "V2 Scope", "Data Model Changes",
-  "Acceptance Criteria", "QA Plan", "Rollout",
+export {
+  getCompiledMission,
+  saveCompiledMission,
+  compiledMissionReady,
+  MISSION_COMPILER_VERSION,
+} from "./compiled-mission.mjs";
+
+const REPO_ROOT = process.env.ALLOY_REPO_ROOT?.trim()
+  || process.env.VACILANDO_CHECKOUT?.trim()
+  || null;
+
+function worktreeRoot() {
+  return process.env.ALLOY_WORKTREE?.trim()
+    || process.env.VACILANDO_CHECKOUT?.trim()
+    || process.cwd();
+}
+
+function resolveRepoPath(rel) {
+  // When ALLOY_WORKTREE is set (tests / isolated runs), do not fall through to
+  // the real checkout — that would falsely mark host artifacts as reused.
+  const isolated = Boolean(process.env.ALLOY_WORKTREE?.trim());
+  const roots = isolated
+    ? [process.env.ALLOY_WORKTREE.trim()]
+    : [
+      worktreeRoot(),
+      REPO_ROOT,
+      join(worktreeRoot(), "scripts/local-dev"),
+    ].filter(Boolean);
+  for (const root of roots) {
+    const p = join(root, rel);
+    if (existsSync(p)) return { absolute: p, relative: rel };
+  }
+  if (!isolated && existsSync(rel)) return { absolute: rel, relative: rel };
+  return null;
+}
+
+/** Canonical Access & Identity discovery deliverable catalog. */
+export const ACCESS_IDENTITY_DELIVERABLE_CATALOG = [
+  {
+    id: "d1_existing_state",
+    title: "Existing-state inventory",
+    patterns: [/existing[- ]state/i, /inventory/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md",
+      "docs/platform/planning/access-identity-v2/authority-path-inventory.md",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/authority-path-inventory.md",
+    ],
+  },
+  {
+    id: "d2_surface_catalog",
+    title: "Surface and capability access catalog",
+    patterns: [/surface/i, /capability access catalog/i, /command.?action enforcement/i],
+    artifacts: [
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md",
+    ],
+    partialOk: true,
+  },
+  {
+    id: "d3_identity_model",
+    title: "Person ↔ user ↔ role ↔ scope model",
+    patterns: [/person/i, /role.*scope/i, /canonical access/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md",
+    ],
+  },
+  {
+    id: "d4_authentication",
+    title: "Authentication model",
+    patterns: [/authentication model/i, /\bMFA\b/, /passwordless/i, /SSO/i],
+    artifacts: [
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md",
+    ],
+  },
+  {
+    id: "d5_effective_access",
+    title: "Effective-access resolution model",
+    patterns: [/effective[- ]access/i, /resolution model/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md",
+    ],
+  },
+  {
+    id: "d6_product_ia",
+    title: "Product IA and principal flows",
+    patterns: [/product IA/i, /principal flows/i, /operator flows/i],
+    artifacts: [
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md",
+    ],
+  },
+  {
+    id: "d7_security_matrix",
+    title: "Security threat and enforcement matrix",
+    patterns: [/threat/i, /enforcement matrix/i, /security matrix/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/01-existing-state-inventory.md",
+    ],
+    partialOk: true,
+  },
+  {
+    id: "d8_gap_analysis",
+    title: "Gap analysis",
+    patterns: [/gap analysis/i, /divergence/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/01-existing-state-inventory.md",
+      "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+    ],
+  },
+  {
+    id: "d9_decisions",
+    title: "Decisions requiring approval",
+    patterns: [/decisions requiring/i, /product decisions/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md",
+    ],
+  },
+  {
+    id: "d10_sequence",
+    title: "Sequenced implementation / QA plan",
+    patterns: [/sequenced/i, /implementation.?qa/i, /delivery plan/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+    ],
+  },
+  {
+    id: "d11_acceptance_rubric",
+    title: "Director acceptance rubric",
+    patterns: [/acceptance rubric/i, /director acceptance/i],
+    artifacts: [
+      "docs/platform/planning/vacilando-os/qa/access-identity-v2/07-director-acceptance-rubric.md",
+    ],
+  },
+  {
+    id: "d12_qa_evidence",
+    title: "QA and evidence plan",
+    patterns: [/QA and evidence/i, /evidence plan/i],
+    artifacts: [
+      "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+    ],
+  },
 ];
 
-/** The deliverable path is derived deterministically from the capability id. */
-export function proposalPath(capability_id) {
-  return `docs/platform/planning/vacilando-os/qa/vertical-slice-v1/${capability_id}-v2-proposal.md`;
+function artifactPresent(relPaths) {
+  for (const rel of relPaths) {
+    const hit = resolveRepoPath(rel);
+    if (hit) {
+      try {
+        const st = statSync(hit.absolute);
+        if (st.size > 200) {
+          return { path: hit.relative, bytes: st.size };
+        }
+      } catch { /* */ }
+    }
+  }
+  return null;
 }
 
-// Operator-directed missions write their outputs under a mission-scoped docs path,
-// distinct from the generic proposal path — so producing the generic proposal can
-// never satisfy an operator-directed mission's deliverable.
-function missionOutputPath(capability, mission) {
-  const slug = capability.slug || capability.capability_id;
-  const short = String(mission.mission_id || "msn_x").replace(/^msn_/, "").slice(0, 10);
-  return `docs/platform/planning/vacilando-os/qa/missions/${slug}-${short}.md`;
+function isAccessIdentityBrief(brief) {
+  const blob = `${brief?.title || ""} ${brief?.objective || ""}`.toLowerCase();
+  return /access\s*&\s*identity|access and identity|access\s*&\s*roles|identity.*auth|roles?\s*&\s*access/.test(blob);
+}
+
+function forbidsImplementation(brief) {
+  const blob = `${brief?.objective || ""} ${(brief?.constraints || []).map((c) => c.text || c).join(" ")}`;
+  return /do not (materially )?implement|should not begin implementation|not ask .* to build|discover and specify/i.test(blob);
+}
+
+function planLooksLikeImplement(brief) {
+  const plan = brief?.plan || [];
+  return plan.some((p) =>
+    /implement/i.test(p.kind || "")
+    || /implement/i.test(p.title || "")
+    || ((p.requiredOutputs || []).length === 0 && /implement/i.test(JSON.stringify(p))));
+}
+
+function planIsTruncatedShell(brief) {
+  const plan = brief?.plan || [];
+  if (plan.length !== 1) return false;
+  const p = plan[0];
+  const outputsEmpty = !(p.requiredOutputs || []).length;
+  const titleIsEllipsis = /…|\.\.\./.test(p.title || "") || (p.title || "").length < 40;
+  const objIsTitle = (p.objective || "") === (p.title || "") || (p.objective || "").length < 80;
+  return outputsEmpty && (titleIsEllipsis || objIsTitle);
+}
+
+function detectCircularDeps(phases) {
+  const byId = new Map(phases.map((p) => [p.phaseId, p]));
+  const visiting = new Set();
+  const seen = new Set();
+  const cycles = [];
+  function walk(id, stack) {
+    if (visiting.has(id)) {
+      cycles.push([...stack, id]);
+      return;
+    }
+    if (seen.has(id)) return;
+    visiting.add(id);
+    const p = byId.get(id);
+    for (const dep of p?.dependencies || []) walk(dep, [...stack, id]);
+    visiting.delete(id);
+    seen.add(id);
+  }
+  for (const p of phases) walk(p.phaseId, []);
+  return cycles;
+}
+
+function synthesizeAccessIdentityPhases(deliverables) {
+  const execute = deliverables.filter((d) => d.status === "to_execute");
+  const reused = deliverables.filter((d) => d.status === "reused");
+  const phases = [];
+  if (execute.length === 0) {
+    return [{
+      phaseId: "p_reuse_only",
+      order: 1,
+      title: "Confirm reused specification corpus",
+      objective: "No new discovery deliverables remain — confirm accepted artifacts cover the Mission Brief.",
+      deliverableIds: reused.map((d) => d.id),
+      dependencies: [],
+      kind: "validation",
+    }];
+  }
+  // Group remaining into focused phases (max ~2 deliverables each)
+  let order = 1;
+  for (let i = 0; i < execute.length; i += 1) {
+    const d = execute[i];
+    phases.push({
+      phaseId: `p${order}`,
+      order,
+      title: d.title,
+      objective: `Produce ${d.title} as a durable specification artifact. Reuse accepted corpus as inputs — do not re-derive covered outputs.`,
+      deliverableIds: [d.id],
+      dependencies: order > 1 ? [`p${order - 1}`] : [],
+      kind: "discovery",
+      requiredOutputs: d.expectedPath ? [d.expectedPath] : [`docs/platform/planning/vacilando-os/qa/access-identity-v2/${d.id}.md`],
+      acceptanceCriteriaIds: [d.acceptanceCriterionId].filter(Boolean),
+    });
+    order += 1;
+  }
+  return phases;
 }
 
 /**
- * Is this an operator-DIRECTED mission — i.e., the operator gave a substantial
- * direction — versus the default templated proposal mission? Authority: a real
- * operator direction outranks the generic capability template.
+ * Compile a Mission Brief into a Compiled Mission (+ Compilation Report).
+ * Never starts workers. May create a Compilation Decision when operator intent is required.
  */
-export function isOperatorDirected(mission, capability) {
-  const intent = String(mission?.intent || "").trim();
-  if (!intent) return false;
-  const name = String(capability?.name || "").trim();
-  const residue = intent
-    .replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), "")
-    .replace(/\bv\d+\b/ig, "").replace(/[—\-:]/g, " ").replace(/\s+/g, " ").trim();
-  // Substantial = more than a short label of direction (a sentence or a spec),
-  // not merely "<Capability> V2".
-  return residue.split(/\s+/).filter(Boolean).length >= 6 || intent.length >= 90;
-}
+export function compileMissionBrief(missionId, {
+  brief = null,
+  actor = "mission_compiler",
+  nowMs,
+  createCompilationDecision = true,
+} = {}) {
+  const b = brief || getBrief(missionId);
+  if (!b) throw new Error(`brief_not_found:${missionId}`);
+  const mid = b.missionId || missionId;
+  const compiled = emptyCompiledMission({ missionId: mid, brief: b, nowMs });
+  const compilerDecisions = [];
+  const warnings = [];
+  const errors = [];
+  const ambiguities = [];
 
-const firstLine = (s) => String(s || "").split(/[\n.]/)[0].trim().slice(0, 160);
+  const objective = String(b.objective || "").trim();
+  let title = String(b.title || "").trim();
+  if (!title || /…|\.\.\./.test(title) || title.length < 8) {
+    title = /access|identity|roles/i.test(objective)
+      ? "Access & Identity V2 — Discovery & Specification"
+      : (objective.split(/[.!\n]/)[0].trim().slice(0, 72) || "Untitled mission");
+    compilerDecisions.push({
+      decision: "normalized_title",
+      reason: "Brief title was truncated or missing — recovered a display title from intent",
+      value: title,
+    });
+  }
+  compiled.title = title;
+  compiled.objective = objective || title;
 
-/** Explicit negative-scope the operator stated ("do not …", "avoid …", "must not …"). */
-function deriveExclusions(intent) {
-  const out = [];
-  const re = /\b(?:do not|don't|do n't|avoid|must not|never|explicitly avoid|not to)\b[^.;\n]{3,140}/ig;
-  let m; while ((m = re.exec(String(intent || "")))) out.push(m[0].replace(/\s+/g, " ").trim().replace(/^./, (c) => c.toUpperCase()));
-  return [...new Set(out)].slice(0, 6);
-}
+  const noImplement = forbidsImplementation(b);
+  const implementPlan = planLooksLikeImplement(b) || (/kind spe?c.*implement/i.test(JSON.stringify(b.plan || [])));
+  const truncated = planIsTruncatedShell(b);
+  const ai = isAccessIdentityBrief(b);
 
-/**
- * Compile a Mission Package for `capability` using `snapshot`, bound to `mission`.
- * Returns { package, trace }. The package is persisted (durable) and its
- * readiness is computed on write.
- */
-export function compile({ capability, snapshot, mission, gapReport = null, reviseOf = null }) {
-  const cid = capability.capability_id;
-  // Use the human-readable slug in the deliverable path — never the raw cap_ id.
-  const outPath = proposalPath(capability.slug || cid);
-  const roadmapV2 = (capability.roadmap || []).filter((r) => /v2/i.test(r.item) || r.status === "planned");
-  const codePaths = (capability.current_implementation?.code_paths || []).join(", ");
-  const roadmapStr = roadmapV2.map((r) => r.item).join("; ");
+  compiled.scope.included = ai
+    ? ["Discovery and specification for Access & Identity V2", "Reuse of accepted planning artifacts"]
+    : ["Work described in the Mission Brief objective and plan"];
+  compiled.exclusions = [];
+  if (noImplement) {
+    compiled.exclusions.push("Material product implementation (code/schema shipping)");
+    compiled.scope.excluded.push("Implementation beyond disposable investigation tooling");
+  }
 
-  const trace = {
-    stages: [
-      { stage: "capability_retrieval", runtime: "capability", request: cid, result_ref: cid, at: new Date().toISOString() },
-      { stage: "knowledge_retrieval", runtime: "knowledge", request: cid, result_ref: snapshot?.snapshot_id || null, at: new Date().toISOString() },
-      ...(gapReport ? [{ stage: "gap_analysis", runtime: "gap-analysis", request: cid, result_ref: gapReport.gap_report_id, at: new Date().toISOString() }] : []),
-      { stage: "compilation", runtime: "compiler", request: "assemble", result_ref: null, at: new Date().toISOString() },
-    ],
-    sources_used: (snapshot?.items || []).map((i) => i.uri),
-    decisions_used: (capability.accepted_decisions || []).map((d) => d.id),
-    references_used: (capability.documentation_index || []).map((d) => d.uri),
-    // Now honestly populated when gap analysis has run upstream.
-    reasoning_invocations: gapReport
-      ? [{ runtime: "gap-analysis", analyzer: gapReport.analyzer_version, report_ref: gapReport.gap_report_id, confidence: gapReport.confidence }]
-      : [],
+  // ——— Artifact reuse (Access & Identity catalog or brief sources) ———
+  const deliverables = [];
+  const reusedArtifacts = [];
+  if (ai) {
+    for (const cat of ACCESS_IDENTITY_DELIVERABLE_CATALOG) {
+      const hit = artifactPresent(cat.artifacts);
+      const acId = `AC_${cat.id}`;
+      if (hit) {
+        deliverables.push({
+          id: cat.id,
+          title: cat.title,
+          status: "reused",
+          dependsOn: [],
+          acceptanceCriteriaIds: [acId],
+          evidenceRequirements: ["document"],
+          discipline: "Platform / Access",
+          expectedPath: hit.path,
+          phaseId: null,
+        });
+        reusedArtifacts.push({
+          path: hit.path,
+          title: cat.title,
+          coversDeliverableIds: [cat.id],
+          status: "reused",
+          bytes: hit.bytes,
+        });
+      } else {
+        deliverables.push({
+          id: cat.id,
+          title: cat.title,
+          status: "to_execute",
+          dependsOn: [],
+          acceptanceCriteriaIds: [acId],
+          evidenceRequirements: ["document"],
+          discipline: "Platform / Access",
+          expectedPath: cat.artifacts[0],
+          acceptanceCriterionId: acId,
+          phaseId: null,
+        });
+      }
+    }
+    compilerDecisions.push({
+      decision: "catalog_access_identity_v1",
+      reason: "Brief matches Access & Identity — applied discovery deliverable catalog and scanned accepted artifacts",
+      reused: reusedArtifacts.length,
+      remaining: deliverables.filter((d) => d.status === "to_execute").length,
+    });
+  } else {
+    // Generic: map brief plan outputs; mark sourceMaterials as reusable refs
+    for (const src of b.sourceMaterials || []) {
+      const ref = src.ref || src.path || src.title;
+      if (!ref) continue;
+      const hit = artifactPresent([ref]) || (existsSync(ref) ? { path: ref, bytes: 0 } : null);
+      if (hit) {
+        reusedArtifacts.push({
+          path: hit.path || ref,
+          title: src.title || ref,
+          coversDeliverableIds: [],
+          status: "reused",
+        });
+      }
+    }
+    let i = 1;
+    for (const phase of (b.plan || []).slice().sort((a, c) => a.order - c.order)) {
+      const outs = phase.requiredOutputs || [];
+      if (!outs.length) {
+        deliverables.push({
+          id: `d_${phase.phaseId || i}`,
+          title: phase.title || `Phase ${i} deliverable`,
+          status: "to_execute",
+          dependsOn: phase.dependencies || [],
+          acceptanceCriteriaIds: phase.acceptanceCriteriaIds || [],
+          evidenceRequirements: ["document"],
+          discipline: "General engineering",
+          phaseId: phase.phaseId,
+        });
+      } else {
+        for (const out of outs) {
+          const hit = artifactPresent([out]);
+          deliverables.push({
+            id: `d_${i++}`,
+            title: out,
+            status: hit ? "reused" : "to_execute",
+            dependsOn: phase.dependencies || [],
+            acceptanceCriteriaIds: phase.acceptanceCriteriaIds || [],
+            evidenceRequirements: ["document"],
+            discipline: "General engineering",
+            expectedPath: out,
+            phaseId: phase.phaseId,
+          });
+          if (hit) {
+            reusedArtifacts.push({
+              path: hit.path,
+              title: out,
+              coversDeliverableIds: [`d_${i - 1}`],
+              status: "reused",
+            });
+          }
+        }
+      }
+    }
+  }
+
+  compiled.deliverables = deliverables;
+  compiled.referencedAcceptedArtifacts = reusedArtifacts;
+  compiled.deliverableDependencies = deliverables.flatMap((d) =>
+    (d.dependsOn || []).map((dep) => ({ from: dep, to: d.id })));
+
+  // ——— Conflict: implement vs specify ———
+  let needsCompilationDecision = false;
+  if (noImplement && (implementPlan || truncated)) {
+    const remaining = deliverables.filter((d) => d.status === "to_execute");
+    warnings.push({
+      code: "conflicting_implement_vs_specify",
+      severity: "conflict",
+      message: "Specification work already exists and conflicts with the requested execution plan.",
+      recommendation: remaining.length
+        ? "Compile only the remaining discovery work."
+        : "Reuse the accepted corpus — do not start an implementation phase.",
+    });
+    ambiguities.push({
+      code: "conflicting_instructions",
+      severity: "conflict",
+      message: "Mission Brief forbids implementation, but the ingested plan looked like implementation (or was a truncated shell).",
+    });
+    compilerDecisions.push({
+      decision: "resolve_conflict_by_scoping_to_gaps",
+      reason: "Compiler prefers reuse + remaining discovery over contradictory implementation",
+      remainingDeliverables: remaining.map((d) => d.id),
+    });
+    // Auto-resolve: do not ask operator if we can compile a coherent discovery mission
+    needsCompilationDecision = remaining.length === 0 && reusedArtifacts.length === 0;
+  }
+
+  if (truncated) {
+    warnings.push({
+      code: "truncated_brief_plan",
+      message: "Ingested plan was a single truncated phase with empty outputs — compiler recovered structure from objective + accepted artifacts.",
+    });
+  }
+
+  // ——— Acceptance criteria ———
+  const ac = [];
+  if (ai) {
+    for (const d of deliverables.filter((x) => x.status === "to_execute")) {
+      ac.push({
+        id: d.acceptanceCriterionId || `AC_${d.id}`,
+        statement: `${d.title} exists as a durable, reviewable specification with cited evidence.`,
+        evidenceType: "document",
+        deliverableId: d.id,
+      });
+    }
+    if (!ac.length && reusedArtifacts.length) {
+      ac.push({
+        id: "AC_reuse_confirmed",
+        statement: "Operator confirms accepted Access & Identity artifacts satisfy the Mission Brief without new discovery.",
+        evidenceType: "document",
+      });
+    }
+  } else {
+    for (const c of b.acceptanceCriteria || []) {
+      const statement = c.statement || String(c);
+      if (/is complete with evidence$/i.test(statement) && statement.length < 80) {
+        errors.push({
+          code: "unfalsifiable_acceptance",
+          message: `Acceptance criterion ${c.id || "?"} is tautological / unfalsifiable`,
+        });
+      } else {
+        ac.push({
+          id: c.id,
+          statement,
+          evidenceType: c.evidenceType || "document",
+        });
+      }
+    }
+  }
+  if (!ac.length && deliverables.some((d) => d.status === "to_execute")) {
+    errors.push({
+      code: "missing_acceptance_criteria",
+      message: "No falsifiable acceptance criteria could be compiled for remaining work",
+    });
+  }
+  compiled.acceptanceCriteria = ac;
+  compiled.evidenceRequirements = ac.map((c) => ({
+    acceptanceCriterionId: c.id,
+    evidenceType: c.evidenceType || "document",
+  }));
+
+  // ——— Phases ———
+  let phases;
+  if (ai || truncated || (noImplement && implementPlan)) {
+    phases = synthesizeAccessIdentityPhases(deliverables);
+  } else {
+    phases = (b.plan || []).slice().sort((a, c) => a.order - c.order).map((p) => ({
+      phaseId: p.phaseId,
+      order: p.order,
+      title: p.title,
+      objective: p.objective || objective,
+      deliverableIds: deliverables.filter((d) => d.phaseId === p.phaseId).map((d) => d.id),
+      dependencies: p.dependencies || [],
+      kind: p.kind || "execution",
+      requiredOutputs: p.requiredOutputs || [],
+      acceptanceCriteriaIds: p.acceptanceCriteriaIds || [],
+    }));
+  }
+  const cycles = detectCircularDeps(phases);
+  if (cycles.length) {
+    errors.push({
+      code: "circular_dependencies",
+      message: `Circular phase dependencies detected: ${cycles.map((c) => c.join("→")).join("; ")}`,
+    });
+  }
+  compiled.executionPhases = phases;
+
+  // Wire deliverables to phases
+  for (const phase of phases) {
+    for (const id of phase.deliverableIds || []) {
+      const d = deliverables.find((x) => x.id === id);
+      if (d) d.phaseId = phase.phaseId;
+    }
+  }
+
+  compiled.workerDisciplines = ai
+    ? ["Platform / Access", "Security", "Operator experience", "Runtime / Workflow"]
+    : ["General engineering"];
+
+  if (!objective || objective.length < 24) {
+    errors.push({ code: "ambiguous_objective", message: "Mission objective is missing or too incomplete to compile" });
+  }
+
+  // Confidence
+  let confidence = 55;
+  confidence += Math.min(25, reusedArtifacts.length * 3);
+  confidence += deliverables.some((d) => d.status === "to_execute") ? 10 : 5;
+  if (warnings.length) confidence -= 8;
+  if (errors.length) confidence -= 25;
+  if (ai && !truncated) confidence += 5;
+  if (ai && truncated) confidence += 10; // recovered well
+  compiled.compilationConfidence = Math.max(5, Math.min(98, confidence));
+  compiled.compilationWarnings = warnings;
+  compiled.compilationErrors = errors;
+  compiled.knownAmbiguities = ambiguities;
+  compiled.expectedDecisions = needsCompilationDecision
+    ? [{
+        kind: "compilation",
+        title: "Mission cannot be compiled without your intent",
+        prompt: warnings[0]?.recommendation || "Choose how to compile remaining work",
+      }]
+    : [];
+
+  if (errors.length) {
+    compiled.status = "blocked";
+    compiled.readyToExecute = false;
+  } else if (needsCompilationDecision) {
+    compiled.status = "needs_decision";
+    compiled.readyToExecute = false;
+  } else {
+    compiled.status = "ready";
+    compiled.readyToExecute = phases.length > 0;
+  }
+
+  compiled.report = buildCompilationReport(compiled, {
+    inputs: {
+      acceptedArtifactRoots: [
+        "docs/platform/planning/access-identity-v2",
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2",
+      ],
+      briefTitle: b.title,
+      forbidsImplementation: noImplement,
+      planTruncated: truncated,
+    },
+    compilerDecisions,
+    nowMs,
+  });
+
+  saveCompiledMission(compiled);
+
+  try {
+    updateMission(mid, {
+      compiled_mission_id: compiled.compiledMissionId,
+      compilation_status: compiled.status,
+      compilation_confidence: compiled.compilationConfidence,
+      ready_to_execute: compiled.readyToExecute,
+    }, { nowMs });
+  } catch { /* mission row optional */ }
+
+  // Timeline — compilation lifecycle
+  const reusedN = reusedArtifacts.length;
+  const execN = deliverables.filter((d) => d.status === "to_execute").length;
+  appendTimelineEvent(mid, {
+    type: "mission_compiled",
+    headline: "Mission compiled",
+    summary: `${reusedN} accepted artifact${reusedN === 1 ? "" : "s"} reused · ${execN} deliverable${execN === 1 ? "" : "s"} identified`,
+    visibility: "summary",
+    actor,
+    detail: {
+      compiledMissionId: compiled.compiledMissionId,
+      confidence: compiled.compilationConfidence,
+      status: compiled.status,
+      warnings: warnings.length,
+      errors: errors.length,
+    },
+    nowMs,
+  });
+  if (reusedN) {
+    appendTimelineEvent(mid, {
+      type: "compilation_reuse",
+      headline: `${reusedN} accepted artifact${reusedN === 1 ? "" : "s"} reused`,
+      summary: reusedArtifacts.slice(0, 5).map((a) => a.title).join("; "),
+      visibility: "summary",
+      actor,
+      nowMs,
+    });
+  }
+  if (warnings.some((w) => w.code === "conflicting_implement_vs_specify")) {
+    appendTimelineEvent(mid, {
+      type: "compilation_conflict",
+      headline: "One conflict detected",
+      summary: "Specification work already exists and conflicts with the requested execution plan — compiler scoped to remaining discovery.",
+      visibility: "summary",
+      actor,
+      nowMs,
+    });
+  }
+  if (compiled.readyToExecute) {
+    appendTimelineEvent(mid, {
+      type: "compilation_ready",
+      headline: "Mission ready for approval",
+      summary: `Compilation confidence ${compiled.compilationConfidence}% · ${phases.length} execution phase${phases.length === 1 ? "" : "s"}`,
+      visibility: "summary",
+      actor,
+      nowMs,
+    });
+  } else if (compiled.status === "blocked") {
+    appendTimelineEvent(mid, {
+      type: "compilation_blocked",
+      headline: "Mission cannot be compiled",
+      summary: (errors[0] && errors[0].message) || "Compilation errors must be resolved before execution",
+      visibility: "summary",
+      actor,
+      nowMs,
+    });
+  }
+
+  let decision = null;
+  if (needsCompilationDecision && createCompilationDecision) {
+    decision = createDecision({
+      missionId: mid,
+      title: "Mission cannot be compiled — conflicting intent",
+      situation: "The Mission Brief and the ingested execution plan disagree, and the compiler could not safely choose a path.",
+      whyThisMatters: "Starting workers now would recreate the contradictory-instruction failure during execution.",
+      discovery: "Raised by Mission Compiler before any worker was created",
+      options: [
+        {
+          optionId: "scope_gaps",
+          label: "Compile only remaining discovery work (recommended)",
+          description: "Reuse accepted artifacts; execute only uncovered specification gaps.",
+        },
+        {
+          optionId: "full_rediscovery",
+          label: "Recompile full discovery from the brief",
+          description: "Ignore reuse and regenerate every deliverable.",
+        },
+        {
+          optionId: "implement",
+          label: "Allow implementation despite the brief",
+          description: "Treat implementation as in-scope — overrides do-not-implement language.",
+        },
+      ],
+      recommendation: "scope_gaps",
+      recommendationReason: "Matches Mission Compiler default: reuse accepted work and finish gaps only.",
+      actor: "mission_compiler",
+      nowMs,
+    });
+    appendTimelineEvent(mid, {
+      type: "compilation_decision",
+      headline: "Compilation decision required before execution",
+      summary: "Director will not create workers until you answer the compilation decision.",
+      visibility: "summary",
+      actor,
+      decisionId: decision.decision?.decisionId,
+      nowMs,
+    });
+  }
+
+  return {
+    ok: true,
+    compiled,
+    report: compiled.report,
+    readyToExecute: compiled.readyToExecute,
+    decision: decision?.decision || null,
+    compiler_version: MISSION_COMPILER_VERSION,
   };
-
-  // ---- AUTHORITY: a substantial operator direction is the mission; the generic
-  // template is only the fallback when the operator gave no direction. ----
-  const directed = isOperatorDirected(mission, capability);
-  const opPath = directed ? missionOutputPath(capability, mission) : null;
-
-  const criteria = directed ? [
-    { id: "AC1", type: "artifact", statement: `The mission's requested outputs exist at ${opPath}.`, evidence_required: ["file_exists"] },
-    // The load-bearing integrity criterion: the deliverables must satisfy the
-    // APPROVED objective, not a generic substitute. Not machine-decidable → it
-    // is an explicit operator confirmation, so a mission can never auto-pass by
-    // producing an unrelated artifact.
-    { id: "ACF", type: "intent-fidelity", statement: `The deliverables satisfy the objective the operator approved: “${firstLine(mission.intent)}” — not a generic substitute.`, evidence_required: ["intent_fidelity"] },
-    { id: "AC3", type: "governance", statement: "No application source code was changed — the mission's outputs live under its docs path.", evidence_required: ["git_clean_outside_docs"] },
-  ] : [
-    { id: "AC1", type: "artifact", statement: `The V2 proposal exists at ${outPath}.`, evidence_required: ["file_exists"] },
-    { id: "AC2", type: "completeness", statement: `The proposal contains all required sections: ${PROPOSAL_SECTIONS.join(", ")}.`, evidence_required: ["sections_present"] },
-    { id: "AC3", type: "governance", statement: "No source code was changed — only the proposal document under the docs path.", evidence_required: ["git_clean_outside_docs"] },
-    { id: "AC4", type: "product-fidelity", statement: `The proposal respects the capability's rejected patterns (${(capability.rejected_patterns || []).map((r) => r.id).join(", ") || "none"}).`, evidence_required: ["rejected_patterns_not_reintroduced"] },
-  ];
-
-  // Operator clarifications (answers given in the Understanding stage) are carried
-  // into the objective so the worker executes with the operator's answers in hand.
-  const clarifications = (mission.clarifications || []).map((c) => c.answer).filter(Boolean);
-  const clarBlock = clarifications.length ? `\n\n[OPERATOR CLARIFICATIONS]\n${clarifications.map((a) => `- ${a}`).join("\n")}` : "";
-
-  const objective = (directed
-    ? `${String(mission.intent).trim()}\n\n[EXECUTION NOTES] Write the outputs this objective requires to ${opPath}. Governance: do not push, merge, or promote; do not modify application source code unless the objective explicitly requires it.`
-    : `Analyze the current ${capability.name} implementation${codePaths ? ` (${codePaths})` : ""} ` +
-      `and produce the ${capability.name} V2 implementation proposal${roadmapStr ? ` covering the roadmap items [${roadmapStr}]` : ""}. ` +
-      `Write the proposal to ${outPath}. Do NOT modify any source code — this is a planning proposal only.`) + clarBlock;
-
-  const scope_included = directed ? [
-    "Perform the work described in the objective, in full.",
-    `Write the resulting outputs to ${opPath}.`,
-  ] : [
-    `Analyze the current ${capability.name} implementation and product decisions.`,
-    `Produce a written V2 implementation proposal at ${outPath}.`,
-    `Cover each planned V2 roadmap item.`,
-  ];
-
-  const scope_excluded = directed ? [
-    ...deriveExclusions(mission.intent),
-    "Substituting a generic proposal for the objective above.",
-    "Any push, merge, or promotion.",
-    "Broadening scope beyond the stated objective.",
-  ] : [
-    "Any source code changes (this mission produces a proposal only).",
-    "Implementing V2 itself.",
-    "Any push, merge, or promotion.",
-  ];
-
-  const deliverablePath = directed ? opPath : outPath;
-
-  const input = {
-    mission_id: mission.mission_id, project_id: capability.project_id, capability_id: cid,
-    worker_slot: mission.worker_slot,
-    title: directed ? `${capability.name} — ${firstLine(mission.intent) || "operator-directed mission"}` : `${capability.name} V2 — Implementation Proposal`,
-    // The mission is operator-directed when the operator gave a substantial
-    // direction; this flag drives proposal presentation + verification integrity.
-    operator_directed: directed,
-    objective,
-    scope_included,
-    scope_excluded,
-    relevant_documents: (snapshot?.items || []).filter((i) => i.kind !== "code").map((i) => ({ uri: i.uri, title: i.title, why_relevant: i.why_relevant })),
-    approved_references: (snapshot?.items || []).filter((i) => i.kind === "code").map((i) => ({ type: "code", uri: i.uri, note: "current implementation" })),
-    inherited_product_rules: (capability.accepted_decisions || []).map((d) => ({ id: d.id, scope: "capability", rule: d.statement, provenance: d.ref })),
-    accepted_decisions: capability.accepted_decisions || [],
-    rejected_patterns: capability.rejected_patterns || [],
-    acceptance_criteria: criteria,
-    required_evidence: directed ? [
-      { id: "EV1", kind: "file", description: `mission outputs at ${deliverablePath}`, criterion_ids: ["AC1"] },
-      { id: "EV2", kind: "operator", description: "operator confirms the outputs satisfy the approved objective", criterion_ids: ["ACF"] },
-    ] : [
-      { id: "EV1", kind: "file", description: `proposal file at ${outPath}`, criterion_ids: ["AC1", "AC2"] },
-      { id: "EV2", kind: "log", description: "git status showing only the docs path changed", criterion_ids: ["AC3"] },
-    ],
-    unresolved_questions: [],
-    operator_decision_gates: [], // mature capability → no in-package gates → package can be ready; the operator approval is the pipeline gate.
-    governance_constraints: { no_push: true, no_merge: true, no_promote: true, no_scope_broadening: true, ask_before_consequential: true, loopback_only: true },
-    QA_plan: directed ? [
-      { id: "QA1", step: `Confirm ${deliverablePath} exists and is non-empty.`, verifies: ["AC1"] },
-      { id: "QA2", step: "Confirm the outputs address the approved objective (operator judgment).", verifies: ["ACF"] },
-      { id: "QA3", step: "Confirm git status shows no application source changes.", verifies: ["AC3"] },
-    ] : [
-      { id: "QA1", step: `Confirm ${outPath} exists and is non-empty.`, verifies: ["AC1"] },
-      { id: "QA2", step: `Confirm all required sections are present.`, verifies: ["AC2"] },
-      { id: "QA3", step: "Confirm git status shows no source changes outside the docs path.", verifies: ["AC3"] },
-    ],
-    expected_deliverables: directed ? [
-      { id: "D1", kind: "document", description: "The outputs the approved objective requires", path: deliverablePath, criterion_ids: ["AC1", "ACF"] },
-    ] : [
-      { id: "D1", kind: "document", description: `${capability.name} V2 implementation proposal`, path: outPath, criterion_ids: ["AC1", "AC2"] },
-    ],
-    // Upstream artifacts embedded for reproducibility + operator review.
-    gap_report: gapReport || null,
-    product_definition_snapshot: capability.product_definition || null,
-    suggested_acceptance_criteria: gapReport?.findings?.suggested_acceptance_criteria || [],
-    // Risks + questions are populated FROM the gap report — an incomplete package
-    // always explains itself.
-    risks: [
-      ...(gapReport?.findings?.conflicts || []).map((c) => ({ id: `r_${c.id}`, risk: c.detail, from: `gap:${c.id}`, severity: c.severity })),
-      ...(gapReport?.findings?.missing_files || []).map((f, i) => ({ id: `r_mf_${i}`, risk: `Missing reference: ${f.uri}`, from: "gap:missing_files", severity: "warn" })),
-    ],
-    questions: (gapReport?.findings?.unknowns || []).map((u) => ({ id: u.id, question: u.question, blocking: u.blocking === true, from: "gap:unknowns" })),
-    compiler_version: COMPILER_VERSION,
-    compiler_trace: trace,
-    knowledge_snapshot: snapshot || null,
-  };
-
-  // Recompilation revises the prior package into a new version (with a diff);
-  // a first compile creates v1.
-  const pkg = reviseOf ? revisePackage(reviseOf, input) : createPackage(input, { origin: "compiled" });
-  return { package: pkg, trace };
 }
 
-export { COMPILER_VERSION };
+/** Plan phases for assignment creation — from Compiled Mission only. */
+export function executionPlanFromCompiled(compiled) {
+  if (!compiled) return [];
+  return (compiled.executionPhases || []).map((p) => ({
+    phaseId: p.phaseId,
+    order: p.order,
+    title: p.title,
+    objective: p.objective,
+    requiredOutputs: p.requiredOutputs
+      || (compiled.deliverables || [])
+        .filter((d) => (p.deliverableIds || []).includes(d.id) && d.status === "to_execute")
+        .map((d) => d.expectedPath || d.title),
+    dependencies: p.dependencies || [],
+    acceptanceCriteriaIds: p.acceptanceCriteriaIds
+      || (compiled.acceptanceCriteria || [])
+        .filter((c) => (p.deliverableIds || []).includes(c.deliverableId))
+        .map((c) => c.id),
+    kind: p.kind || "discovery",
+  }));
+}

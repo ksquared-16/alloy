@@ -42,6 +42,21 @@ export function deriveStatus(e) {
   return STATUS.IDLE;
 }
 
+// Coarse per-worker ACTIVITY for the operator glance — is claude/cursor working,
+// idle, done, or paused? Built from LOCAL signals (last git-commit time +
+// metadata) so it stays meaningful when alloy-ro is thrashing. "working" is an
+// honest proxy — recent repo activity or an active session — not a keystroke feed.
+const WORKING_WINDOW_MS = 15 * 60 * 1000;
+export function deriveActivity(e, nowMs) {
+  if (e.lifecycle === "paused" || e.detail?.pause_recorded_at) return "paused";
+  if (e.detail?.finished_at) return "done";
+  const last = e.git_recent?.last_ms ?? null;
+  if (last != null && nowMs - last < WORKING_WINDOW_MS) return "working";
+  const active = e.agent_status === "active" || e.lifecycle === "active";
+  if (active || last != null) return "idle"; // session open / has history, just quiet now
+  return "unknown";
+}
+
 /** Coarse, explicitly-derived progress (0–100) or null when unsourceable. */
 function deriveProgress(e) {
   const st = e.initiative?.state;
@@ -65,8 +80,9 @@ function projectQuestions(e) {
   }));
 }
 
-export function projectSprint(e) {
+export function projectSprint(e, nowMs = Date.now()) {
   const status = deriveStatus(e);
+  const activity = deriveActivity(e, nowMs);
   const progress = deriveProgress(e);
   const questions = projectQuestions(e);
   const stage = e.manifest?.stage && e.manifest.stage !== "undeclared" ? e.manifest.stage : e.initiative?.state || null;
@@ -83,6 +99,8 @@ export function projectSprint(e) {
     glyph: glyphFor(e.worktree),
     provider: e.provider,
     status,
+    activity,
+    last_activity_ms: e.git_recent?.last_ms ?? null,
     lifecycle: e.lifecycle || null,
     initiative_key: e.initiative?.key || e.manifest?.initiative_key || null,
     stage,
@@ -103,8 +121,8 @@ export function projectSprint(e) {
   };
 }
 
-export function projectSprints(sprintsCtx) {
-  return sprintsCtx.map(projectSprint).sort((a, b) => a.slot - b.slot);
+export function projectSprints(sprintsCtx, nowMs = Date.now()) {
+  return sprintsCtx.map((e) => projectSprint(e, nowMs)).sort((a, b) => a.slot - b.slot);
 }
 
 function humanize(s) {

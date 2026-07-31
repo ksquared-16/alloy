@@ -7,9 +7,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 process.env.ALLOY_RUNTIME_ROOT = mkdtempSync(join(os.tmpdir(), "vac-test-"));
+process.env.VACILANDO_SEED_FIXTURES = "1"; // this suite relies on the Access & Roles seed fixture
 
 const { validatePackage, createPackage, getPackage, revisePackage, computeDiff, packageLineage } = await import("../lib/vacilando/commands/mission-packages.mjs");
 const { deriveVerdict } = await import("../lib/vacilando/director-review.mjs");
@@ -1232,4 +1234,472 @@ test("governed runner (Case B — stalled): terminated with a corrective directi
   assert.equal(r.directive, "corrective_action");
   assert.match(r.summary, /terminated|hard budget/i);
   assert.equal(isValidTurnEnd(r.state), false, "'stalled' is not a valid turn end — it demands corrective action");
+});
+
+// ---------------------------------------------------------------------------
+// Implement-phase evidence checkers (source_changed / tests_pass / qa_evidence)
+// — the last autonomy switch: without these, implement gates never fully pass.
+// ---------------------------------------------------------------------------
+function implPkg(overrides = {}) {
+  return {
+    package_id: "pkg_impl",
+    capability_id: "cap_test",
+    acceptance_criteria: [
+      { id: "AC1", evidence_required: ["source_changed"] },
+      { id: "AC2", evidence_required: ["tests_pass"] },
+      { id: "AC3", evidence_required: ["qa_evidence"] },
+      { id: "AC4", evidence_required: ["rejected_patterns_not_reintroduced"] },
+    ],
+    expected_deliverables: [
+      { id: "D2", kind: "evidence", description: "QA screenshots", path: "docs/platform/planning/vacilando-os/qa/cap-test-v2/" },
+    ],
+    rejected_patterns: [],
+    ...overrides,
+  };
+}
+
+test("conversationNeedsAttention: at_risk/failed does not notify; waiting_for_operator does", async () => {
+  const { conversationNeedsAttention, conversationState } = await import("../lib/vacilando/conversation.mjs");
+  const pkg = { readiness_status: "ready", readiness_verdict: { verdict: "Ready" } };
+  const fail = conversationState({ status: "failed", error_message: "API Error: 529 Overloaded" }, pkg);
+  assert.equal(fail.key, "at_risk");
+  assert.equal(fail.action, "Open");
+  assert.equal(conversationNeedsAttention(fail), false);
+  const wait = conversationState({ status: "waiting_for_operator", pending_question: "Pick a scope" }, pkg);
+  assert.equal(wait.key, "needs_operator");
+  assert.equal(wait.action, "Continue");
+  assert.equal(conversationNeedsAttention(wait), true);
+});
+
+test("implement evidence: unmet when no source/tests/qa", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-"));
+  mkdirSync(join(tmp, ".git"), { recursive: true }); // dirtyPaths tolerates missing git
+  const result = evalMission({ mission_id: "msn_impl_empty", git_baseline: [] }, implPkg(), { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC1").status, "unmet");
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC2").status, "unmet");
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC3").status, "unmet");
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC4").status, "met"); // no rejected patterns → auto-met
+  assert.equal(result.gate, "fail");
+});
+
+test("implement evidence: source_changed + tests_pass + qa_evidence → gate pass", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-"));
+  // Fake a git repo with an attributable source change
+  execFileSync("git", ["init"], { cwd: tmp });
+  mkdirSync(join(tmp, "web/lib"), { recursive: true });
+  writeFileSync(join(tmp, "web/lib/access.ts"), "export const x = 1;\n");
+  // leave untracked so porcelain shows ?? (attributable vs empty baseline)
+
+  const qaDir = join(tmp, "docs/platform/planning/vacilando-os/qa/cap-test-v2");
+  mkdirSync(qaDir, { recursive: true });
+  writeFileSync(join(qaDir, "phase0.png"), "fake-png");
+
+  // Seed a mission report with tests.ran/results
+  const outRoot = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "missions", "outputs", "msn_impl_ok");
+  mkdirSync(outRoot, { recursive: true });
+  writeFileSync(join(outRoot, "outputs.jsonl"), JSON.stringify({ turn: 1, has_report: true }) + "\n");
+  writeFileSync(join(outRoot, "turn-1.report.json"), JSON.stringify({
+    changed_files: ["web/lib/access.ts"],
+    tests: { ran: true, results: { pass: true, failed: 0, passed: 3 } },
+  }));
+
+  const result = evalMission({ mission_id: "msn_impl_ok", git_baseline: [] }, implPkg(), { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC1").status, "met", JSON.stringify(result.criteria.find((c) => c.criterion_id === "AC1")));
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC2").status, "met");
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC3").status, "met");
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC4").status, "met");
+  assert.equal(result.gate, "pass");
+});
+
+test("implement evidence: migration_accounted unmet when mig file missing from report", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-mig-"));
+  execFileSync("git", ["init"], { cwd: tmp });
+  mkdirSync(join(tmp, "supabase/migrations"), { recursive: true });
+  writeFileSync(join(tmp, "supabase/migrations/20260101_roles.sql"), "-- mig\n");
+  mkdirSync(join(tmp, "web/lib"), { recursive: true });
+  writeFileSync(join(tmp, "web/lib/access.ts"), "export const x = 1;\n");
+  const qaDir = join(tmp, "docs/platform/planning/vacilando-os/qa/cap-test-v2");
+  mkdirSync(qaDir, { recursive: true });
+  writeFileSync(join(qaDir, "phase0.png"), "fake-png");
+
+  const mid = "msn_impl_mig_miss";
+  const outRoot = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "missions", "outputs", mid);
+  mkdirSync(outRoot, { recursive: true });
+  writeFileSync(join(outRoot, "outputs.jsonl"), JSON.stringify({ turn: 1, has_report: true }) + "\n");
+  writeFileSync(join(outRoot, "turn-1.report.json"), JSON.stringify({
+    changed_files: ["web/lib/access.ts", "supabase/migrations/20260101_roles.sql"],
+    tests: { ran: true, results: { pass: true } },
+    // migrations[] intentionally absent
+  }));
+
+  const pkg = implPkg({
+    acceptance_criteria: [
+      ...implPkg().acceptance_criteria,
+      { id: "AC5", evidence_required: ["migration_accounted"] },
+    ],
+  });
+  const result = evalMission({ mission_id: mid, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC5").status, "unmet");
+  assert.equal(result.gate, "fail");
+});
+
+test("implement evidence: migration awaiting_authorization → needs_operator", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-mig-auth-"));
+  execFileSync("git", ["init"], { cwd: tmp });
+  mkdirSync(join(tmp, "supabase/migrations"), { recursive: true });
+  writeFileSync(join(tmp, "supabase/migrations/20260101_roles.sql"), "-- mig\n");
+  mkdirSync(join(tmp, "web/lib"), { recursive: true });
+  writeFileSync(join(tmp, "web/lib/access.ts"), "export const x = 1;\n");
+  const qaDir = join(tmp, "docs/platform/planning/vacilando-os/qa/cap-test-v2");
+  mkdirSync(qaDir, { recursive: true });
+  writeFileSync(join(qaDir, "phase0.png"), "fake-png");
+
+  const mid = "msn_impl_mig_auth";
+  const outRoot = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "missions", "outputs", mid);
+  mkdirSync(outRoot, { recursive: true });
+  writeFileSync(join(outRoot, "outputs.jsonl"), JSON.stringify({ turn: 1, has_report: true }) + "\n");
+  writeFileSync(join(outRoot, "turn-1.report.json"), JSON.stringify({
+    changed_files: ["web/lib/access.ts", "supabase/migrations/20260101_roles.sql"],
+    tests: { ran: true, results: { pass: true } },
+    migrations: [{
+      path: "supabase/migrations/20260101_roles.sql",
+      status: "awaiting_authorization",
+      target: "shared",
+      note: "needs Kelly",
+      preflight: { ok: true, summary: "orphan grants=0", evidence_path: "docs/…/preflight.json" },
+    }],
+  }));
+
+  const pkg = implPkg({
+    acceptance_criteria: [
+      ...implPkg().acceptance_criteria,
+      { id: "AC5", evidence_required: ["migration_accounted"] },
+    ],
+  });
+  const result = evalMission({ mission_id: mid, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC5").status, "operator_review");
+  assert.equal(result.gate, "needs_operator");
+});
+
+test("implement evidence: shared awaiting_authorization without preflight → unmet", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-mig-nopf-"));
+  execFileSync("git", ["init"], { cwd: tmp });
+  mkdirSync(join(tmp, "supabase/migrations"), { recursive: true });
+  writeFileSync(join(tmp, "supabase/migrations/20260101_roles.sql"), "-- mig\n");
+  mkdirSync(join(tmp, "web/lib"), { recursive: true });
+  writeFileSync(join(tmp, "web/lib/access.ts"), "export const x = 1;\n");
+  const qaDir = join(tmp, "docs/platform/planning/vacilando-os/qa/cap-test-v2");
+  mkdirSync(qaDir, { recursive: true });
+  writeFileSync(join(qaDir, "phase0.png"), "fake-png");
+
+  const mid = "msn_impl_mig_nopf";
+  const outRoot = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "missions", "outputs", mid);
+  mkdirSync(outRoot, { recursive: true });
+  writeFileSync(join(outRoot, "outputs.jsonl"), JSON.stringify({ turn: 1, has_report: true }) + "\n");
+  writeFileSync(join(outRoot, "turn-1.report.json"), JSON.stringify({
+    changed_files: ["web/lib/access.ts", "supabase/migrations/20260101_roles.sql"],
+    tests: { ran: true, results: { pass: true } },
+    migrations: [{ path: "supabase/migrations/20260101_roles.sql", status: "awaiting_authorization", target: "shared", note: "needs Kelly" }],
+  }));
+
+  const pkg = implPkg({
+    acceptance_criteria: [
+      ...implPkg().acceptance_criteria,
+      { id: "AC5", evidence_required: ["migration_accounted"] },
+    ],
+  });
+  const result = evalMission({ mission_id: mid, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC5").status, "unmet");
+  assert.match(result.criteria.find((c) => c.criterion_id === "AC5").evidence[0].detail, /preflight/);
+  assert.equal(result.gate, "fail");
+});
+
+test("implement evidence: shared awaiting_authorization with failed preflight → unmet", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-mig-badpf-"));
+  execFileSync("git", ["init"], { cwd: tmp });
+  mkdirSync(join(tmp, "supabase/migrations"), { recursive: true });
+  writeFileSync(join(tmp, "supabase/migrations/20260101_roles.sql"), "-- mig\n");
+  mkdirSync(join(tmp, "web/lib"), { recursive: true });
+  writeFileSync(join(tmp, "web/lib/access.ts"), "export const x = 1;\n");
+  const qaDir = join(tmp, "docs/platform/planning/vacilando-os/qa/cap-test-v2");
+  mkdirSync(qaDir, { recursive: true });
+  writeFileSync(join(qaDir, "phase0.png"), "fake-png");
+
+  const mid = "msn_impl_mig_badpf";
+  const outRoot = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "missions", "outputs", mid);
+  mkdirSync(outRoot, { recursive: true });
+  writeFileSync(join(outRoot, "outputs.jsonl"), JSON.stringify({ turn: 1, has_report: true }) + "\n");
+  writeFileSync(join(outRoot, "turn-1.report.json"), JSON.stringify({
+    changed_files: ["web/lib/access.ts", "supabase/migrations/20260101_roles.sql"],
+    tests: { ran: true, results: { pass: true } },
+    migrations: [{
+      path: "supabase/migrations/20260101_roles.sql",
+      status: "awaiting_authorization",
+      target: "shared",
+      preflight: { ok: false, summary: "orphan grants=3" },
+    }],
+  }));
+
+  const pkg = implPkg({
+    acceptance_criteria: [
+      ...implPkg().acceptance_criteria,
+      { id: "AC5", evidence_required: ["migration_accounted"] },
+    ],
+  });
+  const result = evalMission({ mission_id: mid, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC5").status, "unmet");
+  assert.equal(result.gate, "fail");
+});
+
+test("implement evidence: no migration files → migration_accounted met", () => {
+  const tmp = mkdtempSync(join(os.tmpdir(), "vac-impl-mig-none-"));
+  execFileSync("git", ["init"], { cwd: tmp });
+  mkdirSync(join(tmp, "web/lib"), { recursive: true });
+  writeFileSync(join(tmp, "web/lib/access.ts"), "export const x = 1;\n");
+  const qaDir = join(tmp, "docs/platform/planning/vacilando-os/qa/cap-test-v2");
+  mkdirSync(qaDir, { recursive: true });
+  writeFileSync(join(qaDir, "phase0.png"), "fake-png");
+
+  const mid = "msn_impl_mig_none";
+  const outRoot = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "missions", "outputs", mid);
+  mkdirSync(outRoot, { recursive: true });
+  writeFileSync(join(outRoot, "outputs.jsonl"), JSON.stringify({ turn: 1, has_report: true }) + "\n");
+  writeFileSync(join(outRoot, "turn-1.report.json"), JSON.stringify({
+    changed_files: ["web/lib/access.ts"],
+    tests: { ran: true, results: { pass: true } },
+  }));
+
+  const pkg = implPkg({
+    acceptance_criteria: [
+      ...implPkg().acceptance_criteria,
+      { id: "AC5", evidence_required: ["migration_accounted"] },
+    ],
+  });
+  const result = evalMission({ mission_id: mid, git_baseline: [] }, pkg, { worktreePath: tmp });
+  assert.equal(result.criteria.find((c) => c.criterion_id === "AC5").status, "met");
+  assert.equal(result.gate, "pass");
+});
+
+// --- Accept must not advance past needs_operator; strip must surface judgment ---
+const { projectObjectiveLive } = await import("../lib/vacilando/objective.mjs");
+
+test("objective live: waiting_for_acceptance + needs_operator → operator_needed (even autonomous)", () => {
+  const o = {
+    capability_id: "cap_test",
+    mode: "autonomous",
+    phases: [
+      { id: "p1", title: "Phase 0", status: "done" },
+      { id: "p2", title: "Phase 1", status: "pending", mission_id: "msn_x" },
+    ],
+  };
+  const mission = {
+    mission_id: "msn_x",
+    status: "waiting_for_acceptance",
+    acceptance_gate: "needs_operator",
+    phase_id: "p2",
+    objective_capability_id: "cap_test",
+    updated_at: new Date().toISOString(),
+  };
+  const live = projectObjectiveLive(o, () => mission, () => [mission]);
+  assert.equal(live.operator_needed, true);
+  assert.equal(live.status, "needs_you");
+  assert.match(live.label, /judgment/i);
+});
+
+test("objective live: waiting_for_acceptance without gate stays reviewing in autonomous", () => {
+  const o = {
+    capability_id: "cap_test",
+    mode: "autonomous",
+    phases: [{ id: "p2", title: "Phase 1", status: "pending", mission_id: "msn_y" }],
+  };
+  const mission = {
+    mission_id: "msn_y",
+    status: "waiting_for_acceptance",
+    phase_id: "p2",
+    objective_capability_id: "cap_test",
+    updated_at: new Date().toISOString(),
+  };
+  const live = projectObjectiveLive(o, () => mission, () => [mission]);
+  assert.equal(live.operator_needed, false);
+  assert.equal(live.status, "reviewing");
+});
+
+// --- Heavy validation broker guard (Vacilando must not allow raw tsc) ---
+const {
+  isUnbrokeredHeavyCommand,
+  CLAUDE_IMPLEMENT_ALLOWED_TOOLS,
+} = await import("../lib/vacilando/heavy-validation-guard.mjs");
+
+test("unbrokered heavy command detection: raw tsc variants", () => {
+  assert.equal(isUnbrokeredHeavyCommand("npx tsc --noEmit -p tsconfig.json"), true);
+  assert.equal(isUnbrokeredHeavyCommand("npm exec tsc --noEmit"), true);
+  assert.equal(isUnbrokeredHeavyCommand("node …/web/node_modules/.bin/tsc --noEmit -p tsconfig.json"), true);
+  assert.equal(isUnbrokeredHeavyCommand("node /Users/x/web/node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"), true);
+  assert.equal(isUnbrokeredHeavyCommand("npx next build"), true);
+});
+
+test("brokered heavy commands are not flagged", () => {
+  assert.equal(isUnbrokeredHeavyCommand("vac run typecheck"), false);
+  assert.equal(isUnbrokeredHeavyCommand("bash ../scripts/local-dev/vac-run typecheck:tests"), false);
+  assert.equal(isUnbrokeredHeavyCommand("alloy-validate wt1 typecheck"), false);
+  assert.equal(isUnbrokeredHeavyCommand("npx vitest run tests/access/foo.test.ts"), false);
+});
+
+test("Claude implement allowlist omits raw tsc vectors", () => {
+  const joined = CLAUDE_IMPLEMENT_ALLOWED_TOOLS.join("\n");
+  assert.ok(joined.includes("Bash(vac *)"));
+  assert.ok(joined.includes("Bash(npm run *)"));
+  assert.ok(joined.includes("Bash(npx vitest *)"));
+  assert.equal(joined.includes("Bash(npx *)"), false);
+  assert.equal(joined.includes("Bash(npm *)"), false);
+  assert.equal(joined.includes("Bash(node *)"), false);
+});
+
+// --- Director Execution System V2 Phase 1: Mission Brief authority ---
+
+const {
+  createBrief, getBrief, getBriefVersion, listBriefVersions, proposeBriefRevision, computeContentHash,
+} = await import("../lib/vacilando/mission-brief.mjs");
+const { appendTimelineEvent, readTimeline, readTimelineSummary } = await import("../lib/vacilando/timeline.mjs");
+const {
+  reviewMissionReadiness, ingestMissionBrief, approveMissionExecution, getKickoffState,
+} = await import("../lib/vacilando/mission-kickoff.mjs");
+const { ensureObjective, getObjective, getObjectiveByMission } = await import("../lib/vacilando/objective.mjs");
+
+function sampleBriefBody(overrides = {}) {
+  return {
+    title: "Access & Identity V2",
+    objective: "Ship Access & Identity V2 from the operator-owned plan",
+    plan: [
+      { phaseId: "p0", order: 1, title: "Catalog integrity", objective: "Lock catalog", requiredOutputs: ["migration"], acceptanceCriteriaIds: ["AC1"] },
+      { phaseId: "p1", order: 2, title: "Audit trail", objective: "Audit log", requiredOutputs: ["code"], dependencies: ["p0"], acceptanceCriteriaIds: ["AC2"] },
+    ],
+    acceptanceCriteria: [
+      { id: "AC1", statement: "permission_definitions is canonical" },
+      { id: "AC2", statement: "mutations write audit events" },
+    ],
+    constraints: [{ id: "C1", text: "No push without approval" }],
+    sourceMaterials: [{ id: "S1", ref: "docs/platform/planning/access.md", kind: "document" }],
+    executionPreferences: { maxConcurrentWorkers: 2, requireUserApprovalBeforeMerge: true },
+    ...overrides,
+  };
+}
+
+test("brief create → version immutable → revise requires explicit new version", () => {
+  const brief = createBrief(sampleBriefBody({ missionId: "msn_brief_immut_test" }));
+  assert.equal(brief.version, 1);
+  assert.ok(brief.contentHash);
+  const v1path = join(process.env.ALLOY_RUNTIME_ROOT, "vacilando", "mission-briefs", "versions", "msn_brief_immut_test-v1.json");
+  const before = readFileSync(v1path, "utf8");
+  // Attempting silent mutate of the head must not rewrite the immutable version snapshot
+  // without going through proposeBriefRevision.
+  assert.throws(() => proposeBriefRevision("msn_brief_immut_test", { title: "Hijacked" }, { changeSummary: "" }), /change_summary|changeSummary/i);
+  const still = getBriefVersion("msn_brief_immut_test", 1);
+  assert.equal(still.title, "Access & Identity V2");
+  assert.equal(readFileSync(v1path, "utf8"), before);
+
+  const v2 = proposeBriefRevision("msn_brief_immut_test", { title: "Access & Identity V2 (revised)" }, {
+    changeSummary: "Operator renamed title after review",
+    actor: "operator",
+  });
+  assert.equal(v2.version, 2);
+  assert.equal(v2.title, "Access & Identity V2 (revised)");
+  assert.equal(getBriefVersion("msn_brief_immut_test", 1).title, "Access & Identity V2");
+  assert.equal(listBriefVersions("msn_brief_immut_test").length, 2);
+  assert.equal(getBrief("msn_brief_immut_test").version, 2);
+});
+
+test("contentHash is stable for identical brief bodies", () => {
+  const a = computeContentHash(sampleBriefBody());
+  const b = computeContentHash(sampleBriefBody());
+  assert.equal(a, b);
+  const c = computeContentHash(sampleBriefBody({ title: "Different" }));
+  assert.notEqual(a, c);
+});
+
+test("kickoff readiness distinguishes operational vs mission ambiguity", () => {
+  const ready = reviewMissionReadiness(createBrief(sampleBriefBody({ missionId: "msn_ready_rev" })));
+  assert.equal(ready.ready, true);
+  assert.equal(ready.mission_ambiguities.length, 0);
+  assert.ok(ready.operational_gaps.some((g) => g.code === "unclear_branch_target"));
+  assert.equal(ready.kickoff_card.plan_changes_by_director, "None");
+
+  const amb = reviewMissionReadiness(createBrief(sampleBriefBody({
+    missionId: "msn_amb_rev",
+    acceptanceCriteria: [],
+    plan: [{ phaseId: "p0", order: 1, title: "Only", objective: "x", requiredOutputs: [], dependencies: ["missing"] }],
+  })));
+  assert.equal(amb.ready, false);
+  assert.ok(amb.mission_ambiguities.some((g) => g.code === "missing_acceptance_criteria"));
+  assert.ok(amb.mission_ambiguities.some((g) => g.code === "unknown_dependency"));
+});
+
+test("approve execution creates phases matching brief order; titles locked without new version", () => {
+  const ingested = ingestMissionBrief(sampleBriefBody({
+    title: "Brief Spine Mission",
+    executionPreferences: { mergeTarget: "staging", maxConcurrentWorkers: 1 },
+  }), { slot: 6 });
+  assert.equal(ingested.ok, true);
+  assert.equal(ingested.mission.kickoff_status, "awaiting_kickoff_approval");
+  assert.equal(ingested.objective.status, "awaiting_kickoff_approval");
+  assert.equal(ingested.objective.phases.map((p) => p.title).join("|"), "Catalog integrity|Audit trail");
+
+  const approved = approveMissionExecution(ingested.brief.missionId, ingested.brief.version);
+  assert.equal(approved.ok, true);
+  assert.equal(approved.mission.kickoff_status, "executing");
+  assert.equal(approved.mission.mission_brief_version, 1);
+  assert.equal(approved.mission.mission_content_hash, ingested.brief.contentHash);
+  assert.deepEqual(approved.objective.phases.map((p) => p.id), ["p0", "p1"]);
+  assert.deepEqual(approved.objective.phases.map((p) => p.title), ["Catalog integrity", "Audit trail"]);
+
+  // Director cannot change phase titles on the objective without a new brief version:
+  // recreating from the same brief restores the same titles.
+  const again = approveMissionExecution(ingested.brief.missionId, 1);
+  assert.equal(again.ok, true);
+  assert.deepEqual(again.objective.phases.map((p) => p.title), ["Catalog integrity", "Audit trail"]);
+});
+
+test("timeline events emitted for create/approve/phase start", () => {
+  const ingested = ingestMissionBrief(sampleBriefBody({
+    missionId: undefined,
+    title: "Timeline Mission",
+    executionPreferences: { mergeTarget: "staging" },
+  }), { slot: 6 });
+  const mid = ingested.mission.mission_id;
+  const created = readTimeline(mid).filter((e) => e.type === "mission_created");
+  assert.equal(created.length, 1);
+  assert.match(created[0].summary, /awaiting kickoff/i);
+  assert.equal(created[0].visibility, "summary");
+
+  const approved = approveMissionExecution(mid, ingested.brief.version);
+  assert.equal(approved.ok, true);
+  const types = readTimelineSummary(mid).map((e) => e.type);
+  assert.ok(types.includes("mission_started"));
+  assert.ok(types.includes("phase_started"));
+  assert.match(readTimeline(mid).find((e) => e.type === "phase_started").summary, /Catalog integrity/);
+});
+
+test("legacy Access & Roles capability objective path still loads (gated)", () => {
+  const cap = retrieveCapability("Build Access & Roles V2");
+  assert.equal(cap.ok, true);
+  const obj = ensureObjective(cap.capability, { intent: "Build Access & Roles V2" });
+  assert.ok(obj);
+  assert.equal(obj.origin == null || obj.origin !== "mission_brief", true);
+  assert.ok(obj.phases.length >= 1);
+  assert.equal(obj.phases[0].kind, "plan");
+  assert.equal(getObjective(cap.capability.capability_id).capability_id, cap.capability.capability_id);
+  // Brief-origin lookup must not collide with capability-keyed objective
+  assert.equal(getObjectiveByMission(cap.capability.capability_id), null);
+});
+
+test("getKickoffState prefers timeline + brief over inventing a plan", () => {
+  const ingested = ingestMissionBrief(sampleBriefBody({
+    title: "Kickoff State Mission",
+    executionPreferences: { mergeTarget: "staging" },
+  }), { slot: 6 });
+  const state = getKickoffState(ingested.mission.mission_id);
+  assert.equal(state.ok, true);
+  assert.equal(state.kickoff_card.plan_changes_by_director, "None");
+  assert.equal(state.kickoff_card.phase_count, 2);
+  assert.ok(state.timeline.some((e) => e.type === "mission_created"));
 });
