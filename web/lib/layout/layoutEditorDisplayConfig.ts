@@ -61,7 +61,7 @@ export type LayoutAgeFormat = (typeof LAYOUT_AGE_FORMATS)[number];
 
 export const LAYOUT_AGE_FORMAT_LABELS: Record<LayoutAgeFormat, string> = {
     years: "Years only (2y)",
-    years_months: "Years + months (2y 4m)",
+    years_months: "Years + months (2y4m)",
     months: "Months only (28m)",
     full_text: "Full text (2 years 4 months)",
 };

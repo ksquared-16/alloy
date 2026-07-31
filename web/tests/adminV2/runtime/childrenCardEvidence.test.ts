@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { formatFocusPanelDobAgeLine } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import type {
     OperationalContext,
     OperationalContextSignals,
@@ -61,7 +62,7 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.count).toBe(1);
         const emma = evidence.children[0]!;
         expect(emma.name).toBe("Emma Johnson");
-        expect(emma.dobAge).toBe("Mar 3, 2020 · 6y");
+        expect(emma.dobAge).toBe(formatFocusPanelDobAgeLine("2020-03-03", "6y"));
         expect(emma.program).toBe("Preschool");
         expect(emma.room).toBe("Sunflower");
         expect(emma.schedule).toBe("M–F · Full day");
