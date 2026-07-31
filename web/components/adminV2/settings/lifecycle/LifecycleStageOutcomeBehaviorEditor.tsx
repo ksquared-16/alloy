@@ -21,6 +21,8 @@ import {
 type Props = {
     outcomeKey: string;
     outcomeLabel: string;
+    /** The stage this outcome belongs to — named in the "no transitions" explanation. */
+    stageLabel: string;
     rules: StageOutcomeRuleV1[];
     workTemplates: StageWorkTemplateV1[];
     transitionOptions: StageOutcomeTransitionOption[];
@@ -113,6 +115,7 @@ function ScheduleTimingControls({
 export default function LifecycleStageOutcomeBehaviorEditor({
     outcomeKey,
     outcomeLabel,
+    stageLabel,
     rules,
     workTemplates,
     transitionOptions,
@@ -142,17 +145,24 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     />
                     Stay in stage
                 </label>
-                <label className="inline-flex items-center gap-1 text-[10px]">
+                <label
+                    className={`inline-flex items-center gap-1 text-[10px] ${
+                        availableTransitions.length ? "" : "text-alloy-midnight/40"
+                    }`}
+                >
                     <input
                         type="radio"
                         name={`movement-${outcomeKey}`}
                         checked={draft.movement === "move_through_transition"}
                         disabled={!availableTransitions.length}
+                        data-testid={`stage-outcome-move-through-transition-${outcomeKey}`}
                         onChange={() =>
                             apply({
                                 ...draft,
                                 movement: "move_through_transition",
-                                transition_ref: draft.transition_ref ?? availableTransitions[0]?.transition_ref,
+                                // Never auto-select. A silently chosen transition is a movement the
+                                // operator did not author, and it is how a wrong destination ships.
+                                transition_ref: draft.transition_ref,
                             })
                         }
                     />
@@ -173,6 +183,19 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                         ))}
                     </select>
                 :   null}
+                {/*
+                  * A greyed control with no explanation is the defect, not the empty list. Say what
+                  * is missing and what to do about it, in the operator's own vocabulary.
+                  */}
+                {availableTransitions.length ? null : (
+                    <p
+                        className="mt-1 text-[10px] leading-snug text-alloy-midnight/50"
+                        data-testid={`stage-outcome-no-transitions-${outcomeKey}`}
+                    >
+                        No outgoing transitions are configured for {stageLabel}. Create a transition
+                        before choosing this outcome behaviour.
+                    </p>
+                )}
             </fieldset>
 
             <section className="space-y-1">

@@ -64,13 +64,17 @@ describe("publication gate", () => {
 
         expect(result.errors).toHaveLength(1);
         expect(result.errors[0]).toMatchObject({
-            code: "dangling_stage_reference",
+            code: "movement_transition_not_found",
             stage_key: "lead",
         });
-        expect(result.errors[0]!.detail?.invalid_target).toBe("lead_to_tour");
-        expect(result.errors[0]!.message).toContain("lead_to_tour");
+        expect(result.errors[0]!.detail?.transition_ref).toBe("lead_to_tour");
+        // Operator language: names the OUTCOME, says the transition does not exist, and says where
+        // to create it. The message it replaced read `targets stage "lead_to_tour"` — describing a
+        // transition reference as if it were a stage.
+        expect(result.errors[0]!.message).toContain("Qualified");
+        expect(result.errors[0]!.message).toContain("does not exist");
         expect(result.errors[0]!.path).toBe(
-            "processes[enrollment].stages[lead].stage_operating_plan_v1",
+            "processes[enrollment].stages[lead].stage_operating_plan_v1.outcome_rules",
         );
     });
 

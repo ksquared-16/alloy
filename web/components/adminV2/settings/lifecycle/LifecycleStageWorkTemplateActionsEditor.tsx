@@ -363,6 +363,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     <LifecycleStageOutcomeDefinitionsEditor
                         draft={stageDraft}
                         transitionOptions={transitionOptions}
+                        stageLabel={stageLabel}
                         workTemplateKey={work.template_key}
                         onChange={onStageDraftChange}
                     />
