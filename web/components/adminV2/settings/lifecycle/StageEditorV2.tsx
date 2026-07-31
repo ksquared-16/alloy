@@ -45,6 +45,7 @@ import {
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
+import type { StageOperatingPlanDraftSave } from "@/lib/lifecycle/stageOperatingPlanDraftDelta";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { enrollmentStageMembership } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
@@ -60,7 +61,7 @@ export type StageEditorV2Handle = {
     isQueueMembershipDirty: () => boolean;
     getStatusRollupDraft: () => StatusRollupV1 | null;
     isStatusRollupDirty: () => boolean;
-    getStageOperatingPlanDraft: () => StageOperatingPlanV1 | null;
+    getStageOperatingPlanDraft: () => StageOperatingPlanDraftSave | null;
     isStageOperatingPlanDirty: () => boolean;
     getV2Draft: () => StageV2Draft;
     isV2Dirty: () => boolean;
@@ -467,6 +468,7 @@ function PossibleOutcomesSection({
 function StickyTopbar({
     saveState,
     saveError,
+    saveNotice,
     saveDisabled,
     isDirty,
     onSave,
@@ -474,6 +476,7 @@ function StickyTopbar({
 }: {
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     saveDisabled: boolean;
     isDirty: boolean;
     onSave: () => void | Promise<void>;
@@ -487,10 +490,23 @@ function StickyTopbar({
                         Unsaved changes
                     </span>
                 ) : saveState === "saved" ? (
-                    <span className="flex items-center gap-1 text-[10px] font-medium text-alloy-juniper" data-testid="stage-editor-v2-saved">
-                        <Check size={11} strokeWidth={2.5} />
-                        Draft saved
-                    </span>
+                    saveNotice ? (
+                        // Saved, but the graph is not publishable yet. Saying only "Draft saved"
+                        // here and refusing at publish teaches operators to distrust both.
+                        <span
+                            className="flex items-center gap-1 max-w-[20rem] text-[10px] font-medium text-alloy-ember"
+                            data-testid="stage-editor-v2-remaining-issues"
+                            role="status"
+                        >
+                            <AlertCircle size={11} />
+                            {saveNotice}
+                        </span>
+                    ) : (
+                        <span className="flex items-center gap-1 text-[10px] font-medium text-alloy-juniper" data-testid="stage-editor-v2-saved">
+                            <Check size={11} strokeWidth={2.5} />
+                            Draft saved
+                        </span>
+                    )
                 ) : null}
                 {saveState === "error" && saveError ? (
                     <span className="flex items-center gap-1 max-w-[12rem] text-[10px] text-alloy-ember" role="alert">
@@ -541,6 +557,7 @@ export default function StageEditorV2({
     statusesError,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     onDeleteStage,
@@ -566,6 +583,7 @@ export default function StageEditorV2({
     statusesError: string | null;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
@@ -730,6 +748,7 @@ export default function StageEditorV2({
             <StickyTopbar
                 saveState={effectiveSaveState}
                 saveError={saveError}
+                saveNotice={saveNotice ?? null}
                 saveDisabled={saveDisabled}
                 isDirty={isDirty}
                 onSave={onSaveStage}
@@ -915,12 +934,11 @@ export default function StageEditorV2({
                                         stages: _allStages ?? [],
                                     }
                                 }
-                                configuredStatuses={(bootstrap?.queue_membership_status_options ?? []).map((row) => ({
-                                    status_key: row.status_key,
-                                    status_label: row.status_label,
-                                    entity_type: "opportunities",
-                                    is_active: true,
-                                }))}
+                                configuredStatuses={
+                                // The record-status catalog, not the queue picker. The picker
+                                // drops case-layer rows, which is exactly what a transition writes.
+                                bootstrap?.record_status_vocabulary ?? []
+                            }
                             />
 
                             <Subsection label="Recommended actions">

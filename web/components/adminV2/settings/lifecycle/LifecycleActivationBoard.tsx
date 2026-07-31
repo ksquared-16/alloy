@@ -98,6 +98,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { effectiveLifecycleStageStatusKeys } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
+import { remainingIssuesSummary } from "@/lib/lifecycle/stageOperatingPlanDraftDelta";
 
 type DeptRow = {
     id: string;
@@ -108,6 +109,23 @@ type DeptRow = {
 type WorkUnitApiRow = { id: string; key: string; name: string; is_active: boolean; queue_definition: unknown };
 
 const PRIMARY_RECORD_LABEL = "Lead";
+
+/**
+ * Put the operator in front of the thing that blocked the save.
+ *
+ * `controlId` is the same handle the editor stamps onto its issue list, so scrolling to it lands
+ * on the sentence explaining the defect. A blocked save that only sets a message at the bottom of
+ * a long form is barely better than the silent failure this replaces.
+ */
+function focusStageOperatingPlanControl(controlId: string): void {
+    if (typeof document === "undefined") return;
+    const target =
+        document.querySelector(`[data-control-id="${CSS.escape(controlId)}"]`) ??
+        document.querySelector('[data-testid="lifecycle-stage-operating-plan-editor"]');
+    if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+}
 
 export default function LifecycleActivationBoard({
     identity,
@@ -186,6 +204,8 @@ export default function LifecycleActivationBoard({
     const [bootLoading, setBootLoading] = useState(true);
     const [stageSaveState, setStageSaveState] = useState<LifecycleStageSaveUiState>("idle");
     const [stageSaveError, setStageSaveError] = useState<string | null>(null);
+    /** Saved-but-not-publishable: the honest count of what the graph still owes. */
+    const [stageSaveNotice, setStageSaveNotice] = useState<string | null>(null);
     const [readyCheckRevision, setReadyCheckRevision] = useState(0);
     const [processSection, setProcessSection] = useState<BusinessProcessWorkspaceSection>(
         activeProcessSection ?? initialSection
@@ -918,6 +938,7 @@ export default function LifecycleActivationBoard({
 
         setStageSaveState("saving");
         setStageSaveError(null);
+        setStageSaveNotice(null);
         setStatusesError(null);
 
         try {
@@ -935,8 +956,21 @@ export default function LifecycleActivationBoard({
             sk,
             effectiveKeys,
         );
-        const stageOperatingPlan =
+        // D3, drafting half. The editor no longer throws while the request is being assembled;
+        // it returns the plan together with a verdict on what THIS edit did to the graph. Only an
+        // error this edit introduced or worsened stops the save — a stage the operator inherited
+        // broken stays editable, and what remains broken is reported rather than silently endured.
+        const stageOperatingPlanSave =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
+        if (stageOperatingPlanSave?.assessment.blocking.length) {
+            const first = stageOperatingPlanSave.assessment.blocking[0]!;
+            const more = stageOperatingPlanSave.assessment.blocking.length - 1;
+            setStageSaveError(more > 0 ? `${first.message} (+${more} more)` : first.message);
+            setStageSaveState("error");
+            focusStageOperatingPlanControl(first.controlId);
+            return;
+        }
+        const stageOperatingPlan = stageOperatingPlanSave?.plan ?? null;
         const statusRollup =
             handle?.isStatusRollupDirty()
                 ? handle.getStatusRollupDraft()
@@ -1082,6 +1116,11 @@ export default function LifecycleActivationBoard({
             // "Unpublished changes" rather than leaving a stale "Published".
             await refreshConfigurationState();
             setStageSaveState("saved");
+            // The draft landed, but the graph may still be short of publishable. Say so plainly —
+            // an operator who is told "Saved" and later refused at publish learns to distrust both.
+            setStageSaveNotice(
+                stageOperatingPlanSave ? remainingIssuesSummary(stageOperatingPlanSave.assessment) : null,
+            );
             setReadyCheckRevision((n) => n + 1);
             stageDirtyRef.current = false;
         } catch (e) {
@@ -1953,6 +1992,7 @@ export default function LifecycleActivationBoard({
                                     statusesError={statusesError}
                                     saveState={stageSaveState}
                                     saveError={stageSaveError}
+                                    saveNotice={stageSaveNotice}
                                     onSaveStage={saveStageUnified}
                                     onValidateConfiguration={validateConfiguration}
                                     onPublishConfiguration={publishConfiguration}

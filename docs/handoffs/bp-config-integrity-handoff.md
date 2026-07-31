@@ -350,3 +350,64 @@ branch 2 — which is why it survived.
 The separate execution defect (Law 6) is `applyConfiguredStageAutomationRules.ts:74-97`: the one
 caller that neither pre-resolves transitions nor collects `result.undo`, so the saga reports
 `changed: false` while a durable status write survives.
+
+---
+
+# Slice 6 — the draft save contract (D3, drafting half)
+
+## The defect
+
+`stageOperatingPlanDraftToPersisted` threw on any blocking issue, and the board called it while
+assembling the request body. A stage carrying **any** pre-existing defect could not be saved at
+all: the throw preceded the POST, so nothing reached the server, nothing was logged, and the
+operator saw a button that did nothing. A tenant with an imperfect graph was locked out of
+repairing it.
+
+## The contract now
+
+| | what must resolve |
+|---|---|
+| save a draft | only what *this edit* introduced or worsened |
+| Validate / Publish | the whole graph — **unchanged, unweakened** |
+
+Scope is **derived, not declared**: the same plan is validated as-saved and as-proposed under
+identical context, and the findings are diffed. Findings are keyed on `code` + `controlId` +
+`template_key` + `outcome_key` — never message text, because copy is meant to be rewritten and a
+text diff would report a wording fix as a new defect.
+
+Full rules: `docs/platform/governance/business-process-draft-validation-scope.md`.
+
+New: `web/lib/lifecycle/stageOperatingPlanDraftDelta.ts`.
+
+## The status-vocabulary finding — a product defect, not a seed defect
+
+The repeated `closed` → `open` rejection was **two vocabularies answered by one list**:
+
+- **queue membership** — which statuses put a record *in* a stage's queue. Disposition layer,
+  filtered per stage, and it drops `alloy_layer === "case_status"` rows **by design**.
+- **transition status effect** — which status a movement *writes* onto the record. Exactly the
+  case layer (`opportunities.status_key ∈ {open, closed}`).
+
+The editor validated the second against the first, so no valid transition status could ever
+resolve. It also dropped `metadata` when mapping rows, and closure (`terminal`) lives there.
+
+`open` and `closed` were present, active and correct in `status_definitions` the whole time. The
+seed was **not** the problem — so the seed was not edited to make certification pass. Instead the
+three `*_to_closed` transitions stripped during slice 5 were **restored**, and G1 now validates
+and publishes them with `errors=0`.
+
+Owner: the **case-layer status catalog of the process's primary entity**. Not the source stage,
+not the destination stage, not the transition. New: `web/lib/lifecycle/loadRecordStatusVocabulary.ts`,
+surfaced as `bootstrap.record_status_vocabulary`.
+
+## Where refusal now happens
+
+G2 (deleting a transition an outcome depends on) previously asserted `sawSave === false` — that no
+request was ever sent. That assertion was pinning the silent failure itself. The refusal now lands
+**server-side with a 422**, the draft revision does not move, the projection is untouched and the
+revision count holds. G2 records which layer refused rather than requiring a particular one.
+
+## Toolkit
+
+`certification/alloy-certify` no longer calls raw `supabase db reset` — it routes through
+`alloy-db-reset --recover-docker`, and `verify` accepts `CERT_GREP` / `CERT_WORKERS`.

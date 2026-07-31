@@ -202,18 +202,23 @@ test("G2 deleting a referenced transition is blocked AT AUTHORING, with the depe
     expect(issues).toContain("Outcome movement must reference a configured transition identity");
     await shot(page, "G2-referenced-transition-removed");
 
-    // Save is refused: nothing reaches the server, so nothing reaches the draft.
-    let sawSave = false;
-    const listener = (r: { url: () => string }) => {
-        if (r.url().includes("/stage-runtime-config")) sawSave = true;
+    // The save is refused and NOTHING durable changes. Which layer refuses is an implementation
+    // detail — this used to be a client-side throw that never sent the request, which is exactly
+    // the silent failure D3 removed. What must hold is that the operator is told and the draft,
+    // the projection and the revision history are all untouched.
+    let saveStatus: number | null = null;
+    const listener = (r: { url: () => string; status: () => number }) => {
+        if (r.url().includes("/stage-runtime-config")) saveStatus = r.status();
     };
-    page.on("request", listener);
+    page.on("response", listener);
     await page.getByTestId("stage-editor-v2-save").click().catch(() => {});
     await page.waitForTimeout(4000);
-    page.off("request", listener);
+    page.off("response", listener);
 
-    record(`G2 save reached the server: ${sawSave}; draft ${draftBefore} -> ${draftRevision()}`);
-    expect(sawSave).toBe(false);
+    const refusedAt = saveStatus === null ? "client (no request sent)" : `server (http ${saveStatus})`;
+    record(`G2 refused at: ${refusedAt}; draft ${draftBefore} -> ${draftRevision()}`);
+    // If a request went out at all, it must have been refused — never accepted.
+    if (saveStatus !== null) expect(saveStatus).toBeGreaterThanOrEqual(400);
     expect(draftRevision()).toBe(draftBefore);
     expect(projection()).toBe(projectionBefore);
     expect(revisionCount()).toBe(1);
@@ -255,12 +260,19 @@ test("G3 authoring a transition writes the draft only, and survives reload", asy
     expect(projection()).toBe(projectionBefore);
     expect(revisionCount()).toBe(1);
 
-    // Reload: the authored transition is still there.
+    // Reload: the authored transition is still there — read back from the draft, not from memory.
     await openStage(page, "lead");
     await openOperatingPlan(page);
-    await expect(
-        page.getByTestId("stage-outgoing-transitions-editor").getByDisplayValue("Lead → Placement / Decision"),
-    ).toBeVisible({ timeout: 20_000 });
+    const editorAfter = page.getByTestId("stage-outgoing-transitions-editor");
+    await expect(editorAfter).toBeVisible({ timeout: 20_000 });
+    await expect
+        .poll(async () => editorAfter.locator("[data-transition-ref]").count(), { timeout: 20_000 })
+        .toBe(before + 1);
+    const labels = await editorAfter.locator("[data-transition-ref] input").evaluateAll((nodes) =>
+        nodes.map((n) => (n as HTMLInputElement).value),
+    );
+    record(`G3 reload labels: ${labels.filter(Boolean).join(" | ")}`);
+    expect(labels).toContain("Lead → Placement / Decision");
     record("G3 reload: authored transition survived");
     await shot(page, "G3-reload-survives");
 });
@@ -402,4 +414,171 @@ test("G8 the certified path never used the projection-writing lifecycle-builder 
     // `departments.metadata` directly. Certifying a flow that used it would certify a bypass.
     record(`G8 lifecycle-builder PATCHes observed: ${builderPatches.length}`);
     expect(builderPatches).toEqual([]);
+});
+
+/* ── D3 drafting half + positive execution ─────────────────────────────────────────────────── */
+
+/** The rules a stage's outcome resolves through, straight out of the PUBLISHED projection. */
+const publishedLeadMovement = () =>
+    sql(`select coalesce(string_agg(t->>'transition_ref', ','), '') from departments d,
+         jsonb_array_elements(d.metadata->'lifecycle_builder_v1'->'processes'->0->'stages') s,
+         jsonb_array_elements(coalesce(s->'stage_operating_plan_v1'->'outcome_rules','[]'::jsonb)) r,
+         jsonb_array_elements(coalesce(r->'targets','[]'::jsonb)) t
+         where d.id='${DEPT}' and s->>'key'='lead' and t->>'kind'='move_to_stage'`);
+
+test("G9 a stage carrying a PRE-EXISTING defect can still be saved — the D3 drafting half", async () => {
+    // Before this slice the editor threw while assembling the request, so the POST never happened
+    // and the operator saw a dead button. An inherited defect must not freeze editing; it must be
+    // reported and carried.
+    sqlExec(`
+        UPDATE business_process_drafts
+        SET payload = (select payload from business_process_revisions
+                       where department_id='${DEPT}' order by revision_number desc limit 1),
+            draft_revision = draft_revision + 1
+        WHERE department_id='${DEPT}'`);
+    // Plant a defect the operator did NOT introduce: an outcome pointing at a transition that
+    // this stage does not declare.
+    patchDraft(
+        `jsonb_set(payload, '{processes,0,stages,0,stage_operating_plan_v1,outcome_rules,0,targets,0}',
+         '{"kind":"move_to_stage","transition_ref":"lead_to_nowhere"}'::jsonb)`,
+    );
+
+    const revisionBefore = draftRevision();
+    await openStage(page, "lead");
+    await openOperatingPlan(page);
+
+    // Edit something unrelated to the planted defect.
+    const purpose = page.getByTestId("stage-operating-plan-purpose");
+    await expect(purpose).toBeVisible({ timeout: 20_000 });
+    await purpose.fill(`Reach the family and determine next steps. (D3 ${revisionBefore})`);
+
+    const saved = await saveStage(page);
+    record(`G9 save http=${saved.status} — the request was actually sent`);
+    // The whole point: a request happened at all.
+    expect(saved.status).toBe(200);
+    expect(draftRevision()).toBeGreaterThan(revisionBefore);
+
+    // And the operator is told what the graph still owes, rather than a bare "Saved".
+    const notice = page.getByTestId("stage-editor-v2-remaining-issues");
+    if (await notice.count()) {
+        const text = (await notice.first().innerText()).replace(/\s+/g, " ");
+        record(`G9 operator notice: "${text}"`);
+        expect(text).toMatch(/must be repaired before publication/);
+    } else {
+        record("G9 no remaining-issues notice rendered");
+    }
+    await shot(page, "G9-saved-with-preexisting-defect");
+
+    // Drafting forgave it; publication must not.
+    const validation = await validateViaApi(page);
+    record(`G9 publish gate still refuses: can_publish=${validation.body.can_publish}`);
+    expect(validation.body.can_publish).toBe(false);
+});
+
+test("G10 a family actually moves Lead → Tour through the published transition", async () => {
+    // Restore a valid graph and publish it, so execution runs against real published config.
+    sqlExec(`
+        UPDATE business_process_drafts
+        SET payload = (select payload from business_process_revisions
+                       where department_id='${DEPT}' order by revision_number desc limit 1),
+            draft_revision = draft_revision + 1
+        WHERE department_id='${DEPT}'`);
+
+    const validation = await validateViaApi(page);
+    record(`G10 draft is publishable: can_publish=${validation.body.can_publish} errors=${validation.body.errors.length}`);
+    expect(validation.body.can_publish).toBe(true);
+
+    // G5 already published this graph. Re-publishing an identical draft is a no-op the UI
+    // correctly refuses, so execution runs against the projection that publish produced.
+    // The runtime resolves movement from the PROJECTION, so that is what must name the transition.
+    const movement = publishedLeadMovement();
+    record(`G10 published Lead movement targets: ${movement}`);
+    expect(movement).toContain("lead_to_tour");
+
+    // A real family sitting in Lead, with the stage work an operator would actually complete.
+    const [opp, work] = (
+        sql(`select o.id::text || '|' || t.id::text from opportunities o
+             join operational_tasks t on t.entity_id = o.id
+             where o.stage_key='lead' and t.status='open' order by o.created_at limit 1`) || "|"
+    ).split("|");
+    record(`G10 subject opportunity=${opp || "(none)"} work=${work || "(none)"}`);
+    expect(opp).not.toBe("");
+    expect(work).not.toBe("");
+
+    const stageBefore = sql(`select stage_key from opportunities where id='${opp}'`);
+    const res = await page.request.post("/api/admin/lifecycle-builder/complete-stage-work", {
+        data: {
+            department_id: DEPT,
+            stage_key: "lead",
+            work_id: work,
+            outcome_key: "reached_family",
+            subject: { opportunity_id: opp },
+        },
+    });
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+    record(`G10 execute http=${res.status()} ok=${body.ok} message=${body.message ?? ""}`);
+
+    const stageAfter = sql(`select stage_key from opportunities where id='${opp}'`);
+    record(`G10 opportunity stage ${stageBefore} -> ${stageAfter}`);
+    await shot(page, "G10-positive-execution");
+    expect(stageAfter).toBe("tour");
+});
+
+test("G11 an unresolvable outcome refuses BEFORE the first durable write — no torn state", async () => {
+    // Law 6. Plan-then-mutate: if any reference cannot resolve, nothing is written at all. The
+    // Firefly failure was the opposite — the status write landed and the stage move found nothing.
+    const [opp, work] = (
+        sql(`select o.id::text || '|' || t.id::text from opportunities o
+             join operational_tasks t on t.entity_id = o.id
+             where o.stage_key='tour' and t.status='open' order by o.created_at limit 1`) || "|"
+    ).split("|");
+    record(`G11 subject opportunity=${opp || "(none)"} work=${work || "(none)"}`);
+    test.skip(!opp || !work, "no open tour work to exercise");
+
+    // Break the destination the tour outcome depends on, in the PUBLISHED projection.
+    //
+    // This CANNOT be produced through the product any more: authoring refuses it and the publish
+    // gate refuses it. So the only way to reach the Firefly shape — a projection whose outcome
+    // names a transition that is not there — is to write the projection directly, through the
+    // guard's own capability token. The guard staying on for every other path is the point; this
+    // one statement is a deliberate, named simulation of drift that predates the guard.
+    sqlExec(`
+        BEGIN;
+        SELECT set_config('alloy.lifecycle_write', 'on', true);
+        UPDATE departments SET metadata = jsonb_set(metadata,
+          '{lifecycle_builder_v1,processes,0,stages,1,stage_operating_plan_v1,outcome_rules,0,targets,0}',
+          '{"kind":"move_to_stage","transition_ref":"tour_to_nowhere"}'::jsonb)
+        WHERE id='${DEPT}';
+        COMMIT;`);
+
+    const before = sql(
+        `select stage_key || '|' || coalesce(status_key,'') from opportunities where id='${opp}'`,
+    );
+    const activityBefore = sql(`select count(*) from activity_log where entity_id='${opp}'`);
+
+    const res = await page.request.post("/api/admin/lifecycle-builder/complete-stage-work", {
+        data: {
+            department_id: DEPT,
+            stage_key: "tour",
+            work_id: work,
+            outcome_key: "tour_completed",
+            subject: { opportunity_id: opp },
+        },
+    });
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+    record(`G11 execute http=${res.status()} ok=${body.ok} message="${body.message ?? ""}"`);
+
+    const after = sql(
+        `select stage_key || '|' || coalesce(status_key,'') from opportunities where id='${opp}'`,
+    );
+    const activityAfter = sql(`select count(*) from activity_log where entity_id='${opp}'`);
+    record(`G11 record ${before} -> ${after}; activities ${activityBefore} -> ${activityAfter}`);
+
+    // It refused, and it refused cleanly.
+    expect(body.ok).not.toBe(true);
+    expect(after).toBe(before);
+    expect(activityAfter).toBe(activityBefore);
+    // The refusal explains itself in the operator's terms, not as a stack trace.
+    expect(body.message ?? "").toMatch(/cannot run/i);
+    await shot(page, "G11-refused-before-write");
 });
