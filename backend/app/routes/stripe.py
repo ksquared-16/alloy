@@ -22,6 +22,11 @@ from ..settings import (
     GHL_STAGE_ID_PAYMENT_SUCCEEDED,
     require_ghl_workflow_secret,
 )
+from ..services.service_auth import (
+    PAYMENT_EXECUTOR_HEADER,
+    ServiceAuthError,
+    require_payment_executor_auth,
+)
 from ..utils import normalize_phone
 from ..ghl_client import (
     search_contact_by_phone,
@@ -103,16 +108,57 @@ def _setup_intent_metadata_has_alloy_correlation(metadata: Dict[str, Any]) -> bo
 @router.post("/admin/payments/run")
 async def admin_payments_run(
     body: Dict[str, Any] = Body(...),
+    x_alloy_payment_executor_secret: Optional[str] = Header(None, alias=PAYMENT_EXECUTOR_HEADER),
 ):
     """
     Create a payment record and charge the customer's saved payment method via Stripe PaymentIntent.
-    Body: { "job_id": string, "amount_cents"?: number, "idempotency_key"?: string (client-generated per charge intent) }
-    If amount_cents omitted, uses job.estimated_total_cents or job.recurring_total_cents.
-    Multiple succeeded payments per job are allowed (partial pay). Duplicate Stripe PI ids are prevented by DB unique
-    index + webhook/admin updates keyed by provider_payment_id. Stripe idempotency_key avoids duplicate PI creation
-    on network retries (same key → same PI); duplicate rows from retries are reconciled via provider_payment_id.
-    All Stripe logic runs in backend; Next.js proxies to this route.
+
+    AUTHENTICATED INTERNAL SERVICE ENDPOINT (Phase 0 containment).
+    Called only by the authenticated Next.js proxy, which performs operator
+    authentication, resolves the organization from the session, and verifies the
+    operator's access to the job. This executor is authoritative for:
+      * service authentication (constant-time, fails closed when unconfigured)
+      * organization binding (request org == job org == customer org)
+      * financial authority (the amount is resolved from server-side records)
+
+    Body: {
+      "job_id": string,
+      "org_id": string,                      REQUIRED - trusted org context from the proxy
+      "idempotency_key": string,             REQUIRED - stable per charge intent
+      "expected_amount_cents"?: number       optional optimistic consistency check
+    }
+
+    `amount_cents` is NO LONGER accepted as financial authority. The canonical
+    amount is computed here from the job. A caller may supply
+    `expected_amount_cents`; a mismatch is rejected before Stripe is invoked.
+
+    LIMITATION (documented, not a redesign): the data model has no payable
+    obligation/invoice, so the canonical amount is the existing job total
+    (estimated_total_cents, else recurring_total_cents). Introducing a true
+    payable-obligation source is Billing work and is explicitly out of scope.
+
+    Administrative override of the amount is NOT supported here. It requires a
+    distinct permission, an override reason, server-side bounds and its own
+    endpoint contract.
     """
+    # --- Service authentication. Before any lookup, before any Stripe call. ---
+    try:
+        require_payment_executor_auth(x_alloy_payment_executor_secret)
+    except ServiceAuthError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+
+    # --- Trusted organization context. Never inferred from job_id alone. ---
+    org_id = body.get("org_id") if isinstance(body.get("org_id"), str) else None
+    if not org_id or not org_id.strip():
+        raise HTTPException(status_code=400, detail="org_id is required")
+    org_id = org_id.strip()
+
+    # --- Idempotency is mandatory. Its absence previously meant every retry
+    #     created a NEW PaymentIntent. ---
+    raw_ik = body.get("idempotency_key")
+    if not isinstance(raw_ik, str) or not raw_ik.strip():
+        raise HTTPException(status_code=400, detail="idempotency_key is required")
+
     # Request-time Stripe init (same key as SetupIntent): set before any Stripe call
     if not STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="STRIPE_SECRET_KEY is not configured")
@@ -122,17 +168,13 @@ async def admin_payments_run(
     if not job_id:
         raise HTTPException(status_code=400, detail="job_id is required")
 
-    raw_client_ik = body.get("idempotency_key")
-    client_idempotency_key: Optional[str] = None
-    if isinstance(raw_client_ik, str) and raw_client_ik.strip():
-        client_idempotency_key = raw_client_ik.strip()[:512]
+    client_idempotency_key: str = raw_ik.strip()[:512]
 
     logger.info(
-        "admin_payments_run: code_path=partial_payments_v2 (multi-pay per job allowed) job_id_prefix=%s has_client_idempotency_key=%s",
+        "admin_payments_run: authenticated service request org=%s job_id_prefix=%s",
+        org_id,
         job_id[:12],
-        bool(client_idempotency_key),
     )
-    print("admin_payments_run: code_path=partial_payments_v2")
 
     pending_uuid = get_payment_status_id_by_key("pending")
     paid_uuid = get_payment_status_id_by_key("paid")
@@ -147,6 +189,21 @@ async def admin_payments_run(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    # --- ORGANIZATION BINDING -------------------------------------------------
+    # request org == job org == customer org. Any mismatch fails BEFORE Stripe.
+    # Previously the executor trusted job_id alone, which made it a cross-tenant
+    # vector for anyone holding a job id from another organization.
+    job_org_id = job.get("org_id")
+    if not job_org_id or str(job_org_id) != org_id:
+        logger.warning(
+            "admin_payments_run: org mismatch request_org=%s job_org=%s job_id_prefix=%s",
+            org_id,
+            job_org_id,
+            job_id[:12],
+        )
+        # Do not disclose whether the job exists in another organization.
+        raise HTTPException(status_code=404, detail="Job not found")
+
     customer_id = job.get("customer_id")
     if not customer_id:
         raise HTTPException(status_code=400, detail="Job has no customer_id")
@@ -155,21 +212,59 @@ async def admin_payments_run(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
+    customer_org_id = customer.get("org_id")
+    if not customer_org_id or str(customer_org_id) != org_id:
+        logger.error(
+            "admin_payments_run: customer org mismatch request_org=%s customer_org=%s",
+            org_id,
+            customer_org_id,
+        )
+        raise HTTPException(status_code=409, detail="Job and customer belong to different organizations")
+
     stripe_customer_id = customer.get("stripe_customer_id")
     if not stripe_customer_id:
         raise HTTPException(status_code=400, detail="Customer has no stripe_customer_id (card not saved)")
 
-    amount_cents = body.get("amount_cents")
-    if amount_cents is not None and not isinstance(amount_cents, (int, float)):
-        amount_cents = None
-    if amount_cents is None or amount_cents < 1:
-        amount_cents = (job.get("estimated_total_cents") or job.get("recurring_total_cents") or 0) or 0
-    if amount_cents < 1:
+    # --- FINANCIAL AUTHORITY --------------------------------------------------
+    # The canonical amount is resolved from server-side records. A caller-supplied
+    # amount is NOT authority: previously any positive `amount_cents` was honored,
+    # so an unauthenticated caller could charge an arbitrary sum.
+    #
+    # LIMITATION: there is no payable obligation/invoice in the data model, so the
+    # canonical source is the existing job total. Introducing one is Billing work
+    # and is deliberately out of Phase 0 scope.
+    canonical_amount_cents = int(
+        (job.get("estimated_total_cents") or job.get("recurring_total_cents") or 0) or 0
+    )
+    if canonical_amount_cents < 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Job has no payable amount (estimated_total_cents/recurring_total_cents)",
+        )
+
+    # Optimistic consistency check only. Never widens authority.
+    expected = body.get("expected_amount_cents")
+    if expected is not None:
+        if not isinstance(expected, (int, float)) or int(expected) != canonical_amount_cents:
+            logger.warning(
+                "admin_payments_run: expected amount mismatch org=%s job_id_prefix=%s",
+                org_id,
+                job_id[:12],
+            )
+            raise HTTPException(
+                status_code=409,
+                detail="expected_amount_cents does not match the current payable amount",
+            )
+
+    if body.get("amount_cents") is not None:
+        # Explicit refusal rather than silent ignore, so any remaining caller is
+        # discovered rather than quietly having its intent dropped.
         raise HTTPException(
             status_code=400,
-            detail="amount_cents required (or job must have estimated_total_cents/recurring_total_cents)",
+            detail="amount_cents is not accepted; the payable amount is resolved server-side",
         )
-    amount_cents = int(amount_cents)
+
+    amount_cents = canonical_amount_cents
 
     org_id = job.get("org_id")
     if not org_id and job.get("opportunity_id"):
