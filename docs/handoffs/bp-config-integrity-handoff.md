@@ -8,7 +8,7 @@
 |---|---|
 | Root | `/Users/Kelly/Code/alloy-worktrees/wt6-bp-config-integrity` — managed worktree, **sanctioned** |
 | Sprint / slot | `bp-config-integrity` / **6** (provider `claude`) |
-| Branch | `agent/claude/6-bp-config-integrity` — **11 commits ahead, NOT pushed** |
+| Branch | `agent/claude/6-bp-config-integrity` — **12 commits ahead, NOT pushed** |
 | Base | `origin/staging @ 77ac3e68b` |
 | Port | `3016` (`alloy-dev-start wt6-bp-config-integrity`) |
 | Auth | QA identity `qa-slot6-experimental@example.com` |
@@ -32,7 +32,8 @@ configuration work — see [[worktrees-share-one-live-tenant]] and the root-caus
 | `16660f0c5` | Contain the two non-editor bypasses |
 | `6005630a5` | Session handoff |
 | `ce3196c2e` | **Editor slice 1** — the stage save writes a draft, not the projection |
-| _(this slice)_ | **Editor slice 2** — the editor reads the draft, and can publish |
+| `7c51415e6` | **Editor slice 2** — the editor reads the draft, and can publish |
+| _(this slice)_ | **Editor slice 3** — browser certification, 15/15 |
 
 ## Read these
 
@@ -101,21 +102,42 @@ operator never loses editing context by publishing. Documented in the publicatio
 an unconfigured stage *look* configured, and a save then wrote that appearance back as authored
 configuration. An unconfigured stage now reads as unconfigured (decision D1).
 
-## What is NOT proven: the browser
+# DONE — editor slice 3: browser certification
 
-Kelly's call, 2026-07-31: ship on Postgres + vitest evidence, certify the browser separately.
-Runbook, blockers and the exact decision:
+**15/15 scenarios pass** against the isolated `alloy-cert` tenant with the lifecycle guard at its
+default `enforce` posture. The shared dev project was not touched — slot 6 got its own database,
+which is what the runbook recommended.
+
+Full record, including the seven defects the run found:
 [`bp-config-integrity-browser-certification-runbook.md`](./bp-config-integrity-browser-certification-runbook.md).
+Spec: `certification/playwright/business-process-publication.cert.spec.ts`.
+Evidence: `certification/bp-config-integrity/evidence/` (16 screenshots + `evidence.log`).
 
-Short version: the shared dev Supabase project has none of this sprint's three migrations, and the
-worktree has no service-role key. Applying the migrations there would install the `departments` write
-guard in its default `enforce` posture and break the other five worktrees' configuration saves. The
-clean unblock is a database of slot 6's own (`supabase start && supabase db reset`), not a change to
-shared infrastructure.
+```bash
+certification/alloy-certify reset                     # pristine, pre-publication tenant
+CERT_APP_PORT=3016 certification/alloy-certify serve  # requires nvm use v22.21.1
+cd certification && NODE_PATH=../web/node_modules CERT_APP_URL=http://localhost:3016 \
+  ../web/node_modules/.bin/playwright test -c playwright.config.ts
+```
 
-The residual risk is **wiring** — whether `configuration_state` reaches the bar and the buttons post
-what they claim. No logic depends on the browser to be correct, but nobody should call the operator
-experience verified until the runbook runs.
+**Three product defects it caught, all fixed:**
+
+1. A saved stage edit did not survive reload. `GET departments/[id]/lifecycle-builder` feeds the
+   editor's V2 fields and still read the **published projection** — the save wrote the draft, this
+   read looked elsewhere. No unit test could see it; only a real reload could.
+2. "Published" rendered directly above "Runtime: never published" — the state every existing tenant
+   starts in. Now a distinct `never_published` status reading **Not published**.
+3. The publish notice read "Published revision ?" — the route returned camelCase where the UI read
+   snake_case.
+
+**Two harness defects, fixed:** `alloy-certify` wrote no service-role key (so every admin surface
+500s under the cert tenant), and `serve` used whatever `node` was on PATH (dying on Node 16).
+
+**Two pre-existing defects, reported not fixed:** the canonical representative seed ships two
+dangling stage references (`closed_lost`, `enrollment`) so a freshly seeded tenant cannot publish —
+the gate is right, the seed is wrong; and ~140 React "Maximum update depth exceeded" errors on the
+processes page, measured at 145 with the slice-2 UI reverted to `HEAD~1` vs 134 with it applied, so
+demonstrably not this sprint's.
 
 # NEXT SLICE — remaining editors
 
@@ -160,7 +182,7 @@ Reusable pieces this slice leaves behind:
 | Publish exists as a product path | ✅ validate + publish routes on the canonical RPC |
 | Draft-edit concurrency | ✅ second token, trigger-enforced |
 | Browser certification | ❌ **blocked — see the runbook** |
-| Typecheck (slice 2) | ⏳ **not obtained** — killed at every heap size under host load 15+; baseline stays 52 |
+| Typecheck (slice 3) | ⚠️ **narrowed graph rc=0 / 0 errors** (verified by sentinel). Full project still killed — baseline stays 52 |
 | Typecheck | ✅ **full project now completes** — 52 pre-existing errors, **none** in the stage-save graph |
 
 ---
@@ -199,6 +221,23 @@ signature in `serializeLifecycleBuilderV1`). They are fixed, so the count went 5
 
 `web/tsconfig.stagesave.json` (server graph) and `web/tsconfig.stageui.json` (the four editor
 components) are narrowed projects for a fast inner loop — not a substitute for the full run.
+
+**Slice 3 addendum, 2026-07-31.** Root cause found: **memory pressure, not the toolchain.** With the
+cert Supabase stack (7 containers) and a Next dev server running, the machine had ~366 MB free and
+2.7 GB swapped, and macOS killed tsc. Tearing the stack down made the narrowed projects finish in
+under 10 seconds:
+
+```
+tsconfig.stagesave.json  (server graph)  rc=0, 0 errors, 9s
+tsconfig.stageui.json    (editor UI)     rc=0, 0 errors, 4s
+```
+
+Both verified with an exit-code sentinel. Together they cover **every file this slice touched plus
+everything they transitively import**, so the slice introduces zero type errors in its own graph.
+
+The **full** project still could not be completed even with the stack down — killed at 4 GB and
+8 GB, foreground, background and fully detached via `setsid`. The 52-error baseline from slice 1
+therefore stands unverified-but-unchallenged; re-measure it on a quiet host.
 
 **Slice 2 addendum, 2026-07-31.** The full run could NOT be reproduced: every attempt died at 3 GB,
 4 GB, 6 GB, 8 GB and 12 GB heap, foreground and background, at `nice -n 19`, with host load 15-18

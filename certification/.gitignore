@@ -1,6 +1,10 @@
 # Runtime artifacts — the platform is reproducible from config + scripts, not these.
 .run/
 .auth/
+# The RUN directory is throwaway. Curated, committed evidence for a certified slice lives under
+# certification/<slice>/evidence/ and is deliberately not ignored — a certification claim with no
+# artifact in the repo is not a claim anyone can check.
 evidence/
+!bp-config-integrity/evidence/
 supabase/.temp/
 supabase/.branches/
