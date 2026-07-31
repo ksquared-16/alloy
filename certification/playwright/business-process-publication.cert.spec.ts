@@ -213,6 +213,12 @@ test("S2 save draft — draft moves, runtime does not, reload survives", async (
     expect(saved.body.publication_required).toBe(true);
 
     await expect(page.getByTestId("stage-editor-v2-saved")).toBeVisible({ timeout: 15_000 });
+    // The seed is valid, so a plain save lands on "Unpublished changes" — nothing is blocking.
+    await expect(page.getByTestId("bp-publication-bar")).toHaveAttribute(
+        "data-status",
+        "unpublished_changes",
+        { timeout: 20_000 },
+    );
     await shot(page, "S2b-draft-saved");
 
     // The draft advanced by exactly one; the projection did not move at all.
@@ -238,44 +244,49 @@ test("S2 save draft — draft moves, runtime does not, reload survives", async (
     await shot(page, "S2c-reload-survives");
 });
 
-test("S2b a PRE-EXISTING graph defect blocks publication without blocking the save (D3)", async () => {
-    // FINDING, discovered by this certification run: the canonical representative seed
-    // (supabase/seed/local_representative_seed.sql) ships two dangling stage references —
-    // three transitions target `closed_lost` where the stage is `closed`, and the waitlist stage's
-    // `offer_to_enrolling` rule moves to `enrollment` where the stage is `enrolling`.
-    // The gate is right and the seed is wrong. Certifying against it is better than certifying
-    // against a synthetic graph, because it is exactly the shape a real legacy tenant has.
+test("S2b an UNRELATED pre-existing graph defect blocks publication without blocking the save (D3)", async () => {
+    // The seed is valid now (it was not — browser certification found two dangling stage
+    // references in it, repaired in this slice and pinned by
+    // web/tests/configPublication/representativeSeedGraph.test.ts). So the pre-existing defect is
+    // injected here, on a stage the operator is NOT editing, which is the case D3 is actually about.
+    sqlExec(`
+        UPDATE business_process_drafts
+        SET payload = jsonb_set(
+                payload,
+                '{processes,0,stages,2,stage_operating_plan_v1,outgoing_transitions,3}',
+                '{"transition_ref":"decision_to_ghost","source_stage_key":"decision","target_stage_key":"ghost_stage","label":"Nowhere","available":true}'::jsonb,
+                true
+            ),
+            draft_revision = draft_revision + 1
+        WHERE department_id = '${DEPT}'`);
+
+    await openStage(page, "lead");
     const state = await barState(page);
     record(`S2b bar=${JSON.stringify(state)}`);
     expect(state.status).toBe("publication_blocked");
 
     const blockers = await page.getByTestId("bp-publication-errors").innerText();
-    record(`S2b blockers: ${blockers.replace(/\s+/g, " ").slice(0, 400)}`);
-    expect(blockers).toContain("closed_lost");
-    expect(blockers).toMatch(/not configured/i);
+    record(`S2b blockers: ${blockers.replace(/\s+/g, " ").slice(0, 300)}`);
+    expect(blockers).toContain("decision");
+    expect(blockers).toContain("ghost_stage");
     await expect(page.getByTestId("bp-publication-publish")).toBeDisabled();
     await shot(page, "S2d-publication-blocked-pre-existing");
 
-    // The point of decision D3: the defect is pre-existing, so it must NOT have prevented the save.
-    expect(draftRow()!.revision).toBeGreaterThan(1);
+    // Decision D3: a defect on ANOTHER stage must not freeze editing of this one.
+    await editPurpose(page, "Edited while another stage is broken");
+    const saved = await saveStage(page);
+    record(`S2b save while blocked http=${saved.status}`);
+    expect(saved.status).toBe(200);
     expect(
         sql(`select payload->'processes'->0->'stages'->0->>'purpose' from business_process_drafts where department_id='${DEPT}'`),
-    ).toBe("Certified purpose — slice 3");
-    record("S2b pre-existing defect blocked publish but the save stood");
+    ).toBe("Edited while another stage is broken");
+    record("S2b unrelated defect blocked publish but the save stood");
 });
 
-test("S2c repairing the dangling references clears the blocker", async () => {
-    // The repair an operator would make in the transitions editor. Done here in SQL because that
-    // editor family has not been migrated yet — what is under certification is the GATE and the
-    // publish flow, not the transition UI.
-    // jsonb renders as `"key": "value"` with a space, so a naive text replace on the second defect
-    // silently misses. Repair both by value, not by formatting.
+test("S2c removing the defect clears the blocker", async () => {
     sqlExec(`
         UPDATE business_process_drafts
-        SET payload = replace(
-                replace(payload::text, '"closed_lost"', '"closed"'),
-                '"stage_key": "enrollment"', '"stage_key": "enrolling"'
-            )::jsonb,
+        SET payload = payload #- '{processes,0,stages,2,stage_operating_plan_v1,outgoing_transitions,3}',
             draft_revision = draft_revision + 1
         WHERE department_id = '${DEPT}'`);
 
@@ -300,7 +311,8 @@ test("S3 runtime remains on the published configuration before publish", async (
     // The decisive claim is about the projection, not about pixels: the draft edit is simply not
     // in what runtime reads.
     const live = projection();
-    record(`S3 projection contains draft edit = ${live.includes("Certified purpose — slice 3")}`);
+    record(`S3 projection contains draft edit = ${live.includes("Edited while another stage is broken")}`);
+    expect(live).not.toContain("Edited while another stage is broken");
     expect(live).not.toContain("Certified purpose — slice 3");
     expect(revisionCount()).toBe(0);
     await runtimeContext.close();
@@ -344,7 +356,8 @@ test("S5 publish — one revision, one publication act, runtime updates", async 
     expect(revisionCount()).toBe(1);
     expect(publicationCount()).toBe(1);
     expect(projection()).not.toBe(projectionBefore);
-    expect(projection()).toContain("Certified purpose — slice 3");
+    // S2b re-edited the purpose while proving D3, so this is the value that reaches publication.
+    expect(projection()).toContain("Edited while another stage is broken");
 
     // The draft was rebased onto the revision it produced — retained, not closed.
     const draft = draftRow()!;
@@ -368,7 +381,7 @@ test("S6 runtime surface reflects the newly published configuration", async () =
     await runtimePage.goto("/workspace");
     await runtimePage.waitForLoadState("domcontentloaded");
     await shot(runtimePage, "S6-runtime-after-publish");
-    expect(projection()).toContain("Certified purpose — slice 3");
+    expect(projection()).toContain("Edited while another stage is broken");
     record("S6 runtime projection now serves the published revision");
     await runtimeContext.close();
 });

@@ -11,6 +11,8 @@ import {
 type Props = {
     draft: StageOperatingPlanEditorDraft;
     transitionOptions: StageOutcomeTransitionOption[];
+    /** Operator-facing stage name, used when explaining that it has no outgoing transitions. */
+    stageLabel?: string;
     onChange: (draft: StageOperatingPlanEditorDraft) => void;
     /** When set, only outcomes available on this Work Template are shown/edited. */
     workTemplateKey?: string;
@@ -19,6 +21,7 @@ type Props = {
 export default function LifecycleStageOutcomeDefinitionsEditor({
     draft,
     transitionOptions,
+    stageLabel,
     onChange,
     workTemplateKey,
 }: Props) {
@@ -187,6 +190,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                             <LifecycleStageOutcomeBehaviorEditor
                                 outcomeKey={outcome.outcome_key}
                                 outcomeLabel={outcome.label}
+                                stageLabel={stageLabel ?? "this stage"}
                                 rules={draft.outcome_rules}
                                 workTemplates={draft.work_templates}
                                 transitionOptions={transitionOptions}

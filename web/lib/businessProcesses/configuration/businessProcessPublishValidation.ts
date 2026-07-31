@@ -28,6 +28,7 @@ import {
     validateProcessStageReferences,
     type StageReferenceViolation,
 } from "@/lib/lifecycle/validateConfiguredStageReferences";
+import { validateProcessExecutionGraph } from "@/lib/businessProcesses/configuration/executionGraphValidation";
 
 export const PUBLISH_UNREADABLE_PAYLOAD = "configuration_unreadable" as const;
 export const PUBLISH_DANGLING_REFERENCE = "dangling_stage_reference" as const;
@@ -130,8 +131,26 @@ export function validateParsedBusinessProcessForPublish(
                 (p) => isRecord(p) && String(p.id ?? "") === process.id,
             ) ?? process;
 
+        // THE EXECUTION GRAPH owns everything about transitions and movements: identity,
+        // source/destination existence, outgoing membership, and whether an outcome may actually
+        // use the transition it names.
+        const graph = validateProcessExecutionGraph(rawProcess);
+        errors.push(...graph.errors);
+        warnings.push(...graph.warnings);
+
+        // The older walker is kept ONLY for the reference kinds the graph model does not cover —
+        // `next_stage_key`, `return_stage_key` and friends on arbitrary targets. Its `transition`
+        // and `move_to_stage` findings are deliberately dropped: they duplicate the graph's, and
+        // its wording is actively misleading, reporting a missing transition as
+        // `targets stage "lead_to_tour"` — a transition ref described as a stage name.
         const result = validateProcessStageReferences(rawProcess);
-        if (!result.ok) errors.push(...result.violations.map(referenceDiagnostic));
+        if (!result.ok) {
+            errors.push(
+                ...result.violations
+                    .filter((v) => v.reference_kind.startsWith("nested_target:"))
+                    .map(referenceDiagnostic),
+            );
+        }
 
         const activeStages = process.stages.filter((s) => s.is_active);
         if (!activeStages.length) {

@@ -400,12 +400,16 @@ describe("editor state derivation", () => {
 
         expect(state.status).toBe("publication_blocked");
         expect(state.validation.errors).toHaveLength(1);
+        // The execution-graph validator owns this class now, and names the outcome rather than
+        // describing the transition ref as if it were a stage.
         expect(state.validation.errors[0]).toMatchObject({
-            code: "dangling_stage_reference",
+            code: "movement_transition_not_found",
             stage_key: "tour",
         });
-        expect(state.validation.errors[0]!.path).toContain("stages[tour].stage_operating_plan_v1");
-        expect(state.validation.errors[0]!.detail?.invalid_target).toBe("lead_to_tour");
+        expect(state.validation.errors[0]!.path).toContain(
+            "stages[tour].stage_operating_plan_v1.outcome_rules",
+        );
+        expect(state.validation.errors[0]!.detail?.transition_ref).toBe("lead_to_tour");
     });
 
     it("12: after publication the editor reads Published, with the new revision", () => {

@@ -8,7 +8,7 @@
 |---|---|
 | Root | `/Users/Kelly/Code/alloy-worktrees/wt6-bp-config-integrity` — managed worktree, **sanctioned** |
 | Sprint / slot | `bp-config-integrity` / **6** (provider `claude`) |
-| Branch | `agent/claude/6-bp-config-integrity` — **12 commits ahead, NOT pushed** |
+| Branch | `agent/claude/6-bp-config-integrity` — **13 commits ahead, NOT pushed** |
 | Base | `origin/staging @ 77ac3e68b` |
 | Port | `3016` (`alloy-dev-start wt6-bp-config-integrity`) |
 | Auth | QA identity `qa-slot6-experimental@example.com` |
@@ -33,7 +33,8 @@ configuration work — see [[worktrees-share-one-live-tenant]] and the root-caus
 | `6005630a5` | Session handoff |
 | `ce3196c2e` | **Editor slice 1** — the stage save writes a draft, not the projection |
 | `7c51415e6` | **Editor slice 2** — the editor reads the draft, and can publish |
-| _(this slice)_ | **Editor slice 3** — browser certification, 15/15 |
+| `eb5928ddb` | **Editor slice 3** — browser certification, 15/15 |
+| _(this slice)_ | **Editor family 2** — the execution graph: seed repair, graph validator, execution preflight |
 
 ## Read these
 
@@ -138,6 +139,41 @@ dangling stage references (`closed_lost`, `enrollment`) so a freshly seeded tena
 the gate is right, the seed is wrong; and ~140 React "Maximum update depth exceeded" errors on the
 processes page, measured at 145 with the slice-2 UI reverted to `HEAD~1` vs 134 with it applied, so
 demonstrably not this sprint's.
+
+# PARTIALLY DONE — editor family 2: the execution graph
+
+Design and findings: [`business-process-execution-graph.md`](../platform/governance/business-process-execution-graph.md).
+
+**Landed:**
+
+1. **The canonical representative seed was invalid** and is repaired — three transitions targeted
+   `closed_lost` (the stage is `closed`), and the waitlist rule moved to `enrollment` (the stage is
+   `enrolling`) through a bare `stage_key` with no transition at all. Seven blocking errors; a
+   freshly seeded tenant could not publish. Pinned by `representativeSeedGraph.test.ts`, which reads
+   the real seed file rather than a fixture.
+2. **Code defaults can no longer define a transition.** `resolveEffectiveStageOperatingPlan` fell
+   back to the code default for *every configured tenant*, so `lead_to_tour` could be resolved out
+   of `defaultEnrollmentStageOperatingPlans.ts` and masquerade as persisted config. Isolated rather
+   than deleted — it still supplies work templates and outcomes, but `stripTransitionsFromDefaultPlan`
+   removes every transition and every `move_to_stage`.
+3. **Execution now resolves the whole plan before the first durable write.**
+   `planStageOutcomeExecution` is the Law 6 plan phase; `applyConfiguredStageAutomationRules` refuses
+   to mutate on an unresolvable plan and now captures every inverse (it discarded `result.undo`
+   entirely before). This is the Firefly failure path.
+4. **The execution-graph validator** blocks duplicate identity, missing/unknown source or
+   destination, a transition declared on the wrong stage, an outcome naming a transition that does
+   not exist, and an outcome using another stage's transition. Messages are in operator labels.
+5. **"Move through transition"** explains itself when empty and no longer auto-selects.
+
+**NOT done, and the next things to do:**
+
+- **Browser certification of this family has not run.** Unit-tested and seed-proven only. The Stage
+  editor vertical is certified 15/15; this one is not.
+- **There is no tracks editor.** `tracks_v1` is written solely by the creation-time template, and
+  nothing validates `tracks_v1.split_rules` targets.
+- **`PATCH /api/admin/departments/[id]/lifecycle-builder` still writes the projection directly.**
+  Its GET reads the draft; its PATCH does not. Closing that asymmetry is the next step.
+- Firefly repair remains deferred, as instructed.
 
 # NEXT SLICE — remaining editors
 
