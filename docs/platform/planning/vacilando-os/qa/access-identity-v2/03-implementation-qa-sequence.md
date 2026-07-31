@@ -12,9 +12,12 @@
 **contentHash** `a48a454dc1a5a25a537a345999d982dc`
 **Worktree** `wt6-vacilando-os-product-def` @ `agent/claude/6-vacilando-os-product-def`
 **Date** 2026-07-30 · **W-0 executed 2026-07-31** (mission `msn_2d054741a54698fa4c`, assignment `asg_708252478f6fdd`)
-**Status** Proposed — a plan to be scheduled, not a record of work done. **Exception: Wave 0 (§4) is
+· **W-1…W-3 executed 2026-07-31** (same mission, assignment `asg_d77353d7377647`)
+**Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
-Every other wave remains a proposal.
+**Wave 1's W-1, W-2 and W-3 (§5) are implemented and green**; their execution records are in §5 and
+their locks are live in §13. W-4 was not in that assignment and remains a proposal, as does every
+other wave.
 
 ---
 
@@ -133,7 +136,7 @@ code never requires reverting data.
 | Wave | Theme | Workstreams | Gated on |
 |---|---|---|---|
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
-| **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — |
+| **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **W-1…W-3 DONE 2026-07-31** · W-4 open |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
 | **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
@@ -281,6 +284,42 @@ the fixture idiom in `web/tests/admin/usersRolesAuth.test.ts:6-19`. New file
 `web/tests/access/analyticsRouteGates.test.ts`.
 **Exit.** Six tests red before the change, green after. Regression lock RL-1 (§13).
 
+#### W-1 execution record — **DONE 2026-07-31**
+
+**The exposure is three routes, not six.** Three of the six were already portal-gated at their first
+statement, and the plan cited the wrong line in each:
+
+| Route | Plan's citation | What that line actually is |
+|---|---|---|
+| `analytics/metrics/[id]/trend/route.ts` | `:40-41` | a **second** access resolution, inside an `else` branch, used only to build scope dimensions. The gate is `requireAnalyticsV2AdminContext()` at `:18-19`. |
+| `analytics/metrics/[id]/preview/route.ts` | `:31-32` | same shape. Gate is `requireAnalyticsV2AdminMutate()` at `:15-16` — **admin-only**, stricter than portal. |
+| `analytics/metrics/[id]/snapshot/route.ts` | `:23-24` | same shape. Gate is `requireAnalyticsV2AdminMutate()` at `:14-16`. |
+
+`requireAnalyticsV2Admin*` (`lib/metrics/platform/adminApiHelpers.ts`) resolves `getAdminContextCached`,
+which returns 403 unless `portalEligible`. So those three never had the G2 exposure.
+
+**This is a C1-class false positive inside the plan itself** — the §10.2 failure mode, in a document
+that names it. A route holding *two* access resolutions is indistinguishable by line-grep from a route
+holding one, and the second one is the one that looks unguarded. Recorded rather than quietly corrected,
+because the same reading error would recur in W-15's sweep across ~500 routes.
+
+The three genuinely exposed routes — `intelligence/operational:26-29`, `metrics/resolve:82-85`,
+`metrics/trends:46-49` — now gate through `requireAnalyticsReadAccess` (`web/lib/admin/canReadAnalytics.ts`):
+portal-eligible, **or** granted `reports.read` / `reports.write`. That is the `canReadProgramPublication`
+shape exactly, and it is behaviour-preserving for every `admin`/`ops` operator. The declared capability is
+`reports.read`, already seeded by `20260505164000_permission_grid_keys.sql` and already the `reports` grid
+row — so the gate is grantable through the product today, not permanently closed. The `portalEligible`
+leg of that predicate is what W-13 replaces with `portal.access`.
+
+**Evidence.** `web/tests/access/analyticsRouteGates.test.ts` — 31 tests. **9 red before the change, all
+green after** (verified by reverting the three route files against the committed tests). The three
+already-gated routes contribute 9 further tests that were green both before and after: they are
+regression locks, not fixes. Each route is also asserted to deny *before* reaching its data layer, so a
+403 cannot be a late failure after a query has run.
+
+**Not six red, and that is the honest number.** The exit criterion said six; three of the six were never
+broken. Nine tests went red because each fixed route carries three denial assertions.
+
 ### W-2 — Self-elevation ban *(S · I-11 · partially closes G3)*
 
 `PATCH /api/admin/users/[userId]/role` applies no self-assignment guard. The full subset rule is D3-dependent
@@ -290,6 +329,42 @@ own authority.
 **QA.** Tier B: caller `userId` === target `userId` → 403, for every role value including the caller's current
 one. Tier C: an integration case asserting the row is unchanged after the denial.
 **Exit.** A principal cannot alter its own membership through any product path.
+
+#### W-2 execution record — **DONE 2026-07-31**
+
+**Three product paths, not one.** The plan named the role PATCH; its exit criterion says *any* product
+path. Auditing the writers of `user_roles` and `user_access_profiles` under `web/app/api` found three
+routes that mutate `(principal, org)` authority, and all three are reachable from the same live Access
+screen (`components/adminV2/settings/access/AccessUsersConfigurationPage.tsx`), none of them disabled
+for self:
+
+| Path | Self-mutation it allowed |
+|---|---|
+| `PATCH /api/admin/users/[userId]/role` | assign yourself any role — the named defect |
+| `PATCH /api/admin/users/[userId]/access-scope` | widen your own department/site scope to `all` |
+| `POST /api/admin/users/[userId]/remove` | delete your own membership (self-lockout, not elevation) |
+
+The second is a genuine self-elevation vector the plan did not name, and it matters more than it looks:
+W-8 exists to make department scope enforceable, and a principal who can widen their own scope defeats
+W-8 in advance. The third is not elevation, but it is *altering your own membership*, and with W-0 Q2 = 0
+(every auth user has exactly their `user_roles` rows) deleting your own last row is unrecoverable without
+another operator. All three are guarded.
+
+`web/lib/admin/selfAuthorityMutation.ts` compares the caller id **from the resolved access context**
+against the route param — never a body value, which the caller controls. The guard returns before
+`createAdminClient()` is constructed in every path, so no statement can reach the database.
+
+**Evidence.** `web/tests/access/selfAuthorityMutation.test.ts` — 14 tests, **7 red before the change,
+all green after**. Includes the plan's "every role value including the caller's current one" case, and,
+as the tier-B form of *"the row is unchanged after the denial"*, an assertion that the admin client is
+never constructed. That is stronger than the proposed tier-C integration check and needs no database:
+tier C cannot prove *no write was attempted*, only that one particular row still looks the same.
+
+**Residual.** This is the self-elevation ban only. The subset rule — *A* may not grant *B* authority *A*
+lacks — remains W-18 and remains D3-dependent. A `settings.users_roles` holder can still mint an `admin`
+*other than themselves*, and `PUT /api/admin/rbac/grants` can still widen the caller's **own role's**
+grants, which is self-elevation by a different route (role-level rather than membership-level) and is
+**not** closed here. It belongs with W-18's ceiling; recorded so it is not assumed shut.
 
 ### W-3 — Repair the unsavable grid row *(S · I-14 precursor · closes C5)*
 
@@ -309,6 +384,42 @@ it prevents destroys operator input.
 `web/tests/admin/permissionGrid.test.ts`. This assertion becomes structurally unnecessary at W-10 and must be
 *replaced*, not deleted, by the projection test.
 **Exit.** No grid row names an unseeded key; a full-grid save round-trips.
+
+#### W-3 execution record — **DONE 2026-07-31, by a different fix than the one recommended above**
+
+**The recommended fix does not work.** The text above says to point the grid row at
+`ops.workflows.read` / `ops.workflows.write` because they already exist at `remote_schema.sql:731-732`.
+They do exist — **but only in `permission_keys`**, seeded inside `seed_default_rbac()`. They are absent
+from `permissions` and from `permission_definitions`. That breaks the repoint twice over:
+
+1. `PUT /api/admin/rbac/grants:61-67` validates the submission against **`permission_definitions`**, so
+   the save would still return 400 and still destroy the operator's other selections — the exact defect
+   C5 describes, unchanged.
+2. Even bypassing that validation, `role_permission_grants_permissions_fkey` (`remote_schema.sql:6508`)
+   points at **`permissions`**, so the insert would fail at the database.
+
+The plan's own §7/W-9 finding is what makes this true: `role_permission_grants.permission_key` carries
+two FKs to two different tables while the write API validates against a third. A key that satisfies one
+of the three satisfies neither of the others. Verified against `supabase/migrations` — see the RL-2 test,
+which parses every `permission_definitions` INSERT in the migration tree rather than trusting a list.
+
+**What shipped instead: the row is removed.** The plan's other candidate — seed the bare keys — is a
+migration, which this wave excludes by definition, and would need the §11 preflight and an operator
+authorization. Removal is the only remedy that satisfies the exit criterion inside wave 1's constraints,
+and it costs no authority: **no route enforces `workflows.read` or `workflows.write`.** The only
+references in the codebase are three comments saying the key is explicitly *insufficient* for operational
+-expectations authoring. The row granted nothing and could only destroy input.
+
+This does not lose the capability. W-10 makes the grid a projection of the catalog, so the row returns on
+its own the moment W-11 seeds a workflows key that something enforces — which is the correct order, and
+the reason not to seed a fourth vocabulary variant now.
+
+**Evidence.** `web/tests/admin/permissionGrid.test.ts` — RL-2 added, **2 red before the change, green
+after**. Before: `['workflows.read', 'workflows.write']` were the *only* two of the grid's 20 keys absent
+from `permission_definitions`, reproducing C5 exactly and confirming the parser is not vacuous. The
+full-grid round-trip assertion covers the plan's second exit clause.
+
+**This deviates from an accepted plan and was raised as a decision to the operator rather than absorbed.**
 
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
@@ -824,22 +935,22 @@ permits a principal to modify its own authority. Only the subset rule waits.
 Each closed divergence gets one test that fails if it reopens. These are the locks, named, so a future
 contributor deleting one has to do it on purpose.
 
-| Lock | Asserts | Tier | From |
-|---|---|---|---|
-| **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 |
-| **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 |
-| **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 |
-| **RL-4** | Membership creation writes a profile row atomically | C | G4 / W-5 |
-| **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 |
-| **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 |
-| **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 |
-| **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 |
-| **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 |
-| **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 |
-| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 |
-| **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 |
-| **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 |
-| **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 |
+| Lock | Asserts | Tier | From | Status |
+|---|---|---|---|---|
+| **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 | **LIVE** — `web/tests/access/analyticsRouteGates.test.ts` (tier B; the tier A half lands with W-14) |
+| **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **LIVE** — `web/tests/admin/permissionGrid.test.ts` |
+| **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
+| **RL-4** | Membership creation writes a profile row atomically | C | G4 / W-5 | proposed |
+| **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | proposed |
+| **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | proposed |
+| **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
+| **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
+| **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
+| **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
+| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B)** — `web/tests/access/selfAuthorityMutation.test.ts`, covering all three self-authority paths |
+| **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
+| **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
+| **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
 
 RL-2 is listed *because* it is temporary: W-3 adds it and W-10 replaces it. An assertion that becomes
 structurally unnecessary should be replaced deliberately, not quietly deleted when it starts failing.
@@ -891,9 +1002,10 @@ Per the assignment constraints:
 ### 14.3 Limits
 
 1. **Static and file-grounded** when written, like phases 1 and 2 — no request issued, no browser used, no
-   source file modified. **Superseded in one respect on 2026-07-31:** W-0 has since been executed read-only
-   against the deployed database via a trusted host action, so §4 now carries live counts. Everything else in
-   this plan remains static analysis.
+   source file modified. **Superseded twice on 2026-07-31:** W-0 has since been executed read-only against
+   the deployed database via a trusted host action, so §4 now carries live counts; and W-1…W-3 have since
+   been implemented, so §5 records shipped code and green tests. Everything else in this plan remains
+   static analysis.
 2. **Sizings are estimates**, calibrated to 539 routes and 289 migrations, not measured. W-15 (L) has the
    widest error bar; W-4's exception baseline will sharpen it.
 3. ~~**Wave 0 is a plan for queries, not their results.**~~ **RESOLVED 2026-07-31.** Wave 0 executed; its
@@ -901,14 +1013,29 @@ Per the assignment constraints:
    struck, and L2/L3/L4 have empty remediation sets. Waves 2 and 5 are no longer gated by W-0. The counts are
    a snapshot — each lockout-class switch and each §11 preflight must re-run the census rather than cite it.
 4. **Membership writers beyond `POST /api/admin/users` were not enumerated.** W-5 carries that audit as its
-   first step; if other writers exist, W-5 grows.
+   first step; if other writers exist, W-5 grows. **Partially answered by W-2 on 2026-07-31:** the routes
+   under `web/app/api` that write `user_roles` or `user_access_profiles` are `users/route.ts` (create),
+   `users/[userId]/role`, `users/[userId]/remove` and `users/[userId]/access-scope` — four, not one.
+   `settings/users-roles/members/route.ts` reads only. **W-5's audit is not discharged by this**: it was
+   scoped to API routes, and says nothing about server actions, scripts, seeds, RPCs or migrations, which
+   is where W-5's atomic path must also reach. It narrows the search, it does not end it.
 5. **The observation window for dual-read is not specified.** It depends on real traffic to the authority path,
    which is a deployment fact this phase cannot see. Each lockout-class workstream sets its own and states it.
    **W-0 largely dissolves this:** at 6 `(user, org)` pairs the population is exhaustively enumerable, so
    step 3 is better satisfied by enumerating all six and computing both answers for each than by waiting on
    traffic that may not come. The limit would return at a larger tenant — the recommendation is scale-bound,
    not permanent.
-6. **No effort is budgeted for governance-doc reconciliation.**
+6. **The §10.3 fixture matrix was not built with wave 1.** §10.3 asks for it "in wave 1, before it is
+   needed", but it is not W-1, W-2 or W-3 and was outside the executing assignment's scope. W-1's and W-2's
+   suites build their own fixtures inline, in the `usersRolesAuth.test.ts` idiom §10.1 names — so the
+   conventions are consistent and the matrix can absorb them — but **F1–F10 do not yet exist as a shared
+   artifact, and waves 2–5 cannot inherit what was not built.** It remains the highest-reuse unbuilt item.
+   The same applies to the I-4 token tests §13.1 attaches to wave 1.
+7. **Wave 1 carries no tier D evidence, by design.** §10.4 requires browser evidence only for
+   lockout-class switches; W-1…W-3 are none of L1–L4. W-1 narrows three JSON data endpoints with no UI of
+   their own, and W-3's grid-row removal is visible in the Roles screen but changes no authority. Neither
+   was verified in a browser on `:3020`.
+8. **No effort is budgeted for governance-doc reconciliation.**
    `docs/platform/governance/roles-and-permissions.md` is `status: canonical` and states a rule the code does
    not follow, with a dead "Expanded reference" pointer (phase 2 §15.6). It should land with W-15, and is not
    sized here.
@@ -933,3 +1060,25 @@ Per the assignment constraints:
   `resolveAdminAccessCore.chooseOrg`, `userRolesMembership`, `getAdminAccessContext`) identified as extension
   points rather than new files.
 - **Method:** static and file-grounded. No code, schema, migration, or UI changed.
+
+### 15.1 Wave 1 execution (2026-07-31, assignment `asg_d77353d7377647`)
+
+Evidence: [`wave1-execution-evidence.json`](./wave1-execution-evidence.json) — red/green counts, the
+typecheck broker request id, the regression baseline and its stated limit, and the three deviations.
+
+Changed, on commit `41610954c` (local only — not pushed):
+
+| File | Workstream |
+|---|---|
+| `web/lib/admin/canReadAnalytics.ts` *(new)* | W-1 |
+| `web/app/api/admin/intelligence/operational/route.ts` | W-1 |
+| `web/app/api/admin/metrics/resolve/route.ts` | W-1 |
+| `web/app/api/admin/metrics/trends/route.ts` | W-1 |
+| `web/lib/admin/selfAuthorityMutation.ts` *(new)* | W-2 |
+| `web/app/api/admin/users/[userId]/role/route.ts` | W-2 |
+| `web/app/api/admin/users/[userId]/access-scope/route.ts` | W-2 |
+| `web/app/api/admin/users/[userId]/remove/route.ts` | W-2 |
+| `web/lib/admin/permissionGrid.ts` | W-3 |
+| `web/tests/access/analyticsRouteGates.test.ts` *(new)* · `web/tests/access/selfAuthorityMutation.test.ts` *(new)* · `web/tests/admin/permissionGrid.test.ts` · `web/tests/metrics/metricsResolveRoute.test.ts` · `web/tests/metrics/metricsTrendsRoute.test.ts` | QA |
+
+**No migration was written and none was applied.** §11 remains a register.
