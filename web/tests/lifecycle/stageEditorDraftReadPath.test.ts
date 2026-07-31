@@ -429,7 +429,7 @@ describe("editor state derivation", () => {
         expect(state.draft_is_stale).toBe(false);
     });
 
-    it("a pre-publication tenant whose draft matches its live config is not falsely dirty", () => {
+    it("a pre-publication tenant reads as Not published, not falsely dirty and not falsely published", () => {
         const payload = builderPayload();
         const state = buildBusinessProcessEditorState({
             departmentId: DEPT,
@@ -437,7 +437,10 @@ describe("editor state derivation", () => {
             publication: null,
             publishedPayload: payload,
         });
+        // Nothing to publish CHANGE-wise...
         expect(state.unpublished_changes).toBe(false);
-        expect(state.status).toBe("published");
+        // ...but nothing has ever been published either. Browser certification caught the earlier
+        // version of this rendering "Published" directly above "Runtime: never published".
+        expect(state.status).toBe("never_published");
     });
 });

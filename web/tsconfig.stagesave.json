@@ -12,6 +12,7 @@
     "lib/businessProcesses/configuration/businessProcessPublishValidation.ts",
     "app/api/admin/enrollment-process/stage-runtime-config/route.ts",
     "app/api/admin/lifecycle-builder/stage-bootstrap/route.ts",
+    "app/api/admin/departments/[departmentId]/lifecycle-builder/route.ts",
     "app/api/admin/business-process/configuration/route.ts",
     "app/api/admin/business-process/configuration/validate/route.ts",
     "app/api/admin/business-process/configuration/publish/route.ts"

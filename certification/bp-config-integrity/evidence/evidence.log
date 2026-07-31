@@ -1,0 +1,38 @@
+S1 bar={"status":"never_published","draftRevision":1,"publishedRevision":"","message":"Runtime is using this configuration, but it has never been published through the configuration model. Publishing records an immutable revision you can roll back to.","chip":"Not published"}
+S1 draft={"revision":1,"base":null,"status":"draft"} revisions=0
+http 200 POST /api/admin/enrollment-process/stage-runtime-config
+S2 save http=200 publication_required=true
+http 200 GET /api/admin/business-process/configuration
+S2 draft 1 -> 2; projection changed=false
+S2 reload: edited purpose survived
+S2b bar={"status":"publication_blocked","draftRevision":2,"publishedRevision":"","message":"Your changes are saved as a draft, but they cannot be published until the problems below are resolved. Runtime is still using the currently published configuration.","chip":"Publication blocked"}
+S2b blockers: Stage "lead" transition "lead_to_closed_lost" targets stage "closed_lost", which is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_withdrawn.processes[enrollment].stages[lead].stage_operating_plan_v1 Stage "lead" move_to_stage "not_interested_close" targets stage "closed_lost", which is not configured in this Business
+S2b pre-existing defect blocked publish but the save stood
+S2c after repair bar={"status":"unpublished_changes","draftRevision":3,"publishedRevision":"","message":"Your changes are saved as a draft. Runtime will continue using the currently published configuration until you publish.","chip":"Unpublished changes"}
+S3 projection contains draft edit = false
+http 200 POST /api/admin/business-process/configuration/validate
+S4 validate can_publish=true errors=0 warnings=0
+http 200 POST /api/admin/business-process/configuration/publish
+S5 publish http=200 revision=1
+S5 revisions=1 publications=1
+S5 draft rebased base=set
+S6 runtime projection now serves the published revision
+S7 bar={"status":"publication_blocked","draftRevision":4,"publishedRevision":"1","message":"Your changes are saved as a draft, but they cannot be published until the problems below are resolved. Runtime is still using the currently published configuration.","chip":"Publication blocked"}
+S7 operator message: Stage "tour" move_to_stage "tour_scheduled_to_tour" targets stage "lead_to_tour", which is not configured in this Business Process. Configured stages: lead, tour, decision, closed, waitlist, enrolling, enrolled, closed_w
+S7 revisions 1 -> 1; projection unchanged=true
+http 200 POST /api/admin/enrollment-process/stage-runtime-config
+S8 A saved: draft 5 -> 6
+http 200 GET /api/admin/business-process/configuration
+S8 B http=409 code=business_process_draft_edit_conflict
+S8 A's edit intact; B wrote nothing
+S9 out-of-band publish -> revisions=2
+S9 bar={"status":"draft_conflict","draftRevision":7,"publishedRevision":"2","message":"Someone else published a newer version of this configuration while you were editing. Reload to see their changes, then reapply yours.","chip":"Draft conflict"}
+S9 revisions 2 -> 2; projection unchanged=true
+S9 stale publish refused; draft work preserved, not silently rebased
+http 200 POST /api/admin/enrollment-process/stage-runtime-config
+S10 after save: {"marker" : {"authored_by": "a newer branch"}, "grain" : {"grain": "child"}}
+http 200 GET /api/admin/business-process/configuration
+http 200 POST /api/admin/business-process/configuration/publish
+S10 projection keeps marker=true row_grain_v1=true
+S11 queue_membership_v1 after two reloads: ABSENT
+S11 one draft row, never re-seeded

@@ -36,6 +36,11 @@ const STATUS_CHIP: Record<
         className: "bg-alloy-juniper/10 text-alloy-juniper",
         icon: <CheckCircle2 size={11} strokeWidth={2.5} />,
     },
+    never_published: {
+        label: "Not published",
+        className: "bg-alloy-forge/10 text-alloy-forge",
+        icon: <AlertCircle size={11} strokeWidth={2.5} />,
+    },
     unpublished_changes: {
         label: "Unpublished changes",
         className: "bg-alloy-ember/10 text-alloy-ember",
@@ -66,8 +71,12 @@ export default function BusinessProcessPublicationBar({
     const chip = STATUS_CHIP[state.status];
     // A stale draft must not publish over the newer revision, and a blocked one has nothing valid
     // to publish. Both cases point the operator at the recovery instead.
+    // `never_published` has no unpublished CHANGES but still has nothing recorded — publishing it
+    // is exactly how a pre-publication tenant gets its first immutable revision.
     const canPublish =
-        state.unpublished_changes && !state.draft_is_stale && state.blocking_errors.length === 0;
+        (state.unpublished_changes || state.status === "never_published") &&
+        !state.draft_is_stale &&
+        state.blocking_errors.length === 0;
 
     return (
         <div
@@ -110,7 +119,7 @@ export default function BusinessProcessPublicationBar({
                         <button
                             type="button"
                             onClick={() => void onValidate()}
-                            disabled={busy || !state.unpublished_changes}
+                            disabled={busy || (!state.unpublished_changes && state.status === "published")}
                             className="config-secondary-btn config-secondary-btn--sm"
                             data-testid="bp-publication-validate"
                         >

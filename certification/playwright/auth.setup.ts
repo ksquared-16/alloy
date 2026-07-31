@@ -24,7 +24,9 @@ setup("authenticate seeded operator", async ({ page }) => {
     await pw.press("Enter");
     // Success lands on the operator workspace (client-side push after sign-in).
     await page.waitForURL("**/workspace**", { timeout: 45_000 });
-    await page.waitForLoadState("networkidle");
+    // NOT `networkidle`: the operator workspace keeps long-lived requests open, so it never goes
+    // idle and the wait burns the whole timeout on a page that is already usable.
+    await page.waitForLoadState("domcontentloaded");
     fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
     await page.context().storageState({ path: AUTH_FILE });
     // Report whether the captured session survives a fresh SSR round-trip through

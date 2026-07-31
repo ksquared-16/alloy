@@ -57,6 +57,14 @@ import type { LifecycleBuilderV1 } from "@/lib/lifecycle/lifecycleBuilderConfig"
 export type BusinessProcessDraftStatus =
     /** Draft equals what is live. Nothing to publish. */
     | "published"
+    /**
+     * Draft equals what runtime is serving, but no revision has ever been published.
+     *
+     * This is the state EVERY existing tenant starts in: they have `lifecycle_builder_v1` and zero
+     * publications. Calling it "Published" while also reporting "never published" is a plain
+     * contradiction on the operator's screen, so it gets its own status.
+     */
+    | "never_published"
     /** Draft differs from the publication and can be published. */
     | "unpublished_changes"
     /** Draft differs and cannot be published until its blocking issues are resolved. */
@@ -164,7 +172,7 @@ export function buildBusinessProcessEditorState(input: {
     if (draft_is_stale) {
         status = "draft_conflict";
     } else if (!unpublished_changes) {
-        status = "published";
+        status = publication ? "published" : "never_published";
     } else if (validation.errors.length) {
         status = "publication_blocked";
     } else {
@@ -253,6 +261,9 @@ export function summarizeBusinessProcessEditorState(
 /** Operator-facing sentence for each state. One place, so the API and UI cannot drift. */
 export const DRAFT_STATUS_COPY: Record<BusinessProcessDraftStatus, string> = {
     published: "This configuration is published. Runtime is using it.",
+    never_published:
+        "Runtime is using this configuration, but it has never been published through the " +
+        "configuration model. Publishing records an immutable revision you can roll back to.",
     unpublished_changes:
         "Your changes are saved as a draft. Runtime will continue using the currently published " +
         "configuration until you publish.",

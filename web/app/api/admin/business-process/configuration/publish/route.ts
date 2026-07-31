@@ -140,7 +140,16 @@ export async function POST(request: NextRequest) {
             });
 
         return NextResponse.json({
-            published: result,
+            // snake_case on the wire, like every other field this API returns. The service speaks
+            // camelCase internally; shipping that verbatim made the operator notice read
+            // "Published revision ?" because the UI (correctly) looked for `revision_number`.
+            published: {
+                department_id: result.departmentId,
+                revision_id: result.revisionId,
+                revision_number: result.revisionNumber,
+                publication_id: result.publicationId,
+                published_at: result.publishedAt,
+            },
             warnings: validation.warnings,
             ...(state
                 ? {
