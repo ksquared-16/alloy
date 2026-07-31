@@ -40,6 +40,7 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     message_failed: "Message failed",
     note_added: "Note added",
     action_executed: "Action completed",
+    stage_work_outcome_recorded: "Work outcome recorded",
     opportunity_enrollment_packet_created: "Enrollment packet created",
     opportunity_enrollment_packet_opened: "Enrollment packet opened",
     opportunity_enrollment_packet_step_completed: "Enrollment packet step completed",

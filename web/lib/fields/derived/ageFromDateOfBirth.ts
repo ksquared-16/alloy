@@ -31,8 +31,9 @@ export function formatAgePartsDisplay(
             }
         case "years_months":
         default:
+            // Compact operator age: `6m`, `2y`, `2y2m` (no spaces).
             if (years < 1) return `${totalMonths}m`;
-            return months > 0 ? `${years}y ${months}m` : `${years}y`;
+            return months > 0 ? `${years}y${months}m` : `${years}y`;
     }
 }
 

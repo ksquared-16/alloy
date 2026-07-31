@@ -38,6 +38,9 @@ import {
     programCategoryIdForRoom,
     resolveProgramOnRoomChange,
 } from "@/lib/operationalAssignments/assignmentProgramRoomResolution";
+import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
+import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
 
 type Props = {
@@ -178,6 +181,66 @@ async function executeAssignmentAction(body: Record<string, unknown>): Promise<v
                   : `Action failed (${res.status})`;
         throw new Error(operatorFacingAssignmentError(message));
     }
+}
+
+/**
+ * After an assignment mutation, push the reloaded child projection into Focus Panel
+ * truth so Children / Household / Schedule cards recompose together.
+ */
+function publishScheduleProjectionToFocusPanel(args: {
+    opportunityId: string | null;
+    memberId: string;
+    fresh: ChildProj | null;
+    truth: Record<string, unknown>;
+    clearInquiryScheduleDraft: boolean;
+}): void {
+    const opportunityId = args.opportunityId?.trim() || "";
+    const memberId = args.memberId.trim();
+    if (!opportunityId || !memberId) return;
+
+    const prevBag =
+        args.truth._scheduling_projection && typeof args.truth._scheduling_projection === "object"
+            ? ({ ...(args.truth._scheduling_projection as Record<string, unknown>) } as Record<string, unknown>)
+            : {};
+    const prevBy =
+        prevBag.byMemberId && typeof prevBag.byMemberId === "object" && !Array.isArray(prevBag.byMemberId)
+            ? { ...(prevBag.byMemberId as Record<string, unknown>) }
+            : {};
+    if (args.fresh) {
+        prevBy[memberId] = args.fresh;
+    } else {
+        delete prevBy[memberId];
+    }
+
+    const patch: Record<string, unknown> = {
+        ...args.truth,
+        _scheduling_projection: { ...prevBag, byMemberId: prevBy },
+    };
+
+    if (args.clearInquiryScheduleDraft && Array.isArray(args.truth._inquiry_children)) {
+        patch._inquiry_children = (args.truth._inquiry_children as unknown[]).map((raw) => {
+            if (!raw || typeof raw !== "object") return raw;
+            const row = raw as Record<string, unknown>;
+            const id = String(row.id ?? "").trim();
+            const cm = String(row.customer_member_id ?? "").trim();
+            if (id !== memberId && cm !== memberId) return raw;
+            return {
+                ...row,
+                schedule_type: null,
+                program_room_cohort_key: null,
+                program_room_cohort_label: null,
+                desired_schedule_label: null,
+                start_date: null,
+            };
+        });
+    }
+
+    dispatchOpportunityDrawerRecordPatch(opportunityId, patch);
+    dispatchDrawerLayoutRuntimeBodyRecordPatch({
+        entityType: "opportunities",
+        entityId: opportunityId,
+        record: patch,
+    });
 }
 
 /** Shared create payload — proposed when no agreement, committed when agreement exists. */
@@ -390,9 +453,9 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         opportunityId={opportunityId}
                         projection={projById[activeChild.id] ?? null}
                         config={schedConfig}
+                        truth={context.truth as Record<string, unknown>}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
                         coordination={coordination}
-                        onClose={() => setActiveChildId(null)}
                         onBack={() => {
                             setActiveChildId(null);
                             coordination?.back?.();
@@ -495,18 +558,18 @@ function ScheduleWorkSurface({
     opportunityId,
     projection,
     config,
+    truth,
     reloadChild,
     coordination,
-    onClose,
     onBack,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     projection: ChildProj | null;
     config: SchedConfig;
+    truth: Record<string, unknown>;
     reloadChild: () => Promise<ChildProj | null>;
     coordination?: FocusPanelCoordination;
-    onClose: () => void;
     onBack: () => void;
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
@@ -517,6 +580,7 @@ function ScheduleWorkSurface({
     const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
     const [actionBusy, setActionBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     /** Persist Assignments day filter across singular detail drill-in. */
     const [listDayFilter, setListDayFilter] = useState<number | null>(null);
 
@@ -528,10 +592,9 @@ function ScheduleWorkSurface({
     const previousFocus = coordination?.previousFocus ?? null;
 
     /**
-     * ONE header Back affordance per drill-in state — its target changes with depth
-     * (Children → Assignments → Assignment Detail → Edit), it never stacks with a
-     * second back control in the body. Edit/create/pick-type surfaces resolve to
-     * "Cancel" (always lands on the Assignments list, never all the way out).
+     * Depth chrome matches Household/Children: ← Back in the body (not a modal ✕),
+     * form abandon via footer Cancel, dismiss elevation via scrim / ESC.
+     * Edit/create/pick-type do NOT put Cancel in the header (footer owns that).
      */
     const cancelToDetail = () => {
         setPendingTypeId(null);
@@ -539,70 +602,50 @@ function ScheduleWorkSurface({
         setActiveAssignmentId(null);
         setMode("detail");
     };
-    const headerBack: { label: string; kind: "back" | "cancel"; onClick: () => void } | null =
+    const headerBack: { label: string; onClick: () => void } | null =
         mode === "assignment"
             ? {
                   label: "Assignments",
-                  kind: "back",
                   onClick: () => {
                       setActiveAssignmentId(null);
                       setMode("detail");
                   },
               }
             : mode === "edit" || mode === "create" || mode === "pick-type"
-              ? { label: "Cancel", kind: "cancel", onClick: cancelToDetail }
+              ? null
               : previousFocus
-                ? { label: focusPanelCardBackLabel(previousFocus.card), kind: "back", onClick: onBack }
+                ? { label: focusPanelCardBackLabel(previousFocus.card), onClick: onBack }
                 : null;
 
-    const header = (
+    const header = headerBack ? (
         <div
-            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}
+            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
             data-schedule-nav="true"
         >
-            {headerBack ? (
-                <button
-                    type="button"
-                    onClick={headerBack.onClick}
-                    aria-label={headerBack.kind === "cancel" ? "Cancel" : `Back to ${headerBack.label}`}
-                    data-schedule-back="true"
-                    data-schedule-back-target={headerBack.label}
-                    style={{
-                        all: "unset",
-                        cursor: "pointer",
-                        color: T.slate,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        lineHeight: 1.2,
-                        padding: "2px 0",
-                    }}
-                >
-                    {headerBack.kind === "cancel" ? "Cancel" : `← ${headerBack.label}`}
-                </button>
-            ) : null}
             <button
                 type="button"
-                onClick={onClose}
-                aria-label="Close"
-                data-schedule-close="true"
-                style={{
-                    all: "unset",
-                    marginLeft: "auto",
-                    cursor: "pointer",
-                    color: T.mid40,
-                    fontSize: 15,
-                    lineHeight: 1,
-                    padding: 2,
-                }}
+                onClick={headerBack.onClick}
+                aria-label={`Back to ${headerBack.label}`}
+                data-schedule-back="true"
+                data-schedule-back-target={headerBack.label}
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                style={{ padding: "2px 0" }}
             >
-                ✕
+                ← {headerBack.label}
             </button>
         </div>
-    );
+    ) : null;
 
-    const onSaved = async () => {
+    const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean }) => {
         const fresh = await reloadChild();
         setProj(fresh);
+        publishScheduleProjectionToFocusPanel({
+            opportunityId,
+            memberId: child.id,
+            fresh,
+            truth,
+            clearInquiryScheduleDraft: Boolean(opts?.clearInquiryScheduleDraft),
+        });
         setMode("detail");
         setActiveAssignmentId(null);
         setEditingAssignmentId(null);
@@ -623,17 +666,20 @@ function ScheduleWorkSurface({
         setMode("pick-type");
     };
 
-    const runAction = async (body: {
-        action_key: string;
-        entity_type: string;
-        entity_id: string;
-        payload: Record<string, unknown>;
-    }): Promise<boolean> => {
+    const runAction = async (
+        body: {
+            action_key: string;
+            entity_type: string;
+            entity_id: string;
+            payload: Record<string, unknown>;
+        },
+        opts?: { clearInquiryScheduleDraft?: boolean },
+    ): Promise<boolean> => {
         setActionBusy(true);
         setActionError(null);
         try {
             await executeAssignmentAction(body);
-            await onSaved();
+            await onSaved(opts);
             return true;
         } catch (e) {
             setActionError(e instanceof Error ? e.message : "Action failed");
@@ -732,27 +778,7 @@ function ScheduleWorkSurface({
                     }
                     onDelete={
                         activeAssignment.commitmentKind === "proposed"
-                            ? () => {
-                                  if (
-                                      typeof window !== "undefined" &&
-                                      !window.confirm(
-                                          "Delete this proposed assignment? This can't be undone."
-                                      )
-                                  ) {
-                                      return;
-                                  }
-                                  void runAction({
-                                      action_key: "assignment.delete_proposed",
-                                      entity_type: "child",
-                                      entity_id: child.id,
-                                      payload: { assignment_id: activeAssignment.id },
-                                  }).then((ok) => {
-                                      if (ok) {
-                                          setActiveAssignmentId(null);
-                                          setMode("detail");
-                                      }
-                                  });
-                              }
+                            ? () => setDeleteConfirmOpen(true)
                             : undefined
                     }
                     onPromote={
@@ -776,6 +802,36 @@ function ScheduleWorkSurface({
                             ? "This Assignment can only become active after enrollment is completed."
                             : null
                     }
+                />
+                <AdminDeleteConfirmModal
+                    isOpen={deleteConfirmOpen}
+                    onClose={() => setDeleteConfirmOpen(false)}
+                    isLoading={actionBusy}
+                    entityTypeLabel="proposed assignment"
+                    recordLabel={
+                        [
+                            activeAssignment.assignmentType.label,
+                            activeAssignment.room.name || activeAssignment.room.program,
+                        ]
+                            .filter(Boolean)
+                            .join(" · ") || child.name
+                    }
+                    onConfirm={async () => {
+                        const ok = await runAction(
+                            {
+                                action_key: "assignment.delete_proposed",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: { assignment_id: activeAssignment.id },
+                            },
+                            { clearInquiryScheduleDraft: true },
+                        );
+                        if (ok) {
+                            setDeleteConfirmOpen(false);
+                            setActiveAssignmentId(null);
+                            setMode("detail");
+                        }
+                    }}
                 />
             </div>
         );
@@ -1041,7 +1097,7 @@ function AssignmentTypePicker({
                                 padding: "10px 12px",
                                 borderRadius: 10,
                                 border: `1px solid ${T.border}`,
-                                background: "#fff",
+                                background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
                                 cursor: "pointer",
                                 fontSize: 13,
                                 fontWeight: 600,
@@ -1142,7 +1198,17 @@ function DayPills({ days, interactive, allowed, onToggle }: { days: number[]; in
 function BillingConsequence({ billing }: { billing: BillingProjection | null }) {
     const family = billing?.totals ? money(billing.totals.familyResponsibility, billing.totals.recurringFrequency) : null;
     return (
-        <div style={{ background: "#f9fafb", border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", display: "grid", gap: 5 }} data-schedule-billing="true">
+        <div
+            style={{
+                background: "var(--alloy-os-surface-muted, #f6f8fa)",
+                border: `1px solid ${T.border}`,
+                borderRadius: 10,
+                padding: "9px 12px",
+                display: "grid",
+                gap: 5,
+            }}
+            data-schedule-billing="true"
+        >
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
                 <Wallet size={12.5} strokeWidth={2} />
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Recurring tuition</span>
@@ -1186,19 +1252,19 @@ function ScheduleRegions({
 }) {
     return (
         <div
-            style={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", gap: 0, paddingTop: 2 }}
+            className="alloy-os-sched-surface"
+            style={{ display: "flex", flexDirection: "column", gap: 0, paddingTop: 2, minWidth: 0, minHeight: 0, flex: "1 1 auto" }}
             {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
         >
-            <div data-schedule-scroll="true" style={{ display: "grid", gap: 13, flex: "1 1 auto", minHeight: 0, overflowY: "auto", paddingBottom: 4 }}>
+            <div
+                data-schedule-scroll="true"
+                className="alloy-os-sched-scroll"
+                style={{ display: "grid", gap: 13, minWidth: 0, minHeight: 0, flex: "1 1 auto", paddingBottom: 8 }}
+            >
                 <IdentityHeader child={child} state={state} />
                 {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
                 <div
                     data-schedule-days-hours-band="true"
-                    style={{
-                        display: "grid",
-                        gap: 12,
-                        gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 1fr)",
-                    }}
                     className="alloy-os-sched-days-hours-band"
                 >
                     <Region icon={CalendarDays} label="Days">{days}</Region>
@@ -1210,12 +1276,12 @@ function ScheduleRegions({
             </div>
             <div
                 data-schedule-footer="true"
+                className="alloy-os-sched-footer"
                 style={{
-                    flex: "0 0 auto",
                     borderTop: `1px solid ${T.border}`,
                     paddingTop: 12,
                     paddingBottom: 2,
-                    background: "#fff",
+                    background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
                 }}
             >
                 {footer}
@@ -1545,9 +1611,12 @@ function ScheduleEditor({
                     </div>
                 }
                 hours={
-                    <div style={{ display: "grid", gap: 6 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                            <div data-arrive="true">
+                    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                        <div
+                            className="alloy-os-sched-hours-row"
+                            style={{ display: "flex", flexWrap: "wrap", gap: "8px 10px", alignItems: "center", minWidth: 0 }}
+                        >
+                            <div data-arrive="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
                                 <AlloyTimeInput
                                     value={arrive}
                                     onChange={setArrive}
@@ -1556,8 +1625,8 @@ function ScheduleEditor({
                                     className="alloy-time-input--sched"
                                 />
                             </div>
-                            <span style={{ color: T.mid40 }}>–</span>
-                            <div data-depart="true">
+                            <span style={{ color: T.mid40, flex: "0 0 auto" }}>–</span>
+                            <div data-depart="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
                                 <AlloyTimeInput
                                     value={depart}
                                     onChange={setDepart}
@@ -1665,11 +1734,11 @@ function ScheduleEditor({
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
-                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
+                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
-                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
+                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
                             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
                                 <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
@@ -1680,8 +1749,11 @@ function ScheduleEditor({
                     </div>
                 }
                 footer={
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 10.5, color: T.muted }}>
+                    <div
+                        className="alloy-os-sched-footer-row"
+                        style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px 12px", minWidth: 0 }}
+                    >
+                        <span style={{ fontSize: 10.5, color: T.muted, flex: "1 1 140px", minWidth: 0 }}>
                             {createAsSecondary
                                 ? assignmentTypeLabel
                                     ? `${assignmentTypeLabel} — independent of the primary.`
@@ -1690,7 +1762,7 @@ function ScheduleEditor({
                                   ? "Create Assignment — configure the minimum."
                                   : "Editing this Assignment."}
                         </span>
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, flex: "0 0 auto" }}>
                             <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                                 Cancel
                             </button>
@@ -1711,7 +1783,7 @@ function ScheduleEditor({
     );
 }
 
-// ── Room picker — seed from first-paint; Category filter sync; scoring revalidates ──
+// ── Room picker — seed + scored fit; ineligible rooms stay visible for override ──
 function RoomPicker({
     siteId,
     childId,
@@ -1809,6 +1881,23 @@ function RoomPicker({
 
     return (
         <div style={{ display: "grid", gap: 10, paddingTop: 4, minHeight: 0 }} data-room-picker="true">
+            <div
+                style={{ display: "flex", alignItems: "center", gap: 8 }}
+                data-schedule-nav="true"
+            >
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    aria-label="Back to assignment"
+                    data-schedule-back="true"
+                    data-schedule-back-target="Assignment"
+                    data-room-picker-back="true"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    style={{ padding: "2px 0" }}
+                >
+                    ← Back
+                </button>
+            </div>
             {label("Choose a room")}
             <p style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}>
                 Eligible rooms match this child&rsquo;s age and program as of the start date. Ineligible rooms stay
@@ -2009,6 +2098,6 @@ const rowBtnStyle: CSSProperties = {
     border: `1px solid ${T.border}`,
     borderRadius: 10,
     padding: "8px 12px",
-    background: "#fff",
+    background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
 };
 const patternChip: CSSProperties = { all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.slate, background: T.stone, border: `1px solid ${T.border}`, borderRadius: 999, padding: "6px 11px" };

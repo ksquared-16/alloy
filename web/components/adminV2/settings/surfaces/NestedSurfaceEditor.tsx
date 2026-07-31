@@ -451,7 +451,12 @@ export default function NestedSurfaceEditor({
                                             type="button"
                                             className={clsx(
                                                 "rounded-md border px-2 py-1 text-[11px]",
-                                                fieldLayoutWidthForNestedGroup(config, selectedPlacedField.groupKey, selectedPlacedField.fieldKey) !== "half"
+                                                fieldLayoutWidthForNestedGroup(
+                                                    config,
+                                                    selectedPlacedField.groupKey,
+                                                    selectedPlacedField.fieldKey,
+                                                    { purpose: activeConfigPurpose },
+                                                ) !== "half"
                                                     ? "border-alloy-pine/30 bg-alloy-pine/10 text-alloy-pine"
                                                     : "border-alloy-stone/20 text-alloy-midnight/60",
                                             )}
@@ -462,6 +467,7 @@ export default function NestedSurfaceEditor({
                                                         selectedPlacedField.groupKey,
                                                         selectedPlacedField.fieldKey,
                                                         "full",
+                                                        { purpose: activeConfigPurpose },
                                                     ),
                                                 )
                                             }
@@ -472,7 +478,12 @@ export default function NestedSurfaceEditor({
                                             type="button"
                                             className={clsx(
                                                 "rounded-md border px-2 py-1 text-[11px]",
-                                                fieldLayoutWidthForNestedGroup(config, selectedPlacedField.groupKey, selectedPlacedField.fieldKey) === "half"
+                                                fieldLayoutWidthForNestedGroup(
+                                                    config,
+                                                    selectedPlacedField.groupKey,
+                                                    selectedPlacedField.fieldKey,
+                                                    { purpose: activeConfigPurpose },
+                                                ) === "half"
                                                     ? "border-alloy-pine/30 bg-alloy-pine/10 text-alloy-pine"
                                                     : "border-alloy-stone/20 text-alloy-midnight/60",
                                             )}
@@ -483,6 +494,7 @@ export default function NestedSurfaceEditor({
                                                         selectedPlacedField.groupKey,
                                                         selectedPlacedField.fieldKey,
                                                         "half",
+                                                        { purpose: activeConfigPurpose },
                                                     ),
                                                 )
                                             }

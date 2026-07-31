@@ -242,6 +242,43 @@ export function mapFactsToCreateLeadIntake(input: {
         });
     }
 
+    // Map parsed mailing address onto create-lead address keys when the intake
+    // spec includes them; otherwise the household commit selection still carries
+    // structured address for post-commit persistence.
+    if (household.address?.lines?.length) {
+        const line1 = household.address.lines[0]!.trim();
+        if (line1) {
+            const householdKey = keys.household_address_line1;
+            const personKey = keys.address_line1;
+            if (fieldByPayloadKey(input.spec, householdKey) && !seen.has(householdKey)) {
+                push({
+                    payload_key: householdKey,
+                    rule_id: fieldByPayloadKey(input.spec, householdKey)?.rule_id ?? null,
+                    value: line1,
+                    confidence: "medium",
+                    fact_ids: household.address.source_fact_ids,
+                    validation_state: "unknown",
+                });
+            } else if (fieldByPayloadKey(input.spec, personKey) && !seen.has(personKey)) {
+                push({
+                    payload_key: personKey,
+                    rule_id: fieldByPayloadKey(input.spec, personKey)?.rule_id ?? null,
+                    value: line1,
+                    confidence: "medium",
+                    fact_ids: household.address.source_fact_ids,
+                    validation_state: "unknown",
+                });
+            } else if (!fieldByPayloadKey(input.spec, householdKey) && !fieldByPayloadKey(input.spec, personKey)) {
+                mappingWarnings.push({
+                    code: "address_no_action_field",
+                    severity: "info",
+                    message:
+                        `Address detected (${line1}) — will be saved on the household when you confirm.`,
+                });
+            }
+        }
+    }
+
     mapLegacyFactsWithoutHousehold({
         extraction: input.extraction,
         spec: input.spec,

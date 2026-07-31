@@ -57,7 +57,7 @@ A business process defines:
 - **Stages** — ordered steps in the operator journey
 - **Process Command selection (`command_set_v1`)** — sole target process-wide authority for which Commands the process selects (P6.S1). Stage catalogs recommend/evaluate selected Commands; they do not create process selection.
 - **Stage operating plans** — purpose, expected work, success/off-track criteria — see `docs/system/operating-plan-runtime-doctrine.md`
-- **Stage membership** — subject grain + scope (`membership_criteria_v1`); membership itself is the persisted `stage_key`, written by outcome execution
+- **Stage membership** — subject grain + scope (`membership_criteria_v1`); membership itself is the persisted `stage_key`, written by outcome execution. Authoritative entry time is `stage_entered_at` on the stage owner (`opportunities` for family/case grain; `process_instances` for child/participant grain) — see queue operational awareness in `../operator/queue-system.md`
 - **Outgoing transitions** — stage-owned, stable identities for destination, availability, and optional canonical status/close effects
 - **Outcome Definitions** — stage-owned completion choices; Work Templates select Available Outcomes and outcomes compose movement, follow-up work, and attention
 - **Required information & actions** — per-stage configuration

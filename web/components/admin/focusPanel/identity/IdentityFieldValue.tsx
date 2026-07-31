@@ -10,8 +10,11 @@ import {
     CalendarDays,
     DoorOpen,
     GraduationCap,
+    Home,
     Mail,
     Phone,
+    User,
+    Users,
     type LucideIcon,
 } from "lucide-react";
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
@@ -29,7 +32,10 @@ import { normalizeDob } from "@/lib/identity/normalizeDob";
 type InlineEditProps = {
     isEditing: boolean;
     onStartEdit: () => void;
-    onCommit: (value: string) => void | Promise<void>;
+    onCommit: (
+        value: string,
+        meta?: { displayLabel?: string | null },
+    ) => void | Promise<void>;
     onCancel: () => void;
     busy?: boolean;
     /**
@@ -63,6 +69,9 @@ const ICONS: Record<string, LucideIcon> = {
     "calendar-days": CalendarDays,
     "badge-check": BadgeCheck,
     building: Building2,
+    user: User,
+    users: Users,
+    home: Home,
 };
 
 function resolveIcon(name?: string): LucideIcon | null {
@@ -80,6 +89,10 @@ function IdentityInlineEditInput({
     inputId,
     inputRef,
     commit,
+    selectOptions,
+    programDisabled,
+    siteLocationId,
+    programCategoryId,
 }: {
     cell: IdentityFieldCellVM;
     editControl: IdentityFieldEditControl;
@@ -89,34 +102,21 @@ function IdentityInlineEditInput({
     setDraft: (value: string) => void;
     inputId: string;
     inputRef: RefObject<HTMLInputElement | null>;
-    commit: () => void | Promise<void>;
+    commit: (meta?: { displayLabel?: string | null; valueOverride?: string }) => void | Promise<void>;
+    selectOptions: readonly { value: string; label: string }[];
+    programDisabled: boolean;
+    siteLocationId: string;
+    programCategoryId: string;
 }) {
     const optionSetKeys =
         editControl.kind === "select" && inlineEdit.isEditing ? [editControl.optionSetKey] : [];
     const { optionsBySetKey } = useOptionSetSelectOptions(optionSetKeys);
-    const siteLocationId =
-        editControl.kind === "placement_select" ? (editControl.siteLocationId ?? "").trim() : "";
-    const programCategoryId =
-        editControl.kind === "placement_select" ? (editControl.programCategoryId ?? "").trim() : "";
-    const placement = useOperationalPlacementOptions(siteLocationId, programCategoryId);
-    const selectOptions = useMemo(() => {
+    const resolvedSelectOptions = useMemo(() => {
         if (editControl.kind === "select") {
             return optionsBySetKey[editControl.optionSetKey] ?? [];
         }
-        if (editControl.kind === "placement_select") {
-            if (editControl.placement === "site") {
-                return placement.siteOptions ?? [];
-            }
-            // Category-id values only — Focus Panel saves `program_category_id` FK.
-            return placement.programCategoryIdOptions ?? [];
-        }
-        return [];
-    }, [
-        editControl,
-        optionsBySetKey,
-        placement.programCategoryIdOptions,
-        placement.siteOptions,
-    ]);
+        return selectOptions;
+    }, [editControl, optionsBySetKey, selectOptions]);
 
     // Display may store the option label; `<select>` values are keys — map label → value on edit.
     const selectValue = useMemo(() => {
@@ -132,10 +132,10 @@ function IdentityInlineEditInput({
             if (editControl.kind === "placement_select" && programCategoryId) return programCategoryId;
             return "";
         }
-        if (selectOptions.some((o) => o.value === raw)) return raw;
-        const byLabel = selectOptions.find((o) => o.label === raw);
+        if (resolvedSelectOptions.some((o) => o.value === raw)) return raw;
+        const byLabel = resolvedSelectOptions.find((o) => o.label === raw);
         return byLabel?.value ?? raw;
-    }, [controlledDraft, editControl, selectOptions, programCategoryId, siteLocationId]);
+    }, [controlledDraft, editControl, resolvedSelectOptions, programCategoryId, siteLocationId]);
 
     useEffect(() => {
         if (
@@ -161,27 +161,66 @@ function IdentityInlineEditInput({
         }
     };
 
+    const commitWithMeta = () => {
+        if (editControl.kind === "select" || editControl.kind === "placement_select") {
+            const label =
+                resolvedSelectOptions.find((o) => o.value === selectValue)?.label
+                ?? null;
+            return commit({
+                displayLabel: selectValue.trim() ? label : null,
+                valueOverride: selectValue,
+            });
+        }
+        return commit();
+    };
+
+    const useAlloySelect =
+        editControl.kind === "select" || editControl.kind === "placement_select"
+            ? cell.fieldRef === "child.gender"
+                || cell.fieldRef.endsWith(".gender")
+                || cell.fieldRef.includes("assignment")
+                || cell.fieldRef.includes("program")
+                || cell.fieldRef.includes("location")
+                || cell.fieldRef.includes("room")
+                || cell.fieldRef.includes("schedule")
+            : false;
+    // Only hide Save when we actually commit inside AlloySelect onChange.
+    const autoCommitOnPick =
+        !shared
+        && useAlloySelect
+        && (editControl.kind === "placement_select" || cell.fieldRef.includes("program"));
+
     let control: ReactNode;
     if (editControl.kind === "select" || editControl.kind === "placement_select") {
-        const useAlloySelect =
-            cell.fieldRef === "child.gender"
-            || cell.fieldRef.endsWith(".gender")
-            || cell.fieldRef.includes("assignment")
-            || cell.fieldRef.includes("program")
-            || cell.fieldRef.includes("location")
-            || cell.fieldRef.includes("room")
-            || cell.fieldRef.includes("schedule");
         const selectDisabled =
             Boolean(inlineEdit.busy)
             || (editControl.kind === "placement_select"
                 && editControl.placement === "program"
-                && placement.programDisabled);
+                && programDisabled);
         control = useAlloySelect ? (
             <AlloySelect
                 value={selectValue}
-                onChange={onDraftChange}
-                options={selectOptions}
+                onChange={(next) => {
+                    onDraftChange(next);
+                    // Program / placement selects: commit on pick so operators are not
+                    // stuck needing a separate Save click after a lagged options load.
+                    if (autoCommitOnPick) {
+                        const label = resolvedSelectOptions.find((o) => o.value === next)?.label ?? null;
+                        void commit({
+                            displayLabel: next.trim() ? label : null,
+                            valueOverride: next,
+                        });
+                    }
+                }}
+                options={resolvedSelectOptions}
                 disabled={selectDisabled}
+                valueLabelHint={
+                    // Edit draft is often the program_category UUID; keep showing the
+                    // authored label (Infant) until options resolve.
+                    cell.value && cell.value.trim() !== selectValue.trim()
+                        ? cell.value
+                        : null
+                }
                 aria-label={cell.label}
                 testId="identity-field-select"
             />
@@ -189,7 +228,7 @@ function IdentityInlineEditInput({
             <SelectFieldControl
                 value={selectValue}
                 onChange={onDraftChange}
-                options={selectOptions}
+                options={resolvedSelectOptions}
                 disabled={selectDisabled}
                 className="identity-field-value__input identity-field-value__select"
                 aria-label={cell.label}
@@ -209,7 +248,7 @@ function IdentityInlineEditInput({
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
                         event.preventDefault();
-                        if (!shared) void commit();
+                        if (!shared) void commitWithMeta();
                     }
                     if (event.key === "Escape") {
                         event.preventDefault();
@@ -232,7 +271,7 @@ function IdentityInlineEditInput({
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
                         event.preventDefault();
-                        if (!shared) void commit();
+                        if (!shared) void commitWithMeta();
                     }
                     if (event.key === "Escape") {
                         event.preventDefault();
@@ -247,16 +286,27 @@ function IdentityInlineEditInput({
     return (
         <>
             {control}
-            {!shared ? (
+            {!shared && !autoCommitOnPick ? (
                 <span className="identity-field-value__inline-actions">
                     <button
                         type="button"
                         className="identity-field-value__edit"
                         disabled={inlineEdit.busy}
-                        onClick={() => void commit()}
+                        onClick={() => void commitWithMeta()}
                     >
                         Save
                     </button>
+                    <button
+                        type="button"
+                        className="identity-field-value__edit identity-field-value__edit--cancel"
+                        disabled={inlineEdit.busy}
+                        onClick={inlineEdit.onCancel}
+                    >
+                        Cancel
+                    </button>
+                </span>
+            ) : !shared && autoCommitOnPick ? (
+                <span className="identity-field-value__inline-actions">
                     <button
                         type="button"
                         className="identity-field-value__edit identity-field-value__edit--cancel"
@@ -289,6 +339,19 @@ export default function IdentityFieldValue({
         () => cell.editControl ?? resolveIdentityFieldEditControl(cell.fieldRef),
         [cell.editControl, cell.fieldRef],
     );
+
+    // Prefetch program/site options while the field is visible (not only after Edit),
+    // so opening the Program dropdown is not blocked on a cold fetch.
+    const placementSiteId =
+        editControl.kind === "placement_select" ? (editControl.siteLocationId ?? "").trim() : "";
+    const placementProgramCategoryId =
+        editControl.kind === "placement_select" ? (editControl.programCategoryId ?? "").trim() : "";
+    const placement = useOperationalPlacementOptions(placementSiteId, placementProgramCategoryId);
+    const placementSelectOptions = useMemo(() => {
+        if (editControl.kind !== "placement_select") return [];
+        if (editControl.placement === "site") return placement.siteOptions ?? [];
+        return placement.programCategoryIdOptions ?? [];
+    }, [editControl, placement.programCategoryIdOptions, placement.siteOptions]);
 
     const controlledDraft = (() => {
         const raw = shared ? (inlineEdit?.draftValue ?? cell.value ?? "") : draft;
@@ -330,21 +393,45 @@ export default function IdentityFieldValue({
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
     const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
     const valueText = cell.value?.trim() ?? "";
-    const displayValueText =
-        editControl.kind === "date" && valueText
-            ? (formatFocusPanelDate(valueText) ?? valueText)
-            : valueText;
+    const displayValueText = (() => {
+        if (editControl.kind === "date" && valueText) {
+            return formatFocusPanelDate(valueText) ?? valueText;
+        }
+        // Program/site selects may briefly hold a raw FK — prefer the option label.
+        if (
+            (editControl.kind === "placement_select" || editControl.kind === "select")
+            && valueText
+            && placementSelectOptions.length > 0
+        ) {
+            const byValue = placementSelectOptions.find((o) => o.value === valueText);
+            if (byValue?.label) return byValue.label;
+            const byLabel = placementSelectOptions.find((o) => o.label === valueText);
+            if (byLabel?.label) return byLabel.label;
+        }
+        if (
+            editControl.kind === "placement_select"
+            && editControl.placement === "program"
+            && valueText
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                valueText,
+            )
+        ) {
+            // Options not loaded yet — don't show the UUID in read mode.
+            return "—";
+        }
+        return valueText;
+    })();
     // Empty/hidden fields are removed in `resolveIdentityFieldRows` before packing.
     // Never return null here — late nulls leave pair/triple grid holes (field collision).
 
-    const commit = async () => {
+    const commit = async (meta?: { displayLabel?: string | null; valueOverride?: string }) => {
         if (!inlineEdit || inlineEdit.busy) return;
         // Prefer selectValue when editing a choice field so Save writes the option key, not the label.
         // Date fields must commit ISO YYYY-MM-DD (never a formatted display string).
-        const raw = shared ? controlledDraft : draft;
+        const raw = meta?.valueOverride ?? (shared ? controlledDraft : draft);
         const value =
             editControl.kind === "date" ? (normalizeDob(raw) ?? raw.trim()) : raw;
-        await inlineEdit.onCommit(value);
+        await inlineEdit.onCommit(value, meta);
     };
 
     return (
@@ -368,14 +455,20 @@ export default function IdentityFieldValue({
         >
             {showLabel ? (
                 <span className={clsx("identity-field-value__label", eyebrow && "identity-field-value__label--eyebrow")}>
-                    {Icon ? <Icon className="identity-field-value__icon" aria-hidden /> : null}
+                    <span className="identity-field-value__icon-slot" aria-hidden>
+                        {Icon ? <Icon className="identity-field-value__icon" /> : null}
+                    </span>
                     {cell.label}
                 </span>
             ) : null}
             {inlineEdit?.isEditing ? (
                 <span className="identity-field-value__value-row">
-                    {!showLabel && Icon ? (
-                        <Icon className="identity-field-value__icon identity-field-value__icon--solo" aria-hidden />
+                    {!showLabel ? (
+                        <span className="identity-field-value__icon-slot" aria-hidden>
+                            {Icon ? (
+                                <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
+                            ) : null}
+                        </span>
                     ) : null}
                     <IdentityInlineEditInput
                         cell={cell}
@@ -387,12 +480,20 @@ export default function IdentityFieldValue({
                         inputId={inputId}
                         inputRef={inputRef}
                         commit={commit}
+                        selectOptions={placementSelectOptions}
+                        programDisabled={placement.programDisabled}
+                        siteLocationId={placementSiteId}
+                        programCategoryId={placementProgramCategoryId}
                     />
                 </span>
             ) : (
                 <span className="identity-field-value__value-row">
-                    {!showLabel && Icon ? (
-                        <Icon className="identity-field-value__icon identity-field-value__icon--solo" aria-hidden />
+                    {!showLabel ? (
+                        <span className="identity-field-value__icon-slot" aria-hidden>
+                            {Icon ? (
+                                <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
+                            ) : null}
+                        </span>
                     ) : null}
                     {canInlineEdit && inlineEdit ? (
                         <button

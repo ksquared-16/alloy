@@ -14,6 +14,7 @@ import {
     parseWorkViewsV1,
     type WorkViewConfigV1Stored,
 } from "@/lib/lifecycle/workViewsConfigV1";
+import { invalidateTenantConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value != null && typeof value === "object" && !Array.isArray(value);
@@ -58,6 +59,10 @@ export async function persistWorkViewsForProcessSave(
         .eq("id", params.departmentId)
         .eq("org_id", params.orgId);
     if (error) throw new Error(error.message);
+
+    // Work Views live on department lifecycle metadata; bust provisioning config reads so the
+    // pill strip reflects the save immediately (TTL alone can leave a deleted view visible).
+    invalidateTenantConfigReadCache(params.orgId);
 
     return { metadata, workViews: normalized };
 }

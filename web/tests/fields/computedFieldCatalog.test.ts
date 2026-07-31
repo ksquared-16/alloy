@@ -59,8 +59,8 @@ describe("computed field catalog", () => {
         expect(needsResponse?.unavailable_reason).toMatch(/not wired/i);
 
         const daysInStage = computedFieldByRefKey("opportunity.days_in_stage");
-        expect(daysInStage?.resolver_status).toBe("future");
-        expect(daysInStage?.unavailable_reason).toBeTruthy();
+        expect(daysInStage?.resolver_status).toBe("now");
+        expect(daysInStage?.resolver_owner).toMatch(/operationalStateEnteredAt/);
     });
 });
 

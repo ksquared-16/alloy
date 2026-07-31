@@ -132,11 +132,28 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
         subject.kind === "child" && "gender" in subject.value
             ? (subject.value as { gender?: string | null }).gender ?? null
             : null,
+    "child.allergies": (subject) =>
+        subject.kind === "child" && "allergies" in subject.value
+            ? (subject.value as { allergies?: string | null }).allergies ?? null
+            : null,
+    "child.medical_notes": (subject) =>
+        subject.kind === "child" && "medicalNotes" in subject.value
+            ? (subject.value as { medicalNotes?: string | null }).medicalNotes ?? null
+            : null,
+    "child.special_instructions": (subject) =>
+        subject.kind === "child" && "specialInstructions" in subject.value
+            ? (subject.value as { specialInstructions?: string | null }).specialInstructions ?? null
+            : null,
     "child.age_band": (subject) =>
         subject.kind === "child" && "ageBand" in subject.value
             ? (subject.value as { ageBand?: string | null }).ageBand ?? null
             : null,
     "inquiry_child.program": (subject) =>
+        subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
+    // Storage key is program_category_id; display value is always the program label (never the UUID).
+    "inquiry_child.program_category_id": (subject) =>
+        subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
+    "child.program": (subject) =>
         subject.kind === "child" && "program" in subject.value ? subject.value.program ?? null : null,
     // Storage key is location_id; display value is always the site label (never the UUID).
     "inquiry_child.location_id": (subject) =>

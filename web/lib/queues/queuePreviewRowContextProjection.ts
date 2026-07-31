@@ -95,6 +95,13 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "placement_context.location_label",
     "waitlist_context.position_label",
     "waitlist_context.wait_since",
+    "operational_state.stage_key",
+    "operational_state.entered_at",
+    "operational_state.source",
+    "operational_state.age_compact",
+    "operational_state.age_accessible",
+    "personal_seen.unseen",
+    "personal_seen.occurrence_key",
     "drawer_open.entity_type",
     "drawer_open.entity_id",
     "drawer_open.stage_focus_key",
@@ -274,6 +281,21 @@ export function projectQueuePreviewRowContext(context: QueueRowContext): QueueRo
                 ...(waitSince ? { wait_since: waitSince } : {}),
             };
         }
+    }
+    if (context.operational_state) {
+        projected.operational_state = {
+            stage_key: context.operational_state.stage_key,
+            entered_at: context.operational_state.entered_at,
+            source: context.operational_state.source,
+            age_compact: context.operational_state.age_compact,
+            age_accessible: context.operational_state.age_accessible,
+        };
+    }
+    if (context.personal_seen) {
+        projected.personal_seen = {
+            unseen: context.personal_seen.unseen === true,
+            occurrence_key: context.personal_seen.occurrence_key,
+        };
     }
 
     return projected;

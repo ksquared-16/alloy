@@ -74,6 +74,8 @@ const CHILD_TRUTH = {
     _inquiry_children: [
         {
             id: "child-1",
+            person_id: "p-emma",
+            customer_member_id: "cm-emma",
             display_name: "Emma Johnson",
             desired_program_label: "Preschool",
             program_room_cohort_label: "North Room",
@@ -204,6 +206,53 @@ describe("child save refresh", () => {
         expect(afterChild.gender).toBe("Male");
     });
 
+    it("rebuilt children evidence keeps Program label after program_category_id save", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: null },
+            patch: {
+                identityPatch: {},
+                ocmPatch: { program_category_id: "cat-toddler" },
+                displayPatch: { desired_program_label: "Toddler" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.programCategoryId).toBe("cat-toddler");
+        expect(afterChild.program).toBe("Toddler");
+    });
+
+    it("rebuilt children evidence shows photo_url after profile photo merge", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: "p-emma" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { photo_url: "https://cdn.example/emma.jpg" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.imageUrl).toBe("https://cdn.example/emma.jpg");
+        expect(afterChild.personId).toBe("p-emma");
+    });
+
+    it("photo merge falls back to unique person_id when childId is synthetic", () => {
+        const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-0",
+            row: { person_id: "p-emma" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { photo_url: "https://cdn.example/fallback.jpg" },
+            },
+            savedPerson: null,
+        });
+        const afterChild = buildChildrenCardEvidence(householdCtx(merged)).children[0]!;
+        expect(afterChild.imageUrl).toBe("https://cdn.example/fallback.jpg");
+    });
+
     it("unsupported expanded field does not expose edit affordance", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "readiness", "child.readiness_summary");
@@ -310,7 +359,7 @@ describe("expanded field save refresh", () => {
     });
 });
 
-
+describe("drawer record patch photo preservation", () => {
     it("post-save detail cells keep address when merge uses stale truth but patch overlay has values", () => {
         let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
         config = addFieldToNestedGroup(config, "contact_edit", "person.address_line1", { tier: "expanded" });
@@ -358,6 +407,37 @@ describe("expanded field save refresh", () => {
         expect(cells.find((c) => c.fieldRef === "person.address_line1")?.value).toBe("742 Evergreen Terrace");
         expect(cells.find((c) => c.fieldRef === "person.city")?.value).toBe("Portland");
     });
+
+    it("preserves child photo_url when a later inquiry_children patch omits photos", () => {
+        const withPhoto = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
+            childId: "child-1",
+            row: { person_id: "p-emma" },
+            patch: {
+                identityPatch: {},
+                ocmPatch: {},
+                profilePatch: { photo_url: "https://cdn.example/emma.jpg" },
+            },
+            savedPerson: null,
+        });
+        const strippedReload = {
+            ...withPhoto,
+            _inquiry_children: [
+                {
+                    id: "child-1",
+                    person_id: "p-emma",
+                    customer_member_id: "cm-emma",
+                    display_name: "Emma Johnson",
+                },
+            ],
+        };
+        const merged = mergeOpportunityDrawerDisplayRecordPatch(withPhoto, strippedReload);
+        const child = (merged._inquiry_children as Record<string, unknown>[])[0]!;
+        expect(child.photo_url).toBe("https://cdn.example/emma.jpg");
+        expect(buildChildrenCardEvidence(householdCtx(merged)).children[0]!.imageUrl).toBe(
+            "https://cdn.example/emma.jpg",
+        );
+    });
+});
 
 describe("save failure semantics", () => {
     it("failed save does not mutate authoritative truth used for VM recompose", () => {

@@ -179,6 +179,8 @@ Configured field labels prefix the value: **`Created Jan 15`**, **`Tour Jun 22`*
 
 No queue row should show **`YYYY-MM-DD`** or **`MM-DD-YYYY`** as read-only display unless the user specifically configures raw value display.
 
+**Child DOB exception:** Date of Birth fields pair numeric date with compact age — **`1/1/2026 (7m)`**, **`3/3/2020 (6y4m)`** — via `formatFocusPanelDobAgeLine`. Standalone age next to child name uses the same compact age (`2y2m`, `6m`) from `inquiryChildAgeLabelFromDob` / `years_months`.
+
 Formatter: **`formatQueueRecordDateDisplay`** (`web/lib/presentation/presentationDateFormat.ts`, re-exported from `web/lib/adminFormatters.ts`); field-key detection: **`isQueueRecordDateFieldKey`** (`web/lib/layout/runtime/queueRecordScopedResolve.ts`).
 
 **Task mini-card due dates** use task due doctrine: **`formatTaskDueDate`** / **`formatQueueTaskDueMiniCard`** (weekday omitted in mini-card). Full due remains on `title` / popover via **`formatQueueTaskDueShort`**.

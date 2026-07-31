@@ -613,8 +613,7 @@ function ProcessingReviewBody(props: {
             <div>
                 <p className={WS_EYEBROW}>Processing</p>
                 <p className="mt-1 text-[13px] text-alloy-midnight/70">
-                    Review identity matches, approve the commit plan, then explicitly commit to create
-                    records.
+                    Review the household, then confirm once to create the lead and related records.
                 </p>
             </div>
             <IdentityReviewPanel

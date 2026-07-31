@@ -117,3 +117,86 @@ default subject, client composes the requested one). That is an efficiency defec
 correctness one. It remains bounded by the same structural constraint — a layout cannot see
 `searchParams` — and its options are recorded in `PE3-ARCHITECTURE-OPTIONS.md` §2 and
 `CP1-ENRICHED-VM-WATERFALL.md` §5.
+
+---
+
+## 6. THE SEED LAW — initial navigation vs subject transition
+
+**One initial-navigation seed per navigation, plus one subject-transition warm per selected-record
+change.**
+
+Stated that way deliberately. It is **not** "one seed per session", and encoding that would have
+flagged correct behaviour as a defect — which it nearly did: the queue-row-click case showed two
+registrations and a *third* subject, and the honest reading required tracing owners rather than
+assuming duplication.
+
+Certified deterministic across three runs:
+
+| # | Producer | Key subject | Consumed | Role |
+|---|---|---|--:|---|
+| 1 | `page(subject=<requested\|null>)` | requested, or `null` on a bare route | once | initial-navigation seed |
+| 2 | `prefetch` | the clicked row | once | subject-transition intent warm |
+
+- `clickedRowId` == `visibleSubject` **exactly** (`e3ce0c16…`, Alex Lyons Family). The third subject was
+  simply the row clicked, not a stale or default compose.
+- Keys are distinct (`subject=null` vs `subject=e3ce0c16…`), so neither can satisfy the other.
+- Each registration consumed exactly once; no overwrite of a live key.
+- The single provisioning fetch on the click belongs to the prefetch — that *is* the mechanism that
+  removes click latency, and suppressing it would be a regression, not a fix.
+- No default or stale subject recomposed during the transition. Zero mixed-subject frames.
+- Registration 2's `composedSubject` reads null in the trace because the prefetch path registers an
+  in-flight **promise**, not a resolved answer. That is expected for that producer, and is why producer
+  labels — not subject equality — are what classify these events.
+
+**Classification: A — legitimate lifecycle transition.** No redundant producer, nothing to remove.
+
+### Counting rule for certification
+A provisioning request is a **sibling work-view prewarm** iff it carries `work_view_id`; otherwise it is
+initial provisioning for the displayed subject. That rule is only sound because the key builder puts the
+lens in the URL, which `seedAuthorityLifecycle.test.ts` now pins — if the lens ever left the key, every
+prewarm would be miscounted as an initial duplicate and the matrix would read as a false regression.
+
+### Durable guards
+`web/tests/adminV2/runtime/seedAuthorityLifecycle.test.ts` — page owns composition and keys by the
+requested subject; layout renders children and composes nothing; bare route keeps its default; a named
+subject fails honestly before any fallback; lens+subject stay in the key; the reveal gate still defers
+the speculative sweep while never deferring hover intent.
+
+### 6a. A→B→A: five registrations, and why that is correct
+
+The A→B→A case read as 5 seed registrations and 4 "initial" provisioning fetches, which looked like
+duplicated transition work. Traced by producer, deterministic 3/3:
+
+```
+1 × page(subject=A)   the initial-navigation seed
+4 × prefetch          row warms across two transitions (A→B, B→A)
+consumeHits = 2       exactly one consumption per transition
+visible = A           correct end state; distinctSubjects = 2; mixedFrames = 0
+```
+
+Two warms per transition is `prefetchRecord` → `prewarmSubjectDestination` (ADJACENT SUBJECT
+PREPARATION): entering a row warms its complete commit-critical answer so the click resolves from cache
+instead of a cold fetch. A synthetic click fires both the intent warm and the commit, so two per
+transition, four for A→B→A. Legitimate lifecycle work, not duplication.
+
+**The defect was in the certification harness, not the runtime.** Its classifier had two buckets —
+"carries `work_view_id`" (sibling lens warm) versus "everything else" (initial provisioning) — so
+adjacent-subject warms were absorbed into initial provisioning and inflated the count 1 → 4. This is the
+second time that conflation produced a false alarm; the first was sibling lens warms. There are now
+three buckets:
+
+| bucket | identified by |
+|---|---|
+| `initial` | provisioning for the subject actually displayed |
+| `siblingLensPrewarms` | carries `work_view_id` |
+| `adjacentSubjectWarms` | carries a `subject_id` that is not the displayed subject |
+
+After the fix: ABA reports `initialFetch=1, adjWarm=3`; back/forward `initialFetch=0, lensWarm=8,
+adjWarm=2`; every stationary case `initialFetch=0`.
+
+**Residual imprecision, stated rather than hidden:** in A→B→A the *return* transition warms subject A,
+which is also the displayed subject at the end, so URL alone cannot separate it from initial
+provisioning — hence ABA's `initialFetch=1`. The stationary cases (valid deep link, refresh,
+published-doc) each report `initialFetch=0`, which is what actually establishes that initial navigation
+performs no client provisioning fetch. Distinguishing a return-transition warm from initial provisioning
+would need a per-request lifecycle tag, which is not worth adding for a certification harness.

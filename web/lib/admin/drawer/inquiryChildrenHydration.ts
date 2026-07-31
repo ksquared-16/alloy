@@ -4,6 +4,10 @@
  */
 
 import { optionLabelFromBatchMap, type batchOptionItemLabelsForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import {
+    formatAgeFromDateOfBirthIso,
+    formatAgePartsDisplay,
+} from "@/lib/fields/derived/ageFromDateOfBirth";
 
 export type HouseholdChildMemberRow = {
     id: string;
@@ -124,23 +128,29 @@ export function resolveInquiryChildIdentityFields(args: {
 
 export function inquiryChildAgeLabelFromDob(
     dobIso: string | null | undefined,
+    asOfDate: Date = new Date(),
 ): { label: string } | null {
     const raw = String(dobIso ?? "").trim();
     if (!raw) return null;
+
+    // Prefer canonical ISO derivation (years + months compact: `2y2m`, `6m`).
+    const iso = /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : null;
+    if (iso) {
+        const label = formatAgeFromDateOfBirthIso(iso, "years_months", asOfDate);
+        return label ? { label } : null;
+    }
+
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return null;
-    const now = new Date();
-    let years = now.getFullYear() - d.getFullYear();
-    let months = now.getMonth() - d.getMonth();
-    if (now.getDate() - d.getDate() < 0) months -= 1;
+    let years = asOfDate.getFullYear() - d.getFullYear();
+    let months = asOfDate.getMonth() - d.getMonth();
+    if (asOfDate.getDate() - d.getDate() < 0) months -= 1;
     if (months < 0) {
         years -= 1;
         months += 12;
     }
     if (years < 0) return null;
-    const label =
-        years >= 2 ? `${years}y` : years >= 1 ? `${years}y ${months}m` : `${Math.max(0, years * 12 + months)}m`;
-    return { label };
+    return { label: formatAgePartsDisplay(years, months, "years_months") };
 }
 
 /** Compact age label from inquiry-child row payload (queue row / header surfaces). */

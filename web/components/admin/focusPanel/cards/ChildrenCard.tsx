@@ -20,8 +20,10 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import ChildFocusEdit from "@/components/admin/focusPanel/cards/ChildFocusEdit";
 import IdentityRecordSummary from "@/components/admin/focusPanel/identity/IdentityRecordSummary";
+import IdentityAvatar from "@/components/admin/focusPanel/identity/IdentityAvatar";
 import IdentityAvatarEditable from "@/components/admin/focusPanel/identity/IdentityAvatarEditable";
 import IdentityFieldGrid, { type IdentityFieldSaveArgs } from "@/components/admin/focusPanel/identity/IdentityFieldGrid";
+import { resolveChildDisplayImageUrl } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
 import IdentityExpandedDetails from "@/components/admin/focusPanel/identity/IdentityExpandedDetails";
 import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity/IdentityDisclosureBackAction";
 import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/IdentityDisclosureSurface";
@@ -156,6 +158,55 @@ function childRosterAvatarComposer(args: {
     );
 }
 
+/** Live Work Unit image URL — evidence + session preview after Save photo. */
+function childLiveImageUrl(child: ChildrenEvidenceChild): string | null {
+    return resolveChildDisplayImageUrl({
+        imageUrl: child.imageUrl,
+        childId: child.id,
+        personId: child.personId,
+        customerMemberId: child.customerMemberId,
+    });
+}
+
+/**
+ * Live avatar: upload only on Context Facts (`allowUpload`).
+ * Summary / Details show the kept photo without Add/Change controls.
+ */
+function childLiveAvatar(args: {
+    child: ChildrenEvidenceChild;
+    size?: number;
+    allowUpload: boolean;
+    onSavePhoto?: FocusPanelMutation["savePersonChildPhoto"];
+    onClearPhoto?: FocusPanelMutation["clearPersonChildPhoto"];
+}) {
+    const imageUrl = childLiveImageUrl(args.child);
+    if (args.allowUpload && args.onSavePhoto) {
+        return (
+            <IdentityAvatarEditable
+                name={args.child.name}
+                imageUrl={imageUrl}
+                recordId={args.child.id}
+                personId={args.child.personId ?? null}
+                customerMemberId={args.child.customerMemberId ?? null}
+                onSavePhoto={args.onSavePhoto}
+                onClearPhoto={args.onClearPhoto}
+                allowUpload
+                size={args.size ?? 40}
+                role="child"
+            />
+        );
+    }
+    return (
+        <IdentityAvatar
+            name={args.child.name}
+            imageUrl={imageUrl}
+            size={args.size ?? 40}
+            role="child"
+            recordId={args.child.id}
+        />
+    );
+}
+
 /**
  * Children operational card — reference implementation of the Universal Card Lifecycle
  * (Universal Card Behavior V1). The Child card OWNS its operational truth as evidence
@@ -246,6 +297,14 @@ export default function ChildrenCard({
                           identityBaseline: seed.identityBaseline,
                       });
                       if (!patch) return { ok: false as const };
+                      // Keep summary display in sync when Gender is saved as an option key.
+                      const genderLabel = args.displayLabel?.trim() || null;
+                      if (patch.profilePatch && "gender" in patch.profilePatch && genderLabel) {
+                          patch.profilePatch = {
+                              ...patch.profilePatch,
+                              gender_label: genderLabel,
+                          };
+                      }
                       const hasChanges =
                           Object.keys(patch.identityPatch).length > 0
                           || Object.keys(patch.ocmPatch).length > 0
@@ -272,8 +331,39 @@ export default function ChildrenCard({
                       editableKeys,
                       opportunityStartDate,
                   });
+                  const label = args.displayLabel?.trim() || null;
+                  if (valueKey === "program_category_id" && patch.ocmPatch.program_category_id !== undefined) {
+                      // Only write a display label when we resolved one — never wipe a prior
+                      // label because placement options had not loaded yet at Save time.
+                      if (!patch.ocmPatch.program_category_id) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              desired_program_label: null,
+                          };
+                      } else if (label) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              desired_program_label: label,
+                          };
+                      }
+                  }
+                  if (valueKey === "location_id" && patch.ocmPatch.location_id !== undefined) {
+                      if (!patch.ocmPatch.location_id) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              location_label: null,
+                          };
+                      } else if (label) {
+                          patch.displayPatch = {
+                              ...(patch.displayPatch ?? {}),
+                              location_label: label,
+                          };
+                      }
+                  }
                   const hasChanges =
-                      Object.keys(patch.identityPatch).length > 0 || Object.keys(patch.ocmPatch).length > 0;
+                      Object.keys(patch.identityPatch).length > 0
+                      || Object.keys(patch.ocmPatch).length > 0
+                      || Boolean(patch.displayPatch && Object.keys(patch.displayPatch).length > 0);
                   if (!hasChanges) return { ok: true as const };
                   return mutation.saveInquiryChild({
                       childId: seed.childId,
@@ -758,8 +848,10 @@ export default function ChildrenCard({
                     onEditField={canEditChild ? () => setEditing(true) : undefined}
                     personId={focused.personId ?? null}
                     customerMemberId={focused.customerMemberId ?? null}
-                    onSavePhoto={mutation?.savePersonChildPhoto}
-                    onClearPhoto={mutation?.clearPersonChildPhoto}
+                    photoUrl={childLiveImageUrl(focused)}
+                    // Photo upload is Context Facts only — Details shows the kept photo.
+                    onSavePhoto={undefined}
+                    onClearPhoto={undefined}
                 />
                 {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
                     <EmergencyContactsSection
@@ -789,23 +881,29 @@ export default function ChildrenCard({
                         onSelectIdentity={selectChildIdentity}
                         onSaveField={saveChildIdentityField}
                         onLinkField={linkChildIdentityField}
-                        renderRecordAvatar={
-                            composingChildrenSurface
-                                ? (record) => {
-                                      const child = evidence.children.find((c) => c.id === record.id);
-                                      if (!child) return null;
-                                      return childRosterAvatarComposer({
-                                          child,
-                                          previewImageUrl:
-                                              composer?.childAvatarPreviewUrl(child.id)
-                                              ?? child.imageUrl
-                                              ?? null,
-                                          onSavePhoto: mutation?.savePersonChildPhoto,
-                                          onClearPhoto: mutation?.clearPersonChildPhoto,
-                                      });
-                                  }
-                                : undefined
-                        }
+                        renderRecordAvatar={(record) => {
+                            const child = evidence.children.find((c) => c.id === record.id);
+                            if (!child) return null;
+                            if (composingChildrenSurface) {
+                                return childRosterAvatarComposer({
+                                    child,
+                                    previewImageUrl:
+                                        composer?.childAvatarPreviewUrl(child.id)
+                                        ?? childLiveImageUrl(child)
+                                        ?? null,
+                                    onSavePhoto: mutation?.savePersonChildPhoto,
+                                    onClearPhoto: mutation?.clearPersonChildPhoto,
+                                });
+                            }
+                            // Context Facts is the only live surface that stages/saves photos.
+                            return childLiveAvatar({
+                                child,
+                                size: 40,
+                                allowUpload: Boolean(canMutateIdentity && mutation?.savePersonChildPhoto),
+                                onSavePhoto: mutation?.savePersonChildPhoto,
+                                onClearPhoto: mutation?.clearPersonChildPhoto,
+                            });
+                        }}
                     />
             </ComposableRegionShell>
         );
@@ -841,6 +939,8 @@ export default function ChildrenCard({
                                           })
                                         : undefined
                                 }
+                                onSavePhoto={mutation?.savePersonChildPhoto}
+                                onClearPhoto={mutation?.clearPersonChildPhoto}
                                 onSaveField={saveChildIdentityField}
                                 onLinkField={linkChildIdentityField}
                                 onActivate={
@@ -938,6 +1038,8 @@ function ChildSummaryRow({
     canMutate = false,
     composingChildrenSurface = false,
     rosterAvatarComposer,
+    onSavePhoto,
+    onClearPhoto,
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
@@ -948,6 +1050,8 @@ function ChildSummaryRow({
     canMutate?: boolean;
     composingChildrenSurface?: boolean;
     rosterAvatarComposer?: ReactNode;
+    onSavePhoto?: FocusPanelMutation["savePersonChildPhoto"];
+    onClearPhoto?: FocusPanelMutation["clearPersonChildPhoto"];
 }) {
     const record = buildChildIdentityRecordVM({
         config: childrenSurfaceConfig,
@@ -957,9 +1061,16 @@ function ChildSummaryRow({
         isFieldSaveSupported: (fieldRef) =>
             isChildIdentityFieldInlineSaveSupported(fieldRef) || isIdentityFieldSaveSupported(fieldRef),
     });
-    // Work Unit summary: display-only avatar (default IdentityAvatar).
-    // Surfaces → context facts composer owns upload/remove via rosterAvatarComposer.
-    const liveAvatarSlot = composingChildrenSurface ? rosterAvatarComposer : undefined;
+    // Summary: show kept photo only — upload/Save lives on Context Facts.
+    const liveAvatarSlot = composingChildrenSurface
+        ? rosterAvatarComposer
+        : childLiveAvatar({
+              child,
+              size: 30,
+              allowUpload: false,
+              onSavePhoto,
+              onClearPhoto,
+          });
     return (
         <div className="alloy-os-children__summary-row" data-children-child={child.id}>
             <IdentityRecordSummary
@@ -1343,7 +1454,8 @@ function FocusedChild({
 }) {
     const headerDob = childFocusView.headerShowDob || childFocusView.headerShowAge ? child.dobAge : null;
     const composer = useFocusPanelComposer();
-    const previewImageUrl = composer?.childAvatarPreviewUrl(child.id) ?? child.imageUrl;
+    const previewImageUrl =
+        composer?.childAvatarPreviewUrl(child.id) ?? childLiveImageUrl(child);
     const showHeaderAvatar = childrenSurfaceConfig
         ? groupShowAvatarForNestedGroup(childrenSurfaceConfig, "identity")
         : true;
@@ -1401,6 +1513,7 @@ function FocusedChild({
                                       identityRecord.avatar.visible === false
                                           ? null
                                           : (composer?.childAvatarPreviewUrl(child.id)
+                                              ?? child.imageUrl
                                               ?? identityRecord.avatar.imageUrl),
                               }
                             : identityRecord.avatar,
@@ -1408,25 +1521,14 @@ function FocusedChild({
                     depth={disclosureDepth}
                     onEditField={onRequestEdit ? () => onRequestEdit() : undefined}
                     avatarSlot={
-                        showHeaderAvatar ? (
-                            <IdentityAvatarEditable
-                                name={child.name}
-                                imageUrl={
-                                    composer?.childAvatarPreviewUrl(child.id)
-                                    ?? child.imageUrl
-                                    ?? identityRecord.avatar?.imageUrl
-                                    ?? null
-                                }
-                                visible={showHeaderAvatar}
-                                role={identityRecord.avatar?.role}
-                                recordId={child.id}
-                                personId={child.personId ?? null}
-                                customerMemberId={child.customerMemberId ?? null}
-                                onSavePhoto={mutation?.savePersonChildPhoto}
-                                onClearPhoto={mutation?.clearPersonChildPhoto}
-                                size={40}
-                            />
-                        ) : undefined
+                        showHeaderAvatar
+                            ? childLiveAvatar({
+                                  child,
+                                  size: 40,
+                                  // Details/Evidence: display kept photo only (upload on Context Facts).
+                                  allowUpload: false,
+                              })
+                            : undefined
                     }
                 />
             )}

@@ -1,8 +1,6 @@
 import WorkUnitSlugRouteHost from "@/components/admin/workspace/WorkUnitSlugRouteHost";
-import ProvisioningAnswerSeed from "@/components/admin/workspace/ProvisioningAnswerSeed";
 import RouteTimingSeed from "@/components/admin/workspace/RouteTimingSeed";
 import { loadWorkUnitSlugRouteMetaServer } from "@/lib/admin/loadWorkUnitSlugRouteServer";
-import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
 import {
     routeTimingEnabled,
     timedSpan,
@@ -31,53 +29,48 @@ type LayoutProps = {
  * affected; on a COLD cache it adds the compose to TTFB (~2-4s), paid back by removing the ~3-4s
  * post-hydration provisioning round-trip. The seed is co-located with `WorkUnitSlugRouteHost` — the same
  * early-hydrating boundary whose render-phase write precedes the Surface Host's cold-load consume (a
- * page-segment seed is dropped: this layout renders the Host, not `children`).
+ * same commit, ahead of the Host's consume effect).
  *
- * Only the DEFAULT subject is seeded (this layout has no `searchParams`); a `?subject_id` / `?work_view_id`
- * deep link keys differently and falls back to K2's live fetch. Any gate failure / non-operational terminal
- * seeds nothing → K2's existing fetch. The seed can only help, never trap the surface.
+ * Only the DEFAULT subject is seeded here — this layout has no `searchParams`, by framework design. A
+ * `?subject_id` / `?work_view_id` deep link keys differently, so the PAGE segment now owns that case:
+ * it is the only server boundary that receives `searchParams`. This layout therefore renders
+ * `{children}` (it previously discarded them, which is why an earlier page-seed experiment never
+ * mounted at all — see `page.tsx` and DEEPLINK-COMPOSE-OWNERSHIP.md §2a).
+ *
+ * Any gate failure / non-operational terminal seeds nothing → K2's existing fetch. The seed can only
+ * help, never trap the surface.
  */
-export default async function OperatorWorkUnitSlugLayout({ params }: LayoutProps) {
+export default async function OperatorWorkUnitSlugLayout({ children, params }: LayoutProps) {
     const { workUnitSlug } = await params;
 
-    // Compose concurrently with route-meta; hand the seed only an operational/empty terminal (an `error`
-    // or gate-failure resolves to null → K2 falls back to its live fetch). The seed takes the ROUTE
-    // IDENTITY (bare direct-load: no lens/subject) — the KERNEL derives K2's cache key (RA-1), so this
-    // layer never touches the key scheme.
-    const answerP = composeProvisioningAnswerForRoute({
-        rawSlug: workUnitSlug,
-        requestedWorkViewId: null,
-        requestedSubjectId: null,
-    })
-        .then((r) => (r.ok && r.answer.terminal !== "error" ? r.answer : null))
-        .catch(() => null);
-
-    // Diagnostic only (PE-3): the spans are measured around the SAME promises the route already
-    // awaits, so enabling the flag cannot reorder or serialize anything.
+    // Diagnostic only (PE-3): the span wraps the SAME promise the route already awaits, so enabling
+    // the flag cannot reorder or serialize anything.
     const timing = routeTimingEnabled();
     const layoutEntryEpochMs = timing ? Date.now() : 0;
     const layoutStarted = timing ? performance.now() : 0;
 
-    const [[initialRouteMeta, routeMetaMs], [answer, composeWallMs]] = await Promise.all([
-        timedSpan(loadWorkUnitSlugRouteMetaServer(workUnitSlug)),
-        timedSpan(answerP),
-    ]);
+    const [initialRouteMeta, routeMetaMs] = await timedSpan(loadWorkUnitSlugRouteMetaServer(workUnitSlug));
 
     const marks: RouteTimingMarks | null = timing
         ? {
               layout_entry_epoch_ms: layoutEntryEpochMs,
               route_meta_ms: Math.round(routeMetaMs),
-              compose_wall_ms: Math.round(composeWallMs),
+              // The compose no longer happens here — it moved to the page segment, which is the only
+              // boundary that can see which subject was asked for.
+              compose_wall_ms: 0,
               layout_total_ms: Math.round(performance.now() - layoutStarted),
-              seeded: answer != null,
+              seeded: false,
           }
         : null;
 
     return (
         <>
             <WorkUnitSlugRouteHost workUnitSlug={workUnitSlug} initialRouteMeta={initialRouteMeta} />
-            <ProvisioningAnswerSeed target={workUnitSlug} answer={answer} />
             <RouteTimingSeed marks={marks} />
+            {/* The page segment owns provisioning composition and the seed — it is the only server
+                boundary that receives `searchParams`, so only it can compose the subject the URL
+                actually asked for. It renders no UI; without `children` it would never mount. */}
+            {children}
         </>
     );
 }

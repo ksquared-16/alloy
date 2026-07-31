@@ -424,7 +424,7 @@ export function buildHouseholdCardEvidence(
                   personId: row.person_id,
               })
             : "";
-        const bucket: ContactBucket = sectionKey === "other_parent_guardian"
+        let bucket: ContactBucket = sectionKey === "other_parent_guardian"
             ? "other_parent_guardian"
             : sectionKey === "emergency_contacts"
                 ? "emergency"
@@ -435,6 +435,11 @@ export function buildHouseholdCardEvidence(
                         : sectionKey === "household_members"
                             ? "additional"
                             : classifyContactBucket(row.role_type);
+        // Stale Additional criteria (`member`) can claim create-lead secondaries.
+        // Collapsed Household only renders Other Parent — reclassify parent-like roles.
+        if (bucket === "additional" && classifyContactBucket(row.role_type) === "other_parent_guardian") {
+            bucket = "other_parent_guardian";
+        }
         if (nestedConfig && !sectionKey) continue;
         assignContact(evidence, bucket);
     }

@@ -416,6 +416,25 @@ function mergeActionVms(
     return merged;
 }
 
+/**
+ * When a tour booking already exists, What's Next must not keep advertising "Schedule tour".
+ * Rewrite schedule_tour → reschedule_tour so the CTA matches Tour card / helpful-action truth.
+ */
+export function alignTourScheduleActionForBookingState(
+    action: CurrentWorkActionVM,
+    tourScheduled: boolean,
+): CurrentWorkActionVM {
+    if (!tourScheduled) return action;
+    const key = (action.handlerKey || action.key || "").trim();
+    if (key !== "schedule_tour") return action;
+    return {
+        ...action,
+        key: "reschedule_tour",
+        handlerKey: "reschedule_tour",
+        label: "Reschedule tour",
+    };
+}
+
 /** Config-owned helpful actions: explicit template config first; legacy catalog/header fallback only when undefined. */
 function resolveHelpfulActions(args: {
     explicitRefs: CurrentWorkTemplateConfigOverlay["helpful_actions"] | undefined;
@@ -726,6 +745,9 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
     // Command integrity (Slice F): thread each action's resolved execution state onto the VM so
     // the card renders enabled only what is provably executable, and config errors stay observable.
     // Tour presentation: when an active booking exists, remapped schedule_tour → Reschedule / Cancel.
+    // Merge note (staging sync): origin's `alignTourScheduleActionForBookingState` below solves the
+    // same problem reschedule-only and rewrites `key`; this swap is the superset (offers cancel, keeps
+    // `key` so config identity still matches) and is what the rest of the surface already consumes.
     const tourScheduled = context.signals.tour.scheduled === true;
     const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T => {
         if (!action) return action;

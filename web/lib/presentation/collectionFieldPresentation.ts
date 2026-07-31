@@ -7,8 +7,8 @@
  */
 
 import type { QueueRecordFieldConfig, QueueRecordNameDisplay } from "@/lib/layout/queueRecordLayoutV3";
-import { formatDisplayDate } from "@/lib/adminFormatters";
 import { inquiryChildAgeLabelFromDob } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import { formatFocusPanelDobAgeLine } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { QueueRowContext, RelatedSubjectSummary } from "@/lib/workUnits/lifecycleSubjectContracts";
@@ -266,7 +266,8 @@ function resolveItemAgeLabel(item: CollectionItem): string | null {
 function resolveItemDobDisplay(item: CollectionItem): string | null {
     const dob = item.dob?.trim();
     if (!dob) return null;
-    return formatDisplayDate(dob) || dob;
+    // DOB fields carry compact age: `1/1/2026 (7m)`, `3/3/2020 (6y4m)`.
+    return formatFocusPanelDobAgeLine(dob, item.age);
 }
 
 function enrichItemFromChildRow(item: CollectionItem, row: ProofRuntimeRecord): CollectionItem {
@@ -440,8 +441,8 @@ function formatItemLine(item: CollectionItem, includedFields: readonly Collectio
 
     let head = nameSegment ?? "";
     if (includesAge && ageLabel) {
-        // Operator-facing list shape: "Blake Wenc · 3" (not parentheses).
-        head = head ? `${head} · ${ageLabel}` : ageLabel;
+        // Operator-facing list shape: "Lennon (2y2m)".
+        head = head ? `${head} (${ageLabel})` : ageLabel;
     } else if (!head && dobLabel) {
         head = dobLabel;
     } else if (head && includesDob && dobLabel) {

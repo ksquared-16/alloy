@@ -87,6 +87,13 @@ export default function ChildFocusEdit({
     const draftRef = useRef(draft);
     draftRef.current = draft;
 
+    const placement = useOperationalPlacementOptions(
+        draft.location_id.trim() || seed.row.location_id?.trim() || "",
+        draft.program_category_id.trim() || seed.values.program_category_id.trim() || "",
+    );
+    const placementRef = useRef(placement);
+    placementRef.current = placement;
+
     const dirty = childFocusEditDirtyForPolicy(draft, baselineRef.current, editableKeys);
 
     const edit = useEditableCardRuntime({
@@ -102,16 +109,38 @@ export default function ChildFocusEdit({
             (onSaved ?? onClose)();
         },
         save: async () => {
+            const nextDraft = draftRef.current;
             const patch = buildChildFocusSavePatch({
                 row: seed.row,
-                draft: draftRef.current,
+                draft: nextDraft,
                 baseline: baselineRef.current,
                 identityBaseline: seed.identityBaseline,
                 editableKeys,
                 opportunityStartDate,
             });
+            const opts = placementRef.current;
+            if (patch.ocmPatch.program_category_id !== undefined) {
+                const id = (patch.ocmPatch.program_category_id ?? "").trim();
+                patch.displayPatch = {
+                    ...(patch.displayPatch ?? {}),
+                    desired_program_label: id
+                        ? (optionsLabel(opts.programCategoryIdOptions ?? opts.programOptions, id) || null)
+                        : null,
+                };
+            }
+            if (patch.ocmPatch.location_id !== undefined) {
+                const id = (patch.ocmPatch.location_id ?? "").trim();
+                patch.displayPatch = {
+                    ...(patch.displayPatch ?? {}),
+                    location_label: id
+                        ? (optionsLabel(opts.siteOptions ?? [], id) || null)
+                        : null,
+                };
+            }
             const hasChanges =
-                Object.keys(patch.identityPatch).length > 0 || Object.keys(patch.ocmPatch).length > 0;
+                Object.keys(patch.identityPatch).length > 0
+                || Object.keys(patch.ocmPatch).length > 0
+                || Boolean(patch.displayPatch && Object.keys(patch.displayPatch).length > 0);
             if (!hasChanges) return { ok: true };
             markChildrenSavePerf(CHILDREN_SAVE_PERF_MARK.request);
             const result = await save({

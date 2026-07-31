@@ -15,6 +15,10 @@ export const QUEUE_ROW_CARD_IDLE_BORDER_CLASS =
 export const QUEUE_ROW_CARD_SELECTED_BORDER_CLASS =
     "alloy-os-queue-row-card--selected !bg-alloy-bend-pine/[0.06] hover:!bg-alloy-bend-pine/[0.08]";
 
-export const QUEUE_ROW_SELECTED_RAIL_CLASS = "absolute inset-y-0 left-0 z-[3] w-[3px] bg-alloy-bend-pine";
+/**
+ * Selected state is perimeter + tint only (`QUEUE_ROW_CARD_SELECTED_BORDER_CLASS`).
+ * Decorative left rails are retired — keep this empty so legacy callers render nothing.
+ */
+export const QUEUE_ROW_SELECTED_RAIL_CLASS = "";
 
 export const QUEUE_ROW_BUILDER_SHELL_DATA_ATTR = "data-queue-row-builder-shell";

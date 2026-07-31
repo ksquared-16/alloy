@@ -272,6 +272,7 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
             clearPersonChildPhoto: async () => ({ ok: false, status: 501, error: "Not implemented in dev verify" }),
             openAddEmergencyContact: () => {},
             openAddEmergencyContactForChild: () => {},
+            openAddAuthorizedPickup: () => {},
             savePersonChildRelationship: async () => ({ ok: true }),
             removeEmergencyContactRole: async () => ({ ok: true }),
             tour: {

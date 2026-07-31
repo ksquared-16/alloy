@@ -115,11 +115,27 @@ describe("Work Unit header — Actions control band (independent of BOS)", () =>
 describe("Queue rows — runtime shell parity", () => {
     const src = read("workUnit/CondensedQueueRow.tsx");
 
-    it("uses shared queue row card shell with selected rail and hover states", () => {
+    it("uses shared queue row card shell with selected perimeter (no left rail)", () => {
         expect(src).toMatch(/QUEUE_ROW_CARD_SHELL_CLASS/);
         expect(src).toMatch(/QUEUE_ROW_CARD_SELECTED_BORDER_CLASS/);
-        expect(src).toMatch(/QUEUE_ROW_SELECTED_RAIL_CLASS/);
+        expect(src).not.toMatch(/QUEUE_ROW_SELECTED_RAIL_CLASS/);
         expect(src).toMatch(/queueRowCardShell/);
+    });
+
+    it("selected queue row CSS keeps uniform border weight (no heavier left)", () => {
+        const css = readFileSync(
+            resolve(__dirname, "../../../app/adminV2/components/alloyOsRuntime.css"),
+            "utf8",
+        );
+        const selectedBlock = css.match(
+            /\.alloy-os-queue-row-card\.alloy-os-queue-row-card--selected,[\s\S]*?\.alloy-os-queue-row-card\[data-queue-row-active="true"\]\s*\{[\s\S]*?\n\}/,
+        )?.[0];
+        expect(selectedBlock).toBeTruthy();
+        expect(selectedBlock).toMatch(/border-left-width:\s*1px/);
+        expect(selectedBlock).toMatch(/border-width:\s*1px/);
+        expect(css).not.toMatch(
+            /\.adminv2-ws-wu-queue-card\[data-queue-row-active="true"\][\s\S]{0,160}inset\s+3px\s+0\s+0\s+0/,
+        );
     });
 });
 

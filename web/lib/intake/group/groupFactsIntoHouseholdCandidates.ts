@@ -329,7 +329,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         parents,
         children,
         has_address: Boolean(address),
-        action_has_address_field: false,
+        action_has_address_field: true,
         has_invalid_phone: invalidPhone,
         invalid_phone_value: invalidPhone ? String(householdPhones[0]?.raw_value ?? "") : null,
         has_invalid_email: invalidEmail,

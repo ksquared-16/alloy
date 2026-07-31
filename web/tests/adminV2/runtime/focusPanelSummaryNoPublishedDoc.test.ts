@@ -85,3 +85,39 @@ describe("Focus Panel Summary — no published doc resolves the canonical compos
         }
     });
 });
+
+/**
+ * SEED OWNERSHIP AT THE NO-PUBLISHED-DOC SEAM (Option B).
+ *
+ * The seam matters for seed authority as well as layout: with nothing published, the canonical code
+ * composition resolves, and the subject seed must still come from the PAGE (the only boundary that
+ * receives `searchParams`) with no second compose from the layout. Certified in the browser for the
+ * published-doc tenant; this is the evidence for the unpublished path, which has no browser subject.
+ */
+describe("no published doc — seed ownership and provider filtering", () => {
+    const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
+
+    it("the page owns the subject seed; the layout composes nothing on either doc path", () => {
+        const page = read("app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx");
+        const layout = read("app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx");
+        expect(page).toContain("searchParams");
+        expect(page).toMatch(/subject=\{requestedSubjectId\}/);
+        // One compose, page-owned — the layout must not reintroduce a default-subject compose that the
+        // unpublished path would then discard.
+        expect(layout).not.toContain("composeProvisioningAnswerForRoute");
+        expect(layout).toMatch(/\{children\}/);
+    });
+
+    it("canonical composition is the resolved source when nothing is published", () => {
+        // ModeGrid falls back to FOCUS_PANEL_SUMMARY_DEFAULT_DOC; the composition inputs derive from it.
+        expect(inputs.publishedLayout).toBeTruthy();
+        expect(visibleKeys.length).toBeGreaterThan(0);
+    });
+
+    it("provider-unavailable cards stay withheld here too, not just on the published path", () => {
+        // Capability availability outranks authored visibility on BOTH doc paths — an unpublished tenant
+        // must not become the way a provider-less card sneaks into production.
+        expect(inputs.visibilityByCardKey.get("milestones")).toBe("hidden");
+        expect(inputs.linkedCardKeys).not.toContain("milestones");
+    });
+});

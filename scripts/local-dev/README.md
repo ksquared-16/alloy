@@ -90,7 +90,7 @@ Detected heavy commands (run from `web/`):
 | Kind | Command |
 |------|---------|
 | typecheck | `node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit` |
-| test | `npx vitest run --maxWorkers=2 --minWorkers=1` |
+| test | built per worktree from `vitest run --help` (worker flags added only if supported) |
 | build | `npm run build` |
 | playwright | `npx playwright test --workers=1` |
 | imports | `npm run verify:module-imports` |
