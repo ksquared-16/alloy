@@ -1,0 +1,32 @@
+[32m✓[0m App already serving at http://localhost:3011
+[32m✓[0m Communications mocked (no real email/SMS; local-delivery only)
+  Authenticating operator + running certification specs…
+
+Running 7 tests using 1 worker
+
+[certify] captured session server-valid on cold load: true (url=http://localhost:3011/workspace)
+  ✓  1 [setup] › playwright/auth.setup.ts:18:6 › authenticate seeded operator (11.6s)
+[views] W1 load http=200 draft_revision=1 status=never_published
+  ✓  2 [certify] › playwright/work-views.cert.spec.ts:144:5 › W1 the Work Views editor loads the DRAFT, and reports where runtime stands (1.1s)
+[views] W2 BEFORE published=[All Work,Follow Up,New Leads,Tours] draft_revision=1
+[views] W2 save http=200 publication_required=true
+[views] W2 AFTER draft=[All Work,Certified View 1,Follow Up,Tours] draft_revision=1 -> 2
+[views] W2 published unchanged=true
+  ✓  3 [certify] › playwright/work-views.cert.spec.ts:161:5 › W2 a Work View edit saves to the DRAFT and does NOT move the projection (11.8s)
+[views] W3 reload labels=[All Work,Certified View 1,Follow Up,Tours]
+  ✓  4 [certify] › playwright/work-views.cert.spec.ts:199:5 › W3 the edit survives a reload — the editor reads where its save landed (7.8s)
+[views] W4 row_grain_v1 in draft after edit: (absent)
+[views] W4 unknown field after a Work Views save: survive me
+  ✓  5 [certify] › playwright/work-views.cert.spec.ts:215:5 › W4 row_grain_v1 and unknown fields survive the edit (7.8s)
+[views] W5 pre-publish published=[All Work,Follow Up,New Leads,Tours] draft=[All Work,Certified View 3b,Follow Up,Tours] revisions=0
+[views] W5 validate can_publish=true errors=0
+[views] W5 publish http=200
+[views] W5 post-publish published=[All Work,Certified View 3b,Follow Up,Tours] revisions=0 -> 1
+  ✓  6 [certify] › playwright/work-views.cert.spec.ts:246:5 › W5 publishing moves the runtime projection — and only then (1.6s)
+[views] W6 published views=[All Work,Certified View 3b,Follow Up,Tours] visible=[All Work,Certified View 3b,Follow Up,Tours]
+  ✓  7 [certify] › playwright/work-views.cert.spec.ts:274:5 › W6 the runtime surface serves the published Work Views (4.2s)
+
+  7 passed (54.8s)
+[32m✓[0m Authentication established (reusable session captured)
+[32m✓[0m Runtime verification ready — evidence in certification/evidence/
+rc=0

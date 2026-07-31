@@ -11,7 +11,15 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
     type LifecycleBuilderProcessRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { persistParticipationForProcessSave } from "@/lib/lifecycle/persistParticipationV1";
+import {
+    persistParticipationForProcessSave,
+    readParticipationForEditor,
+} from "@/lib/lifecycle/persistParticipationV1";
+import {
+    draftAsDepartmentMetadata,
+} from "@/lib/businessProcesses/configuration/editProcessInDraft";
+import { summarizeBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { BusinessProcessDraftEditConflictError } from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
 import { parseParticipationConfigV1 } from "@/lib/process/participationConfig";
 import { DEFAULT_ENROLLMENT_PARTICIPATION_CONFIG } from "@/lib/process/definitions/enrollment";
 import {
@@ -61,7 +69,14 @@ export async function GET(request: NextRequest) {
         if (!row) {
             return NextResponse.json({ error: lifecycleBuilderDepartmentNotFoundError(departmentId) }, { status: 404 });
         }
-        const config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        // The DRAFT, not the projection — an editor must read from where its saves land.
+        const { editorState } = await readParticipationForEditor(createAdminClient(), {
+            orgId: ctx.orgId,
+            departmentId,
+            processId,
+            actorUserId: ctx.userId,
+        });
+        const config = lifecycleBuilderFromDepartmentMetadata(draftAsDepartmentMetadata(editorState));
         const process = findProcess(config, processId);
         if (!process) {
             return NextResponse.json({ error: "Process not found" }, { status: 404 });
@@ -77,6 +92,7 @@ export async function GET(request: NextRequest) {
             saved_participation_v1: saved,
             is_default: !saved,
             stages,
+            configuration_state: summarizeBusinessProcessEditorState(editorState),
         });
     } catch (e) {
         return NextResponse.json(
@@ -124,19 +140,25 @@ export async function POST(request: NextRequest) {
         if (!row) {
             return NextResponse.json({ error: lifecycleBuilderDepartmentNotFoundError(departmentId) }, { status: 404 });
         }
-        const metadata =
-            row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as Record<string, unknown>)
-                : {};
         const result = await persistParticipationForProcessSave(createAdminClient(), {
             orgId: ctx.orgId,
             departmentId,
             processId,
-            metadata,
             participation: parsed,
+            actorUserId: ctx.userId,
+            expectedDraftRevision:
+                typeof body.draft_revision === "number" ? body.draft_revision : undefined,
         });
-        return NextResponse.json({ ok: true, participation_v1: result.participation });
+        return NextResponse.json({
+            ok: true,
+            participation_v1: result.participation,
+            draft: { draft_revision: result.draftRevision },
+            publication_required: result.publicationRequired,
+        });
     } catch (e) {
+        if (e instanceof BusinessProcessDraftEditConflictError) {
+            return NextResponse.json({ error: e.message }, { status: 409 });
+        }
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to save participation" },
             { status: 500 },
