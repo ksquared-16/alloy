@@ -10,6 +10,8 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { deleteActivationLifecycleForDepartment } from "@/lib/lifecycle/lifecycleActivationOwned";
 import { isActivationOwnedDepartmentMetadata } from "@/lib/lifecycle/lifecycleActivationOwned";
+import { editBuilderInDraft } from "@/lib/businessProcesses/configuration/editProcessInDraft";
+import { BusinessProcessDraftEditConflictError } from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
 
 /** POST — delete builder-owned department or remove legacy process (with confirm). */
 export async function POST(request: NextRequest) {
@@ -27,6 +29,8 @@ export async function POST(request: NextRequest) {
         department_id?: string;
         process_id?: string;
         legacy_delete_confirm?: boolean;
+        /** The draft token the caller loaded, so a concurrent edit conflicts instead of vanishing. */
+        draft_revision?: number;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -82,15 +86,33 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const config = lifecycleBuilderFromDepartmentMetadata(metadata);
-    const next = removeProcessFromConfig(config, processId);
-    const nextMeta = mergeLifecycleBuilderIntoMetadata(metadata, next);
-    const { error } = await supabase
-        .from("departments")
-        .update({ metadata: nextMeta, updated_at: new Date().toISOString() })
-        .eq("id", departmentId)
-        .eq("org_id", ctx.orgId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-    return NextResponse.json({ ok: true, mode: "legacy_process_removed" });
+    // Removing a process is ordinary editing, so it goes where every other ordinary edit goes:
+    // the draft. It used to UPDATE the projection directly, which meant a delete took runtime
+    // down with it before anyone reviewed or published the change — and, once the lifecycle guard
+    // reached `enforce`, failed with an opaque Postgres error instead of doing anything.
+    try {
+        const result = await editBuilderInDraft(supabase, {
+            orgId: ctx.orgId,
+            departmentId,
+            actorUserId: ctx.userId,
+            expectedDraftRevision:
+                typeof body.draft_revision === "number" ? body.draft_revision : undefined,
+            edit: (builder) => removeProcessFromConfig(builder, processId),
+        });
+        return NextResponse.json({
+            ok: true,
+            mode: "legacy_process_removed",
+            draft: { draft_revision: result.draftRevision },
+            // The process is gone from the DRAFT. Runtime still serves it until a publish.
+            publication_required: result.publicationRequired,
+        });
+    } catch (e) {
+        if (e instanceof BusinessProcessDraftEditConflictError) {
+            return NextResponse.json({ error: e.message }, { status: 409 });
+        }
+        return NextResponse.json(
+            { error: e instanceof Error ? e.message : "Failed to remove process" },
+            { status: 400 },
+        );
+    }
 }

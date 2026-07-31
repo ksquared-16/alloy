@@ -315,7 +315,14 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
             path: ["platform", "organization", "location"],
             label: "Organization defines processes; operational contexts choose availability",
         },
-        publication: { mode: "immediate", status: "live_on_save", label: "Live after confirmed save" },
+        // Business Process configuration is no longer live-on-save. Every ordinary editor writes a
+        // draft; the runtime projection moves only when someone publishes. Saying `live_on_save`
+        // here would be the card telling operators the opposite of what the product now does.
+        publication: {
+            mode: "explicit",
+            status: "publish_required",
+            label: "Draft saved — live after publish",
+        },
         override: { state: "available", label: "Availability may vary by operational context" },
         health: {
             state: "not_assessed",
