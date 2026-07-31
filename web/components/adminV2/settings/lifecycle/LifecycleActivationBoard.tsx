@@ -791,6 +791,108 @@ export default function LifecycleActivationBoard({
         if (runtimeDepartmentId) await loadPipeline(runtimeDepartmentId);
     }, [saveStageStatuses, runtimeDepartmentId, loadPipeline, statusesSaveState]);
 
+    // ── Publication workflow (Law 4) ────────────────────────────────────────────
+    // A stage save writes the DRAFT. Runtime keeps serving the published revision until the
+    // operator publishes, so the editor needs its own small workflow rather than a "Saved" chip.
+    const [publicationBusy, setPublicationBusy] = useState(false);
+    const [publicationNotice, setPublicationNotice] = useState<string | null>(null);
+
+    const refreshConfigurationState = useCallback(async () => {
+        if (!runtimeDepartmentId) return;
+        try {
+            const res = await fetch(
+                `/api/admin/business-process/configuration?department_id=${encodeURIComponent(runtimeDepartmentId)}`,
+                workspaceDataFetchInit(),
+            );
+            const j = (await res.json().catch(() => ({}))) as {
+                summary?: LifecycleStageBootstrapPayload["configuration_state"];
+            };
+            if (res.ok && j.summary) patchStageBootstrap({ configuration_state: j.summary });
+        } catch {
+            // A failed refresh must not break the save it followed; the next load corrects it.
+        }
+    }, [runtimeDepartmentId, patchStageBootstrap]);
+
+    const validateConfiguration = useCallback(async () => {
+        if (!runtimeDepartmentId) return;
+        setPublicationBusy(true);
+        setPublicationNotice(null);
+        try {
+            const res = await fetch("/api/admin/business-process/configuration/validate", {
+                ...workspaceDataFetchInit(),
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ department_id: runtimeDepartmentId }),
+            });
+            const j = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                can_publish?: boolean;
+                summary?: LifecycleStageBootstrapPayload["configuration_state"];
+            };
+            if (!res.ok) throw new Error(j.error ?? "Validation failed");
+            if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            setPublicationNotice(
+                j.can_publish
+                    ? "Validated. This configuration is ready to publish."
+                    : "Validation found problems that must be resolved before publishing.",
+            );
+        } catch (e) {
+            setPublicationNotice(e instanceof Error ? e.message : "Validation failed");
+        } finally {
+            setPublicationBusy(false);
+        }
+    }, [runtimeDepartmentId, patchStageBootstrap]);
+
+    const publishConfiguration = useCallback(async () => {
+        if (!runtimeDepartmentId) return;
+        setPublicationBusy(true);
+        setPublicationNotice(null);
+        try {
+            const res = await fetch("/api/admin/business-process/configuration/publish", {
+                ...workspaceDataFetchInit(),
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    department_id: runtimeDepartmentId,
+                    ...(stageBootstrap?.configuration_state
+                        ? { draft_revision: stageBootstrap.configuration_state.draft_revision }
+                        : {}),
+                }),
+            });
+            const j = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                published?: { revision_number?: number };
+                summary?: LifecycleStageBootstrapPayload["configuration_state"];
+            };
+            if (!res.ok) {
+                if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+                else await refreshConfigurationState();
+                throw new Error(j.error ?? "Publish failed");
+            }
+            if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            setPublicationNotice(
+                `Published revision ${j.published?.revision_number ?? "?"}. Runtime is now using it.`,
+            );
+            bumpWorkspaceCache();
+        } catch (e) {
+            setPublicationNotice(e instanceof Error ? e.message : "Publish failed");
+        } finally {
+            setPublicationBusy(false);
+        }
+    }, [
+        runtimeDepartmentId,
+        stageBootstrap?.configuration_state,
+        patchStageBootstrap,
+        refreshConfigurationState,
+        bumpWorkspaceCache,
+    ]);
+
+    const reloadConfiguration = useCallback(async () => {
+        setPublicationNotice(null);
+        // A stale draft is resolved by seeing the newer world, not by force-publishing over it.
+        window.location.reload();
+    }, []);
+
     const saveStageUnified = useCallback(async () => {
         const sk = normalizeLifecycleBuilderStageKey(stageKeyRef.current || stageKey);
         const selectedKeys = statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk);
@@ -853,6 +955,14 @@ export default function LifecycleActivationBoard({
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
             ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
             ...(v2Draft ? { stage_v2_draft: v2Draft } : {}),
+            // Both conflict tokens the editor loaded. `draft_revision` catches a colleague editing
+            // the same draft; `base_revision_id` catches a publish that happened underneath us.
+            ...(stageBootstrap?.configuration_state
+                ? {
+                      draft_revision: stageBootstrap.configuration_state.draft_revision,
+                      base_revision_id: stageBootstrap.configuration_state.base_revision_id,
+                  }
+                : {}),
         };
 
             const res = await fetch(LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH, {
@@ -866,8 +976,22 @@ export default function LifecycleActivationBoard({
                 status_stages?: EnrollmentStatusStagesPayload;
                 snapshot?: { selectedStatusKeys?: string[]; synced?: boolean };
                 pipeline?: EnrollmentPipelineWorkUnitSnapshot | null;
+                draft?: { draft_revision?: number; base_revision_id?: string | null };
+                publication_required?: boolean;
+                errors?: { message?: string }[];
             };
-            if (!res.ok) throw new Error(j.error ?? "Save failed");
+            if (!res.ok) {
+                // 409 is a conflict, not a failure: the operator's work is intact, they just need
+                // to reload. 422 carries the touched-reference errors D3 blocks on.
+                if (res.status === 409) {
+                    setPublicationNotice(null);
+                    throw new Error(j.error ?? "This configuration changed while you were editing.");
+                }
+                if (res.status === 422 && j.errors?.length) {
+                    throw new Error(j.errors.map((e) => e.message).filter(Boolean).join(" "));
+                }
+                throw new Error(j.error ?? "Save failed");
+            }
 
             const keys =
                 j.snapshot?.selectedStatusKeys?.length ? j.snapshot.selectedStatusKeys : effectiveKeys;
@@ -954,6 +1078,9 @@ export default function LifecycleActivationBoard({
             }
 
             bumpWorkspaceCache();
+            // The save moved the draft, not runtime. Re-read the publication state so the bar says
+            // "Unpublished changes" rather than leaving a stale "Published".
+            await refreshConfigurationState();
             setStageSaveState("saved");
             setReadyCheckRevision((n) => n + 1);
             stageDirtyRef.current = false;
@@ -975,6 +1102,8 @@ export default function LifecycleActivationBoard({
         saveActivation,
         loadPipeline,
         bumpWorkspaceCache,
+        refreshConfigurationState,
+        stageBootstrap?.configuration_state,
     ]);
 
     useEffect(() => {
@@ -1825,6 +1954,11 @@ export default function LifecycleActivationBoard({
                                     saveState={stageSaveState}
                                     saveError={stageSaveError}
                                     onSaveStage={saveStageUnified}
+                                    onValidateConfiguration={validateConfiguration}
+                                    onPublishConfiguration={publishConfiguration}
+                                    onReloadConfiguration={reloadConfiguration}
+                                    publicationBusy={publicationBusy}
+                                    publicationNotice={publicationNotice}
                                     onDirtyChange={(dirty) => {
                                         stageDirtyRef.current = dirty;
                                     }}

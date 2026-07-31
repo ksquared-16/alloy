@@ -117,6 +117,51 @@ from the application tests — it depends on the trigger comparing values (`IS N
 rather than counting writes. Paired with **`un-migrated stage write REJECTED`**, the two together
 say the migrated shape passes for the right reason and the old shape still fails.
 
+## `04-publication-workflow.sql` — draft edit -> validate -> publish -> runtime
+
+The editor vertical. Recorded run, 2026-07-31 — 24/24 passing. Highlights:
+
+```
+PASS  publish -> revision 1
+PASS  draft rebased onto the publication it produced
+PASS  draft edit with the current token succeeds
+PASS  stale draft-edit token writes ZERO rows
+PASS  the losing edit did not land
+PASS  payload change without advancing the token REJECTED: business_process_draft_revision_not_advanced …
+PASS  a non-payload draft update needs no token
+PASS  runtime projection unchanged by draft edits
+PASS  publish with blocking issues REJECTED: business_process_draft_not_validated
+PASS  blocked publish created no revision
+PASS  blocked publish created no publication act
+PASS  blocked publish left runtime on revision 1
+PASS  exactly two revisions exist
+PASS  runtime projection now carries the draft edit
+PASS  unknown fields survived load -> save -> publish
+PASS  STALE PUBLICATION BLOCKED: business_process_draft_stale (current_revision=… attempted_base=…)
+PASS  no revision 4 was created
+PASS  revision 3 remains the latest publication
+PASS  A's unpublished edit is still safely in the draft, not silently rebased
+```
+
+The two that carry the most weight:
+
+- **`payload change without advancing the token REJECTED`** — the draft-edit token is structural,
+  not a convention a future writer can forget. Without the trigger, compare-and-set would be
+  optional and therefore not a guarantee.
+- **`A's unpublished edit is still safely in the draft, not silently rebased`** — a stale publication
+  is refused *and* the losing operator's work survives. Refusing without preserving would trade one
+  data-loss defect for another.
+
+## Running the whole harness
+
+```bash
+psql -h 127.0.0.1 -p 5432 -d postgres -c "DROP DATABASE IF EXISTS alloy_bp_pub_test;" -c "CREATE DATABASE alloy_bp_pub_test;"
+```
+
+then, against `alloy_bp_pub_test`, in order: `00-stubs.sql`, the three migrations
+(`20260730120000`, `20260730130000`, `20260731120000`), then `01` … `04`.
+Recorded total: **76/76** (18 + 22 + 12 + 24).
+
 ## Scope
 
 Publish-path CAS **and** projection write authority. What is *not* yet done: the ~15 product writers

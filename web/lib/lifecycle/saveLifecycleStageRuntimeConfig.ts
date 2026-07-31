@@ -30,6 +30,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
+    BusinessProcessDraftEditConflictError,
     BusinessProcessStaleDraftError,
     draftBuilder,
     openDraft,
@@ -128,6 +129,12 @@ export type SaveLifecycleStageRuntimeConfigInput = {
      * Omitted by callers that predate the publication model.
      */
     expectedBaseRevisionId?: string | null;
+    /**
+     * The `draft_revision` the editor loaded. This is the DRAFT-EDIT token — it catches a
+     * colleague editing the same draft between publishes, which `expectedBaseRevisionId` cannot
+     * see because that only moves at publish.
+     */
+    expectedDraftRevision?: number;
     actorUserId?: string | null;
 };
 
@@ -139,21 +146,39 @@ export type CompanionWriteResult = {
     error?: string;
 };
 
-export type StageDraftStaleConflict = {
-    code: "business_process_draft_stale";
-    current_base_revision_id: string | null;
-    attempted_base_revision_id: string | null;
-};
+/**
+ * Two genuinely different conflicts, kept apart because the recovery differs:
+ * `publication` means a newer configuration is already live; `draft_edit` means a colleague is
+ * editing the same draft right now.
+ */
+export type StageDraftConflict =
+    | {
+          kind: "publication";
+          code: "business_process_draft_stale";
+          current_base_revision_id: string | null;
+          attempted_base_revision_id: string | null;
+      }
+    | {
+          kind: "draft_edit";
+          code: "business_process_draft_edit_conflict";
+          current_draft_revision: number | null;
+          attempted_draft_revision: number;
+      };
 
 export type StageConfigurationSaveResult = {
     status: "saved" | "blocked" | "stale_conflict";
     snapshot: LifecycleStageRuntimeConfigSnapshot | null;
-    draft: { id: string; base_revision_id: string | null; status: "draft" | "validated" } | null;
+    draft: {
+        id: string;
+        base_revision_id: string | null;
+        draft_revision: number;
+        status: "draft" | "validated";
+    } | null;
     /** Pre-existing graph defects — reported, never blocking (decision D3). */
     warnings: ConfigurationWarning[];
     /** References this save introduced on this stage. Non-empty means nothing was written. */
     errors: ConfigurationError[];
-    conflict: StageDraftStaleConflict | null;
+    conflict: StageDraftConflict | null;
     companion_writes: CompanionWriteResult[];
     /** Always true: the draft changed, runtime did not. Publishing is a separate, explicit act. */
     publication_required: true;
@@ -341,9 +366,34 @@ export async function saveLifecycleStageRuntimeConfig(
             warnings: [],
             errors: [],
             conflict: {
+                kind: "publication",
                 code: "business_process_draft_stale",
                 current_base_revision_id: existingDraft.baseRevisionId,
                 attempted_base_revision_id: input.expectedBaseRevisionId,
+            },
+            companion_writes: [],
+            publication_required: true,
+        };
+    }
+
+    // The draft-edit token. Checked before any transform so a losing writer does no work and,
+    // more importantly, performs no companion writes.
+    if (
+        input.expectedDraftRevision !== undefined &&
+        existingDraft &&
+        existingDraft.draftRevision !== input.expectedDraftRevision
+    ) {
+        return {
+            status: "stale_conflict",
+            snapshot: null,
+            draft: null,
+            warnings: [],
+            errors: [],
+            conflict: {
+                kind: "draft_edit",
+                code: "business_process_draft_edit_conflict",
+                current_draft_revision: existingDraft.draftRevision,
+                attempted_draft_revision: input.expectedDraftRevision,
             },
             companion_writes: [],
             publication_required: true,
@@ -369,7 +419,12 @@ export async function saveLifecycleStageRuntimeConfig(
         return {
             status: "blocked",
             snapshot: null,
-            draft: { id: draft.id, base_revision_id: draft.baseRevisionId, status: draft.status },
+            draft: {
+                id: draft.id,
+                base_revision_id: draft.baseRevisionId,
+                draft_revision: draft.draftRevision,
+                status: draft.status,
+            },
             warnings: [],
             errors: [
                 {
@@ -498,7 +553,12 @@ export async function saveLifecycleStageRuntimeConfig(
         return {
             status: "blocked",
             snapshot: null,
-            draft: { id: draft.id, base_revision_id: draft.baseRevisionId, status: draft.status },
+            draft: {
+                id: draft.id,
+                base_revision_id: draft.baseRevisionId,
+                draft_revision: draft.draftRevision,
+                status: draft.status,
+            },
             warnings: state.warnings,
             errors: state.errors,
             conflict: null,
@@ -522,8 +582,27 @@ export async function saveLifecycleStageRuntimeConfig(
                 departmentId: input.departmentId,
                 builder: state.builder,
                 actorUserId: input.actorUserId ?? null,
+                expectedDraftRevision: draft.draftRevision,
             });
         } catch (e) {
+            if (e instanceof BusinessProcessDraftEditConflictError) {
+                // Lost the compare-and-set between our read and our write. Nothing was written.
+                return {
+                    status: "stale_conflict",
+                    snapshot: null,
+                    draft: null,
+                    warnings: state.warnings,
+                    errors: [],
+                    conflict: {
+                        kind: "draft_edit",
+                        code: "business_process_draft_edit_conflict",
+                        current_draft_revision: e.currentDraftRevision,
+                        attempted_draft_revision: e.attemptedDraftRevision,
+                    },
+                    companion_writes: [],
+                    publication_required: true,
+                };
+            }
             if (e instanceof BusinessProcessStaleDraftError) {
                 return {
                     status: "stale_conflict",
@@ -532,6 +611,7 @@ export async function saveLifecycleStageRuntimeConfig(
                     warnings: state.warnings,
                     errors: [],
                     conflict: {
+                        kind: "publication",
                         code: "business_process_draft_stale",
                         current_base_revision_id: e.currentRevisionId,
                         attempted_base_revision_id: e.attemptedBaseRevisionId,
@@ -744,6 +824,7 @@ export async function saveLifecycleStageRuntimeConfig(
         draft: {
             id: savedDraft.id,
             base_revision_id: savedDraft.baseRevisionId,
+            draft_revision: savedDraft.draftRevision,
             status: savedDraft.status,
         },
         warnings: state.warnings,

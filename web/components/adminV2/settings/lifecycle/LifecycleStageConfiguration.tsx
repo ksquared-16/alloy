@@ -33,6 +33,11 @@ export default function LifecycleStageConfiguration({
     onDirtyChange,
     onDeleteStage,
     workspaceHandleRef,
+    onValidateConfiguration,
+    onPublishConfiguration,
+    onReloadConfiguration,
+    publicationBusy,
+    publicationNotice,
 }: {
     departmentId: string;
     businessProcessKey: string;
@@ -54,6 +59,11 @@ export default function LifecycleStageConfiguration({
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
     workspaceHandleRef?: React.RefObject<StageEditorV2Handle | null>;
+    onValidateConfiguration?: () => void | Promise<void>;
+    onPublishConfiguration?: () => void | Promise<void>;
+    onReloadConfiguration?: () => void | Promise<void>;
+    publicationBusy?: boolean;
+    publicationNotice?: string | null;
 }) {
     const localRef = useRef<StageEditorV2Handle | null>(null);
     const ref = workspaceHandleRef ?? localRef;
@@ -79,6 +89,11 @@ export default function LifecycleStageConfiguration({
                 onDirtyChange={onDirtyChange}
                 onDeleteStage={onDeleteStage}
                 entityDisplayLabels={bootstrap?.entity_display_labels ?? undefined}
+                onValidateConfiguration={onValidateConfiguration}
+                onPublishConfiguration={onPublishConfiguration}
+                onReloadConfiguration={onReloadConfiguration}
+                publicationBusy={publicationBusy}
+                publicationNotice={publicationNotice}
             />
         </div>
     );
