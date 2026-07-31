@@ -3089,7 +3089,8 @@ html[data-alloy-os-runtime-split="true"]
 }
 
 /* Focus Panel grid cards — reinforce shared shell (do not wash out perimeter/elevation). */
-.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard {
+.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work) .alloy-os-ucard,
+.alloy-os-focus-panel-grid--work .alloy-os-ucard {
   border: 1px solid var(--alloy-os-fp-card-border);
   border-radius: var(--alloy-os-fp-card-radius, 14px);
   box-shadow: var(--alloy-os-fp-card-shadow);
@@ -3353,7 +3354,9 @@ html[data-alloy-os-runtime-split="true"]
   z-index: 60;
   pointer-events: auto;
   background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
-  border-color: transparent;
+  /* Real perimeter — overflow:hidden clips outer box-shadow rings; keep the same
+   * resting card border so elevated Assignments/Household stay edged on white frost. */
+  border: 1px solid var(--alloy-os-fp-card-border);
   border-radius: 20px;
   transform-origin: center center;
   box-shadow:
@@ -6268,20 +6271,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   z-index: 1;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
-  overflow: hidden;
-  pointer-events: auto;
-}
-/* Inner Universal Card — same elevated shell as in-grid Focus Cards. */
-.alloy-os-focus-panel-linked-host__card .alloy-os-ucard {
-  width: 100%;
-  max-height: inherit;
-  height: max-content;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border-color: transparent;
+  /* Own the elevated perimeter here so child overflow:hidden cannot erase the edge. */
+  overflow: visible;
   border-radius: 20px;
   background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
+  border: 1px solid var(--alloy-os-fp-card-border);
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
     0 2px 8px -3px rgba(15, 23, 42, 0.16),
@@ -6289,6 +6283,20 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     0 56px 110px -44px rgba(15, 23, 42, 0.5),
     0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 24%, transparent),
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
+  pointer-events: auto;
+}
+/* Inner Universal Card — content clip only; shell chrome lives on the host above. */
+.alloy-os-focus-panel-linked-host__card .alloy-os-ucard {
+  width: 100%;
+  max-height: inherit;
+  height: max-content;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  box-shadow: none;
 }
 .alloy-os-focus-panel-linked-host__card .alloy-os-ucard__body {
   min-height: 0;
