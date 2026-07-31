@@ -25,6 +25,15 @@ Three operator blockers plus a follow-on round, all fixed and committed:
 | Guardian "Name" always "Form field only" | intent inferred from the LABEL alone; a bare "Name:" under "Parent or Guardian #1" has no subject |
 | Names captured as one field | `defaultNameRepresentation` defaulted to `full_name` |
 | Sunscreen PDF failed the whole import | Postgres `jsonb` rejects NUL (SQLSTATE 22P05); that PDF carries NULs in its text layer |
+| Concept review and generation described names differently | names bound to `display_name`/`full_name`, which are NOT registered system fields; generation built the registered first/last pair |
+
+Name bindings are now anchored on `OPERATIONAL_FORM_SYSTEM_FIELDS` in both layers, and
+`tests/pos/nameBindingAlignment.test.ts` pins the agreement in both directions so they cannot drift.
+
+**Pre-existing RED baselines on origin/staging — verify against staging before diagnosing as yours:**
+`tests/workspace` 8 files / 12 tests · `tests/forms` **13 files / 24 tests** · `tests/pos`
+`formDraft.test.ts` · `vac run typecheck:tests` 6 errors in `queueRowVariantResolve.test.ts`.
+Production `vac run typecheck` is clean.
 
 Also: source PDF now renders with synchronized detection highlights (via the pdf.js already bundled
 in `unpdf` — no new dependency), concept review condensed + pinned apply bar + Review action, and the
