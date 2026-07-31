@@ -3,8 +3,29 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { resolveLatestProfilePhotoDocumentForPerson } from "@/lib/admin/person/resolvePersonProfilePhotoDocument";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    assertDocumentAccess,
+    documentAccessHttp,
+    signedUrlExpirySeconds,
+} from "@/lib/documents/assertDocumentAccess";
 
-const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7; // 7 days.
+/**
+ * Phase 0 commit 6A.
+ *
+ * This was 60*60*24*7 — a SEVEN-DAY signed URL on a child's photograph. A
+ * signed URL is a bearer credential; a week-long one outlives every revocation
+ * this platform can perform. Expiry is now owned by the canonical helper and
+ * capped at 15 minutes.
+ *
+ * KNOWN CONSEQUENCE (raised, not hidden): `persons.metadata.photo_url` caches
+ * this URL, and 14 modules read that cache for avatars (drawers, focus panel,
+ * household cards). With a short expiry those cached URLs go stale quickly.
+ * Caching a signed URL across actors is itself disallowed, so the cache must be
+ * replaced by on-render resolution — that is UI work beyond this commit and is
+ * recorded in the closeout debt list.
+ */
+const SIGNED_URL_EXPIRES_IN_SECONDS = signedUrlExpirySeconds("preview");
 
 /**
  * Canonical child/person profile photo — persistence + resolution WITHOUT a schema
@@ -50,6 +71,27 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const resolved = await resolveLatestProfilePhotoDocumentForPerson(supabase, ctx.orgId, id);
     if (resolved) {
+        // Authorization BEFORE the document or its URL is disclosed. Previously
+        // any org member reaching this route received the photo.
+        const access = await getAdminAccessContextCached();
+        const decision = await assertDocumentAccess({
+            supabase,
+            actor: {
+                ok: ctx.ok,
+                failureStatus: undefined,
+                userId: ctx.userId,
+                orgId: ctx.orgId,
+                role: ctx.role,
+                roleKeys: access.ok ? access.roleKeys : [],
+                permissionKeys: access.ok ? access.permissionKeys : [],
+            },
+            documentId: resolved.documentId,
+            operation: "preview",
+        });
+        if (decision.outcome !== "allowed") {
+            const http = documentAccessHttp(decision);
+            return NextResponse.json(http.body, { status: http.status });
+        }
         return NextResponse.json({ photoUrl: resolved.photoUrl, documentId: resolved.documentId });
     }
 
