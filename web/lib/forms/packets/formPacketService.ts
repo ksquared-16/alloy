@@ -44,13 +44,58 @@ export function mergeLaunchFksPreferringSessionCrmSnapshot(
     };
 }
 
-/** Merge only non-null FKs from a submitted step into the stored snapshot (does not clear keys). */
+/**
+ * Participant identity (Slice 3):
+ *
+ * A packet session's `crm_snapshot` carries HOUSEHOLD identity — customer, member, opportunity. When
+ * recipient links share ONE session (`packet_instance_id`), that snapshot is shared by every
+ * participant, so it can never decide WHO is answering: the first link to launch the session would
+ * pin `person_id` for everyone, and every later step would prefer that pin over its own recipient.
+ *
+ * On a shared session the RESOLVING LINK is the participant authority. Its `recipient_person_id` is
+ * validated server-side during FK derivation (`applyOpportunityPacketLinkFkExtras` checks the person
+ * exists in this org) and arrives here as `launchFks.person_id` — it is never client-asserted.
+ *
+ * A session that is NOT shared keeps the previous behaviour exactly: one link, one participant, and
+ * the snapshot supplies continuity across steps.
+ */
+export function resolveParticipantFksForPacketDraft(args: {
+    launchFks: LaunchFkStamp;
+    crmSnapshot: Record<string, unknown>;
+    /** True when the resolving link names its own recipient (Family Packet instance). */
+    linkNamesRecipient: boolean;
+}): LaunchFkStamp {
+    const { launchFks, crmSnapshot, linkNamesRecipient } = args;
+    const s = launchFkStampFromCrmSnapshotRecord(crmSnapshot);
+    return {
+        // Participant: the link wins when it names a recipient; otherwise unchanged behaviour.
+        person_id: linkNamesRecipient ? launchFks.person_id : s.person_id ?? launchFks.person_id,
+        // Household: always the shared snapshot when it knows.
+        customer_id: s.customer_id ?? launchFks.customer_id,
+        customer_member_id: s.customer_member_id ?? launchFks.customer_member_id,
+        opportunity_id: s.opportunity_id ?? launchFks.opportunity_id,
+    };
+}
+
+/** Does this link name its own recipient? Presence only — the id itself is validated at FK derivation. */
+export function linkNamesRecipientPerson(metadata: Record<string, unknown>): boolean {
+    const v = metadata.recipient_person_id;
+    return typeof v === "string" && v.trim().length > 0;
+}
+
+/**
+ * Merge only non-null FKs from a submitted step into the stored snapshot (does not clear keys).
+ *
+ * `householdOnly` withholds `person_id` — the snapshot of a SHARED session must stay household-scoped,
+ * or each submit re-pins the participant for every other recipient.
+ */
 export function mergeNonNullSubmissionFksIntoCrmSnapshot(
     existing: Record<string, unknown>,
-    fks: LaunchFkStamp
+    fks: LaunchFkStamp,
+    options?: { householdOnly?: boolean }
 ): Record<string, unknown> {
     const out = { ...existing };
-    if (fks.person_id) out.person_id = fks.person_id;
+    if (fks.person_id && !options?.householdOnly) out.person_id = fks.person_id;
     if (fks.customer_id) out.customer_id = fks.customer_id;
     if (fks.customer_member_id) out.customer_member_id = fks.customer_member_id;
     if (fks.opportunity_id) out.opportunity_id = fks.opportunity_id;
@@ -65,13 +110,13 @@ export async function syncPacketSessionCrmSnapshotFromSubmission(
 ): Promise<{ error: Error | null }> {
     const { data: sess, error: loadErr } = await supabase
         .from("form_packet_sessions")
-        .select("crm_snapshot, status")
+        .select("crm_snapshot, status, packet_instance_id")
         .eq("id", packetSessionId)
         .eq("org_id", orgId)
         .maybeSingle();
 
     if (loadErr) return { error: new Error(loadErr.message) };
-    const row = sess as { crm_snapshot?: unknown; status?: string } | null;
+    const row = sess as { crm_snapshot?: unknown; status?: string; packet_instance_id?: string | null } | null;
     if (!row || row.status !== "in_progress") {
         return { error: null };
     }
@@ -79,7 +124,10 @@ export async function syncPacketSessionCrmSnapshotFromSubmission(
     const existing = (row.crm_snapshot && typeof row.crm_snapshot === "object" && !Array.isArray(row.crm_snapshot)
         ? row.crm_snapshot
         : {}) as Record<string, unknown>;
-    const merged = mergeNonNullSubmissionFksIntoCrmSnapshot(existing, fks);
+    // Shared session: household facts only. Writing the submitter's person here would re-pin the
+    // participant for every other recipient on their next step.
+    const shared = typeof row.packet_instance_id === "string" && row.packet_instance_id.trim().length > 0;
+    const merged = mergeNonNullSubmissionFksIntoCrmSnapshot(existing, fks, { householdOnly: shared });
 
     const { error: upErr } = await supabase
         .from("form_packet_sessions")
@@ -181,9 +229,16 @@ export function pickLaunchContextForPacketSession(metadata: Record<string, unkno
     return out;
 }
 
-export function crmSnapshotFromLaunchFks(fks: LaunchFkStamp): Record<string, unknown> {
+/**
+ * Seed a new session's snapshot. `householdOnly` (Family Packet instance) omits `person_id` so the
+ * FIRST recipient link to launch the shared session does not pin the participant for the rest.
+ */
+export function crmSnapshotFromLaunchFks(
+    fks: LaunchFkStamp,
+    options?: { householdOnly?: boolean }
+): Record<string, unknown> {
     return {
-        person_id: fks.person_id,
+        ...(options?.householdOnly ? {} : { person_id: fks.person_id }),
         customer_id: fks.customer_id,
         customer_member_id: fks.customer_member_id,
         opportunity_id: fks.opportunity_id,
@@ -256,7 +311,7 @@ export async function ensurePacketSessionForPublicLink(
     }
 
     const launch_context = pickLaunchContextForPacketSession(linkMetadata);
-    const crm_snapshot = crmSnapshotFromLaunchFks(launchFks);
+    const crm_snapshot = crmSnapshotFromLaunchFks(launchFks, { householdOnly: Boolean(packetInstanceId) });
 
     const { data: insertedSess, error: insErr } = await supabase
         .from("form_packet_sessions")

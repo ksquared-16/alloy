@@ -20,7 +20,7 @@ import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { stampFormContextFromLinkMetadata } from "@/lib/forms/formContextMode";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
-import { mergeLaunchFksPreferringSessionCrmSnapshot } from "@/lib/forms/packets/formPacketService";
+import { linkNamesRecipientPerson, resolveParticipantFksForPacketDraft } from "@/lib/forms/packets/formPacketService";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 
@@ -117,6 +117,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let packetSessionRow: { shared_values: unknown; crm_snapshot: unknown } | null = null;
+    // Participant attribution: on a Family Packet the resolving link owns WHO is answering, so a
+    // shared session's snapshot never overrides it. See resolveParticipantFksForPacketDraft.
+    const namesRecipient = linkNamesRecipientPerson(ctx.linkMetadata);
     if (ctx.packet) {
         const { data: psRow } = await supabase
             .from("form_packet_sessions")
@@ -131,7 +134,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             !Array.isArray(packetSessionRow.crm_snapshot)
                 ? (packetSessionRow.crm_snapshot as Record<string, unknown>)
                 : {};
-        launchFks = mergeLaunchFksPreferringSessionCrmSnapshot(launchFks, snap);
+        launchFks = resolveParticipantFksForPacketDraft({
+            launchFks,
+            crmSnapshot: snap,
+            linkNamesRecipient: namesRecipient,
+        });
     }
 
     let clientVals = (payload.values ?? {}) as Record<string, unknown>;
@@ -281,7 +288,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             status: "draft",
             payload: mergedPayload as unknown as Record<string, unknown>,
             created_via_public_link_id: ctx.linkId,
-            metadata: {},
+            // Provenance only — never a product-level distinction a consumer may branch on.
+            metadata: ctx.packet && namesRecipient && launchFks.person_id
+                ? { participant_attribution: { person_id: launchFks.person_id, source: "resolving_link" } }
+                : {},
             person_id: launchFks.person_id,
             customer_id: launchFks.customer_id,
             customer_member_id: launchFks.customer_member_id,
