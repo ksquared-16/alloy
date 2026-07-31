@@ -18,7 +18,7 @@ and three structural duplications remain.
 | Dimension | Score | Direction |
 | --- | --- | --- |
 | **Security** | 8.5 | ▲▲ from ~3 |
-| **Migration state** | 8.0 | ▲ (local); ⛔ blocked for promotion |
+| **Migration state** | 8.5 | ▲▲ local certified + staging promotion restored |
 | **Documentation** | 8.5 | ▲▲ |
 | **Testing** | 6.5 | ▲ |
 | **Architecture coherence** | 6.0 | ▲ |
@@ -51,16 +51,20 @@ callers — and still handed authorized callers a week-long credential minted
 before the check. If one existed, others may. The mitigation is inventories plus
 test-pinning, both now in place.
 
-## Migration state — 8.0 locally, blocked for promotion
+## Migration state — 8.5, promotion restored
 
 Four additive migrations, certified in three modes: clean replay of all 301 from
 scratch, upgrade replay, idempotent rerun. Schema and CHECK constraints verified
 against D3 in the resulting database. No drops, no destructive backfills, no
 one-way doors.
 
-**⛔ The blocker is not ours.** Staging carries a 28-migration Processing-Identity
-backlog with `db push` blocked by three orphan ledger versions. Nothing here
-promotes until that clears.
+**✅ Promotion unblocked 2026-07-31.** This section originally reported a
+28-migration backlog and three orphan ledger versions; that was inherited from a
+stale note (the backlog was applied 2026-07-27). The real blocker was one
+dashboard-minted orphan, now reconciled to its canonical repository twin. Repo
+and ledger agree at 298/298, `db push` reports "Remote database is up to date",
+and Conversation Platform Phase 0 remains deliberately unapplied and ready to
+promote on your authorization.
 
 ## Documentation — 8.5
 
@@ -147,7 +151,8 @@ progress, and this report does not read it that way.
 | # | Risk | Severity | Owner |
 | --- | --- | --- | --- |
 | 1 | Four send paths bypass eligibility | **High** once real opt-outs exist | Phase 1 |
-| 2 | Staging migration backlog blocks all promotion | **High** | outside this initiative |
+| 2 | ~~Staging migration backlog blocks all promotion~~ **CLEARED 2026-07-31** | — | resolved by the migration repair sprint |
+| 2b | Out-of-band migrations keep breaking the staging ledger (4 occurrences in 3 weeks) | **Medium** | `scripts/migration-preflight.mjs` + promotion controls |
 | 3 | Another "correct-looking but wrong" gate exists | **Medium** | inventories + test-pinning |
 | 4 | Scheduled sends have no lease → double-send | Medium at >1 worker | Phase 2 |
 | 5 | Preview ≠ send rendering | Medium | Phase 3 |
@@ -162,7 +167,7 @@ progress, and this report does not read it that way.
 **Build on it. Do not ship it yet.**
 
 Phase 0 did what it was scoped to do and stopped where it was told to. The result
-is a platform whose *foundation* is in good shape (security 8.5, migrations 8.0,
+is a platform whose *foundation* is in good shape (security 8.5, migrations 8.5,
 documentation 8.5) and whose *body* is barely begun (features 1.5, convergence
 4.5).
 

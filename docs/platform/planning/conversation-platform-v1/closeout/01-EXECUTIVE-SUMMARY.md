@@ -126,10 +126,13 @@ certified by clean replay, upgrade replay and idempotent rerun against a local
 stack. No column dropped, no row deleted, no one-way door. Rollback is reverting
 code; the schema can simply stay.
 
-**One caveat that is not ours.** Staging carries a 28-migration backlog from
-another initiative, with `db push` blocked by three orphan ledger versions. That
-must be resolved before anything here can be promoted. It does not block Phase 1
-development, only deployment.
+**The promotion caveat has been cleared.** This summary originally reported a
+28-migration backlog and three orphan ledger versions blocking `db push`. That
+figure was inherited from a stale note; the backlog had already been applied on
+2026-07-27. A repair sprint on 2026-07-31 found the real blocker was a single
+dashboard-minted orphan ledger version, reconciled it to its canonical
+repository twin, and restored promotion: repo and ledger now agree at 298/298
+and `db push` reports "Remote database is up to date". Staging is promotable.
 
 ## The one thing to hold onto
 

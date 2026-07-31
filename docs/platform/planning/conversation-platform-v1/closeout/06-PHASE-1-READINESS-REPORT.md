@@ -73,12 +73,25 @@ mandatory (D-3) — are literally Phase 1's opening work.
 
 ## 4. The one condition
 
-**Deployment, not development, is gated.**
+**RESOLVED 2026-07-31 — there is no longer a condition.**
 
-Staging carries a **28-migration Processing-Identity backlog** that is unapplied,
-and `db push` is blocked by **three orphan ledger versions**. Until that is
-resolved, the four Phase 0 migrations cannot be promoted, and therefore neither
-can any Phase 1 migration.
+This section originally reported a 28-migration Processing-Identity backlog and
+three orphan ledger versions. That was inherited from a 2026-07-26 note and was
+already stale: the backlog was applied on 2026-07-27.
+
+A dedicated repair sprint established the verified history and cleared the real
+blocker:
+
+| | |
+| --- | --- |
+| Earlier 28-migration backlog | already resolved 2026-07-27 |
+| Actual blocker | **one** dashboard-minted orphan, `20260730000602` |
+| Genuinely unrecorded | `20260730212000`, `20260730212100` (schema already applied out-of-band) |
+| Resolution | orphan reconciled to canonical twin `20260729120000`; both recorded |
+| Result | repo 298 = ledger 298; 0 orphans; 0 pending; `db push` → "Remote database is up to date" |
+
+Staging is promotable. Conversation Platform Phase 0 migrations remain
+deliberately unapplied and can be promoted whenever you authorize it.
 
 This is not Phase 0's debt and not Phase 1's. But it means:
 

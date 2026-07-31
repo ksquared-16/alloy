@@ -65,7 +65,7 @@ not a claim.**
 | Migrations | 4, replay-certified locally, **applied to nothing shared** |
 | Program completion | ~4% (Phase 0 was a security track, not platform delivery) |
 | Overall health | 6.5 / 10 — ready to build on, not ready to ship |
-| Phase 1 | **May begin.** Promotion blocked by a staging backlog that is not ours |
+| Phase 1 | **May begin.** Staging promotion blocker cleared 2026-07-31 |
 
 ## Earlier documents (superseded or supporting)
 

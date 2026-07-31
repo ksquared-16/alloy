@@ -109,10 +109,25 @@ photo write, which is intended and recorded in R-3.
 
 ### Pre-promotion gate
 
-Known blockers from prior sprints that are **not** Phase 0's but will affect a
-promotion window: a 28-migration Processing-Identity backlog is unapplied on
-staging and `db push` is blocked by 3 orphan ledger versions. Confirm that is
-resolved before applying anything here.
+**CLEARED 2026-07-31.** Staging is promotable.
+
+An earlier draft of this section reported a 28-migration Processing-Identity
+backlog and three orphan ledger versions. That was carried over from a note
+written on 2026-07-26 and was **already stale when written here**: the backlog
+was applied on 2026-07-27.
+
+The verified history, from the repair sprint that followed:
+
+- the 28-migration backlog had already been resolved on 2026-07-27
+- the actual blocker was **one** dashboard-minted orphan, `20260730000602`,
+  whose identical SQL was committed as `20260729120000` on an unmerged branch
+- two further migrations (`20260730212000`, `20260730212100`) were genuinely
+  unrecorded, though their schema was already applied out-of-band
+- the orphan was reconciled to its canonical repository twin, and staging
+  promotion was restored: repo and ledger now agree at 298/298, with
+  `supabase db push` reporting "Remote database is up to date"
+
+See `docs/platform/governance/migration-promotion-controls.md`.
 
 ## 5. Open decisions for Kelly
 
