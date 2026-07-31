@@ -112,3 +112,27 @@ only selects from it.
 `web/lib/lifecycle/loadRecordStatusVocabulary.ts` loads that catalog, carrying `metadata`
 through, and the bootstrap exposes it as `record_status_vocabulary`. The editors read it instead
 of the queue picker. The seed was not modified.
+
+
+---
+
+# Appendix — what the drafting-half counter does and does not see
+
+Certification G9 plants a pre-existing defect, saves successfully, and renders **no**
+remaining-issues notice. That is correct, and worth stating so it is not read as a bug.
+
+The planted defect is `movement_transition_not_found` — an **execution-graph** finding, raised by
+the publish-time graph validator. The drafting-half counter is built from **operating-contract**
+and **work-definition** findings, which are the ones the stage editor itself owns and can repair
+in place.
+
+That is D3's split working exactly as designed:
+
+- **drafting** sees the stage — what this editor can fix, so blocking on it is actionable
+- **publish** sees the whole graph — where cross-stage references resolve or do not
+
+G9 asserts both halves: the save lands (`http 200`) *and* the publish gate still refuses
+(`can_publish=false`). Nothing is hidden; the news simply arrives at the gate that can act on it.
+
+A future slice could widen the counter to include graph findings scoped to the stage being
+edited, which would make the middle state more informative without changing what blocks what.

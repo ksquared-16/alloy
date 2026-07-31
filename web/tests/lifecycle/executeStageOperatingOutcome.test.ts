@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { executeStageOperatingOutcome, STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { executeStageOperatingOutcome, rollbackStageOperatingOutcome, STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
 
@@ -381,5 +381,50 @@ describe("executeStageOperatingOutcome", () => {
             expect.objectContaining({ newStatusKey: "closed" }),
         );
         expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ stage_key: "closed_lost" }));
+    });
+});
+
+/**
+ * Compensation ordering.
+ *
+ * The inverses were captured in application order and replayed in reverse, but nothing asserted
+ * the reversal. Order is not cosmetic here: a later target's inverse can depend on state an
+ * earlier target's inverse restores. Replaying oldest-first would undo the foundation before the
+ * thing standing on it, and the failure would surface as corrupted state rather than as an error.
+ */
+describe("rollbackStageOperatingOutcome — inverses replay newest-first", () => {
+    it("runs the LAST applied inverse first and the first applied inverse last", async () => {
+        const order: string[] = [];
+        const undo = ["first", "second", "third"].map((name) => ({
+            target: { kind: "move_to_stage" as const },
+            run: vi.fn(async () => {
+                order.push(name);
+            }),
+        }));
+
+        const failures = await rollbackStageOperatingOutcome({ undo } as never);
+
+        expect(order).toEqual(["third", "second", "first"]);
+        expect(failures).toEqual([]);
+    });
+
+    it("keeps going after one inverse throws, and names every inverse that failed", async () => {
+        // A single un-revertible target must not strand the inverses behind it — and the caller
+        // needs the full list, because that is what turns "rolled back" into "partially committed".
+        const order: string[] = [];
+        const undo = [
+            { target: { kind: "update_family_case_status" as const }, run: vi.fn(async () => { order.push("a"); }) },
+            { target: { kind: "move_to_stage" as const }, run: vi.fn(async () => { throw new Error("restore denied"); }) },
+            { target: { kind: "mark_stage_work_complete" as const }, run: vi.fn(async () => { order.push("c"); }) },
+        ];
+
+        const failures = await rollbackStageOperatingOutcome({ undo } as never);
+
+        expect(order).toEqual(["c", "a"]);
+        expect(failures).toEqual(["move_to_stage: restore denied"]);
+    });
+
+    it("reports no failures when there is nothing to undo", async () => {
+        expect(await rollbackStageOperatingOutcome({ undo: [] } as never)).toEqual([]);
     });
 });

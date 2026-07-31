@@ -13,7 +13,11 @@ const AUTH_FILE = path.join(__dirname, ".auth", "operator.json");
 export default defineConfig({
     testDir: "./playwright",
     outputDir: "./evidence/.trace",
-    timeout: 60_000,
+    // 60s was a budget for a WARM dev server. A cold Turbopack compile of the admin routes alone
+    // can consume most of it, so tests were failing on compile latency after every one of their
+    // product assertions had already passed. This is an environment allowance, not a loosened
+    // assertion — nothing about what the specs prove changes.
+    timeout: Number(process.env.CERT_TIMEOUT_MS || 240_000),
     fullyParallel: false,
     reporter: [["list"], ["html", { outputFolder: "./evidence/report", open: "never" }]],
     use: {

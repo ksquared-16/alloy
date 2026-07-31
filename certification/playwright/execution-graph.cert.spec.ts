@@ -524,61 +524,115 @@ test("G10 a family actually moves Lead → Tour through the published transition
     expect(stageAfter).toBe("tour");
 });
 
-test("G11 an unresolvable outcome refuses BEFORE the first durable write — no torn state", async () => {
-    // Law 6. Plan-then-mutate: if any reference cannot resolve, nothing is written at all. The
-    // Firefly failure was the opposite — the status write landed and the stage move found nothing.
-    const [opp, work] = (
-        sql(`select o.id::text || '|' || t.id::text from opportunities o
-             join operational_tasks t on t.entity_id = o.id
-             where o.stage_key='tour' and t.status='open' order by o.created_at limit 1`) || "|"
-    ).split("|");
-    record(`G11 subject opportunity=${opp || "(none)"} work=${work || "(none)"}`);
-    test.skip(!opp || !work, "no open tour work to exercise");
+/** The configuration ledger as G11 found it, so G11b can prove execution did not move it. */
+let g11LedgerBefore = { revisions: -1, publications: -1 };
 
-    // Break the destination the tour outcome depends on, in the PUBLISHED projection.
+/** Every piece of durable state this execution could possibly touch, as one comparable string. */
+function durableState(oppId: string, workId: string): string {
+    return sql(`
+        select
+          coalesce((select stage_key || '/' || coalesce(status_key,'-') || '/' || coalesce(close_reason_key,'-')
+                    from opportunities where id='${oppId}'), 'missing')
+          || ' work=' || coalesce((select status || '/' || coalesce(metadata->>'outcome_key','-')
+                    || '/' || updated_at::text
+                    from operational_tasks where id='${workId}'), 'missing')
+          || ' activity=' || (select count(*) from activity_log where entity_id='${oppId}')
+          || ' members=' || coalesce((select string_agg(coalesce(outcome_status_key,'-') || ':' || coalesce(stage_key,'-'), ',' order by id)
+                    from opportunity_customer_members where opportunity_id='${oppId}'), '-')`);
+}
+
+test("G11 an unresolvable outcome refuses BEFORE the first durable write — no torn state", async () => {
+    // Law 6, the negative case. Plan-then-mutate: if any reference cannot resolve, NOTHING is
+    // written. The Firefly failure was the exact opposite — the status write landed, the stage
+    // move then found no transition, and durable state contradicted itself while the runtime
+    // reported no change.
     //
-    // This CANNOT be produced through the product any more: authoring refuses it and the publish
-    // gate refuses it. So the only way to reach the Firefly shape — a projection whose outcome
-    // names a transition that is not there — is to write the projection directly, through the
-    // guard's own capability token. The guard staying on for every other path is the point; this
-    // one statement is a deliberate, named simulation of drift that predates the guard.
+    // Install the invalid graph on LEAD, the stage where that failure actually happened.
+    //
+    // This shape cannot be produced through the product any more: authoring refuses it (G2) and
+    // the publish gate refuses it (G6). So the only route to it is a direct projection write
+    // through the guard's own capability token — a deliberate, named simulation of drift that
+    // predates the guard. The guard staying on for every other path is the whole point.
     sqlExec(`
         BEGIN;
         SELECT set_config('alloy.lifecycle_write', 'on', true);
         UPDATE departments SET metadata = jsonb_set(metadata,
-          '{lifecycle_builder_v1,processes,0,stages,1,stage_operating_plan_v1,outcome_rules,0,targets,0}',
-          '{"kind":"move_to_stage","transition_ref":"tour_to_nowhere"}'::jsonb)
+          '{lifecycle_builder_v1,processes,0,stages,0,stage_operating_plan_v1,outcome_rules,0,targets,0}',
+          '{"kind":"move_to_stage","transition_ref":"lead_to_nowhere"}'::jsonb)
         WHERE id='${DEPT}';
         COMMIT;`);
+    const projectedRule = sql(`select jsonb_extract_path_text(metadata,
+        'lifecycle_builder_v1','processes','0','stages','0','stage_operating_plan_v1','outcome_rules','0','targets','0','transition_ref')
+        from departments where id='${DEPT}'`);
+    record(`G11 published Lead rule now points at: ${projectedRule}`);
+    expect(projectedRule).toBe("lead_to_nowhere");
 
-    const before = sql(
-        `select stage_key || '|' || coalesce(status_key,'') from opportunities where id='${opp}'`,
-    );
-    const activityBefore = sql(`select count(*) from activity_log where entity_id='${opp}'`);
+    // A real family still sitting in Lead, with the open stage work an operator would complete.
+    const [opp, work] = (
+        sql(`select o.id::text || '|' || t.id::text from opportunities o
+             join operational_tasks t on t.entity_id = o.id
+             where o.stage_key='lead' and t.status='open' order by o.created_at limit 1`) || "|"
+    ).split("|");
+    record(`G11 subject opportunity=${opp || "(none)"} work=${work || "(none)"}`);
+    expect(opp).not.toBe("");
+    expect(work).not.toBe("");
+
+    const before = durableState(opp, work);
+    g11LedgerBefore = { revisions: revisionCount(), publications: publicationCount() };
+    record(`G11 BEFORE ${before} ledger=${g11LedgerBefore.revisions}/${g11LedgerBefore.publications}`);
 
     const res = await page.request.post("/api/admin/lifecycle-builder/complete-stage-work", {
         data: {
             department_id: DEPT,
-            stage_key: "tour",
+            stage_key: "lead",
             work_id: work,
-            outcome_key: "tour_completed",
+            outcome_key: "reached_family",
             subject: { opportunity_id: opp },
         },
     });
-    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
-    record(`G11 execute http=${res.status()} ok=${body.ok} message="${body.message ?? ""}"`);
-
-    const after = sql(
-        `select stage_key || '|' || coalesce(status_key,'') from opportunities where id='${opp}'`,
+    const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        changed?: boolean;
+        integrity_breach?: unknown;
+        transaction?: { outcome?: string };
+    };
+    record(
+        `G11 execute http=${res.status()} ok=${body.ok} changed=${body.changed} `
+        + `transaction=${body.transaction?.outcome ?? "-"} error="${(body.error ?? "").slice(0, 160)}"`,
     );
-    const activityAfter = sql(`select count(*) from activity_log where entity_id='${opp}'`);
-    record(`G11 record ${before} -> ${after}; activities ${activityBefore} -> ${activityAfter}`);
 
-    // It refused, and it refused cleanly.
-    expect(body.ok).not.toBe(true);
-    expect(after).toBe(before);
-    expect(activityAfter).toBe(activityBefore);
-    // The refusal explains itself in the operator's terms, not as a stack trace.
-    expect(body.message ?? "").toMatch(/cannot run/i);
+    const after = durableState(opp, work);
+    record(`G11 AFTER  ${after}`);
     await shot(page, "G11-refused-before-write");
+
+    // 1. It refused.
+    expect(body.ok).not.toBe(true);
+    expect(res.status()).toBeGreaterThanOrEqual(400);
+
+    // 2. Nothing durable moved — stage, canonical status, close reason, work state, activity
+    //    trace and per-child rows are all byte-identical.
+    expect(after).toBe(before);
+
+    // 3. No misleading completion event: the work is still open, with no completion stamp.
+    expect(after).toContain("work=open/-");
+
+    // 4. The refusal names the unresolved reference, in the operator's terms rather than a stack
+    //    trace, so the repair is obvious.
+    expect(body.error ?? "").toMatch(/cannot run/i);
+    expect(body.error ?? "").toContain("lead_to_nowhere");
+
+    // 5. And it does not claim a partial commit it did not make. `changed:false` is only honest
+    //    here BECAUSE nothing was written — assertion 2 is what earns it.
+    expect(body.changed).not.toBe(true);
+    expect(body.integrity_breach).toBeFalsy();
+});
+
+test("G11b the refusal disturbed no configuration revision or publication", async () => {
+    // A refusal that wrote and then reverted leaves the same RECORD state as one that never wrote.
+    // The configuration ledger is a second, independent witness: execution must not mint a
+    // revision or a publication, and the simulated drift above was not a publication act either.
+    record(`G11b after refusal: revisions=${revisionCount()} publications=${publicationCount()}`);
+    expect(revisionCount()).toBe(g11LedgerBefore.revisions);
+    expect(publicationCount()).toBe(g11LedgerBefore.publications);
 });
