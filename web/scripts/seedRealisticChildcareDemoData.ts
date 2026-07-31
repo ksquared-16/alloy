@@ -577,11 +577,30 @@ async function ensureDepartment(
     description: string | null,
     sortOrder: number
 ): Promise<string> {
-    const { data: existing } = await supabase.from("departments").select("id").eq("org_id", orgId).eq("key", key).maybeSingle();
+    const { data: existing } = await supabase
+        .from("departments")
+        .select("id, metadata")
+        .eq("org_id", orgId)
+        .eq("key", key)
+        .maybeSingle();
     const seedKey = `dept_seed:${key}`;
     const meta = demoSeedMetadata(seedKey);
     if ((existing as { id?: string } | null)?.id) {
-        const id = (existing as { id: string }).id;
+        const row = existing as { id: string; metadata?: unknown };
+        const id = row.id;
+
+        // Demo tooling INITIALIZES; it never replaces an established department.
+        //
+        // This previously wrote `metadata: meta` — a small marker object — over the whole column,
+        // destroying `lifecycle_builder_v1` and every process, stage and work view inside it. Same
+        // class of defect as the one fixed in applyVerticalBootstrap. Demo tooling must never be
+        // able to overwrite publication-owned configuration; existing keys win over seed markers.
+        const existingMeta =
+            row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as Record<string, unknown>)
+                : {};
+        const mergedMeta = { ...meta, ...existingMeta };
+
         const { error: upErr } = await supabase
             .from("departments")
             .update({
@@ -589,7 +608,7 @@ async function ensureDepartment(
                 description,
                 sort_order: sortOrder,
                 is_active: true,
-                metadata: meta,
+                metadata: mergedMeta,
             })
             .eq("id", id);
         if (upErr) throw new Error(`departments update ${key}: ${upErr.message}`);
