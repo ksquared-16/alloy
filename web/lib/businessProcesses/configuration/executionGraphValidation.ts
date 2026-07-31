@@ -37,6 +37,8 @@ export const TRANSITION_SELF_LOOP = "transition_self_loop" as const;
 export const MOVEMENT_TRANSITION_NOT_FOUND = "movement_transition_not_found" as const;
 export const MOVEMENT_TRANSITION_FOREIGN = "movement_transition_from_another_stage" as const;
 export const MOVEMENT_WITHOUT_TRANSITION = "movement_without_transition" as const;
+export const SPLIT_RULE_DESTINATION_UNKNOWN = "split_rule_destination_unknown" as const;
+export const SPLIT_RULE_STAGE_UNKNOWN = "split_rule_stage_unknown" as const;
 
 export type ExecutionGraphTransition = {
     transition_ref: string;
@@ -59,12 +61,27 @@ export type ExecutionGraphMovement = {
     stage_key_target: string | null;
 };
 
+/**
+ * A track split — `tracks_v1.split_rules[]`. Execution-critical: `resolveOutgoingProcessTransitions`
+ * derives transitions from these when a stage declares no `outgoing_transitions`, so a split rule
+ * pointing at a stage that does not exist is the same class of defect one level up. Nothing
+ * validated them before.
+ */
+export type ExecutionGraphSplit = {
+    rule_key: string;
+    from_stage_key: string;
+    outcome_label: string;
+    /** null is legitimate — "no movement, keep with the family". */
+    target_stage_key: string | null;
+};
+
 export type ExecutionGraph = {
     process_key: string;
     stage_keys: string[];
     stage_labels: Record<string, string>;
     transitions: ExecutionGraphTransition[];
     movements: ExecutionGraphMovement[];
+    splits: ExecutionGraphSplit[];
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -176,12 +193,31 @@ export function buildExecutionGraph(processRaw: unknown): ExecutionGraph {
         }
     }
 
+    // ── track split rules ────────────────────────────────────────────────────
+    const splits: ExecutionGraphSplit[] = [];
+    const tracks = isRecord(process.tracks_v1) ? process.tracks_v1 : null;
+    for (const rule of asArray(tracks?.split_rules).filter(isRecord)) {
+        const fromStage = str(rule.from_stage_key) ?? "";
+        const ruleKey =
+            str(rule.rule_key) ??
+            `${str(rule.from_track_key) ?? "track"} → ${str(rule.into_track_key) ?? "track"}`;
+        for (const outcome of asArray(rule.per_subject_outcomes).filter(isRecord)) {
+            splits.push({
+                rule_key: ruleKey,
+                from_stage_key: fromStage,
+                outcome_label: str(outcome.label) ?? humanize(str(outcome.outcome_key) ?? "outcome"),
+                target_stage_key: str(outcome.target_stage_key),
+            });
+        }
+    }
+
     return {
         process_key: str(process.key) ?? "",
         stage_keys,
         stage_labels,
         transitions,
         movements,
+        splits,
     };
 }
 
@@ -370,6 +406,36 @@ export function validateExecutionGraph(graph: ExecutionGraph): ExecutionGraphVal
                     transition_ref: m.transition_ref,
                     source: other.source_stage_key,
                 },
+            });
+        }
+    }
+
+    // ── track splits ─────────────────────────────────────────────────────────
+    for (const split of graph.splits) {
+        const where = `processes[${graph.process_key}].tracks_v1.split_rules[${split.rule_key}]`;
+
+        if (split.from_stage_key && !stages.has(split.from_stage_key)) {
+            errors.push({
+                code: SPLIT_RULE_STAGE_UNKNOWN,
+                path: where,
+                message:
+                    `The “${split.rule_key}” split starts at ` +
+                    `“${stageName(graph, split.from_stage_key)}”, but that stage is missing from ` +
+                    `this Business Process.`,
+                detail: { rule_key: split.rule_key, invalid_target: split.from_stage_key },
+            });
+        }
+
+        // A null target is a real choice — "no action, keep with the family".
+        if (split.target_stage_key && !stages.has(split.target_stage_key)) {
+            errors.push({
+                code: SPLIT_RULE_DESTINATION_UNKNOWN,
+                path: where,
+                message:
+                    `“${split.outcome_label}” in the “${split.rule_key}” split moves to ` +
+                    `“${stageName(graph, split.target_stage_key)}”, but that stage is missing from ` +
+                    `this Business Process.`,
+                detail: { rule_key: split.rule_key, invalid_target: split.target_stage_key },
             });
         }
     }

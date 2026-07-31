@@ -171,6 +171,57 @@ stage, with a resolvable destination, never every transition in the process.
 
 ---
 
+---
+
+## Browser certification — PARTIAL, and why
+
+Run against the isolated `alloy-cert` tenant, guard at `enforce`, shared Firefly untouched.
+Spec: `certification/playwright/execution-graph.cert.spec.ts`.
+Evidence: `certification/bp-config-integrity/evidence/G*.png` + `execution-graph.log`.
+
+**G1 — PASSED.** The pristine repaired seed validates with **zero errors** and publishes: revision 1,
+one publication act, projection updated. That is the first DONE-WHEN item, and the thing the seed
+repair existed to make true.
+
+**G2 — PASSED, and better than the spec expected.** Deleting `lead_to_tour` while outcome rules
+still reference it is refused **at authoring**, not deferred to publish. The editor names the
+dependency in operator language —
+
+> Selected transition is not a valid outgoing edge — repair it.
+> Outcome movement must reference a configured transition identity.
+
+— the save never reaches the server (asserted, not inferred), the draft revision does not move, and
+the projection still contains `lead_to_tour`. This is decision D3 acting at the point of authoring.
+
+**G3 onward — BLOCKED by a defect this run found.**
+
+`stageOperatingPlanEditorModel.getDraftPlan()` **throws** on any blocking validation issue, including
+ones the operator did not introduce. The seed's transitions carry `status_key` values (`open`,
+`closed`) that are not in their own stage's configured status vocabulary, so every Lead-stage edit —
+including an unrelated one — is un-saveable through the editor:
+
+> Status "open" is not a configured canonical status.
+
+Removing `status_key: "closed"` from the seed's three `*_to_closed` transitions moved the blocker to
+`open` rather than clearing it, which is the tell: **the shape is systemic, not a single bad value.**
+
+This is the same class the sprint exists to end — *"the current all-or-nothing 422 can freeze a
+legacy tenant out of editing entirely, which pushes operators onto exactly the unvalidated write
+paths that caused this defect"* — now found on a certified path, one level below the publish gate
+that D3 already fixed.
+
+**Two candidate repairs, deliberately not made at the end of a long session:**
+
+1. **The principled one:** `getDraftPlan()` must not throw on pre-existing issues. Blocking should
+   follow D3 — refuse what this edit *introduced*, warn about the rest. This changes the editor
+   model's save contract and deserves its own slice with its own tests.
+2. **The narrow one:** strip `status_key` from the seed's transitions entirely. That makes the seed
+   saveable but silently drops resulting-status behaviour from the reference tenant, and it treats
+   a systemic editor defect as a data problem.
+
+**Therefore: G3–G8 are written and unexecuted, and the positive execution scenario (author →
+publish → execute → family moves Lead → Tour) was never reached.** No claim is made about it.
+
 ## What is NOT done
 
 - **Browser certification of this family has not run.** The Stage editor vertical is certified

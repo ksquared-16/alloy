@@ -43,6 +43,7 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                 <button
                     type="button"
                     className="text-[10px] font-medium text-alloy-pine"
+                    data-testid="stage-transition-add"
                     onClick={() => {
                         const refs = new Set(transitions.map((transition) => transition.transition_ref));
                         let index = transitions.length;
@@ -66,6 +67,7 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                         key={`${transition.transition_ref}-${index}`}
                         className="grid gap-2 rounded border border-alloy-forge/10 p-2 md:grid-cols-5"
                         data-transition-ref={transition.transition_ref}
+                        data-testid={`stage-transition-row-${index}`}
                     >
                         <p className="text-[10px] font-medium text-alloy-midnight/60 md:col-span-5">
                             {stageLabel?.trim() || stageKey} → {destinationLabel}
@@ -74,6 +76,7 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                             <span className="block text-[9px] text-alloy-midnight/50">Label</span>
                             <input
                                 className="w-full rounded border border-alloy-forge/15 px-2 py-1 text-xs"
+                                data-testid={`stage-transition-label-${index}`}
                                 value={transition.label}
                                 onChange={(event) => {
                                     const next = [...transitions];
@@ -86,6 +89,7 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                             <span className="block text-[9px] text-alloy-midnight/50">Destination</span>
                             <select
                                 className="w-full rounded border border-alloy-forge/15 bg-white px-2 py-1 text-xs"
+                                data-testid={`stage-transition-destination-${index}`}
                                 value={transition.target_stage_key}
                                 onChange={(event) => {
                                     const next = [...transitions];
@@ -137,7 +141,12 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                                 />
                                 Available
                             </label>
-                            <button type="button" className="text-[10px] text-red-700" onClick={() => onChange(transitions.filter((_, row) => row !== index))}>
+                            <button
+                                type="button"
+                                className="text-[10px] text-red-700"
+                                data-testid={`stage-transition-remove-${index}`}
+                                onClick={() => onChange(transitions.filter((_, row) => row !== index))}
+                            >
                                 Remove
                             </button>
                         </div>

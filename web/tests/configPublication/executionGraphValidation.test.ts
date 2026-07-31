@@ -238,6 +238,50 @@ describe("execution graph — outcomes and automation", () => {
     });
 });
 
+describe("execution graph — track split rules", () => {
+    const withSplits = (perSubject: Record<string, unknown>[]) => ({
+        ...process([stage("lead", "Lead", leadPlan()), stage("tour", "Tour"), stage("waitlist", "Waitlist")]),
+        tracks_v1: {
+            version: 1,
+            tracks: [{ key: "family_track", label: "Family" }, { key: "child_track", label: "Child" }],
+            split_rules: [
+                {
+                    version: 1,
+                    from_track_key: "family_track",
+                    from_stage_key: "tour",
+                    into_track_key: "child_track",
+                    per_subject_outcomes: perSubject,
+                },
+            ],
+        },
+    });
+
+    it("accepts a split whose destinations all resolve, including an explicit no-move", () => {
+        const p = withSplits([
+            { outcome_key: "waitlist", label: "Waitlist", target_stage_key: "waitlist" },
+            // null is a real operator choice: keep the child with the family.
+            { outcome_key: "no_action", label: "No action", target_stage_key: null },
+        ]);
+        expect(validateProcessExecutionGraph(p).errors).toEqual([]);
+    });
+
+    it("blocks a split destination that does not exist", () => {
+        const p = withSplits([{ outcome_key: "x", label: "Enrolling", target_stage_key: "enrolling" }]);
+        const result = validateProcessExecutionGraph(p);
+        expect(result.errors.map((e) => e.code)).toContain("split_rule_destination_unknown");
+        expect(result.errors[0]!.message).toContain("Enrolling");
+    });
+
+    it("blocks a split that starts at a stage that does not exist", () => {
+        const p = withSplits([{ outcome_key: "x", label: "Waitlist", target_stage_key: "waitlist" }]);
+        (p as { tracks_v1: { split_rules: Record<string, unknown>[] } }).tracks_v1.split_rules[0]!.from_stage_key =
+            "ghost";
+        expect(validateProcessExecutionGraph(p).errors.map((e) => e.code)).toContain(
+            "split_rule_stage_unknown",
+        );
+    });
+});
+
 describe("selectable transitions — what the Move-through-transition control may offer", () => {
     const graph = buildExecutionGraph(
         process([
