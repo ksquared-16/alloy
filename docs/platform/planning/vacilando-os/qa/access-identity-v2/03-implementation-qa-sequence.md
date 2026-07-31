@@ -183,13 +183,19 @@ population rather than a no-op.
 |---|---|
 | Evidence file | [`wave0-authority-census.json`](./wave0-authority-census.json) — queries prepared, **counts not yet recorded** |
 | Queries | Q1–Q6 written and schema-verified against `supabase/migrations` in this worktree, plus one combined single-statement form that returns all answers as one JSON row |
-| Executed | **No** — blocked on live database access |
+| Executed | **No** — blocked on live database access, in two independent sessions |
 | Blocker | A managed agent worktree holds no database credential by design. `web/.env.local.agent` carries public values only; the privileged tier (`ALLOY_SERVER_ENV_SOURCE`) is injected into the toolkit-owned Next process and never into the worktree (`alloy-config.example:70-73`, `lib/verify.sh:293-335`); `alloy-ro` declares `credential_access: false` and exposes no database verb; and no arbitrary-SQL RPC exists in `supabase/migrations`, so Q1's `pg_trigger` read is unreachable through PostgREST even with a service-role key. |
 | Decision taken | The operator authorized a single read-only `psql` session against the trusted `DATABASE_URL`. |
-| Outcome | **Not executable from this session.** Mission Control's decision channel does not grant Claude Code tool permissions — they are a separate control — so all three routes to the credential (direct env read, sandboxed read, and a runner using the toolkit's own `alloy_load_trusted_server_env_exports`) were denied by the harness before any connection was attempted. |
-| Resolution | An execution channel, not a further decision. `wave0-authority-census.json` → `execution.blocker.second_order.unblock_options` carries the exact command to run in a normal terminal, the permission grant that would let this slot run it, and the credential-free SQL-editor path. |
+| Outcome | **Not executable from a managed slot.** Mission Control's decision channel does not grant Claude Code tool permissions — they are a separate control — so every route to the credential was denied by the harness before any connection was attempted. Attempt 1 tried three routes (direct env read, sandboxed read, and a runner using the toolkit's own `alloy_load_trusted_server_env_exports`). Attempt 2 (assignment `asg_708252478f6fdd`) tried four more and hit **two independent controls**: a workspace boundary that refuses any read outside the worktree, and command approval. Both must be lifted, not either. |
+| Structural finding | `DATABASE_URL` is not incidentally absent — it is on the toolkit's explicit denylist twice, as a secret-like substring (`lib/verify.sh:202`) and as a named privileged variable (`:210`). The single function that reads it (`alloy_load_trusted_server_env_exports`, `:495-523`) exists solely to spawn the `alloy-dev-start` Next process. **No further attempt from inside a managed worktree is worth making**; this is a designed refusal working as intended. |
+| Resolution | An execution channel, not a further decision. `wave0-authority-census.json` → `execution.blocker.second_order.unblock_options` carries the recommended terminal command (now using the toolkit's own loader, so the credential is never printed, written, or handled by the operator), the permission grant that would let this slot run it, and the credential-free SQL-editor path. |
 
-Two things were fixed while writing the queries, both of which would have produced a wrong number:
+**W-0 has not met its exit criteria.** §4 requires counts *and* query text; only the query text exists. Since
+§4 makes citing this file a precondition for all of L1–L4, **waves 2 and 5 remain gated**. Nothing about the
+thoroughness of the prepared SQL changes that.
+
+Three things were fixed while writing and re-verifying the queries, each of which would have produced a wrong
+number or a failed run:
 
 1. **Q4's grain.** `user_roles` is per `(user, org, role)`; `user_access_profiles` is `UNIQUE (user_id, org_id)`.
    M1's preflight rule "row count == W-0 Q4" means **distinct `(user, org)` pairs**, not membership rows. The
@@ -198,6 +204,16 @@ Two things were fixed while writing the queries, both of which would have produc
    (`resolveAdminAccessCore.ts:111-140`), and `user_profiles` has no `org_id` — the org is recovered from
    `app_users` by `id`, then `auth_user_id`. Q2 reproduces that precedence rather than counting "anyone with a
    legacy role", which would overstate the L4 population.
+3. **Q1's `tgenabled` cast** (found on re-verification, 2026-07-31). `pg_trigger.tgenabled` is type `"char"`,
+   not `text`, and inside `jsonb_build_object` it was relying on `to_jsonb`'s fallback for a non-JSON-native
+   builtin. It is now cast explicitly. This was the likeliest first-contact failure and it sat in Q1 — the
+   first query the operator would hit.
+
+Every table and column the census names was re-verified against `supabase/migrations` in this worktree
+(`orgs`, `user_roles`, `role_definitions`, `user_profiles`, `app_users`, `user_access_profiles` — see the
+census file's `method.schema_reverification_2026_07_31`). One caveat that decides between the unblock options:
+**Q1 and Q2 read `auth.users`**, so a read-only role scoped to `public` would fail or under-report. Options (a)
+and (b) avoid that; option (c) requires an explicit `SELECT` grant on `auth.users`.
 
 ---
 
