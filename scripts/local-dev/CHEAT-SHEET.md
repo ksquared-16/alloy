@@ -9,6 +9,8 @@ source ~/bin/alloy-dev/shell-aliases.sh   # awt / devup / astatus / ahealth
 # Read-only orientation
 alloy-audit
 alloy-health
+alloy-engineering-doctor          # Engineering Health (disk/Docker/caches/worktrees)
+alloy-engineering-doctor --json
 alloy-ai-health
 alloy-agent-status
 alloy-clean report

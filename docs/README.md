@@ -147,6 +147,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Documentation rules | `platform/governance/documentation-governance.md` |
 | Agent repo boundaries | `platform/governance/agent-repo-boundaries.md` |
 | **Managed sprint operations** | `platform/governance/managed-sprint-operations.md` |
+| Engineering Health (disk/Docker/caches) | `platform/governance/engineering-health.md` |
 | Workspace orchestration | `platform/governance/workspace-orchestration.md` |
 | API contracts | `platform/governance/api-contracts.md` |
 | **API documentation (full inventory)** | `api/README.md` — per-domain reference + generated route index + audit |

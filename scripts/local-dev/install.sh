@@ -50,6 +50,7 @@ COMMANDS=(
   alloy-worker-resume
   alloy-worker-doctor
   alloy-docker-doctor
+  alloy-engineering-doctor
   alloy-db-reset
   alloy-sprint-finish
   alloy-initiative-review

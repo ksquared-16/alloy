@@ -514,6 +514,8 @@ async function resourcesCached() {
  */
 const MEMORY_POLICY = { auto_reclaim: true, swap_pct: 0.85, cooldown_ms: 180000 };
 let lastReclaim = { servers: [], reclaimable_mb: 0, idle_count: 0, heavy_active: [], total_server_mb: 0, pressure: null, auto_actions: [] };
+/** Cached Engineering Health summary (background refresh; never auto-executes cleanup). */
+let lastEngHealth = null;
 const reclaimCooldown = new Map(); // slot -> last-reclaim ts
 
 async function refreshMemory({ act = false } = {}) {
@@ -1057,6 +1059,26 @@ export function createVacilandoServer() {
     if (path === "/api/disk") {
       return sendJson(res, 200, await refreshDisk());
     }
+    if (path === "/api/engineering-health") {
+      try {
+        const { runEngineeringHealth } = await import("./engineering-health/index.mjs");
+        const refresh = url.searchParams.get("refresh") === "1";
+        const deep = url.searchParams.get("deep") === "1";
+        const report = await runEngineeringHealth({ refresh, deep });
+        lastEngHealth = {
+          overall: report.score?.overall,
+          subsystems: report.score?.subsystems,
+          potential_recovery_gb: report.potential_recovery_gb,
+          warnings: (report.findings || []).filter((f) => f.severity !== "healthy").map((f) => ({
+            id: f.id, severity: f.severity, title: f.title,
+          })),
+          generated_at: report.generated_at,
+        };
+        return sendJson(res, 200, { ok: true, summary: lastEngHealth, report });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: String(e.message || e) });
+      }
+    }
     if (path === "/api/dashboard") {
       // Dashboard must never block on the provider probe or the resource scan.
       const [snap, resrcC] = await Promise.all([snapshotSafe(), swr("resources", () => collectResources(), { ttlMs: 15000 })]);
@@ -1094,6 +1116,7 @@ export function createVacilandoServer() {
         provider_runtime,
         memory: lastReclaim,
         disk: lastDiskGc,
+        engineering_health: lastEngHealth,
         scheduler: sched,
         throughput,
         operator_load,
@@ -1383,6 +1406,25 @@ export function createVacilandoServer() {
   // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
   const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
   diskTimer.unref?.();
+  // Engineering Health: observe/evaluate only (never executes cleanup). Refresh every 30 min.
+  const engHealthTick = () => {
+    import("./engineering-health/index.mjs").then(({ runEngineeringHealth }) =>
+      runEngineeringHealth({ deep: false, refresh: false }).then((report) => {
+        lastEngHealth = {
+          overall: report.score?.overall,
+          potential_recovery_gb: report.potential_recovery_gb,
+          critical: (report.findings || []).filter((f) => f.severity === "critical").length,
+          warning: (report.findings || []).filter((f) => f.severity === "warning").length,
+          generated_at: report.generated_at,
+        };
+        if (lastEngHealth.critical > 0) {
+          console.warn(`[engineering-health] CRITICAL findings=${lastEngHealth.critical} overall=${lastEngHealth.overall}% — run alloy-engineering-doctor`);
+        }
+      })).catch(() => {});
+  };
+  const engHealthTimer = setInterval(engHealthTick, 30 * 60 * 1000);
+  engHealthTimer.unref?.();
+  setTimeout(engHealthTick, 45_000).unref?.();
   // Autonomous conductor: advance handed-off objectives without the operator.
   const condTimer = setInterval(() => { try { conductorTick(); } catch {} }, 15000);
   condTimer.unref?.();
@@ -1472,6 +1514,7 @@ export function createVacilandoServer() {
       clearInterval(timer);
       clearInterval(memTimer);
       clearInterval(diskTimer);
+      clearInterval(engHealthTimer);
       clearInterval(condTimer);
       for (const t of backgroundTimers) clearInterval(t);
       server.close();
