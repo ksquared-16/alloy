@@ -76,6 +76,35 @@ Columns that matter to this architecture:
 not — it is domain vocabulary, and constraining it would make tenant extension a
 migration.
 
+### Recipient kinds — DECIDED 2026-07-31, **[PLANNED]** implementation in Phase 1
+
+The runtime recognises exactly **three** recipient kinds. There is no fourth and
+no untyped fallback.
+
+| Kind | Resolves to | Audience | Consent semantics |
+| --- | --- | --- | --- |
+| **Person** | canonical Person → channel identity | external | full — preferences + eligibility |
+| **Internal** | Alloy User/Person identity | `internal` | external consent N/A; permissions, org scope, audit and identity validity still apply |
+| **External operational** | bounded recipient object (name + address/phone) | external-operational | `operational` \| `transactional` only; **marketing prohibited**; purpose is **server-owned** |
+
+Canonical external path:
+
+```
+Person → channel identity → communication preferences → eligibility
+       → conversation/thread → message
+```
+
+**A free-text address or phone number alone is never sufficient for family or
+customer communication.** External-operational exists for vendors, contractors,
+inspectors, attorneys and other-org contacts — it requires an explicit recipient
+type, a recorded organization and authorizing actor, and an audited reason.
+
+**Invariant: no silent fallback.** A failed Person resolution must fail the send.
+It may never downgrade to external-operational. That downgrade would recreate the
+exact defect Phase 0 closed — a recipient no consent check can evaluate. An
+external-operational recipient may later be *promoted* to a canonical Person, but
+never auto-created to rescue a failed send.
+
 ### Participants
 
 Three separate tables, and they are **not** the same concept:
@@ -293,3 +322,6 @@ trustworthy; the *same shape* read out of storage or metadata is not. Trust is b
 6. The document row is authority; the storage path is not.
 7. Authorization precedes minting of any credential.
 8. BOS and Current Work never send.
+9. A recipient is one of exactly three typed kinds. A failed Person resolution
+   fails the send — it never silently downgrades to a free-text or
+   external-operational recipient.

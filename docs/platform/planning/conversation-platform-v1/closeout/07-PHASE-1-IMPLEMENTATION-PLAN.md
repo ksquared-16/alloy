@@ -56,7 +56,7 @@ classification.
 | Pure versioned evaluator | ✅ exists | bump `ELIGIBILITY_POLICY_VERSION` on any policy change |
 | Cross-runtime contracts | ✅ exists | any new vocabulary goes here, not in either codebase |
 | Behavioral harness | ✅ exists | commit 0 |
-| **Staging migration backlog** | ⛔ **blocked** | development unaffected; **promotion blocked** |
+| **Staging migration ledger** | ✅ **repaired 2026-07-31** | 298/298, 0 orphans, 0 pending; promotion restored |
 
 ## 4. Work order
 
@@ -70,12 +70,61 @@ Re-point the four bypassing paths. Then add the structural test:
 *Why first:* every later statement about eligibility is qualified until this
 lands.
 
-*Risk:* one of the four is `/api/admin/communications/send`, which accepts a
-free-text `to` with no `recipient_person_id`. It cannot be gated as-is — there is
-no person whose consent could be checked. **This forces a product decision:**
-either the route requires a resolvable identity, or it is restricted to
-internal/operational audiences. Surface this in week 1; do not let it be
-discovered late.
+*The free-text recipient question this step raised is now **DECIDED** — see §4a.
+Implement the recipient model before re-pointing `/communications/send`.*
+
+### Step 1a — Canonical recipient modelling *(decided 2026-07-31)*
+
+`/api/admin/communications/send` accepted a free-text `to` with no
+`recipient_person_id`, so there was no person whose consent could be checked.
+That is why the old gate was inert by construction. The resolution is not "allow
+it" or "ban it" — it is to make the recipient an explicit, typed thing.
+
+**Three recipient kinds. There is no fourth, and no untyped fallback.**
+
+**1 · Person recipient — the normal path for family/customer communication.**
+
+```
+Person → channel identity → communication preferences → eligibility
+       → conversation/thread → message
+```
+
+A bare address or phone number is **not** sufficient for family or customer
+communication. Full consent semantics apply.
+
+**2 · Internal recipient.** Resolves to an Alloy User/Person identity and sets
+`audience = internal`. External consent semantics do not apply — but permissions,
+org scope, audit, and identity validity all do. Internal is not a bypass.
+
+**3 · External operational recipient** — bounded, explicit, non-Person.
+
+For vendors, contractors, inspectors, attorneys, professional service providers,
+and contacts at other organizations who are not canonical People. Requires
+**all** of:
+
+| Requirement | Rule |
+| --- | --- |
+| Recipient type | explicit `external_operational_recipient` — never inferred |
+| Audience | explicit external-operational |
+| Category | `operational` or `transactional` **only** |
+| Marketing | **prohibited** |
+| Purpose | **server-owned** — never client-supplied |
+| Recipient object | bounded: name + address/phone captured together |
+| Attribution | organization and authorizing actor recorded |
+| Reason | audited reason for use |
+| Fallback | **none** — a failed Person resolution must fail, never silently downgrade |
+| Semantics | no household or customer semantics attach |
+| Exposure | no arbitrary public API send |
+| Lifecycle | promotable to a canonical Person later where appropriate |
+
+**The load-bearing rule is "no silent fallback."** If Person resolution fails,
+the send fails. A downgrade path would recreate exactly the hole Phase 0 closed —
+an unresolvable recipient that no consent check can evaluate.
+
+*Acceptance for this step:* a send with an unresolvable Person and no explicit
+external-operational recipient **fails**; an external-operational send with
+`category = marketing` **fails**; a client-supplied `purpose` on an
+external-operational send is **ignored or rejected**, never honoured.
 
 ### Step 2 — Mandatory classification *(removes D-3, R-7)*
 
