@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
-import { resolveLatestProfilePhotoDocumentForPerson } from "@/lib/admin/person/resolvePersonProfilePhotoDocument";
+import { findCanonicalProfilePhotoDocumentForPerson } from "@/lib/admin/person/resolvePersonProfilePhotoDocument";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertNoCredentialInMetadata, classifyLegacyPhotoUrl } from "@/lib/documents/profilePhotoPresentation";
 import {
@@ -70,10 +70,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const person = await loadPerson(supabase, ctx.orgId, id);
     if (!person) return NextResponse.json({ error: "Person not found" }, { status: 404 });
 
-    const resolved = await resolveLatestProfilePhotoDocumentForPerson(supabase, ctx.orgId, id);
-    if (resolved) {
-        // Authorization BEFORE the document or its URL is disclosed. Previously
-        // any org member reaching this route received the photo.
+    const doc = await findCanonicalProfilePhotoDocumentForPerson(supabase, ctx.orgId, id);
+    if (doc) {
+        // Authorization BEFORE the URL is MINTED, not merely before it is
+        // returned. Previously the helper signed a seven-day URL first and the
+        // access check ran afterwards, so a credential existed regardless of the
+        // decision and, when allowed, long outlived it.
         const access = await getAdminAccessContextCached();
         const decision = await assertDocumentAccess({
             supabase,
@@ -86,14 +88,21 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
                 roleKeys: access.ok ? access.roleKeys : [],
                 permissionKeys: access.ok ? access.permissionKeys : [],
             },
-            documentId: resolved.documentId,
+            documentId: doc.id,
             operation: "preview",
         });
         if (decision.outcome !== "allowed") {
             const http = documentAccessHttp(decision);
             return NextResponse.json(http.body, { status: http.status });
         }
-        return NextResponse.json({ photoUrl: resolved.photoUrl, documentId: resolved.documentId });
+
+        const { data: signed, error } = await supabase.storage
+            .from(doc.bucket as string)
+            .createSignedUrl(doc.storage_path as string, SIGNED_URL_EXPIRES_IN_SECONDS);
+        if (error || !signed?.signedUrl) {
+            return NextResponse.json({ photoUrl: null, documentId: doc.id });
+        }
+        return NextResponse.json({ photoUrl: signed.signedUrl, documentId: doc.id });
     }
 
     // No documents-backed photo — fall back to whatever URL (if any) metadata already carries.
