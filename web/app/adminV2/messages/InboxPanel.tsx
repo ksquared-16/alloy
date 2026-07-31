@@ -42,6 +42,7 @@ import type {
     InboxThreadsListResponse,
 } from "@/lib/communications/inboxThreadTypes";
 import { INBOX_FOLDERS } from "@/lib/communications/inboxThreadTypes";
+import { WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 
 const FOLDER_LABELS: Record<InboxFolder, string> = {
     inbox: "Inbox",
@@ -607,7 +608,7 @@ export default function InboxPanel({
     const listColumn = (
         <section
             className={`flex min-h-0 flex-col bg-white/90 ${
-                isModal ? "w-[min(18rem,52%)] shrink-0 border-r border-alloy-stone/12" : "w-[min(22rem,34vw)] shrink-0 border-r border-alloy-stone/12"
+                isModal ? `w-[min(18rem,52%)] shrink-0 ${WS_QUEUE_RAIL}` : `w-[min(22rem,34vw)] shrink-0 ${WS_QUEUE_RAIL}`
             }`}
         >
             {!isModal ? (

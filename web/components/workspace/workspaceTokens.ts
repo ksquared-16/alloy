@@ -32,7 +32,12 @@ export const WS_DIVIDER_FILL = "bg-alloy-stone/22";
 export const WS_NAV_CONTENT_DIVIDER = "";
 
 /** Top control band → workspace body (full inner width). */
-export const WS_CONTROL_BAND_DIVIDER = "border-b border-alloy-stone/30";
+/**
+ * Full-width rule closing the control band (header → mode tabs → section tabs). This is THE line
+ * under Overview/Queue: it already spans the entire shell, so definition belongs here rather than on
+ * the nav row, which would draw a second line immediately above it.
+ */
+export const WS_CONTROL_BAND_DIVIDER = "border-b border-alloy-midnight/25";
 /** Title bar: white, subtle bottom border, midnight text (never navy). */
 export const WS_TITLEBAR = "border-b border-alloy-stone/15 bg-white";
 
@@ -135,10 +140,15 @@ export const WS_FIELD_CANVAS =
  * than floating above the body — the section tabs and the metrics strip previously ran straight into
  * the canvas with nothing separating them.
  */
-export const WS_SHELL_NAV_CLASS = "border-b border-alloy-stone/22 bg-white px-4 pb-3 pt-1";
+export const WS_SHELL_NAV_CLASS = "bg-white px-4 pb-3 pt-1";
 
 /** Queue / list rail — white column with visible vertical stone separator. */
-export const WS_QUEUE_RAIL = "border-r border-alloy-stone/30 bg-white";
+/**
+ * Queue rail — the vertical counterpart to WS_CONTROL_BAND_DIVIDER. Same weight and colour so the
+ * header rule and the rail read as one continuous frame around the workspace rather than two
+ * unrelated hairlines.
+ */
+export const WS_QUEUE_RAIL = "border-r border-alloy-midnight/25 bg-white";
 
 /** Primary working canvas inside a module workspace. */
 export const WS_CANVAS = "bg-white shadow-[0_1px_6px_rgba(24,39,58,0.06)]";

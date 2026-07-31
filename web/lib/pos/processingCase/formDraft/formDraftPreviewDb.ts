@@ -9,6 +9,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { StoredFormDraftPreview } from "./types";
+import { sanitizeForJsonb } from "./sanitizeForJsonb";
 
 export function stampFormDraftPreview(draft: StoredFormDraftPreview, now: Date = new Date()): StoredFormDraftPreview {
     return { ...draft, generated_at: now.toISOString() };
@@ -27,7 +28,12 @@ export async function dbStoreFormDraftPreview(
     if (readErr) throw new Error(readErr.message);
 
     const baseMeta = (existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
-    const metadata = { ...baseMeta, form_draft_preview: args.draft };
+    // Postgres jsonb rejects NULs and lone surrogates, and some PDFs carry them in their text layer.
+    // Left unsanitized, ONE odd character fails the entire import with an opaque
+    // "unsupported Unicode escape sequence" — which is exactly how the Sunscreen Permission Form
+    // died. Cleaned here because every draft-producing path converges on this write.
+    const safeDraft = sanitizeForJsonb(args.draft);
+    const metadata = { ...baseMeta, form_draft_preview: safeDraft };
 
     const { error } = await supabase
         .from("processing_cases")
@@ -36,7 +42,7 @@ export async function dbStoreFormDraftPreview(
         .eq("id", args.caseId);
     if (error) throw new Error(error.message);
 
-    return args.draft;
+    return safeDraft;
 }
 
 /**
@@ -64,7 +70,9 @@ export async function dbRecordFormDraftDetection(
         .eq("id", args.caseId)
         .maybeSingle();
     const baseMeta = (existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {};
-    const metadata = { ...baseMeta, form_draft_detection: args.record };
+    // Same jsonb column, same hazard: stage details carry extraction messages that may echo document
+    // bytes, so a failure report must not itself become an unwritable row.
+    const metadata = { ...baseMeta, form_draft_detection: sanitizeForJsonb(args.record) };
     await supabase.from("processing_cases").update({ metadata }).eq("org_id", args.orgId).eq("id", args.caseId);
 }
 

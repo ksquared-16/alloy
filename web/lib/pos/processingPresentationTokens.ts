@@ -30,10 +30,10 @@ export const PROCESSING_METADATA = `text-[10px] leading-snug ${WS_TEXT_SECONDARY
 
 /** Queue row title — compact scan density; kept a touch smaller than the folder-category
  *  header so the categories read as headers and rows don't overpower them. */
-export const PROCESSING_QUEUE_ROW_TITLE = `text-[11.5px] font-medium leading-snug ${WS_TEXT_PRIMARY}`;
+export const PROCESSING_QUEUE_ROW_TITLE = `text-[12.5px] font-medium leading-snug ${WS_TEXT_PRIMARY}`;
 
 /** Queue row metadata — supporting lines beneath title. */
-export const PROCESSING_QUEUE_METADATA = `text-[10.5px] leading-snug ${WS_TEXT_SECONDARY}`;
+export const PROCESSING_QUEUE_METADATA = `text-[11.5px] leading-snug ${WS_TEXT_SECONDARY}`;
 
 /** Field labels in forms — secondary hierarchy (uppercase band). */
 export const PROCESSING_FIELD_LABEL =
