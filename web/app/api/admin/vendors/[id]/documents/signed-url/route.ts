@@ -68,11 +68,15 @@ export async function GET(
         const decision = await assertDocumentAccess({
             supabase: adminSb,
             actor: {
-                ok: ctx.ok,
-                failureStatus: ctx.ok ? undefined : ctx.status,
-                userId: ctx.ok ? ctx.userId : undefined,
-                orgId: ctx.ok ? ctx.orgId : undefined,
-                role: ctx.ok ? ctx.role : undefined,
+                // `ctx` is already narrowed to the authenticated variant by the
+                // `!ctx.ok` guard above, so the failure branches here are
+                // unreachable. Writing them as ternaries anyway made the false
+                // branch `never` and broke the production typecheck.
+                ok: true,
+                failureStatus: undefined,
+                userId: ctx.userId,
+                orgId: ctx.orgId,
+                role: ctx.role,
                 roleKeys: access.ok ? access.roleKeys : [],
                 permissionKeys: access.ok ? access.permissionKeys : [],
             },
