@@ -1,0 +1,73 @@
+[32m✓[0m App already serving at http://localhost:3011
+[32m✓[0m Communications mocked (no real email/SMS; local-delivery only)
+  Authenticating operator + running certification specs…
+
+Running 18 tests using 1 worker
+
+[certify] captured session server-valid on cold load: true (url=http://localhost:3011/workspace)
+  ✓   1 [setup] › playwright/auth.setup.ts:18:6 › authenticate seeded operator (35.3s)
+[graph] G1 validate can_publish=true errors=0
+[graph] G1 publish http=200 revision=1
+  ✓   2 [certify] › playwright/execution-graph.cert.spec.ts:163:5 › G1 the pristine representative seed validates and publishes (1.4m)
+[graph] G2 authoring issues: Selected transition is not a valid outgoing edge — repair it. Selected transition is not a valid outgoing edge — repair it. Outcome movement must reference a configured transition identity. Outcome movement must reference a configured transition identity.
+[graph] G2 refused at: server (http 422); draft 1 -> 1
+  ✓   3 [certify] › playwright/execution-graph.cert.spec.ts:181:5 › G2 deleting a referenced transition is blocked AT AUTHORING, with the dependency named (25.7s)
+[graph] G3 save http=200 publication_required=true
+[graph] G3 draft 2 -> 3; projection unchanged=true
+[graph] G3 reload labels: Continue to Tour | on | Close as Lost | on | Lead → Placement / Decision | on
+[graph] G3 reload: authored transition survived
+  ✓   4 [certify] › playwright/execution-graph.cert.spec.ts:228:5 › G3 authoring a transition writes the draft only, and survives reload (43.1s)
+[graph] G4 lead declares: lead_to_tour, lead_to_closed, lead_transition_3
+[graph] G4 no outcome behaviour panel open on this stage — selector not rendered
+  ✓   5 [certify] › playwright/execution-graph.cert.spec.ts:280:5 › G4 the transition selector offers only this stage's outgoing transitions (20.4s)
+[graph] G5 validate can_publish=true errors=0
+[graph] G5 publish http=200 revision=2
+[graph] G5 revisions=2 publications=2
+  ✓   6 [certify] › playwright/execution-graph.cert.spec.ts:301:5 › G5 a valid graph publishes: one revision, one publication act, runtime updates (33.9s)
+[graph] G6 missing destination stage: codes=transition_destination_unknown
+[graph] G6 missing destination stage: publish http=422 first="“Continue to Tour” points to “Ghost Stage”, but the Ghost Stage stage is missing."
+  ✓   7 [certify] › playwright/execution-graph.cert.spec.ts:361:9 › G6 blocked publish — missing destination stage (6.2s)
+[graph] G6 transition declared on the wrong source stage: codes=transition_not_outgoing_from_source,transition_self_loop,movement_transition_from_another_stage,movement_transition_from_another_stage
+[graph] G6 transition declared on the wrong source stage: publish http=422 first="“Continue to Tour” is listed on “New Lead” but leaves from “Tour”. Move it to “Tour” so it can be used there."
+  ✓   8 [certify] › playwright/execution-graph.cert.spec.ts:361:9 › G6 blocked publish — transition declared on the wrong source stage (5.2s)
+[graph] G6 self-loop: codes=transition_self_loop
+[graph] G6 self-loop: publish http=422 first="“Continue to Tour” both leaves from and moves to “New Lead”. A stage cannot move to itself."
+  ✓   9 [certify] › playwright/execution-graph.cert.spec.ts:361:9 › G6 blocked publish — self-loop (16.1s)
+[graph] G6 duplicate transition identity: codes=duplicate_transition_identity
+[graph] G6 duplicate transition identity: publish http=422 first="2 transitions share the identity “lead_to_tour” (Continue to Tour, Continue to Tour). Only the first would ever be used."
+  ✓  10 [certify] › playwright/execution-graph.cert.spec.ts:361:9 › G6 blocked publish — duplicate transition identity (8.9s)
+[graph] G6 outcome references a transition that does not exist: codes=movement_transition_not_found
+[graph] G6 outcome references a transition that does not exist: publish http=422 first="“Reached Family” is set to move through “never_configured”, but that transition does not exist. Create it on “New Lead”,"
+  ✓  11 [certify] › playwright/execution-graph.cert.spec.ts:361:9 › G6 blocked publish — outcome references a transition that does not exist (5.3s)
+[graph] G6 outcome references another stage's transition: codes=movement_transition_from_another_stage
+[graph] G6 outcome references another stage's transition: publish http=422 first="“Reached Family” on “New Lead” is set to move through “Continue to Decision”, which leaves from “Tour”. An outcome can o"
+  ✓  12 [certify] › playwright/execution-graph.cert.spec.ts:361:9 › G6 blocked publish — outcome references another stage's transition (6.0s)
+[graph] G7 errors= can_publish=true
+  ✓  13 [certify] › playwright/execution-graph.cert.spec.ts:392:5 › G7 a legacy bare stage_key move warns, and is never preferred over a transition_ref (2.3s)
+[graph] G8 lifecycle-builder PATCHes observed: 0
+  ✓  14 [certify] › playwright/execution-graph.cert.spec.ts:412:5 › G8 the certified path never used the projection-writing lifecycle-builder PATCH (119ms)
+[graph] G9 save http=200 — the request was actually sent
+[graph] G9 no remaining-issues notice rendered
+[graph] G9 publish gate still refuses: can_publish=false
+  ✓  15 [certify] › playwright/execution-graph.cert.spec.ts:429:5 › G9 a stage carrying a PRE-EXISTING defect can still be saved — the D3 drafting half (34.2s)
+[graph] G10 draft is publishable: can_publish=true errors=0
+[graph] G10 published Lead movement targets: lead_to_tour,lead_to_tour,lead_to_closed
+[graph] G10 subject opportunity=00000000-0000-4000-8000-400000000001 work=00000000-0000-4000-8000-900000000001
+[graph] G10 execute http=200 ok=true message=
+[graph] G10 opportunity stage lead -> tour
+  ✓  16 [certify] › playwright/execution-graph.cert.spec.ts:478:5 › G10 a family actually moves Lead → Tour through the published transition (12.0s)
+[graph] G11 published Lead rule now points at: lead_to_nowhere
+[graph] G11 subject opportunity=00000000-0000-4000-8000-400000000002 work=00000000-0000-4000-8000-900000000002
+[graph] G11 BEFORE lead/open/- work=open/-/2026-07-31 22:27:04.840537+00 activity=0 members=-:- ledger=2/2
+[graph] G11 execute http=400 ok=undefined changed=false transaction=aborted error="This outcome cannot run: lead/reached_family_to_tour: Transition "lead_to_nowhere" is not configured on this stage."
+[graph] G11 AFTER  lead/open/- work=open/-/2026-07-31 22:27:04.840537+00 activity=0 members=-:-
+  ✓  17 [certify] › playwright/execution-graph.cert.spec.ts:544:5 › G11 an unresolvable outcome refuses BEFORE the first durable write — no torn state (6.0s)
+[graph] G11b after refusal: revisions=2 publications=2
+  ✓  18 [certify] › playwright/execution-graph.cert.spec.ts:631:5 › G11b the refusal disturbed no configuration revision or publication (2.3s)
+
+  Slow test file: [certify] › playwright/execution-graph.cert.spec.ts (5.2m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  18 passed (6.1m)
+[32m✓[0m Authentication established (reusable session captured)
+[32m✓[0m Runtime verification ready — evidence in certification/evidence/
+rc=0

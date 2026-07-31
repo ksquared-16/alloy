@@ -411,3 +411,53 @@ revision count holds. G2 records which layer refused rather than requiring a par
 
 `certification/alloy-certify` no longer calls raw `supabase db reset` — it routes through
 `alloy-db-reset --recover-docker`, and `verify` accepts `CERT_GREP` / `CERT_WORKERS`.
+
+
+---
+
+# Slice 7 — G11, and the execution-graph slice closed
+
+**Execution-graph certification is 17 / 17, `rc=0`.** Full result and evidence:
+`certification/evidence/EXECUTION-GRAPH-CERTIFICATION.md`; raw log
+`certification/evidence/execution-graph-certification-17of17.log`.
+
+## G11 — an invalid published graph mutates nothing
+
+The invalid graph is installed through the lifecycle guard's own capability token, because it can
+no longer be produced through the product (authoring refuses it, publish refuses it). Durable
+state before and after the execution attempt is byte-identical across stage, canonical status,
+close reason, work status, work outcome stamp, the work row's `updated_at`, the activity trace and
+every per-child member row. The response is `http 400 / transaction=aborted / changed=false`, and
+the error names `lead_to_nowhere` and the rule carrying it. G11b confirms the configuration ledger
+(`revisions=2 publications=2`) is untouched — the witness that distinguishes a preflight refusal
+from a write-then-rollback.
+
+## Compensation — cited, not duplicated
+
+Every claim in the compensation-truthfulness scenario was already unit/Postgres-proven except
+**newest-first inverse replay**, which was implemented but asserted nowhere. That is now three
+tests in `executeStageOperatingOutcome.test.ts`. Browser execution adds nothing here: reaching the
+scenario needs an injected mid-saga effect failure. The exact citations are tabulated in the
+certification evidence doc.
+
+This remains **saga compensation, not database transaction atomicity** — stated plainly there.
+
+## Corrections to earlier statements in this handoff
+
+- Slice 6 recorded G2 as refusing "server-side with a 422". It refuses at **either** layer
+  depending on editor dirty-state timing at click. Both refuse; nothing mutates. The spec now
+  records which fired instead of asserting one.
+- Slice 6 said G11's fix was "committed but unexercised". It is now exercised and passing.
+
+## Environment lessons that cost real time
+
+- **Never let two `supabase db reset` runs overlap.** Concurrent resets left the migration ledger
+  inconsistent (312 recorded rows against 300 files) with `business_process_drafts` /
+  `business_process_revisions` silently absent while `db reset` still reported success. Always
+  quiesce first and verify the specific tables after: `select to_regclass(...)`.
+- `supabase db reset` health-checks storage **through Kong**, which does not re-resolve the
+  restarted storage upstream → spurious 502. `docker restart supabase_kong_alloy-cert` clears it.
+- Killing `next dev` mid-write truncates `.next/dev/types/routes.d.ts`, and every narrowed
+  typecheck then reports two phantom `TS1128` errors in generated code. `rm -rf .next/dev/types`.
+- Certification budgets are environment allowances: `CERT_TIMEOUT_MS` (240s) and
+  `CERT_AUTH_WAIT_MS` (180s). A cold admin-route compile alone took 45s here.
