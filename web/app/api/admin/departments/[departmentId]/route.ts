@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { invalidateTenantConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -144,6 +145,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
     if (body.metadata !== undefined) {
         if (body.metadata === null || typeof body.metadata !== "object" || Array.isArray(body.metadata)) {
             return NextResponse.json({ error: "metadata must be a JSON object" }, { status: 400 });
+        }
+        // Business Process configuration is publication-owned. This endpoint deep-merges arbitrary
+        // caller metadata, which made it a generic bypass able to rewrite any part of the
+        // configured process. The database guard rejects it too, but that surfaces as an opaque
+        // Postgres error — reject here so the caller gets a reason and a destination.
+        if (LIFECYCLE_BUILDER_METADATA_KEY in (body.metadata as Record<string, unknown>)) {
+            return NextResponse.json(
+                {
+                    error:
+                        "Business Process configuration cannot be changed here. It is published " +
+                        "configuration — edit the draft and publish it through the Business Process " +
+                        "configuration service.",
+                    field: LIFECYCLE_BUILDER_METADATA_KEY,
+                },
+                { status: 409 },
+            );
         }
         const prevRaw = (existing as { metadata?: unknown }).metadata;
         const prev =
