@@ -149,7 +149,18 @@ export function resetCategoryFallbackReport(): void {
     categoryFallbackUses.clear();
 }
 
+/**
+ * Snapshot SCHEMA version — distinct from the policy version.
+ *
+ * `policyVersion` records which rules ran. `snapshotVersion` records the SHAPE
+ * of this object. Dispatch rejects a version it does not know rather than
+ * guessing at missing fields, so an old queued row can never be revalidated
+ * against assumptions that were not true when it was authored.
+ */
+export const ELIGIBILITY_SNAPSHOT_VERSION = 1;
+
 export type EligibilitySnapshot = {
+    snapshotVersion: number;
     policyVersion: string;
     decision: EligibilityDecision;
     audience: MessageAudience;
@@ -157,6 +168,8 @@ export type EligibilitySnapshot = {
     purpose: string | null;
     recipient: { personId: string | null; channel: MessageChannel };
     authorizedBy: { userId: string | null; permission: string | null };
+    /** The sender identity chosen at enqueue. Revalidated at dispatch. */
+    identity: { identityId: string | null; providerAccountId: string | null; bindingId: string | null };
     consentInputs: Array<{ category: string; state: string }>;
     quietHours: QuietHoursWindow | null;
     evaluatedAt: string;

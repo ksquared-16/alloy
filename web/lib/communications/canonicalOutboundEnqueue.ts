@@ -26,6 +26,7 @@ import {
 } from "@/lib/communications/eligibility/evaluateEligibility";
 import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
 import {
+    ELIGIBILITY_SNAPSHOT_VERSION,
     recordCategoryFallback,
     type EligibilitySnapshot,
     type MessageAudience,
@@ -290,6 +291,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
           });
 
     const snapshot: EligibilitySnapshot = {
+        snapshotVersion: ELIGIBILITY_SNAPSHOT_VERSION,
         policyVersion: ELIGIBILITY_POLICY_VERSION,
         decision,
         audience,
@@ -299,6 +301,11 @@ export async function enqueueCanonicalOutboundMessage(params: {
         authorizedBy: {
             userId: params.authorizedByUserId ?? null,
             permission: params.emergencyPermitted ? "communications.send.emergency" : "communications.send",
+        },
+        identity: {
+            identityId: identityUuid,
+            providerAccountId: accountUuid,
+            bindingId: bindingUuid,
         },
         consentInputs: context.consultedPreferenceCategory
             ? [{ category: context.consultedPreferenceCategory, state: context.preferenceState }]
