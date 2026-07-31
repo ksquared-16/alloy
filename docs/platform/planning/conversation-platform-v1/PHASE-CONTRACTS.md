@@ -91,54 +91,70 @@ Everything else in your cadence I accept as proposed.
 
 ---
 
-# Phase 2 — Composer convergence and production send pipeline
+# Phase 2 — Composer Convergence and Production Send Pipeline
 
-*(scope refined per the challenge above)*
+*(renamed and rescoped per Kelly's decision §5 — sequencing challenge accepted)*
 
 | | |
 |---|---|
-| **Product outcome** | One composer runtime across every surface, and a send pipeline that actually runs, retries, and surfaces its failures — so a queued message is guaranteed to be attempted and an operator can see when it wasn't. |
+| **Product outcome** | One composer runtime across every surface, and a send pipeline that can **schedule and deliver one message exactly once from Alloy's perspective** — proven, not asserted. |
 
-**Included**
+> **Gating rule, as decided:** the interactive-tour implementation (Phase 3) **does not begin** until this phase proves exactly-once scheduling and delivery.
+
+**Included — composer convergence**
 - Composer Runtime: contract, capability registry, presentation variants, Preview VM seed (§10.1 of the plan)
 - **Every rendered control is capability-gated** — inert buttons become impossible to write
-- Provider/identity **write path**: account + identity CRUD, verification workflow, location bindings, grants (D7 stays fail-open until the UI ships, then flips in the same release)
-- **Scheduler** for both drains, with a committed runbook
-- **Queue B lease** — `FOR UPDATE SKIP LOCKED` + claim token, matching Queue A's proven pattern
-- **Retry + DLQ** — attempts, backoff, `next_attempt_at`, dead-letter
-- Failed-send queue UI + retry endpoint
-- Stale-claim release actually invoked
 - Deletion: `ComposerV2`, `TemplateBuilder`, `AnnouncementBuilder`, `CommunicationsDrawerSectionLegacy` — **unique capabilities ported first** (optimistic rows, activity invalidation, contact-attempt notes)
 
-**Excluded** — interactive actions (3); attachments (4); delivery *telemetry* to timeline (4); inbound (5); hierarchy (4)
+**Included — production provider onboarding**
+- Identity/provider **write path**: account + identity CRUD, verification workflow, location bindings, grants (D7 stays fail-open until the UI ships, then flips **in the same release**)
+- Remove the cross-tenant credential fallback (`communication_message_sender.py:329-334`) — an `unconfigured` tenant must fail closed, as the SMS branch already does
+
+**Included — production send pipeline** *(the rescope)*
+- **Scheduled execution infrastructure** — a committed scheduler for both drains, with a runbook. Nothing in-repo drives either today.
+- **Dequeue leasing / atomic claim** on Queue B — `FOR UPDATE SKIP LOCKED` + claim token, matching Queue A's already-proven pattern (`claim_due_communication_scheduled_sends`)
+- **Idempotent provider dispatch** — a dispatch key so a retried or concurrent attempt cannot produce a second provider call
+- **Duplicate-send prevention** — enforced at the claim, not by convention
+- **Retry behavior** — attempts, backoff, `next_attempt_at`, dead-letter; `failed` ceases to be terminal
+- **Stale lease recovery** — `releaseStaleClaims` actually invoked (today it exists and is self-documented as never called in production)
+- **Provider-result persistence** — provider response and error persisted, not just logged
+- **Worker observability** — drain runs, claim counts, blocked counts, retry counts, DLQ depth
+- **Safe handling of single-use interactive links** — a retried send must not mint a second token, and a token minted for a message that later fails must be revoked. This is the specific interaction that makes Phase 3 safe.
+- **Proof** that concurrent workers cannot send the same message twice
+
+**Excluded** — interactive actions (3); attachments (4); delivery telemetry to timeline (4); inbound (5); hierarchy (4)
 
 **Dependencies** — Phase 1 complete; **D7**
 
-**Database** — retry columns on `communication_messages`; lease columns; no new tables.
+**Database** — retry + lease columns on `communication_messages`; dispatch-key column; no new tables.
 
-**APIs / workers / providers** — identity CRUD routes; retry + failures routes; the Python sender gains a claim step; scheduler invokes `process-due` and `/internal/messages/process`.
+**APIs / workers / providers** — identity CRUD routes; retry + failures routes; the Python sender gains a claim step and an idempotency key; scheduler invokes `process-due` and `/internal/messages/process`.
 
-**UI** — one composer across Command Center, Compose-New, record drawer, Focus Panel embed, inbox reply, quick message, broadcast; identity/provider admin; failed-send queue.
+**UI** — one composer across all surfaces; identity/provider admin; failed-send queue with retry.
 
-**Migration / compatibility** — composer surfaces migrate one at a time behind the capability registry; each surface's old implementation is deleted as it migrates, not after.
+**Migration / compatibility** — composer surfaces migrate one at a time behind the capability registry; each surface's old implementation is deleted as it migrates, not after. The lease is added to Queue B without changing Queue A.
 
-**Security** — identity CRUD requires a real permission (not `requireAdminOrOps` alone); grants flip to fail-closed **in the same release** as the grant UI; scheduler endpoint uses a rotated internal token and logs all-org runs explicitly.
+**Security** — identity CRUD requires a real permission (not `requireAdminOrOps` alone); grants flip to fail-closed in the same release as the grant UI; scheduler endpoint uses a rotated internal token and logs all-org runs explicitly; the credential fallback removal is a tenant-isolation fix.
 
 **Acceptance**
 - [ ] One composer runtime serves all surfaces; **no rendered control lacks a handler**
 - [ ] An operator creates a provider account and sender identity in the UI with **no SQL**
-- [ ] A committed scheduler drives both drains; a runbook exists; a deliberately-failed send retries with backoff and lands in the DLQ
-- [ ] Concurrent workers cannot double-send — proven by a DB-backed concurrency test
-- [ ] An operator sees and retries a failed send
+- [ ] A committed scheduler drives both drains; a runbook exists
+- [ ] **Concurrent workers cannot send the same message twice — proven by a DB-backed concurrency test running N workers against one queued row**
+- [ ] **One message scheduled for T is delivered exactly once at T**, proven end to end
+- [ ] A deliberately-failed send retries with backoff and lands in the DLQ; an operator sees and retries it
+- [ ] A stale lease is recovered without duplicating the send
+- [ ] A retried send does not mint a second interactive token
+- [ ] An `unconfigured` tenant fails closed rather than sending on platform credentials
 - [ ] The four orphaned/legacy surfaces are deleted
 
-**Automated tests** — DB-backed concurrency on both queues; retry/backoff/DLQ; composer capability-registry validation (a surface declaring a capability it cannot perform fails the build); identity CRUD permission matrix.
+**Automated tests** — DB-backed concurrency on both queues (N workers, one row, assert exactly one provider call); retry/backoff/DLQ; stale-lease recovery; idempotent dispatch under duplicate invocation; composer capability-registry validation (a surface declaring a capability it cannot perform fails the build); identity CRUD permission matrix.
 
-**Manual QA** — send from every surface; kill the provider mid-send and confirm retry then DLQ then operator retry.
+**Manual QA** — send from every surface; kill the provider mid-send and confirm retry → DLQ → operator retry; run two drains simultaneously and confirm one delivery.
 
-**Evidence** — concurrency test output; a DLQ row with its retry history; screenshots of every migrated composer surface; `git log` showing the deletions.
+**Evidence for approval** — concurrency test output showing exactly one provider call under N concurrent workers; a scheduled message delivered once at its scheduled time; a DLQ row with its retry history; screenshots of every migrated composer surface; `git log` showing the deletions.
 
-**Risk** — **High** (largest phase; touches every send surface). **Stop conditions:** a legacy composer capability cannot be ported without a new architectural decision; or the scheduler cannot be committed to the repo (hosting constraint) — in which case stop and raise, because Phase 3 depends on it.
+**Risk** — **High** (largest phase; touches every send surface and the worker). **Stop conditions:** a legacy composer capability cannot be ported without a new architectural decision; the scheduler cannot be committed to the repo (hosting constraint); or exactly-once cannot be proven — in which case **stop**, because Phase 3 is gated on that proof.
 
 ---
 

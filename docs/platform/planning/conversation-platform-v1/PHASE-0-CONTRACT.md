@@ -1,366 +1,304 @@
 ---
-title: Phase 0 — Production Safety & Schema Repair — Implementation Contract
-status: awaiting go / awaiting D3 + S-1 scope decision
+title: Phase 0 — Production Safety & Schema Repair — Implementation Contract (v2)
+status: COMPLETE — authorized to execute
+supersedes: v1 (2026-07-30 morning)
 date: 2026-07-30
-evidence: PHASE-0-LIVE-VERIFICATION.md
+evidence: PHASE-0-LIVE-VERIFICATION.md · SEND-PATH-MATRIX.md
 ---
 
-# Phase 0 — Implementation Contract
+# Phase 0 — Implementation Contract (v2)
 
-**Scope:** P0-1 eligibility gate · P0-2 signed-URL authorization · P0-3 server-authoritative rendering · P0-4 `announcement_targets` repair.
+**Scope:** P0-1 eligibility gate & keyword processing · P0-2 signed-URL authorization · P0-3 server-authoritative rendering · P0-4 `announcement_targets` repair.
 
-**Two items must be resolved before I start:** **D3** (category vocabulary — P0-1 has no input without it) and **S-1** (a newly-discovered unauthenticated SMS surface, §0.2 — outside the scope you defined, so yours to scope in or out).
+## Changes from v1
+
+| Change | Source |
+|---|---|
+| Category enum is **4 values** (`transactional`/`operational`/`marketing`/`emergency`); `internal` moves to a separate `audience` axis | Decision §1 |
+| `audience` added as a first-class column — internal messages do **not** inherit external consent behavior | Decision §1 |
+| **DB trigger dropped.** Migration #4 removed | Decision §2 — two layers named (TS enqueue, Python dispatch); Python dispatch covers direct DB inserts because it is the only route to a provider |
+| Enqueue/dispatch responsibility split specified with an eligibility **snapshot** + minimum live rechecks | Decision §2 |
+| Storage debt explicitly classified as blocking / non-blocking for authorization | Decision §3 |
+| P0-4 promoted to first execution slot | Decision §4 |
+| Phase 2 renamed and rescoped (separate doc) | Decision §5 |
+| Send-path enumeration complete and classified (separate doc) | Decision §6 |
+
+**Unresolved and excluded:** **S-1** — `dispatch.py`'s two unauthenticated SMS endpoints. Not addressed in your decisions; **out of Phase 0 scope; not touched.** They remain a live unauthenticated outbound-SMS surface that no mechanism in this contract can reach (they create no row).
 
 ---
 
-## 0. Findings that changed this contract after you wrote the direction
+## 1. Classification model
 
-### 0.1 `executeCommunicationsSend` is not the floor — and its gate protects nothing today
+### 1.1 Four orthogonal axes
 
-The discovery report treated `executeCommunicationsSend.ts:113-124` as *the* consent gate. Verified: it is a **wrapper**, and the gate is inert for **four independent reasons**, any one of which alone would defeat it:
-
-1. `comms_v2_compliance` is not in `CORE_COMMS_V2_FLAGS` (`v2/flags.ts:54-59`) → `resolveCommsV2Flag` returns `false` by default (`:70`). Dead code unless the env var is explicitly set.
-2. It is **skipped when `recipient_person_id` is absent or non-UUID** (`:117-118`). `/api/admin/communications/send` accepts a free-text `to`/`to_address` with no person id (`route.ts:69,74`) — **bypassed by construction**, not by misconfiguration.
-3. It is skipped entirely for `in_app` (`:116`).
-4. Even when it runs, category defaults to *transactional* (`consentEnforcement.ts:14-16,27`) and `evaluateConsent` permits every transactional send absent an opt-out row on `email_transactional`/`sms_transactional` (`consentGate.ts:49-53`). An opt-out recorded on `email_marketing` blocks nothing.
-
-**Consequence for the contract:** your instruction *"do not merely enable `comms_v2_compliance`"* is not just correct, it is an understatement. Enabling the flag would still leave three bypasses.
-
-**The true TypeScript floor is `insertCommunicationMessageRow` (`canonicalOutboundEnqueue.ts:78`, insert at `:120`), reachable only via `enqueueCanonicalOutboundMessage` (`:136`).** Exactly four TS product call sites reach it. Moving the gate down one level covers every currently-gated path **plus** the tour orchestrator, packet launch, and the workflow mirror — with **zero re-pointing**.
-
-### 0.2 🔴 S-1 — NEW FINDING, outside your defined scope: two unauthenticated SMS-sending endpoints
-
-Verified independently, not taken on the sub-agent's word:
-
+```text
+audience:  external | internal
+channel:   email | sms | in_app            (in_app == the "internal" transport)
+category:  transactional | operational | marketing | emergency
+purpose:   domain/tenant key (free text, compliance-inert)
 ```
-backend/app/server.py:28   app.include_router(dispatch.router)      ← mounted, no prefix
-backend/app/routes/dispatch.py:214   @router.post("/dispatch")         ← no Depends(), no token, no auth
-backend/app/routes/dispatch.py:941   @router.post("/contractor-reply") ← no Depends(), no token, no auth
+
+**Note on `channel`.** Your model names the internal transport `internal`; the live DB CHECK is `('sms','email','in_app')`. Phase 0 **keeps `in_app`** and does not rename the enum — renaming is a breaking change across 6 tables and every reader, for zero safety gain. `audience='internal'` is the semantically load-bearing field. Renaming is Phase 1 hygiene at the earliest.
+
+### 1.2 Category semantics — as decided
+
+| Category | Suppressible by | Honors | Notes |
+|---|---|---|---|
+| `transactional` | Not by broad marketing opt-out | Unusable channels, identity uncertainty, provider restrictions, legal delivery constraints | Still fails closed on channel/identity problems |
+| `operational` | Operational opt-out | Channel preference, quiet hours, contact priority, recipient eligibility | The default class for ambiguous cases |
+| `marketing` | All applicable opt-outs | Explicit eligibility required (opt-in) | Strictest |
+| `emergency` | Nothing | Nothing suppresses it | **Permissioned + audited.** Requires `communications.send.emergency`; every use writes an audit row naming the actor. Not available as a convenience bypass. |
+
+`audience='internal'` short-circuits recipient-consent evaluation entirely — an internal note is not a communication to a data subject. It still evaluates channel availability and org scope.
+
+### 1.3 Defaulting and its retirement — as required
+
+**New sends must not silently default.** Three-step, observable, migration-retired:
+
+1. **Migration** adds `category text NOT NULL DEFAULT 'operational'` — the default exists **only** to make the column addable against existing rows (live: 7). `operational` is the *safer* class, so any mis-classification under-sends.
+2. **API requires `category` explicitly.** Missing → `400 CATEGORY_REQUIRED`. A bounded compatibility fallback exists for exactly one release behind `COMMS_CATEGORY_FALLBACK` (default OFF), and **every use increments a counter and logs the call site** — observable by construction.
+3. **Retirement migration** `ALTER COLUMN category DROP DEFAULT` once the counter reads zero for a full release. After that, an insert without a category fails at the database.
+
+A test asserts **no production caller relies on the fallback**.
+
+---
+
+## 2. Eligibility enforcement — the enqueue/dispatch split
+
+### 2.1 Canonical policy contract
+
+One versioned pure decision function, `evaluateEligibility(input) → Decision`, owned by TypeScript (`v2/consentGate.ts`). Python does **not** reimplement it.
+
+The seam is a **persisted eligibility snapshot** plus a **minimum live recheck set**:
+
+```jsonc
+// communication_messages.eligibility_snapshot
+{
+  "policy_version": "2026-07-31.1",
+  "decision": "allow",
+  "audience": "external", "category": "operational", "purpose": "tour_reminder",
+  "recipient": { "person_id": "…", "address": "…", "channel": "sms" },
+  "authorized_by": { "user_id": "…", "permission": "communications.send" },
+  "consent_inputs": [ { "category": "sms_operational", "state": "unset", "updated_at": "…" } ],
+  "quiet_hours": { "basis": "location", "window": "21:00-08:00", "tz": "America/Los_Angeles" },
+  "evaluated_at": "…"
+}
 ```
 
-Ten SMS call sites across the two handlers, all dispatching through `ghl_client.send_conversation_sms` (`ghl_client.py:293` → `POST {LC_BASE_URL}/conversations/messages` `:316`). **They create no `communication_messages` row, no `public.messages` row, and no audit row — only a log line.**
+Drift between runtimes is caught by a **shared golden-fixture file** that both the TS engine and the Python recheck execute against in CI. A divergence fails the build rather than surfacing in production.
 
-Three consequences:
-- **No row-level or database-level gate can ever reach them.** They are structurally invisible to every mechanism in this contract.
-- They are an **unauthenticated outbound-SMS surface**: abuse potential (SMS pumping / toll fraud / sending from the org's number) independent of consent.
-- `dispatch.py:1380` appends *"Reply STOP to unsubscribe."* while `sms_inbound.py` never inspects inbound bodies for keywords — so this path makes a promise the platform cannot keep.
+### 2.2 Immutable at enqueue vs revalidated at dispatch
 
-This is the cleaning vertical (`server.py:13` — *"API for dispatching cleaning jobs"*), plausibly dead for childcare, but it is **mounted and live**.
+**The principle: classification and authorization are *authoring facts*. Recipient state and time-dependent constraints are *live facts*.**
 
-> **Raising, not deciding.** Options: **(a)** authenticate both routes; **(b)** decommission them; **(c)** gate `send_conversation_sms` itself; **(d)** out of Phase 0 scope, tracked separately. I recommend **(a) now, (b) soon** — authentication is a small, safe change that closes the abuse surface without a product decision about the cleaning vertical. **I will not touch these without your instruction**, because decommissioning a live route is a product decision, not a repair.
-
-### 0.3 A live hazard in a dev script
-
-`scripts/dev/communications-resend-smoke-enqueue.sql:26` inserts a `status='queued'` message with a **hard-coded real org UUID** (`93667019-bd28-49b5-a688-acc9bb1e0a19`, the staging org seeded by `20260501200000`) and a **real personal address** (`kurz16@gmail.com`). Pasting it into the SQL Editor enqueues a message that the Python queue **will dispatch**. Related to the known "comms not dispatched — QA fixture holds a real email/phone" item.
-
-Phase 0 will add the DB-level floor that makes this row non-dispatchable to a suppressed recipient, and will add a header warning to the file. **It will not delete the file** (dev tooling, not my call).
-
----
-
-## 1. Exact affected files and tables
-
-### 1.1 P0-1 — eligibility gate & keyword processing
-
-**Tables**
-
-| Table | Change |
-|---|---|
-| `communication_messages` | `+ category text NOT NULL DEFAULT 'operational'` (closed CHECK); `+ purpose text NULL`; `+ eligibility_decision jsonb NULL` (audit of the gate's verdict) |
-| `communication_preferences` | no DDL — becomes the single canonical truth |
-| `communication_preference_events` | no DDL — gains its first writer |
-| `communication_scheduled_sends` | `+ category text` (snapshot at schedule time) |
-| `messages`, `messages_outbox` (legacy) | trigger only |
-
-**Files — gate relocation and hardening**
-
-| File | Change |
-|---|---|
-| `web/lib/communications/canonicalOutboundEnqueue.ts:78,120,136` | **The gate moves here.** Fail-closed evaluation before insert |
-| `web/lib/communications/executeCommunicationsSend.ts:113-124` | Remove the local gate (now redundant); keep recipient resolution |
-| `web/lib/communications/v2/consentEnforcement.ts:14-16,27` | Remove channel-derived category default; require explicit category |
-| `web/lib/communications/v2/consentGate.ts:34-63` | Extend to category vocabulary + quiet hours + emergency override |
-| `web/lib/communications/v2/flags.ts:54-59` | `comms_v2_compliance` → `CORE_COMMS_V2_FLAGS` (default ON) |
-| `web/lib/communications/v2/preferenceMutations.ts` | Gains its first production caller |
-| `web/lib/communications/v2/smsKeywords.ts` | Gains its first production caller |
-
-**Files — bypass closure (LIST B)**
-
-| File | Change |
-|---|---|
-| `web/lib/workflowRun.ts:1725` (`create_message`) | Re-point to canonical enqueue **or** gate independently |
-| `web/lib/workflowRun.ts:2028` (`send_message` → `messages`) | Same |
-| `web/lib/workflowRun.ts:2070` (`send_message` → `messages_outbox`) | Same (no Python consumer — audit-only today) |
-| `web/lib/tours/comms/tourSchedulingScheduledSends.ts:210` | Gate at **schedule** time |
-| `web/lib/communications/v2/scheduleAnnouncementSendout.ts:143` | Gate at schedule time |
-| `web/lib/communications/v2/announcementFanout.ts:48-50` | **Collapse its separate consent implementation into `consentGate`** |
-| `web/lib/tours/comms/tourCommsOrchestrator.ts:282,394` | Covered automatically by the relocation |
-| `web/app/api/admin/opportunities/[id]/enrollment-packet-launch/route.ts:358` | Covered automatically |
-| `web/lib/communications/mirrorQueuedMessage.ts:133` | Covered automatically |
-
-**Files — Python enforcement (defense in depth)**
-
-| File | Change |
-|---|---|
-| `backend/app/services/communication_message_sender.py:113,133` | Re-check eligibility between the queue read and the provider calls (`:260`, `:270`, `:339`) |
-| `backend/app/services/message_sender.py:26,91` | Same, if legacy survives |
-| `backend/app/routes/sms_inbound.py:117-124` | Parse STOP/START/HELP → preference mutation + audit |
-
-**Files — missing permission gates**
-
-`communication-scheduled-sends/process-due/route.ts:31` · `communications/family-note/route.ts:14` · `opportunities/[id]/form-deliver/route.ts:33` — add `assertCommunicationsSendAllowed`.
-
-### 1.2 P0-2 — signed-URL authorization
-
-| File | Change |
-|---|---|
-| `web/app/api/admin/documents/[id]/signed-url/route.ts:10-16` | Role + relationship authorization; path-ownership assertion; fail-closed |
-| `web/app/api/admin/vendors/[id]/documents/signed-url/route.ts:14-15` | Same |
-| `web/app/api/admin/persons/[id]/profile-photo/route.ts:108` | Same |
-| `web/lib/documents/assertDocumentAccess.ts` | **NEW** — the single authorization helper all three call |
-| `web/lib/vendors/publicVendorApplication.ts:352-353` | Write org-prefixed paths |
-| `web/app/api/vendor-application/route.ts:77-98` | Size cap + MIME allowlist |
-
-**Tables:** `documents` (no DDL). **Storage:** an explicit deny-by-default `storage.objects` policy so the current fail-closed posture becomes *intentional*, plus re-pathing the 6 `vendors/…` objects.
-
-### 1.3 P0-3 — server-authoritative rendering
-
-| File | Change |
-|---|---|
-| `web/lib/communications/render/renderOutboundMessage.ts` | **NEW** — the one canonical renderer |
-| `web/lib/communications/canonicalOutboundEnqueue.ts:136` | Render + validate before insert; **block on unresolved tokens** |
-| `web/lib/communications/v2/templateTokens.ts` | Becomes the single engine; gains HTML escaping |
-| `web/lib/communications/v2/templateRender.ts` | **DELETE** (engine C) — port `hasUnresolvedTokens`/`canSendTemplate` first |
-| `web/lib/tours/comms/tourCommsTemplates.ts:170` | Engine D folds into the canonical renderer |
-| `web/app/adminV2/components/QuickMessageModal.tsx:228-232` | Template apply keeps tokens; server resolves |
-| `web/app/adminV2/communications/AnnouncementsWorkspace.tsx:448,685` | Same; preview uses the same renderer |
-| `web/app/api/admin/communications/templates/[id]/preview/route.ts` | Same renderer as send — **preview and send become identical by construction** |
-
-**Tables:** `communication_messages` `+ rendered_snapshot jsonb`, `+ template_id uuid`, `+ template_version integer`.
-
-### 1.4 P0-4 — `announcement_targets`
-
-**Tables:** `announcement_targets` only. **Files:** `web/app/api/admin/communications/announcements/[id]/targets/route.ts:78-85`, plus a schema-drift assertion test.
-
----
-
-## 2. Canonical owner for each concern
-
-| Concern | Canonical owner | Everything else |
+| Concern | Where | Why |
 |---|---|---|
-| **Eligibility decision** (consent, opt-out, channel, quiet hours, legal) | `web/lib/communications/v2/consentGate.ts` — pure, no I/O | `announcementFanout`'s parallel implementation is deleted |
-| **Gate enforcement (TS)** | `enqueueCanonicalOutboundMessage` (`canonicalOutboundEnqueue.ts:136`) | `executeCommunicationsSend` becomes a convenience wrapper |
-| **Gate enforcement (dispatch)** | `process_communication_messages` (`communication_message_sender.py:113`) | Defense in depth, not the primary |
-| **Gate enforcement (floor)** | `BEFORE INSERT` trigger on the three message tables | Catches raw SQL and seed scripts |
-| **Preference truth** | `communication_preferences` | `field_values.communication_opt_out` → migrated then read-only; `persons.metadata.*_opt_in` → migrated |
-| **Preference audit** | `communication_preference_events` | — |
-| **Keyword processing** | `smsKeywords.parseSmsKeyword` → `preferenceMutations` | One path, called from Python inbound |
-| **Message category** | Platform, closed CHECK (D3) | Not tenant-configurable |
-| **Rendering** | `renderOutboundMessage` | Engines A/B/C/D collapse into it |
-| **Document authorization** | `assertDocumentAccess` | All three routes delegate |
-| **Storage tenancy** | `{org_id}/…` path convention **+** an explicit deny-by-default policy | Convention alone is not enforcement |
+| `audience`, `category`, `purpose` | **Immutable** | An authoring decision by an authorized operator. Re-deriving at dispatch would let a queued message silently change class. |
+| Authorizing actor + permission | **Immutable** | Authorization already occurred. Python has no session context and must not invent one. |
+| Recipient resolution (person, address) | **Immutable** | Re-resolving could select a *different* person than the operator addressed. |
+| Quiet-hours basis (tz, window) | **Immutable** | The configuration that applied at authoring time. |
+| **Preference / consent state** | **REVALIDATE** | **The critical one.** The queue→dispatch gap is unbounded; a STOP or opt-out may land in between. |
+| **Suppression state** (hard bounce, complaint) | **REVALIDATE** | May have occurred after enqueue. |
+| **Quiet hours — the clock** | **REVALIDATE** | A message that sat in the queue may now be *inside* the window. Applies to `operational` and `marketing`; `transactional` and `emergency` exempt. |
+| **Communication identity validity** | **REVALIDATE** | Identity/account may have been disabled, revoked, or lost its `secret_ref`. |
+| **Structural coherence** | **REVALIDATE** | `direction='outbound'`, `to_address` present and channel-consistent, `audience='external'` for provider dispatch. |
+| **Category presence & validity** | **REVALIDATE** | A directly-inserted row (raw SQL, seed script) may have none → **fail closed**. This is what replaces the DB trigger. |
+
+Six live checks. Python reads the snapshot, re-reads preferences/suppression/identity, re-evaluates the clock, and asserts structure. It does not re-derive classification, authorization, or recipient identity.
+
+**Dispatch failure behavior:** skip, mark `status='blocked'` with `eligibility_decision`, emit an audit event, **do not retry**. A blocked message is a policy outcome, not a transient failure. Blocking is **idempotent** — re-running the drain over a blocked row is a no-op, so revalidation cannot itself become a double-send vector.
+
+### 2.3 Bypass coverage
+
+| Vector | Covered by |
+|---|---|
+| Paths 1–10 (canonical TS) | Gate relocated to `enqueueCanonicalOutboundMessage:136` |
+| Paths 11–13 (legacy tables) | Adapter + Python dispatch revalidation |
+| Paths 8, 14 (schedule-time) | Gate at schedule **and** drain **and** dispatch |
+| Paths 15–17 (scripts, raw SQL) | **Python dispatch revalidation** |
+| Paths 21–22 (`dispatch.py`) | **Nothing. S-1, out of scope.** |
 
 ---
 
-## 3. Migration list
+## 3. P0-2 — storage debt: blocking vs non-blocking
 
-Ordered, additive-first, each independently revertible.
+You asked whether the three debt items block reliable document authorization. Verified answers:
+
+| Debt | Blocks authorization? | Reasoning | Phase 0 action |
+|---|---|---|---|
+| **34 storage objects not in `documents`** | **NO** | The signed-URL routes resolve **by `documents.id`**. An object with no row is unreachable through them — it is orphaned storage, not an authorization gap. | Track as debt. No remediation. |
+| **6 `vendors/…` objects without org prefix** | **NO for the `documents` route; YES for path-ownership validation** | They are reachable via `vendors/[id]/documents/signed-url`, which is in scope. The path-ownership check must not *assume* an org prefix, or it will either reject legitimate vendor documents or be written so loosely it validates nothing. | **Smallest required remediation:** validate path ownership against the *row's* `org_id` + `bucket` + `storage_path` rather than against a prefix convention, and re-path the 6 objects so the convention becomes true. |
+| **Object-storage ↔ metadata reconciliation** | **NO** | Authorization is row-driven throughout. | Track as debt. |
+
+**Net:** only the vendor re-pathing is required, and only because path-ownership validation would otherwise be unsound. No storage redesign.
+
+---
+
+## 4. Affected files and tables
+
+### 4.1 P0-1
+
+**Tables:** `communication_messages` `+ audience`, `+ category`, `+ purpose`, `+ eligibility_snapshot`, `+ eligibility_decision`; `communication_scheduled_sends` `+ audience`, `+ category`, `+ purpose`; `communication_preferences` and `communication_preference_events` gain their first writers (no DDL).
+
+**Gate relocation:** `canonicalOutboundEnqueue.ts:78,120,136` (gate lands here) · `executeCommunicationsSend.ts:113-124` (local gate removed) · `v2/consentEnforcement.ts:14-16,27` (channel-derived default removed) · `v2/consentGate.ts:34-63` (4 categories, audience short-circuit, quiet hours, emergency override) · `v2/flags.ts:54-59` (`comms_v2_compliance` → core, default ON).
+
+**Bypass closure:** `workflowRun.ts:1725,2028` (adapter) · `workflowRun.ts:2070` (retire) · `tourSchedulingScheduledSends.ts:210` and `v2/scheduleAnnouncementSendout.ts:143` (schedule-time gate) · `v2/announcementFanout.ts:48-50` (**collapse its parallel consent implementation into `consentGate`**) · paths 7, 9, 10 covered automatically.
+
+**Keywords:** `v2/smsKeywords.ts` and `v2/preferenceMutations.ts` gain their first production callers, from `backend/app/routes/sms_inbound.py:117-124`.
+
+**Python:** `communication_message_sender.py:113,133` (revalidation before `:260`/`:270`/`:339`) · `message_sender.py:26,91` (same, legacy).
+
+**Permission gates:** `process-due/route.ts:31` · `family-note/route.ts:14` · `form-deliver/route.ts:33`.
+
+**Scripts:** `seedRealisticChildcareDemoData.ts:2314` (production guard) · `scripts/dev/communications-resend-smoke-enqueue.sql` (warning header).
+
+### 4.2 P0-2
+
+`lib/documents/assertDocumentAccess.ts` (**NEW**, single helper) · `documents/[id]/signed-url/route.ts:10-16` · `vendors/[id]/documents/signed-url/route.ts:14-15` · `persons/[id]/profile-photo/route.ts:108` · `lib/vendors/publicVendorApplication.ts:352-353` (org-prefixed paths) · `api/vendor-application/route.ts:77-98` (size cap + MIME allowlist).
+
+### 4.3 P0-3
+
+`lib/communications/render/renderOutboundMessage.ts` (**NEW**, canonical) · `canonicalOutboundEnqueue.ts:136` (render + block on unresolved) · `v2/templateTokens.ts` (single engine, gains escaping) · `v2/templateRender.ts` (**DELETE** — port `hasUnresolvedTokens`/`canSendTemplate` first) · `tours/comms/tourCommsTemplates.ts:170` (folds in) · `QuickMessageModal.tsx:228-232` · `AnnouncementsWorkspace.tsx:448,685` · `templates/[id]/preview/route.ts` (**same renderer as send**) · `backend/app/integrations/resend_client.py:38-41` + `communication_message_sender.py:342` (stop discarding the per-message body).
+
+**Tables:** `communication_messages` `+ rendered_snapshot`, `+ template_id`, `+ template_version`.
+
+### 4.4 P0-4
+
+`announcement_targets` (canonical shape declared) · `announcements/[id]/targets/route.ts:78-85`.
+
+---
+
+## 5. Canonical owners
+
+| Concern | Owner |
+|---|---|
+| Eligibility decision | `v2/consentGate.ts` — pure, versioned. `announcementFanout`'s parallel implementation deleted |
+| Enforcement (TS) | `enqueueCanonicalOutboundMessage:136` |
+| Enforcement (dispatch) | `process_communication_messages:113` — snapshot + 6 live rechecks |
+| Preference truth | `communication_preferences` (`field_values.communication_opt_out` migrated then read-only; `persons.metadata.*_opt_in` migrated) |
+| Preference audit | `communication_preference_events` |
+| Keyword processing | `smsKeywords.parseSmsKeyword` → `preferenceMutations` |
+| Category vocabulary | Platform, closed CHECK. `purpose` owned by domain/config |
+| Rendering | `renderOutboundMessage` — engines A/B/C/D collapse into it |
+| Document authorization | `assertDocumentAccess` |
+
+---
+
+## 6. Migration list
 
 | # | Migration | Purpose |
 |---|---|---|
-| 1 | `20260731100000_announcement_targets_shape_repair.sql` | **P0-4.** Idempotent, shape-agnostic: add `target_type`/`target_ref`/`rule` if absent, drop `target_spec NOT NULL`, backfill either direction where derivable, add the B4 CHECK. Must be safe on both shapes and re-runnable. |
-| 2 | `20260731101000_communication_message_category.sql` | **P0-1.** `+ category` (NOT NULL, `DEFAULT 'operational'`, closed CHECK), `+ purpose`, `+ eligibility_decision`; `+ category` on `communication_scheduled_sends`. |
-| 3 | `20260731102000_communication_preferences_backfill.sql` | **P0-1.** Migrate `field_values.communication_opt_out` and `persons.metadata.*_opt_in` → `communication_preferences` + `communication_preference_events` with `source='migration'`. **Live: 0 rows to migrate** — the migration asserts that and fails loudly if another environment differs. |
-| 4 | `20260731103000_communication_eligibility_floor.sql` | **P0-1.** `BEFORE INSERT` trigger on `communication_messages`, `messages`, `messages_outbox` rejecting outbound rows to a suppressed `(person, channel, category)`. |
-| 5 | `20260731104000_communication_message_render_columns.sql` | **P0-3.** `+ rendered_snapshot`, `+ template_id`, `+ template_version`. |
-| 6 | `20260731105000_storage_objects_deny_by_default.sql` | **P0-2.** Explicit deny-by-default `storage.objects` policy — makes the verified-incidental posture intentional. |
-| 7 | `20260731106000_communication_status_check.sql` | Hygiene: pin the six live `status` values; `provider_message_id` unique index. |
+| 1 | `20260731100000_announcement_targets_canonical_repair.sql` | **P0-4.** Idempotent, shape-agnostic, non-destructive |
+| 2 | `20260731101000_communication_classification.sql` | `+ audience`, `+ category` (CHECK, transitional default), `+ purpose`, `+ eligibility_snapshot`, `+ eligibility_decision`; same on scheduled sends |
+| 3 | `20260731102000_communication_preferences_backfill.sql` | 3 stores → 1; **asserts source emptiness** (live: 0 rows) and fails loudly otherwise |
+| 4 | `20260731103000_communication_render_columns.sql` | `+ rendered_snapshot`, `+ template_id`, `+ template_version` |
+| 5 | `20260731104000_storage_objects_deny_by_default.sql` | Makes the verified-incidental fail-closed posture explicit |
+| 6 | `20260731105000_communication_status_check.sql` | Pin the 6 live `status` values; `provider_message_id` unique index |
+| 7 | `20260801100000_communication_category_drop_default.sql` | **Retirement** — after the fallback counter reads zero for a release |
 
-**Not in Phase 0:** `communication_thread_links`, structured `content`, retry columns, hierarchy tables. Those are Phase 1+.
-
----
-
-## 4. API and worker changes
-
-**Behavioral (require coordinated client changes)**
-
-| Endpoint | Change | Breaking? |
-|---|---|---|
-| `POST /api/admin/communications/send` | `category` **required**; free-text `to` without `recipient_person_id` now **rejected** (this is bypass #2) | **Yes** — see §5 |
-| `POST /api/admin/communications/family-send` | `category` required | Yes |
-| `POST /api/admin/communications/announcements/[id]/schedule` | `category` required; consent evaluated at schedule time | Yes |
-| `POST .../announcements/[id]/targets` | Writes the canonical shape post-repair | No |
-| `POST /api/admin/communication-scheduled-sends` | `category` required and snapshotted | Yes |
-
-**Additive**
-
-`.../process-due`, `.../family-note`, `.../form-deliver` gain `assertCommunicationsSendAllowed`. Three signed-URL routes gain `assertDocumentAccess`. `web/middleware.ts:41-42` adds the `[binding_id]` Twilio bypass.
-
-**Workers**
-
-`process_communication_messages` gains an eligibility re-check between the queue read (`:133`) and provider dispatch (`:260`/`:270`/`:339`), and skips-with-audit rather than failing. `sms_inbound.py` gains keyword parsing before persistence.
-
-**Providers:** no change. **Note (absorbed defect):** `resend_client.py:38-41` + `communication_message_sender.py:342` — a binding config carrying `html` silently discards the per-message body and sends static binding HTML. Fixed as part of P0-3 because it makes rendering unverifiable.
-
----
-
-## 5. Backfill and compatibility behavior
-
-| Concern | Behavior |
-|---|---|
-| `category` on existing rows | `DEFAULT 'operational'` — the **safer** class (opt-out honored, quiet hours applied). A mis-classification under-sends. Live: 7 rows. |
-| Explicit classification | Every call site passes `category` explicitly; a test asserts **no production caller relies on the default**, satisfying your "not an undocumented default" requirement. |
-| Preference migration | 3 stores → 1. Live has **0 rows in all three**, so this is greenfield wiring; the migration asserts emptiness and **fails loudly** if another environment has data, rather than silently guessing precedence. |
-| `field_values.communication_opt_out` | Kept and made **read-only in the UI**, rendered from `communication_preferences`. Not deleted in Phase 0. |
-| Free-text `to` rejection | **The one genuinely breaking change.** Ships behind `COMMS_REQUIRE_RECIPIENT_PERSON` (default OFF for one release, logging violations), then flipped. Prevents a silent break of any caller I have not found. |
-| `announcement_targets` | Repair is idempotent and shape-agnostic; safe on fresh, PKG-05-first, and (hypothetically) B4-first databases. Live: 0 rows, so no data risk. |
-| Legacy `messages` / `messages_outbox` | **Not retired** (D8). Trigger-gated only. |
-| Rendering | Inline bodies (no template) pass through unchanged. Only template-sourced bodies gain mandatory resolution. |
-
----
-
-## 6. Security implications
-
-**Closed by this phase**
-
-| ID | Issue | Closure |
-|---|---|---|
-| S-A | Consent gate bypassable four ways | Gate relocated to the insert floor; three bypasses removed; DB trigger backstop |
-| S-B | Any org member reads any document | `assertDocumentAccess`: org + role + relationship + path ownership, fail-closed |
-| S-C | 6 objects outside the org-prefix convention | Re-pathed; convention asserted at write |
-| S-D | Unauthenticated upload, no size/MIME limit | Cap + allowlist |
-| S-E | Three send-capable routes ungated | Gates added |
-| S-F | Raw tokens deliverable | Render blocks enqueue |
-| S-G | Storage posture incidental | Explicit deny-by-default policy |
-| S-H | `[binding_id]` webhook outside the bypass | Added |
-
-**Explicitly NOT closed by this phase**
-
-| ID | Issue | Why |
-|---|---|---|
-| **S-1** | **Unauthenticated SMS endpoints (`dispatch.py`)** | **Outside your defined scope — §0.2. Awaiting your decision.** |
-| S-2 | Cross-tenant credential fallback (`communication_message_sender.py:329-334`) | Phase 2 (provider setup) |
-| S-3 | Grants fail open | D7, Phase 4 |
-| S-4 | `GRANT ALL … TO anon` | Phase 1 hygiene |
-| S-5 | Comms metrics ignore location scope | Phase 4 |
-
-**New surface introduced:** none. Phase 0 only removes authority.
+*(v1's DB-trigger migration is removed.)*
 
 ---
 
 ## 7. Test matrix
 
-**Prerequisite: a DB-backed integration harness.** There is currently **zero** DB-backed and **zero** route-level coverage in communications, and `executeCommunicationsSend` has no test file. Building the harness is the first task, not the last.
+**Prerequisite: a DB-backed integration + route-level harness.** Communications currently has **zero** of both, and `executeCommunicationsSend` has no test file. See §9 for why this is commit 0.
 
 | Dimension | Values |
 |---|---|
-| Category | `transactional`, `operational`, `marketing`, `emergency`, `internal` |
-| Channel | `email`, `sms`, `in_app` |
-| Preference state | `opted_in`, `opted_out`, `unset`, no row |
-| Entry point | all 6 LIST A + all 8 LIST B + raw SQL insert + Python dispatch |
-| Quiet hours | inside / outside / `emergency` inside |
-| Recipient identity | resolvable person / free-text address / ambiguous / none |
+| audience | external, internal |
+| category | transactional, operational, marketing, emergency |
+| channel | email, sms, in_app |
+| preference state | opted_in, opted_out, unset, no row |
+| entry point | **one test per path** in classes CM, AD, TO (16 paths) |
+| quiet hours | inside, outside, emergency-inside, transactional-inside |
+| recipient identity | resolvable person, free-text address, ambiguous, none |
+| timing | preference changed **between enqueue and dispatch** |
 
 **Required assertions**
 
-- Every LIST B path is blocked for an opted-out recipient — **one test per path**, so a regression names the path
-- A raw SQL insert of a suppressed outbound row is rejected by the trigger
-- Python dispatch skips-with-audit a row that became ineligible after enqueue
-- STOP → `opted_out` + audit row + the **next** send blocked; START re-opts; HELP replies without changing state
-- `emergency` is never suppressed by quiet hours; `transactional` is never blocked by opt-out; `marketing` requires opt-in
+- Every CM/AD path blocked for an opted-out recipient — one named test each
+- **A row inserted by raw SQL with no category is blocked at dispatch** (replaces the trigger)
+- **A preference that changes after enqueue blocks the message at dispatch**
+- Re-running the drain over a blocked row is a no-op (idempotence)
+- STOP → `opted_out` + audit + next send blocked; START re-opts; HELP replies without state change
+- `emergency` never suppressed; requires its permission; writes an audit row
+- `audience='internal'` never evaluates recipient consent and never reaches a provider
+- `transactional` still fails closed on unusable channel / invalid identity
 - No message reaches a provider containing `{{`
-- Preview output === send output for the same template + context (byte-identical)
-- Signed URL: guessed id, cross-org, low-privilege viewer, cross-location, cross-child, malformed path, non-conforming path — **all fail closed**
-- `announcement_targets` repair is idempotent (run twice) and correct on both shapes
-- Migration replay from empty reaches canonical schema
+- **Preview output === send output**, byte-identical, same renderer
+- Signed URL: guessed id, cross-org, low-privilege viewer, cross-location, cross-child, malformed path, non-conforming path — all fail closed
+- `announcement_targets` repair idempotent (run twice), correct on fresh replay **and** from the live shape, non-destructive
+- TS engine and Python recheck agree on the shared golden fixtures
 
 **Deleted:** every `readFileSync`-regex shape test replaced by a real one.
 
 ---
 
-## 8. Rollout and rollback
+## 8. Rollout, rollback, live verification
 
-**Order (each independently deployable and revertible):**
+**Shadow mode is the core of the strategy.** P0-1 enforcement ships evaluating-and-logging first; enforcement is a flag flip, so disabling it needs no deploy. Live volume is 7 messages, so shadow is quiet here — its value is any environment with real traffic.
 
-1. Test harness — no production change
-2. **P0-4** — migration + route. *Lowest risk, currently broken, immediate win.* Rollback: revert route; the additive columns are harmless.
-3. **P0-2** — `assertDocumentAccess` + three routes + re-path + storage policy. Rollback: revert helper; routes revert to prior behavior.
-4. **P0-3** — renderer + block-on-unresolved. Rollback: feature-flag the block, keep rendering.
-5. **P0-1** — the largest. Sub-staged:
-   - 5a. `category` column, default, explicit call sites (no enforcement)
-   - 5b. Preference migration + STOP/START/HELP + audit
-   - 5c. Gate relocation + Python re-check, **in shadow mode** — evaluate and log, do not block
-   - 5d. Read shadow logs; confirm zero unexpected blocks
-   - 5e. Enforce
-   - 5f. DB trigger floor last (the backstop, once nothing should hit it)
+**Rollback:** every commit is independently revertible. Migrations are additive; the only destructive step (#7, drop default) is deliberately deferred to a later release.
 
-**Rollback:** each stage is a revert. The gate is enforced by a flag flip (5e), so disabling enforcement is instant and needs no deploy. The DB trigger is `DROP TRIGGER`.
+**Live verification — before:** re-confirm `announcement_targets` shape; re-confirm all preference stores empty (**if not, stop** — the migration's assumption is invalid); re-confirm bucket private and storage policies zero; read `persons/[id]/profile-photo` auth; determine what drives `process-due` in production.
 
-**Shadow mode is the core of the strategy.** Live volume is 6 messages, so shadow will be quiet here — its value is in whatever environment has real traffic.
+**Live verification — after each commit:** P0-4 → create a real announcement + target via the API, confirm, delete. P0-2 → authenticate as a low-privilege role, attempt a signed URL for an out-of-scope document, expect 403. P0-3 → send one templated message to an internal address, assert no `{{` and `rendered_snapshot` matches. P0-1 → set a test person `opted_out`, attempt from **each** CM/AD path, assert all blocked and audited; send STOP from a test handset.
 
 ---
 
-## 9. Live verification steps
+## 9. Execution order and commit plan
 
-Read-only unless stated. Same method as `PHASE-0-LIVE-VERIFICATION.md`.
+Your order is adopted with **one change, explained before execution as required**.
 
-**Before**
-1. Re-confirm `announcement_targets` shape (guard against drift since verification)
-2. Confirm preference stores still empty — if not, **stop**; the migration's precedence assumption is invalid
-3. Confirm bucket still private, storage policies still zero
-4. Read `persons/[id]/profile-photo` auth (the one route not yet read)
-5. Confirm whether anything drives `process-due` in production
+### The change: a test harness must be commit 0
 
-**After each stage**
-- P0-4: insert a target via the API (**write — a real announcement in the staging org**), confirm it persists, delete it
-- P0-2: authenticate as a low-privilege role and attempt a signed URL for a document that role should not reach; expect 403
-- P0-3: send one message from a template to an internal address; assert no `{{` and that `rendered_snapshot` matches
-- P0-1: set a test person to `opted_out`, attempt a send from **each** LIST A and LIST B path, assert all blocked and audited; send STOP from a test handset, assert the preference flips and the next send blocks
+Your item 7 places "integration tests, live verification, and closeout" last. Final integration tests belong there. But the **harness itself** must come first, because:
 
-**Post-deploy**
-- Zero outbound rows with `category = 'operational'` that were not explicitly classified
-- Zero delivered messages containing `{{`
-- Shadow-mode logs show no unexpected blocks before 5e
+- There is **zero** DB-backed and **zero** route-level test infrastructure in communications today. Not thin — absent.
+- Every commit from 1 onward makes a safety claim (`this path is now gated`, `this document is now protected`) that is **unverifiable without it**.
+- ~23 existing "contract" tests are `readFileSync` + regex asserting code *shape*. They pass while behavior is broken — which is precisely how P0-1 and D4 stayed invisible.
+
+Writing the harness after the repairs would mean shipping seven safety commits on the same evidentiary basis that produced the defects.
+
+### Commit plan
+
+| # | Commit | Concern | Depends on | Independently revertible |
+|---|---|---|---|---|
+| **0** | `test(comms): DB-backed integration + route-level harness` | Prerequisite | — | Yes (test-only) |
+| **1** | `fix(comms): repair announcement_targets to canonical shape` | P0-4 | 0 | Yes |
+| **2** | `feat(comms): communication classification + eligibility foundation` | P0-1a | 0 | Yes |
+| **3** | `feat(comms): SMS keyword processing (STOP/START/HELP)` | P0-1b | 2 | Yes |
+| **4** | `feat(comms): dispatch-time eligibility revalidation` | P0-1c | 2 | Yes |
+| **5** | `feat(comms): server-authoritative template rendering` | P0-3 | 0 | Yes |
+| **6** | `fix(security): document signed-URL authorization` | P0-2 | 0 | Yes |
+| **7** | `test(comms): integration coverage, live verification, closeout` | Closeout | 1–6 | Yes |
+
+**Rationale for the rest of the order (unchanged from yours):**
+
+- **1 first** — highest-confidence currently-broken defect, smallest blast radius, needs no decision, and delivers a working feature immediately.
+- **2 before 3 and 4** — keyword handling writes preferences; dispatch revalidation reads the snapshot. Both require the classification foundation.
+- **6 is fully independent** of 1–5 and could move anywhere; kept at your position.
+- **7 last** — final integration and closeout, as you specified.
+
+**Commit isolation:** Phase 0 commits are separate from all Conversation Platform planning commits, and each of 1–6 addresses exactly one concern.
 
 ---
 
 ## 10. Explicit non-goals
 
-Phase 0 does **not**:
-
-1. **Redesign storage.** Live verification demonstrates it is unnecessary — bucket private, RLS fail-closed.
-2. Retire legacy `public.messages` / `messages_outbox` (D8).
-3. Converge composers, or delete the orphaned/legacy composer surfaces.
-4. Add `communication_thread_links` or structured `content` (D1/D2 — Phase 1).
-5. Add retry, DLQ, queue lease, or a scheduler (Phase 2) — **except** the eligibility re-check.
-6. Build identity/provider write paths (Phase 2).
-7. Wire announcement **delivery** (Phase 4) — Phase 0 repairs the schema and adds the disclosure banner only.
-8. Add quiet-hours **configuration UI** — Phase 0 enforces `emergency` exemption using existing tour config; general quiet hours are Phase 4.
-9. Touch `dispatch.py` (**S-1 — awaiting your decision**).
-10. Delete `scripts/dev/communications-resend-smoke-enqueue.sql` — a warning header only.
-11. Introduce any new runtime, or weaken any org, relationship, audit, consent, or permission boundary.
+Phase 0 does **not**: redesign storage (verification shows it unnecessary) · retire legacy `public.messages`/`messages_outbox` (D8) · converge composers · add `communication_thread_links` or structured `content` (Phase 1) · add retry, DLQ, lease, or scheduler (Phase 2, except the revalidation) · build identity write paths (Phase 2) · wire announcement *delivery* (Phase 4 — Phase 0 repairs schema and adds the disclosure banner only) · add quiet-hours configuration UI (Phase 4) · **touch `dispatch.py` (S-1)** · delete the smoke-SQL file · reconcile the 34 orphaned storage objects · rename the `channel` enum · introduce any new runtime · weaken any org, relationship, audit, consent, or permission boundary.
 
 ---
 
-## 11. Boundary check
-
-Per your stop-condition rule, three choices could be read as touching a canonical ownership boundary. My assessment:
-
-| Choice | Boundary? | Reasoning |
-|---|---|---|
-| Moving the gate from `executeCommunicationsSend` to `enqueueCanonicalOutboundMessage` | **No** | Both are Communications Runtime internals. Relocation within one owner. |
-| Python re-check at dispatch | **No** | Defense in depth. Python already owns dispatch; adding a check does not move ownership. Flagged last turn; I consider it in-contract. |
-| **DB trigger as the eligibility floor** | **Arguably yes — flagging** | Your boundary states *"code owns security and executable invariants."* A trigger is code owning an invariant, but it relocates part of that invariant into the database. I recommend it because it is the **only** mechanism covering raw SQL and seed scripts, and the live smoke-SQL hazard (§0.3) is a concrete instance. **If you prefer the invariant stay in application code, say so and I will drop migration #4** — the cost is that raw-SQL inserts remain ungated. |
-
-Everything else in this contract is repair within existing ownership.
-
----
-
-## 12. Ready-to-start checklist
+## 11. Readiness
 
 | Gate | Status |
 |---|---|
+| Enumeration complete and classified | ✅ `SEND-PATH-MATRIX.md` |
 | Contract internally consistent | ✅ |
-| No new architectural decision required | ⚠️ **Two open: D3, and the §11 trigger question** |
-| Scope decision outstanding | ⚠️ **S-1 (`dispatch.py`)** |
-| Live verification complete | ✅ |
-| Commit separation | ✅ Phase 0 commits on their own, separate from Conversation Platform work |
+| No unresolved canonical ownership change | ✅ — DB-trigger question resolved by Decision §2 (two layers; Python dispatch covers direct inserts) |
+| Decisions required to start | ✅ D3 answered |
+| Out-of-scope item flagged, not silently absorbed | ⚠️ **S-1 open** — excluded, not resolved |
+| Coverage claim bounded | ✅ Paths 21–22 explicitly excluded from any "all paths protected" claim |
+| Commit isolation | ✅ |

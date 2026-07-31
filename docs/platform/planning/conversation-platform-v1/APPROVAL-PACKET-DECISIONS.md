@@ -1,10 +1,50 @@
 ---
 title: Conversation Platform V1 — Twelve-Decision Approval Packet
-status: awaiting Kelly's decisions
+status: D3 DECIDED · D1, D2, D4–D12 open
 date: 2026-07-30
 ---
 
 # Conversation Platform V1 — Approval Packet
+
+---
+
+## ✅ Decision log — updates caused by Kelly's 2026-07-30 decisions
+
+### D3 — DECIDED. Two-axis model approved, with amendments.
+
+**Approved as proposed**, with three changes to what I recommended:
+
+| My proposal | Decided | Effect |
+|---|---|---|
+| 5 categories incl. `internal` | **4 categories** — `transactional`, `operational`, `marketing`, `emergency` | `internal` was a category *mistake* on my part: it conflated *who the audience is* with *what compliance class applies*. |
+| — | **New `audience` axis: `external \| internal`** | Cleaner than my model. Internal staff messages no longer inherit external recipient-consent behavior merely by sharing the runtime. |
+| `purpose` free text, compliance-inert | Unchanged, with examples fixed: `tour_confirmation`, `tour_reminder`, `enrollment_follow_up`, `missing_document`, `payment_receipt`, `closure_notice`, `internal_handoff` | Domain/config owns the vocabulary; shared platform code owns category behavior |
+| Default `operational` | Unchanged, but the fallback must be **narrowly bounded, observable, and retired by migration** | Implemented as a counter-instrumented one-release fallback + a `DROP DEFAULT` migration |
+
+`emergency` additionally requires a **distinct permission** and writes an **audit row** — it must not be a convenience bypass for ordinary operational messaging.
+
+The canonical model is now:
+
+```text
+audience: external | internal
+channel:  email | sms | in_app            (in_app is the internal transport)
+category: transactional | operational | marketing | emergency
+purpose:  domain or tenant-specific key
+```
+
+### Knock-on updates to other decisions
+
+| Decision | Update |
+|---|---|
+| **D2** (structured content) | The authored representation gains `audience` alongside `category`/`purpose`. No other change. |
+| **D6** (internal conversation placement) | **Materially strengthened toward my (c) recommendation.** The `audience` axis is precisely the mechanism that makes a shared Conversation Runtime safe for internal threads — it lets one runtime serve both without internal messages inheriting external consent semantics. The instruction *"Internal staff messages must not inherit external recipient-consent behavior merely because they share the Conversation Runtime"* presupposes a shared runtime, which is option (c). **D6 is now largely pre-answered; it remains open only on scope, not on placement.** |
+| **Phase mapping** | Phase 2 renamed **"Composer Convergence and Production Send Pipeline"** (sequencing challenge accepted). D7's dependent phase is unchanged. |
+| **Enforcement boundary** | Not a numbered decision, but resolved: **two** layers (TS enqueue + Python dispatch). The DB-trigger question I flagged in the Phase 0 contract §11 is **closed** — Python dispatch covers direct database inserts because it is the only route to a provider. Migration dropped. |
+
+**Still open:** D1, D2, D4, D5, D6 (scope only), D7, D8, D9, D10, D11, D12.
+**Still unaddressed:** **S-1** — `dispatch.py`'s two unauthenticated SMS endpoints. Not a numbered decision; raised twice; excluded from Phase 0.
+
+---
 
 **Numbering note.** Your direction renumbered the decisions and promoted structured message content to its own decision. This packet uses **your** numbering. Mapping from the discovery plan §7: your D1←my D1, **D2 is new**, D3←D2, D4←D4, D5←D3, D6←D5, D7←D6, D8←D7, D9←D8, D10←D9, D11←D10, D12←D11. My old D12 (hotfix go/no-go) is **resolved** by your authorization and is dropped.
 
