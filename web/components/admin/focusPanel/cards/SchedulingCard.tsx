@@ -1881,6 +1881,23 @@ function RoomPicker({
 
     return (
         <div style={{ display: "grid", gap: 10, paddingTop: 4, minHeight: 0 }} data-room-picker="true">
+            <div
+                style={{ display: "flex", alignItems: "center", gap: 8 }}
+                data-schedule-nav="true"
+            >
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    aria-label="Back to assignment"
+                    data-schedule-back="true"
+                    data-schedule-back-target="Assignment"
+                    data-room-picker-back="true"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    style={{ padding: "2px 0" }}
+                >
+                    ← Back
+                </button>
+            </div>
             {label("Choose a room")}
             <p style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}>
                 Eligible rooms match this child&rsquo;s age and program as of the start date. Ineligible rooms stay

@@ -3346,9 +3346,11 @@ html[data-alloy-os-runtime-split="true"]
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   display: flex;
   flex-direction: column;
-  /* Content-sized; leave bottom inset so the rounded card sits fully on the surface. */
+  /* Content-sized; leave bottom inset so the rounded card sits fully on the surface.
+   * Do NOT use percentage-of-cell max-height — elevated cells reserve only the resting
+   * height, so `100%` crushed Assignments below its own list content. */
   min-height: 0;
-  max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
+  max-height: min(75vh, calc(100dvh - 64px));
   height: max-content;
   overflow: hidden;
   z-index: 60;
@@ -3390,8 +3392,8 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-schedule-detail="true"]),
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) {
   height: max-content;
-  /* Leave bottom inset so the rounded card sits on the surface (like Household). */
-  max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
+  /* Viewport-based only — cell % height is the resting reservation and clips content. */
+  max-height: min(75vh, calc(100dvh - 64px));
   overflow: hidden;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
@@ -3478,6 +3480,16 @@ html[data-alloy-os-runtime-split="true"]
   .alloy-os-sched-days-hours-band {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   }
+}
+/* Elevated scheduling summary/list: grow with content; scroll only when viewport-capped. */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]:has([data-scheduling-card="true"]):not(:has([data-schedule-editor="true"])):not(:has([data-schedule-detail="true"])):not(:has([data-room-picker="true"]))
+  .alloy-os-ucard__body,
+.alloy-os-ucard--expanded:has([data-scheduling-card="true"]):not(:has([data-schedule-editor="true"])):not(:has([data-schedule-detail="true"])):not(:has([data-room-picker="true"]))
+  .alloy-os-ucard__body {
+  max-height: none !important;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .alloy-os-sched-surface,
 .alloy-os-ucard--expanded:has([data-scheduling-card="true"]) .alloy-os-ucard__body,
@@ -6302,7 +6314,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   position: relative;
   z-index: 1;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
-  max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
+  /* Viewport-based — match in-grid elevated cards (never resting-cell %). */
+  max-height: min(75vh, calc(100dvh - 64px));
   /* Clip to the bordered shell — overflow:visible let the schedule footer paint
    * below the max-height border box (white card ended above Cancel/Create). */
   overflow: hidden;
@@ -6323,7 +6336,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 /* Inner Universal Card — fill host; shell chrome lives on the host above. */
 .alloy-os-focus-panel-linked-host__card .alloy-os-ucard {
   width: 100%;
-  flex: 1 1 auto;
+  /* Content-sized; shrink only when the host hits its viewport max-height. */
+  flex: 0 1 auto;
   min-height: 0;
   max-height: 100%;
   height: auto;
@@ -6339,7 +6353,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex: 1 1 auto;
   min-height: 0;
   max-height: none !important;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   -webkit-overflow-scrolling: touch;
