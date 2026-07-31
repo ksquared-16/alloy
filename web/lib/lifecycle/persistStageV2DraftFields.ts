@@ -1,17 +1,15 @@
 /**
- * Persist V2 builder stage fields (grain, purpose, description, etc.) on stage save.
+ * V2 builder stage fields (grain, purpose, description, …) submitted by StageEditorV2.
  *
- * Mirrors persistStageOperatingPlanForLifecycleStageSave but for the new V2 fields
- * introduced by StageEditorV2. All fields are stored in the builder stage JSON.
+ * This module used to also PERSIST them, with its own `UPDATE departments.metadata` issued from
+ * the stage-runtime-config route after the orchestrator had already written the same column four
+ * times. That writer is gone: the fields are now applied to the in-memory draft by
+ * `applyStageV2DraftFields` (lib/lifecycle/stageDraftTransforms.ts) and persisted in the single
+ * draft write, so nothing here touches the published projection.
+ *
+ * What remains is the input contract — parsing and its type.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-    LIFECYCLE_BUILDER_METADATA_KEY,
-    lifecycleBuilderFromDepartmentMetadata,
-    mergeLifecycleBuilderIntoMetadata,
-} from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
 import {
     parseStageGrain,
     parseSubjectResolutionStrategy,
@@ -34,44 +32,6 @@ export type StageV2DraftInput = {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
-}
-
-function applyV2DraftToBuilderStage(
-    metadata: Record<string, unknown>,
-    stageKey: string,
-    draft: StageV2DraftInput,
-): Record<string, unknown> {
-    const out = structuredClone(metadata) as Record<string, unknown>;
-    const builderRaw = out[LIFECYCLE_BUILDER_METADATA_KEY];
-    if (!isRecord(builderRaw) || !Array.isArray(builderRaw.processes)) return out;
-
-    for (let pi = 0; pi < builderRaw.processes.length; pi++) {
-        const processRaw = builderRaw.processes[pi];
-        if (!isRecord(processRaw) || !Array.isArray(processRaw.stages)) continue;
-
-        for (let si = 0; si < processRaw.stages.length; si++) {
-            const stageRaw = processRaw.stages[si];
-            if (!isRecord(stageRaw) || String(stageRaw.key ?? "").trim() !== stageKey.trim()) continue;
-
-            if (draft.grain !== undefined) stageRaw.grain = draft.grain;
-            if (draft.purpose !== undefined) stageRaw.purpose = draft.purpose;
-            if (draft.description !== undefined) stageRaw.description = draft.description || undefined;
-            if (draft.parent_stage_key !== undefined) stageRaw.parent_stage_key = draft.parent_stage_key || undefined;
-            if (draft.allow_skipping !== undefined) stageRaw.allow_skipping = draft.allow_skipping;
-            if (draft.operator_guidance !== undefined) stageRaw.operator_guidance = draft.operator_guidance || undefined;
-            if (draft.subject_resolution_strategy !== undefined) stageRaw.subject_resolution_strategy = draft.subject_resolution_strategy;
-            if (draft.candidate_actions !== undefined) {
-                stageRaw.action_catalog_v1 = { version: 1, candidate_actions: draft.candidate_actions };
-            }
-
-            processRaw.stages[si] = stageRaw;
-            builderRaw.processes[pi] = processRaw;
-            out[LIFECYCLE_BUILDER_METADATA_KEY] = builderRaw;
-            return out;
-        }
-    }
-
-    return out;
 }
 
 export function parseStageV2DraftInput(raw: unknown): StageV2DraftInput | null {
@@ -100,32 +60,4 @@ export function parseStageV2DraftInput(raw: unknown): StageV2DraftInput | null {
             }));
     }
     return result;
-}
-
-export async function persistStageV2DraftFields(
-    supabase: SupabaseClient,
-    params: {
-        orgId: string;
-        departmentId: string;
-        stageKey: string;
-        metadata: Record<string, unknown>;
-        draft: StageV2DraftInput;
-    },
-): Promise<{ metadata: Record<string, unknown>; updated: boolean }> {
-    let nextMetadata = applyV2DraftToBuilderStage(params.metadata, params.stageKey.trim(), params.draft);
-
-    // P6.S3: stamp command_set_v1 after stage catalog/draft writes.
-    const builder = lifecycleBuilderFromDepartmentMetadata(nextMetadata);
-    const stamped = ensureBuilderCommandSetsOnSave(builder);
-    nextMetadata = mergeLifecycleBuilderIntoMetadata(nextMetadata, stamped);
-
-    const { error } = await supabase
-        .from("departments")
-        .update({ metadata: nextMetadata, updated_at: new Date().toISOString() })
-        .eq("id", params.departmentId)
-        .eq("org_id", params.orgId);
-
-    if (error) throw new Error(error.message);
-
-    return { metadata: nextMetadata, updated: true };
 }
