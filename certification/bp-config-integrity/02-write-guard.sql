@@ -186,6 +186,7 @@ BEGIN
     -- ---------------------------------------------------------------
     UPDATE public.business_process_drafts
     SET payload = jsonb_build_object('version', 1, 'processes', '[]'::jsonb, 'mark', 'INCOMPLETE'),
+        draft_revision = draft_revision + 1,
         draft_status = 'draft',
         validation_errors = '[{"code":"dangling_transition"}]'::jsonb,
         validated_at = NULL

@@ -33,10 +33,23 @@ export type BusinessProcessDraft = {
     departmentId: string;
     /** Stored configuration payload. May be invalid — that is the point of a draft. */
     payload: Record<string, unknown>;
-    /** The publication this draft was opened against. The conflict token. */
+    /** The publication this draft was opened against. The PUBLICATION conflict token. */
     baseRevisionId: string | null;
+    /**
+     * The DRAFT-EDIT conflict token. Advances by one on every payload change.
+     * `baseRevisionId` only moves at publish, so it cannot detect two operators editing the same
+     * draft between publishes; this can.
+     */
+    draftRevision: number;
     status: "draft" | "validated";
     validationErrors: unknown[];
+};
+
+export type BusinessProcessPublication = {
+    revisionId: string;
+    revisionNumber: number;
+    payloadChecksum: string;
+    publishedAt: string;
 };
 
 export type PublishResult = {
@@ -60,6 +73,25 @@ export class BusinessProcessStaleDraftError extends Error {
     }
 }
 
+/**
+ * Someone else edited the draft after this editor loaded it.
+ *
+ * Deliberately a different error from {@link BusinessProcessStaleDraftError}: one means "reload,
+ * a colleague is editing", the other means "a newer configuration is already live". Collapsing
+ * them would give the operator no way to tell which recovery applies.
+ */
+export class BusinessProcessDraftEditConflictError extends Error {
+    readonly code = "business_process_draft_edit_conflict";
+    constructor(
+        readonly currentDraftRevision: number | null,
+        readonly attemptedDraftRevision: number,
+        message: string,
+    ) {
+        super(message);
+        this.name = "BusinessProcessDraftEditConflictError";
+    }
+}
+
 export class BusinessProcessDraftInvalidError extends Error {
     readonly code = "business_process_draft_not_validated";
     constructor(readonly validationErrors: unknown[]) {
@@ -67,6 +99,10 @@ export class BusinessProcessDraftInvalidError extends Error {
         this.name = "BusinessProcessDraftInvalidError";
     }
 }
+
+/** Every read of a draft returns the same shape, including both conflict tokens. */
+const DRAFT_COLUMNS =
+    "id, department_id, payload, base_revision_id, draft_revision, draft_status, validation_errors";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value != null && typeof value === "object" && !Array.isArray(value);
@@ -94,21 +130,44 @@ export async function loadPublishedConfiguration(
 }
 
 /**
- * Open the draft for editing, creating it from the published projection on first use so the
- * operator starts from what is live rather than from nothing.
+ * Open the draft for editing.
+ *
+ * READ PRECEDENCE — the canonical order every editor surface must follow:
+ *
+ *   1. the existing editable draft, if there is one;
+ *   2. otherwise a new draft seeded from the latest published configuration;
+ *   3. otherwise, only for a department with no configuration at all, `templateSeed`.
+ *
+ * Step 2 reads the published projection through {@link loadPublishedConfiguration} rather than
+ * touching `departments.metadata` directly. That matters for every existing tenant: they have
+ * `lifecycle_builder_v1` and zero publications, so the projection IS their latest publication until
+ * they publish for the first time.
+ *
+ * Step 3 fires ONCE, at creation, and never again — the template is a seed, never a runtime or
+ * reload-time authority (decision D1). A department that already has configuration never reaches it,
+ * so a save can never resurrect template defaults an operator deleted.
  */
 export async function openDraft(
     supabase: SupabaseClient,
-    params: { orgId: string; departmentId: string; actorUserId?: string | null },
+    params: {
+        orgId: string;
+        departmentId: string;
+        actorUserId?: string | null;
+        /** Applied only when the department has no published configuration whatsoever. */
+        templateSeed?: LifecycleBuilderV1 | null;
+    },
 ): Promise<BusinessProcessDraft> {
     const existing = await readDraft(supabase, params);
     if (existing) return existing;
 
-    const published = (await loadPublishedConfiguration(supabase, params)) ?? {
-        version: 1,
-        active_process_id: null,
-        processes: [],
-    };
+    const publishedProjection = await loadPublishedConfiguration(supabase, params);
+    const published =
+        publishedProjection ??
+        (params.templateSeed ? serializeLifecycleBuilderV1(params.templateSeed) : null) ?? {
+            version: 1,
+            active_process_id: null,
+            processes: [],
+        };
 
     // Seed base_revision_id from the current publication so the very first save already carries the
     // right conflict token — otherwise the first publish would look like a first-ever publish and
@@ -127,7 +186,7 @@ export async function openDraft(
             created_by: params.actorUserId ?? null,
             updated_by: params.actorUserId ?? null,
         })
-        .select("id, department_id, payload, base_revision_id, draft_status, validation_errors")
+        .select(DRAFT_COLUMNS)
         .single();
     if (error) throw new Error(error.message);
     return mapDraft(data);
@@ -139,7 +198,7 @@ export async function readDraft(
 ): Promise<BusinessProcessDraft | null> {
     const { data, error } = await supabase
         .from("business_process_drafts")
-        .select("id, department_id, payload, base_revision_id, draft_status, validation_errors")
+        .select(DRAFT_COLUMNS)
         .eq("org_id", params.orgId)
         .eq("department_id", params.departmentId)
         .maybeSingle();
@@ -161,14 +220,31 @@ export async function saveDraft(
         departmentId: string;
         builder: LifecycleBuilderV1;
         actorUserId?: string | null;
+        /**
+         * The `draftRevision` the editor loaded. Supplying it makes the write a compare-and-set:
+         * if a colleague saved in between, this fails instead of silently overwriting them.
+         * Omit only for callers that legitimately have no prior read (migrations, seeds).
+         */
+        expectedDraftRevision?: number;
     },
 ): Promise<BusinessProcessDraft> {
     const payload = serializeLifecycleBuilderV1(params.builder);
 
-    const { data, error } = await supabase
+    // The database trigger requires payload changes to advance the token by exactly one, so the
+    // next value is computed here rather than left to a raw `+ 1` PostgREST cannot express.
+    const current =
+        params.expectedDraftRevision ??
+        (await readDraft(supabase, params))?.draftRevision ??
+        null;
+    if (current == null) {
+        throw new Error("There is no draft configuration to save.");
+    }
+
+    let query = supabase
         .from("business_process_drafts")
         .update({
             payload,
+            draft_revision: current + 1,
             draft_status: "draft",
             validation_errors: [],
             validated_at: null,
@@ -177,10 +253,22 @@ export async function saveDraft(
             updated_at: new Date().toISOString(),
         })
         .eq("org_id", params.orgId)
-        .eq("department_id", params.departmentId)
-        .select("id, department_id, payload, base_revision_id, draft_status, validation_errors")
-        .single();
+        .eq("department_id", params.departmentId);
+
+    // The compare-and-set. A conditional UPDATE is a single atomic statement, so no RPC is needed.
+    query = query.eq("draft_revision", current);
+
+    const { data, error } = await query.select(DRAFT_COLUMNS).maybeSingle();
     if (error) throw new Error(error.message);
+    if (!data) {
+        const latest = await readDraft(supabase, params);
+        throw new BusinessProcessDraftEditConflictError(
+            latest?.draftRevision ?? null,
+            current,
+            "Someone else changed this configuration while you were editing. " +
+                "Reload to see their changes, then reapply yours.",
+        );
+    }
     return mapDraft(data);
 }
 
@@ -212,7 +300,7 @@ export async function recordDraftValidation(
         })
         .eq("org_id", params.orgId)
         .eq("department_id", params.departmentId)
-        .select("id, department_id, payload, base_revision_id, draft_status, validation_errors")
+        .select(DRAFT_COLUMNS)
         .single();
     if (error) throw new Error(error.message);
     return mapDraft(data);
@@ -273,13 +361,14 @@ export async function rollbackToRevision(
     return mapPublishResult(data);
 }
 
-async function currentPublishedRevisionId(
+/** The latest publication for a department, or null before the first publish. */
+export async function latestPublication(
     supabase: SupabaseClient,
     params: { orgId: string; departmentId: string },
-): Promise<string | null> {
+): Promise<BusinessProcessPublication | null> {
     const { data, error } = await supabase
         .from("configuration_publications")
-        .select("revision_id")
+        .select("revision_id, revision_number, payload_checksum, published_at")
         .eq("org_id", params.orgId)
         .eq("domain_key", BUSINESS_PROCESS_DOMAIN_KEY)
         .eq("subject_id", params.departmentId)
@@ -287,7 +376,21 @@ async function currentPublishedRevisionId(
         .limit(1)
         .maybeSingle();
     if (error) throw new Error(error.message);
-    return (data as { revision_id?: string } | null)?.revision_id ?? null;
+    if (!data) return null;
+    const row = data as Record<string, unknown>;
+    return {
+        revisionId: String(row.revision_id ?? ""),
+        revisionNumber: Number(row.revision_number ?? 0),
+        payloadChecksum: String(row.payload_checksum ?? ""),
+        publishedAt: String(row.published_at ?? ""),
+    };
+}
+
+async function currentPublishedRevisionId(
+    supabase: SupabaseClient,
+    params: { orgId: string; departmentId: string },
+): Promise<string | null> {
+    return (await latestPublication(supabase, params))?.revisionId ?? null;
 }
 
 /**
@@ -320,6 +423,7 @@ function mapDraft(row: unknown): BusinessProcessDraft {
         departmentId: String(r.department_id),
         payload: isRecord(r.payload) ? r.payload : {},
         baseRevisionId: r.base_revision_id ? String(r.base_revision_id) : null,
+        draftRevision: Number(r.draft_revision ?? 1),
         status: r.draft_status === "validated" ? "validated" : "draft",
         validationErrors: Array.isArray(r.validation_errors) ? r.validation_errors : [],
     };

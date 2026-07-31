@@ -789,6 +789,11 @@
         border-color 0.15s ease;
 }
 
+.config-secondary-btn--sm {
+    padding: 0.3125rem 0.625rem;
+    font-size: 0.6875rem;
+}
+
 .config-secondary-btn:hover:not(:disabled) {
     border-color: rgba(0, 162, 131, 0.28);
     background: rgba(0, 162, 131, 0.04);

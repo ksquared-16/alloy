@@ -34,6 +34,8 @@ export type DraftRow = {
     department_id: string;
     payload: Record<string, unknown>;
     base_revision_id: string | null;
+    /** Mirrors the column default; the CAS on save compares against it. */
+    draft_revision?: number;
     draft_status: "draft" | "validated";
     validation_errors: unknown[];
 };
@@ -76,6 +78,13 @@ export type StageSaveStore = {
     publishedBuilderBaseline: unknown;
 };
 
+type Row = Record<string, unknown>;
+
+/** Column defaults the real schema applies on INSERT and the service relies on. */
+const TABLE_DEFAULTS: Record<string, Row> = {
+    business_process_drafts: { draft_revision: 1 },
+};
+
 export function createStageSaveStore(init: {
     department: DeptRow;
     workUnits?: WorkUnitRow[];
@@ -86,7 +95,12 @@ export function createStageSaveStore(init: {
     return {
         departments: [init.department],
         work_units: init.workUnits ?? [],
-        business_process_drafts: init.drafts ?? [],
+        // Seeded rows get the same column defaults an INSERT would, so a fixture that omits
+        // `draft_revision` still behaves like a real row rather than defeating the CAS.
+        business_process_drafts: (init.drafts ?? []).map((d) => ({
+            ...(TABLE_DEFAULTS.business_process_drafts as Partial<DraftRow>),
+            ...d,
+        })),
         configuration_publications: init.publications ?? [],
         status_definitions: init.statusDefinitions ?? [],
         writes: [],
@@ -97,11 +111,20 @@ export function createStageSaveStore(init: {
     };
 }
 
-type Row = Record<string, unknown>;
-
-function tableRows(store: StageSaveStore, table: string): Row[] {
+/**
+ * Reads of a table this double does not model return empty; WRITES to one throw.
+ *
+ * The stage bootstrap fans out to a dozen loaders that touch tables irrelevant to what is under
+ * test (forms, form versions, public links). Making every test enumerate them would be noise. But
+ * an unmodelled WRITE is always a real finding — either a typo or a write nobody knew about — so
+ * it must not be swallowed.
+ */
+function tableRows(store: StageSaveStore, table: string, forWrite = false): Row[] {
     const rows = (store as unknown as Record<string, unknown>)[table];
-    if (!Array.isArray(rows)) throw new Error(`stageSaveStore: unknown table "${table}"`);
+    if (!Array.isArray(rows)) {
+        if (forWrite) throw new Error(`stageSaveStore: write to unmodelled table "${table}"`);
+        return [];
+    }
     return rows as Row[];
 }
 
@@ -165,6 +188,7 @@ export function createStageSaveSupabase(store: StageSaveStore): SupabaseClient {
             const applyUpdate = () => {
                 guard();
                 store.writes.push({ table, op: "update", patch });
+                tableRows(store, table, true);
                 const rows = matching();
                 for (const row of rows) Object.assign(row, patch);
                 return rows;
@@ -212,9 +236,13 @@ export function createStageSaveSupabase(store: StageSaveStore): SupabaseClient {
             const materialize = () => {
                 guard();
                 seq += 1;
-                const inserted: Row = { id: row.id ?? `${table}-${seq}`, ...row };
+                const inserted: Row = {
+                    id: row.id ?? `${table}-${seq}`,
+                    ...TABLE_DEFAULTS[table],
+                    ...row,
+                };
                 store.writes.push({ table, op: "insert", patch: row });
-                tableRows(store, table).push(inserted);
+                tableRows(store, table, true).push(inserted);
                 return inserted;
             };
             const chain: Record<string, unknown> = {

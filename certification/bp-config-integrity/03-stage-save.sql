@@ -81,6 +81,7 @@ BEGIN
             '{processes,0,stages,0,stage_operating_plan_v1}',
             jsonb_build_object('version', 1, 'stage_key', 'tour', 'journey_segment', 'family')
         ),
+        draft_revision = draft_revision + 1,
         draft_status = 'draft',
         validation_errors = '[]'::jsonb,
         updated_at = now()

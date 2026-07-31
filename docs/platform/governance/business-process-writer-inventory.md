@@ -48,6 +48,12 @@ Columns: **R** reads first · **U** preserves unknown fields · **CAS** carries 
 | `scripts/simulatePreFixLifecycleE2E.ts:167` INSERT | D | yes | n/a | no | yes | n/a | dev-only |
 | `app/api/admin/lifecycle-catalog/repair/route.ts:35` POST | D | — | — | no | yes | — | migration utility |
 
+**Editor slice 2 (2026-07-31)** added the read half: `buildLifecycleStageBootstrap` and the
+stage-bootstrap route now resolve publication-owned state from the DRAFT
+(`loadBusinessProcessEditorState`), and `POST /api/admin/business-process/configuration/publish` is
+the first product path that calls the publish RPC. `departments.metadata.lifecycle_builder_v1` is
+now read by editors only through `loadPublishedConfiguration`, for side-by-side comparison.
+
 **Editor slice 1 (2026-07-30) migrated the stage save.** It is now the only writer that carries a
 conflict token, writes the draft rather than the projection, and reports `publication_required`.
 Every other row above is still a direct projection writer — that is the remaining worklist, in the

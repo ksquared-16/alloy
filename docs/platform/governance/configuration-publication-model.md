@@ -87,6 +87,71 @@ process domain closes the gap rather than inheriting it.
   identical payloads produce different checksums and no-op detection breaks.
 - Revisions are never updated or deleted. Correction means a new revision.
 
+# The two conflict tokens
+
+`base_revision_id` answers *"was this draft based on the current publication?"*. It cannot answer
+*"did someone else edit this draft while my editor had it open?"*, because it only moves at publish.
+Two operators editing one department between publishes would silently last-write-wins each other —
+the same defect Law 4 forbids, one level down.
+
+So the business-process domain carries **two** tokens, reported separately because the recovery
+differs:
+
+| Token | Column | Moves when | Conflict means | Operator recovery |
+|---|---|---|---|---|
+| Publication | `base_revision_id` | a publish succeeds | a newer configuration is already live | reload, reapply, publish |
+| Draft edit | `draft_revision` | any payload change | a colleague is editing the same draft | reload, reapply, save |
+
+`draft_revision` is compared with a conditional `UPDATE … WHERE draft_revision = <loaded>` — a single
+atomic statement, so no RPC is needed for the compare-and-set. A `BEFORE UPDATE` trigger
+(`guard_business_process_draft_revision`, migration `20260731120000`) rejects any payload change that
+does not advance the token by exactly one, which makes the mechanism **structural rather than
+conventional**. Law 6's lesson in this codebase is that a safety property depending on every caller
+remembering to participate is not a guarantee.
+
+Non-payload updates are exempt: publish rebasing `base_revision_id` and the Validate action
+rewriting `validation_errors` are not configuration edits.
+
+# The draft lifecycle after publication — decided
+
+A draft is **retained and rebased**, never closed or superseded.
+
+`business_process_drafts` is `UNIQUE (org_id, department_id)` and the publish RPC already sets
+`base_revision_id = <the revision it just created>` rather than deleting the row. So publishing
+leaves exactly one draft, now equal to what is live. Consequences, all deliberate:
+
+- *"Are there unpublished changes?"* is a **checksum comparison** between the draft payload and the
+  publication's `payload_checksum`, not a row-existence question.
+- The operator never loses editing context by publishing — the thing they were looking at is still
+  the thing they are looking at.
+- There is exactly one editable object per department, so "which draft am I in?" is never a question
+  the UI has to answer.
+
+The alternative — close the draft at publish and lazily recreate one — was rejected: it makes the
+first edit after every publish a write, and it gives the surface a null state to handle that carries
+no information.
+
+# Editor read precedence
+
+One order, for every editor surface:
+
+```
+editing:   existing draft
+           -> otherwise create a draft from the latest publication
+           -> otherwise (no configuration at all) seed once from the process template
+
+runtime:   the published projection ONLY
+```
+
+Step 2 reads the projection through `loadPublishedConfiguration`, never by touching
+`departments.metadata` directly. That matters for every existing tenant: they have
+`lifecycle_builder_v1` and zero publications, so the projection *is* their latest publication until
+they publish for the first time.
+
+Step 3 fires once, at creation. A department that already has configuration never reaches it, so
+template defaults cannot reappear after creation (decision **D1**) and a save can never resurrect a
+default the operator deleted.
+
 # Conflict model
 
 At publish, inside one transaction:

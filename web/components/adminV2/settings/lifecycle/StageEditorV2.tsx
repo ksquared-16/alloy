@@ -24,6 +24,7 @@ import {
     Building2,
     Package,
 } from "lucide-react";
+import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
@@ -488,7 +489,7 @@ function StickyTopbar({
                 ) : saveState === "saved" ? (
                     <span className="flex items-center gap-1 text-[10px] font-medium text-alloy-juniper" data-testid="stage-editor-v2-saved">
                         <Check size={11} strokeWidth={2.5} />
-                        Saved
+                        Draft saved
                     </span>
                 ) : null}
                 {saveState === "error" && saveError ? (
@@ -544,6 +545,11 @@ export default function StageEditorV2({
     onDirtyChange,
     onDeleteStage,
     workspaceRef,
+    onValidateConfiguration,
+    onPublishConfiguration,
+    onReloadConfiguration,
+    publicationBusy,
+    publicationNotice,
 }: {
     departmentId: string;
     businessProcessKey: string;
@@ -564,6 +570,12 @@ export default function StageEditorV2({
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
     workspaceRef?: React.RefObject<StageEditorV2Handle | null>;
+    /** Publication workflow — draft is saved here, runtime only moves when the operator publishes. */
+    onValidateConfiguration?: () => void | Promise<void>;
+    onPublishConfiguration?: () => void | Promise<void>;
+    onReloadConfiguration?: () => void | Promise<void>;
+    publicationBusy?: boolean;
+    publicationNotice?: string | null;
 }) {
     // ── Sub-editor refs ──
     const fieldReqRef = useRef<LifecycleStageFieldRequirementsEditorHandle | null>(null);
@@ -723,6 +735,17 @@ export default function StageEditorV2({
                 onSave={onSaveStage}
                 onDelete={onDeleteStage}
             />
+
+            {onValidateConfiguration && onPublishConfiguration && onReloadConfiguration ? (
+                <BusinessProcessPublicationBar
+                    state={bootstrap?.configuration_state ?? null}
+                    busy={publicationBusy ?? false}
+                    notice={publicationNotice ?? null}
+                    onValidate={onValidateConfiguration}
+                    onPublish={onPublishConfiguration}
+                    onReload={onReloadConfiguration}
+                />
+            ) : null}
 
             {statusesError ? (
                 <p className="mx-5 mt-2 flex items-center gap-1.5 text-xs text-alloy-ember" role="alert">

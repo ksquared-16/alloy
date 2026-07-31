@@ -8,7 +8,7 @@
 |---|---|
 | Root | `/Users/Kelly/Code/alloy-worktrees/wt6-bp-config-integrity` — managed worktree, **sanctioned** |
 | Sprint / slot | `bp-config-integrity` / **6** (provider `claude`) |
-| Branch | `agent/claude/6-bp-config-integrity` — **10 commits ahead, NOT pushed** |
+| Branch | `agent/claude/6-bp-config-integrity` — **11 commits ahead, NOT pushed** |
 | Base | `origin/staging @ 77ac3e68b` |
 | Port | `3016` (`alloy-dev-start wt6-bp-config-integrity`) |
 | Auth | QA identity `qa-slot6-experimental@example.com` |
@@ -31,7 +31,8 @@ configuration work — see [[worktrees-share-one-live-tenant]] and the root-caus
 | `f773841f6` | Writer inventory + canonical draft service module |
 | `16660f0c5` | Contain the two non-editor bypasses |
 | `6005630a5` | Session handoff |
-| _(this slice)_ | **Editor slice 1** — the stage save moves onto draft persistence |
+| `ce3196c2e` | **Editor slice 1** — the stage save writes a draft, not the projection |
+| _(this slice)_ | **Editor slice 2** — the editor reads the draft, and can publish |
 
 ## Read these
 
@@ -53,38 +54,68 @@ successful publication* rather than *whatever last wrote `departments.metadata`*
 
 ---
 
-# DONE — editor slice 1: the stage save
+# DONE — editor slice 1: the stage save writes a draft
 
-`web/lib/lifecycle/saveLifecycleStageRuntimeConfig.ts` and its route now perform **one** lifecycle
-draft write followed by idempotent companion writes, and **never** touch the published projection.
+`web/lib/lifecycle/saveLifecycleStageRuntimeConfig.ts` and its route perform **one** lifecycle draft
+write followed by idempotent companion writes, and **never** touch the published projection.
 
-Full map, old/new write graphs, defaults classification and the companion-write contract:
-[`docs/platform/governance/business-process-stage-save-decomposition.md`](../platform/governance/business-process-stage-save-decomposition.md).
+Map, old/new write graphs, defaults classification, companion contract:
+[`business-process-stage-save-decomposition.md`](../platform/governance/business-process-stage-save-decomposition.md).
 
-Five direct projection writers were deleted, not merely bypassed:
-`persistPerspectivesV1.ts` (file), and the `persist…ForLifecycleStageSave` writer in
-`persistStatusRollupV1.ts`, `persistQueueMembershipV1.ts`, `persistStageOperatingPlanV1.ts`,
-`persistStageV2DraftFields.ts`. Three hidden-authoring seeds went with them — the membership
-default, the legacy operating-plan default, and the process-level `ensureBuilderCommandSetsOnSave`
-stamp (a third instance, **not** in the original inventory).
+Five direct projection writers were deleted, not bypassed. Three hidden-authoring seeds went with
+them — the membership default, the legacy operating-plan default, and the process-level
+`ensureBuilderCommandSetsOnSave` stamp (a third instance, **not** in the original inventory).
 
-Evidence: 53/53 real-Postgres scenarios (18 + 22 + **13 new** in `03-stage-save.sql`); 23 new vitest
-assertions in `stageSaveDraftPersistence.test.ts` + `stageDraftTransforms.test.ts`; lifecycle +
-configPublication suites went **94 → 86 failures with zero new failures** (8 pre-existing failures
-fixed).
+# DONE — editor slice 2: the editor reads the draft, and can publish
 
-## THE CONSEQUENCE TO DECIDE BEFORE THE NEXT SLICE
+Slice 1 left the editor telling a lie: it saved to the draft and reloaded from the projection, so an
+operator's change appeared to vanish, and there was no way to publish. That is closed.
 
-A stage save now writes the draft and **nothing reads the draft**. The stage editor reads
-`departments.metadata`, so an operator's edit will neither take effect at runtime nor appear on
-reload until a publish happens — and there is no publish affordance yet. The response says
-`publication_required: true`; nothing consumes it.
+**Read precedence**, now one contract for every editor surface
+(`lib/businessProcesses/configuration/businessProcessEditorState.ts`):
 
-This is the publication model behaving as designed, and it is why the guard stays in `warn` and the
-capability is not flipped. But it means **the migrated path must not be exposed to a live tenant
-until the draft-aware read path and the publish action ship.** Decide the order: either
-(a) build read-from-draft + publish next, before migrating any further editor, or
-(b) migrate the remaining editors first and land the read/publish surface as one cut-over.
+```
+editing:  existing draft -> create from latest publication -> seed once from template (creation only)
+runtime:  the published projection ONLY
+```
+
+`buildLifecycleStageBootstrap` resolves every publication-owned field from the draft; the top-level
+siblings (field rules, progression requirements, activation) still come from `departments.metadata`,
+because they are category F and were never publication-owned.
+
+**Two conflict tokens, reported separately** — `base_revision_id` (publication) and the new
+`draft_revision` (draft edit). The second is enforced by a trigger that rejects any payload change
+that does not advance it, so compare-and-set is structural, not a convention a future caller can
+forget. Migration `20260731120000`.
+
+**Publish** is a real product path: `POST /api/admin/business-process/configuration/publish`, which
+runs the full-graph gate then calls `publish_business_process_revision_v1`. It never writes
+`departments.metadata` itself — the guard would reject it, which is the point of having the guard.
+
+**Draft lifecycle: retained and rebased**, not closed. One draft row per department; publish sets
+`base_revision_id` to the revision it created. "Unpublished changes" is a checksum comparison, so an
+operator never loses editing context by publishing. Documented in the publication model doc.
+
+**Also removed:** the two code-default read fallbacks on the editor path
+(`enrollmentQueueMembershipLegacyFallback`, `defaultStageOperatingPlanForEnrollmentStage`). They made
+an unconfigured stage *look* configured, and a save then wrote that appearance back as authored
+configuration. An unconfigured stage now reads as unconfigured (decision D1).
+
+## What is NOT proven: the browser
+
+Kelly's call, 2026-07-31: ship on Postgres + vitest evidence, certify the browser separately.
+Runbook, blockers and the exact decision:
+[`bp-config-integrity-browser-certification-runbook.md`](./bp-config-integrity-browser-certification-runbook.md).
+
+Short version: the shared dev Supabase project has none of this sprint's three migrations, and the
+worktree has no service-role key. Applying the migrations there would install the `departments` write
+guard in its default `enforce` posture and break the other five worktrees' configuration saves. The
+clean unblock is a database of slot 6's own (`supabase start && supabase db reset`), not a change to
+shared infrastructure.
+
+The residual risk is **wiring** — whether `configuration_state` reaches the bar and the buttons post
+what they claim. No logic depends on the browser to be correct, but nobody should call the operator
+experience verified until the runbook runs.
 
 # NEXT SLICE — remaining editors
 
@@ -124,7 +155,12 @@ Reusable pieces this slice leaves behind:
 | Tests prove bypass prevention | ✅ 40/40 Postgres, 33 vitest |
 | Capability says `publish_required` | ❌ correctly not flipped |
 | Stage save atomic | ✅ one draft write, proven in vitest + Postgres |
-| Hidden default writes removed | ✅ three seeds deleted from the save path |
+| Hidden default writes removed | ✅ three seeds deleted from the save path; two read fallbacks too |
+| Editor reads the draft | ✅ one read-precedence contract; reload survives |
+| Publish exists as a product path | ✅ validate + publish routes on the canonical RPC |
+| Draft-edit concurrency | ✅ second token, trigger-enforced |
+| Browser certification | ❌ **blocked — see the runbook** |
+| Typecheck (slice 2) | ⏳ **not obtained** — killed at every heap size under host load 15+; baseline stays 52 |
 | Typecheck | ✅ **full project now completes** — 52 pre-existing errors, **none** in the stage-save graph |
 
 ---
@@ -151,7 +187,8 @@ Two things mattered: **12 GB heap** (6 GB, 8 GB and 10 GB all died) and **idle p
 tsc finish rather than being starved by the other worktree's `scripts/local-dev` daemon. Every
 earlier 144 was OOM-under-contention presenting as a silent death.
 
-Result: **rc=2, 52 errors, none in this slice's graph.** They live in `tests/adminV2/runtime/*`,
+Result at the end of slice 1: **rc=2, 52 errors, none in this slice's graph.** That is the
+baseline for slice 2. They live in `tests/adminV2/runtime/*`,
 `tests/presentation/runtime/*`, `tests/bos/*`, `tests/layout/*`, `tests/platform/*`,
 `tests/lifecycle/processRuntimeCommandConsumption.test.ts` and `scripts/qa/*` — all pre-existing,
 all unrelated. **Use 52 as the baseline** for the next slice.
@@ -160,8 +197,20 @@ Three of the errors that used to be in that count were real defects left by the 
 `lifecycleBuilderConfig.ts` (generic inference widening `version: 1` to `number`; a lost index
 signature in `serializeLifecycleBuilderV1`). They are fixed, so the count went 55 → 52.
 
-`web/tsconfig.stagesave.json` is a narrowed project over the stage-save graph that finishes in
-seconds at 8 GB — useful for a fast inner loop, not a substitute for the full run.
+`web/tsconfig.stagesave.json` (server graph) and `web/tsconfig.stageui.json` (the four editor
+components) are narrowed projects for a fast inner loop — not a substitute for the full run.
+
+**Slice 2 addendum, 2026-07-31.** The full run could NOT be reproduced: every attempt died at 3 GB,
+4 GB, 6 GB, 8 GB and 12 GB heap, foreground and background, at `nice -n 19`, with host load 15-18
+from unrelated desktop apps. Do not read a 0-byte output file as a pass — `grep -c` returns 0 for
+both "clean" and "killed". Write an exit-code sentinel and check it:
+
+```bash
+tsc -p tsconfig.json --noEmit > out.txt 2>&1; echo $? > out.done
+```
+
+`out.done` missing means killed. **Slice 2 therefore reports typecheck as NOT OBTAINED, not green.**
+The 52-error baseline from slice 1 stands until someone reproduces the run on a quiet host.
 
 **Never `git stash pop` in this worktree.** A `stash push` that errors on an untracked pathspec
 leaves the pop to grab `stash@{0}` — an unrelated parked stash from another slot. This happened; it

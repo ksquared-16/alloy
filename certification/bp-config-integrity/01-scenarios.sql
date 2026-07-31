@@ -80,6 +80,7 @@ BEGIN
     -- Second publish from the (correctly rebased) draft succeeds -> revision 2.
     UPDATE public.business_process_drafts
     SET payload = jsonb_build_object('version', 1, 'processes', '[]'::jsonb, 'edit', 'second'),
+        draft_revision = draft_revision + 1,
         draft_status = 'validated', validated_at = now()
     WHERE id = v_draft;
     v_res := public.publish_business_process_revision_v1(v_org, v_dept, v_actor, 'sum-b');
@@ -90,6 +91,7 @@ BEGIN
     UPDATE public.business_process_drafts
     SET base_revision_id = v_rev1,
         payload = jsonb_build_object('version', 1, 'processes', '[]'::jsonb, 'edit', 'STALE'),
+        draft_revision = draft_revision + 1,
         draft_status = 'validated', validated_at = now()
     WHERE id = v_draft;
 
@@ -149,6 +151,7 @@ BEGIN
     -- ---------------------------------------------------------------
     UPDATE public.business_process_drafts
     SET payload = jsonb_build_object('version', 1, 'processes', '[]'::jsonb, 'edit', 'after-rollback'),
+        draft_revision = draft_revision + 1,
         draft_status = 'validated', validated_at = now()
     WHERE id = v_draft;
     v_res := public.publish_business_process_revision_v1(v_org, v_dept, v_actor, 'sum-d');
