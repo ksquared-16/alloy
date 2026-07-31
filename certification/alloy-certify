@@ -116,7 +116,8 @@ cmd_verify() {
     info "Authenticating operator + running certification specs…"
     ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
         CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
-        "$WEB_DIR/node_modules/.bin/playwright" test -c "$CERT_DIR/playwright.config.ts" )
+        "$WEB_DIR/node_modules/.bin/playwright" test -c "$CERT_DIR/playwright.config.ts" \
+            ${CERT_WORKERS:+--workers="$CERT_WORKERS"} ${CERT_GREP:+-g "$CERT_GREP"} )
     green "Authentication established (reusable session captured)"
     green "Runtime verification ready — evidence in certification/evidence/"
 }
@@ -125,7 +126,13 @@ cmd_verify() {
 # that creates them cannot be undone in place — the only honest reset is a fresh database.
 cmd_reset() {
     info "Resetting the cert tenant (full migration history + representative seed)…"
-    sb db reset >/dev/null || die "db reset failed"
+    # Route through the toolkit wrapper, not a raw `supabase db reset`: it gates on Docker health
+    # and retries the transient 502s that used to cost a turn each. Falls back only if absent.
+    if command -v alloy-db-reset >/dev/null 2>&1; then
+        alloy-db-reset "$CERT_DIR" --recover-docker >/dev/null || die "db reset failed"
+    else
+        sb db reset >/dev/null || die "db reset failed"
+    fi
     cmd_seed
     green "Cert tenant reset to a pristine, pre-publication state"
 }

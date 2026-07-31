@@ -32,10 +32,22 @@ import {
     validateStageOperatingPlanOperatingContract,
     type StageOperatingContractIssue,
 } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
+import {
+    assessStageOperatingPlanEdit,
+    type StageOperatingPlanDraftSave,
+} from "@/lib/lifecycle/stageOperatingPlanDraftDelta";
 
 
 export type LifecycleStageOperatingPlanEditorHandle = {
-    getDraftPlan: () => StageOperatingPlanV1 | null;
+    /**
+     * The plan to persist, plus a delta-aware verdict on it (D3, drafting half).
+     *
+     * This used to THROW on any blocking issue, which meant a stage carrying a pre-existing defect
+     * could not be saved at all — the throw happened before the request was assembled, so the
+     * operator saw a dead button and no explanation. It now always returns; the caller decides,
+     * and blocks only on what this edit introduced or worsened.
+     */
+    getDraftPlan: () => StageOperatingPlanDraftSave | null;
     isDirty: () => boolean;
 };
 
@@ -169,13 +181,25 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     useImperativeHandle(
         ref,
         () => ({
-            getDraftPlan: () =>
-                stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, {
-                    operatingContract: operatingContractContext,
-                }),
+            getDraftPlan: () => {
+                // `validate: false` — the throw is gone; judgement moves to the delta below.
+                const plan = stageOperatingPlanDraftToPersisted(draft, stageKey, undefined, {
+                    validate: false,
+                });
+                // No plan means there is nothing to persist for this stage — not a save failure.
+                if (!plan) return null;
+                return {
+                    plan,
+                    assessment: assessStageOperatingPlanEdit({
+                        savedPlan,
+                        proposedPlan: plan,
+                        operatingContract: operatingContractContext,
+                    }),
+                };
+            },
             isDirty: () => dirty,
         }),
-        [draft, dirty, stageKey, operatingContractContext],
+        [draft, dirty, stageKey, savedPlan, operatingContractContext],
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });

@@ -43,6 +43,7 @@ import {
     summarizeBusinessProcessEditorState,
 } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { loadRecordStatusVocabulary } from "@/lib/lifecycle/loadRecordStatusVocabulary";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
     return rows.map((r) => ({
@@ -276,6 +277,10 @@ export async function buildLifecycleStageBootstrap(params: {
         subjectForOptions,
         builderStageKey,
     );
+    // The vocabulary a TRANSITION may write — the case layer, which the queue-membership picker
+    // above deliberately excludes. Conflating the two made every canonical transition status
+    // unselectable and unvalidatable. See loadRecordStatusVocabulary.
+    const record_status_vocabulary = await loadRecordStatusVocabulary(supabase, orgId);
     const stage_operating_plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey);
     const savedPerspectives = resolvePerspectivesForStage(stageRecord ?? {});
     const perspectiveLaneKeys = derivePerspectiveLanesFromPipeline(pipeline).map((lane) => lane.queueKey);
@@ -299,6 +304,7 @@ export async function buildLifecycleStageBootstrap(params: {
         base_actions,
         queue_membership,
         queue_membership_status_options,
+        record_status_vocabulary,
         status_category_catalog,
         status_rollup_v1,
         stage_operating_plan,

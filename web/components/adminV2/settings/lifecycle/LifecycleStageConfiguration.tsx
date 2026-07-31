@@ -29,6 +29,7 @@ export default function LifecycleStageConfiguration({
     validationSlot: _validationSlot,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     onDeleteStage,
@@ -55,6 +56,7 @@ export default function LifecycleStageConfiguration({
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
@@ -85,6 +87,7 @@ export default function LifecycleStageConfiguration({
                 statusesError={statusesError}
                 saveState={saveState}
                 saveError={saveError}
+                saveNotice={saveNotice ?? null}
                 onSaveStage={onSaveStage}
                 onDirtyChange={onDirtyChange}
                 onDeleteStage={onDeleteStage}
