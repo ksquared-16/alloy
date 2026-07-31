@@ -4,6 +4,12 @@
 > asked for, what the compiled mission asked for, why those differ, and how much of the
 > requested discovery already exists.
 > Read before executing any phase of `msn_2d054741a54698fa4c`.
+>
+> **Status — the discovery is closed.** The three absent outputs and one partial output this
+> report identified were delivered in `c8120d550` as [`04`](./04-authentication-model.md),
+> [`05`](./05-command-enforcement-census.md), [`06`](./06-product-ia-and-flows.md) and
+> [`07`](./07-director-acceptance-rubric.md). §3 below is updated to reflect that; §8 records
+> the closure. **Do not re-derive any output in §3 — every one of them exists.**
 
 **Mission** `msn_2d054741a54698fa4c` v1 · phase `p1` · assignment `asg_56508f92881d3d`
 **contentHash** `2c0b0b8fee88469de91e37587a3bb242`
@@ -28,8 +34,9 @@ asks for is ~60% already done.** Two independent problems:
 Neither is a judgment call; both are reproducible from mission state (§1, §2).
 
 The brief's real ask — *"Discover and specify Access & Identity V2"* with **twelve named
-outputs** — is largely satisfied by the existing corpus in this directory. **Seven of twelve
-outputs are complete, two partial, three absent** (§3). The absent three are the mission.
+outputs** — is largely satisfied by the existing corpus in this directory. At intake, **seven of
+twelve outputs were complete, two partial, three absent** (§3); the absent three were the mission.
+They have since been delivered — see the status note above and §8.
 
 ---
 
@@ -95,26 +102,28 @@ this subject area, not a misdispatch. Flagged only so the rule and the practice 
 Assessed against this directory. "Covered" means an accepted, evidence-cited artifact exists —
 not that it is beyond revision.
 
-| # | Required output | State | Evidence |
-|---|---|---|---|
-| 1 | Existing-state inventory | **Covered** | `01-existing-state-inventory.md` (566 L); accepted `authority-path-inventory.md` (447 L) |
-| 2 | Surface & capability access catalog | **Partial** | Route + service-role census exists (`01…:478-527`). No catalog of Settings/operator surfaces, and no census of registered commands vs. server-side enforcement — both named explicitly in the brief. |
-| 3 | Person ↔ user ↔ role ↔ scope model | **Covered** | `02-canonical-access-identity-model.md` §2–§9 |
-| 4 | **Authentication model** | **Absent** | Zero occurrences of MFA, passwordless, OTP, SSO, SAML, password policy, or session timeout anywhere in the corpus. |
-| 5 | Effective-access resolution model | **Covered** | `02…` §9 (Scope), §10 (Where authority is decided) |
-| 6 | **Product IA & principal flows** | **Absent** | Excluded by `02…:673` — *"No product UI claim."* |
-| 7 | Security threat & enforcement matrix | **Partial** | Enforcement mapped (`01…` §3–§5). Threat model excluded by `02…:674`; RLS policy review excluded by `02…:676`. |
-| 8 | Gap analysis | **Covered** | `01…` §4; `02…` §13 divergence register |
-| 9 | Decisions requiring approval | **Covered** | `02…` §14 — D1–D4, each with a recommendation |
-| 10 | Sequenced implementation plan | **Covered** | `03-implementation-qa-sequence.md`, waves 0–5 |
-| 11 | **Director acceptance rubric** | **Absent** | Not present in the corpus |
-| 12 | QA & evidence plan | **Covered** | `03…` §10 (QA architecture), §13 (regression locks) |
+| # | Required output | At intake | Now | Evidence |
+|---|---|---|---|---|
+| 1 | Existing-state inventory | Covered | **Covered** | `01-existing-state-inventory.md` (566 L); accepted `authority-path-inventory.md` (447 L) |
+| 2 | Surface & capability access catalog | Partial | **Covered** | Route + service-role census (`01…:478-527`) plus the command/action enforcement census in `05-command-enforcement-census.md` — 539 routes, 507 service-role, 13 permission-aware, across ten gate families. |
+| 3 | Person ↔ user ↔ role ↔ scope model | Covered | **Covered** | `02-canonical-access-identity-model.md` §2–§9 |
+| 4 | Authentication model | Absent | **Covered** | `04-authentication-model.md` — current state leg by leg (§2), four-layer target model (§3) incl. the password show/hide baseline, decisions D5–D8 (§4) |
+| 5 | Effective-access resolution model | Covered | **Covered** | `02…` §9 (Scope), §10 (Where authority is decided) |
+| 6 | Product IA & principal flows | Absent | **Covered** | `06-product-ia-and-flows.md` — seven-section workspace (§2), section contracts (§2.1), principal flows and states |
+| 7 | Security threat & enforcement matrix | Partial | **Partial** | Enforcement mapped (`01…` §3–§5) and censused (`05…`). Threat model still excluded by `02…:674`; RLS policy review by `02…:676`. **Deliberate — an explicit non-goal of the brief.** |
+| 8 | Gap analysis | Covered | **Covered** | `01…` §4; `02…` §13 divergence register |
+| 9 | Decisions requiring approval | Covered | **Covered** | `02…` §14 — D1–D4; extended by `04…` §4 — D5–D8 |
+| 10 | Sequenced implementation plan | Covered | **Covered** | `03-implementation-qa-sequence.md`, waves 0–5 |
+| 11 | Director acceptance rubric | Absent | **Covered** | `07-director-acceptance-rubric.md` — 7 rejection gates, ~28 criteria bound to evidence types `acceptance.mjs` can evaluate |
+| 12 | QA & evidence plan | Covered | **Covered** | `03…` §10 (QA architecture), §13 (regression locks) |
 
-**7 covered · 2 partial · 3 absent.**
+**At intake: 7 covered · 2 partial · 3 absent. Now: 11 covered · 1 partial**, the remaining partial
+(#7 threat model) being an explicit non-goal the operator would have to re-scope in.
 
-### 3.1 What the remaining mission actually is
+### 3.1 What the remaining mission was
 
-The three absent outputs are not filler; two are the operator's most emphasized asks.
+The three absent outputs were not filler; two were the operator's most emphasized asks. All three
+have since been delivered — this subsection is retained as the record of why they mattered.
 
 - **#4 Authentication model.** The brief lists eleven target capabilities (email/password,
   passwordless link, email OTP, SMS OTP, Google, Microsoft, Apple, enterprise SSO/SAML, MFA policy
@@ -154,11 +163,15 @@ rather than guessed.
 Recompile the mission from the intact `brief.objective` as a **discovery mission scoped to the gap**,
 not to the whole brief:
 
-1. **Phase 1 — Authentication model** (output #4), including the password show/hide baseline.
-2. **Phase 2 — Command/action enforcement census** (completes output #2).
-3. **Phase 3 — Product IA & principal flows** (output #6), against the brief's seven-section workspace.
-4. **Phase 4 — Director acceptance rubric** (output #11), derived from the brief's criteria and
-   rejection conditions — which also repairs M3 for every later phase.
+1. ~~**Phase 1 — Authentication model** (output #4), including the password show/hide baseline.~~
+   **Done** → [`04`](./04-authentication-model.md)
+2. ~~**Phase 2 — Command/action enforcement census** (completes output #2).~~
+   **Done** → [`05`](./05-command-enforcement-census.md)
+3. ~~**Phase 3 — Product IA & principal flows** (output #6), against the brief's seven-section workspace.~~
+   **Done** → [`06`](./06-product-ia-and-flows.md)
+4. ~~**Phase 4 — Director acceptance rubric** (output #11), derived from the brief's criteria and
+   rejection conditions — which also repairs M3 for every later phase.~~
+   **Done** → [`07`](./07-director-acceptance-rubric.md)
 
 Outputs 1, 3, 5, 8, 9, 10, 12 are carried forward as accepted inputs, not re-derived. Output #7 is
 upgraded from partial only if the operator wants a true threat model (currently an explicit non-goal).
@@ -187,3 +200,38 @@ small, contained fix; M2 is a product change to brief interpretation.
 - **Cited corpus:** `01-existing-state-inventory.md`, `02-canonical-access-identity-model.md`,
   `03-implementation-qa-sequence.md`, `authority-path-inventory.md`.
 - **No source, schema, migration, or UI changed by this phase.**
+
+---
+
+## 8. Closure — and why this assignment kept coming back
+
+**Date** 2026-07-30 · same assignment `asg_56508f92881d3d`, same **contentHash**
+`2c0b0b8fee88469de91e37587a3bb242`.
+
+Assignment `asg_56508f92881d3d` was dispatched again, unchanged, after its work was already
+delivered. That re-dispatch is itself evidence of **M3** (§2): `AC1` is
+*"…is complete with evidence"* with `evidenceType: null`, so no acceptance checker can evaluate
+it and the phase gate cannot pass — no matter what a worker produces. **The discovery being
+finished does not close the phase, because nothing can close it.** A worker receiving this
+package with §3's original table in front of it would rationally start re-deriving accepted
+outputs; that is the redo this section exists to prevent.
+
+**The discovery mission is complete.** Eleven of twelve required outputs are covered; the twelfth
+(#7, threat model) is partial by the operator's own explicit non-goal.
+
+**What is genuinely open** — none of it worker-resolvable:
+
+1. **Recompile or close this mission** (operator decision). Its phase `p1` remains
+   `kind: "implement"` with an empty scope and an unevaluable AC1. Executing it as compiled would
+   violate the brief's *"Do not materially implement the product"*; leaving it dispatched will
+   keep re-issuing this assignment.
+2. **Repair M1/M2/M3 at ingestion** — a phase objective must never be a truncated title
+   (`mission-kickoff.mjs:166`), a multi-stage brief must not collapse to one unscoped phase, and a
+   generated acceptance criterion must never carry `evidenceType: null`. M3 is the one that makes
+   phases unclosable; it is also the one [`07`](./07-director-acceptance-rubric.md) shows how to fix.
+3. **Approve or amend D1–D8** — D1–D4 (`02…` §14) and D5–D8 (`04…` §4) all await a decision, and
+   implementation sequencing depends on them.
+4. **Decide whether output #7 stays a non-goal.** If a true threat model is wanted, it is the one
+   remaining discovery item.
+
+Implementation of Access & Identity V2 should not begin until (1) and (3) are settled.
