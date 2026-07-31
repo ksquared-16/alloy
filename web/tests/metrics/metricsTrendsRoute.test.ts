@@ -12,7 +12,12 @@ vi.mock("@/lib/admin/getAdminAccessContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminAccessContext")>(
         "@/lib/admin/getAdminAccessContext"
     );
-    return { ...actual, getAdminAccessContextCached: mockGetAdminAccessContextCached };
+    return {
+        ...actual,
+        getAdminAccessContextCached: mockGetAdminAccessContextCached,
+        // W-1: the route now gates through `requireAnalyticsReadAccess`, which reads the bundle.
+        loadAdminAccessBundleCached: mockGetAdminAccessContextCached,
+    };
 });
 
 vi.mock("@/lib/metrics/snapshots/readMetricTrend", () => ({
@@ -39,6 +44,8 @@ describe("GET /api/admin/metrics/trends", () => {
             siteScope: "all",
             allowedSiteLocationIds: [],
             roleKeys: ["admin"],
+            permissionKeys: [],
+            portalEligible: true,
         });
         mockReadMetricTrend.mockResolvedValue({
             latest: { value: 0.5, computedAt: "2026-06-23T00:00:00Z" },

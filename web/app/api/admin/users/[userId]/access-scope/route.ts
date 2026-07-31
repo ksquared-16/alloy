@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 import {
     resolveAdminAccessDimensionsForOrgMember,
     type DepartmentScopeMode,
@@ -74,6 +75,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     const uid = typeof userId === "string" ? userId.trim() : "";
     if (!uid) {
         return NextResponse.json({ error: "userId required" }, { status: 400 });
+    }
+
+    // Self-elevation ban — widening your own department/site scope is an authority change.
+    if (isSelfAuthorityMutation({ callerUserId: access.userId, targetUserId: uid })) {
+        return selfAuthorityMutationResponse();
     }
 
     let body: Record<string, unknown> = {};

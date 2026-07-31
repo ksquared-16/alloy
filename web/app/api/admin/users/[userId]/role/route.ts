@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 
 /**
  * PATCH: replace **all** role rows for this user in this org with a single role_key.
@@ -14,6 +15,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     const { userId } = await context.params;
     if (!userId) {
         return NextResponse.json({ error: "userId required" }, { status: 400 });
+    }
+
+    // Self-elevation ban — denied before the body is read, so no write can be reached.
+    if (isSelfAuthorityMutation({ callerUserId: access.userId, targetUserId: userId })) {
+        return selfAuthorityMutationResponse();
     }
 
     const body = await request.json().catch(() => ({}));

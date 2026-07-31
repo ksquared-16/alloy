@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 import { assertMetricSiteAccess } from "@/lib/metrics/resolveMetricSiteAccess";
 import {
     findUnknownMetricKeys,
@@ -43,10 +42,9 @@ function resolveScope(siteId: string | null): { scopeType: "org" | "site"; scope
  * Query: keys, window (default rolling_30d), site_id, points (series limit, default 8)
  */
 export async function GET(request: NextRequest) {
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) {
-        return adminContextFailureResponse(access);
-    }
+    const auth = await requireAnalyticsReadAccess();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     const { searchParams } = new URL(request.url);
     const keysParam = searchParams.get("keys");

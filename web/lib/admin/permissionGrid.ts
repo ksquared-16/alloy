@@ -20,7 +20,18 @@ export const PERMISSION_GRID_ROWS: readonly PermissionGridRow[] = [
     { id: "settings", label: "Configuration", readKeys: ["settings.read"], writeKeys: ["settings.manage"] },
     // Users & Roles is also enforced by server gate on `settings.users_roles` (write/manage).
     { id: "users_roles", label: "Users & Roles", readKeys: ["settings.users_roles.read"], writeKeys: ["settings.users_roles"] },
-    { id: "workflows", label: "Workflows / Automation", readKeys: ["workflows.read"], writeKeys: ["workflows.write"] },
+    // W-3 (closes C5): the "Workflows / Automation" row named `workflows.read`/`workflows.write`,
+    // which are seeded into no catalog table. `PUT /api/admin/rbac/grants` validates the whole
+    // submission against `permission_definitions` *before* its delete-all-then-insert, so toggling
+    // this row returned 400 and destroyed the operator's other selections on the screen.
+    //
+    // The row is removed rather than repointed. The plan's suggested repoint to the legacy
+    // `ops.workflows.*` keys does not work: those exist only in `permission_keys`, not in
+    // `permissions` or `permission_definitions`, so the save would still be rejected — and the
+    // grant would additionally violate `role_permission_grants_permissions_fkey`. Seeding the bare
+    // keys is a migration, which wave 1 excludes. No route enforces `workflows.*`, so the row
+    // granted nothing; removing it costs no authority. W-10 regenerates the grid from the catalog,
+    // and the row returns on its own once W-11 seeds a workflows capability that is enforced.
 ] as const;
 
 export function keysForLevel(row: PermissionGridRow, level: PermissionGridLevel): string[] {
