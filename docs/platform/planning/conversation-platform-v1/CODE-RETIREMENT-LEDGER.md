@@ -1,4 +1,10 @@
-# Code Retirement Ledger — Phase 0
+# Code Retirement Ledger — Phase 0 (interim)
+
+> **SUPERSEDED.** The permanent ledger is
+> [`closeout/05-CODE-RETIREMENT-LEDGER.md`](closeout/05-CODE-RETIREMENT-LEDGER.md),
+> which adds the retired paths (old implementation, replacement, reason, commit,
+> evidence) alongside the retained adapters below. Use that one.
+
 
 Every compatibility shim, adapter, and containment layer Phase 0 introduced,
 with the **named condition** under which it may be deleted.
