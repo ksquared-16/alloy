@@ -132,18 +132,16 @@ export async function requestStatus({ provider, cwd, resume } = {}) {
  * executor can register the live child (for Stop) before the turn resolves.
  */
 function missionArgs(provider, resume) {
-  // A headless worker cannot answer interactive permission prompts, so it runs in
+  // `-p --output-format stream-json` requires --verbose in print mode. A headless
+  // worker cannot answer interactive permission prompts, so it runs in
   // `acceptEdits` mode — file edits/writes are auto-approved (the worker must be
   // able to produce its declared deliverables) but Bash and other tools are NOT
   // auto-granted. Mission scope is bounded by the package prompt + governance
   // (no push/merge/promote); the operator gates start/stop.
   if (provider === "claude") {
-    // `claude -p --output-format stream-json` requires --verbose in print mode.
     return ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", ...(resume ? ["--resume", resume] : [])];
   }
-  // cursor-agent streams stream-json WITHOUT --verbose (it rejects that flag and
-  // exits code 1 — "unknown option '--verbose'"). It uses --trust for headless auto-approve.
-  return ["-p", "--output-format", "stream-json", "--trust", ...(resume ? ["--resume", resume] : [])];
+  return ["-p", "--output-format", "stream-json", "--verbose", "--trust", ...(resume ? ["--resume", resume] : [])];
 }
 
 /** Extract a compact, side-effect-free activity descriptor from a stream frame. */

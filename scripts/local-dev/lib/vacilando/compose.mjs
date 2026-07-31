@@ -81,7 +81,7 @@ export async function composeSnapshot(opts = {}) {
     sprintsCtx.filter((e) => e.initiative?.key).map((e) => [e.initiative.key, { sprint: e.sprint, slot: e.slot }]),
   );
 
-  const sprints = projectSprints(sprintsCtx, nowMs);
+  const sprints = projectSprints(sprintsCtx);
   const workers = projectWorkers(sprintsCtx);
   const repository = projectRepository(sprintsCtx, { root: raw.root, base });
   const approvals = projectApprovals(raw.initiatives || [], slotByInitiative, reviewDispositions());

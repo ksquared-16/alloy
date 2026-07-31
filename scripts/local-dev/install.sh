@@ -15,8 +15,6 @@ COMMANDS=(
   alloy-dev-stop
   alloy-dev-status
   alloy-validate
-  vac
-  vac-run
   alloy-health
   alloy-audit
   alloy-clean
@@ -49,8 +47,6 @@ COMMANDS=(
   alloy-worker-pause
   alloy-worker-resume
   alloy-worker-doctor
-  alloy-docker-doctor
-  alloy-db-reset
   alloy-sprint-finish
   alloy-initiative-review
   alloy-initiative-remediate

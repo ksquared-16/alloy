@@ -11,8 +11,6 @@ source "${SCRIPT_DIR}/lib/agent.sh"
 source "${SCRIPT_DIR}/lib/sprint-ops.sh"
 # shellcheck source=lib/verify.sh
 source "${SCRIPT_DIR}/lib/verify.sh"
-# shellcheck source=lib/docker-ops.sh
-source "${SCRIPT_DIR}/lib/docker-ops.sh"
 
 usage() {
   cat <<'EOF'
@@ -20,10 +18,9 @@ Usage: alloy-worker-doctor <slot|--all> [--recover]
 
 Detects stale PIDs, dead providers, orphaned ports, unreachable registered
 servers, duplicate worktree ownership, missing dependencies/auth/env,
-Docker host health (wedged Desktop), generated-file noise, and registry drift.
+generated-file noise, and registry drift.
 
 Does not mutate by default. Pass --recover for safe stale-PID cleanup only.
-Docker recover is separate: alloy-docker-doctor --recover [--force]
 
 Examples:
   alloy-worker-doctor 3

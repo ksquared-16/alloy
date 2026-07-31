@@ -338,25 +338,12 @@ Expected:
 - Do NOT stash/reset/clean user work.
 - “Commit” never implies “push.” Commit coherent changes locally when asked / appropriate (multiple local commits expected).
 - Prefer focused checks (single-file Vitest, lint of touched files).
-- Heavy checks ONLY via package scripts (brokered) or vac:
-  - \`cd web && npm run typecheck|typecheck:tests|build|test\`
-  - \`vac run typecheck|typecheck:tests|build|test|playwright|imports\`
-  - \`alloy-validate ${name} <kind>\`
-  These take a host-wide validation lease — do NOT run raw \`tsc\` / \`next build\` / full \`vitest run\`.
-- Focused Vitest stays unlocked: \`npx vitest run path/to/file.test.ts\`
+- Heavy checks only via: \`alloy-validate ${name} typecheck|test|build|playwright|imports\`
 - Do NOT background heavy checks.
-- Check lease/queue: \`vac status\`
 - Do NOT start a second dev server. Use \`alloy-dev-start ${name}\` / \`alloy-dev-stop ${name}\` only — **never** \`npm run dev\` directly (two-tier env: agent-safe \`web/.env.local.agent\` + trusted server injection; privileged values never enter the worktree).
 - Ensure \`npm install\` has been run in **this** worktree's \`web/\` — login/verify use that worktree-local Playwright only.
 - Overnight: \`alloy-worker-pause ${slot}\`. Morning: \`alloy-worker-resume ${slot}\`. Finish: \`alloy-sprint-finish ${slot}\`.
 - Before finishing, report any processes left running.
-- **Local Docker / supabase db reset (mandatory toolkit path):**
-  - Never invent Docker Desktop force-kill / relaunch loops.
-  - Never hammer raw \`supabase db reset\` when you see 502 / Bad Gateway / hung \`docker info\`.
-  - Diagnose: \`alloy-docker-doctor\`
-  - Recover: \`alloy-docker-doctor --recover\` (add \`--force\` only if still wedged after quit).
-  - Reset local disposable DB: \`alloy-db-reset --recover-docker\` (retries transient 502s; uses \`--debug\` on the last attempt).
-  - Refuse hosted/production resets — the toolkit fails closed.
 
 ## Operator shortcuts
 

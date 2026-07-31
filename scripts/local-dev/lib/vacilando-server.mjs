@@ -20,12 +20,10 @@
  *   POST /api/commands        → confirm+execute a command through the registry
  *   GET  /                    → the SPA shell (static, path-traversal safe)
  */
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { createConnection } from "node:net";
-import { basename, extname, join, normalize, resolve } from "node:path";
+import { extname, join, normalize, resolve } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,35 +43,17 @@ import { collectPolicies } from "./vacilando/policies.mjs";
 import { collectUsage } from "./vacilando/usage.mjs";
 import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
 import { computeReclaim, memoryPressure, runningDevServers } from "./vacilando/memory-manager.mjs";
-import { diskSignalAsync, freeDiskGb, runGc } from "./vacilando/disk-hygiene.mjs";
-import {
-  claimControlPlaneOwnership,
-  noteBindTiming,
-  recordControlPlaneEvent,
-  getControlPlaneHealth,
-} from "./vacilando/control-plane-health.mjs";
 import { schedule } from "./vacilando/scheduler.mjs";
 import { readReviews } from "./vacilando/commands/review.mjs";
 import { readMissions, getMission, recoverMissions } from "./vacilando/commands/missions.mjs";
 import { getPackage } from "./vacilando/commands/mission-packages.mjs";
 import { readMissionOutputs, readTurnOutput, liveMissionIds } from "./vacilando/mission-executor.mjs";
 import { providerResumable } from "./vacilando/provider-runtime.mjs";
-import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance, setObjectiveMode, prepareNextPhase, readObjective, conductObjectiveNext } from "./vacilando/mission-director.mjs";
-import { terminateUnbrokeredHeavyProcesses } from "./vacilando/heavy-validation-guard.mjs";
-import { listObjectives, projectObjectiveLive, getObjectiveByMission } from "./vacilando/objective.mjs";
+import { compileMissionForIntent, recompileMission, reframeMission, answerQuestions, defineCapability, addProductDecision, startMission as directorStart, steerMission as directorSteer, stop as directorStop, evaluate as directorEvaluate, accept as directorAccept, close as directorClose, previewAction, readAcceptance } from "./vacilando/mission-director.mjs";
 import { listCapabilities, getCapability, registerCapability } from "./vacilando/capability.mjs";
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
-import {
-  ingestMissionBrief,
-  reviewMissionReadiness,
-  approveMissionExecution,
-  getKickoffState,
-} from "./vacilando/mission-kickoff.mjs";
-import { getBrief, getBriefVersion, listBriefVersions, proposeBriefRevision } from "./vacilando/mission-brief.mjs";
-import { readTimelineSummary, summarizeFromTimeline } from "./vacilando/timeline.mjs";
-import { handleV2Get, handleV2Post } from "./vacilando/v2-api.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
@@ -283,7 +263,6 @@ function registrySprints() {
     return {
       slot: i.slot, title: titleFromBranch(i.branch, i.worktree_name),
       provider: i.provider || "claude", worktree: i.worktree_name, branch: i.branch,
-      path: i.worktree_path || null,
       port: i.port || null,
       status: missing ? "worktree-missing" : i.ok ? "unknown" : "identity-conflict",
       server: "unknown", glyph: "spark",
@@ -323,139 +302,8 @@ function resilientBoard(snap) {
   };
 }
 
-/**
- * Authoritative, memory-pressure-proof server state: is anything LISTENING on
- * the slot's port? A pure-TCP probe (no alloy-ro, no lsof) resolved on EVERY
- * read — so "App: running / Open App" flips the instant Next binds the port,
- * even when the compose projection is cached-stale or alloy-ro is thrashing
- * under swap (the exact case where "App: stopped" used to stick after a real
- * start). A non-listening localhost port refuses immediately (ECONNREFUSED), so
- * this is ~1ms per slot; unreachable ports fall back to the projection value.
- */
-function probePortListening(port, timeoutMs = 500) {
-  return new Promise((resolve) => {
-    if (!port) return resolve(null);
-    let done = false;
-    const finish = (v) => { if (done) return; done = true; try { sock.destroy(); } catch { /* noop */ } resolve(v); };
-    const sock = createConnection({ host: LOOPBACK_HOST, port: Number(port) });
-    sock.setTimeout(timeoutMs);
-    sock.once("connect", () => finish(true));
-    sock.once("timeout", () => finish(false));
-    sock.once("error", () => finish(false));
-  });
-}
-
-const ACTIVITY_WORKING_MS = 15 * 60 * 1000;
-/** Resolve a worktree's real gitdir (following the linked-worktree .git file). */
-function gitdirOf(path) {
-  if (!path) return null;
-  try {
-    const dotgit = join(path, ".git");
-    if (!statSync(dotgit).isFile()) return dotgit; // a normal .git directory
-    const m = /^gitdir:\s*(.+)\s*$/m.exec(readFileSync(dotgit, "utf8"));
-    return m ? m[1].trim() : null;
-  } catch { return null; }
-}
-/**
- * Cheap, local, pressure-proof "last git activity" for a worktree: the mtime of
- * its ref log. Lets the per-worker activity pill stay meaningful even when the
- * enriched projection is degraded under load. Returns ms since epoch, or null.
- */
-function worktreeActivityMs(path) {
-  const gd = gitdirOf(path);
-  try { return gd ? Math.round(statSync(join(gd, "logs", "HEAD")).mtimeMs) : null; } catch { return null; }
-}
-/** Current branch of a worktree, read cheaply from gitdir/HEAD (no subprocess). */
-function branchOf(path) {
-  const gd = gitdirOf(path);
-  try {
-    const head = readFileSync(join(gd, "HEAD"), "utf8").trim();
-    const m = /^ref:\s*refs\/heads\/(.+)$/.exec(head);
-    return m ? m[1] : head.slice(0, 8); // detached → short sha
-  } catch { return null; }
-}
-
-// The Director/app runs from this checkout. Presented as the CHAMPION — a
-// distinct entry above the six worker slots, not itself a worker slot.
-const DIRECTOR_HOME = resolve(HERE, "..", "..", "..");
-function championEntry() {
-  const now = Date.now();
-  const path = DIRECTOR_HOME;
-  const last = worktreeActivityMs(path);
-  return {
-    role: "director",
-    title: "Vacilando",
-    worktree: basename(path),
-    path,
-    branch: branchOf(path),
-    activity: last != null && now - last < ACTIVITY_WORKING_MS ? "working" : "idle",
-    last_activity_ms: last,
-    glyph: "compass",
-  };
-}
-
-/**
- * Overlay LIVE truth onto the board on every read: port-authoritative server
- * state (so "Open App" flips the instant Next listens) and a git-activity
- * fallback for the per-worker activity pill when the enriched projection didn't
- * supply it (degraded board). Enriched activity — which knows done/paused —
- * always wins; the fallback only fills the working/idle gap.
- */
-async function applyLiveTruth(board) {
-  const now = Date.now();
-  const sprints = board.sprints || [];
-  const listen = await Promise.all(sprints.map((s) => probePortListening(s.port)));
-  board.sprints = sprints.map((s, i) => {
-    const out = listen[i] == null ? { ...s } : { ...s, server: listen[i] ? "running" : "stopped" };
-    if (!out.activity || out.activity === "unknown") {
-      const last = worktreeActivityMs(s.path);
-      if (last != null) {
-        out.last_activity_ms = out.last_activity_ms ?? last;
-        out.activity = now - last < ACTIVITY_WORKING_MS ? "working" : "idle";
-      }
-    }
-    return out;
-  });
-  // Vacilando itself — the CHAMPION — presented above the six worker slots, never
-  // as one of them. Its home worktree may still appear as a numbered worker until
-  // it's unregistered from the slot system; once freed, the six slots are all
-  // workers and this is the only place Vacilando shows.
-  board.champion = championEntry();
-  board.sprints = board.sprints.filter((s) => s.path !== board.champion.path);
-  return board;
-}
-
 /** The snapshot every UI surface consumes: never fewer workers than are registered. */
-async function boardSnapshot() { return applyLiveTruth(resilientBoard(await snapshotSafe())); }
-
-const MISSION_BUSY = new Set(["starting", "running", "stopping"]);
-/**
- * Resolve which WORKER a Director mission runs in. The Director dispatches to one
- * of the six work slots — it is not itself a slot. An explicit run-target is
- * honored (the operator's choice); "auto" picks the lowest-numbered occupied
- * worker that is NOT already running a mission, so work never silently piles onto
- * one slot. Returns { slot } or { error, detail, available }.
- */
-function resolveRunSlot(requested) {
-  // A slot with a registered worktree already hosts a sprint (human or a prior
-  // Vacilando mission). A FREE slot (no worktree) is where a new mission goes —
-  // Vacilando provisions a fresh worktree there at start (the launcher). Missions
-  // never run in the champion and never co-tenant an occupied worktree.
-  // A slot with ANY registered worktree is occupied — even one whose identity is
-  // in conflict (wrong branch, missing worktree). Only a slot with no worktree at
-  // all is free. (listSlotIdentities already returns only slots that have one.)
-  const withWorktree = new Set(listSlotIdentities().map((i) => i.slot));
-  const freeSlots = [1, 2, 3, 4, 5, 6].filter((n) => !withWorktree.has(n));
-  const req = (typeof requested === "string" && /^-?\d+$/.test(requested)) ? Number(requested) : requested;
-  if (Number.isInteger(req)) {
-    if (req < 1 || req > 6) return { error: "bad_slot", detail: `slot ${req} out of range`, available: freeSlots };
-    if (!freeSlots.includes(req)) return { error: "slot_occupied", detail: `slot ${req} already hosts a sprint — pick a free slot, or End Work to free it.`, available: freeSlots };
-    return { slot: req, provision: true };
-  }
-  // Auto → the lowest free worker slot; a fresh worktree is provisioned on start.
-  if (freeSlots.length) return { slot: freeSlots[0], provision: true };
-  return { error: "all_workers_busy", detail: "all six worker slots host sprints — End Work on one to free a slot before dispatching.", available: [] };
-}
+async function boardSnapshot() { return resilientBoard(await snapshotSafe()); }
 
 /** Warm the expensive keys in the background so the first operator read is instant. */
 function warmExpensive() {
@@ -537,129 +385,6 @@ async function refreshMemory({ act = false } = {}) {
 }
 
 /**
- * Disk Hygiene — the sibling of the memory manager, one resource over. It measures
- * headroom + what a reclaim would free (dry-run signal), and — only when the
- * operator has ENABLED it (auto_gc, default OFF; a destructive action gated behind
- * an explicit opt-in) — reactively runs the safe `alloy-worktree-gc` when free disk
- * crosses a low-water mark. Never touches source, history, or uncommitted work.
- */
-const DISK_POLICY = {
-  auto_gc: false,        // OFF until the operator flips it on (dashboard toggle)
-  low_water_gb: 8,       // reactive: reclaim below this
-  hard_gb: 5,            // pre-build/pre-sprint fail-fast floor
-  cache_min_free_gb: 20, // also clear the npm cache if still below this after
-  cooldown_ms: 30 * 60 * 1000,
-};
-let lastDiskGc = { signal: null, last_run: null, policy: DISK_POLICY, auto_actions: [] };
-let diskReclaimCooldown = 0;
-
-// Persist the operator's disk-policy choice so "set-and-forget" survives a server
-// restart (the app respawns the server; an in-memory flag would silently revert).
-const DISK_POLICY_FILE = join(RUNTIME_ROOT_DIR, "vacilando", "disk-policy.json");
-function loadDiskPolicy() {
-  try {
-    const j = JSON.parse(readFileSync(DISK_POLICY_FILE, "utf8"));
-    if (typeof j.auto_gc === "boolean") DISK_POLICY.auto_gc = j.auto_gc;
-    if (Number.isFinite(j.low_water_gb) && j.low_water_gb > 0) DISK_POLICY.low_water_gb = j.low_water_gb;
-  } catch { /* first run / unreadable → keep defaults */ }
-}
-function saveDiskPolicy() {
-  try { mkdirSync(dirname(DISK_POLICY_FILE), { recursive: true }); writeFileSync(DISK_POLICY_FILE, JSON.stringify({ auto_gc: DISK_POLICY.auto_gc, low_water_gb: DISK_POLICY.low_water_gb }, null, 2)); } catch { /* best-effort */ }
-}
-loadDiskPolicy();
-
-async function refreshDisk({ act = false } = {}) {
-  // Yield first so callers that fire-and-forget at boot never block listen on the
-  // GC dry-run (was execFileSync ≤30s inside createVacilandoServer).
-  await Promise.resolve();
-  let signal = null;
-  try { signal = await diskSignalAsync(); } catch { /* keep last */ }
-  if (act && DISK_POLICY.auto_gc && signal && typeof signal.free_gb === "number" && signal.free_gb < DISK_POLICY.low_water_gb
-      && Date.now() - diskReclaimCooldown >= DISK_POLICY.cooldown_ms) {
-    diskReclaimCooldown = Date.now();
-    try {
-      const out = await runGc({ minFreeGb: DISK_POLICY.cache_min_free_gb });
-      lastDiskGc.auto_actions = [{ ...out, trigger: `free ${signal.free_gb}GB < ${DISK_POLICY.low_water_gb}GB`, at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10);
-      try { signal = await diskSignalAsync(); } catch { /* keep */ }
-    } catch (e) { lastDiskGc.auto_actions = [{ ok: false, error: String(e.message || e), at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10); }
-  }
-  lastDiskGc = { ...lastDiskGc, signal: signal || lastDiskGc.signal, policy: DISK_POLICY };
-  return lastDiskGc;
-}
-
-/**
- * Autonomous conductor: once the operator has handed an objective off (mode =
- * autonomous), a phase that FINISHES and whose acceptance gate fully passes (every
- * criterion evidence-met) is auto-accepted — which advances the objective and
- * starts the next phase. A gate that needs judgment (needs_operator) or a blocker
- * is LEFT for the operator, who is pulled in by notification. Governance is
- * unchanged: the worker still may not push/merge/promote, and consequential
- * actions still preview→confirm. Never rubber-stamps judgment.
- */
-const autoResumeTries = new Map(); // mission_id -> resume attempts (in-memory, resets on restart)
-const conductCooldown = new Map(); // capability_id -> last re-launch attempt (avoid spamming a failing phase)
-function conductorTick() {
-  try {
-    // Host protection: terminate raw tsc / next build that bypassed the validation
-    // broker (Vacilando workers must use vac run). Runs every tick regardless of
-    // autonomous mode — Cursor sessions and stale package.json scripts also leak.
-    try {
-      const term = terminateUnbrokeredHeavyProcesses({ signal: "SIGTERM" });
-      if (term.killed?.length) {
-        try {
-          writeAuditEvent({
-            actor: "system",
-            command: "validation.broker.enforce",
-            input: { killed: term.killed.map((k) => ({ pid: k.pid, command: k.command })) },
-            target: { kind: "host", label: "heavy-validation" },
-            outcome: "succeeded",
-            preview_summary: `terminated ${term.killed.length} unbrokered heavy validator(s)`,
-          });
-        } catch { /* audit best-effort */ }
-        // Escalation if still alive next tick
-        setTimeout(() => {
-          try { terminateUnbrokeredHeavyProcesses({ signal: "SIGKILL" }); } catch { /* */ }
-        }, 4000);
-      }
-    } catch { /* never break conductor */ }
-
-    const autoObjectives = new Set();
-    // Prefer durable objective records so an idle autonomous objective (no recent
-    // mission traffic) still self-heals once the provider reconnects.
-    for (const o of listObjectives()) {
-      if (o?.mode === "autonomous" && o.capability_id) autoObjectives.add(o.capability_id);
-    }
-    for (const m of readMissions(null, 200)) {
-      if (!m.capability_id) continue;
-      const obj = readObjective(m.capability_id);
-      if (!obj || obj.mode !== "autonomous") continue;
-      autoObjectives.add(m.capability_id);
-      // A finished phase whose gate fully passes → auto-accept (advances the objective).
-      if (m.status === "waiting_for_acceptance") {
-        const ev = directorEvaluate({ mission_id: m.mission_id });
-        if (ev?.result?.gate === "pass") directorAccept({ mission_id: m.mission_id, confirm: true });
-        continue;
-      }
-      // A RESUMABLE interruption (inactivity timeout OR server restart that
-      // captured a provider session) is a technical hiccup, not a decision —
-      // self-heal by resuming (capped) rather than pulling the operator in.
-      if (m.status === "interrupted" && m.provider_session_id && (m.error_code === "timeout" || /server restart|interrupted by a Vacilando/i.test(m.error_message || ""))) {
-        const tries = autoResumeTries.get(m.mission_id) || 0;
-        if (tries < 3) { autoResumeTries.set(m.mission_id, tries + 1); directorSteer({ mission_id: m.mission_id, instruction: "Continue where you left off; complete the mission.", confirm: true }); }
-      }
-    }
-    // Self-heal: for each autonomous objective, ensure its current pending phase is
-    // being worked — re-launch a phase whose last attempt failed (e.g. an auth
-    // expiry now fixed), in the objective's own slot. Cooldown avoids a spin loop.
-    for (const capId of autoObjectives) {
-      if (Date.now() - (conductCooldown.get(capId) || 0) < 90000) continue;
-      conductCooldown.set(capId, Date.now());
-      conductObjectiveNext({ capability_id: capId }).catch(() => {});
-    }
-  } catch { /* best-effort; the operator path always still works */ }
-}
-
-/**
  * Director async send: run a durable request's provider turn in the background
  * and update its record through the lifecycle. The browser never waits on this —
  * it created the record (Queued) and polls /api/director/requests for status.
@@ -722,24 +447,6 @@ export function createVacilandoServer() {
     const url = new URL(req.url, `http://${LOOPBACK_HOST}`);
     const path = url.pathname;
 
-    // ---- V2 Mission Control API (Director Execution System) ----
-    if (path.startsWith("/api/v2/")) {
-      try {
-        if (req.method === "POST") {
-          const body = await readJsonBody(req);
-          if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-          const out = await handleV2Post(path, body.value);
-          if (out) return sendJson(res, out.status, out.body);
-        } else if (req.method === "GET") {
-          const out = await handleV2Get(path, url);
-          if (out) return sendJson(res, out.status, out.body);
-        }
-        return sendJson(res, 404, { ok: false, error: "unknown_v2_route", path });
-      } catch (e) {
-        return sendJson(res, 500, { ok: false, error: "v2_server_error", detail: String(e && e.message || e) });
-      }
-    }
-
     // ---- command runtime (POST; inert JSON only, routed through the registry) ----
     if (req.method === "POST" && (path === "/api/commands" || path === "/api/commands/preview")) {
       const body = await readJsonBody(req);
@@ -769,88 +476,6 @@ export function createVacilandoServer() {
         // NEVER hang: a thrown command returns a real error the UI can show.
         return sendJson(res, 500, { ok: false, stage: "execute", code: "server_error", command: body.value?.command, error: String(e && e.message || e) });
       }
-    }
-
-    // Disk hygiene: run the safe reclaim now (operator-triggered), or set the policy
-    // (enable/disable the reactive auto-gc, tune the low-water mark).
-    // Conductor: hand the objective to Director (autonomous) or take it back (gated),
-    // and prepare the next phase as a Ready mission (gated).
-    if (req.method === "POST" && path === "/api/director/objective/mode") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      const out = setObjectiveMode({ capability_id: body.value?.capability_id, mode: body.value?.mode });
-      return sendJson(res, out.ok ? 200 : 404, out);
-    }
-    if (req.method === "POST" && path === "/api/director/objective/prepare-next") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      const out = prepareNextPhase({ capability_id: body.value?.capability_id });
-      return sendJson(res, out.ok ? 200 : 409, out);
-    }
-
-    // Mission Brief kickoff (Execution System V2 Phase 1) — user-owned plan authority.
-    if (req.method === "POST" && path === "/api/missions/brief/ingest") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      try {
-        const out = ingestMissionBrief(body.value || {}, {
-          slot: body.value?.slot ?? null,
-          provider: body.value?.provider || "claude",
-          actor: body.value?.actor || "operator",
-        });
-        return sendJson(res, 201, out);
-      } catch (e) {
-        return sendJson(res, 400, { ok: false, error: String(e && e.message || e) });
-      }
-    }
-    if (req.method === "POST" && path === "/api/missions/brief/review") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      const briefId = body.value?.brief_id || body.value?.mission_id;
-      const ver = body.value?.version;
-      const brief = (ver != null ? getBriefVersion(briefId, ver) : null) || getBrief(briefId);
-      if (!brief) return sendJson(res, 404, { ok: false, error: "brief_not_found" });
-      return sendJson(res, 200, { ok: true, brief, readiness: reviewMissionReadiness(brief) });
-    }
-    if (req.method === "POST" && path === "/api/missions/brief/approve") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      const briefId = body.value?.brief_id || body.value?.mission_brief_id || body.value?.mission_id;
-      const out = approveMissionExecution(briefId, body.value?.version, {
-        actor: body.value?.actor || "operator",
-        slot: body.value?.slot ?? null,
-      });
-      return sendJson(res, out.ok ? 200 : 409, out);
-    }
-    if (req.method === "POST" && path === "/api/missions/brief/revise") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      try {
-        const brief = proposeBriefRevision(body.value?.brief_id || body.value?.mission_id, body.value?.patch || body.value || {}, {
-          actor: body.value?.actor || "operator",
-          changeSummary: body.value?.change_summary || body.value?.changeSummary,
-          approvalSource: body.value?.approval_source || "operator_edit",
-        });
-        return sendJson(res, 200, { ok: true, brief, readiness: reviewMissionReadiness(brief) });
-      } catch (e) {
-        return sendJson(res, 400, { ok: false, error: String(e && e.message || e) });
-      }
-    }
-
-    if (req.method === "POST" && path === "/api/disk/reclaim") {
-      const out = await runGc({ minFreeGb: DISK_POLICY.cache_min_free_gb });
-      lastDiskGc.auto_actions = [{ ...out, trigger: "operator", at: new Date().toISOString() }, ...(lastDiskGc.auto_actions || [])].slice(0, 10);
-      await refreshDisk();
-      return sendJson(res, out.ok ? 200 : 500, { ok: out.ok, result: out, disk: lastDiskGc });
-    }
-    if (req.method === "POST" && path === "/api/disk/policy") {
-      const body = await readJsonBody(req);
-      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-      const v = body.value || {};
-      if (typeof v.auto_gc === "boolean") DISK_POLICY.auto_gc = v.auto_gc;
-      if (Number.isFinite(v.low_water_gb) && v.low_water_gb > 0) DISK_POLICY.low_water_gb = v.low_water_gb;
-      saveDiskPolicy(); // survive restarts — the whole point is set-and-forget
-      return sendJson(res, 200, { ok: true, policy: DISK_POLICY });
     }
 
     // Director async send: durable request created BEFORE execution; returns immediately.
@@ -906,20 +531,12 @@ export function createVacilandoServer() {
 
       // Compile: intent → capability → knowledge → package (Director stages 1–4).
       if (path === "/api/missions/compile") {
-        const intent = v.intent;
+        const slot = v.slot, intent = v.intent;
+        if (!Number.isInteger(slot) || slot < 1 || slot > 6) return sendJson(res, 400, { ok: false, error: "bad_slot" });
         if (typeof intent !== "string" || !intent.trim()) return sendJson(res, 400, { ok: false, error: "empty_intent" });
-        // The Director is INFRASTRUCTURE — it does not own a slot. It DISPATCHES
-        // each mission to one of the six workers: an explicit run-target if the
-        // operator chose one, otherwise an auto-picked worker that isn't already
-        // running a mission. (Was hardcoded to slot 6, which pinned all work to
-        // the app's own checkout.)
-        const requested = v.slot === "auto" || v.slot == null ? "auto" : v.slot;
-        const pick = resolveRunSlot(requested);
-        if (pick.error) return sendJson(res, 409, { ok: false, error: pick.error, detail: pick.detail, available: pick.available });
         // Identity is resolved inside the Director (single source of truth) —
         // no snapshot dependency, so compile never waits on a starved projection.
-        const out = compileMissionForIntent({ slot: pick.slot, intent });
-        if (out.ok) out.assigned_slot = pick.slot;
+        const out = compileMissionForIntent({ slot, intent });
         return sendJson(res, out.ok ? 200 : 422, out);
       }
 
@@ -976,23 +593,7 @@ export function createVacilandoServer() {
     if (req.method !== "GET") return sendJson(res, 405, { error: "method_not_allowed" });
 
     if (path === "/api/health") {
-      const timings = getStartupTimings();
-      const cp = getControlPlaneHealth();
-      const hydrated = Boolean(timings.cache_hydrated);
-      return sendJson(res, 200, {
-        ok: true,
-        accepting: true,
-        hydrated,
-        schema: "vacilando.snapshot.v1",
-        server: "vacilando",
-        host: LOOPBACK_HOST,
-        pid: process.pid,
-        control_plane: { status: cp.status, accepting: true, hydrated },
-        startup: timings,
-      });
-    }
-    if (path === "/api/control-plane/health") {
-      return sendJson(res, 200, { ok: true, ...getControlPlaneHealth(), startup: getStartupTimings() });
+      return sendJson(res, 200, { ok: true, schema: "vacilando.snapshot.v1", server: "vacilando", host: LOOPBACK_HOST });
     }
     if (path === "/api/state" || path === "/api/snapshot") {
       return sendJson(res, 200, await boardSnapshot());
@@ -1018,9 +619,6 @@ export function createVacilandoServer() {
     }
     if (path === "/api/memory") {
       return sendJson(res, 200, await refreshMemory());
-    }
-    if (path === "/api/disk") {
-      return sendJson(res, 200, await refreshDisk());
     }
     if (path === "/api/dashboard") {
       // Dashboard must never block on the provider probe or the resource scan.
@@ -1058,7 +656,6 @@ export function createVacilandoServer() {
         providers: usage,
         provider_runtime,
         memory: lastReclaim,
-        disk: lastDiskGc,
         scheduler: sched,
         throughput,
         operator_load,
@@ -1190,56 +787,7 @@ export function createVacilandoServer() {
       const id = url.searchParams.get("id") || "";
       const c = assembleConversation(id);
       if (!c) return sendJson(res, 404, { error: "unknown_conversation" });
-      // Attach the objective (phase spine + mode + proposed next) so the UI can
-      // render Director conducting the objective, not just the single mission.
-      // `live` is the authoritative NOW-state — even when the open conversation is
-      // a finished prior phase (the stale "Reviewing" trap).
-      // Prefer brief-origin objective (keyed by mission id) over capability roadmap.
-      let objective = getObjectiveByMission(id) || (c.capability_id ? readObjective(c.capability_id) : null);
-      if (objective) {
-        objective = {
-          ...objective,
-          live: projectObjectiveLive(objective, getMission, () => readMissions(null, 300)),
-        };
-      }
-      const kickoff = getKickoffState(id);
-      const timeline = readTimelineSummary(id, { limit: 40 });
-      const timeline_summary = summarizeFromTimeline(id);
-      return sendJson(res, 200, {
-        conversation: c,
-        objective,
-        kickoff: kickoff.ok ? kickoff : null,
-        timeline,
-        timeline_summary,
-      });
-    }
-    if (path === "/api/missions/brief") {
-      const id = url.searchParams.get("id") || url.searchParams.get("mission_id") || "";
-      const ver = url.searchParams.get("version");
-      const brief = (ver != null ? getBriefVersion(id, Number(ver)) : null) || getBrief(id);
-      if (!brief) return sendJson(res, 404, { ok: false, error: "brief_not_found" });
-      return sendJson(res, 200, {
-        ok: true,
-        brief,
-        versions: listBriefVersions(id).map((b) => ({ version: b.version, contentHash: b.contentHash, changeSummary: b.changeSummary })),
-        readiness: reviewMissionReadiness(brief),
-        kickoff: getKickoffState(id),
-      });
-    }
-    if (path === "/api/missions/timeline") {
-      const id = url.searchParams.get("id") || url.searchParams.get("mission_id") || "";
-      if (!id) return sendJson(res, 400, { ok: false, error: "missing_mission_id" });
-      return sendJson(res, 200, {
-        ok: true,
-        mission_id: id,
-        timeline: readTimelineSummary(id, { limit: 100 }),
-        summary: summarizeFromTimeline(id),
-      });
-    }
-    if (path === "/api/missions/kickoff") {
-      const id = url.searchParams.get("id") || url.searchParams.get("mission_id") || "";
-      const out = getKickoffState(id);
-      return sendJson(res, out.ok ? 200 : 404, out);
+      return sendJson(res, 200, { conversation: c });
     }
 
     // Capability Runtime (registry). Read-only projections; enriched at read time.
@@ -1345,153 +893,36 @@ export function createVacilandoServer() {
   // servers when the host is thrashing. Slower cadence than the SSE tick.
   const memTimer = setInterval(() => { refreshMemory({ act: true }).catch(() => {}); }, MEMORY_TICK_MS);
   memTimer.unref?.();
-  // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
-  const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
-  diskTimer.unref?.();
-  // Autonomous conductor: advance handed-off objectives without the operator.
-  const condTimer = setInterval(() => { try { conductorTick(); } catch {} }, 15000);
-  condTimer.unref?.();
 
-  /**
-   * Background warm AFTER listen. Previously recover + diskSignal (sync GC dry-run
-   * ≤30s) + getSnapshot + warmExpensive ran inside createVacilandoServer and
-   * delayed HTTP bind. Recover stays cheap sync but still runs post-listen so a
-   * hung FS never blocks accepting traffic.
-   */
-  function beginBackgroundWarm({ startedAtMs = Date.now() } = {}) {
-    const tWarm = Date.now();
-    try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
-    try {
-      const rec = recoverMissions({ providerResumable });
-      if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
-    } catch { /* best-effort */ }
-    try {
-      import("./vacilando/execution-session-recovery.mjs").then(async ({ reconcileExecutionSessionsOnBoot }) => {
-        const ex = reconcileExecutionSessionsOnBoot();
-        const n = (ex.recovered?.length || 0) + (ex.lost?.length || 0) + (ex.interrupted?.length || 0);
-        if (n) console.log(`[execution-sessions] reconciled ${n} (recovered=${ex.recovered.length} interrupted=${ex.interrupted.length} lost=${ex.lost.length})`);
-        // Resume interrupted Claude sessions that still have a connector session id.
-        if (ex.interrupted?.length) {
-          const { resumeAfterDecisionAnswer } = await import("./vacilando/assignment-dispatch.mjs");
-          for (const s of ex.interrupted) {
-            if (!s.connectorSessionId && !s.checkpoint?.connectorSessionId) continue;
-            try {
-              await resumeAfterDecisionAnswer({
-                missionId: s.missionId,
-                assignmentIds: [s.assignmentId],
-                decision: {
-                  title: "Resume after control-plane restart",
-                  situation: "Vacilando restarted during Claude execution",
-                  recommendation: "continue",
-                },
-                chosenOptionId: "continue",
-                response: "Control plane recovered. Continue the paused deliverable from your prior checkpoint. Do not restart unrelated work.",
-                actor: "director",
-              });
-            } catch (e) {
-              console.log(`[execution-sessions] resume failed ${s.sessionId}: ${e.message || e}`);
-            }
-          }
-        }
-      }).catch(() => {});
-    } catch { /* best-effort */ }
-    try {
-      import("./vacilando/trusted-host-actions.mjs").then(({ reconcileTrustedHostActionsOnBoot }) => {
-        const tha = reconcileTrustedHostActionsOnBoot();
-        if (tha.interrupted?.length) {
-          console.log(`[trusted-host] reconciled ${tha.interrupted.length} in-flight action(s) after restart`);
-        }
-      }).catch(() => {});
-    } catch { /* best-effort */ }
-    startupTimings.recover_ms = Date.now() - tWarm;
+  // Any Director request left non-terminal died with a previous process — mark it
+  // interrupted honestly rather than showing a fake "running".
+  try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
 
-    // Defer expensive compose / provider / GC until after the process is accepting.
-    setImmediate(() => {
-      getSnapshot().then((s) => {
-        startupTimings.first_compose_ms = Date.now() - startedAtMs;
-        if (s && !s.pending) {
-          recordControlPlaneEvent({
-            status: "hydrated",
-            detail: "Board projection ready",
-            timings: { ...startupTimings },
-          });
-        }
-      }).catch(() => {});
-      // Memory reclaim OFF until hydrated — avoid stopping idle servers while compose runs.
-      refreshMemory({ act: false }).catch(() => {});
-      refreshDisk({ act: false }).catch(() => {});
-      // Stagger provider warm so it does not compete with first compose.
-      setTimeout(() => warmExpensive(), 1500);
-    });
-    const warmTimer = setInterval(warmExpensive, 30000);
-    warmTimer.unref?.();
-    backgroundTimers.push(warmTimer);
-  }
+  // Any mission left in a LIVE state (starting/running/stopping) lost its owning
+  // child with the previous process — project an honest interrupted/resumable
+  // state. Never show "running" without a live tracked child.
+  try {
+    const rec = recoverMissions({ providerResumable });
+    if (rec.length) console.log(`[missions] recovered ${rec.length} interrupted mission(s) (${rec.filter((r) => r.resumable).length} resumable)`);
+  } catch { /* best-effort */ }
 
-  const backgroundTimers = [];
-  return {
-    server,
-    clients,
-    beginBackgroundWarm,
-    close: () => {
-      clearInterval(timer);
-      clearInterval(memTimer);
-      clearInterval(diskTimer);
-      clearInterval(condTimer);
-      for (const t of backgroundTimers) clearInterval(t);
-      server.close();
-    },
-  };
-}
+  // Warm the cache immediately so the first request isn't a cold ~8s compute.
+  getSnapshot().catch(() => {});
+  refreshMemory({ act: true }).catch(() => {});
+  // Warm the EXPENSIVE keys too (providers ~23s, resources ~6s) so the operator's
+  // first read of those surfaces is served from cache instead of blocking.
+  warmExpensive();
+  const warmTimer = setInterval(warmExpensive, 30000);
+  warmTimer.unref?.();
 
-const startupTimings = {
-  process_started_at: Date.now(),
-  create_ms: null,
-  listen_ms: null,
-  recover_ms: null,
-  first_compose_ms: null,
-};
-
-export function getStartupTimings() {
-  return { ...startupTimings, cache_hydrated: Boolean(cache.snap && !cache.snap.pending) };
+  return { server, clients, close: () => { clearInterval(timer); clearInterval(memTimer); server.close(); } };
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {
-  // Desktop / auto defaults: real provider unless tests authorize mock.
-  if (!process.env.VACILANDO_EXECUTION_PROVIDER) {
-    process.env.VACILANDO_EXECUTION_PROVIDER = "auto";
-  }
-  if (process.env.VACILANDO_ALLOW_MOCK_PROVIDER !== "1"
-      && process.env.VACILANDO_EXECUTION_PROVIDER !== "mock") {
-    process.env.VACILANDO_ALLOW_MOCK_PROVIDER = "0";
-  }
-  process.env.VACILANDO_CONTROL_PLANE_PORT = String(port);
-
-  recordControlPlaneEvent({ status: "starting", detail: `Binding :${port}`, timings: { process_started_at: startupTimings.process_started_at } });
-  const tCreate = Date.now();
-  const { server, close, beginBackgroundWarm } = createVacilandoServer();
-  startupTimings.create_ms = Date.now() - tCreate;
+  const { server, close } = createVacilandoServer();
   return new Promise((res, rej) => {
-    server.once("error", (e) => {
-      recordControlPlaneEvent({ status: "failed", detail: String(e.message || e) });
-      rej(e);
-    });
-    server.listen(port, LOOPBACK_HOST, () => {
-      const listenAt = Date.now();
-      const bound = server.address()?.port ?? port;
-      startupTimings.listen_ms = listenAt - startupTimings.process_started_at;
-      noteBindTiming({ startedAtMs: startupTimings.process_started_at, listenAtMs: listenAt });
-      claimControlPlaneOwnership({
-        pid: process.pid,
-        port: bound,
-        worktree: process.cwd(),
-        desktopOwned: process.env.VACILANDO_DESKTOP_OWNED === "1" || process.env.VACILANDO_OWNED === "1",
-        executionProvider: process.env.VACILANDO_EXECUTION_PROVIDER || "auto",
-      });
-      // Warm only after accepting — health answers immediately.
-      setImmediate(() => beginBackgroundWarm({ startedAtMs: startupTimings.process_started_at }));
-      res({ server, close, port: bound, startupTimings: getStartupTimings() });
-    });
+    server.once("error", rej);
+    server.listen(port, LOOPBACK_HOST, () => res({ server, close, port }));
   });
 }
 

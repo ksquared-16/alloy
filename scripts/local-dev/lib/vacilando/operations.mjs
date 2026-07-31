@@ -43,7 +43,7 @@ export function stateKeyFor(mission, pkg) {
   if (s === "blocked") return "blocked";
   if (s === "waiting_for_operator") return "needs_operator";
   if (s === "waiting_for_acceptance") return mission.acceptance_gate ? "review" : "verifying";
-  if (s === "provisioning" || s === "starting" || s === "running" || s === "stopping") return "executing";
+  if (s === "starting" || s === "running" || s === "stopping") return "executing";
   if (s === "stopped") return "waiting";
   if (s === "ready" || ready) return "ready";
   return "preparing";
@@ -108,7 +108,7 @@ export function conversationStage(mission, pkg) {
   const s = mission?.status;
   if (s === "closed") return "closed";
   if (["completed", "waiting_for_acceptance"].includes(s)) return "reviewing";
-  if (["provisioning", "starting", "running", "stopping", "failed", "interrupted", "blocked", "waiting_for_operator"].includes(s)) return "executing";
+  if (["starting", "running", "stopping", "failed", "interrupted", "blocked", "waiting_for_operator"].includes(s)) return "executing";
   // Pre-start: understanding until Director's questions are answered.
   if (understandingQuestions(mission, pkg).length > 0) return "understanding";
   const ready = pkg?.readiness_verdict?.verdict === "Ready" && pkg?.readiness_status === "ready";

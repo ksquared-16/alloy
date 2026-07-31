@@ -932,26 +932,6 @@ alloy_worker_doctor_one() {
     issues=$((issues + 1))
   fi
 
-  # Docker host health (shared resource — wedged Desktop blocks every slot)
-  local dock_status=""
-  if dock_status="$(alloy_docker_health_report 2>/dev/null | grep '^DOCKER_STATUS=' | head -1 | cut -d= -f2-)"; then
-    :
-  else
-    dock_status="unknown"
-  fi
-  case "$dock_status" in
-    ok) echo "OK: Docker healthy" ;;
-    wedged)
-      echo "ISSUE: Docker wedged (docker info hung) — run: alloy-docker-doctor --recover --force"
-      issues=$((issues + 1))
-      ;;
-    unreachable|missing)
-      echo "ISSUE: Docker ${dock_status} — run: alloy-docker-doctor --recover"
-      issues=$((issues + 1))
-      ;;
-    *) echo "NOTE: Docker status=${dock_status}" ;;
-  esac
-
   # Generated-file noise
   local dirty_class
   dirty_class="$(alloy_worktree_dirty_classification "$path")"
