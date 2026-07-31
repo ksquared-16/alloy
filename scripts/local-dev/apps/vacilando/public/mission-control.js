@@ -662,9 +662,24 @@ We'll capture the context automatically.</p>
     function renderDeliverableReview(o) {
       if (!o || o.kind !== "deliverable_review") return null;
       const ready = Boolean(o.operatorMayApprove);
-      const rec = o.recommendation || {};
+      const rec = o.directorRecommendation || o.recommendation || {};
+      const cert = o.certification || {};
+      const confidence = cert.confidence || {};
+      const confPct = confidence.pct ?? rec.confidencePct;
       const discList = (rec.discrepancies || o.reconciliation?.blocking || [])
         .map((d) => `<li>${esc(d.detail || d)}</li>`).join("");
+      const chips = (cert.chips || []).map((c) => {
+        const mark = c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "·";
+        const cls = c.status === "pass" ? "ok" : c.status === "fail" ? "bad" : "warn";
+        return `<li class="drev-chip ${cls}"><span class="drev-chip-mark">${mark}</span>${esc(c.label)}</li>`;
+      }).join("");
+      const confReasons = (confidence.reasons || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      const execSentences = (o.executiveSummary?.sentences || [])
+        .map((s) => `<p class="drev-exec-line">${esc(s)}</p>`).join("");
+      const asking = o.askingYouToApprove || {};
+      const approving = (asking.approving || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      const notApproving = (asking.not_approving || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      const impact = (o.approvalImpact?.immediately || []).map((x) => `<li>${esc(x)}</li>`).join("");
       const checks = (o.verification?.checks || []).map((c) => {
         const pill = c.status === "pass" ? "ok" : c.status === "fail" ? "bad" : "warn";
         return `<li class="drev-check"><span class="mc-pill ${pill}">${esc(c.status)}</span>
@@ -685,13 +700,11 @@ We'll capture the context automatically.</p>
           ${(e.acceptanceCriteriaCovered || []).length ? `<p><b>Criteria</b><br/>${esc(e.acceptanceCriteriaCovered.join(", "))}</p>` : ""}
           ${e.commit ? `<p><b>Commit</b><br/><code>${esc(e.commit)}</code></p>` : ""}
           <p class="muted">${esc(e.timestamp || "")}${e.source ? ` · ${esc(e.source)}` : ""}</p>
-          <button class="btn ghost" type="button" data-nav="evidence/${esc(id)}">Open details</button>
         </article>`;
       }).join("");
-      const meaning = o.approvalMeaning || {};
       const actions = [];
       if (o.actions?.approve) {
-        actions.push(`<button class="btn" type="button" data-drev-approve="${esc(o.reviewId)}" data-mission="${esc(id)}">Approve deliverable</button>`);
+        actions.push(`<button class="btn" type="button" data-drev-approve="${esc(o.reviewId)}" data-mission="${esc(id)}">Certify ${esc(o.waveLabel || "deliverable")}</button>`);
       }
       if (o.actions?.requestChanges) {
         actions.push(`<button class="btn ghost" type="button" data-drev-changes="${esc(o.reviewId)}" data-mission="${esc(id)}">Request changes</button>`);
@@ -699,67 +712,80 @@ We'll capture the context automatically.</p>
       if (o.actions?.askDirector) {
         actions.push(`<button class="btn ghost" type="button" data-drev-ask="${esc(o.reviewId)}" data-mission="${esc(id)}">Ask Director</button>`);
       }
-      const changed = (o.whatChanged || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
-      const notChanged = (o.whatDidNotChange || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
       const risks = (o.residualRisks || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">None recorded</li>";
       const deferred = (o.deferredWork || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      const changed = (o.whatChanged || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
+      const notChanged = (o.whatDidNotChange || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
       const recCardClass = ready ? "drev-rec ok" : "drev-rec blocked";
       return `<section class="mc-sec mc-outcome mc-drev" id="mc-outcome">
         <h3>${esc(o.headline)}</h3>
         <p class="muted">${esc(o.assignment?.title || "")}</p>
+        <p class="muted drev-role">You are approving Director’s certification — not reviewing implementation.</p>
+
+        ${execSentences ? `<article class="mc-card drev-exec">
+          <h4 style="margin-top:0">Executive Summary</h4>
+          ${execSentences}
+        </article>` : ""}
 
         <article class="mc-card ${recCardClass}">
-          <h4 style="margin-top:0">Director recommendation</h4>
-          <p class="drev-rec-headline">${esc(rec.headline || (ready ? "Approve" : "Not ready for approval"))}</p>
-          <p style="white-space:pre-wrap">${esc(rec.detail || "")}</p>
+          <h4 style="margin-top:0">Director Recommendation</h4>
+          <p class="drev-rec-headline">${esc(rec.headline || (ready ? "Approve" : "Director cannot yet certify"))}</p>
+          ${confPct != null ? `<div class="drev-conf"><span class="drev-conf-label">Confidence</span><span class="drev-conf-pct">${esc(String(confPct))}%</span></div>` : ""}
+          <p class="drev-conf-sub">Summary</p>
+          <p style="white-space:pre-wrap">${esc(rec.summary || rec.detail || "")}</p>
           ${discList ? `<ul>${discList}</ul>` : ""}
-          <div class="mc-actions" style="margin-top:12px">${actions.join("") || `<span class="muted">Approval disabled until evidence is consistent</span>`}</div>
+          <div class="mc-actions" style="margin-top:12px">${actions.join("") || `<span class="muted">Certification disabled until Director can recommend it</span>`}</div>
         </article>
 
-        <h4>Assignment</h4>
-        <p>${esc(o.assignment?.objective || "")}</p>
+        <article class="mc-card drev-cert">
+          <h4 style="margin-top:0">Director Certification</h4>
+          <ul class="drev-chips">${chips || "<li class=\"muted\">Certification pending</li>"}</ul>
+          ${confPct != null ? `<div class="drev-conf" style="margin-top:14px">
+            <span class="drev-conf-label">${esc(confidence.label || "Certification Confidence")}</span>
+            <span class="drev-conf-pct">${esc(String(confPct))}%</span>
+          </div>` : ""}
+          ${confReasons ? `<p class="drev-conf-sub">Because</p><ul class="drev-conf-reasons">${confReasons}</ul>` : ""}
+          <details class="mc-diag drev-verify">
+            <summary>View verification details</summary>
+            <ul class="drev-checks">${checks || "<li class=\"muted\">No checks recorded</li>"}</ul>
+            ${verifiedFacts ? `<h4>Director verified</h4><ul>${verifiedFacts}</ul>` : ""}
+          </details>
+        </article>
 
-        <h4>Why this work existed</h4>
-        <p>${esc(o.why || "")}</p>
+        <article class="mc-card">
+          <h4 style="margin-top:0">What I'm asking you to approve</h4>
+          <p><b>You are approving:</b></p>
+          <ul>${approving || "<li class=\"muted\">—</li>"}</ul>
+          <p><b>You are not approving:</b></p>
+          <ul>${notApproving || "<li class=\"muted\">—</li>"}</ul>
+        </article>
 
-        <h4>What changed</h4>
-        <ul>${changed}</ul>
-
-        <h4>What this protects or enables</h4>
-        <p>${esc(o.protectsOrEnables || "")}</p>
-
-        <h4>What did not change</h4>
-        <ul>${notChanged}</ul>
-
-        <details class="mc-diag drev-verify">
-          <summary>Director verification — ${esc(o.verification?.summary || `${o.verification?.passed || 0} of ${o.verification?.total || 0} checks passed`)}</summary>
-          <ul class="drev-checks">${checks || "<li class=\"muted\">No checks recorded</li>"}</ul>
-          ${verifiedFacts ? `<h4>Director verified</h4><ul>${verifiedFacts}</ul>` : ""}
-        </details>
-
-        <h4>Evidence</h4>
-        <div class="drev-ev-grid">${evidence || "<p class=\"muted\">No translated evidence</p>"}</div>
+        <article class="mc-card">
+          <h4 style="margin-top:0">Approval Impact</h4>
+          <p class="muted">Immediately after approval, Director will:</p>
+          <ul>${impact || "<li class=\"muted\">Continue the mission</li>"}</ul>
+          <p class="muted">If you request changes: ${esc(o.rejectionConsequence || "")}</p>
+        </article>
 
         <h4>Remaining risk</h4>
         <ul>${risks}</ul>
         ${deferred ? `<h4>Deferred work</h4><ul>${deferred}</ul>` : ""}
 
-        ${judgment ? `<h4>Your judgment</h4><ul class="drev-judgment">${judgment}</ul>` : ""}
+        ${judgment ? `<details class="mc-diag"><summary>Your judgment</summary><ul class="drev-judgment">${judgment}</ul></details>` : ""}
 
-        <h4>What your approval means</h4>
-        <ul>
-          <li>Accepts assignment: <b>${esc(o.assignment?.title || "")}</b></li>
-          <li>Criteria satisfied: ${esc((meaning.criteria_satisfied || []).join("; ") || "—")}</li>
-          <li>Dependent work eligible: ${esc(meaning.dependent_work_eligible || "—")}</li>
-          ${(meaning.does_not_imply || []).map((x) => `<li>Does <b>not</b> imply: ${esc(x)}</li>`).join("")}
-        </ul>
-        <p class="muted">If you request changes: ${esc(o.rejectionConsequence || "")}</p>
-
-        <details class="mc-diag" style="margin-top:18px">
+        <details class="mc-diag drev-tech" style="margin-top:18px">
           <summary>Technical details</summary>
+          <h4>What changed</h4>
+          <ul>${changed}</ul>
+          <h4>What did not change</h4>
+          <ul>${notChanged}</ul>
+          <h4>Evidence inventory</h4>
+          <div class="drev-ev-grid">${evidence || "<p class=\"muted\">No translated evidence</p>"}</div>
           <p class="muted">Worker claim (not Director-confirmed truth):</p>
           <p style="white-space:pre-wrap">${esc(o.technical?.workerClaimSummary || "—")}</p>
           ${(o.technical?.files || []).length ? `<div class="mc-stat-k">Files touched</div><ul>${o.technical.files.map((f) => `<li class="mono">${esc(f)}</li>`).join("")}</ul>` : ""}
+          <p class="muted">Assignment <code>${esc(o.technical?.assignmentId || o.assignmentId || "—")}</code>
+            · Review <code>${esc(o.technical?.reviewId || o.reviewId || "—")}</code></p>
           <p class="muted">Verified ${esc(o.technical?.verifiedAt || "—")} by ${esc(o.technical?.verifiedBy || "—")}</p>
           <button class="btn ghost" data-nav="evidence/${esc(id)}">Open Evidence gallery</button>
           <button class="btn ghost" data-nav="timeline/${esc(id)}">Open Timeline</button>

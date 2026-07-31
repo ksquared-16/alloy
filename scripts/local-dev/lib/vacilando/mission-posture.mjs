@@ -207,6 +207,9 @@ export function deriveMissionPosture(missionId) {
     const cannot = state === "cannot_verify";
     const verifying = state === "director_verifying";
     const ready = state === "ready_for_review" && openReview.recommendation === "approve";
+    const wave = openReview.wave_label
+      || (String(openReview.deliverable_title || "").match(/\b(W-\d+)\b/i)?.[1])
+      || "this deliverable";
     return {
       ...base,
       id: "deliverable_review",
@@ -218,25 +221,25 @@ export function deriveMissionPosture(missionId) {
             ? "deliverable_unverified"
             : "deliverable_ready_for_approval",
       label: repair
-        ? "Evidence repair in progress"
+        ? `Director returned ${wave} for evidence repair`
         : verifying
-          ? "Director verifying"
+          ? "Director is verifying this deliverable"
           : cannot
-            ? "Director could not certify"
-            : "Deliverable ready for approval",
+            ? `Director cannot certify ${wave}`
+            : `Director recommends certifying ${wave}`,
       detail: repair
         ? (openReview.recommendation_detail
-          || "Director is reconciling evidence before asking for approval.")
+          || "Director is reconciling evidence before recommending certification.")
         : cannot
-          ? (openReview.recommendation_detail || "Director could not certify this deliverable.")
-          : `${openReview.deliverable_title} is verified and waiting for your approval.`,
+          ? (openReview.recommendation_detail || `Director cannot yet certify ${wave}.`)
+          : `Director verified ${wave}. You are approving Director’s certification — not reviewing implementation.`,
       next: repair
-        ? "Wait for evidence repair — or open the review"
+        ? "Wait for evidence repair — or open the certification briefing"
         : cannot
           ? "Request changes or ask Director"
-          : "Review the Deliverable Review, then approve or request changes",
+          : "Read Director’s recommendation, then certify or request changes",
       needsYou: ready || cannot || repair,
-      primaryAction: action("review_deliverable", ready ? "Review deliverable" : "Open review", {
+      primaryAction: action("review_deliverable", ready ? "Open certification" : "Open briefing", {
         href: `missions/${missionId}`,
         missionId,
         reviewId: openReview.review_id,

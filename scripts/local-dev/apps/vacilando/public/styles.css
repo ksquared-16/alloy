@@ -851,8 +851,25 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .drev-rec{margin:12px 0 18px}
 .drev-rec.ok{border-color:#2f6b45;background:rgba(47,107,69,.06)}
 .drev-rec.blocked{border-color:#c2703f;background:rgba(194,112,63,.08)}
-.drev-rec-headline{font-size:20px;font-weight:700;margin:4px 0 8px;letter-spacing:-0.02em}
-.drev-verify{margin:14px 0}
+.drev-rec-headline{font-size:22px;font-weight:700;margin:4px 0 8px;letter-spacing:-0.02em}
+.drev-role{margin:-4px 0 14px}
+.drev-exec{margin:12px 0}
+.drev-exec-line{margin:0 0 8px;font-size:15px;line-height:1.45}
+.drev-exec-line:last-child{margin-bottom:0}
+.drev-conf{display:flex;align-items:baseline;gap:10px;margin:6px 0 4px}
+.drev-conf-label{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#667)}
+.drev-conf-pct{font-size:28px;font-weight:700;letter-spacing:-0.03em}
+.drev-conf-sub{margin:10px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#667)}
+.drev-conf-reasons{margin:0;padding-left:1.1em}
+.drev-cert{margin:12px 0}
+.drev-chips{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.drev-chip{display:flex;gap:10px;align-items:center;font-size:15px}
+.drev-chip-mark{display:inline-flex;width:1.25em;justify-content:center;font-weight:700}
+.drev-chip.ok .drev-chip-mark{color:#2f6b45}
+.drev-chip.bad .drev-chip-mark{color:#a33}
+.drev-chip.warn .drev-chip-mark{color:#a67c2a}
+.drev-verify{margin:14px 0 0}
+.drev-tech{margin-top:18px}
 .drev-judgment li{margin:8px 0}
 .drev-judgment .mc-pill{display:none}
 .mc-conf-big{font-size:42px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin:4px 0 8px}

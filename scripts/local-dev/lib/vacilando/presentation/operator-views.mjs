@@ -92,11 +92,11 @@ const TIMELINE_HEADLINES = {
   phase_completed: "A workstream finished",
   assignment_started: "A worker began the assignment",
   assignment_completed: "Claude completed an assignment",
-  deliverable_verified: "Director verified a deliverable",
-  deliverable_accepted: "You accepted a deliverable",
+  deliverable_verified: "Director verified the deliverable",
+  deliverable_accepted: "You certified a deliverable",
   deliverable_changes_requested: "You requested changes on a deliverable",
-  deliverable_evidence_discrepancy: "Director found an evidence mismatch",
-  deliverable_evidence_repair: "Director returned work for evidence repair",
+  deliverable_evidence_discrepancy: "Director cannot yet certify this work",
+  deliverable_evidence_repair: "Director returned this assignment for evidence repair",
   progress: "A worker reported progress",
   discovery: "Director surfaced a risk",
   blocker: "Work hit a blocker",
@@ -330,11 +330,9 @@ export function missionListCardVm(row) {
   const phase = r.current_phase;
 
   const deliverablesLabel = posture.id === "deliverable_review"
-    ? (posture.status === "evidence_repair"
-      ? "Evidence repair in progress"
-      : posture.label)
+    ? posture.label
     : posture.id === "operator_review" || posture.id === "awaiting_completion"
-      ? "Deliverable ready for approval"
+      ? "Director is preparing certification"
       : posture.busy
         ? `${progress.accepted_deliverables ?? 0} of ${progress.total_deliverables ?? 0} deliverables accepted`
         : `${progress.accepted_deliverables ?? 0} of ${progress.total_deliverables ?? 0} assignments closed`;
@@ -461,6 +459,24 @@ export function timelineEventVm(ev) {
   // Strip worker-escalation noise from decision-adjacent headlines.
   if (/^Claude requires|^Raised by|^Execution session|^Worker\b/i.test(headline || "")) {
     headline = TIMELINE_HEADLINES[type] || "Director needs a decision from you";
+  }
+
+  // Prefer wave labels over generic “worker completed assignment” language.
+  if (type === "assignment_completed") {
+    const wave = String(ev.detail?.title || ev.detail?.assignmentTitle || summary || "")
+      .match(/\b(W-\d+)\b/i)?.[1];
+    if (wave) headline = `Claude completed ${wave}`;
+    else if (/Worker completed|assignment completed/i.test(headline || "")) {
+      headline = "Claude completed an assignment";
+    }
+  }
+  if (type === "deliverable_verified" && /recommend/i.test(summary || "")) {
+    if (!/Director verified|Director recommends|Director cannot/i.test(headline || "")) {
+      headline = "Director recommends certification";
+    }
+  }
+  if (type === "deliverable_accepted" && /^You accepted\b/i.test(headline || "")) {
+    headline = headline.replace(/^You accepted\b/i, "You certified");
   }
 
   const actorMap = { operator: "You", director: "Director", system: "Vacilando" };
@@ -804,7 +820,7 @@ export function listNeedsYou() {
         missionId,
         title: posture.label,
         body: posture.detail,
-        urgency: "Deliverable review",
+        urgency: "Director certification",
         recommendation: posture.next,
         action: posture.primaryAction,
       }));

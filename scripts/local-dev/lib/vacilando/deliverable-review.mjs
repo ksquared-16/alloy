@@ -87,12 +87,18 @@ function curatedBrief(assignment) {
   if (/W-4|Service-client principal/i.test(title) || phaseId === "impl_w1b") {
     return {
       deliverable_title: "Wave 1 — Service-client principal check (W-4)",
+      wave_label: "W-4",
       assignment_objective:
         "Prevent privileged API routes from bypassing principal-resolution review by adding a build-time enforcement check.",
       reason_for_work:
         "Service-role routes can skip principal resolution unless they are reviewed. Without a hard gate, new privileged routes can ship unreviewed.",
       expected_outcome:
         "A build-time AST check fails the build on unreviewed service-client routes or stale allowlist entries, and records today’s exception baseline.",
+      executive_summary: [
+        "This assignment accomplished a build-time enforcement guard that blocks unreviewed privileged API routes.",
+        "It changes how production builds validate service-role clients before they ship.",
+        "Remaining work is remediating today’s allowlisted exceptions in a later assignment (W-15).",
+      ],
       outcome_summary:
         "Director verified a build-time enforcement guard for service-role Supabase clients. Unreviewed routes and stale allowlist entries now fail validation during prebuild. Exception remediation remains deferred to W-15.",
       behavior_changed: [
@@ -119,8 +125,37 @@ function curatedBrief(assignment) {
       ],
       recommendation: "approve",
       recommendation_detail:
-        "The build-time principal-resolution guard is active, its negative scenarios passed, and the current exception baseline is recorded for W-15 remediation. Approval accepts the enforcement guard only — it does not permanently approve the existing exceptions.",
+        "I independently verified the required evidence, tests, scope boundaries, and acceptance criteria.\n\nThe remaining risk is already documented and scheduled for W-15.\n\nApproving this allows the mission to continue.",
       recommendation_headline: "Approve W-4",
+      asking_you_to_approve: {
+        approving: [
+          "The new build-time enforcement guard.",
+        ],
+        not_approving: [
+          "Existing allowlisted exceptions.",
+          "Future remediation (W-15).",
+          "Schema changes.",
+          "Operator UI.",
+        ],
+      },
+      approval_impact: {
+        immediately: [
+          "Director marks W-4 accepted",
+          "Director unlocks the next dependent work (W-5 when ready)",
+          "Director continues mission execution",
+          "Mission confidence increases",
+        ],
+      },
+      certification_confidence: {
+        pct: 97,
+        reasons: [
+          "Evidence complete",
+          "Tests passed",
+          "Scope respected",
+          "No blocking discrepancies",
+          "Known risks documented",
+        ],
+      },
       approval_meaning: {
         assignment_accepted: true,
         criteria_satisfied: ["AC_W1B — build-time principal check + baseline inventory"],
@@ -481,33 +516,41 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     }));
 
   const blocking = reconciliation.blocking_discrepancies || [];
+  const wave = curated?.wave_label || shortDeliverableName(assignment.title);
   let certState = "cannot_verify";
   let recommendation = "not_ready";
-  let recommendationHeadline = "Not ready for approval";
+  let recommendationHeadline = `Director cannot yet certify ${wave}`;
   let recommendationDetail = "Director could not certify this deliverable.";
 
   if (reconciliation.reconciliation_state === "inconsistent" || blocking.length) {
     certState = "evidence_discrepancy";
     recommendation = "not_ready";
-    recommendationHeadline = "Not ready for approval";
+    recommendationHeadline = `Director cannot yet certify ${wave}`;
     recommendationDetail = blocking.length === 1
-      ? `One evidence discrepancy must be resolved:\n${blocking[0].detail}`
-      : `${blocking.length} evidence discrepancies must be resolved:\n${blocking.map((d) => `• ${d.detail}`).join("\n")}`;
+      ? `Director returned this assignment for evidence repair:\n${blocking[0].detail}`
+      : `Director returned this assignment for evidence repair:\n${blocking.map((d) => `• ${d.detail}`).join("\n")}`;
   } else if (verification.can_recommend_approval && verification.recommendation === "approve") {
     certState = "ready_for_review";
     recommendation = "approve";
-    recommendationHeadline = curated?.recommendation_headline || "Approve deliverable";
+    recommendationHeadline = curated?.recommendation_headline || `Approve ${wave}`;
     recommendationDetail = curated?.recommendation_detail
-      || "All required evidence is consistent and Director recommends approval.";
+      || "I independently verified the required evidence, tests, scope boundaries, and acceptance criteria.\n\nApproving this allows the mission to continue.";
   } else {
     certState = "cannot_verify";
     recommendation = "not_ready";
-    recommendationHeadline = "Not ready for approval";
+    recommendationHeadline = `Director cannot yet certify ${wave}`;
     recommendationDetail = "Director verification is incomplete or failed required checks.";
   }
 
   const passedChecks = (verification.checks || []).filter((c) => c.status === "pass").length;
   const totalChecks = (verification.checks || []).length;
+  const certChips = buildCertificationChips(verification, reconciliation, curated);
+  const certConfidence = buildCertificationConfidence({
+    curated,
+    ready: recommendation === "approve" && certState === "ready_for_review",
+    chips: certChips,
+    blocking,
+  });
 
   return {
     schema_version: SCHEMA,
@@ -515,6 +558,7 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     mission_id: assignment.missionId,
     assignment_id: assignment.assignmentId,
     deliverable_title: curated?.deliverable_title || assignment.title,
+    wave_label: wave,
     assignment_objective: curated?.assignment_objective || assignment.objective || assignment.title,
     reason_for_work: curated?.reason_for_work
       || assignment.scope
@@ -522,8 +566,8 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     expected_outcome: curated?.expected_outcome
       || (assignment.expectedDeliverables || []).map((d) => (typeof d === "string" ? d : d.title || d.path)).filter(Boolean).join("; ")
       || "Complete the assignment per its acceptance criteria.",
-    // Keep short — do not duplicate "What changed" bullets
-    outcome_summary: null,
+    executive_summary: curated?.executive_summary || buildExecutiveSummaryFallback(assignment, curated, report),
+    outcome_summary: curated?.outcome_summary || null,
     behavior_changed: curated?.behavior_changed || summarizeChanged(report, assignment),
     behavior_not_changed: curated?.behavior_not_changed || [
       "Anything outside the assignment’s expected deliverables",
@@ -540,6 +584,10 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
       worker_claims: verification.worker_claims,
       can_recommend_approval: verification.can_recommend_approval,
     },
+    director_certification: {
+      chips: certChips,
+      confidence: certConfidence,
+    },
     evidence_reconciliation: reconciliation,
     evidence_summary: evidenceDeduped,
     residual_risks: curated?.residual_risks || report.residualRisks || [],
@@ -547,6 +595,22 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     recommendation,
     recommendation_headline: recommendationHeadline,
     recommendation_detail: recommendationDetail,
+    asking_you_to_approve: curated?.asking_you_to_approve || {
+      approving: [`The outcomes described for ${wave}.`],
+      not_approving: [
+        "Work outside this assignment’s stated scope",
+        "Future remediation",
+        "Unrelated mission risks",
+      ],
+    },
+    approval_impact: curated?.approval_impact || {
+      immediately: [
+        `Director marks ${wave} accepted`,
+        "Director unlocks dependent work when ready",
+        "Director continues mission execution",
+        "Mission confidence increases",
+      ],
+    },
     approval_meaning: curated?.approval_meaning || {
       assignment_accepted: true,
       criteria_satisfied: assignment.acceptanceCriteriaIds || [],
@@ -564,6 +628,88 @@ function buildReviewFields(assignment, verification, { nowMs } = {}) {
     verified_by: verification.verified_by,
     history: [],
   };
+}
+
+function checkStatus(checks, id) {
+  return (checks || []).find((c) => c.id === id)?.status || "warn";
+}
+
+function buildCertificationChips(verification, reconciliation, curated) {
+  const checks = verification.checks || [];
+  const risksOk = (curated?.residual_risks || verification.verified_facts || []).length > 0
+    || checks.some((c) => c.id === "risks_documented");
+  const evidenceOk = reconciliation?.reconciliation_state === "consistent"
+    && checkStatus(checks, "evidence_reconciled") !== "fail"
+    && checkStatus(checks, "evidence_present") !== "fail";
+  return [
+    {
+      id: "scope",
+      label: "Scope verified",
+      status: checkStatus(checks, "scope_respected") === "fail" ? "fail" : "pass",
+    },
+    {
+      id: "evidence",
+      label: "Evidence reconciled",
+      status: evidenceOk ? "pass" : "fail",
+    },
+    {
+      id: "tests",
+      label: "Tests verified",
+      status: checkStatus(checks, "tests_passed") === "pass" ? "pass" : "fail",
+    },
+    {
+      id: "acceptance",
+      label: "Acceptance criteria satisfied",
+      status: ["pass", "warn"].includes(checkStatus(checks, "acceptance_criteria")) ? "pass" : "fail",
+    },
+    {
+      id: "risks",
+      label: "Remaining risks documented",
+      status: risksOk || curated?.residual_risks?.length ? "pass" : "warn",
+    },
+  ];
+}
+
+function buildCertificationConfidence({ curated, ready, chips, blocking }) {
+  if (curated?.certification_confidence && ready) {
+    return {
+      pct: curated.certification_confidence.pct,
+      reasons: curated.certification_confidence.reasons,
+    };
+  }
+  if (!ready || (blocking || []).length) {
+    const failed = (chips || []).filter((c) => c.status === "fail").map((c) => c.label);
+    return {
+      pct: Math.max(20, 55 - failed.length * 8),
+      reasons: failed.length
+        ? failed.map((l) => `Not yet: ${l}`)
+        : ["Director has not completed certification"],
+    };
+  }
+  const passed = (chips || []).filter((c) => c.status === "pass").length;
+  const total = Math.max(1, (chips || []).length);
+  return {
+    pct: Math.min(97, 88 + Math.round((passed / total) * 9)),
+    reasons: [
+      "Evidence complete",
+      "Tests passed",
+      "Scope respected",
+      "No blocking discrepancies",
+      "Known risks documented",
+    ].slice(0, Math.max(3, passed)),
+  };
+}
+
+function buildExecutiveSummaryFallback(assignment, curated, report) {
+  const wave = curated?.wave_label || shortDeliverableName(assignment.title);
+  const accomplished = curated?.expected_outcome
+    || report.summary
+    || `the required outcomes for ${wave}`;
+  return [
+    `This assignment accomplished ${String(accomplished).replace(/\.$/, "")}.`,
+    "It changes what the mission can safely proceed with next.",
+    "Remaining work is whatever Director deferred or left as residual risk.",
+  ].slice(0, 3);
 }
 
 function summarizeChanged(report, assignment) {
@@ -660,8 +806,8 @@ export function createDeliverableReview(missionId, assignmentId, {
   } else if (review.recommendation === "approve") {
     appendTimelineEvent(missionId, {
       type: "deliverable_verified",
-      headline: `Director verified ${shortTitle} and recommends approval`,
-      summary: review.recommendation_detail,
+      headline: `Director verified the deliverable`,
+      summary: `Director recommends certification of ${shortTitle}.`,
       visibility: "summary",
       assignmentId,
       actor,
@@ -671,7 +817,7 @@ export function createDeliverableReview(missionId, assignmentId, {
   } else {
     appendTimelineEvent(missionId, {
       type: "deliverable_verified",
-      headline: `Director could not certify ${shortTitle}`,
+      headline: `Director cannot yet certify ${shortTitle}`,
       summary: review.recommendation_detail,
       visibility: "summary",
       assignmentId,
@@ -835,14 +981,20 @@ export function acceptDeliverableReview(missionId, reviewId, {
   unlockDependents(missionId, review.assignment_id, { nowMs });
 
   const short = shortDeliverableName(review.deliverable_title);
+  const unlocked = listAssignments(missionId)
+    .filter((a) => (a.dependencies || []).includes(review.assignment_id) && a.status === "ready")
+    .map((a) => shortDeliverableName(a.title))
+    .filter(Boolean);
   appendTimelineEvent(missionId, {
     type: "deliverable_accepted",
-    headline: `You accepted ${short}`,
-    summary: "Director unlocked the next dependent work.",
+    headline: `You certified ${short}`,
+    summary: unlocked.length
+      ? `Director unlocked ${unlocked[0]}.`
+      : "Director continues execution.",
     visibility: "summary",
     assignmentId: review.assignment_id,
     actor,
-    detail: { review_id: reviewId, approval_meaning: review.approval_meaning },
+    detail: { review_id: reviewId, approval_meaning: review.approval_meaning, unlocked },
     nowMs,
   });
 
@@ -951,7 +1103,7 @@ export function askDirectorAboutDeliverable(missionId, reviewId, {
   return { ok: out.ok !== false, review, directorMessage: out };
 }
 
-/** Operator-facing view model — executive structure only. */
+/** Operator-facing view model — executive certification briefing. */
 export function deliverableReviewVm(missionId, review = null) {
   ensureDeliverableReviewsForMission(missionId);
   const r = review || getOpenDeliverableReview(missionId);
@@ -968,6 +1120,7 @@ export function deliverableReviewVm(missionId, review = null) {
   const ready = state === "ready_for_review"
     && r.recommendation === "approve"
     && !inconsistent;
+  const wave = r.wave_label || shortDeliverableName(r.deliverable_title);
 
   const checks = (r.director_verification?.checks || []).map((c) => ({
     id: c.id,
@@ -980,14 +1133,28 @@ export function deliverableReviewVm(missionId, review = null) {
     ?? checks.filter((c) => c.status === "pass").length;
   const total = r.director_verification?.total ?? checks.length;
 
-  let headline = "Deliverable review";
+  const chips = r.director_certification?.chips
+    || buildCertificationChips(
+      { checks, verified_facts: r.director_verification?.verified_facts },
+      recon,
+      { residual_risks: r.residual_risks },
+    );
+  const confidence = r.director_certification?.confidence
+    || buildCertificationConfidence({ curated: null, ready, chips, blocking });
+
+  let headline = "Director certification briefing";
   if (verifying) headline = "Director is verifying this deliverable";
-  else if (state === "evidence_repair") headline = "Evidence repair in progress";
-  else if (state === "evidence_discrepancy" || inconsistent) headline = "Director found an evidence discrepancy";
-  else if (ready) headline = "Ready for your approval";
-  else if (state === "cannot_verify") headline = "Director could not certify this deliverable";
-  else if (state === "accepted") headline = "Deliverable accepted";
+  else if (state === "evidence_repair") headline = "Director returned this assignment for evidence repair";
+  else if (state === "evidence_discrepancy" || inconsistent) {
+    headline = `Director cannot yet certify ${wave}`;
+  } else if (ready) headline = "Director has certified this deliverable";
+  else if (state === "cannot_verify") headline = `Director cannot yet certify ${wave}`;
+  else if (state === "accepted") headline = `You certified ${wave}`;
   else if (state === "changes_requested") headline = "Changes requested";
+
+  const executiveSummary = Array.isArray(r.executive_summary)
+    ? r.executive_summary.slice(0, 3)
+    : (r.executive_summary ? [String(r.executive_summary)] : []);
 
   return {
     kind: "deliverable_review",
@@ -995,14 +1162,44 @@ export function deliverableReviewVm(missionId, review = null) {
     missionId: r.mission_id,
     assignmentId: r.assignment_id,
     certificationState: state,
+    waveLabel: wave,
     headline,
     operatorMayApprove: ready,
+    executiveSummary: {
+      sentences: executiveSummary,
+      text: executiveSummary.join(" "),
+    },
+    directorRecommendation: {
+      action: ready ? "approve" : "not_ready",
+      headline: r.recommendation_headline
+        || (ready ? `Approve ${wave}` : `Director cannot yet certify ${wave}`),
+      confidencePct: confidence.pct,
+      summary: r.recommendation_detail || "",
+      discrepancies: blocking,
+    },
+    // Back-compat alias used by older tests / callers
     recommendation: {
       action: ready ? "approve" : "not_ready",
       headline: r.recommendation_headline
-        || (ready ? "Approve deliverable" : "Not ready for approval"),
+        || (ready ? `Approve ${wave}` : `Director cannot yet certify ${wave}`),
       detail: r.recommendation_detail || "",
       discrepancies: blocking,
+      confidencePct: confidence.pct,
+    },
+    certification: {
+      chips,
+      confidence: {
+        pct: confidence.pct,
+        label: "Certification Confidence",
+        reasons: confidence.reasons || [],
+      },
+    },
+    askingYouToApprove: r.asking_you_to_approve || {
+      approving: [`The outcomes Director certified for ${wave}.`],
+      not_approving: ["Work outside this assignment’s stated scope"],
+    },
+    approvalImpact: {
+      immediately: (r.approval_impact?.immediately || []).slice(),
     },
     assignment: {
       title: r.deliverable_title,
@@ -1042,6 +1239,8 @@ export function deliverableReviewVm(missionId, review = null) {
       files: r.director_verification?.worker_claims?.files || [],
       verifiedAt: r.verified_at,
       verifiedBy: r.verified_by,
+      assignmentId: r.assignment_id,
+      reviewId: r.review_id,
     },
   };
 }

@@ -1,22 +1,32 @@
 # Deliverable Review — before / after (W-4)
 
-## Before
-Operator saw a completion dump:
-- Worker prose summary
-- Files touched list
-- Raw evidence labels (`document — document`, `notes — notes`, `log — log`)
-- Generic “Worker closed the assignment — review before you certify”
-- Mission certify / reopen / park choices without Director verification narrative
+## Before (worker / technical review)
+- Headline: **Ready for your approval**
+- Operator felt responsible for checking implementation
+- Verification checklist of technical checks (files, tests, git)
+- Evidence cards and worker claim above the fold
+- Status: **Deliverable ready for approval**
+- Timeline: Worker completed · Review requested · You accepted
 
-## After
-Director-owned Deliverable Review (`vacilando.deliverable_review.v1`):
-- **Ready for your approval**
-- Assignment / Why / What changed / Protects / What did not change
-- Director verification checks (pass/fail) distinguishing automatic vs judgment
-- Evidence translated by what it proves (Build integration, Baseline inventory, Automated enforcement tests)
-- Explicit approval meaning + deferred W-15 risk
-- Actions: Approve deliverable · Request changes · Ask Director (durable overlays, not `prompt()`)
-- Status / Needs You: **Deliverable ready for approval**
+## After evidence integrity
+- Recommendation first; test-run semantics reconciled (`0 failed` ≠ Failed)
+- Blocking discrepancies prevent Approve
+- Screenshot: `w4-evidence-integrity-after.png`
 
-Screenshot: `w4-deliverable-review-after.png`
-Example payload: `w4-review-example.json`
+## After Director Certification Experience V1
+- Headline: **Director has certified this deliverable**
+- Role line: you approve Director’s certification — not implementation
+- **Executive Summary** (≤3 sentences)
+- **Director Recommendation** first (Approve W-4 · Confidence · summary · Certify)
+- **Director Certification** chips + Certification Confidence + collapsed verification
+- **What I'm asking you to approve** / **Approval Impact**
+- Technical details collapsed below the fold
+- Dashboard: **Director recommends certifying W-4**
+- Primary action: **Open certification** / **Certify W-4**
+
+Screenshots:
+- `w4-certification-briefing-top.png`
+- `w4-certification-experience-after.png`
+- `w4-mission-dashboard-cert-label.png`
+
+See also: `CERTIFICATION-EXPERIENCE.md`
