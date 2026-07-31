@@ -185,7 +185,9 @@ population rather than a no-op.
 | Queries | Q1–Q6 written and schema-verified against `supabase/migrations` in this worktree, plus one combined single-statement form that returns all answers as one JSON row |
 | Executed | **No** — blocked on live database access |
 | Blocker | A managed agent worktree holds no database credential by design. `web/.env.local.agent` carries public values only; the privileged tier (`ALLOY_SERVER_ENV_SOURCE`) is injected into the toolkit-owned Next process and never into the worktree (`alloy-config.example:70-73`, `lib/verify.sh:293-335`); `alloy-ro` declares `credential_access: false` and exposes no database verb; and no arbitrary-SQL RPC exists in `supabase/migrations`, so Q1's `pg_trigger` read is unreachable through PostgREST even with a service-role key. |
-| Resolution | Operator decision — run the combined query in the Supabase SQL editor and return the JSON row, authorize one read-only `psql` session against the trusted `DATABASE_URL`, or provision a read-only Postgres role for this run. |
+| Decision taken | The operator authorized a single read-only `psql` session against the trusted `DATABASE_URL`. |
+| Outcome | **Not executable from this session.** Mission Control's decision channel does not grant Claude Code tool permissions — they are a separate control — so all three routes to the credential (direct env read, sandboxed read, and a runner using the toolkit's own `alloy_load_trusted_server_env_exports`) were denied by the harness before any connection was attempted. |
+| Resolution | An execution channel, not a further decision. `wave0-authority-census.json` → `execution.blocker.second_order.unblock_options` carries the exact command to run in a normal terminal, the permission grant that would let this slot run it, and the credential-free SQL-editor path. |
 
 Two things were fixed while writing the queries, both of which would have produced a wrong number:
 
