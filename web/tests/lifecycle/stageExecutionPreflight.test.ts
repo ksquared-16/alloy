@@ -158,6 +158,30 @@ describe("the automation path refuses to mutate on an unresolvable plan", () => 
     });
 });
 
+describe("the outcome-completion path also preflights before its first write", () => {
+    it("resolves the whole effect sequence before the transaction opens", async () => {
+        const { readFileSync } = await import("fs");
+        const { resolve } = await import("path");
+        const src = readFileSync(
+            resolve(__dirname, "../../lib/lifecycle/completeStageWorkWithOutcome.ts"),
+            "utf8",
+        );
+
+        // Transition refs used to resolve inside `executeStageOperatingOutcome`, which runs in the
+        // `business_process` step — AFTER `work_state` has already closed the work row. So a pure
+        // configuration error closed and then compensated a work item for nothing.
+        const preflight = src.indexOf("planStageOutcomeExecution(");
+        const resolverEnd = src.indexOf("closeDecision: shouldCloseWorkAfterStageOutcome");
+        const transaction = src.indexOf("runPlatformTransaction({");
+        expect(preflight).toBeGreaterThan(-1);
+        // Inside the pure resolver, before it returns ok…
+        expect(preflight).toBeLessThan(resolverEnd);
+        // …and the resolver runs before the transaction that owns every durable write.
+        expect(src.indexOf("resolveOutcomeExecutionPlan(input")).toBeLessThan(transaction);
+        expect(src).toContain("This outcome cannot run:");
+    });
+});
+
 describe("code defaults are not runtime transition authority (decision D1)", () => {
     it("the effective-plan resolver only falls back when NO process is configured", async () => {
         const { readFileSync } = await import("fs");

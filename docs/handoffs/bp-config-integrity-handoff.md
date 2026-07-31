@@ -8,7 +8,7 @@
 |---|---|
 | Root | `/Users/Kelly/Code/alloy-worktrees/wt6-bp-config-integrity` — managed worktree, **sanctioned** |
 | Sprint / slot | `bp-config-integrity` / **6** (provider `claude`) |
-| Branch | `agent/claude/6-bp-config-integrity` — **13 commits ahead, NOT pushed** |
+| Branch | `agent/claude/6-bp-config-integrity` — **14 commits ahead, NOT pushed** |
 | Base | `origin/staging @ 77ac3e68b` |
 | Port | `3016` (`alloy-dev-start wt6-bp-config-integrity`) |
 | Auth | QA identity `qa-slot6-experimental@example.com` |
@@ -34,7 +34,8 @@ configuration work — see [[worktrees-share-one-live-tenant]] and the root-caus
 | `ce3196c2e` | **Editor slice 1** — the stage save writes a draft, not the projection |
 | `7c51415e6` | **Editor slice 2** — the editor reads the draft, and can publish |
 | `eb5928ddb` | **Editor slice 3** — browser certification, 15/15 |
-| _(this slice)_ | **Editor family 2** — the execution graph: seed repair, graph validator, execution preflight |
+| `284e556c4` | **Editor family 2** — the execution graph: seed repair, graph validator, execution preflight |
+| _(this slice)_ | Execution-graph certification — **PARTIAL, blocked on a newly found editor defect** |
 
 ## Read these
 
@@ -165,14 +166,28 @@ Design and findings: [`business-process-execution-graph.md`](../platform/governa
    not exist, and an outcome using another stage's transition. Messages are in operator labels.
 5. **"Move through transition"** explains itself when empty and no longer auto-selects.
 
+**Certification: PARTIAL.** Full record in the execution-graph doc, "Browser certification —
+PARTIAL, and why".
+
+- **G1 PASSED** — the pristine repaired seed validates with zero errors and publishes (revision 1,
+  one publication act, projection updated).
+- **G2 PASSED** — deleting a referenced transition is refused **at authoring** with the dependency
+  named in operator language; the save never reaches the server, the draft does not move, and the
+  projection is untouched.
+- **G3 onward BLOCKED** by a defect this run found: `getDraftPlan()` throws on ANY blocking issue,
+  including pre-existing ones, so a stage with any legacy issue is un-saveable through the editor —
+  and the throw happens before the request, so the operator sees nothing at all. Task spawned. The
+  positive execution scenario was never reached and no claim is made about it.
+
 **NOT done, and the next things to do:**
 
-- **Browser certification of this family has not run.** Unit-tested and seed-proven only. The Stage
-  editor vertical is certified 15/15; this one is not.
+- **Finish execution-graph certification** once the `getDraftPlan()` defect is fixed. G3–G8 are
+  written and unexecuted; the positive execution scenario is not yet written.
 - **There is no tracks editor.** `tracks_v1` is written solely by the creation-time template, and
   nothing validates `tracks_v1.split_rules` targets.
 - **`PATCH /api/admin/departments/[id]/lifecycle-builder` still writes the projection directly.**
-  Its GET reads the draft; its PATCH does not. Closing that asymmetry is the next step.
+  Its GET reads the draft; its PATCH does not. The certification spec asserts the certified path
+  never calls it (`G8`), so the asymmetry is contained but not closed.
 - Firefly repair remains deferred, as instructed.
 
 # NEXT SLICE — remaining editors
