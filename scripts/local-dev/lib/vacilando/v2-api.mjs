@@ -547,6 +547,10 @@ export async function handleV2Get(path, url) {
     const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");
     return { status: 200, body: { ok: true, diagnostics: trustedHostDiagnostics() } };
   }
+  if (path === "/api/v2/revision" || path === "/api/v2/views/revision") {
+    const { computePresentationRevision } = await import("./presentation-revision.mjs");
+    return { status: 200, body: { ok: true, ...computePresentationRevision() } };
+  }
 
   if (path === "/api/v2/missions" || path === "/api/v2/views/missions") {
     const filter = q("filter") || "active";

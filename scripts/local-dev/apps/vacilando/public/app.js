@@ -2026,9 +2026,11 @@ function adoptSnapshot(s) {
 function onSnap(s) {
   if (!adoptSnapshot(s)) return;
   chrome();
-  // On Mission Control routes, board SSE must not thrash #view or overwrite V2 Needs You.
+  // On Mission Control routes, board SSE must not thrash #view — but it SHOULD
+  // poke the V2 revision sync so Director/worker mutations surface promptly.
   const r = parseRoute();
   if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
+    window.VacilandoV2.syncPresentationRevision?.();
     return;
   }
   render();

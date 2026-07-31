@@ -56,6 +56,151 @@
     });
   }
 
+  const DEFAULT_MAX_AGE_MS = 3500;
+
+  function markFetched(key) {
+    V2.state._fetchedAt = V2.state._fetchedAt || {};
+    V2.state._fetchedAt[key] = Date.now();
+  }
+
+  /** Soft-expire: next paint revalidates, but keeps last-known data until fetch returns. */
+  V2.expirePresentationCaches = function () {
+    V2.state._fetchedAt = {};
+    V2.state._decisionRevalidated = null;
+  };
+
+  /**
+   * Stale-while-revalidate. If cache is older than maxAgeMs (or missing), kick a
+   * fetch without blanking the current view. Hard-invalidated keys have no data.
+   */
+  V2.revalidate = function (key, fetcher, { maxAgeMs = DEFAULT_MAX_AGE_MS } = {}) {
+    const at = V2.state._fetchedAt?.[key] || 0;
+    const stale = Date.now() - at > maxAgeMs;
+    if (!stale) return false;
+    V2.state._inflight = V2.state._inflight || {};
+    if (V2.state._inflight[key]) return true;
+    V2.state._inflight[key] = true;
+    Promise.resolve()
+      .then(() => fetcher())
+      .catch(() => { /* keep prior */ })
+      .finally(() => {
+        if (V2.state._inflight) V2.state._inflight[key] = false;
+        markFetched(key);
+      });
+    return true;
+  };
+
+  /** Drop cached Mission Control views so Refresh / external Director answers are visible. */
+  V2.invalidatePresentationCaches = function () {
+    V2.state.decisionDetail = null;
+    V2.state.decisionDetailError = null;
+    V2.state._decisionRevalidated = null;
+    V2.state.decisionsVm = null;
+    V2.state.needsYou = null;
+    V2.state.overview = null;
+    V2.state.missionsHome = null;
+    V2.state.timelineVm = null;
+    V2.state.timelineMissionId = null;
+    V2.state.workersHome = null;
+    V2.state.workerDetail = null;
+    V2.state.evidenceVm = null;
+    V2.state.evidenceMissionId = null;
+    V2.state.runtimeDiagnostics = null;
+    V2.state.trustedHostDiagnostics = null;
+    V2.state.improvementsHome = null;
+    V2.state.improvementDetail = null;
+    V2.state._fetchedAt = {};
+    V2.state._inflight = {};
+  };
+
+  /** Reload whatever Mission Control route is on screen after a hard invalidate. */
+  V2.reloadActiveView = function () {
+    let name = "missions";
+    let sub = null;
+    let missionQ = null;
+    try {
+      const raw = location.hash.replace(/^#\/?/, "");
+      const [pathPart, queryPart] = raw.split("?");
+      const p = (pathPart || "").split("/").filter(Boolean);
+      name = p[0] || "missions";
+      sub = p[1] || null;
+      missionQ = new URLSearchParams(queryPart || "").get("mission");
+    } catch { /* */ }
+    if (name === "needs-you") V2.fetchNeedsYou();
+    else if (name === "missions" && sub) V2.fetchDashboard(sub);
+    else if (name === "missions") V2.fetchMissions(V2.state.missionsFilter || "active");
+    else if (name === "timeline") V2.fetchTimeline(sub || missionQ || V2.state.selectedMissionId);
+    else if (name === "workers" && sub) V2.fetchWorker(sub);
+    else if (name === "workers") V2.fetchWorkers();
+    else if (name === "decisions" && sub) V2.fetchDecision(sub, V2.state.selectedMissionId);
+    else if (name === "decisions") V2.fetchDecisions(missionQ || V2.state.selectedMissionId);
+    else if (name === "evidence") V2.fetchEvidence(sub || missionQ || V2.state.selectedMissionId);
+    else if (name === "settings") V2.fetchRuntimeDiagnostics?.();
+    else if (name === "improvements" && sub) V2.fetchImprovement(sub);
+    else if (name === "improvements") V2.fetchImprovements();
+    else V2.fetchNeedsYou();
+    bump();
+    schedulePaint();
+  };
+
+  /**
+   * Poll control-plane revision. When Director/workers mutate durable state
+   * outside this window, caches drop and the active view reloads.
+   */
+  V2.syncPresentationRevision = async function ({ force = false } = {}) {
+    if (V2.state._revisionInflight) return;
+    V2.state._revisionInflight = true;
+    try {
+      const j = await get("/api/v2/revision");
+      const next = j.revision || "";
+      const prev = V2.state._serverRevision || null;
+      V2.state._serverRevision = next;
+      V2.state._serverRevisionAt = Date.now();
+      if (force || (prev && next && prev !== next)) {
+        V2.invalidatePresentationCaches();
+        V2.state._serverRevision = next;
+        V2.reloadActiveView();
+        try { await V2.fetchNeedsYou(); } catch { /* */ }
+      } else if (!prev) {
+        try { await V2.fetchNeedsYou(); } catch { /* */ }
+      }
+    } catch { /* offline — keep prior */ }
+    finally {
+      V2.state._revisionInflight = false;
+    }
+  };
+
+  V2.startFreshnessLoop = function () {
+    if (V2.state._freshnessStarted) return;
+    V2.state._freshnessStarted = true;
+    const tick = () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const raw = location.hash.replace(/^#\/?/, "");
+        const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "missions";
+        if (!V2.isPrimaryRoute(name)) return;
+      } catch { return; }
+      V2.syncPresentationRevision();
+    };
+    setInterval(tick, 2500);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        V2.syncPresentationRevision({ force: false });
+        V2.expirePresentationCaches();
+        V2.reloadActiveView();
+      }
+    });
+    window.addEventListener("focus", () => {
+      V2.syncPresentationRevision({ force: false });
+    });
+    window.addEventListener("hashchange", () => {
+      // Soft-expire on navigation so the destination revalidates without blanking.
+      V2.expirePresentationCaches();
+    });
+    // First sync shortly after boot.
+    setTimeout(() => V2.syncPresentationRevision(), 400);
+  };
+
   V2.isPrimaryRoute = function (name) {
     return ["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"].includes(name);
   };
@@ -240,6 +385,7 @@ We'll capture the context automatically.</p>
       V2.state.overview = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(id));
       V2.state.selectedMissionId = id;
       V2.state.overviewError = null;
+      markFetched(`overview:${id}`);
       bump(); schedulePaint();
     } catch (e) {
       V2.state.overviewError = String(e.message || e);
@@ -252,15 +398,21 @@ We'll capture the context automatically.</p>
       V2.state.needsYou = await get("/api/v2/views/needs-you");
       const el = document.getElementById("nb-needs");
       if (el) el.textContent = String((V2.state.needsYou.items || []).length);
+      markFetched("needsYou");
       bump(); schedulePaint();
     } catch { /* keep */ }
   };
   V2.fetchWorkers = async () => {
-    try { V2.state.workersHome = await get("/api/v2/views/workers"); bump(); schedulePaint(); } catch { /* keep */ }
+    try {
+      V2.state.workersHome = await get("/api/v2/views/workers");
+      markFetched("workers");
+      bump(); schedulePaint();
+    } catch { /* keep */ }
   };
   V2.fetchWorker = async (id) => {
     try {
       V2.state.workerDetail = await get("/api/v2/views/worker?id=" + encodeURIComponent(id));
+      markFetched(`worker:${id}`);
       bump(); schedulePaint();
     } catch (e) {
       V2.state.workerDetailError = String(e.message || e);
@@ -272,6 +424,7 @@ We'll capture the context automatically.</p>
       const q = missionId ? "?mission_id=" + encodeURIComponent(missionId) + "&status=all" : "?status=open";
       V2.state.decisionsVm = await get("/api/v2/views/decisions" + q);
       V2.state.decisionsMissionId = missionId || null;
+      markFetched(`decisions:${missionId || "open"}`);
       bump(); schedulePaint();
     } catch { /* keep */ }
   };
@@ -281,6 +434,7 @@ We'll capture the context automatically.</p>
       if (missionId) url += "&mission_id=" + encodeURIComponent(missionId);
       V2.state.decisionDetail = await get(url);
       V2.state.decisionDetailError = null;
+      markFetched(`decision:${decisionId}`);
       bump(); schedulePaint();
     } catch (e) {
       V2.state.decisionDetailError = String(e.message || e);
@@ -288,26 +442,11 @@ We'll capture the context automatically.</p>
     }
   };
 
-  /** Drop cached Mission Control views so Refresh / external Director answers are visible. */
-  V2.invalidatePresentationCaches = function () {
-    V2.state.decisionDetail = null;
-    V2.state.decisionDetailError = null;
-    V2.state._decisionRevalidated = null;
-    V2.state.decisionsVm = null;
-    V2.state.needsYou = null;
-    V2.state.overview = null;
-    V2.state.missionsHome = null;
-    V2.state.timelineVm = null;
-    V2.state.workersHome = null;
-    V2.state.workerDetail = null;
-    V2.state.evidenceVm = null;
-    V2.state.runtimeDiagnostics = null;
-    V2.state.trustedHostDiagnostics = null;
-  };
   V2.fetchTimeline = async (id) => {
     try {
       V2.state.timelineVm = await get("/api/v2/views/mission/timeline?id=" + encodeURIComponent(id));
       V2.state.timelineMissionId = id;
+      markFetched(`timeline:${id}`);
       bump(); schedulePaint();
     } catch { /* keep */ }
   };
@@ -315,6 +454,7 @@ We'll capture the context automatically.</p>
     try {
       V2.state.evidenceVm = await get("/api/v2/views/mission/evidence?id=" + encodeURIComponent(id));
       V2.state.evidenceMissionId = id;
+      markFetched(`evidence:${id}`);
       bump(); schedulePaint();
     } catch { /* keep */ }
   };
@@ -327,6 +467,7 @@ We'll capture the context automatically.</p>
       }
       V2.state.kickoffMissionId = id || null;
       V2.state.kickoffError = null;
+      markFetched(`kickoff:${id || "empty"}`);
       bump(); schedulePaint();
     } catch (e) {
       V2.state.kickoffError = e;
@@ -341,6 +482,7 @@ We'll capture the context automatically.</p>
     try {
       V2.state.missionsHome = await get("/api/v2/views/missions?filter=" + encodeURIComponent(f));
       V2.state.missionsError = null;
+      markFetched(`missions:${f}`);
     } catch (e) {
       V2.state.missionsError = String(e.message || e);
     }
@@ -348,6 +490,7 @@ We'll capture the context automatically.</p>
   };
 
   V2.viewMissions = function () {
+    V2.revalidate(`missions:${V2.state.missionsFilter || "active"}`, () => V2.fetchMissions(V2.state.missionsFilter || "active"));
     if (!V2.state.missionsHome && !V2.state.missionsError) {
       V2.fetchMissions(V2.state.missionsFilter || "active");
       return shell("Missions", {
@@ -446,6 +589,7 @@ We'll capture the context automatically.</p>
 
   V2.viewMissionDetail = function (id) {
     V2.state.selectedMissionId = id;
+    V2.revalidate(`overview:${id}`, () => V2.fetchDashboard(id));
     const dashPayload = V2.state.overview;
     const dash = dashPayload?.dashboard || dashPayload?.overview;
     if (!dash || (dash.missionId || dash.header?.missionId) !== id) {
@@ -672,6 +816,7 @@ We'll capture the context automatically.</p>
   };
 
   V2.viewNeedsYou = function () {
+    V2.revalidate("needsYou", () => V2.fetchNeedsYou());
     if (!V2.state.needsYou) {
       V2.fetchNeedsYou();
       return shell("Needs You") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`;
@@ -694,6 +839,7 @@ We'll capture the context automatically.</p>
       return shell("Timeline") + `<div class="rempty">Open a mission to see its story.</div>
         <button class="btn" data-nav="missions">Missions</button></div>`;
     }
+    V2.revalidate(`timeline:${mid}`, () => V2.fetchTimeline(mid));
     if (!V2.state.timelineVm || V2.state.timelineMissionId !== mid) {
       V2.fetchTimeline(mid);
       return shell("Timeline", { missionId: mid, active: "timeline" })
@@ -716,6 +862,7 @@ We'll capture the context automatically.</p>
   };
 
   V2.viewWorkers = function () {
+    V2.revalidate("workers", () => V2.fetchWorkers());
     if (!V2.state.workersHome) {
       V2.fetchWorkers();
       return shell("Workers") + `<div class="empty"><span class="spin"></span> Loading workers…</div></div>`;
@@ -737,6 +884,7 @@ We'll capture the context automatically.</p>
   };
 
   V2.viewWorkerDetail = function (workerId) {
+    V2.revalidate(`worker:${workerId}`, () => V2.fetchWorker(workerId));
     if (!V2.state.workerDetail || V2.state.workerDetail.worker?.workerId !== workerId) {
       V2.fetchWorker(workerId);
       return shell("Worker") + `<div class="empty"><span class="spin"></span> Loading…</div></div>`;
@@ -777,6 +925,7 @@ We'll capture the context automatically.</p>
 
   V2.viewDecisions = function (missionId) {
     const mid = missionId || null;
+    V2.revalidate(`decisions:${mid || "open"}`, () => V2.fetchDecisions(mid));
     if (!V2.state.decisionsVm || V2.state.decisionsMissionId !== mid) {
       V2.fetchDecisions(mid);
       return shell("Decisions", { missionId: mid, active: "decisions" })
@@ -812,8 +961,11 @@ We'll capture the context automatically.</p>
 
   V2.viewDecisionDetail = function (decisionId) {
     const cached = V2.state.decisionDetail?.decision;
+    // TTL revalidate always; open decisions also force a hard refetch once per open cache.
+    V2.revalidate(`decision:${decisionId}`, () => V2.fetchDecision(decisionId, V2.state.selectedMissionId), {
+      maxAgeMs: cached?.status === "open" ? 2000 : DEFAULT_MAX_AGE_MS,
+    });
     const revalidateKey = `dec:${decisionId}`;
-    // Revalidate once when cached as open — Director may have answered via Trusted Host outside this window.
     const mustRevalidateOpen = cached
       && cached.decisionId === decisionId
       && cached.status === "open"
@@ -957,6 +1109,7 @@ We'll capture the context automatically.</p>
       return shell("Evidence") + `<div class="rempty">Open a mission to review evidence.</div>
         <button class="btn" data-nav="missions">Missions</button></div>`;
     }
+    V2.revalidate(`evidence:${mid}`, () => V2.fetchEvidence(mid));
     if (!V2.state.evidenceVm || V2.state.evidenceMissionId !== mid) {
       V2.fetchEvidence(mid);
       return shell("Evidence", { missionId: mid, active: "evidence" })
@@ -1146,10 +1299,12 @@ We'll capture the context automatically.</p>
     } catch (e) {
       V2.state.trustedHostDiagnosticsError = String(e.message || e);
     }
+    markFetched("runtimeDiagnostics");
     bump(); schedulePaint();
   };
 
   V2.viewSettings = function () {
+    V2.revalidate("runtimeDiagnostics", () => V2.fetchRuntimeDiagnostics(), { maxAgeMs: 8000 });
     if (!V2.state.runtimeDiagnostics && !V2.state.runtimeDiagnosticsError) {
       V2.fetchRuntimeDiagnostics();
     }
@@ -1927,11 +2082,13 @@ We'll capture the context automatically.</p>
     requestIdleCallback(() => {
       if (!V2.state.missionsHome) V2.fetchMissions();
       V2.fetchNeedsYou();
+      V2.startFreshnessLoop();
     }, { timeout: 2000 });
   } else {
     setTimeout(() => {
       if (!V2.state.missionsHome) V2.fetchMissions();
       V2.fetchNeedsYou();
+      V2.startFreshnessLoop();
     }, 50);
   }
 })();
