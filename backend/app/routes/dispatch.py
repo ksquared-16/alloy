@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from ..settings import (
@@ -17,6 +17,19 @@ from ..settings import (
     JOBS_OFFER_EXPIRES_AT_FIELD_KEY, OPP_ASSIGNED_CONTRACTOR_FIELD_ID, 
     OPP_CONTRACTOR_PAY_AMOUNT, OPP_RECURRING_CONTRACTOR_PAY_AMOUNT,
     JOBS_CONTRACTOR_PAY_AMOUNT_FIELD_KEY, JOBS_RECURRING_CONTRACTOR_PAY_AMOUNT_FIELD_KEY, CUSTOM_FIELD_IDS
+)
+from ..services.legacy_dispatch_guard import (
+    DispatchGuardError,
+    WORKFLOW_SECRET_HEADER,
+    audit,
+    build_assignment_confirmation,
+    check_lockout,
+    claim_idempotency,
+    clear_attempts,
+    enforce_rate_limit,
+    record_failed_attempt,
+    require_workflow_secret,
+    send_bounded_sms,
 )
 from ..ghl_client import (
     build_job_summary,
@@ -212,7 +225,10 @@ def resolve_job_record_id_with_retries(candidates: List[str], max_attempts: int 
 
 
 @router.post("/dispatch")
-async def dispatch(request: Request):
+async def dispatch(
+    request: Request,
+    x_alloy_workflow_secret: Optional[str] = Header(None, alias=WORKFLOW_SECRET_HEADER),
+):
     """
     Webhook endpoint called by GHL when a customer books a cleaning appointment.
 
@@ -232,6 +248,15 @@ async def dispatch(request: Request):
         The SMS sent to contractors does NOT include home access information yet.
         Access info is only shared after a contractor accepts the job.
     """
+    # ---- S-1 CONTAINMENT: authenticate BEFORE any lookup or side effect ----
+    try:
+        require_workflow_secret(x_alloy_workflow_secret)
+        enforce_rate_limit(f"{route}:global")
+    except DispatchGuardError as guard_err:
+        audit("request_refused", route="/dispatch", reason=guard_err.audit_reason)
+        raise HTTPException(status_code=guard_err.status_code, detail=guard_err.detail) from guard_err
+    audit("request_authenticated", route="/dispatch")
+
     payload = await request.json()
     logger.info("Received payload from GHL: %s", payload)
 
@@ -925,7 +950,12 @@ async def dispatch(request: Request):
                 phone,
             )
             continue
-        send_conversation_sms(cid, msg)
+        send_bounded_sms(
+            contact_id=cid,
+            body=msg,
+            purpose="job_offer",
+            sender=send_conversation_sms,
+        )
         notified_ids.append(cid)
         job_summary["notified_contractors"].append(cid)
 
@@ -939,7 +969,10 @@ async def dispatch(request: Request):
 
 
 @router.post("/contractor-reply")
-async def contractor_reply(request: Request):
+async def contractor_reply(
+    request: Request,
+    x_alloy_workflow_secret: Optional[str] = Header(None, alias=WORKFLOW_SECRET_HEADER),
+):
     """
     Webhook endpoint called by GHL when a contractor replies to a dispatch SMS.
 
@@ -963,6 +996,15 @@ async def contractor_reply(request: Request):
         4. Notifies the customer their job has been assigned
         5. Updates the GHL Jobs custom object with assignment details
     """
+    # ---- S-1 CONTAINMENT: authenticate BEFORE any lookup or side effect ----
+    try:
+        require_workflow_secret(x_alloy_workflow_secret)
+        enforce_rate_limit(f"{route}:global")
+    except DispatchGuardError as guard_err:
+        audit("request_refused", route="/contractor-reply", reason=guard_err.audit_reason)
+        raise HTTPException(status_code=guard_err.status_code, detail=guard_err.detail) from guard_err
+    audit("request_authenticated", route="/contractor-reply")
+
     payload = await request.json()
     logger.info("Received contractor reply webhook: %s", payload)
 
@@ -1009,14 +1051,30 @@ async def contractor_reply(request: Request):
         # Format: "12345"
         offer_code = parts[0].strip()
 
-    logger.info("OFFER_ACCEPT_ATTEMPT contractor_id=%s code=%s message_text=%s", 
+    logger.info("OFFER_ACCEPT_ATTEMPT contractor_id=%s code=%s message_text=%s",
                 contact_id, offer_code, message_text)
+
+    # S-1: guessing protection. The offer code is 5 digits (~90k keyspace) and
+    # previously had no attempt limit at all, so it was brute-forceable at
+    # webhook speed. Lockout is keyed per contact, checked BEFORE the code is
+    # evaluated, and cleared only on a genuine success.
+    attempt_key = f"offer:{contact_id}"
+    try:
+        enforce_rate_limit(f"{route}:contact:{contact_id}")
+        check_lockout(attempt_key)
+    except DispatchGuardError as guard_err:
+        audit("request_refused", route=route, reason=guard_err.audit_reason, contact_id=contact_id)
+        raise HTTPException(status_code=guard_err.status_code, detail=guard_err.detail) from guard_err
 
     # Look up job by offer code from GHL Job custom object
     if not offer_code:
         logger.warning("OFFER_ACCEPT_INVALID reason=no_code_provided contractor_id=%s", contact_id)
+        record_failed_attempt(attempt_key)
         rejection_msg = "Invalid code. Please reply with the 5-digit code from the job offer."
-        send_conversation_sms(contact_id, rejection_msg)
+        # S-1: rejection branches must send NOTHING. An SMS here was an
+        # unauthenticated oracle: supplying only a contact_id triggered a
+        # message with no validation having succeeded.
+        audit("validation_failed", contact_id=contact_id)
         return JSONResponse(
             {
                 "ok": False,
@@ -1035,7 +1093,11 @@ async def contractor_reply(request: Request):
         logger.warning("OFFER_ACCEPT_INVALID reason=code_not_found contractor_id=%s code=%s", 
                       contact_id, offer_code)
         rejection_msg = f"Invalid code. Reply YES {offer_code} to accept."
-        send_conversation_sms(contact_id, rejection_msg)
+        # S-1: rejection branches must send NOTHING. An SMS here was an
+        # unauthenticated oracle: supplying only a contact_id triggered a
+        # message with no validation having succeeded.
+        record_failed_attempt(attempt_key)
+        audit("validation_failed", contact_id=contact_id)
         return JSONResponse(
             {
                 "ok": False,
@@ -1051,7 +1113,10 @@ async def contractor_reply(request: Request):
     if not job_record:
         logger.error("OFFER_ACCEPT_ERROR reason=record_fetch_failed contractor_id=%s code=%s record_id=%s",
                     contact_id, offer_code, job_record_id)
-        send_conversation_sms(contact_id, "Error processing your acceptance. Please contact support.")
+        # S-1: rejection branches must send NOTHING. An SMS here was an
+        # unauthenticated oracle: supplying only a contact_id triggered a
+        # message with no validation having succeeded.
+        audit("validation_failed", contact_id=contact_id)
         return JSONResponse(
             {
                 "ok": False,
@@ -1098,7 +1163,11 @@ async def contractor_reply(request: Request):
             if datetime.now(ZoneInfo("UTC")) > expires_at:
                 logger.warning("OFFER_ACCEPT_INVALID reason=expired contractor_id=%s code=%s", 
                               contact_id, offer_code)
-                send_conversation_sms(contact_id, "This offer has expired. Please wait for a new job offer.")
+                # S-1: rejection branches must send NOTHING. An SMS here was an
+                # unauthenticated oracle: supplying only a contact_id triggered a
+                # message with no validation having succeeded.
+                record_failed_attempt(attempt_key)
+                audit("validation_failed", contact_id=contact_id)
                 return JSONResponse(
                     {
                         "ok": False,
@@ -1142,7 +1211,10 @@ async def contractor_reply(request: Request):
     if not contractor:
         logger.warning("OFFER_ACCEPT_INVALID reason=contractor_not_found contractor_id=%s code=%s", 
                       contact_id, offer_code)
-        send_conversation_sms(contact_id, "Contractor not found. Please contact support.")
+        # S-1: rejection branches must send NOTHING. An SMS here was an
+        # unauthenticated oracle: supplying only a contact_id triggered a
+        # message with no validation having succeeded.
+        audit("validation_failed", contact_id=contact_id)
         return JSONResponse(
             {"ok": False, "reason": "contractor_not_found", "contact_id": contact_id},
             status_code=200,
@@ -1156,13 +1228,29 @@ async def contractor_reply(request: Request):
     if not required_tags.issubset(normalized_tags):
         logger.warning("OFFER_ACCEPT_INVALID reason=contractor_not_eligible contractor_id=%s code=%s tags=%s", 
                       contact_id, offer_code, raw_tags)
-        send_conversation_sms(contact_id, "You are not eligible for this job. Please contact support.")
+        # S-1: rejection branches must send NOTHING. An SMS here was an
+        # unauthenticated oracle: supplying only a contact_id triggered a
+        # message with no validation having succeeded.
+        audit("validation_failed", contact_id=contact_id)
         return JSONResponse(
             {"ok": False, "reason": "contractor_not_eligible", "contact_id": contact_id},
             status_code=200,
         )
 
     contractor_name = contractor.get("name") if contractor else "Unknown contractor"
+
+    # S-1: the code is now proven. Stop counting attempts against this
+    # contractor, and claim the acceptance exactly once.
+    #
+    # Idempotency is keyed on (offer_code, contact_id) and claimed BEFORE any
+    # state mutation, so a replayed webhook — a GHL retry, or an attacker
+    # resubmitting a captured body — neither reassigns the job nor produces a
+    # second round of SMS.
+    clear_attempts(attempt_key)
+    if not claim_idempotency(f"accept:{offer_code}:{contact_id}"):
+        logger.info("OFFER_ACCEPT_REPLAY code=%s contractor_id=%s", offer_code, contact_id)
+        audit("replay_suppressed", contact_id=contact_id, offer_code=offer_code)
+        return JSONResponse({"ok": True, "reason": "already_processed", "code": offer_code})
 
     # Update job assignment first (using record_id directly)
     job_updated = False
@@ -1347,26 +1435,26 @@ async def contractor_reply(request: Request):
     else:
         logger.warning("OFFER_ACCEPT_CUSTOMER_PHONE_SKIPPED customer_contact_id missing from job record")
     
-    confirm_msg = f"✅ You got the job\n\n"
-    confirm_msg += f"Date/Time: {start_time_display}\n"
-    confirm_msg += f"Customer: {customer_name}\n"
-    confirm_msg += f"Customer phone: {customer_phone}\n"
-    
-    if full_address:
-        confirm_msg += f"Address: {full_address}\n"
-    
-    confirm_msg += f"Entry: {access_method}\n"
-    
-    if access_notes:
-        confirm_msg += f"Access notes: {access_notes}\n"
-    
-    if price_breakdown:
-        confirm_msg += f"\nPrice breakdown:\n{price_breakdown}\n"
-    
-    confirm_msg += "\nReply here if you have questions."
+    # S-1: minimum assignment information ONLY.
+    #
+    # REMOVED: customer phone, full street address, entry method, access notes.
+    # Those are home-access secrets, and a 5-digit offer code is not
+    # authorization to disclose them. This legacy vertical has no authenticated
+    # contractor surface to redirect to, so the details are omitted entirely
+    # rather than disclosed anyway, and the message says so.
+    confirm_msg = build_assignment_confirmation(
+        start_time_display=start_time_display,
+        customer_name=customer_name,
+        has_access_details=bool(full_address or access_method or access_notes),
+    )
 
     if contact_id:
-        send_conversation_sms(contact_id, confirm_msg)
+        send_bounded_sms(
+            contact_id=contact_id,
+            body=confirm_msg,
+            purpose="assignment_confirmation",
+            sender=send_conversation_sms,
+        )
 
     # 2) Notify all other contractors that the job was claimed
     # Get customer_name from job_record properties if available, fallback to job dict
@@ -1390,7 +1478,12 @@ async def contractor_reply(request: Request):
                     phone,
                 )
             continue
-        send_conversation_sms(cid, claimed_msg)
+        send_bounded_sms(
+            contact_id=cid,
+            body=claimed_msg,
+            purpose="assignment_claimed",
+            sender=send_conversation_sms,
+        )
         logger.info("OFFER_CLAIMED_NOTIFICATION sent to contractor_id=%s offer_code=%s", cid, offer_code)
 
     # 3) Notify the customer their job has been assigned (if we have their contact_id)
@@ -1400,7 +1493,12 @@ async def contractor_reply(request: Request):
             f"Your cleaning on {job['start_time']} has been assigned to one of our partner teams. "
             f"They will contact you before arrival."
         )
-        send_conversation_sms(customer_contact_id, customer_msg)
+        send_bounded_sms(
+            contact_id=customer_contact_id,
+            body=customer_msg,
+            purpose="customer_assignment_notice",
+            sender=send_conversation_sms,
+        )
 
     # Final success log
     logger.info("OFFER_ACCEPT_SUCCESS offer_code=%s record_id=%s opportunity_id=%s job_updated=%s stage_updated=%s",

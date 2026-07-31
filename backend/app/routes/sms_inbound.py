@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request, Response
 
 from ..services.activity_workflow_events import emit_message_lifecycle_event
 from ..services.communication_inbound import persist_inbound_communication_sms
+from ..services.inbound_keyword_handler import handle_inbound_keyword
 from ..services.communications.binding_resolver import (
     find_binding_by_id,
     find_sms_bindings_by_inbound_to,
@@ -182,6 +183,18 @@ def _handle_inbound_with_optional_binding(
                         sid[-8:] if len(sid) > 8 else sid,
                         _mask_binding_id(eff_uuid),
                     )
+                    # Compliance keywords are processed AFTER the message is
+                    # persisted, never instead of it. The inbound record is
+                    # immutable history and a STOP is still part of the
+                    # conversation; a keyword failure must not lose it.
+                    try:
+                        handle_inbound_keyword(
+                            org_id=str(org_id_raw),
+                            body=body,
+                            message_row=row,
+                        )
+                    except Exception as kw_err:  # noqa: BLE001
+                        logger.error("sms_inbound: keyword handling failed %s", kw_err)
                 else:
                     logger.warning(
                         "sms_inbound: canonical_persist noop binding=%s (see inbound_comm / PostgREST errors)",

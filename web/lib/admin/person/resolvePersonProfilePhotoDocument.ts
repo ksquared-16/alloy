@@ -13,8 +13,9 @@
  *      (e.g. via the Surface Builder composer's upload-only flow).
  *
  * The selection logic below is pure and unit-tested without any Supabase/storage IO;
- * `resolveLatestProfilePhotoDocumentForPerson` is the thin async wrapper that actually
- * queries `documents` + signs a URL, used by the profile-photo API route.
+ * `findCanonicalProfilePhotoDocumentForPerson` is the thin async wrapper that queries
+ * `documents`, used by the profile-photo API route. It deliberately does NOT sign —
+ * signing happens in the route, after authorization.
  */
 
 import type { createAdminClient } from "@/lib/supabaseAdmin";
@@ -96,18 +97,24 @@ export function resolvePersonPhotoReference(
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
-const SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7; // 7 days — long enough to survive between edits.
-
 /**
- * Async wrapper: resolve + sign the canonical profile photo URL for a person, querying
- * `documents` directly (not the HTTP layer) so it can be reused by API routes and by
- * batch truth-hydration call sites without a network round-trip.
+ * Find the canonical profile-photo document for a person. QUERY ONLY — it does
+ * not sign.
+ *
+ * This used to resolve AND sign in one step, with a seven-day expiry, and the
+ * caller authorized only afterwards. Both halves of that were wrong: the URL was
+ * minted before the access decision, and a seven-day credential outlives the
+ * authorization it was minted under — the same defect the profile-photo cache
+ * correction removed elsewhere.
+ *
+ * Signing is now the caller's step, taken AFTER `assertDocumentAccess` and with
+ * `signedUrlExpirySeconds`, which is capped at 15 minutes.
  */
-export async function resolveLatestProfilePhotoDocumentForPerson(
+export async function findCanonicalProfilePhotoDocumentForPerson(
     supabase: AdminSupabase,
     orgId: string,
     personId: string,
-): Promise<{ documentId: string; photoUrl: string } | null> {
+): Promise<ProfilePhotoDocumentRow | null> {
     const id = personId.trim();
     if (!id) return null;
 
@@ -124,10 +131,5 @@ export async function resolveLatestProfilePhotoDocumentForPerson(
     const doc = (rows as ProfilePhotoDocumentRow[] | null)?.[0] ?? null;
     if (!doc?.bucket || !doc.storage_path) return null;
 
-    const { data: signed, error } = await supabase.storage
-        .from(doc.bucket)
-        .createSignedUrl(doc.storage_path, SIGNED_URL_EXPIRES_IN_SECONDS);
-    if (error || !signed?.signedUrl) return null;
-
-    return { documentId: doc.id, photoUrl: signed.signedUrl };
+    return doc;
 }

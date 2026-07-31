@@ -149,6 +149,21 @@ STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 GHL_WORKFLOW_SECRET = os.getenv("GHL_WORKFLOW_SECRET", "").strip()
 
+# Dedicated credential for the payment executor (POST /admin/payments/run),
+# called only by the authenticated Next.js proxy.
+#
+# Deliberately NOT reusing GHL_WORKFLOW_SECRET: that secret is shared with an
+# external automation platform, and a card-charging executor must not be
+# reachable with a credential that leaves our infrastructure.
+#
+# Server-only. Never exposed to the browser (no NEXT_PUBLIC_ prefix anywhere).
+PAYMENT_EXECUTOR_SECRET = os.getenv("PAYMENT_EXECUTOR_SECRET", "").strip()
+
+
+def payment_executor_configured() -> bool:
+    """True when the payment executor can authenticate. When false it fails closed."""
+    return bool(PAYMENT_EXECUTOR_SECRET)
+
 
 def ghl_workflow_configured() -> bool:
     """True when GHL workflow webhook secret is set (POST /stripe/charge can authenticate)."""
