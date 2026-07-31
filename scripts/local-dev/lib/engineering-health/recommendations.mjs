@@ -53,11 +53,11 @@ const CATALOG = {
   }),
   "git.worktree_gc": (f) => ({
     action_id: "worktree_gc",
-    title: "Run worktree GC",
-    command: "alloy-engineering-doctor --fix worktree_gc --yes",
+    title: "Run worktree GC (artifacts) or prune-merged (full trees)",
+    command: "alloy-worktree-prune-merged   # dry-run; add --yes to delete merged trees",
     estimated_reclaim_gb: f.metrics?.reclaimable_gb ?? null,
     risk: "low",
-    detail: "Frees regenerable artifacts from merged/clean worktrees only.",
+    detail: "GC strips node_modules/.next. prune-merged removes entire worktrees whose HEAD is in origin/staging.",
   }),
   "ide.orphan.cursor_backup_local": (f) => ({
     action_id: "remove_cursor_backup_local",

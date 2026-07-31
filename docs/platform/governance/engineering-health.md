@@ -62,7 +62,10 @@ alloy-engineering-doctor --fix npm_cache_clean --yes
 alloy-engineering-doctor --fix cursor_cached_data_clean --yes
 ```
 
-Related (narrower) tools remain available: `alloy-health`, `alloy-clean`, `alloy-docker-doctor`, `alloy-worktree-gc`, `alloy-ai-health`.
+Related (narrower) tools remain available: `alloy-health`, `alloy-clean`, `alloy-docker-doctor`, `alloy-worktree-gc`, `alloy-worktree-prune-merged`, `alloy-ai-health`.
+
+`alloy-worktree-gc` only strips regenerable `node_modules`/`.next`.  
+`alloy-worktree-prune-merged` deletes entire worktrees whose HEAD is already in `origin/staging` (clean, no live server).
 
 ## Extending
 

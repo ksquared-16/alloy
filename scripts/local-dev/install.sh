@@ -11,6 +11,7 @@ COMMANDS=(
   alloy-worktree-create
   alloy-worktree-sync
   alloy-worktree-remove
+  alloy-worktree-prune-merged
   alloy-dev-start
   alloy-dev-stop
   alloy-dev-status

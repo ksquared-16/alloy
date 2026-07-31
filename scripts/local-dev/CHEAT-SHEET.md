@@ -11,6 +11,8 @@ alloy-audit
 alloy-health
 alloy-engineering-doctor          # Engineering Health (disk/Docker/caches/worktrees)
 alloy-engineering-doctor --json
+alloy-worktree-prune-merged       # dry-run: list worktrees fully merged to staging
+alloy-worktree-prune-merged --yes # remove those worktrees (never --force)
 alloy-ai-health
 alloy-agent-status
 alloy-clean report
