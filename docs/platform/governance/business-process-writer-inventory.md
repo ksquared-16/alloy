@@ -24,16 +24,16 @@ Columns: **R** reads first · **U** preserves unknown fields · **CAS** carries 
 |---|---|---|---|---|---|---|---|
 | `lib/lifecycle/persistWorkViewsV1.ts:56` | B | caller | yes | no | yes | derived | → publish |
 | `lib/lifecycle/persistParticipationV1.ts:45` | B | caller | yes | no | yes | derived | → publish |
-| `lib/lifecycle/persistPerspectivesV1.ts:82` | B | caller | yes | no | yes | derived | → publish |
-| `lib/lifecycle/persistStatusRollupV1.ts:90` | B | caller | yes | no | yes | derived | → publish |
-| `lib/lifecycle/persistQueueMembershipV1.ts:163` | B | caller | yes | no | yes | derived | → publish; **auto-seeds** |
-| `lib/lifecycle/persistStageOperatingPlanV1.ts:125` | B | caller | yes | no | yes | derived | → publish; **auto-seeds** |
-| `lib/lifecycle/persistStageV2DraftFields.ts:122` | A→B | caller | yes | no | yes | derived | → **draft** (named "draft", writes the projection) |
+| ~~`lib/lifecycle/persistPerspectivesV1.ts:82`~~ | — | — | — | — | — | — | **MIGRATED** — file deleted; now `applyStagePerspectivesDraft` |
+| ~~`lib/lifecycle/persistStatusRollupV1.ts:90`~~ | — | — | — | — | — | — | **MIGRATED** — writer removed; now `applyStatusRollupDraft` + a status-assignment companion |
+| ~~`lib/lifecycle/persistQueueMembershipV1.ts:163`~~ | — | — | — | — | — | — | **MIGRATED** — writer removed, **auto-seed deleted**; now `applyQueueMembershipDraft` (explicit only) |
+| ~~`lib/lifecycle/persistStageOperatingPlanV1.ts:125`~~ | — | — | — | — | — | — | **MIGRATED** — writer removed, **auto-seed deleted**; now `applyStageOperatingPlanDraft` (explicit only) |
+| ~~`lib/lifecycle/persistStageV2DraftFields.ts:122`~~ | — | — | — | — | — | — | **MIGRATED** — writer removed (module is parse-only); now `applyStageV2DraftFields`. Its `ensureBuilderCommandSetsOnSave` process-level stamp is gone too |
 | `app/api/admin/departments/[id]/lifecycle-builder/route.ts:103` PATCH | B | yes | yes | no | yes | derived | → draft + publish (primary structural editor) |
 | `app/api/admin/lifecycle-builder/process-work-views/route.ts:126` POST | B | yes | yes | no | yes | derived | → publish |
 | `app/api/admin/lifecycle-builder/process-participation/route.ts:131` POST | B | yes | yes | no | yes | derived | → publish |
-| `app/api/admin/enrollment-process/stage-runtime-config/route.ts:161,188` POST | B | yes | yes | no | yes | derived | → publish, **one transaction** |
-| `lib/lifecycle/saveLifecycleStageRuntimeConfig.ts:185` | B | yes | inherited | no | yes | delegates | single publish call |
+| `app/api/admin/enrollment-process/stage-runtime-config/route.ts:161` POST | **A** | yes | yes | **yes** | **no** | no | ✅ **MIGRATED** — one draft write + idempotent companions |
+| `lib/lifecycle/saveLifecycleStageRuntimeConfig.ts` | **A** | yes | yes | **yes** | **no** | no | ✅ **MIGRATED** — see `business-process-stage-save-decomposition.md` |
 | `app/api/admin/lifecycle-catalog/delete/route.ts:88` POST | B/E | yes | yes | no | yes | derived | → publish (destructive) |
 | `lib/lifecycle/lifecycleActivationOwned.ts:125` | D | yes | **deletes the key** | no | yes | derived | migration utility — **blocked today** |
 | `lib/lifecycle/repairLifecycleWorkspaceVisibility.ts:205` INSERT | D/C | yes | n/a | no | yes | n/a | creation only (passes guard) |
@@ -48,8 +48,10 @@ Columns: **R** reads first · **U** preserves unknown fields · **CAS** carries 
 | `scripts/simulatePreFixLifecycleE2E.ts:167` INSERT | D | yes | n/a | no | yes | n/a | dev-only |
 | `app/api/admin/lifecycle-catalog/repair/route.ts:35` POST | D | — | — | no | yes | — | migration utility |
 
-**No writer carries a CAS token, and no writer calls the publish RPC.** That is the gap this slice
-exists to close.
+**Editor slice 1 (2026-07-30) migrated the stage save.** It is now the only writer that carries a
+conflict token, writes the draft rather than the projection, and reports `publication_required`.
+Every other row above is still a direct projection writer — that is the remaining worklist, in the
+order given at the end of `bp-config-integrity-handoff.md`.
 
 ## B. Category F — must keep working
 

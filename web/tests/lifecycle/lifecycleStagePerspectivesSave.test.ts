@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
     coercePerspectivesV1ForLanes,
     parsePerspectivesV1,
-    PERSPECTIVES_V1_METADATA_KEY,
 } from "@/lib/lifecycle/perspectiveConfigV1";
 import {
     perspectiveDraftDirty,
@@ -10,7 +9,6 @@ import {
     perspectiveDraftToPersisted,
 } from "@/lib/lifecycle/perspectiveConfigEditorModel";
 import type { PerspectiveLaneSource } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
-import { persistPerspectivesForLifecycleStageSave } from "@/lib/lifecycle/persistPerspectivesV1";
 
 const lanes: PerspectiveLaneSource[] = [
     {
@@ -95,63 +93,5 @@ describe("perspectives editor draft model", () => {
             { queue_key: "tours", label: "Updated tours", mission: expect.any(String), visible_in_rail: true, display_order: 1 },
             expect.objectContaining({ queue_key: "waitlist" }),
         ]);
-    });
-});
-
-describe("persistPerspectivesForLifecycleStageSave", () => {
-    it("writes perspectives_v1 to builder stage metadata", async () => {
-        const metadata = {
-            lifecycle_builder_v1: {
-                version: 1,
-                active_process_id: "proc-1",
-                processes: [
-                    {
-                        id: "proc-1",
-                        key: "enrollment",
-                        name: "Enrollment",
-                        primary_entity: "opportunity",
-                        sort_order: 0,
-                        is_active: true,
-                        stages: [
-                            {
-                                id: "st-lead",
-                                key: "lead",
-                                label: "Lead",
-                                sort_order: 0,
-                                is_active: true,
-                            },
-                        ],
-                    },
-                ],
-            },
-        };
-
-        const store = { metadata: structuredClone(metadata) };
-        const supabase = {
-            from: () => ({
-                update: (patch: { metadata: Record<string, unknown> }) => ({
-                    eq: () => ({
-                        eq: () => {
-                            Object.assign(store, patch);
-                            return Promise.resolve({ error: null });
-                        },
-                    }),
-                }),
-            }),
-        };
-
-        const result = await persistPerspectivesForLifecycleStageSave(supabase as never, {
-            orgId: "org-1",
-            departmentId: "dept-1",
-            stageKey: "lead",
-            metadata: store.metadata as Record<string, unknown>,
-            explicitPerspectives: [{ queue_key: "tours", label: "Tour lane" }],
-        });
-
-        const stage = (
-            (result.metadata.lifecycle_builder_v1 as { processes: Array<{ stages: unknown[] }> }).processes[0]
-                .stages[0] as Record<string, unknown>
-        );
-        expect(stage[PERSPECTIVES_V1_METADATA_KEY]).toEqual([{ queue_key: "tours", label: "Tour lane" }]);
     });
 });

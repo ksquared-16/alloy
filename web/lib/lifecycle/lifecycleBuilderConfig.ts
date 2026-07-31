@@ -268,17 +268,22 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
 
     if (!processes.length) {
         const activeRaw = typeof o.active_process_id === "string" ? o.active_process_id.trim() : "";
-        return withUnknownFields(
-            { version: 1, active_process_id: activeRaw || null, processes: [] },
-            builderResidue,
-        );
+        // Annotated: without it TS widens the `version: 1` literal to `number` and the object
+        // stops matching LifecycleBuilderV1.
+        const empty: LifecycleBuilderV1 = {
+            version: 1,
+            active_process_id: activeRaw || null,
+            processes: [],
+        };
+        return withUnknownFields(empty, builderResidue);
     }
 
     const activeRaw = typeof o.active_process_id === "string" ? o.active_process_id.trim() : "";
     const active_process_id =
         activeRaw && processes.some((p) => p.id === activeRaw) ? activeRaw : processes[0]!.id;
 
-    return withUnknownFields({ version: 1, active_process_id, processes }, builderResidue);
+    const parsed: LifecycleBuilderV1 = { version: 1, active_process_id, processes };
+    return withUnknownFields(parsed, builderResidue);
 }
 
 /**
@@ -289,12 +294,12 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
 export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<string, unknown> {
     const processes = config.processes.map((process) => {
         const stages = process.stages.map((stage) => serializeWithUnknownFields(stage));
-        const serialized = { ...serializeWithUnknownFields(process), stages };
+        const serialized: Record<string, unknown> = { ...serializeWithUnknownFields(process), stages };
         // Work views carry their own residue and are nested one level deeper than the walk above.
         if (process.work_views_v1) {
             serialized.work_views_v1 = process.work_views_v1.map((view) =>
                 serializeWithUnknownFields(view),
-            ) as unknown as typeof process.work_views_v1;
+            );
         }
         return serialized;
     });

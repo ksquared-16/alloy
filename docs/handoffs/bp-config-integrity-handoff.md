@@ -8,7 +8,7 @@
 |---|---|
 | Root | `/Users/Kelly/Code/alloy-worktrees/wt6-bp-config-integrity` — managed worktree, **sanctioned** |
 | Sprint / slot | `bp-config-integrity` / **6** (provider `claude`) |
-| Branch | `agent/claude/6-bp-config-integrity` — **6 commits ahead, NOT pushed** |
+| Branch | `agent/claude/6-bp-config-integrity` — **10 commits ahead, NOT pushed** |
 | Base | `origin/staging @ 77ac3e68b` |
 | Port | `3016` (`alloy-dev-start wt6-bp-config-integrity`) |
 | Auth | QA identity `qa-slot6-experimental@example.com` |
@@ -30,6 +30,8 @@ configuration work — see [[worktrees-share-one-live-tenant]] and the root-caus
 | `ea874289d` | **Law 4** — DB write guard; publication owns the projection |
 | `f773841f6` | Writer inventory + canonical draft service module |
 | `16660f0c5` | Contain the two non-editor bypasses |
+| `6005630a5` | Session handoff |
+| _(this slice)_ | **Editor slice 1** — the stage save moves onto draft persistence |
 
 ## Read these
 
@@ -51,43 +53,42 @@ successful publication* rather than *whatever last wrote `departments.metadata`*
 
 ---
 
-# NEXT SLICE — start here
+# DONE — editor slice 1: the stage save
 
-**Migrate `web/lib/lifecycle/saveLifecycleStageRuntimeConfig.ts` (461 lines) as ONE atomic unit.**
-Do not migrate its callees individually.
+`web/lib/lifecycle/saveLifecycleStageRuntimeConfig.ts` and its route now perform **one** lifecycle
+draft write followed by idempotent companion writes, and **never** touch the published projection.
 
-## Why it must move as a unit
+Full map, old/new write graphs, defaults classification and the companion-write contract:
+[`docs/platform/governance/business-process-stage-save-decomposition.md`](../platform/governance/business-process-stage-save-decomposition.md).
 
-It performs 4–6 independent whole-column writes with a re-read between some of them. Under the
-guard the first succeeds and later ones fail → **torn stage**. It also spans four destinations:
+Five direct projection writers were deleted, not merely bypassed:
+`persistPerspectivesV1.ts` (file), and the `persist…ForLifecycleStageSave` writer in
+`persistStatusRollupV1.ts`, `persistQueueMembershipV1.ts`, `persistStageOperatingPlanV1.ts`,
+`persistStageV2DraftFields.ts`. Three hidden-authoring seeds went with them — the membership
+default, the legacy operating-plan default, and the process-level `ensureBuilderCommandSetsOnSave`
+stamp (a third instance, **not** in the original inventory).
 
-| Destination | Members | Treatment |
-|---|---|---|
-| **Inside** `lifecycle_builder_v1` | `status_rollup_v1` (`:234`), `queue_membership_v1` (`:256`), `stage_operating_plan_v1` (`:265`), `perspectives_v1` (`:393`) | lift to pure transforms → **one draft write** |
-| **Sibling top-level key** | `persistLifecycleStageFieldRules` (`:203`) → `lifecycle_builder_stage_field_rules_v1` | **category F — leave alone.** Misleading name; it is NOT in the builder |
-| Separate tables | `work_units` upserts (`:298`, `:336`), `persistStageStatusAssignments` (`:243`) | not publication-owned — leave as-is |
+Evidence: 53/53 real-Postgres scenarios (18 + 22 + **13 new** in `03-stage-save.sql`); 23 new vitest
+assertions in `stageSaveDraftPersistence.test.ts` + `stageDraftTransforms.test.ts`; lifecycle +
+configPublication suites went **94 → 86 failures with zero new failures** (8 pre-existing failures
+fixed).
 
-## Target shape
+## THE CONSEQUENCE TO DECIDE BEFORE THE NEXT SLICE
 
-1. `openDraft` (or load existing) from `businessProcessConfigurationService`
-2. apply **all** stage edits in memory to one `LifecycleBuilderV1`
-3. apply allowed **draft-time** defaults (see below)
-4. validate **touched** references only (decision **D3**)
-5. **one** `saveDraft` call
-6. return one coherent result: draft revision, warnings, touched blocking errors, conflict state,
-   whether publication is required
+A stage save now writes the draft and **nothing reads the draft**. The stage editor reads
+`departments.metadata`, so an operator's edit will neither take effect at runtime nor appear on
+reload until a publish happens — and there is no publish affordance yet. The response says
+`publication_required: true`; nothing consumes it.
 
-## Hidden authoring to remove while doing it
+This is the publication model behaving as designed, and it is why the guard stays in `warn` and the
+capability is not flipped. But it means **the migrated path must not be exposed to a live tenant
+until the draft-aware read path and the publish action ship.** Decide the order: either
+(a) build read-from-draft + publish next, before migrating any further editor, or
+(b) migrate the remaining editors first and land the read/publish surface as one cut-over.
 
-- `persistStageOperatingPlanV1.ts:116` seeds `legacyEnrollmentOperatingPlanDefault(stageKey)`
-- `persistQueueMembershipV1.ts:153` seeds a default membership when absent
+# NEXT SLICE — remaining editors
 
-Today, merely opening and saving a stage mutates the **published** projection with configuration the
-operator never authored. Under publication these become **draft-time seeds applied once**, never
-runtime fallback authority (decision **D1**). Document the distinction between: initial template
-seed · explicit operator edit · migration · compatibility read · published configuration.
-
-## Then, in this order
+In this order:
 
 1. Lifecycle Builder process-level saves (`departments/[id]/lifecycle-builder/route.ts:103` PATCH)
 2. Work Views (`process-work-views/route.ts:126` → `persistWorkViewsV1.ts:56`)
@@ -97,6 +98,14 @@ seed · explicit operator edit · migration · compatibility read · published c
 6. Scripts / bootstrap / demo writers → explicit migration utilities holding the `migration` token
 
 Then, and only then: guard → `enforce`; capability `organizationRuntime.ts:303` → `publish_required`.
+
+Reusable pieces this slice leaves behind:
+
+- `lib/lifecycle/stageDraftTransforms.ts` — the pure-transform shape every editor should adopt
+- `lib/lifecycle/validateTouchedStageReferences.ts` — the D3 before/after diff
+- `lib/businessProcesses/configuration/configurationDiagnostics.ts` — warning/error shape
+- `web/tests/lifecycle/helpers/stageSaveStore.ts` — in-memory Supabase double with a write log
+- `web/tsconfig.stagesave.json` — a narrowed tsc project that actually completes (see below)
 
 ---
 
@@ -114,9 +123,9 @@ Then, and only then: guard → `enforce`; capability `organizationRuntime.ts:303
 | Runtime reads only published truth | ❌ not until editors migrate |
 | Tests prove bypass prevention | ✅ 40/40 Postgres, 33 vitest |
 | Capability says `publish_required` | ❌ correctly not flipped |
-| Stage save atomic | ❌ **next slice** |
-| Hidden default writes removed | ❌ next slice |
-| Typecheck | ⏳ **pending — see below** |
+| Stage save atomic | ✅ one draft write, proven in vitest + Postgres |
+| Hidden default writes removed | ✅ three seeds deleted from the save path |
+| Typecheck | ✅ **full project now completes** — 52 pre-existing errors, **none** in the stage-save graph |
 
 ---
 
@@ -130,10 +139,29 @@ cd <worktree>/web && rm -rf node_modules && npm install
 ```
 Prefix every vitest/tsc run with the `nvm use` line.
 
-**Typecheck is PENDING, not green.** `npx tsc -p tsconfig.json --noEmit` → **exit 144, zero
-diagnostic output**, at default heap and at `--max-old-space-size=6144`, and also for a 4-file
-narrowed project. `tsc --version` and a trivial file check both exit 0, so the toolchain is fine —
-this is host contention. **Do not treat process death as a pass.** Retry on a quiet host.
+**Typecheck: UNBLOCKED.** The exit-144 wall is gone. The recipe that works:
+
+```bash
+cd <worktree>/web
+export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use v22.21.1
+nice -n 19 node --max-old-space-size=12288 ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit
+```
+
+Two things mattered: **12 GB heap** (6 GB, 8 GB and 10 GB all died) and **idle priority**, which lets
+tsc finish rather than being starved by the other worktree's `scripts/local-dev` daemon. Every
+earlier 144 was OOM-under-contention presenting as a silent death.
+
+Result: **rc=2, 52 errors, none in this slice's graph.** They live in `tests/adminV2/runtime/*`,
+`tests/presentation/runtime/*`, `tests/bos/*`, `tests/layout/*`, `tests/platform/*`,
+`tests/lifecycle/processRuntimeCommandConsumption.test.ts` and `scripts/qa/*` — all pre-existing,
+all unrelated. **Use 52 as the baseline** for the next slice.
+
+Three of the errors that used to be in that count were real defects left by the Law 7 commit in
+`lifecycleBuilderConfig.ts` (generic inference widening `version: 1` to `number`; a lost index
+signature in `serializeLifecycleBuilderV1`). They are fixed, so the count went 55 → 52.
+
+`web/tsconfig.stagesave.json` is a narrowed project over the stage-save graph that finishes in
+seconds at 8 GB — useful for a fast inner loop, not a substitute for the full run.
 
 **Never `git stash pop` in this worktree.** A `stash push` that errors on an untracked pathspec
 leaves the pop to grab `stash@{0}` — an unrelated parked stash from another slot. This happened; it

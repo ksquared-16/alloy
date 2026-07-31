@@ -1,73 +1,21 @@
 /**
- * Persist queue_membership_v1 on Lifecycle Builder stage save — metadata only.
- * Does not change executable queue filters unless builder routing flag is on elsewhere.
+ * Queue-membership denormalization onto the executable work-unit queue.
+ *
+ * The builder-stage writer that lived here — `persistQueueMembershipForLifecycleStageSave` — is
+ * gone. It did two things that must not be one thing: it authored `queue_membership_v1` on the
+ * stage, and when the key was absent it **seeded a template default and persisted it**, so merely
+ * opening and saving a stage wrote configuration the operator never authored (decision D1).
+ *
+ * Authoring is now `applyQueueMembershipDraft` (explicit input only), and the compatibility read
+ * that keeps queue runtime unchanged is `resolveEffectiveStageMembership` in the stage save. What
+ * remains here is only the work-unit projection.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-    LIFECYCLE_BUILDER_METADATA_KEY,
-    activeLifecycleProcess,
-    lifecycleBuilderFromDepartmentMetadata,
-} from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import {
-    QUEUE_MEMBERSHIP_METADATA_KEY,
     applyEnrollmentQueueMembershipSeedToWorkUnitMetadata,
     membershipSeedDecision,
-    type QueueMembershipSeedStageActionKind,
 } from "@/lib/lifecycle/seedEnrollmentQueueMembershipV1";
-
-export type QueueMembershipPersistenceResult = {
-    metadata: Record<string, unknown>;
-    membership: QueueMembershipV1 | null;
-    stageAction: QueueMembershipSeedStageActionKind;
-    builderStageUpdated: boolean;
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return value != null && typeof value === "object" && !Array.isArray(value);
-}
-
-function findEnrollmentStageRaw(
-    metadata: Record<string, unknown>,
-    stageKey: string,
-): Record<string, unknown> | null {
-    const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
-    const process = builder ? activeLifecycleProcess(builder) : null;
-    if (!process || process.key !== ENROLLMENT_PROCESS_KEY) return null;
-    const stage = process.stages.find((s) => s.key === stageKey.trim() && s.is_active);
-    if (!stage) return null;
-    return stage as unknown as Record<string, unknown>;
-}
-
-function applyMembershipToBuilderStage(
-    metadata: Record<string, unknown>,
-    stageKey: string,
-    membership: QueueMembershipV1,
-): Record<string, unknown> {
-    const out = structuredClone(metadata) as Record<string, unknown>;
-    const builderRaw = out[LIFECYCLE_BUILDER_METADATA_KEY];
-    if (!isRecord(builderRaw) || !Array.isArray(builderRaw.processes)) return out;
-
-    for (let pi = 0; pi < builderRaw.processes.length; pi++) {
-        const processRaw = builderRaw.processes[pi];
-        if (!isRecord(processRaw) || String(processRaw.key ?? "").trim() !== ENROLLMENT_PROCESS_KEY) continue;
-        if (!Array.isArray(processRaw.stages)) continue;
-
-        for (let si = 0; si < processRaw.stages.length; si++) {
-            const stageRaw = processRaw.stages[si];
-            if (!isRecord(stageRaw) || String(stageRaw.key ?? "").trim() !== stageKey.trim()) continue;
-            stageRaw[QUEUE_MEMBERSHIP_METADATA_KEY] = structuredClone(membership);
-            processRaw.stages[si] = stageRaw;
-            builderRaw.processes[pi] = processRaw;
-            out[LIFECYCLE_BUILDER_METADATA_KEY] = builderRaw;
-            return out;
-        }
-    }
-
-    return out;
-}
 
 /** Membership to denormalize on work unit — preserve explicit WU metadata when valid. */
 export function resolveMembershipForWorkUnitDenormalization(
@@ -119,62 +67,6 @@ export function mergeInertQueueMembershipIntoQueueDefinition(
     }
 
     return raw;
-}
-
-/**
- * Ensure builder stage carries queue_membership_v1 (preserve explicit or seed default).
- * Updates department metadata in DB when a default is written.
- */
-export async function persistQueueMembershipForLifecycleStageSave(
-    supabase: SupabaseClient,
-    params: {
-        orgId: string;
-        departmentId: string;
-        stageKey: string;
-        metadata: Record<string, unknown>;
-        explicitMembership?: QueueMembershipV1 | null;
-    },
-): Promise<QueueMembershipPersistenceResult> {
-    const stageKey = params.stageKey.trim();
-    let metadata = params.metadata;
-    let builderStageUpdated = false;
-    let membership: QueueMembershipV1 | null = null;
-    let stageAction: QueueMembershipSeedStageActionKind;
-
-    if (params.explicitMembership) {
-        membership = params.explicitMembership;
-        metadata = applyMembershipToBuilderStage(metadata, stageKey, membership);
-        builderStageUpdated = true;
-        stageAction = "skipped_has_explicit";
-    } else {
-        const stageRaw = findEnrollmentStageRaw(params.metadata, stageKey);
-        const decision = membershipSeedDecision(stageKey, stageRaw ?? {});
-
-        if (decision.action === "seeded" && decision.membership) {
-            membership = decision.membership;
-            metadata = applyMembershipToBuilderStage(metadata, stageKey, membership);
-            builderStageUpdated = true;
-        } else if (decision.action === "skipped_has_explicit" && decision.membership_before) {
-            membership = decision.membership_before;
-        }
-        stageAction = decision.action;
-    }
-
-    if (builderStageUpdated) {
-        const { error } = await supabase
-            .from("departments")
-            .update({ metadata, updated_at: new Date().toISOString() })
-            .eq("id", params.departmentId)
-            .eq("org_id", params.orgId);
-        if (error) throw new Error(error.message);
-    }
-
-    return {
-        metadata,
-        membership,
-        stageAction,
-        builderStageUpdated,
-    };
 }
 
 export function mergeLifecycleStageWorkUnitMetadataWithMembership(

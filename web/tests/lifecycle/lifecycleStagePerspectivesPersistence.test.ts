@@ -113,7 +113,7 @@ describe("Lifecycle stage perspectives persistence wiring", () => {
 
     it("save transaction persists perspectives_v1 metadata", () => {
         const save = read("lib/lifecycle/saveLifecycleStageRuntimeConfig.ts");
-        expect(save).toContain("persistPerspectivesForLifecycleStageSave");
+        expect(save).toContain("applyStagePerspectivesDraft");
         expect(save).toContain("perspectivesV1");
     });
 

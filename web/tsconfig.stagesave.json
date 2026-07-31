@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/lifecycle/saveLifecycleStageRuntimeConfig.ts",
+    "lib/lifecycle/stageDraftTransforms.ts",
+    "lib/lifecycle/projectLifecycleStageQueueLanes.ts",
+    "lib/lifecycle/validateTouchedStageReferences.ts",
+    "lib/lifecycle/persistStageV2DraftFields.ts",
+    "lib/lifecycle/persistQueueMembershipV1.ts",
+    "lib/lifecycle/persistStageOperatingPlanV1.ts",
+    "lib/lifecycle/persistStatusRollupV1.ts",
+    "lib/lifecycle/lifecycleStageWorkUnitIdentity.ts",
+    "app/api/admin/enrollment-process/stage-runtime-config/route.ts"
+  ]
+}

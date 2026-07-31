@@ -89,6 +89,34 @@ transaction — any later write in that transaction inherited a standing bypass.
 the token immediately after the projection UPDATE (`end_lifecycle_projection_write`). Worth noting
 because the contract tests alone would not have found it; only executing the sequence did.
 
+## `03-stage-save.sql` — the migrated stage save survives `enforce`
+
+Proves the write shape produced by `lib/lifecycle/saveLifecycleStageRuntimeConfig.ts` after the
+editor-slice-1 migration. Recorded run, 2026-07-30 — 13/13 passing:
+
+```
+PASS  setup: published revision 1
+PASS  stage draft write succeeds under enforce
+PASS  draft write did NOT change the runtime projection
+PASS  unknown fields survived the draft write
+PASS  companion field-rules write succeeds: identical builder passes the guard
+PASS  companion write preserved the projection byte-for-byte
+PASS  companion write landed its sibling keys
+PASS  un-migrated stage write REJECTED: lifecycle_builder_v1 is publication-owned; …
+PASS  publish -> revision 2
+PASS  runtime projection now carries the stage edit
+PASS  publication preserved the unrelated sibling keys
+PASS  publication preserved unknown fields
+--- STAGE SAVE: ALL SCENARIOS PASSED ---
+```
+
+The one that justifies the file: **`companion field-rules write succeeds`**. The field-rules
+companion is a *whole-column* `departments.metadata` update that rewrites the identical
+`lifecycle_builder_v1` alongside a changed sibling. Whether the guard permits that is not decidable
+from the application tests — it depends on the trigger comparing values (`IS NOT DISTINCT FROM`)
+rather than counting writes. Paired with **`un-migrated stage write REJECTED`**, the two together
+say the migrated shape passes for the right reason and the old shape still fails.
+
 ## Scope
 
 Publish-path CAS **and** projection write authority. What is *not* yet done: the ~15 product writers
