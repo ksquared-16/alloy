@@ -280,11 +280,29 @@ We'll capture the context automatically.</p>
       let url = "/api/v2/views/decision?id=" + encodeURIComponent(decisionId);
       if (missionId) url += "&mission_id=" + encodeURIComponent(missionId);
       V2.state.decisionDetail = await get(url);
+      V2.state.decisionDetailError = null;
       bump(); schedulePaint();
     } catch (e) {
       V2.state.decisionDetailError = String(e.message || e);
       bump(); schedulePaint();
     }
+  };
+
+  /** Drop cached Mission Control views so Refresh / external Director answers are visible. */
+  V2.invalidatePresentationCaches = function () {
+    V2.state.decisionDetail = null;
+    V2.state.decisionDetailError = null;
+    V2.state._decisionRevalidated = null;
+    V2.state.decisionsVm = null;
+    V2.state.needsYou = null;
+    V2.state.overview = null;
+    V2.state.missionsHome = null;
+    V2.state.timelineVm = null;
+    V2.state.workersHome = null;
+    V2.state.workerDetail = null;
+    V2.state.evidenceVm = null;
+    V2.state.runtimeDiagnostics = null;
+    V2.state.trustedHostDiagnostics = null;
   };
   V2.fetchTimeline = async (id) => {
     try {
@@ -793,7 +811,15 @@ We'll capture the context automatically.</p>
   };
 
   V2.viewDecisionDetail = function (decisionId) {
-    if (!V2.state.decisionDetail || V2.state.decisionDetail.decision?.decisionId !== decisionId) {
+    const cached = V2.state.decisionDetail?.decision;
+    const revalidateKey = `dec:${decisionId}`;
+    // Revalidate once when cached as open — Director may have answered via Trusted Host outside this window.
+    const mustRevalidateOpen = cached
+      && cached.decisionId === decisionId
+      && cached.status === "open"
+      && V2.state._decisionRevalidated !== revalidateKey;
+    if (!cached || cached.decisionId !== decisionId || mustRevalidateOpen) {
+      if (mustRevalidateOpen) V2.state._decisionRevalidated = revalidateKey;
       V2.fetchDecision(decisionId, V2.state.selectedMissionId);
       return shell("Decision") + `<div class="empty"><span class="spin"></span> Loading decision…</div></div>`;
     }
@@ -804,6 +830,8 @@ We'll capture the context automatically.</p>
     const s = d.sections || {};
     const b = d.briefing || {};
     const open = d.status === "open";
+    const chosen = d.chosen_option_id || d.chosenOptionId || "";
+    const resolvedViaTha = !open && /trusted_host|Trusted Host/i.test(`${chosen} ${d.response || ""}`);
     const why = s.whyStopped || b.why_stopped || {};
     const whyBullets = (why.bullets || []).map((x) => `<li>${esc(x)}</li>`).join("");
     const whyBlock = `<p>${esc(why.lead || s.whyItMatters || "")}</p>
@@ -835,17 +863,33 @@ We'll capture the context automatically.</p>
       <button class="btn" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(s.recommendedCard?.id || b.recommendation_id || d.recommendationId)}" data-mission="${esc(d.missionId)}">Approve recommendation</button>
       <button class="btn ghost" data-mc-ask="${esc(d.decisionId)}">Ask Director</button>
       <button class="btn ghost" data-mc-reject="${esc(d.decisionId)}">Reject and provide direction</button>
-    </div>` : `<div class="mc-pill">${esc(d.statusLabel)}</div>`;
+    </div>` : `<div class="mc-pill">${esc(d.statusLabel || "Answered")}</div>`;
 
-    return shell("Director needs your decision", {
+    const resolutionBanner = resolvedViaTha ? `<section class="mc-briefing-sec">
+      <div class="mc-rec-card" style="border-color: var(--ok, #2a7a4b)">
+        <div class="mc-rec-badge">Resolved</div>
+        <p class="mc-rec-summary">Director already fulfilled this via a Trusted Host Action. No Terminal, Supabase, or credential step is needed.</p>
+        <p class="muted">${esc(d.response || "Census ran on the trusted host; results returned to Claude.")}</p>
+        <div class="mc-actions">
+          <button class="btn" data-nav="missions/${esc(d.missionId)}">Back to mission</button>
+          <button class="btn ghost" data-nav="needs-you">Open Needs You</button>
+        </div>
+      </div>
+    </section>` : (!open ? `<section class="mc-briefing-sec">
+      <p class="muted">This decision is already answered (${esc(chosen || d.statusLabel || "answered")}). It is shown for history only.</p>
+    </section>` : "");
+
+    return shell(open ? "Director needs your decision" : "Decision history", {
       missionId: d.missionId,
       active: "decisions",
       lead: `${esc(d.missionTitle)} · ${esc(d.requestedLabel)}`,
     }) + `<article class="mc-decision mc-briefing mobile-decision">
       <header class="mc-briefing-hero">
-        <p class="mc-briefing-kicker">Director needs your decision</p>
+        <p class="mc-briefing-kicker">${open ? "Director needs your decision" : "Decision history"}</p>
         <h2 class="mc-briefing-stop">${esc(s.stopReason || b.stop_reason || d.title)}</h2>
       </header>
+
+      ${resolutionBanner}
 
       <section class="mc-briefing-sec">
         <h3>What happened?</h3>
@@ -857,7 +901,7 @@ We'll capture the context automatically.</p>
         ${whyBlock}
       </section>
 
-      <section class="mc-briefing-sec mc-briefing-rec">
+      ${open ? `<section class="mc-briefing-sec mc-briefing-rec">
         <h3>Director’s recommendation</h3>
         <div class="mc-rec-card">
           <div class="mc-rec-badge">Recommended</div>
@@ -867,7 +911,7 @@ We'll capture the context automatically.</p>
           <ul>${recWhy || `<li>${esc(d.recommendationReason || "Best path given the Mission Brief and accepted work.")}</li>`}</ul>
           <h4>Estimated impact</h4>
           <ul>${impact || "<li>Review carefully before continuing</li>"}</ul>
-          ${open ? `<button class="btn" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(recCard.id || b.recommendation_id || d.recommendationId)}" data-mission="${esc(d.missionId)}">Continue with recommendation</button>` : ""}
+          <button class="btn" data-mc-answer="${esc(d.decisionId)}" data-option="${esc(recCard.id || b.recommendation_id || d.recommendationId)}" data-mission="${esc(d.missionId)}">Continue with recommendation</button>
         </div>
       </section>
 
@@ -890,9 +934,9 @@ We'll capture the context automatically.</p>
             ${rejectSteps ? `<ul>${rejectSteps}</ul>` : ""}
           </div>
         </div>
-      </section>
+      </section>` : ""}
 
-      ${d.pausedWork?.length ? `<section class="mc-briefing-sec">
+      ${d.pausedWork?.length && open ? `<section class="mc-briefing-sec">
         <h3>Work waiting on this</h3>
         ${(d.pausedWork || []).map((w) => `<div class="mc-work"><b>${esc(w.title)}</b> · ${esc(w.statusLabel)}</div>`).join("")}
       </section>` : ""}

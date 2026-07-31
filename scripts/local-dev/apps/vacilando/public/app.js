@@ -246,9 +246,11 @@ function setActiveNav(name) {
 }
 
 /**
- * Cutover: empty hash and ambiguous legacy-home land in Mission Control unless
- * the operator explicitly requested ?legacy=1.
+ * Cutover: empty hash and legacy home routes land in Mission Control Missions
+ * unless the operator explicitly requested ?legacy=1.
+ * Desktop historically opened #/director — that must not remain the landing page.
  */
+const LEGACY_HOME_ROUTES = new Set(["director", "command", "history", "policies", "trust"]);
 function enforceMissionControlHome() {
   const hash = location.hash || "";
   const empty = !hash || hash === "#" || hash === "#/";
@@ -258,15 +260,15 @@ function enforceMissionControlHome() {
   }
   if (legacyMode()) return;
   const r = parseRoute();
-  // Stale bookmarks / in-app hashes to Command Center must not become a dual home.
-  if (r.name === "command" && !r.sub) {
+  // Top-level legacy shells only (keep #/command/worker/N reachable via Settings → Legacy).
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) {
     location.hash = "#/missions";
   }
 }
 window.addEventListener("hashchange", () => {
   if (legacyMode()) return;
   const r = parseRoute();
-  if (r.name === "command" && !r.sub) location.hash = "#/missions";
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = "#/missions";
 });
 
 let lastKey = null;
@@ -287,9 +289,14 @@ function renderMcView(r, V2) {
   else if (r.name === "improvements") html = r.sub ? V2.viewImprovementDetail(r.sub) : V2.viewImprovements();
   V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
   try {
-    const n = window.VacilandoV2?.state?.needsYou?.items?.length;
-    if (n != null) $("#nb-needs").textContent = n;
-    else if (state.snap) $("#nb-needs").textContent = needsYou().length;
+    // Mission Control badge is V2 Needs You only — never fall back to legacy board counts.
+    const items = window.VacilandoV2?.state?.needsYou?.items;
+    if (Array.isArray(items)) $("#nb-needs").textContent = String(items.length);
+    else if (typeof window.VacilandoV2?.fetchNeedsYou === "function") {
+      window.VacilandoV2.fetchNeedsYou();
+    } else {
+      $("#nb-needs").textContent = "0";
+    }
   } catch { /* */ }
 }
 
@@ -1978,7 +1985,25 @@ function showDelete(slot) {
   };
   document.body.appendChild(ov);
 }
-$("#refresh-btn").addEventListener("click", async (ev) => { ev.target.disabled = true; const x = ev.target.textContent; ev.target.textContent = "↻ …"; await execute("runtime.refresh", {}, false); fetchResources(); ev.target.disabled = false; ev.target.textContent = x; });
+$("#refresh-btn").addEventListener("click", async (ev) => {
+  ev.target.disabled = true;
+  const x = ev.target.textContent;
+  ev.target.textContent = "↻ …";
+  try {
+    await execute("runtime.refresh", {}, false);
+    fetchResources();
+    // Mission Control caches decision/Needs You clientside — Director may have
+    // answered via Trusted Host outside this window. Drop caches and re-render.
+    if (typeof window.VacilandoV2?.invalidatePresentationCaches === "function") {
+      window.VacilandoV2.invalidatePresentationCaches();
+    }
+    lastKey = null;
+    render(true);
+  } finally {
+    ev.target.disabled = false;
+    ev.target.textContent = x;
+  }
+});
 window.addEventListener("hashchange", () => render(true));
 
 // -------- data loop --------
@@ -2001,10 +2026,9 @@ function adoptSnapshot(s) {
 function onSnap(s) {
   if (!adoptSnapshot(s)) return;
   chrome();
-  // On Mission Control routes, board SSE must not thrash #view — only refresh chrome/badges.
+  // On Mission Control routes, board SSE must not thrash #view or overwrite V2 Needs You.
   const r = parseRoute();
   if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
-    try { $("#nb-needs").textContent = needsYou().length; } catch { /* */ }
     return;
   }
   render();
