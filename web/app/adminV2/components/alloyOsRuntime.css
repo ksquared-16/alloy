@@ -3406,22 +3406,54 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-ucard--expanded:has([data-schedule-editor="true"]) .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-schedule-detail="true"]) .alloy-os-ucard__body,
 .alloy-os-ucard--expanded:has([data-room-picker="true"]) .alloy-os-ucard__body {
-  /* Taller than the default 360px expanded body so the schedule form fits more
-   * often without a forced full-viewport card; still scrolls when needed. */
+  /* Flex column so the schedule footer stays inside the card; form scrolls above. */
   max-height: min(560px, 58vh) !important;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   padding-inline: 16px;
   padding-bottom: 10px;
   box-sizing: border-box;
+}
+/* Schedule editor/detail (linked host): same pin-footer contract as in-grid. */
+.alloy-os-focus-panel-linked-host__card .alloy-os-ucard:has([data-schedule-editor="true"]) .alloy-os-ucard__body,
+.alloy-os-focus-panel-linked-host__card .alloy-os-ucard:has([data-schedule-detail="true"]) .alloy-os-ucard__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-inline: 16px;
+  padding-bottom: 10px;
+  box-sizing: border-box;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-sched-surface,
+.alloy-os-ucard--expanded .alloy-os-sched-surface,
+.alloy-os-focus-panel-linked-host__card .alloy-os-sched-surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-sched-scroll,
+.alloy-os-ucard--expanded .alloy-os-sched-scroll,
+.alloy-os-focus-panel-linked-host__card .alloy-os-sched-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 .alloy-os-focus-panel-grid[data-fp-depth="active"]
   .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
   [data-schedule-footer="true"],
-.alloy-os-ucard--expanded [data-schedule-footer="true"] {
-  position: sticky;
-  bottom: 0;
+.alloy-os-ucard--expanded [data-schedule-footer="true"],
+.alloy-os-focus-panel-linked-host__card [data-schedule-footer="true"] {
+  position: relative;
+  flex: 0 0 auto;
   z-index: 2;
   background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
   padding-top: 10px;
@@ -6271,8 +6303,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   z-index: 1;
   width: min(var(--alloy-os-focus-panel-max-width, 720px), calc(100% - 32px));
   max-height: min(75vh, calc(100% - 44px), calc(100dvh - 64px));
-  /* Own the elevated perimeter here so child overflow:hidden cannot erase the edge. */
-  overflow: visible;
+  /* Clip to the bordered shell — overflow:visible let the schedule footer paint
+   * below the max-height border box (white card ended above Cancel/Create). */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border-radius: 20px;
   background: var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff));
   border: 1px solid var(--alloy-os-fp-card-border);
@@ -6285,24 +6320,28 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
   pointer-events: auto;
 }
-/* Inner Universal Card — content clip only; shell chrome lives on the host above. */
+/* Inner Universal Card — fill host; shell chrome lives on the host above. */
 .alloy-os-focus-panel-linked-host__card .alloy-os-ucard {
   width: 100%;
-  max-height: inherit;
-  height: max-content;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  height: auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   border: 0;
-  border-radius: 20px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 .alloy-os-focus-panel-linked-host__card .alloy-os-ucard__body {
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: min(560px, 58vh);
-  overflow-x: hidden;
-  overflow-y: auto;
+  max-height: none !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   -webkit-overflow-scrolling: touch;
 }
 
