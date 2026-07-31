@@ -1,12 +1,35 @@
 # Configuration Discovery V1 — closeout and Participant Runtime handoff
 
-**Status: CLOSED / FROZEN** · 2026-07-30 · branch `agent/claude/4-phase7-slice3-participant-runtime`
+**Status: CLOSED / FROZEN + product QA complete** · updated 2026-07-31 · branch
+`agent/claude/4-phase7-slice3-participant-runtime`
 
-Worktree `wt4-phase7-slice3-participant-runtime`. **53 commits, committed and NOT pushed** — no push,
-no merge, per standing instruction.
+Worktree `wt4-phase7-slice3-participant-runtime`. **62 commits, rebased onto origin/staging (0
+behind), committed and NOT pushed.** Kelly is testing on localhost before any merge.
+
+Local: `alloy-dev-start wt4-phase7-slice3-participant-runtime` → http://localhost:3014 (staging DB).
+Isolated cert stack: `CERT_APP_PORT=3018 certification/alloy-certify serve` — **never run both from
+this worktree at once**; two dev servers share one `.next` and corrupt each other's Turbopack graph.
 
 Read first: [certification record](../platform/core/data/configuration-discovery-v1-certification.md)
 · [canonical architecture](../platform/core/data/relationship-model.md).
+
+## Product QA pass (after certification)
+
+Three operator blockers plus a follow-on round, all fixed and committed:
+
+| Defect | Root cause |
+|---|---|
+| Import stuck on "Reading your document" 20+ min | `busy` was both set inside an effect and in its dep array → the effect cancelled its own in-flight request; no polling could recover |
+| Detailed Questions showed an empty canvas | native-layout detection discarded geometry the extractor already computed, so `hasRegions` was always false |
+| Review Questions panel would not scroll | `WorkspaceZonePanel` body was a BLOCK, so every consumer's `flex-1` child was inert and clipped |
+| Guardian "Name" always "Form field only" | intent inferred from the LABEL alone; a bare "Name:" under "Parent or Guardian #1" has no subject |
+| Names captured as one field | `defaultNameRepresentation` defaulted to `full_name` |
+| Sunscreen PDF failed the whole import | Postgres `jsonb` rejects NUL (SQLSTATE 22P05); that PDF carries NULs in its text layer |
+
+Also: source PDF now renders with synchronized detection highlights (via the pdf.js already bundled
+in `unpdf` — no new dependency), concept review condensed + pinned apply bar + Review action, and the
+workspace frame (header rule, queue rails, +20% operational health) converged onto shared tokens so
+Processing, Communications, Work Items and Scheduling move together.
 
 ---
 
