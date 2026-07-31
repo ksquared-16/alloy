@@ -1,0 +1,615 @@
+/**
+ * Trusted Host Actions — privileged host-side execution runtime.
+ *
+ * Workers may request; workers never receive credentials.
+ * Director authorizes; this runtime executes outside the managed sandbox.
+ */
+import { randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  chmodSync,
+  readdirSync,
+} from "node:fs";
+import { join, dirname } from "node:path";
+import { spawnSync } from "node:child_process";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
+import {
+  ACTION_TYPES,
+  DEFAULT_TARGET,
+  getActionDefinition,
+  listRegisteredActions,
+  resolveCanonicalRepoRoot,
+  resolveTrustedServerEnvSource,
+  findRepoRoot,
+  hashSql,
+} from "./trusted-host-action-registry.mjs";
+import {
+  findAuthorization,
+  markAuthorizationUsed,
+  recognizePriorCensusAuthorization,
+  listAuthorizations,
+  databaseTargetFingerprint,
+} from "./trusted-host-authz.mjs";
+import { appendTimelineEvent } from "./timeline.mjs";
+import { attachEvidence } from "./evidence.mjs";
+
+const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
+  || join(os.homedir(), ".local", "state", "alloy-dev");
+const STORE_DIR = join(RUNTIME_ROOT, "vacilando", "trusted-host-actions");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const RUN_SQL_SH = join(HERE, "trusted-host-run-sql.sh");
+const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
+
+function ensureDir(p = STORE_DIR) {
+  mkdirSync(p, { recursive: true });
+}
+
+function newActionId() {
+  return `tha_${randomBytes(7).toString("hex")}`;
+}
+
+function storePath(actionId) {
+  return join(STORE_DIR, `${actionId}.json`);
+}
+
+function indexPath(missionId) {
+  return join(STORE_DIR, `index_${missionId}.json`);
+}
+
+function readAction(actionId) {
+  const p = storePath(actionId);
+  if (!existsSync(p)) return null;
+  return JSON.parse(readFileSync(p, "utf8"));
+}
+
+function writeAction(action) {
+  ensureDir();
+  writeFileSync(storePath(action.id), JSON.stringify(action, null, 2));
+  const idxP = indexPath(action.missionId);
+  let idx = { missionId: action.missionId, ids: [] };
+  if (existsSync(idxP)) {
+    try { idx = JSON.parse(readFileSync(idxP, "utf8")); } catch { /* */ }
+  }
+  if (!idx.ids.includes(action.id)) idx.ids.push(action.id);
+  writeFileSync(idxP, JSON.stringify(idx, null, 2));
+  return action;
+}
+
+export function listTrustedHostActions(missionId = null) {
+  ensureDir();
+  if (!missionId) return [];
+  const idxP = indexPath(missionId);
+  if (!existsSync(idxP)) return [];
+  const idx = JSON.parse(readFileSync(idxP, "utf8"));
+  return (idx.ids || []).map(readAction).filter(Boolean);
+}
+
+export function getTrustedHostAction(actionId) {
+  return readAction(actionId);
+}
+
+function redactSecrets(text) {
+  return String(text || "")
+    .replace(/postgresql:\/\/[^\s]+/gi, "postgresql://[redacted]")
+    .replace(/postgres:\/\/[^\s]+/gi, "postgres://[redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted_jwt]");
+}
+
+function buildAudit(action, extra = {}) {
+  return {
+    actionId: action.id,
+    missionId: action.missionId,
+    assignmentId: action.assignmentId,
+    executionSessionId: action.executionSessionId,
+    actionType: action.actionType,
+    authorizationId: action.authorizationId,
+    authorizingOperator: extra.authorizingOperator || null,
+    databaseTarget: action.inputs?.databaseTarget,
+    databaseTargetFingerprint: databaseTargetFingerprint(action.inputs?.databaseTarget),
+    queryArtifactPath: action.inputs?.queryArtifactPath,
+    queryHash: action.inputs?.queryHash,
+    validationResult: action.inputs?.validation || null,
+    started_at: action.started_at,
+    completed_at: action.completed_at,
+    rowCount: extra.rowCount ?? null,
+    outputArtifactPath: extra.outputArtifactPath || null,
+    success: extra.success === true,
+    failureCode: extra.failureCode || null,
+    retryHistory: action.retryState || null,
+  };
+}
+
+export function requestTrustedHostAction({
+  missionId,
+  assignmentId = null,
+  executionSessionId = null,
+  requestedBy = "director",
+  actionType,
+  inputs = {},
+  nowMs,
+} = {}) {
+  if (!missionId || !actionType) return { ok: false, error: "missing_fields" };
+  const def = getActionDefinition(actionType);
+  if (!def) return { ok: false, error: "unknown_action_type", actionType };
+
+  const validated = def.validateInputs(inputs);
+  if (!validated.ok) {
+    return { ok: false, error: "input_validation_failed", validation: validated };
+  }
+
+  // Dedupe in-flight / completed only — failed actions may be retried.
+  const existing = listTrustedHostActions(missionId).find((a) =>
+    a.actionType === actionType
+    && a.inputs?.queryHash === validated.normalized.queryHash
+    && ["requested", "policy_review", "authorized", "executing", "completed", "retrying"].includes(a.state));
+  if (existing) {
+    return { ok: true, action: existing, deduped: true };
+  }
+
+  const action = {
+    schema_version: "vacilando.trusted_host_action.v1",
+    id: newActionId(),
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy,
+    actionType,
+    actionVersion: def.version,
+    requestedInputs: {
+      queryArtifactPath: validated.normalized.queryArtifactPath,
+      expectedQueryHash: validated.normalized.queryHash,
+      databaseTarget: validated.normalized.databaseTarget,
+      timeoutMs: validated.normalized.timeoutMs,
+    },
+    inputs: {
+      queryArtifactPath: validated.normalized.queryArtifactPath,
+      queryHash: validated.normalized.queryHash,
+      databaseTarget: validated.normalized.databaseTarget,
+      timeoutMs: validated.normalized.timeoutMs,
+      validation: validated.normalized.validation,
+    },
+    policyClassification: def.riskClass,
+    authorizationState: "pending",
+    authorizationId: null,
+    executionState: "not_started",
+    state: "requested",
+    hostProcess: null,
+    started_at: null,
+    completed_at: null,
+    result: null,
+    evidence: [],
+    audit: null,
+    failureReason: null,
+    retryState: { attempts: 0, maxAttempts: def.retry?.maxAttempts ?? 1 },
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+  };
+  writeAction(action);
+  try {
+    appendTimelineEvent(missionId, {
+      type: "progress",
+      headline: "Director prepared a Trusted Host Action",
+      summary: `${def.title} requested — credentials stay on the trusted host.`,
+      visibility: "summary",
+      actor: "director",
+      detail: { trustedHostActionId: action.id, actionType },
+      nowMs,
+    });
+  } catch { /* optional */ }
+  return { ok: true, action, normalized: validated.normalized };
+}
+
+export function authorizeTrustedHostAction(actionId, {
+  actor = "operator",
+  authorizationId = null,
+  nowMs,
+} = {}) {
+  const action = readAction(actionId);
+  if (!action) return { ok: false, error: "not_found" };
+  let auth = null;
+  if (authorizationId) {
+    auth = listAuthorizations(action.missionId).find((a) => a.authorizationId === authorizationId) || null;
+  } else {
+    auth = findAuthorization({
+      missionId: action.missionId,
+      actionType: action.actionType,
+      databaseTarget: action.inputs.databaseTarget,
+      queryHash: action.inputs.queryHash,
+      actionRequestId: action.id,
+      nowMs: nowMs ?? Date.now(),
+    });
+  }
+  if (!auth) {
+    action.state = "policy_review";
+    action.authorizationState = "required";
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: "authorization_required", action };
+  }
+  action.state = "authorized";
+  action.authorizationState = "authorized";
+  action.authorizationId = auth.authorizationId;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  return { ok: true, action, authorization: auth };
+}
+
+export function executeTrustedHostAction(actionId, { actor = "director", nowMs } = {}) {
+  let action = readAction(actionId);
+  if (!action) return { ok: false, error: "not_found" };
+  if (action.state === "completed") return { ok: true, action, already: true };
+
+  const authz = authorizeTrustedHostAction(actionId, { actor, nowMs });
+  if (!authz.ok) return authz;
+  action = authz.action;
+
+  const root = findRepoRoot();
+  const absSqlArtifact = join(root, action.inputs.queryArtifactPath);
+  let sql = null;
+  if (absSqlArtifact.endsWith(".json")) {
+    const j = JSON.parse(readFileSync(absSqlArtifact, "utf8"));
+    sql = j.combined_query;
+  } else {
+    sql = readFileSync(absSqlArtifact, "utf8");
+  }
+  if (hashSql(sql) !== action.inputs.queryHash) {
+    action.state = "failed";
+    action.failureReason = "query_hash_mismatch";
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: "query_hash_mismatch" });
+    writeAction(action);
+    return { ok: false, error: "query_hash_mismatch", action };
+  }
+
+  const tmpDir = join(STORE_DIR, "tmp");
+  ensureDir(tmpDir);
+  const sqlFile = join(tmpDir, `${action.id}.sql`);
+  const outFile = join(tmpDir, `${action.id}.out`);
+  const errFile = join(tmpDir, `${action.id}.err`);
+  writeFileSync(sqlFile, sql.endsWith(";") ? sql : `${sql};`);
+
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = iso(nowMs);
+  action.hostProcess = { kind: "trusted-host-run-sql" };
+  action.retryState.attempts = (action.retryState.attempts || 0) + 1;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  try {
+    appendTimelineEvent(action.missionId, {
+      type: "progress",
+      headline: "Director is running an approved database census",
+      summary: "Trusted Host Action executing on the control-plane host — worker still has no credentials.",
+      visibility: "summary",
+      actor: "director",
+      detail: { trustedHostActionId: action.id },
+      nowMs,
+    });
+  } catch { /* */ }
+
+  if (!existsSync(RUN_SQL_SH)) {
+    action.state = "failed";
+    action.failureReason = "host_runtime_missing";
+    action.completed_at = iso(nowMs);
+    writeAction(action);
+    return { ok: false, error: "host_runtime_missing", action };
+  }
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+
+  const canonical = resolveCanonicalRepoRoot();
+  const envSource = resolveTrustedServerEnvSource();
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: canonical,
+      ALLOY_REPO: canonical,
+      ALLOY_SERVER_ENV_SOURCE: envSource,
+      VACILANDO_CHECKOUT: root,
+      ALLOY_WORKTREE: root,
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: action.inputs.timeoutMs || 60_000,
+    encoding: "utf8",
+  });
+
+  const errText = redactSecrets(
+    (existsSync(errFile) ? readFileSync(errFile, "utf8") : "") || child.stderr || "",
+  );
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8").trim() : "";
+  try { unlinkSync(sqlFile); } catch { /* */ }
+
+  if (child.status !== 0) {
+    const code = /trusted_credential_unavailable/.test(errText)
+      ? "trusted_credential_unavailable"
+      : (child.error?.code === "ETIMEDOUT" ? "timeout" : "execution_failed");
+    const transient = code === "timeout" || /could not connect|timeout|Connection refused/i.test(errText);
+    action.failureReason = code;
+    action.executionState = "failed";
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, {
+      success: false,
+      failureCode: code,
+      authorizingOperator: authz.authorization?.granted_by || null,
+    });
+    action.state = (transient && action.retryState.attempts < (action.retryState.maxAttempts || 1))
+      ? "retrying"
+      : "failed";
+    action.updated_at = iso(nowMs);
+    writeAction(action);
+    try {
+      appendTimelineEvent(action.missionId, {
+        type: "progress",
+        headline: code === "trusted_credential_unavailable"
+          ? "Trusted credential unavailable on the host"
+          : "Database census failed",
+        summary: redactSecrets(errText).slice(0, 240) || "Host execution failed.",
+        visibility: "summary",
+        actor: "director",
+        detail: { trustedHostActionId: action.id, code },
+        nowMs,
+      });
+    } catch { /* */ }
+    return { ok: false, error: code, detail: redactSecrets(errText).slice(0, 500), action };
+  }
+
+  let resultObj = null;
+  try {
+    resultObj = JSON.parse(outText);
+  } catch {
+    const m = outText.match(/\{[\s\S]*\}/);
+    if (m) {
+      try { resultObj = JSON.parse(m[0]); } catch { /* */ }
+    }
+  }
+  if (!resultObj) {
+    action.state = "failed";
+    action.failureReason = "result_parse_failed";
+    action.completed_at = iso(nowMs);
+    action.audit = buildAudit(action, { success: false, failureCode: "result_parse_failed" });
+    writeAction(action);
+    return { ok: false, error: "result_parse_failed", action };
+  }
+
+  const wave0Rel = "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json";
+  const evidenceRel = action.actionType === ACTION_TYPES.DATABASE_READ_CENSUS
+    ? wave0Rel
+    : action.inputs.queryArtifactPath.replace(/\.json$/i, "") + ".results.json";
+  const evidenceAbs = join(root, evidenceRel);
+
+  if (existsSync(evidenceAbs) && evidenceAbs.endsWith(".json")) {
+    try {
+      const prior = JSON.parse(readFileSync(evidenceAbs, "utf8"));
+      const merged = {
+        ...prior,
+        status: "executed",
+        query_hash: action.inputs.queryHash,
+        execution: {
+          ...(prior.execution || {}),
+          executed: true,
+          executed_at: iso(nowMs),
+          executed_by: "trusted_host_action",
+          trusted_host_action_id: action.id,
+          authorization_id: action.authorizationId,
+          query_hash: action.inputs.queryHash,
+          database_target: action.inputs.databaseTarget,
+          database_target_fingerprint: databaseTargetFingerprint(action.inputs.databaseTarget),
+          blocker: null,
+        },
+        results: resultObj,
+      };
+      writeFileSync(evidenceAbs, JSON.stringify(merged, null, 2));
+    } catch {
+      writeFileSync(join(root, evidenceRel), JSON.stringify({
+        trusted_host_action_id: action.id,
+        query_hash: action.inputs.queryHash,
+        results: resultObj,
+      }, null, 2));
+    }
+  } else {
+    writeFileSync(join(root, evidenceRel), JSON.stringify({
+      trusted_host_action_id: action.id,
+      query_hash: action.inputs.queryHash,
+      results: resultObj,
+    }, null, 2));
+  }
+
+  const auditPath = join(STORE_DIR, `${action.id}.audit.json`);
+  const audit = buildAudit(action, {
+    success: true,
+    rowCount: 1,
+    outputArtifactPath: evidenceRel,
+    authorizingOperator: authz.authorization?.granted_by || null,
+  });
+  writeFileSync(auditPath, JSON.stringify(audit, null, 2));
+
+  action.state = "completed";
+  action.executionState = "completed";
+  action.completed_at = iso(nowMs);
+  action.result = {
+    databaseTarget: action.inputs.databaseTarget,
+    queryHash: action.inputs.queryHash,
+    rowCount: 1,
+    census: resultObj,
+    evidencePath: evidenceRel,
+  };
+  action.evidence = [
+    { type: "query_artifact", path: action.inputs.queryArtifactPath },
+    { type: "query_hash", value: action.inputs.queryHash },
+    { type: "validation_report", value: action.inputs.validation },
+    { type: "result_json", path: evidenceRel },
+    { type: "execution_audit", path: auditPath },
+  ];
+  action.audit = audit;
+  action.failureReason = null;
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  markAuthorizationUsed(action.missionId, action.authorizationId, { nowMs });
+
+  try {
+    attachEvidence({
+      missionId: action.missionId,
+      assignmentId: action.assignmentId,
+      type: "database",
+      title: "Wave 0 authority census results (Trusted Host Action)",
+      description: "Read-only deployed-database census completed on the trusted host. No credentials entered the worker.",
+      fileUri: evidenceRel,
+      acceptanceCriteriaIds: ["AC_W0"],
+      createdBy: "director",
+      nowMs,
+    });
+  } catch { /* */ }
+
+  try {
+    appendTimelineEvent(action.missionId, {
+      type: "evidence_added",
+      headline: "Database census completed",
+      summary: "Results returned to Claude. Paused work can resume.",
+      visibility: "summary",
+      actor: "director",
+      detail: { trustedHostActionId: action.id, evidencePath: evidenceRel },
+      nowMs,
+    });
+  } catch { /* */ }
+
+  return { ok: true, action, result: action.result, audit };
+}
+
+/**
+ * Director path: request → recognize prior auth → authorize → execute.
+ */
+export function fulfillDatabaseCensusForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  queryArtifactPath = "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json",
+  actor = "director",
+  nowMs,
+} = {}) {
+  recognizePriorCensusAuthorization(missionId, { nowMs });
+
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+    inputs: {
+      queryArtifactPath,
+      databaseTarget: DEFAULT_TARGET,
+    },
+    nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) {
+    return { ok: true, action: req.action, already: true };
+  }
+
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+      decisionNeeded: {
+        title: "Authorize read-only database census for this mission",
+        recommendation: "Authorize read-only database census for this mission.",
+        whatDirectorWillDo: [
+          "validate the committed query",
+          "run it through the trusted host",
+          "store the result as evidence",
+          "resume Claude",
+        ],
+      },
+    };
+  }
+
+  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+}
+
+export function trustedHostDiagnostics() {
+  const envSource = resolveTrustedServerEnvSource();
+  const credentialFilePresent = existsSync(envSource);
+  ensureDir();
+  const recentFailures = [];
+  let lastSuccess = null;
+  const activeActions = [];
+  try {
+    for (const f of fsReaddirSafe()) {
+      try {
+        const a = JSON.parse(readFileSync(join(STORE_DIR, f), "utf8"));
+        if (["requested", "policy_review", "authorized", "executing", "retrying"].includes(a.state)) {
+          activeActions.push({ id: a.id, state: a.state, actionType: a.actionType });
+        }
+        if (a.state === "failed") {
+          recentFailures.push({ id: a.id, reason: a.failureReason, at: a.completed_at });
+        }
+        if (a.state === "completed") {
+          if (!lastSuccess || Date.parse(a.completed_at || 0) > Date.parse(lastSuccess.at || 0)) {
+            lastSuccess = { id: a.id, at: a.completed_at, actionType: a.actionType };
+          }
+        }
+      } catch { /* */ }
+    }
+  } catch { /* */ }
+
+  return {
+    kind: "trusted_host_diagnostics",
+    hostRuntimeAvailable: existsSync(RUN_SQL_SH),
+    databaseCredentialAvailable: credentialFilePresent,
+    approvedDatabaseTarget: DEFAULT_TARGET,
+    registeredActions: listRegisteredActions(),
+    activeActions,
+    recentFailures: recentFailures.slice(-10),
+    lastSuccessfulAction: lastSuccess,
+    note: "Secret values are never displayed.",
+  };
+}
+
+function fsReaddirSafe() {
+  return readdirSync(STORE_DIR).filter((f) => f.startsWith("tha_") && f.endsWith(".json"));
+}
+
+/**
+ * After control-plane restart: stuck "executing" actions cannot be trusted mid-flight.
+ * Mark them failed for safe retry (dedupe excludes failed). Never re-expose credentials.
+ */
+export function reconcileTrustedHostActionsOnBoot({ nowMs } = {}) {
+  ensureDir();
+  const interrupted = [];
+  for (const f of fsReaddirSafe()) {
+    try {
+      const a = JSON.parse(readFileSync(join(STORE_DIR, f), "utf8"));
+      if (a.state === "executing" || a.state === "retrying") {
+        a.state = "failed";
+        a.executionState = "interrupted_by_restart";
+        a.failureReason = {
+          code: "host_restart",
+          detail: "Control plane restarted while Trusted Host Action was in flight. Safe to retry.",
+        };
+        a.completed_at = iso(nowMs);
+        a.updated_at = iso(nowMs);
+        writeAction(a);
+        interrupted.push(a.id);
+        try {
+          appendTimelineEvent(a.missionId, {
+            type: "progress",
+            headline: "Trusted Host Action interrupted by restart",
+            summary: "Director will not ask for Terminal workarounds. Retry the registered action.",
+            visibility: "summary",
+            actor: "director",
+            detail: { trustedHostActionId: a.id },
+            nowMs,
+          });
+        } catch { /* */ }
+      }
+    } catch { /* */ }
+  }
+  return { interrupted };
+}
+
+export { ACTION_TYPES, listRegisteredActions };

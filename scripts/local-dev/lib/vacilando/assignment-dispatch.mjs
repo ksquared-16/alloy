@@ -279,6 +279,66 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
 
   if (finished?.status === "awaiting_decision" || finished?.status === "awaiting_operator") {
     const dreq = finished.decisionRequest || finished.checkpoint?.decisionRequest || {};
+
+    // Privileged credential boundary → Trusted Host Action (never Terminal/Supabase instructions).
+    try {
+      const { tryFulfillViaTrustedHost } = await import("./trusted-host-director.mjs");
+      const tha = await tryFulfillViaTrustedHost({
+        missionId,
+        assignmentId,
+        executionSessionId: finished.sessionId,
+        dreq,
+        actor: "director",
+        nowMs,
+      });
+      if (tha?.fulfilled) {
+        setDispatchState(missionId, assignmentId, {
+          providerLifecycle: "running",
+          lastError: null,
+          sessionId: finished.sessionId,
+          connectorSessionId: finished.checkpoint?.connectorSessionId || finished.connectorSessionId,
+        }, { nowMs });
+        return {
+          ok: true,
+          via: "trusted_host_action",
+          actionId: tha.actionId,
+          sessionId: finished.sessionId,
+          resumed: tha.resumed,
+        };
+      }
+      if (tha && tha.via === "trusted_host_authorization_decision") {
+        setDispatchState(missionId, assignmentId, {
+          providerLifecycle: "awaiting_decision",
+          lastError: null,
+          sessionId: finished.sessionId,
+          connectorSessionId: finished.checkpoint?.connectorSessionId || finished.connectorSessionId,
+        }, { nowMs });
+        return {
+          ok: false,
+          error: "awaiting_decision",
+          sessionId: finished.sessionId,
+          via: tha.via,
+          decision: { title: "Authorize read-only database census for this mission" },
+        };
+      }
+      if (tha && tha.via === "trusted_host_failure_decision") {
+        setDispatchState(missionId, assignmentId, {
+          providerLifecycle: "awaiting_decision",
+          lastError: tha.error || null,
+          sessionId: finished.sessionId,
+        }, { nowMs });
+        return {
+          ok: false,
+          error: "awaiting_decision",
+          sessionId: finished.sessionId,
+          via: tha.via,
+        };
+      }
+    } catch (e) {
+      // Fall through to normal decision if THA seam fails unexpectedly.
+      console.log(`[trusted-host] director seam error: ${e?.message || e}`);
+    }
+
     createDecision({
       missionId,
       title: dreq.title || "Product decision required",

@@ -198,6 +198,28 @@ We'll capture the context automatically.</p>
 
   function actionBtn(action) {
     if (!action) return "";
+    if (action.kind === "certify_completion" && action.missionId) {
+      return `<button class="btn" data-mc-certify="${esc(action.missionId)}">${esc(action.label || "Certify completion")}</button>`;
+    }
+    if (action.kind === "reject_completion" && action.missionId) {
+      return `<button class="btn ghost" data-mc-reject-completion="${esc(action.missionId)}">${esc(action.label || "Not complete — send back")}</button>`;
+    }
+    if (action.kind === "reopen_work" && action.missionId) {
+      return `<button class="btn" data-mc-reopen-work="${esc(action.missionId)}">${esc(action.label || "Send back for more work")}</button>`;
+    }
+    if (action.kind === "review_outcome" && action.missionId) {
+      return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review outcome")}</button>`;
+    }
+    if (action.kind === "advance_implementation" && action.missionId) {
+      return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Advance to implementation")}</button>`;
+    }
+    if (action.kind === "dispatch_ready" && action.missionId) {
+      return `<button class="btn" data-mc-dispatch="${esc(action.missionId)}">${esc(action.label || "Start work")}</button>`;
+    }
+    if (action.kind === "resume_stalled" && action.missionId) {
+      return `<button class="btn" data-mc-resume-stalled="${esc(action.missionId)}">${esc(action.label || "Resume work")}</button>`;
+    }
+    if (!action.href) return `<button class="btn" disabled>${esc(action.label || "Action")}</button>`;
     return `<button class="btn" data-nav="${esc(action.href)}">${esc(action.label)}</button>`;
   }
 
@@ -321,17 +343,66 @@ We'll capture the context automatically.</p>
     const filter = home.filter || V2.state.missionsFilter || "active";
     const rows = home.missions || [];
     const empty = home.emptyState;
-    const cards = rows.map((m) => `<article class="mc-card mc-mission-card" data-nav="missions/${esc(m.missionId)}">
+    const sum = home.summary || {};
+    const ms = sum.missions || {};
+    const ws = sum.workers || {};
+    const statusChips = (ms.byStatus || []).map((s) =>
+      `<span class="mc-chip">${esc(s.label)} <b>${s.count}</b></span>`).join("");
+    const workerRows = (ws.rows || []).map((w) => `<tr>
+        <td><button class="btn link" type="button" data-nav="workers/${esc(w.workerId)}">${esc(w.slotLabel || w.workerId)}</button></td>
+        <td><span class="mc-pill ${esc(w.health || "")}">${esc(w.healthLabel || w.health || "—")}</span></td>
+        <td>${w.missionId
+          ? `<button class="btn link" type="button" data-nav="missions/${esc(w.missionId)}">${esc(w.missionTitle)}</button>`
+          : `<span class="muted">Unassigned</span>`}</td>
+        <td class="muted">${esc(w.deliverable || "—")}</td>
+      </tr>`).join("");
+    const needsPreview = (sum.needsYouPreview || []).map((n) => `<li>
+        <button class="btn link" type="button" data-nav="missions/${esc(n.missionId)}">${esc(n.missionTitle || n.missionId)}</button>
+        <span class="muted"> — ${esc(n.title)}</span>
+      </li>`).join("");
+
+    const summaryPanel = (filter === "archived" || filter === "history")
+      ? ""
+      : `<section class="mc-home-summary" aria-label="Control plane summary">
+      <div class="mc-stat-grid mc-home-stats">
+        <div class="mc-stat"><div class="mc-stat-k">Active missions</div><div class="mc-stat-v">${ms.active ?? home.activeCount ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Needs you</div><div class="mc-stat-v">${sum.needsYouCount ?? ms.needingYou ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Ready to start</div><div class="mc-stat-v">${ms.readyToStart ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Running</div><div class="mc-stat-v">${ms.running ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Workers</div><div class="mc-stat-v">${ws.total ?? 0}<span class="muted" style="font-weight:500;font-size:12px"> · ${ws.active ?? 0} active${ws.attention ? ` · ${ws.attention} attention` : ""}</span></div></div>
+      </div>
+      ${statusChips ? `<div class="mc-home-chips">${statusChips}</div>` : ""}
+      <div class="mc-home-split">
+        <div class="mc-card" style="margin:0">
+          <div class="mc-card-h"><b>Workers</b>
+            <button class="btn ghost" type="button" data-nav="workers">All workers</button>
+          </div>
+          ${workerRows
+            ? `<table class="mc-table"><thead><tr><th>Worker</th><th>Status</th><th>Mission</th><th>Assignment</th></tr></thead><tbody>${workerRows}</tbody></table>`
+            : `<p class="muted" style="margin:8px 0 0">No workers reporting yet.</p>`}
+        </div>
+        <div class="mc-card" style="margin:0">
+          <div class="mc-card-h"><b>Needs You</b>
+            <button class="btn ghost" type="button" data-nav="needs-you">Open inbox</button>
+          </div>
+          ${needsPreview
+            ? `<ul class="mc-home-needs">${needsPreview}</ul>`
+            : `<p class="muted" style="margin:8px 0 0">Nothing waiting on you.</p>`}
+        </div>
+      </div>
+    </section>`;
+
+    const cards = rows.map((m) => `<article class="mc-card mc-mission-card">
       <div class="mc-card-h">
-        <b>${esc(m.title)}</b>
+        <b data-nav="missions/${esc(m.missionId)}" style="cursor:pointer">${esc(m.title)}</b>
         <span class="mc-pill ${esc(m.status)}">${esc(m.archived ? "Archived" : m.statusLabel)}</span>
       </div>
-      <div class="mc-card-p">${esc(m.phaseLabel)}</div>
+      <div class="mc-card-p">${esc(m.postureDetail || m.phaseLabel)}</div>
       <div class="mc-card-m">${esc(m.deliverablesLabel)}</div>
       <div class="mc-card-d">${esc(m.archived ? (m.archiveReason || "Archived certification history") : m.directorState)}</div>
       <div class="mc-card-f">${esc(m.workersLine)}${m.openDecisionCount ? ` · ${m.openDecisionCount} open decision${m.openDecisionCount === 1 ? "" : "s"}` : ""}</div>
       <div class="mc-card-meta muted">${esc(m.latestUpdate)} · ${esc(m.updatedLabel || "")}</div>
-      <div class="mc-card-cta">${m.archived ? `<span class="muted">Read-only history</span>` : actionBtn(m.primaryAction)}</div>
+      <div class="mc-card-cta mc-actions">${m.archived ? `<span class="muted">Read-only history</span>` : `${actionBtn(m.primaryAction)}${actionBtn(m.secondaryAction)}`}</div>
     </article>`).join("")
       || (empty
         ? `<div class="rempty">
@@ -350,9 +421,9 @@ We'll capture the context automatically.</p>
     return shell("Missions", {
       lead: filter === "archived" || filter === "history"
         ? "Archived certification and validation history — read-only."
-        : "Active Director-managed product work.",
+        : "Control plane home — missions, workers, and what needs you.",
       actions: `<button class="btn" data-nav="kickoff">Create Mission</button>`,
-    }) + filterBar + `<div class="mc-list">${cards}</div></div>`;
+    }) + summaryPanel + filterBar + `<div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewMissionDetail = function (id) {
@@ -388,6 +459,8 @@ We'll capture the context automatically.</p>
         <div class="mc-hero-actions">
           <button class="btn ghost" type="button" data-ci-open>Improve Vacilando</button>
           ${actionBtn(s.primaryAction)}
+          ${actionBtn(s.secondaryAction)}
+          ${actionBtn(s.certifyAction)}
         </div>
       </div>
       <div class="mc-stat-grid">
@@ -398,6 +471,66 @@ We'll capture the context automatically.</p>
         <div class="mc-stat"><div class="mc-stat-k">Next checkpoint</div><div class="mc-stat-v">${esc(s.nextCheckpoint)}</div></div>
       </div>
       ${providers.length ? `<div class="mc-provider-line">${providers.map((p) => `<span>${esc(p.label)}</span>`).join("")}</div>` : ""}
+    </section>`;
+
+    const outcome = dash.outcome;
+    const showOutcome = Boolean(outcome) && (V2.state.showOutcome !== false);
+    const choices = (outcome?.choices || s.choices || []).map((c) => {
+      const kindAttr = c.kind === "certify_completion" ? "data-mc-certify"
+        : c.kind === "reopen_work" ? "data-mc-reopen-work"
+          : c.kind === "park_outcome" ? "data-mc-park-outcome"
+            : c.kind === "advance_implementation" ? "data-mc-advance"
+              : null;
+      if (!kindAttr) return "";
+      const primary = c.id === "advance" ? "btn" : "btn ghost";
+      return `<article class="mc-card" style="margin:8px 0">
+        <div class="mc-card-h"><b>${esc(c.label)}</b></div>
+        <p class="muted">${esc(c.explanation)}</p>
+        <button class="${primary}" ${kindAttr}="${esc(c.missionId || id)}">${esc(c.label)}</button>
+      </article>`;
+    }).join("");
+    const outcomeSec = outcome ? `<section class="mc-sec mc-outcome" id="mc-outcome">
+      <h3>${esc(outcome.headline)}</h3>
+      <p class="muted">Reviewing does not change the mission. Pick one choice below when you are ready.</p>
+      ${outcome.assignmentTitle ? `<p class="muted">${esc(outcome.assignmentTitle)}${outcome.finishedAt ? ` · finished ${esc(outcome.finishedAt)}` : ""}</p>` : ""}
+      <div class="mc-card" style="margin:12px 0">
+        <p style="white-space:pre-wrap">${esc(outcome.summary)}</p>
+      </div>
+      ${outcome.filesChanged?.length ? `<div>
+        <div class="mc-stat-k">Files touched</div>
+        <ul>${outcome.filesChanged.map((f) => `<li class="mono">${esc(f)}</li>`).join("")}</ul>
+      </div>` : `<p class="muted">No file list recorded.</p>`}
+      ${outcome.evidence?.length ? `<div style="margin-top:12px">
+        <div class="mc-stat-k">Evidence</div>
+        <ul>${outcome.evidence.map((e) => `<li><b>${esc(e.type)}</b> — ${esc(e.title)}</li>`).join("")}</ul>
+        <button class="btn ghost" data-nav="evidence/${esc(id)}">Open Evidence</button>
+        <button class="btn ghost" data-nav="timeline/${esc(id)}">Open Timeline</button>
+      </div>` : ""}
+      <h3 style="margin-top:20px">Choose next step</h3>
+      ${choices || `<p class="muted">No choices available.</p>`}
+    </section>` : "";
+
+    const local = dash.localServer || {};
+    const localActions = [];
+    if (local.actions?.start) {
+      localActions.push(`<button class="btn" type="button" data-mc-server-start="${esc(local.actions.start.slot)}">${esc(local.actions.start.label)}</button>`);
+    }
+    if (local.actions?.open) {
+      localActions.push(`<a class="btn" href="${esc(local.actions.open.href)}" target="_blank" rel="noopener">${esc(local.actions.open.label)} ↗</a>`);
+    }
+    if (local.actions?.stop) {
+      localActions.push(`<button class="btn ghost" type="button" data-mc-server-stop="${esc(local.actions.stop.slot)}">${esc(local.actions.stop.label)}</button>`);
+    }
+    const localServerSec = `<section class="mc-sec mc-local-server">
+      <div class="mc-card-h">
+        <b>${esc(local.title || "Local Alloy app")}</b>
+        <span class="mc-pill ${esc(local.status || "")}">${esc(local.statusLabel || (local.available === false ? "Unavailable" : "—"))}</span>
+      </div>
+      <p>${esc(local.detail || "")}</p>
+      <p class="muted">${esc(local.note || "Workers do not need this server to code.")}</p>
+      ${local.slot != null ? `<p class="muted mono">slot ${esc(local.slot)}${local.port ? ` · :${esc(local.port)}` : ""}${local.worktree ? ` · ${esc(local.worktree)}` : ""}</p>` : ""}
+      ${local.conflictDetail ? `<p class="mc-error-inline">${esc(local.conflictDetail)}</p>` : ""}
+      <div class="mc-actions" style="margin-top:10px">${localActions.join("") || `<span class="muted">No server actions available</span>`}</div>
     </section>`;
 
     const directorSec = `<section class="mc-sec mc-director">
@@ -431,7 +564,7 @@ We'll capture the context automatically.</p>
             <div class="mc-card-h"><b>${esc(it.title)}</b><span class="mc-pill">${esc(it.urgency)}</span></div>
             <p>${esc(it.body)}</p>
             ${it.recommendation ? `<p><b>Recommendation:</b> ${esc(it.recommendation)}</p>` : ""}
-            ${actionBtn(it.primaryAction)}
+            <div class="mc-actions">${actionBtn(it.primaryAction)}${actionBtn(it.secondaryAction)}</div>
           </article>`).join("")
         : `<div class="rempty">Nothing needs you right now.</div>`}
     </section>`;
@@ -516,8 +649,8 @@ We'll capture the context automatically.</p>
       missionId: id,
       active: "dashboard",
       lead: `${esc(s.statusLabel)} · Confidence ${esc(s.confidencePercent)}% · Next: ${esc(s.nextCheckpoint)}`,
-      actions: actionBtn(s.primaryAction),
-    }) + summaryStrip + directorSec + needsSec + `<div class="mc-grid">${workSec}${recentSec}</div>` + usageSec + confSec + tlSec + `</div>`;
+      actions: `${actionBtn(s.primaryAction)}${actionBtn(s.secondaryAction)}${actionBtn(s.certifyAction)}`,
+    }) + summaryStrip + localServerSec + (showOutcome ? outcomeSec : "") + directorSec + needsSec + `<div class="mc-grid">${workSec}${recentSec}</div>` + usageSec + confSec + tlSec + `</div>`;
   };
 
   V2.viewNeedsYou = function () {
@@ -531,7 +664,7 @@ We'll capture the context automatically.</p>
       <div class="muted">${esc(it.missionTitle)}</div>
       <p>${esc(it.body)}</p>
       ${it.recommendation ? `<p><b>Director:</b> ${esc(it.recommendation)}</p>` : ""}
-      ${actionBtn(it.primaryAction)}
+      <div class="mc-actions">${actionBtn(it.primaryAction)}${actionBtn(it.secondaryAction)}</div>
     </article>`).join("") || `<div class="rempty">Nothing needs you right now.</div>`;
     return shell("Needs You", { lead: "Decisions, recoveries, and approvals waiting on you." })
       + `<div class="mc-list">${cards}</div></div>`;
@@ -631,7 +764,10 @@ We'll capture the context automatically.</p>
       return shell("Decisions", { missionId: mid, active: "decisions" })
         + `<div class="empty"><span class="spin"></span> Loading decisions…</div></div>`;
     }
-    const rows = (V2.state.decisionsVm.decisions || []).map((d) => {
+    const decisions = [...(V2.state.decisionsVm.decisions || [])]
+      .sort((a, b) => Number(b.status === "open") - Number(a.status === "open"));
+    const openCount = decisions.filter((d) => d.status === "open").length;
+    const rows = decisions.map((d) => {
       const stop = d.briefing?.stop_reason || d.question || d.title;
       const rec = d.briefing?.recommendation_summary || d.recommendation;
       return `<article class="mc-card" data-nav="decisions/${esc(d.decisionId)}">
@@ -643,10 +779,16 @@ We'll capture the context automatically.</p>
     </article>`;
     }).join("") || `<div class="rempty">No decisions here.</div>`;
 
+    const lead = openCount
+      ? (mid ? "Director briefings that need your call." : "Open decisions across missions.")
+      : (mid
+        ? "No open decisions on this mission. Completion review lives on Dashboard → Needs Me."
+        : "No open decisions right now.");
+
     return shell("Decisions", {
       missionId: mid,
       active: mid ? "decisions" : null,
-      lead: mid ? "Director briefings that need your call." : "Open decisions across missions.",
+      lead,
     }) + `<div class="mc-list">${rows}</div></div>`;
   };
 
@@ -953,6 +1095,13 @@ We'll capture the context automatically.</p>
     } catch (e) {
       V2.state.runtimeDiagnosticsError = String(e.message || e);
     }
+    try {
+      const j2 = await get("/api/v2/trusted-host/diagnostics");
+      V2.state.trustedHostDiagnostics = j2.diagnostics || j2;
+      V2.state.trustedHostDiagnosticsError = null;
+    } catch (e) {
+      V2.state.trustedHostDiagnosticsError = String(e.message || e);
+    }
     bump(); schedulePaint();
   };
 
@@ -963,9 +1112,12 @@ We'll capture the context automatically.</p>
     const diag = V2.state.runtimeDiagnostics;
     const claude = diag?.claude || {};
     const ex = diag?.execution || {};
+    const tha = V2.state.trustedHostDiagnostics;
     const claudePill = claude.state === "available" ? "ok"
       : claude.state === "auth_missing" ? "warn"
         : "bad";
+    const thaHostPill = !tha ? ""
+      : (tha.hostRuntimeAvailable && tha.databaseCredentialAvailable) ? "ok" : "warn";
     return shell("Settings", { lead: "Diagnostics and legacy tools." }) + `
       <section class="mc-sec">
         <h3>Diagnostics</h3>
@@ -985,6 +1137,27 @@ We'll capture the context automatically.</p>
           <div class="mc-card-h"><b>Claude</b><span class="mc-pill ${claudePill}">${esc(claude.label || (diag ? "Unknown" : "Checking…"))}</span></div>
           <p>${esc(claude.detail || "Loading Claude availability…")}</p>
           ${claude.bin ? `<p class="muted">CLI: ${esc(claude.bin)}</p>` : ""}
+        </article>
+        <article class="mc-card" style="margin-top:12px">
+          <div class="mc-card-h"><b>Trusted Host Actions</b><span class="mc-pill ${thaHostPill || "muted"}">${esc(tha ? (tha.hostRuntimeAvailable ? "Runtime ready" : "Unavailable") : "Checking…")}</span></div>
+          <p class="muted">Privileged operations run on the desktop-owned host. Workers never receive credentials. Secret values are never shown.</p>
+          ${V2.state.trustedHostDiagnosticsError && !tha
+            ? `<p class="muted">Could not load: ${esc(V2.state.trustedHostDiagnosticsError)}</p>`
+            : ""}
+          ${tha ? `
+          <div class="mc-stat-grid" style="margin-top:8px">
+            <div class="mc-stat"><div class="mc-stat-k">Host runtime</div><div class="mc-stat-v">${tha.hostRuntimeAvailable ? "Available" : "Missing"}</div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Database credential</div><div class="mc-stat-v">${tha.databaseCredentialAvailable ? "Available on host" : "Unavailable"}</div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Approved DB target</div><div class="mc-stat-v"><code>${esc(tha.approvedDatabaseTarget || "—")}</code></div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Registered actions</div><div class="mc-stat-v">${esc(String((tha.registeredActions || []).length))}</div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Active actions</div><div class="mc-stat-v">${esc(String((tha.activeActions || []).length))}</div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Last success</div><div class="mc-stat-v">${esc(tha.lastSuccessfulAction ? `${tha.lastSuccessfulAction.actionType} @ ${tha.lastSuccessfulAction.at}` : "—")}</div></div>
+          </div>
+          ${(tha.registeredActions || []).length ? `<ul style="margin-top:8px">${tha.registeredActions.map((a) =>
+            `<li><code>${esc(a.actionType || a.type || a)}</code>${a.riskClass ? ` — ${esc(a.riskClass)}` : ""}</li>`).join("")}</ul>` : ""}
+          ${(tha.recentFailures || []).length ? `<div style="margin-top:8px"><div class="mc-stat-k">Recent failures</div><ul>${tha.recentFailures.map((f) =>
+            `<li><code>${esc(f.id)}</code> — ${esc(typeof f.reason === "object" ? (f.reason.code || JSON.stringify(f.reason)) : (f.reason || "failed"))}</li>`).join("")}</ul></div>` : ""}
+          ` : ""}
         </article>
         ${(diag?.sessions?.recent || []).length ? `<div style="margin-top:12px">
           <div class="mc-stat-k">Recent execution sessions</div>
@@ -1148,6 +1321,249 @@ We'll capture the context automatically.</p>
     }
   }
 
+  async function certifyCompletion(missionId) {
+    V2.state.kickoffBusy = "Certifying completion";
+    V2.state.kickoffError = null;
+    toast("Certifying completion…", "ok");
+    bump(); schedulePaint();
+    try {
+      const out = await post("/api/v2/missions/certify", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator certified completion from Mission Control",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Certification failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      V2.state.kickoffBusy = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Mission certified — open Mission History to review it.", "ok");
+      location.hash = "#/missions?filter=archived";
+    } catch (e) {
+      V2.state.kickoffBusy = null;
+      bump(); schedulePaint();
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  async function dispatchReady(missionId) {
+    toast("Starting work…", "ok");
+    try {
+      const out = await post("/api/v2/missions/dispatch", {
+        mission_id: missionId,
+        actor: "operator",
+        slot: 6,
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Dispatch failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Director is launching the worker.", "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  async function resumeStalled(missionId) {
+    const ok = window.confirm(
+      "Resume this mission?\n\nThe previous worker went silent. Vacilando will reset the stalled assignment and relaunch work — it will not pretend the old process is still running."
+    );
+    if (!ok) return;
+    toast("Resuming after silence…", "ok");
+    try {
+      const out = await post("/api/v2/missions/resume-stalled", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator resumed after worker went silent",
+        dispatch: true,
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Resume failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Relaunching worker.", "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  async function missionServerCommand(command, slot) {
+    const label = command === "server.start" ? "Starting local Alloy app…" : "Stopping local Alloy app…";
+    toast(label, "ok");
+    try {
+      const preview = await post("/api/commands/preview", { command, input: { slot: Number(slot) } });
+      if (preview && preview.ok === false) {
+        throw new Error(preview.reason || (preview.errors || []).join("; ") || preview.code || "Not eligible");
+      }
+      const out = await post("/api/commands", {
+        command,
+        input: { slot: Number(slot) },
+        confirm: true,
+        actor: "operator",
+      });
+      const stage = out?.stage;
+      const result = out?.result;
+      const d = result?.data;
+      const okc = result ? (result.exit === undefined || result.exit === 0) && (d?.ok !== false) : out?.ok;
+      if (stage !== "execute" || !okc) {
+        const msg = result?.stdout || result?.stderr || out?.reason || out?.code || "Command did not run";
+        throw new Error(String(msg).split("\n").slice(0, 3).join(" "));
+      }
+      V2.state.overview = null;
+      bump(); schedulePaint();
+      if (command === "server.start") {
+        toast(`Slot ${slot} server starting…`, "ok");
+        watchMissionServerReady(Number(slot), preview?.target?.port || preview?.preview?.effects);
+      } else {
+        toast(`Slot ${slot} server stopped`, "ok");
+      }
+      // Refresh dashboard so status flips when ready
+      const mid = V2.state.selectedMissionId;
+      if (mid) setTimeout(() => V2.fetchDashboard(mid), 1500);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  function watchMissionServerReady(slot, _hint) {
+    const deadline = Date.now() + 75000;
+    const iv = setInterval(async () => {
+      if (Date.now() > deadline) {
+        clearInterval(iv);
+        toast(`Slot ${slot} server did not come up in time`, "err");
+        return;
+      }
+      try {
+        const mid = V2.state.selectedMissionId;
+        if (!mid) { clearInterval(iv); return; }
+        const dash = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(mid));
+        V2.state.overview = dash;
+        bump(); schedulePaint();
+        const local = dash?.dashboard?.localServer || dash?.localServer;
+        if (local?.status === "running") {
+          clearInterval(iv);
+          toast(`Slot ${slot} app is up on :${local.port}`, "ok");
+        }
+      } catch { /* keep polling */ }
+    }, 2500);
+  }
+
+  async function advanceImplementation(missionId) {
+    const ok = window.confirm(
+      "Advance this same mission to implementation?\n\nDiscovery stays on the timeline. Wave 0 (live authority census) becomes ready to Start work.\nThe mission will not close."
+    );
+    if (!ok) return;
+    toast("Advancing to implementation…", "ok");
+    try {
+      const out = await post("/api/v2/missions/advance-implementation", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator advanced discovery → implementation on the same mission",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Advance failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      V2.state.showOutcome = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Advanced. Click Start work for Wave 0.", "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  async function parkOutcome(missionId) {
+    toast("Parking mission…", "ok");
+    try {
+      const out = await post("/api/v2/missions/park-outcome", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator parked after review — no worker launch",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Park failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Parked. Nothing will launch until you choose again.", "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  async function reopenWork(missionId) {
+    const ok = window.confirm(
+      "Need more work?\n\nThis reopens the assignment so you can Start work again.\nIt does not launch a worker by itself.\n\nContinue?"
+    );
+    if (!ok) return;
+    toast("Reopening for more work…", "ok");
+    try {
+      const out = await post("/api/v2/missions/reopen-work", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator requested more work after reviewing the outcome",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Reopen failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      V2.state.showOutcome = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Reopened. Click Start work when you want a worker to run.", "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
+  async function rejectCompletion(missionId) {
+    toast("Sending completion back…", "ok");
+    try {
+      const out = await post("/api/v2/missions/reject-completion", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator rejected completion — work is not finished",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Reject failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      toast("Completion sent back — mission stays open.", "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
   async function sendDirectorMessage(kind, decisionId, missionId, message) {
     V2.state.kickoffBusy = kind === "ask" ? "Asking Director" : "Sending direction";
     bump(); schedulePaint();
@@ -1196,8 +1612,67 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
     if (!t) return;
+
+    if (t.dataset.mcCertify) {
+      const ok = window.confirm(
+        "Close this mission without continuing implementation here?\n\nPrefer Advance to implementation if you want the work to continue on this same mission."
+      );
+      if (!ok) return;
+      certifyCompletion(t.dataset.mcCertify);
+      return;
+    }
+    if (t.dataset.mcRejectCompletion) {
+      rejectCompletion(t.dataset.mcRejectCompletion);
+      return;
+    }
+    if (t.dataset.mcReopenWork) {
+      reopenWork(t.dataset.mcReopenWork);
+      return;
+    }
+    if (t.dataset.mcParkOutcome) {
+      parkOutcome(t.dataset.mcParkOutcome);
+      return;
+    }
+    if (t.dataset.mcAdvance) {
+      advanceImplementation(t.dataset.mcAdvance);
+      return;
+    }
+    if (t.dataset.mcReviewOutcome) {
+      V2.state.showOutcome = true;
+      const mid = t.dataset.mcReviewOutcome;
+      if (!location.hash.includes(mid)) {
+        location.hash = "#/missions/" + encodeURIComponent(mid);
+      }
+      bump(); schedulePaint();
+      requestAnimationFrame(() => {
+        const el = document.getElementById("mc-outcome");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        else toast("Scroll to Outcome on this dashboard.", "ok");
+      });
+      return;
+    }
+    if (t.dataset.mcDispatch) {
+      dispatchReady(t.dataset.mcDispatch);
+      return;
+    }
+    if (t.dataset.mcResumeStalled) {
+      resumeStalled(t.dataset.mcResumeStalled);
+      return;
+    }
+    if (t.dataset.mcServerStart) {
+      const ok = window.confirm(
+        `Start the Alloy app server for slot ${t.dataset.mcServerStart}?\n\nThis is for your QA click-through only. Claude/Cursor do not need it to code.\nPrefer one running Alloy app at a time.`
+      );
+      if (!ok) return;
+      missionServerCommand("server.start", t.dataset.mcServerStart);
+      return;
+    }
+    if (t.dataset.mcServerStop) {
+      missionServerCommand("server.stop", t.dataset.mcServerStop);
+      return;
+    }
 
     if (t.dataset.legacyNav) {
       const u = new URL(location.href);

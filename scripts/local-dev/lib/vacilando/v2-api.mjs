@@ -39,6 +39,8 @@ import {
   recordValidationRun,
   acceptanceEvidenceCoverage,
   canCertifyMission,
+  certifyMissionCompletion,
+  rejectMissionCompletion,
   buildMissionCompletionPackage,
   listAllEvidenceGalleries,
 } from "./evidence.mjs";
@@ -64,6 +66,7 @@ import { buildMissionContextPackage } from "./mission-context.mjs";
 import {
   missionsHomeVm,
   missionDashboardVm,
+  missionOutcomeVm,
   directorSummaryVm,
   timelinePageVm,
   evidenceGalleryVm,
@@ -119,6 +122,50 @@ export async function handleV2Post(path, body) {
     });
     return { status: out.ok ? 200 : 409, body: out };
   }
+  if (path === "/api/v2/missions/complete" || path === "/api/v2/missions/certify") {
+    const mid = v.mission_id || v.missionId;
+    const out = certifyMissionCompletion(mid, {
+      actor: v.actor || "operator",
+      response: v.response || v.note || null,
+      force: Boolean(v.force),
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+  if (path === "/api/v2/missions/reject-completion" || path === "/api/v2/missions/completion/reject") {
+    const mid = v.mission_id || v.missionId;
+    const out = rejectMissionCompletion(mid, {
+      actor: v.actor || "operator",
+      response: v.response || v.note || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+  if (path === "/api/v2/missions/reopen-work" || path === "/api/v2/missions/send-back") {
+    const { reopenMissionForMoreWork } = await import("./mission-reopen.mjs");
+    const mid = v.mission_id || v.missionId;
+    const out = reopenMissionForMoreWork(mid, {
+      actor: v.actor || "operator",
+      response: v.response || v.note || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+  if (path === "/api/v2/missions/park-outcome" || path === "/api/v2/missions/park") {
+    const { parkMissionOutcome } = await import("./mission-reopen.mjs");
+    const mid = v.mission_id || v.missionId;
+    const out = parkMissionOutcome(mid, {
+      actor: v.actor || "operator",
+      response: v.response || v.note || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+  if (path === "/api/v2/missions/advance-implementation" || path === "/api/v2/missions/advance") {
+    const { advanceMissionToImplementation } = await import("./mission-advance.mjs");
+    const mid = v.mission_id || v.missionId;
+    const out = advanceMissionToImplementation(mid, {
+      actor: v.actor || "operator",
+      response: v.response || v.note || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
   if (path === "/api/v2/missions/dispatch") {
     try {
       if (v.provider) process.env.VACILANDO_EXECUTION_PROVIDER = String(v.provider);
@@ -130,6 +177,45 @@ export async function handleV2Post(path, body) {
         actor: v.actor || "director",
       });
       return { status: 200, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/missions/resume-stalled" || path === "/api/v2/missions/resume") {
+    try {
+      const { resumeStalledMission } = await import("./mission-reopen.mjs");
+      const mid = v.mission_id || v.missionId;
+      const out = await resumeStalledMission(mid, {
+        actor: v.actor || "operator",
+        response: v.response || v.note || null,
+        dispatch: v.dispatch !== false,
+      });
+      return { status: out.ok ? 200 : 409, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/trusted-host/census" || path === "/api/v2/missions/trusted-host/census") {
+    try {
+      const { fulfillDatabaseCensusForMission } = await import("./trusted-host-actions.mjs");
+      const { resumeMissionAfterTrustedHostAction } = await import("./trusted-host-resume.mjs");
+      const mid = v.mission_id || v.missionId;
+      const out = fulfillDatabaseCensusForMission(mid, {
+        assignmentId: v.assignment_id || v.assignmentId || null,
+        executionSessionId: v.execution_session_id || v.executionSessionId || null,
+        actor: v.actor || "director",
+      });
+      if (!out.ok) return { status: 409, body: out };
+      let resumed = null;
+      if (v.resume !== false && out.action?.state === "completed") {
+        resumed = await resumeMissionAfterTrustedHostAction({
+          missionId: mid,
+          actionId: out.action.id,
+          assignmentId: v.assignment_id || v.assignmentId || out.action.assignmentId,
+          actor: v.actor || "director",
+        });
+      }
+      return { status: 200, body: { ...out, resumed } };
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
@@ -216,12 +302,13 @@ export async function handleV2Post(path, body) {
   }
   if (path === "/api/v2/decisions/answer") {
     const mid = v.mission_id || v.missionId;
+    const chosen = v.chosen_option_id || v.chosenOptionId;
     const out = answerDecision({
       ...v,
       missionId: mid,
       decisionId: v.decision_id || v.decisionId,
-      chosenOptionId: v.chosen_option_id || v.chosenOptionId,
-      response: v.response || v.chosen_option_id || v.chosenOptionId,
+      chosenOptionId: chosen,
+      response: v.response || chosen,
       changesApprovedIntent: Boolean(v.changes_approved_intent || v.changesApprovedIntent),
       briefPatch: v.brief_patch || v.briefPatch,
       changeSummary: v.change_summary || v.changeSummary,
@@ -229,6 +316,38 @@ export async function handleV2Post(path, body) {
       invalidateWorkerContexts,
     });
     if (out.ok && mid) {
+      // Mission-scoped Trusted Host authorization — execute then resume (no Terminal).
+      if (chosen === "authorize_mission_census" || chosen === "retry_trusted_host") {
+        setTimeout(async () => {
+          try {
+            const { grantMissionAuthorization } = await import("./trusted-host-authz.mjs");
+            const { ACTION_TYPES, fulfillDatabaseCensusForMission } = await import("./trusted-host-actions.mjs");
+            const { resumeMissionAfterTrustedHostAction } = await import("./trusted-host-resume.mjs");
+            if (chosen === "authorize_mission_census") {
+              grantMissionAuthorization({
+                missionId: mid,
+                actionType: ACTION_TYPES.DATABASE_READ_CENSUS,
+                actor: v.actor || "operator",
+                sourceDecisionId: out.decision?.decisionId,
+                note: "Operator authorized read-only database census for this mission.",
+              });
+            }
+            const fulfilled = fulfillDatabaseCensusForMission(mid, {
+              assignmentId: (out.decision?.affectedAssignments || [])[0] || null,
+              actor: "director",
+            });
+            if (fulfilled.ok && fulfilled.action?.state === "completed") {
+              await resumeMissionAfterTrustedHostAction({
+                missionId: mid,
+                actionId: fulfilled.action.id,
+                assignmentId: fulfilled.action.assignmentId,
+                actor: "director",
+              });
+            }
+          } catch { /* best-effort */ }
+        }, 10);
+        return { status: 200, body: out };
+      }
       const { resumeAfterDecisionAnswer } = await import("./assignment-dispatch.mjs");
       // Durable resume — prefer prior Claude session; do not blind re-dispatch.
       setTimeout(() => {
@@ -236,8 +355,8 @@ export async function handleV2Post(path, body) {
           missionId: mid,
           assignmentIds: out.decision?.affectedAssignments || [],
           decision: out.decision,
-          chosenOptionId: v.chosen_option_id || v.chosenOptionId,
-          response: v.response || v.chosen_option_id || v.chosenOptionId,
+          chosenOptionId: chosen,
+          response: v.response || chosen,
           actor: "director",
         }).catch(() => {});
       }, 10);
@@ -424,6 +543,10 @@ export async function handleV2Get(path, url) {
     const { buildRuntimeDiagnostics } = await import("./runtime-diagnostics.mjs");
     return { status: 200, body: await buildRuntimeDiagnostics() };
   }
+  if (path === "/api/v2/trusted-host/diagnostics" || path === "/api/v2/views/trusted-host/diagnostics") {
+    const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");
+    return { status: 200, body: { ok: true, diagnostics: trustedHostDiagnostics() } };
+  }
 
   if (path === "/api/v2/missions" || path === "/api/v2/views/missions") {
     const filter = q("filter") || "active";
@@ -446,6 +569,13 @@ export async function handleV2Get(path, url) {
     const dashboard = missionDashboardVm(id);
     if (!dashboard) return { status: 404, body: { ok: false, error: "mission_not_found" } };
     return { status: 200, body: { ok: true, dashboard, overview: dashboard } };
+  }
+  if (path === "/api/v2/views/mission/outcome") {
+    const id = q("id") || q("mission_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
+    const outcome = missionOutcomeVm(id);
+    if (!outcome) return { status: 404, body: { ok: false, error: "no_outcome" } };
+    return { status: 200, body: { ok: true, outcome } };
   }
   if (path === "/api/v2/views/mission/confidence") {
     const id = q("id") || q("mission_id");

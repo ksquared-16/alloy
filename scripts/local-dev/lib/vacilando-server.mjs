@@ -1395,6 +1395,14 @@ export function createVacilandoServer() {
         }
       }).catch(() => {});
     } catch { /* best-effort */ }
+    try {
+      import("./vacilando/trusted-host-actions.mjs").then(({ reconcileTrustedHostActionsOnBoot }) => {
+        const tha = reconcileTrustedHostActionsOnBoot();
+        if (tha.interrupted?.length) {
+          console.log(`[trusted-host] reconciled ${tha.interrupted.length} in-flight action(s) after restart`);
+        }
+      }).catch(() => {});
+    } catch { /* best-effort */ }
     startupTimings.recover_ms = Date.now() - tWarm;
 
     // Defer expensive compose / provider / GC until after the process is accepting.
