@@ -1,12 +1,37 @@
 /**
  * Canonical communication_threads + communication_messages inserts + workflow_events.message_queued.
  * Used by workflow dual-write mirror and drawer composer (Card 12).
+ *
+ * PHASE 0: this module is the eligibility CHOKE POINT.
+ *
+ * `insertCommunicationMessageRow` is the only TypeScript function that inserts
+ * an outbound communication_messages row, and this is its only caller. The
+ * consent gate previously lived one level up in executeCommunicationsSend,
+ * where four independent bypasses defeated it and three send paths never
+ * reached it at all (tour comms, packet launch, the workflow mirror).
+ * Evaluating here covers all of them with no re-pointing.
+ *
+ * This is not the whole story: rows can still enter the table by paths
+ * TypeScript never sees (raw SQL, seed scripts). Python dispatch revalidation
+ * is the second layer that catches those.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitEvent } from "@/lib/emitEvent";
 import { resolveOutboundEmailSubject } from "@/lib/communications/emailSubject";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
+import {
+    ELIGIBILITY_POLICY_VERSION,
+    evaluateEligibility,
+} from "@/lib/communications/eligibility/evaluateEligibility";
+import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
+import {
+    recordCategoryFallback,
+    type EligibilitySnapshot,
+    type MessageAudience,
+    type MessageCategory,
+    type QuietHoursWindow,
+} from "@/lib/communications/eligibility/types";
 
 async function upsertCommunicationThread(params: {
     supabase: SupabaseClient;
@@ -90,6 +115,10 @@ async function insertCommunicationMessageRow(params: {
     communication_identity_id?: string | null;
     communication_provider_account_id?: string | null;
     from_address?: string | null;
+    audience?: string;
+    category?: string;
+    purpose?: string | null;
+    eligibility_snapshot?: unknown;
 }): Promise<{ messageId?: string | null; error?: { message?: string; code?: string } }> {
     const insertPayload: Record<string, unknown> = {
         org_id: params.org_id,
@@ -102,6 +131,10 @@ async function insertCommunicationMessageRow(params: {
         metadata: params.metadata,
         to_address: params.to_address,
     };
+    if (params.audience) insertPayload.audience = params.audience;
+    if (params.category) insertPayload.category = params.category;
+    if (params.purpose != null) insertPayload.purpose = params.purpose;
+    if (params.eligibility_snapshot != null) insertPayload.eligibility_snapshot = params.eligibility_snapshot;
     if (params.channel === "email") {
         insertPayload.subject = params.subject ?? null;
     }
@@ -154,6 +187,30 @@ export async function enqueueCanonicalOutboundMessage(params: {
     fromAddress?: string | null;
     /** When false, skips workflow_events emit (testing only — default true) */
     emitMessageQueued?: boolean;
+
+    // ---- Phase 0 classification + eligibility -------------------------------
+    /** external | internal. Defaults to external — the stricter reading. */
+    audience?: MessageAudience;
+    /**
+     * Platform-owned compliance class. SHOULD be supplied explicitly by every
+     * caller; omission takes the bounded, counted fallback (see
+     * recordCategoryFallback) which is retired by migration.
+     */
+    category?: MessageCategory;
+    /** Domain/tenant key. Compliance-inert — may never widen consent. */
+    purpose?: string | null;
+    /** Resolved recipient. Absent blocks an external send (fail closed). */
+    recipientPersonId?: string | null;
+    /** Whether the acting operator holds the emergency-send permission. */
+    emergencyPermitted?: boolean;
+    /** Recorded in the snapshot for audit. */
+    authorizedByUserId?: string | null;
+    /** Channel usability as already resolved upstream (address + identity). */
+    channelUsable?: boolean;
+    /** Quiet-hours window, when one applies. */
+    quietHours?: QuietHoursWindow | null;
+    /** Names the caller in fallback telemetry. */
+    callSite?: string;
 }): Promise<CanonicalEnqueueResult> {
     const ch = params.channelRaw.toLowerCase();
     const mc = metaChannel(ch);
@@ -195,6 +252,76 @@ export async function enqueueCanonicalOutboundMessage(params: {
     const emailSubjectResolved =
         mc === "email" ? resolveOutboundEmailSubject(params.primaryEntityType, params.emailSubjectRaw ?? null) : null;
 
+    // ---- ELIGIBILITY GATE ---------------------------------------------------
+    // Evaluated immediately before the insert, so no TypeScript path can create
+    // an outbound row without a decision. Blocking here means no queued row is
+    // created at all — there is nothing for the worker to pick up.
+    const audience: MessageAudience = params.audience ?? "external";
+    const category: MessageCategory =
+        params.category ?? recordCategoryFallback(params.callSite ?? "canonicalOutboundEnqueue:unspecified");
+    const toAddress = params.toRaw?.trim() || null;
+
+    const context = await loadEligibilityContext({
+        supabase: params.supabase,
+        orgId: orgIdTrim,
+        personId: params.recipientPersonId ?? null,
+        category,
+        channel: mc,
+        toAddress,
+    });
+
+    const decision = context.lookupFailed
+        ? {
+              allowed: false,
+              code: "SUPPRESSED" as const,
+              reason: "Eligibility inputs could not be loaded; refusing to send.",
+          }
+        : evaluateEligibility({
+              audience,
+              category,
+              channel: mc,
+              purpose: params.purpose ?? null,
+              recipientPersonId: params.recipientPersonId ?? null,
+              preferenceState: context.preferenceState,
+              suppressed: context.suppressed,
+              channelUsable: params.channelUsable ?? true,
+              quietHours: params.quietHours ?? null,
+              emergencyPermitted: params.emergencyPermitted,
+          });
+
+    const snapshot: EligibilitySnapshot = {
+        policyVersion: ELIGIBILITY_POLICY_VERSION,
+        decision,
+        audience,
+        category,
+        purpose: params.purpose ?? null,
+        recipient: { personId: params.recipientPersonId ?? null, channel: mc },
+        authorizedBy: {
+            userId: params.authorizedByUserId ?? null,
+            permission: params.emergencyPermitted ? "communications.send.emergency" : "communications.send",
+        },
+        consentInputs: context.consultedPreferenceCategory
+            ? [{ category: context.consultedPreferenceCategory, state: context.preferenceState }]
+            : [],
+        quietHours: params.quietHours ?? null,
+        evaluatedAt: new Date().toISOString(),
+    };
+
+    if (!decision.allowed) {
+        console.warn("[communications] send blocked by eligibility gate", {
+            org_id: orgIdTrim,
+            channel: mc,
+            audience,
+            category,
+            code: decision.code,
+        });
+        return {
+            communicationMessageId: null,
+            threadId,
+            skippedReason: `eligibility_blocked:${decision.code}`,
+        };
+    }
+
     const { messageId: mid, error } = await insertCommunicationMessageRow({
         supabase: params.supabase,
         org_id: orgIdTrim,
@@ -205,11 +332,15 @@ export async function enqueueCanonicalOutboundMessage(params: {
         subject: emailSubjectResolved,
         workflow_run_id: workflowRunUuid,
         metadata: meta,
-        to_address: params.toRaw?.trim() || null,
+        to_address: toAddress,
         communication_provider_binding_id: bindingUuid,
         communication_identity_id: identityUuid,
         communication_provider_account_id: accountUuid,
         from_address: params.fromAddress?.trim() || null,
+        audience,
+        category,
+        purpose: params.purpose ?? null,
+        eligibility_snapshot: snapshot,
     });
 
     if (error?.message) {

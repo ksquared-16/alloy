@@ -117,6 +117,38 @@ export type EligibilityInput = {
  * The principle: classification and authorization are authoring facts;
  * recipient state and time-dependent constraints are live facts.
  */
+/**
+ * Bounded, observable compatibility fallback for an unclassified send.
+ *
+ * Direction is explicit: new sends must not silently default, and any fallback
+ * must be "narrowly bounded, observable, and retired through migration". So the
+ * default is never silent — every use is counted and logged with its call site,
+ * a test asserts no production caller relies on it, and migration
+ * 20260801100000 drops the column default so an unclassified insert then fails
+ * at the database.
+ */
+const categoryFallbackUses = new Map<string, number>();
+
+export function recordCategoryFallback(callSite: string): MessageCategory {
+    const next = (categoryFallbackUses.get(callSite) ?? 0) + 1;
+    categoryFallbackUses.set(callSite, next);
+    console.warn("[comms-category-fallback] send was not explicitly classified", {
+        call_site: callSite,
+        uses: next,
+        defaulted_to: "operational",
+    });
+    return "operational";
+}
+
+/** Test/observability seam: which call sites have relied on the fallback. */
+export function categoryFallbackReport(): Record<string, number> {
+    return Object.fromEntries(categoryFallbackUses);
+}
+
+export function resetCategoryFallbackReport(): void {
+    categoryFallbackUses.clear();
+}
+
 export type EligibilitySnapshot = {
     policyVersion: string;
     decision: EligibilityDecision;
