@@ -19,9 +19,15 @@ describe("buildPreferenceChange", () => {
 });
 
 describe("expandSmsKeywordChanges", () => {
-    it("STOP opts out of both SMS categories with audit", () => {
+    it("STOP opts out of every SMS category with audit", () => {
+        // sms_operational added in Phase 0: carrier STOP suppresses ALL SMS, and
+        // operational is the bulk of what the platform sends.
         const changes = expandSmsKeywordChanges("stop", { orgId: "o", personId: "p" });
-        expect(changes.map((c) => c.upsert.category).sort()).toEqual(["sms_marketing", "sms_transactional"]);
+        expect(changes.map((c) => c.upsert.category).sort()).toEqual([
+            "sms_marketing",
+            "sms_operational",
+            "sms_transactional",
+        ]);
         expect(changes.every((c) => c.upsert.state === "opted_out")).toBe(true);
         expect(changes.every((c) => c.event.method === "stop")).toBe(true);
     });

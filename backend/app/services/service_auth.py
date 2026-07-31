@@ -29,7 +29,7 @@ import hmac
 import logging
 from typing import Optional
 
-from ..settings import PAYMENT_EXECUTOR_SECRET
+from .. import settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,5 +72,13 @@ def verify_service_secret(candidate: Optional[str], expected: str, *, label: str
 
 
 def require_payment_executor_auth(candidate: Optional[str]) -> None:
-    """Gate for the payment executor. Dedicated secret, not the GHL workflow one."""
-    verify_service_secret(candidate, PAYMENT_EXECUTOR_SECRET, label="payment_executor")
+    """
+    Gate for the payment executor. Dedicated secret, not the GHL workflow one.
+
+    Reads the setting at CALL time rather than binding it at import. Capturing
+    a credential in a module-level constant makes behavior depend on import
+    order — which surfaced immediately as a cross-test-module failure — and is
+    equally fragile in any deployment that populates the environment after the
+    first import.
+    """
+    verify_service_secret(candidate, settings.PAYMENT_EXECUTOR_SECRET, label="payment_executor")

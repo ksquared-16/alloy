@@ -35,8 +35,14 @@ sys.modules.setdefault("stripe", _fake_stripe)
 # `from twilio.request_validator import RequestValidator` with the misleading
 # "'twilio' is not a package". Only inject what this module actually needs.
 
+from app import settings as app_settings  # noqa: E402
 from app.services.service_auth import ServiceAuthError, verify_service_secret  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
+
+# settings captured the environment at ITS import, which may have happened via a
+# sibling test module before this one ran. Set the value explicitly rather than
+# depending on import order.
+app_settings.PAYMENT_EXECUTOR_SECRET = "test-payment-executor-secret"
 
 SECRET = "test-payment-executor-secret"
 ORG_A = "aaaaaaaa-0000-4000-8000-000000000001"
