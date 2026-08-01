@@ -41,6 +41,7 @@ import {
 } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 import { validateStageOperatingPlanWorkDefinitions } from "@/lib/lifecycle/validateStageOperatingPlanWorkDefinitions";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { stageExecutionGraphFindings } from "@/lib/lifecycle/stageExecutionGraphFindings";
 
 /**
  * Work-definition findings, expressed as operating-contract findings so one delta covers both.
@@ -170,7 +171,28 @@ export function assessStageOperatingPlanEdit(input: {
     savedPlan: StageOperatingPlanV1 | null | undefined;
     proposedPlan: StageOperatingPlanV1;
     operatingContract: Omit<ValidateStageOperatingPlanOperatingContractInput, "plan">;
+    /**
+     * The whole process, as it stands and as this edit would leave it.
+     *
+     * Execution-graph findings are only computable from the process — a transition reference is
+     * broken relative to the graph, not to one stage's plan. Supplying both sides lets a graph
+     * defect this edit INTRODUCED block the save, while one the operator inherited stays a
+     * warning, exactly like every other finding. Omit them and the counter simply reports fewer
+     * findings; it never reports wrong ones.
+     */
+    processBefore?: unknown;
+    processAfter?: unknown;
+    stageKey?: string;
 }): StageDraftSaveAssessment {
+    const stageKey = input.stageKey ?? input.proposedPlan.stage_key ?? "";
+    const graphBefore =
+        input.processBefore !== undefined && stageKey
+            ? stageExecutionGraphFindings(input.processBefore, stageKey)
+            : [];
+    const graphAfter =
+        input.processAfter !== undefined && stageKey
+            ? stageExecutionGraphFindings(input.processAfter, stageKey)
+            : [];
     const before = input.savedPlan
         ? [
               ...validateStageOperatingPlanOperatingContract({
@@ -178,6 +200,7 @@ export function assessStageOperatingPlanEdit(input: {
                   ...input.operatingContract,
               }),
               ...workDefinitionFindings(input.savedPlan),
+              ...graphBefore,
           ]
         : // No saved plan means nothing pre-existed: every finding belongs to this edit.
           [];
@@ -187,6 +210,7 @@ export function assessStageOperatingPlanEdit(input: {
             ...input.operatingContract,
         }),
         ...workDefinitionFindings(input.proposedPlan),
+        ...graphAfter,
     ];
     return assessStageDraftSave({ before, after });
 }

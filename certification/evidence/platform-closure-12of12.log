@@ -1,0 +1,50 @@
+[32m✓[0m App already serving at http://localhost:3011
+[32m✓[0m Communications mocked (no real email/SMS; local-delivery only)
+  Authenticating operator + running certification specs…
+
+Running 12 tests using 1 worker
+
+[certify] captured session server-valid on cold load: true (url=http://localhost:3011/workspace)
+  ✓   1 [setup] › playwright/auth.setup.ts:18:6 › authenticate seeded operator (56.7s)
+[closure] P1 load http=200 draft_revision=1 status=never_published is_default=true
+  ✓   2 [certify] › playwright/platform-closure.cert.spec.ts:129:5 › P1 participation loads from the DRAFT and reports where runtime stands (10.0s)
+[closure] P2 BEFORE published=(none) draft_revision=1
+[closure] P2 save http=200 publication_required=true draft 1 -> 2
+  ✓   3 [certify] › playwright/platform-closure.cert.spec.ts:147:5 › P2 a participation save lands in the DRAFT and does not move the projection (3.7s)
+[closure] P3 unknown participation field after a save: survive me
+[closure] P3 reload http=200 draft participation present=true
+  ✓   4 [certify] › playwright/platform-closure.cert.spec.ts:182:5 › P3 participation survives reload, and unknown fields survive the save (4.3s)
+[closure] P4 stale token=3 http=409 error="Someone else changed this configuration while you were editing. Reload to see th"
+  ✓   5 [certify] › playwright/platform-closure.cert.spec.ts:220:5 › P4 a stale participation token is refused — draft CAS (2.1s)
+[closure] P5 validate can_publish=true errors=0
+[closure] P5 publish http=200 revisions 0 -> 1
+[closure] P5 projection changed=true
+  ✓   6 [certify] › playwright/platform-closure.cert.spec.ts:241:5 › P5 participation publishes through the canonical path, and only then moves runtime (2.6s)
+[closure] R1 refuse http=400 error="Cannot remove processes from the Enrollment department via this action. Use Advanced Confi"
+[closure] R1 draft and projection both unchanged
+  ✓   7 [certify] › playwright/platform-closure.cert.spec.ts:283:5 › R1 removal is REFUSED on the Enrollment department, with a reason and no mutation (985ms)
+[closure] R2 BEFORE draft=[00000000-0000-4000-8000-0000000009e1,00000000-0000-4000-8000-0000000009f1] published=[(none)] draft_revision=1
+[closure] R2 remove http=200 publication_required=true error=-
+[closure] R2 AFTER draft=[00000000-0000-4000-8000-0000000009e1] published=[(none)]
+[closure] R2 unknown field on the SURVIVING process after a removal: survive me
+  ✓   8 [certify] › playwright/platform-closure.cert.spec.ts:304:5 › R2 on a removable department, removal changes the DRAFT only (2.1s)
+[closure] R3 stale removal token=1 http=409 error="Someone else changed this configuration while you were editing. Reload"
+  ✓   9 [certify] › playwright/platform-closure.cert.spec.ts:357:5 › R3 a stale token cannot remove a process — draft CAS applies to removal too (705ms)
+[closure] R4 validate can_publish=true errors=0
+[closure] R4 publish http=200
+[closure] R4 published AFTER=[00000000-0000-4000-8000-0000000009e1]
+[closure] R4 unknown field in the PUBLISHED projection: survive me
+  ✓  10 [certify] › playwright/platform-closure.cert.spec.ts:377:5 › R4 publishing the removal moves runtime, and the guard was never tripped (1.3s)
+[closure] C1 both editors loaded draft_revision=4
+[closure] C1 A save http=200 draft 4 -> 5
+[closure] C1 B save http=409 error="Someone else changed this configuration while you were editing. Reload to see their change"
+[closure] C1 draft labels after both attempts: [All Work,Editor A 4,Follow Up,Tours]
+[closure] C1 conflict surfaced to editor B on screen: true
+  ✓  11 [certify] › playwright/platform-closure.cert.spec.ts:410:5 › C1 two editors, one draft: the second save is refused, and the first survives (2.0m)
+[closure] C2 published labels (unchanged by the conflict): [All Work,Follow Up,New Leads,Tours]
+  ✓  12 [certify] › playwright/platform-closure.cert.spec.ts:472:5 › C2 the refused save left the published runtime untouched (633ms)
+
+  12 passed (3.6m)
+[32m✓[0m Authentication established (reusable session captured)
+[32m✓[0m Runtime verification ready — evidence in certification/evidence/
+rc=0

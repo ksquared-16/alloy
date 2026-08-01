@@ -301,6 +301,12 @@ export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<
                 serializeWithUnknownFields(view),
             );
         }
+        // Participation is the same shape of problem: its parser is an allowlist reconstruction,
+        // so its residue rides a carrier one level deeper than this walk reaches. Omitting it
+        // meant a participation save silently deleted every field this branch could not name.
+        if (process.participation_v1) {
+            serialized.participation_v1 = serializeWithUnknownFields(process.participation_v1);
+        }
         return serialized;
     });
     return { ...serializeWithUnknownFields(config), processes };
