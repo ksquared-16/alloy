@@ -280,7 +280,7 @@ No implementation may violate those laws.
 | Privacy Runtime | Canonical (published) |
 | Reasoning Runtime | Canonical (published) |
 | Operational Learning | Canonical (published) |
-| Trust Governance | Planned |
+| Trust Governance | Canonical (published) |
 | Platform Integration | Planned |
 
 ---
