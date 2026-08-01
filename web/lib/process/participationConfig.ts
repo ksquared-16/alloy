@@ -10,6 +10,7 @@
  */
 
 import type { ProcessParticipationContract } from "@/lib/process/engine";
+import { captureUnknownFields, withUnknownFields } from "@/lib/config/preserveUnknownFields";
 
 /** Presentation view capabilities a process may offer Work Views (not an engine concept). */
 export const PARTICIPATION_VIEW_KEYS = ["family", "child", "candidate"] as const;
@@ -62,7 +63,7 @@ export function parseParticipationConfigV1(raw: unknown): ParticipationConfigV1 
         }
     }
 
-    return {
+    const parsed: ParticipationConfigV1 = {
         version: 1,
         subject_type: subject,
         context_type: context,
@@ -72,7 +73,26 @@ export function parseParticipationConfigV1(raw: unknown): ParticipationConfigV1 
         available_views: views,
         ...(Object.keys(labels).length ? { operational_state_labels: labels } : {}),
     };
+
+    // Law 7. This parser is an allowlist reconstruction, so anything it cannot name was being
+    // DELETED on every save — a branch that had never heard of a field destroyed it by editing
+    // something else entirely. Certification caught it: a field planted in `participation_v1`
+    // came back `(GONE)`. The carrier is an enumerable symbol, so object spread copies it while
+    // `JSON.stringify` ignores it, and unknown data survives without ever being re-persisted as
+    // something this branch pretends to understand.
+    return withUnknownFields(parsed, captureUnknownFields(o, PARTICIPATION_OWNED_KEYS));
 }
+
+/** Every key this branch understands. Anything else rides the unknown-field carrier. */
+const PARTICIPATION_OWNED_KEYS = [
+    "version",
+    "subject_type",
+    "context_type",
+    "inherits_context_stage",
+    "participant_creation",
+    "available_views",
+    "operational_state_labels",
+] as const;
 
 /**
  * The engine contract derived from a participation config — the ONLY four fields the engine reads.

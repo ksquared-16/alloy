@@ -188,18 +188,35 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 });
                 // No plan means there is nothing to persist for this stage — not a save failure.
                 if (!plan) return null;
+                // The process as it stands, and as this edit would leave it. Execution-graph
+                // findings are only computable across the whole process, so both sides are needed
+                // to tell "this edit broke the graph" from "the graph was already broken".
+                const processBefore = process ?? undefined;
+                const processAfter =
+                    process ?
+                        {
+                            ...process,
+                            stages: (process.stages ?? []).map((s) =>
+                                s.key === stageKey ? { ...s, stage_operating_plan_v1: plan } : s,
+                            ),
+                        }
+                    :   undefined;
+
                 return {
                     plan,
                     assessment: assessStageOperatingPlanEdit({
                         savedPlan,
                         proposedPlan: plan,
                         operatingContract: operatingContractContext,
+                        processBefore,
+                        processAfter,
+                        stageKey,
                     }),
                 };
             },
             isDirty: () => dirty,
         }),
-        [draft, dirty, stageKey, savedPlan, operatingContractContext],
+        [draft, dirty, stageKey, savedPlan, operatingContractContext, process],
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });

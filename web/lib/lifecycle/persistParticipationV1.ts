@@ -17,6 +17,7 @@ import {
     editProcessInDraft,
 } from "@/lib/businessProcesses/configuration/editProcessInDraft";
 import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { unknownFieldsOf, withUnknownFields } from "@/lib/config/preserveUnknownFields";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value != null && typeof value === "object" && !Array.isArray(value);
@@ -39,8 +40,21 @@ export async function persistParticipationForProcessSave(
         processId: params.processId,
         actorUserId: params.actorUserId ?? null,
         expectedDraftRevision: params.expectedDraftRevision,
-        // Spread, so unknown fields on the process survive this edit.
-        edit: (process) => ({ ...process, participation_v1: params.participation }),
+        edit: (process) => ({
+            ...process,
+            // The incoming config came over HTTP, and `JSON.stringify` cannot carry the Law 7
+            // unknown-field symbol — so the client was never SENT the residue and cannot send it
+            // back. Replacing wholesale would therefore delete every field this branch does not
+            // name, on every save, no matter how careful the parser is.
+            //
+            // The fix is a merge, not a spread: keep the residue captured from the draft we just
+            // read, and let the caller's known fields land on top of it. A client can only be
+            // responsible for what it was given.
+            participation_v1: withUnknownFields(
+                params.participation,
+                unknownFieldsOf(process.participation_v1) ?? {},
+            ),
+        }),
     });
 
     return {

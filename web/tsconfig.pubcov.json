@@ -8,6 +8,7 @@
     "app/api/admin/lifecycle-builder/process-work-views/route.ts",
     "app/api/admin/lifecycle-builder/process-participation/route.ts",
     "app/api/admin/lifecycle-catalog/delete/route.ts",
-    "lib/configRuntime/organizationRuntime.ts"
+    "lib/configRuntime/organizationRuntime.ts",
+    "components/adminV2/settings/businessProcess/WorkViewsConfigurationContext.tsx"
   ]
 }
