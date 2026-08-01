@@ -274,7 +274,7 @@ No implementation may violate those laws.
 | Capability | Status |
 |------------|--------|
 | Philosophy | Canonical (published) |
-| Manifesto | Planned |
+| Manifesto | Canonical (published) |
 | Runtime | Planned |
 | Knowledge Architecture | Planned |
 | Privacy Runtime | Planned |
