@@ -36,6 +36,10 @@ import {
     assessStageOperatingPlanEdit,
     type StageOperatingPlanDraftSave,
 } from "@/lib/lifecycle/stageOperatingPlanDraftDelta";
+import {
+    WorkItemAttentionSection,
+    WorkItemFollowUpSection,
+} from "@/components/adminV2/settings/lifecycle/WorkItemOperatingSections";
 
 
 export type LifecycleStageOperatingPlanEditorHandle = {
@@ -220,6 +224,9 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
+
+    /** Attention the STAGE owns. Work-scoped rules render on their work item instead. */
+    const stageOwnedAttentionRules = draft.attention_rules.filter((r) => !(r.template_key ?? "").trim());
 
     return (
         <div className="space-y-4" data-testid="lifecycle-stage-operating-plan-editor">
@@ -501,6 +508,24 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                         })
                                     }
                                 />
+
+                                {/* Follow-up and attention are persisted elsewhere — on outcome
+                                    rules and on the stage's flat attention array — but they answer
+                                    questions an operator asks while looking at THIS work item.
+                                    Composed here, never copied. See WorkItemOperatingSections. */}
+                                <div className="space-y-4 border-t border-alloy-forge/8 pt-3">
+                                    <WorkItemFollowUpSection plan={stageOperatingPlanForResolver} work={work} />
+                                    <WorkItemAttentionSection
+                                        templateKey={work.template_key}
+                                        workLabel={work.label?.trim() || work.template_key}
+                                        rules={draft.attention_rules}
+                                        workTemplates={draft.work_templates}
+                                        stageLabel={stageLabel?.trim() || stageKey}
+                                        onChange={(attention_rules) =>
+                                            setDraft((prev) => ({ ...prev, attention_rules }))
+                                        }
+                                    />
+                                </div>
                             </div>
                         );
                     })}
@@ -520,15 +545,29 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                 <details className="group" data-testid="stage-operating-plan-attention-collapsible">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
                         <span className="text-[11px] font-semibold text-alloy-midnight/75">
-                            {BUSINESS_PROCESS_SECTION_ATTENTION} ({draft.attention_rules.length})
+                            Stage-level attention ({stageOwnedAttentionRules.length})
                         </span>
                         <span className="text-[10px] text-alloy-midnight/40 group-open:rotate-90">›</span>
                     </summary>
                     <div className="border-t border-alloy-forge/8 px-3 pb-3 pt-2">
+                        <p className="mb-2 text-[11px] leading-relaxed text-alloy-midnight/45">
+                            Signals about the stage itself — ownership, age, missing information.
+                            Attention about a specific piece of work lives with that work item above.
+                        </p>
                         <LifecycleStageAttentionRulesEditor
-                            rules={draft.attention_rules}
+                            rules={stageOwnedAttentionRules}
                             workTemplates={draft.work_templates}
-                            onChange={(attention_rules) => setDraft((prev) => ({ ...prev, attention_rules }))}
+                            onChange={(next) =>
+                                setDraft((prev) => ({
+                                    ...prev,
+                                    // Same single array: keep every work-scoped rule untouched and
+                                    // replace only the stage-owned slice.
+                                    attention_rules: [
+                                        ...prev.attention_rules.filter((r) => (r.template_key ?? "").trim()),
+                                        ...next,
+                                    ],
+                                }))
+                            }
                             stageLabel={stageLabel?.trim() || stageKey}
                             layout="queue_workspace"
                         />

@@ -190,3 +190,57 @@ rather than written alongside it.
    Tour is referenced; not built in this slice.
 3. **Off-grid slot messaging** — "slot is not available" does not say the time was off-grid.
    Recorded as a scheduling-copy follow-up.
+
+---
+
+# G3 closed — the Work Item is now the unit of editing
+
+Certified **18/18** (`lead-operating-model.cert.spec.ts`, L14–L16). Schedule Tour still **8/8**;
+non-regression **35/35**.
+
+## What Contact Family now renders, verbatim
+
+```
+WHAT HAPPENS NEXT
+Set on each outcome above. Shown here so the chain is visible in one place.
+Left Message      → Follow up tomorrow
+Awaiting Response → Follow up in 3 days
+Unable to Reach   → Follow up in 2 days, retrying until 3 attempts — then escalate
+Tour Scheduled    → moves the family on, automatically when the booking is made.
+
+ATTENTION FOR THIS WORK
+Raised when Contact Family needs someone to look at it. Stage-wide signals stay with the stage.
+Contact Family overdue · No contact attempt recorded
+```
+
+And the stage section, collapsed, reads **"Stage-level attention (2)"** — the count alone carries
+the split before anything is expanded.
+
+## Presentation vs persistence — the decision, and the proof
+
+Nothing moved. **L16 asserts it against the database**: four attention rules, one flat array, two
+carrying `template_key: contact_family` and two carrying none.
+
+- **Attention** is persisted as one stage-level array where each row *names* a work item. That is
+  the correct normalization: a rule scoped to `contact_family` is a stage row referring to a work
+  item, not a child of one. The work item renders a **filtered lens** over that array and splices
+  edits back — rules it does not own are passed through untouched, and a rule created in the lens
+  is stamped with the work item's key so the operator never picks a scope from a dropdown.
+- **Follow-up** is persisted as `create_next_work` targets on outcome rules — outcome
+  configuration, correctly. It is rendered here **read-only and derived**, because duplicating the
+  control would create two places to change one thing. It states where it is configured.
+
+The rule applied throughout: *render together what is asked together; persist where the model
+says it belongs.*
+
+## Operator before / after
+
+| | Before | After |
+|---|---|---|
+| Configure Contact Family | purpose and timing in one panel; actions and outcomes in a second; follow-up buried inside individual outcome rules; attention in a fourth panel at the bottom of the page, listing all four rules with no indication which applied | one panel: purpose → completion → actions → outcomes → what happens next → attention for this work |
+| Understand follow-up | open each outcome and read its targets | "Left Message → Follow up tomorrow" |
+| Understand the attempt policy | read `when_attempt_count_lt` on a rule | "retrying until 3 attempts — then escalate" |
+| Stage attention | 4 rules, mixed scope | 2 rules, stage-owned, with a sentence saying where the others went |
+
+Still deferred, unchanged: **G6** (requirement timing) and **G9** (findings beside the object).
+Requirements were left alone deliberately — the brief scopes timing to a later slice.
