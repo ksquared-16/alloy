@@ -341,3 +341,70 @@ test("L10 draft, validation, publication and runtime remain separate and visible
     expect(body.configuration_state?.draft_revision).toBeGreaterThanOrEqual(0);
     expect(revisionCount()).toBeGreaterThan(0);
 });
+
+/* ── Premium configuration UX ─────────────────────────────────────────────────────────────── */
+
+test("L11 the Lead stage is understandable WITHOUT expanding any section", async () => {
+    await page.goto("/adminV2/settings/organization/processes");
+    await page.waitForLoadState("domcontentloaded");
+    const close = page.getByRole("button", { name: "Close", exact: true });
+    if (await close.count()) await close.first().click().catch(() => {});
+    await page.getByTestId("business-process-tab-stages").click();
+    await page.getByTestId("lifecycle-stage-tab-lead").click();
+
+    const overview = page.getByTestId("stage-editor-v2-overview");
+    await expect(overview).toBeVisible({ timeout: 60_000 });
+    // Section labels render uppercase via CSS, so `innerText` returns them uppercased. Compare
+    // case-insensitively — asserting on letter case would be testing the stylesheet.
+    const raw = (await overview.innerText()).replace(/\s+/g, " ");
+    const text = raw;
+    const has = (needle: string) => raw.toLowerCase().includes(needle.toLowerCase());
+    record(`L11 overview: ${text.slice(0, 320)}`);
+
+    // What staff do here, and what it costs them.
+    expect(has("Contact Family")).toBe(true);
+    expect(has("Primary")).toBe(true);
+    expect(has("Due in 1 day")).toBe(true);
+
+    // The ways out, in product language — not transition identities.
+    expect(has("Continue to Tour")).toBe(true);
+    expect(has("Close as Lost")).toBe(true);
+    expect(text).not.toContain("lead_to_tour");
+
+    // The automatic path is stated, so nobody concludes an operator must record it by hand.
+    expect(has("moves the family on — automatically")).toBe(true);
+
+    // Stage-level attention is separated from work-level.
+    expect(has("Stage-level attention")).toBe(true);
+    // …and work-scoped attention is NOT in the stage list.
+    expect(has("Contact Family overdue")).toBe(false);
+    await shot(page, "L11-stage-overview");
+});
+
+test("L12 outcomes are described by effect, and the duplicate section is gone", async () => {
+    const body = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+    // G1: outcomes were rendered twice — editable in one section, read-only in another.
+    expect(body).not.toContain("Possible Outcomes");
+    // G2: the dead panel that only pointed elsewhere.
+    expect(body).not.toContain("Process Actions supply the action catalog");
+    record(`L12 duplicate outcome section removed: true; dead action panel removed: true`);
+});
+
+test("L13 the attempt policy gate is authored where the runtime reads it", async () => {
+    // `when_attempt_count_lt` is a RULE-level gate. Written onto a target it is silently never
+    // read, so the policy would do nothing while appearing configured.
+    const ruleLevel = sql(`select count(*) from departments d,
+        jsonb_array_elements(d.metadata->'lifecycle_builder_v1'->'processes') p,
+        jsonb_array_elements(p->'stages') s,
+        jsonb_array_elements(coalesce(s->'stage_operating_plan_v1'->'outcome_rules','[]'::jsonb)) r
+        where d.id='${DEPT}' and s->>'key'='lead' and r ? 'when_attempt_count_lt'`);
+    const targetLevel = sql(`select count(*) from departments d,
+        jsonb_array_elements(d.metadata->'lifecycle_builder_v1'->'processes') p,
+        jsonb_array_elements(p->'stages') s,
+        jsonb_array_elements(coalesce(s->'stage_operating_plan_v1'->'outcome_rules','[]'::jsonb)) r,
+        jsonb_array_elements(coalesce(r->'targets','[]'::jsonb)) t
+        where d.id='${DEPT}' and s->>'key'='lead' and t ? 'when_attempt_count_lt'`);
+    record(`L13 attempt gates — rule-level: ${ruleLevel}, target-level (dead): ${targetLevel}`);
+    expect(Number(ruleLevel)).toBeGreaterThan(0);
+    expect(Number(targetLevel)).toBe(0);
+});

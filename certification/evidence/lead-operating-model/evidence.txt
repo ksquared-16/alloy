@@ -20,3 +20,6 @@ L8 execute http=200 ok=true | family lead/open/- -> tour/open/- | work=completed
 L8 durable opportunity status after the move: open
 L9 opportunities with durable status 'tour_scheduled': 0
 L10 editor state: status=published draft_revision=3 base_revision=present | revisions=1
+L11 overview: Reach the family, understand their needs, determine fit, and establish the next operational step. 1 WORK ITEM · 6 OUTCOMES · 2 WAYS OUT Contact Family Primary Required Due in 1 day Reach the family, understand their needs, determine fit, and establish the next operational step. 4 actions · 6 outcomes · 2 attention rule
+L12 duplicate outcome section removed: true; dead action panel removed: true
+L13 attempt gates — rule-level: 1, target-level (dead): 0

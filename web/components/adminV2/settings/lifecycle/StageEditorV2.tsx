@@ -50,6 +50,7 @@ import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { enrollmentStageMembership } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
+import StageOperatingPlanOverview from "@/components/adminV2/settings/lifecycle/StageOperatingPlanOverview";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -775,6 +776,20 @@ export default function StageEditorV2({
 
             <div className="flex flex-col pb-16">
 
+                {/* ── Stage Overview ──
+                    The operating plan in operator language, above the editors and readable
+                    without expanding anything. Everything here is derived from the same draft the
+                    editors write, so the page cannot describe configuration it does not have. */}
+                <div
+                    className="border-b border-alloy-forge/10 px-5 py-4"
+                    data-testid="stage-editor-v2-overview"
+                >
+                    <StageOperatingPlanOverview
+                        plan={bootstrap?.stage_operating_plan ?? null}
+                        stageLabel={stageLabel || stageKey}
+                    />
+                </div>
+
                 {/* ── Section 1: Stage Identity ── */}
                 <Section
                     id="identity"
@@ -941,15 +956,6 @@ export default function StageEditorV2({
                             }
                             />
 
-                            <Subsection label="Recommended actions">
-                                <div className="rounded-lg border border-dashed border-alloy-forge/15 px-4 py-4">
-                                    <p className="text-[12px] font-medium text-alloy-midnight/55">Process Actions supply the action catalog.</p>
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/35">
-                                        Configure primary, helpful, and alternate-path actions per work template in the Operating Plan editor above.
-                                    </p>
-                                </div>
-                            </Subsection>
-
                             <Subsection label="Operator guidance">
                                 <p className="mb-2 text-[11px] text-alloy-midnight/45">
                                     Shown to operators when they open a record in this stage. Use this to communicate context, priorities, or reminders.
@@ -1000,19 +1006,7 @@ export default function StageEditorV2({
                 </Section>
 
                 {/* ── Section 5: Possible Outcomes ── */}
-                <Section
-                    id="outcomes"
-                    icon={<GitBranch size={13} />}
-                    title={outcomeCount > 0 ? `Possible Outcomes (${outcomeCount})` : "Possible Outcomes"}
-                    status={sectionStatus.outcomes}
-                    collapsed={!!collapsed.outcomes}
-                    onToggle={() => toggleSection("outcomes")}
-                >
-                    <p className="mb-3 text-[11px] text-alloy-midnight/50">
-                        What can happen when operators act from this stage. Each outcome produces a durable state change — a status transition, a stage movement, or follow-up work.
-                    </p>
-                    <PossibleOutcomesSection operatingPlan={bootstrap?.stage_operating_plan} />
-                </Section>
+
 
             </div>
         </div>
