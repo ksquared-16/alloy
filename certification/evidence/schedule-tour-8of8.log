@@ -1,0 +1,35 @@
+[32m✓[0m App already serving at http://localhost:3011
+[32m✓[0m Communications mocked (no real email/SMS; local-delivery only)
+  Authenticating operator + running certification specs…
+
+Running 8 tests using 1 worker
+
+[certify] captured session server-valid on cold load: true (url=http://localhost:3011/workspace)
+  ✓  1 [setup] › playwright/auth.setup.ts:18:6 › authenticate seeded operator (3.1s)
+[tour] T0 published Lead rules: reached_qualified_complete,tour_scheduled_to_tour,tour_booking_scheduled_to_tour,left_message_follow_up,awaiting_response_follow_up,unable_to_reach_retry,closed_lost_close,interested_retired_no_movement
+[tour] T0 trigger: {"domain": "tour_booking", "signal": "scheduled"}
+  ✓  2 [certify] › playwright/schedule-tour.cert.spec.ts:174:5 › T0 the published configuration carries a domain-signal rule for tour booking (249ms)
+[tour] T1 subject=00000000-0000-4000-8000-400000000001
+[tour] T1 BEFORE stage=lead status=open bookings=0 open_work=0 activity=0
+  ✓  3 [certify] › playwright/schedule-tour.cert.spec.ts:194:5 › T1 before: the family is in Lead with no booking (1.4s)
+[tour] T2 command http=201 error=-
+[tour] T2 bookings=1 state=confirmed
+[tour] T2 stage lead -> tour | status=open | open_work=1
+[tour] T2 booking events: tour_confirmed | opportunity activity_log 0 -> 0
+  ✓  4 [certify] › playwright/schedule-tour.cert.spec.ts:207:5 › T2 the real Schedule Tour command creates ONE booking and moves the family to Tour (1.4s)
+[tour] T3 opportunities with durable status 'tour_scheduled': 0
+  ✓  5 [certify] › playwright/schedule-tour.cert.spec.ts:238:5 › T3 no family anywhere carries a legacy tour_scheduled durable status (99ms)
+[tour] T4 duplicate http=400 error="tour_bookings: an active non-terminal booking already exists for this opportunity"
+[tour] T4 bookings 1 -> 1 | stage tour -> tour
+  ✓  6 [certify] › playwright/schedule-tour.cert.spec.ts:244:5 › T4 a duplicate submission creates no second booking and no second transition (736ms)
+[tour] T5 missing inputs http=400 error="opportunity_id and location_id required"
+[tour] T5 no booking, stage unchanged (lead)
+  ✓  7 [certify] › playwright/schedule-tour.cert.spec.ts:264:5 › T5 missing required inputs: no booking, no movement (497ms)
+[tour] T6 command http=400 error="tour_booking: scheduled signal failed — lead/tour_booking_scheduled_to_tour: Transition "lead_to_tour" is not configured on this stage." | bookings=0 state=(none) | stage lead -> lead
+[tour] T6 CONTRACT: booking COMPENSATED — no orphan booking, no movement, operator informed
+  ✓  8 [certify] › playwright/schedule-tour.cert.spec.ts:284:5 › T6 with the published transition removed, the booking is truthful but the stage does NOT move (914ms)
+
+  8 passed (11.2s)
+[32m✓[0m Authentication established (reusable session captured)
+[32m✓[0m Runtime verification ready — evidence in certification/evidence/
+rc=0

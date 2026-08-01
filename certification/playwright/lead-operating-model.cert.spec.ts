@@ -186,10 +186,18 @@ test("L2 the retired behaviour is GONE from the published model", async () => {
 
     // Reached now completes the work and stays put.
     expect(rules).toContain("reached_qualified_complete");
-    // Exactly one rule moves through lead_to_tour, and it is the tour-scheduled one.
-    const moves = (rules.match(/lead_to_tour/g) ?? []).length;
-    record(`L2 rules referencing lead_to_tour: ${moves} (expected 1 — tour_scheduled only)`);
-    expect(moves).toBe(1);
+    // Every rule that moves through lead_to_tour must be a tour-scheduled path. Asserting the
+    // INVARIANT rather than a count: a legitimate second path exists (the booking domain signal),
+    // and a bare number would have to be edited every time the model gains one — which is exactly
+    // how an assertion stops protecting anything.
+    const movingRuleKeys = (JSON.parse(rules) as { rule_key: string; targets?: { transition_ref?: string }[] }[])
+        .filter((r) => (r.targets ?? []).some((t) => t.transition_ref === "lead_to_tour"))
+        .map((r) => r.rule_key);
+    record(`L2 rules moving through lead_to_tour: ${movingRuleKeys.join(", ")}`);
+    expect(movingRuleKeys.length).toBeGreaterThan(0);
+    for (const key of movingRuleKeys) {
+        expect(key, `${key} moves to Tour but is not a tour-scheduled path`).toMatch(/tour_scheduled|tour_booking_scheduled/);
+    }
 
     // `interested` survives as a non-moving outcome so historical records still resolve.
     const outcomes = publishedPlan("->'outcomes'");

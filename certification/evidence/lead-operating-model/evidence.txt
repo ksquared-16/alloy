@@ -4,7 +4,7 @@ L0 published rules unchanged by authoring: true
 L1 validate can_publish=true errors=0
 L1 publish http=200 revisions 0 -> 1
 L1 runtime now carries the corrected rules
-L2 rules referencing lead_to_tour: 1 (expected 1 — tour_scheduled only)
+L2 rules moving through lead_to_tour: tour_scheduled_to_tour, tour_booking_scheduled_to_tour
 L2 interested retained as non-moving — historical evidence preserved
 L3 published Work View predicates: new_leads=[{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}] | tours=[{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}] | follow_up=(absent) | all_work=[]
 L3 new_leads predicate: [{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}]

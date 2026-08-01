@@ -138,6 +138,22 @@
       ]
     },
     {
+      "rule_key": "tour_booking_scheduled_to_tour",
+      "when_domain_signal": {
+        "domain": "tour_booking",
+        "signal": "scheduled"
+      },
+      "targets": [
+        {
+          "kind": "mark_stage_work_complete"
+        },
+        {
+          "kind": "move_to_stage",
+          "transition_ref": "lead_to_tour"
+        }
+      ]
+    },
+    {
       "rule_key": "left_message_follow_up",
       "when_outcome_key": "left_message",
       "targets": [

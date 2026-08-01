@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/tours/**/*.ts",
+    "lib/lifecycle/applyConfiguredStageAutomationRules.ts",
+    "lib/lifecycle/emitDomainLifecycleSignalEvent.ts",
+    "lib/lifecycle/stageOperatingPlanV1.ts",
+    "lib/lifecycle/stageOutcomeRuleTargetExecutor.ts",
+    "lib/platform/transaction/platformTransaction.ts",
+    "app/api/admin/tours/bookings/route.ts"
+  ]
+}
