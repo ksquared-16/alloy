@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-01
+supersedes: []
+---
+
 # Conversation Code Retirement Ledger
 
 **Permanent document.** Supersedes the interim ledger written during Phase 0.
