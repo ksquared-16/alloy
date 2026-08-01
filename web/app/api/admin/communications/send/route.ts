@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE } from "@/lib/communications/recipients/typedRecipient";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -66,8 +67,25 @@ export async function POST(request: NextRequest) {
     let entityType = normalizeEntityTypeParam(String(body.entity_type ?? ""));
     let entityId = String(body.entity_id ?? "").trim();
     const channel = normalizeChannel(String(body.channel ?? ""));
-    const toRawInput = String(body.to ?? body.to_address ?? "").trim();
     const textRaw = String(body.body ?? "").trim();
+
+    // ---- Phase 1 Slice 1: typed recipient is the only recipient authority ----
+    //
+    // This route previously accepted a free-text `to` / `to_address` with no
+    // person reference. That is precisely why the Phase 0 eligibility gate was
+    // inert here: with no resolvable person there is no consent to evaluate.
+    //
+    // Free-text is now refused outright. There is deliberately NO fallback —
+    // a downgrade path would recreate the defect Phase 0 closed. Both existing
+    // UI callers (QuickMessageModal, ComposerV2) already send
+    // recipient_person_id, so nothing legitimate is broken by this.
+    const freeTextTo = String(body.to ?? body.to_address ?? "").trim();
+    if (freeTextTo) {
+        return NextResponse.json(
+            { error: FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE, code: "free_text_recipient_unsupported" },
+            { status: 400 }
+        );
+    }
     const subjectRawEmail =
         channel === "email" && typeof body.subject === "string" ? body.subject : undefined;
     const bindingIdOpt = typeof body.binding_id === "string" ? body.binding_id.trim() : "";
@@ -130,7 +148,7 @@ export async function POST(request: NextRequest) {
         subjectRawEmail,
         bindingIdOpt,
         recipientPersonIdRaw,
-        toRawInput,
+        toRawInput: "",
         sendMetadataAugment: null,
     });
 
