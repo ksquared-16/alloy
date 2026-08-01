@@ -196,6 +196,7 @@
     {
       "rule_key": "unable_to_reach_retry",
       "when_outcome_key": "unable_to_reach",
+      "when_attempt_count_lt": 3,
       "targets": [
         {
           "kind": "no_movement"
@@ -203,7 +204,6 @@
         {
           "kind": "create_next_work",
           "template_key": "contact_family",
-          "when_attempt_count_lt": 3,
           "follow_up_due_policy": {
             "anchor": "outcome_recorded_at",
             "offset_value": 2,
@@ -211,10 +211,19 @@
             "direction": "after",
             "missing_anchor_behavior": "use_outcome_recorded_at"
           }
+        }
+      ]
+    },
+    {
+      "rule_key": "unable_to_reach_escalate",
+      "when_outcome_key": "unable_to_reach",
+      "when_attempt_count_gte": 3,
+      "targets": [
+        {
+          "kind": "no_movement"
         },
         {
           "kind": "create_needs_attention",
-          "when_attempt_count_gte": 3,
           "attention_reason": "Unable to reach after 3 attempts \u2014 decide whether to keep trying or close",
           "wait_bucket": "waiting_on_staff"
         }

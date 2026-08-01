@@ -1,4 +1,4 @@
-T0 published Lead rules: reached_qualified_complete,tour_scheduled_to_tour,tour_booking_scheduled_to_tour,left_message_follow_up,awaiting_response_follow_up,unable_to_reach_retry,closed_lost_close,interested_retired_no_movement
+T0 published Lead rules: reached_qualified_complete,tour_scheduled_to_tour,tour_booking_scheduled_to_tour,left_message_follow_up,awaiting_response_follow_up,unable_to_reach_retry,unable_to_reach_escalate,closed_lost_close,interested_retired_no_movement
 T0 trigger: {"domain": "tour_booking", "signal": "scheduled"}
 T1 subject=00000000-0000-4000-8000-400000000001
 T1 BEFORE stage=lead status=open bookings=0 open_work=0 activity=0
