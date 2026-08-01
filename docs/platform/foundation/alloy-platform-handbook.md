@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-14
+last_reviewed: 2026-08-01
 supersedes: []
 ---
 
@@ -226,9 +226,27 @@ Childcare tuition and enrollment commercial patterns are vertical applications o
 
 ---
 
-## Chapter 9 — AI Platform
+## Chapter 9 — Trust Platform
 
-Alloy’s AI is assistive and **platform-grounded**.
+The Trust Platform is Alloy’s **cognitive platform**: trusted operational reasoning — not an AI feature layer, prompt library, or model abstraction.
+
+- Mission: **reduce uncertainty without modifying operational truth.**
+- Reasoning produces recommendations; execution and truth remain owned elsewhere.
+- Entry point and reading order: [`../trust/trust-platform.md`](../trust/trust-platform.md).
+- Corpus index: [`../trust/README.md`](../trust/README.md).
+
+**Read next**
+
+- [`../trust/trust-platform.md`](../trust/trust-platform.md)
+- [`../trust/trust-philosophy.md`](../trust/trust-philosophy.md)
+- [`../trust/trust-platform-manifesto.md`](../trust/trust-platform-manifesto.md)
+- [`../trust/trust-runtime.md`](../trust/trust-runtime.md)
+
+---
+
+## Chapter 10 — AI Platform
+
+Alloy’s AI is assistive and **platform-grounded**. Artificial intelligence is one possible implementation of reasoning; the Trust Platform owns trusted operational reasoning as infrastructure (Chapter 9).
 
 - **BOS** (Business Operating System assist) recommends and drafts inside operator context.
 - Recommendations must use the same records, permissions, workflows, and audit paths as humans.
@@ -239,13 +257,14 @@ Do not invent parallel data planes or privileged client-side service-role shortc
 **Read next**
 
 - [`../modules/ai-platform.md`](../modules/ai-platform.md)
+- [`../trust/trust-platform.md`](../trust/trust-platform.md)
 - [`../../system/bos-identity-doctrine.md`](../../system/bos-identity-doctrine.md)
 - [`../../product/bos-foundation.md`](../../product/bos-foundation.md)
 - [`../../product/ai-system.md`](../../product/ai-system.md)
 
 ---
 
-## Chapter 10 — Platform Principles
+## Chapter 11 — Platform Principles
 
 Hold these as operating rules:
 

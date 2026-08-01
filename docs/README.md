@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-01
 supersedes: []
 ---
 
@@ -46,6 +46,8 @@ For behavior-changing work, include **`docs/platform/governance/design-and-opera
 **BOS Command Runtime Convergence (Mission 1 — frozen, July 2026):** Business Process selects effective Commands; BOS prepares and confirms; shared bridge invokes Command Runtime once; domain executors own writes. Standalone Organization Commands product rejected; Surfaces do not configure Commands. Closeout: **`platform/milestones/bos-command-runtime-convergence-closeout.md`**.
 
 **Operational Intelligence Platform V1 (frozen, July 2026):** Questions → Measurements → Definitions → Answers. Consumers present **Answers** (not Measurements). Freeze: **`platform/milestones/Operational-Intelligence-Platform-V1-Certified.md`**. Product closeout: **`sprints/07_2026/operational-intelligence-expansion/OPERATIONAL-INTELLIGENCE-PLATFORM-V1-COMPLETE.md`**. Phase 2 consumption: **`sprints/07_2026/operational-intelligence-expansion/PHASE-2-CONSUMPTION-MODEL.md`**. Module: **`platform/modules/operational-intelligence-platform.md`**.
+
+**Trust Platform (publication in progress, August 2026):** Alloy’s cognitive platform for **trusted operational reasoning** — not an AI/prompt/model layer. Entry: **`platform/trust/trust-platform.md`**. Corpus index: **`platform/trust/README.md`**.
 
 ---
 
@@ -140,6 +142,7 @@ Then: **`platform/foundation/system-overview.md`**
 | Attendance (L4 facts — doctrine) | `platform/modules/attendance-system.md` |
 | Financial platform domain (canonical entities — frozen) | `platform/modules/financial-platform-domain.md` |
 | Billing & financials platform (L5 — doctrine) | `platform/modules/billing-financials-platform.md` |
+| Trust Platform (cognitive / reasoning) | `platform/trust/trust-platform.md` — corpus index `platform/trust/README.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
 | Operational intelligence | `platform/modules/operational-intelligence-platform.md` |
 

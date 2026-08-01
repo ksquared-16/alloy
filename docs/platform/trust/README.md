@@ -9,6 +9,8 @@ supersedes: []
 
 **Status:** Publication in progress. GPT is the platform architect; this tree is the canonical home for Trust Platform doctrine as each document is published.
 
+**Front door (published):** [`trust-platform.md`](./trust-platform.md).
+
 **Role of this folder:** Repository placement, frontmatter, cross-references, formatting, and publication index — **not** architectural design. Published bodies are assumed canonical as received from GPT.
 
 **Related (existing platform doctrine):**
@@ -28,7 +30,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 |----------|------|--------|-----------|
 | Trust Philosophy | [`trust-philosophy.md`](./trust-philosophy.md) | stub — awaiting GPT | — |
 | Trust Platform Manifesto | [`trust-platform-manifesto.md`](./trust-platform-manifesto.md) | stub — awaiting GPT | — |
-| Trust Platform | [`trust-platform.md`](./trust-platform.md) | stub — awaiting GPT | — |
+| Trust Platform | [`trust-platform.md`](./trust-platform.md) | published (canonical) | 2026-08-01 |
 | Trust Runtime | [`trust-runtime.md`](./trust-runtime.md) | stub — awaiting GPT | — |
 | Decision Contract | [`decision-contract.md`](./decision-contract.md) | stub — awaiting GPT | — |
 | Decision Package | [`decision-package.md`](./decision-package.md) | stub — awaiting GPT | — |
