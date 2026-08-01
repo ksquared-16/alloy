@@ -277,7 +277,7 @@ No implementation may violate those laws.
 | Manifesto | Canonical (published) |
 | Runtime | Canonical (published) |
 | Knowledge Architecture | Canonical (published) |
-| Privacy Runtime | Planned |
+| Privacy Runtime | Canonical (published) |
 | Reasoning Runtime | Planned |
 | Operational Learning | Planned |
 | Trust Governance | Planned |
