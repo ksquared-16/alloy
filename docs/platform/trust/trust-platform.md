@@ -278,7 +278,7 @@ No implementation may violate those laws.
 | Runtime | Canonical (published) |
 | Knowledge Architecture | Canonical (published) |
 | Privacy Runtime | Canonical (published) |
-| Reasoning Runtime | Planned |
+| Reasoning Runtime | Canonical (published) |
 | Operational Learning | Planned |
 | Trust Governance | Planned |
 | Platform Integration | Planned |

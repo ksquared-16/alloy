@@ -37,7 +37,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 | Knowledge Platform | [`knowledge-platform.md`](./knowledge-platform.md) | published (canonical) | 2026-08-01 |
 | Information Classification | [`information-classification.md`](./information-classification.md) | published (canonical) | 2026-08-01 |
 | Privacy Runtime | [`privacy-runtime.md`](./privacy-runtime.md) | published (canonical) | 2026-08-01 |
-| Reasoning Runtime | [`reasoning-runtime.md`](./reasoning-runtime.md) | stub — awaiting GPT | — |
+| Reasoning Runtime | [`reasoning-runtime.md`](./reasoning-runtime.md) | published (canonical) | 2026-08-01 |
 | Operational Learning | [`operational-learning.md`](./operational-learning.md) | stub — awaiting GPT | — |
 | Trust Governance | [`trust-governance.md`](./trust-governance.md) | stub — awaiting GPT | — |
 | Trust Economics | [`trust-economics.md`](./trust-economics.md) | stub — awaiting GPT | — |
