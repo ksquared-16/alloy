@@ -5,7 +5,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 
 /**
  * Generic form DELIVERY execution (v1, on existing comms + form-link infra).
@@ -110,26 +110,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const delivered: Array<{ person_id: string; ok: boolean; message_id?: string; error?: string }> = [];
     for (const personId of recipientPersonIds) {
-        const exec = await executeCommunicationsSend({
+        // Each recipient is resolved, classified, rendered, evaluated and
+        // enqueued INDEPENDENTLY through the canonical send command.
+        const send = await canonicalSend({
             supabase,
             orgId: ctx.orgId,
-            quickMessage: false,
+            authorizingUserId: ctx.userId ?? null,
+            sourceCapability: "opportunities.form_deliver",
+            recipient: { kind: "person", personId },
+            audience: "external",
+            category: "transactional",
+            purpose: "form_delivery",
+            channel,
             primaryEntityType: "opportunities",
             primaryEntityId: opportunityId,
-            channel,
-            textRaw,
-            subjectRawEmail,
-            bindingIdOpt: "",
-            recipientPersonIdRaw: personId,
-            toRawInput: "",
-            sendMetadataAugment: {
-                form_delivery: { public_link_id: mint.data.public_link_id, form_definition_id: formDefinitionId, subject_ids: subjectIds },
+            bodyRaw: textRaw,
+            subjectRaw: subjectRawEmail ?? null,
+            userAuthored: true,
+            // One delivery per (public link, person). A retry of the same
+            // delivery returns the existing message instead of sending twice.
+            idempotencyKey: `form_deliver:${mint.data.public_link_id}:${personId}`,
+            metadata: {
+                source: "form_delivery",
+                form_id: formDefinitionId,
+                form_name: formName,
+                opportunity_id: opportunityId,
+                author_user_id: ctx.userId ?? null,
             },
         });
+        const ok = send.outcome === "sent_to_queue" || send.outcome === "duplicate";
         delivered.push(
-            exec.ok
-                ? { person_id: personId, ok: true, message_id: exec.communication_message_id }
-                : { person_id: personId, ok: false, error: exec.error },
+            ok
+                ? { person_id: personId, ok: true, message_id: send.messageId ?? undefined }
+                : { person_id: personId, ok: false, error: send.message },
         );
     }
 

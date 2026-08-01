@@ -137,9 +137,11 @@ describe("purpose bounds classification", () => {
     });
 
     it("rejects operator-authored content under a platform-composed purpose", () => {
+        // enrollment_packet is fully platform-composed. (form_delivery is NOT a
+        // valid example: that route genuinely lets an operator prepend text.)
         expect(
             validatePurpose({
-                purpose: "form_delivery",
+                purpose: "enrollment_packet",
                 audience: "external",
                 category: "transactional",
                 channel: "email",

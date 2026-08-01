@@ -6,7 +6,7 @@ import {
     isTaskAssistV1Uuid,
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
 import { buildCommunicationScheduledSendProcessMetadataAugment } from "@/lib/communications/communicationScheduledSendProcessMetadata";
 
 export type CommunicationScheduledSendRow = {
@@ -571,7 +571,7 @@ type RpcClaimRow = Record<string, unknown>;
 
 /**
  * Claims due rows via `claim_due_communication_scheduled_sends` (SKIP LOCKED), then enqueues each once through
- * {@link executeCommunicationsSend}. Rows move **pending → claimed → queued** (or **failed**).
+ * {@link executeLegacyCommunicationsSendAdapter}. Rows move **pending → claimed → queued** (or **failed**).
  *
  * Idempotency: skips enqueue when `communication_message_id` is already set on the row; success updates require
  * `communication_message_id IS NULL` to avoid double-attaching the same send result.
@@ -645,7 +645,7 @@ export async function processDueCommunicationScheduledSends(params: {
             continue;
         }
 
-        const exec = await executeCommunicationsSend({
+        const exec = await executeLegacyCommunicationsSendAdapter({
             supabase: params.supabase,
             orgId: fresh.org_id,
             quickMessage: false,

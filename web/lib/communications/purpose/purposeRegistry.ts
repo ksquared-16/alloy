@@ -165,7 +165,11 @@ export const PURPOSE_REGISTRY: readonly PurposeDefinition[] = [
         categories: ["transactional"],
         channels: EXTERNAL_CHANNELS,
         recipientKinds: ["person"],
-        allowsUserAuthored: false,
+        // The platform composes the envelope and owns the link, but the route
+        // genuinely lets an operator prepend a custom message — so this is
+        // user-authored in part. Marked true to match the behaviour rather than
+        // the aspiration.
+        allowsUserAuthored: true,
         allowsExternalOperational: false,
     },
 

@@ -1,8 +1,31 @@
 /**
- * Shared implementation for guarded outbound composer enqueue (canonical `communication_*` path).
- * Used by `POST /api/admin/communications/send` and Task Assist apply — keep behavior aligned.
+ * LEGACY COMPATIBILITY ADAPTER — not canonical. Do not add callers.
+ *
+ * Renamed from `executeCommunicationsSend` in Phase 1 Slice 1 because the name
+ * made it look canonical while `canonicalSend` (lib/communications/send/
+ * canonicalSend.ts) is the real authority. Two equally canonical-looking send
+ * functions is the condition that let this one quietly own policy for months.
+ *
+ * REMAINING CALLERS (3), and why each is still here:
+ *
+ *   app/api/admin/communications/send/route.ts
+ *       Typed-recipient enforcement has landed (free-text is refused), but the
+ *       send body still flows through this adapter. Removal condition: port the
+ *       route body to canonicalSend, including quick-message entity rewriting.
+ *       Target: Slice 1 follow-up.
+ *
+ *   app/api/admin/communications/family-note/route.ts
+ *       Internal activity note (channel in_app), NOT a provider-bound send, so
+ *       it is outside the convergence denominator. Removal condition: a
+ *       canonical internal/activity fact path. Target: a later Phase 1 slice.
+ *
+ *   lib/communications/communicationScheduledSendsService.ts
+ *       The scheduled-send queue, which has its own lease and timing concerns.
+ *       Removal condition: scheduler convergence. Target: Phase 2.
+ *
+ * `tests/communications/legacyAdapterBoundary.test.ts` fails if a fourth caller
+ * appears.
  */
-
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
@@ -90,7 +113,7 @@ export type ExecuteCommunicationsSendFailure = {
  * Caller must have already validated auth, permissions, entity existence, and parsed/normalized inputs
  * the same way as `communications/send` (including `quick_message` entity rewrite when applicable).
  */
-export async function executeCommunicationsSend(
+export async function executeLegacyCommunicationsSendAdapter(
     params: ExecuteCommunicationsSendParams
 ): Promise<ExecuteCommunicationsSendSuccess | ExecuteCommunicationsSendFailure> {
     const {

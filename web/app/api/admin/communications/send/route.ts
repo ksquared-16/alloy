@@ -8,7 +8,7 @@ import {
     COMMUNICATIONS_SEND_PERMISSION_KEY,
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
 import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     const primaryEntityType = entityType;
 
-    const exec = await executeCommunicationsSend({
+    const exec = await executeLegacyCommunicationsSendAdapter({
         supabase,
         orgId: ctx.orgId,
         quickMessage,
