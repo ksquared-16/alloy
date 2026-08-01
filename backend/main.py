@@ -1,37 +1,31 @@
 """
-Alloy Dispatcher API
+Alloy backend API. Entry point for uvicorn; the application is defined in
+app/server.py.
 
-This is the core dispatcher/API for Alloy, a marketplace connecting homeowners
-with trusted local service professionals (starting with home cleaning in Bend, Oregon).
+GoHighLevel is NOT a supported Alloy integration. It was fully retired on
+2026-08-01 along with the legacy cleaning product it served — no dormant path,
+feature flag, environment variable, or reactivation route. This docstring
+previously described GHL job dispatch, contractor-reply and cleaning lead
+submission as the primary workflows; every one of those endpoints is deleted.
 
-The dispatcher integrates with:
-- GoHighLevel (GHL): For contact management, custom objects (Jobs), and SMS conversations
-- Twilio: For SMS flows (via GHL's Conversations API)
+The backend now serves three things:
 
-Main workflows:
-1. Job Dispatch: When a customer books a cleaning appointment via GHL, the /dispatch
-   webhook is triggered. The dispatcher:
-   - Builds a job summary from the appointment data
-   - Fetches eligible contractors (tagged with contractor_cleaning + job-pending-assignment)
-   - Sends SMS notifications to all eligible contractors
+1. Payment execution — POST /admin/payments/run, called only by the
+   authenticated Next.js proxy.
 
-2. Contractor Reply: When a contractor replies "YES <job_id>" (or just "YES" for the latest job),
-   the /contractor-reply webhook processes the acceptance:
-   - Assigns the job to that contractor
-   - Sends confirmation SMS to the contractor (with access details)
-   - Notifies other contractors the job is claimed
-   - Notifies the customer their job is assigned
-   - Updates the GHL Jobs custom object with assignment details
+2. Conversation Platform dispatch — POST /internal/messages/process claims
+   queued `communication_messages` rows, revalidates eligibility at the provider
+   boundary, and sends via the configured provider.
 
-3. Lead Submission: The /leads/cleaning endpoint accepts cleaning lead submissions
-   from the frontend website and creates/updates contacts in GHL.
+3. Inbound SMS — /sms/*, Twilio signature-verified, including the
+   STOP / START / HELP keyword vocabulary.
 
-Environment Variables Required:
-- GHL_API_KEY: GoHighLevel API key (Bearer token)
-- GHL_LOCATION_ID: GoHighLevel location ID for this Alloy instance
-
-This file now serves as the entry point for uvicorn. The actual application
-is defined in app/server.py.
+Environment variables:
+- STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET  required; the app refuses to boot without them
+- PAYMENT_EXECUTOR_SECRET                   payment executor fails closed (503) when unset
+- SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   optional; writes are skipped when unset
+- TWILIO_*                                  optional; the app still boots without them
+- INTERNAL_CRON_TOKEN                       guards POST /internal/messages/process
 """
 
 # Import the FastAPI app from the app module

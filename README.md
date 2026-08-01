@@ -19,15 +19,15 @@ Alloy is a **configurable business operations platform** for service businesses.
 │   └── ...
 ├── supabase/
 │   └── migrations/         # SQL migrations (apply via Supabase CLI or dashboard)
-├── sync/                   # Python: GHL → Supabase sync (contacts, opportunities, jobs)
-├── backend/                # Python: GHL/Twilio dispatcher (optional; see below)
+├── backend/                # Python: payment executor, comms dispatch, inbound SMS
 └── docs/                   # Active source pack + audits (see docs/README.md)
 ```
 
 - **web**: Primary app. Next.js runs both the public/marketing/booking frontend and the admin; API routes live under `web/app/api/`.
 - **supabase/migrations**: Source of truth for schema. Apply in order by timestamp prefix.
-- **sync**: Idempotent workers that pull from GoHighLevel and upsert into Supabase (see **`sync/README.md`**).
-- **backend**: Optional Python service for GHL webhooks, Twilio, and message dispatch; not required for the core booking → job → schedule → assignment flow handled in the web app.
+- **backend**: Python service for the payment executor (`POST /admin/payments/run`), Conversation Platform dispatch (`POST /internal/messages/process`) and Twilio inbound SMS.
+
+> **GoHighLevel is not a supported Alloy integration.** It was fully retired on 2026-08-01 together with the legacy cleaning product. There is no dormant path, feature flag, environment variable, or reactivation route.
 
 ---
 
@@ -69,25 +69,10 @@ supabase db push
 
 Or run the SQL files in order (by filename timestamp) in the Supabase SQL editor or your migration runner. **Do not change migration order**; they depend on each other.
 
-### 3. Sync (optional)
-
-For GHL → Supabase sync:
-
-```bash
-cd sync
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env: GHL_*, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-# Run e.g. sync_contacts.py, sync_opportunities.py, sync_jobs.py
-```
-
-See **`sync/README.md`** for details.
 
 ### 4. Backend (optional)
 
-Python dispatcher for GHL/Twilio; not required for booking/admin core paths:
+Python service for the payment executor, Conversation Platform dispatch and Twilio inbound SMS:
 
 ```bash
 cd backend

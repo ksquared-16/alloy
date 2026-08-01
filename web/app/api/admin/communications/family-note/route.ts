@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         if (!personCheck.ok) return NextResponse.json({ error: "Person not found" }, { status: 404 });
     }
 
-    const exec = await executeCommunicationsSend({
+    const exec = await executeLegacyCommunicationsSendAdapter({
         supabase,
         orgId: ctx.orgId,
         quickMessage: false,

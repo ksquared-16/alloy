@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
+import { FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE } from "@/lib/communications/recipients/typedRecipient";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -7,8 +8,26 @@ import {
     COMMUNICATIONS_SEND_PERMISSION_KEY,
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
+
+
+const CATEGORIES = ["transactional", "operational", "marketing", "emergency"] as const;
+type SendCategory = (typeof CATEGORIES)[number];
+
+/** Explicit only — never inferred, never defaulted to transactional. */
+function normalizeCategory(raw: unknown): SendCategory | null {
+    const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    return (CATEGORIES as readonly string[]).includes(v) ? (v as SendCategory) : null;
+}
+
+/** Stable short token over authored content, for idempotency identity. */
+function contentToken(body: string, subject: string | null): string {
+    const s = `${(subject ?? "").trim()}\u0000${body.trim()}`;
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+}
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -66,8 +85,25 @@ export async function POST(request: NextRequest) {
     let entityType = normalizeEntityTypeParam(String(body.entity_type ?? ""));
     let entityId = String(body.entity_id ?? "").trim();
     const channel = normalizeChannel(String(body.channel ?? ""));
-    const toRawInput = String(body.to ?? body.to_address ?? "").trim();
     const textRaw = String(body.body ?? "").trim();
+
+    // ---- Phase 1 Slice 1: typed recipient is the only recipient authority ----
+    //
+    // This route previously accepted a free-text `to` / `to_address` with no
+    // person reference. That is precisely why the Phase 0 eligibility gate was
+    // inert here: with no resolvable person there is no consent to evaluate.
+    //
+    // Free-text is now refused outright. There is deliberately NO fallback —
+    // a downgrade path would recreate the defect Phase 0 closed. Both existing
+    // UI callers (QuickMessageModal, ComposerV2) already send
+    // recipient_person_id, so nothing legitimate is broken by this.
+    const freeTextTo = String(body.to ?? body.to_address ?? "").trim();
+    if (freeTextTo) {
+        return NextResponse.json(
+            { error: FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE, code: "free_text_recipient_unsupported" },
+            { status: 400 }
+        );
+    }
     const subjectRawEmail =
         channel === "email" && typeof body.subject === "string" ? body.subject : undefined;
     const bindingIdOpt = typeof body.binding_id === "string" ? body.binding_id.trim() : "";
@@ -119,27 +155,76 @@ export async function POST(request: NextRequest) {
 
     const primaryEntityType = entityType;
 
-    const exec = await executeCommunicationsSend({
-        supabase,
-        orgId: ctx.orgId,
-        quickMessage,
-        primaryEntityType,
-        primaryEntityId: entityId,
-        channel,
-        textRaw,
-        subjectRawEmail,
-        bindingIdOpt,
-        recipientPersonIdRaw,
-        toRawInput,
-        sendMetadataAugment: null,
-    });
-
-    if (!exec.ok) {
+    // Phase 1 Slice 1: the canonical send command owns resolution, classification,
+    // rendering, eligibility, snapshots and enqueue. This route no longer
+    // delegates to the legacy adapter and owns none of that policy itself.
+    //
+    // A person recipient is required. Free-text was refused earlier; there is no
+    // external-operational fallback, because a downgrade from "unresolvable
+    // person" would recreate the defect Phase 0 closed.
+    if (!recipientPersonIdRaw || !UUID_RE.test(recipientPersonIdRaw)) {
         return NextResponse.json(
-            exec.code ? { error: exec.error, code: exec.code, thread_id: exec.thread_id } : { error: exec.error, thread_id: exec.thread_id },
-            { status: exec.status }
+            { error: FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE, code: "typed_recipient_required" },
+            { status: 400 }
         );
     }
+
+    // Classification is explicit. `purpose` is server-owned: a client value is
+    // never read, so a caller cannot widen what this capability may emit.
+    const category = normalizeCategory(body.category);
+    if (!category) {
+        return NextResponse.json(
+            { error: "category is required (transactional, operational, marketing, or emergency).", code: "missing_category" },
+            { status: 400 }
+        );
+    }
+
+    const send = await canonicalSend({
+        supabase,
+        orgId: ctx.orgId,
+        authorizingUserId: ctx.userId ?? null,
+        sourceCapability: "communications.send",
+        recipient: { kind: "person", personId: recipientPersonIdRaw },
+        audience: "external",
+        category,
+        purpose: "operator_direct_message",
+        channel,
+        primaryEntityType,
+        primaryEntityId: entityId,
+        bodyRaw: textRaw,
+        subjectRaw: subjectRawEmail ?? null,
+        userAuthored: true,
+        communicationProviderBindingId: bindingIdOpt || null,
+        // Stable per (recipient, content). A double-click or retry returns the
+        // existing message rather than sending twice.
+        idempotencyKey: `comms_send:${recipientPersonIdRaw}:${contentToken(textRaw, subjectRawEmail ?? null)}`,
+        metadata: { source: "communications_send", author_user_id: ctx.userId ?? null },
+    });
+
+    if (send.outcome !== "sent_to_queue" && send.outcome !== "duplicate") {
+        return NextResponse.json(
+            {
+                error: send.message,
+                code: send.reason,
+                outcome: send.outcome,
+                available_channels: send.availableChannels ?? null,
+                thread_id: send.threadId ?? null,
+            },
+            {
+                status:
+                    send.outcome === "blocked" ? 409
+                    : send.outcome === "failed" ? 500
+                    : send.outcome === "needs_selection" ? 409
+                    : 400,
+            }
+        );
+    }
+
+    const exec = {
+        communication_message_id: send.messageId ?? null,
+        thread_id: send.threadId ?? null,
+        channel,
+    };
 
     let contact_attempt_association:
         | {
@@ -187,7 +272,7 @@ export async function POST(request: NextRequest) {
         thread_id: exec.thread_id,
         channel: exec.channel,
         permission_note: sendAuth.ok ? COMMUNICATIONS_SEND_PERMISSION_KEY : undefined,
-        process_trigger_attempted_note: exec.process_trigger_attempted_note,
+        outcome: send.outcome,
         contact_attempt_association,
     });
 }

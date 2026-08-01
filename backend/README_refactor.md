@@ -1,3 +1,8 @@
+> **HISTORICAL DOCUMENT.** Describes the backend as it was before the GoHighLevel
+> retirement (2026-08-01). Routes and modules named here — dispatch, leads, quote,
+> discounts, webhooks, debug, ghl_client — no longer exist. Retained to describe
+> prior work accurately.
+
 # Backend Refactoring - Module Structure
 
 This document describes the refactored module structure of `backend/main.py`.
@@ -12,7 +17,6 @@ backend/
     server.py          # FastAPI app creation + route registration
     settings.py        # Env vars, constants, CUSTOM_FIELD_IDS
     models.py          # Pydantic models for request/response
-    ghl_client.py      # All GHL API HTTP calls
     pricing.py         # Pricing calculation + breakdown parsing
     lead_processing.py # process_lead_async + orchestration
     utils.py           # normalize_phone, helpers, etc.
@@ -114,7 +118,7 @@ npm run dev
 4. Verify:
    - SetupIntent is created (check backend logs for `create_setup_intent: created setup_intent_id=...`)
    - Webhook receives `setup_intent.succeeded` event (check logs for `stripe_webhook: received event type=setup_intent.succeeded`)
-   - Contact in GHL is tagged with "card_on_file:collected" (check logs for `stripe_webhook: tagged contact_id=...`)
+   - (historical) This step tagged a GoHighLevel contact. GHL was retired 2026-08-01 and this no longer occurs.
    - Success page is shown and redirects to homepage
 
 **Trigger a test SetupIntent succeeded event manually:**

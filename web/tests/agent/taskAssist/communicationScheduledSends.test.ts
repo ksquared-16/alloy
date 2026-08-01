@@ -9,10 +9,10 @@ import {
     validateCommunicationScheduledSendCreateBody,
     validateCommunicationScheduledSendUpdateBody,
 } from "@/lib/communications/communicationScheduledSendsService";
-import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { executeLegacyCommunicationsSendAdapter } from "@/lib/communications/executeLegacyCommunicationsSendAdapter";
 
-vi.mock("@/lib/communications/executeCommunicationsSend", () => ({
-    executeCommunicationsSend: vi.fn(),
+vi.mock("@/lib/communications/executeLegacyCommunicationsSendAdapter", () => ({
+    executeLegacyCommunicationsSendAdapter: vi.fn(),
 }));
 
 const orgId = "11111111-1111-4111-8111-111111111111";
@@ -192,12 +192,12 @@ describe("cancelCommunicationScheduledSend", () => {
 
 describe("processDueCommunicationScheduledSends", () => {
     beforeEach(() => {
-        vi.mocked(executeCommunicationsSend).mockReset();
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockReset();
     });
 
-    it("calls executeCommunicationsSend once for a claimed row", async () => {
+    it("calls executeLegacyCommunicationsSendAdapter once for a claimed row", async () => {
         const row = baseRow();
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: true,
             communication_message_id: "msg-11111111-1111-4111-8111-111111111111",
             thread_id: null,
@@ -248,8 +248,8 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.succeeded).toBe(1);
             expect(res.result.failed).toBe(0);
         }
-        expect(executeCommunicationsSend).toHaveBeenCalledOnce();
-        expect(executeCommunicationsSend).toHaveBeenCalledWith(
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledOnce();
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledWith(
             expect.objectContaining({
                 textRaw: "hi",
                 sendMetadataAugment: {
@@ -275,7 +275,7 @@ describe("processDueCommunicationScheduledSends", () => {
                 location_id: "loc-1",
             },
         });
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: true,
             communication_message_id: "msg-11111111-1111-4111-8111-111111111111",
             thread_id: null,
@@ -321,7 +321,7 @@ describe("processDueCommunicationScheduledSends", () => {
         });
 
         expect(res.ok).toBe(true);
-        expect(executeCommunicationsSend).toHaveBeenCalledWith(
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledWith(
             expect.objectContaining({
                 textRaw: "Rendered reminder body from Batch 5",
                 subjectRawEmail: "Reminder subject",
@@ -335,7 +335,7 @@ describe("processDueCommunicationScheduledSends", () => {
                 }),
             })
         );
-        const augment = vi.mocked(executeCommunicationsSend).mock.calls[0]?.[0]?.sendMetadataAugment as Record<
+        const augment = vi.mocked(executeLegacyCommunicationsSendAdapter).mock.calls[0]?.[0]?.sendMetadataAugment as Record<
             string,
             unknown
         >;
@@ -344,7 +344,7 @@ describe("processDueCommunicationScheduledSends", () => {
 
     it("skips enqueue when communication_message_id already set", async () => {
         const row = baseRow({ communication_message_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: true,
             communication_message_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
             thread_id: null,
@@ -382,12 +382,12 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.skipped).toBe(1);
             expect(res.result.succeeded).toBe(0);
         }
-        expect(executeCommunicationsSend).not.toHaveBeenCalled();
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
     });
 
-    it("marks failed when executeCommunicationsSend fails", async () => {
+    it("marks failed when executeLegacyCommunicationsSendAdapter fails", async () => {
         const row = baseRow();
-        vi.mocked(executeCommunicationsSend).mockResolvedValue({
+        vi.mocked(executeLegacyCommunicationsSendAdapter).mockResolvedValue({
             ok: false,
             status: 422,
             error: "channel_unavailable",
@@ -428,7 +428,7 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.failed).toBe(1);
             expect(res.result.succeeded).toBe(0);
         }
-        expect(executeCommunicationsSend).toHaveBeenCalledOnce();
+        expect(executeLegacyCommunicationsSendAdapter).toHaveBeenCalledOnce();
     });
 
     it("does nothing when RPC returns no rows", async () => {
@@ -450,7 +450,7 @@ describe("processDueCommunicationScheduledSends", () => {
             expect(res.result.claimed).toBe(0);
             expect(res.result.processed).toBe(0);
         }
-        expect(executeCommunicationsSend).not.toHaveBeenCalled();
+        expect(executeLegacyCommunicationsSendAdapter).not.toHaveBeenCalled();
         expect(fromSpy).not.toHaveBeenCalled();
     });
 });
