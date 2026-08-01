@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-01
 supersedes: []
 ---
 
@@ -31,6 +31,23 @@ Detailed behavior always lives in the **canonical owner** documents linked below
 **Status:** Active | Superseded
 **Superseded by:** link when applicable.
 ```
+
+---
+
+## 2026-08 — Trust Platform (cognitive / reasoning)
+
+**Decision:**
+Alloy introduces a **Trust Platform** as the single owner of trusted operational reasoning — not an AI Platform, prompt platform, or model runtime. Capabilities submit Decision Contracts and consume Decision Packages. Privacy precedes reasoning. Deterministic reasoning is preferred. Validation and Trust remain independent of Confidence. Operational Learning promotes Knowledge through review; graduation toward deterministic capability is preferred. Providers are implementation details. The Trust Runtime is the only reasoning runtime; Objective Runtime remains the only execution runtime; Records remain the only operational truth.
+
+**Why:**
+Without a shared platform every capability invents its own prompts, providers, privacy, cost, explainability, learning, and governance — fragmenting trust.
+
+**Consequences:**
+No capability implements independent reasoning. Do not treat BOS/AI module docs as a substitute for Trust Platform doctrine. Permanent Trust architectural decisions live in the Trust ADR; this register summarizes the cross-platform commitment.
+
+**Canonical owners:** [`../trust/trust-platform.md`](../trust/trust-platform.md), [`../trust/trust-platform-decisions.md`](../trust/trust-platform-decisions.md), [`../trust/trust-platform-manifesto.md`](../trust/trust-platform-manifesto.md), [`../trust/README.md`](../trust/README.md).
+
+**Status:** Active
 
 ---
 

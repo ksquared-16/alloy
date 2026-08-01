@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-08-01
 supersedes: []
 ---
 
@@ -141,6 +141,12 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 | Field policy enforcement | **Complete** | Opportunity/job subset | Forms parity open |
 | Record Experience Builder | **Planned** | Deferred from parity sprint | |
 | Placement priority | **Complete** | Opt-in ordered cohort ranking layer | Childcare waitlist is one use; off by default |
+
+## Trust Platform
+
+| Capability | Status | Description | Notes |
+|------------|--------|-------------|-------|
+| Trust Platform (cognitive / reasoning) | **Planned** | Trusted operational reasoning: Decision Contracts → Trust Runtime → Decision Packages; privacy, knowledge, learning, economics, governance | Entry: [`../trust/trust-platform.md`](../trust/trust-platform.md); corpus index [`../trust/README.md`](../trust/README.md). Not an AI/prompt/model layer — AI is one possible reasoning implementation |
 
 ## AI / BOS
 
