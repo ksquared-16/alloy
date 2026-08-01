@@ -82,13 +82,17 @@ async function openStage(page: Page, stageKey: string) {
     await expect(page.getByTestId("bp-publication-bar")).toBeVisible({ timeout: 30_000 });
 }
 
-/** Expand the accordion that owns the operating plan, so its editors are reachable. */
+/**
+ * Ensure the section that owns the operating plan is expanded, so its editors are reachable.
+ * It now opens by default (the operator's reason for visiting the page shouldn't start behind a
+ * click), so this is a guard rather than a step — it only acts if something left it closed.
+ */
 async function openOperatingPlan(page: Page) {
-    for (const name of [/Operational Experience/, /Possible Outcomes/]) {
-        const button = page.getByRole("button", { name }).first();
-        if (await button.count()) await button.click().catch(() => {});
-        await page.waitForTimeout(600);
+    const header = page.locator("#stage-section-experience > button").first();
+    if ((await header.getAttribute("aria-expanded")) === "false") {
+        await header.click().catch(() => {});
     }
+    await page.waitForTimeout(600);
 }
 
 async function saveStage(page: Page) {

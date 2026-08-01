@@ -54,7 +54,7 @@ function ScheduleTimingControls({
                         offset_value: event.target.value === "immediate" ? 0 : Math.max(1, timing.offset_value || 1),
                     })
                 }
-                className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
             >
                 <option value="immediate">Immediately</option>
                 <option value="before">Before</option>
@@ -66,7 +66,7 @@ function ScheduleTimingControls({
                         type="number"
                         min={1}
                         aria-label="Schedule offset value"
-                        className="w-12 rounded border border-alloy-forge/15 px-1 py-0.5 text-[10px]"
+                        className="w-12 rounded-md border border-alloy-forge/15 px-1 py-0.5 text-[0.6875rem]"
                         value={timing.offset_value || 1}
                         onChange={(event) =>
                             applyTiming({
@@ -84,7 +84,7 @@ function ScheduleTimingControls({
                                 offset_unit: event.target.value as ScheduleTimingUi["offset_unit"],
                             })
                         }
-                        className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                        className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
                     >
                         {FOLLOW_UP_OFFSET_UNIT_OPTIONS.map((unit) => (
                             <option key={unit.value} value={unit.value}>{unit.label}</option>
@@ -99,7 +99,7 @@ function ScheduleTimingControls({
                                 anchor: event.target.value as ScheduleTimingUi["anchor"],
                             })
                         }
-                        className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                        className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
                     >
                         {FOLLOW_UP_DUE_ANCHOR_OPTIONS.map((anchor) => (
                             <option key={anchor.value} value={anchor.value}>{anchor.label}</option>
@@ -107,7 +107,7 @@ function ScheduleTimingControls({
                     </select>
                 </>
             :   null}
-            <span className="text-[9px] text-alloy-midnight/45">{formatScheduleTimingSummary(policy)}</span>
+            <span className="text-[0.6875rem] text-alloy-midnight/45">{formatScheduleTimingSummary(policy)}</span>
         </div>
     );
 }
@@ -133,10 +133,10 @@ export default function LifecycleStageOutcomeBehaviorEditor({
     });
 
     return (
-        <div className="mt-2 space-y-3 rounded border border-alloy-forge/10 bg-white p-2" data-testid={`stage-outcome-behavior-${outcomeKey}`}>
+        <div className="mt-2 space-y-3 rounded-md border border-alloy-forge/10 bg-white p-2" data-testid={`stage-outcome-behavior-${outcomeKey}`}>
             <fieldset className="space-y-1">
-                <legend className="text-[10px] font-semibold text-alloy-midnight/70">After recording</legend>
-                <label className="mr-3 inline-flex items-center gap-1 text-[10px]">
+                <legend className="text-[0.6875rem] font-semibold text-alloy-midnight/70">After recording</legend>
+                <label className="mr-3 inline-flex items-center gap-1 text-[0.6875rem]">
                     <input
                         type="radio"
                         name={`movement-${outcomeKey}`}
@@ -146,7 +146,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     Stay in stage
                 </label>
                 <label
-                    className={`inline-flex items-center gap-1 text-[10px] ${
+                    className={`inline-flex items-center gap-1 text-[0.6875rem] ${
                         availableTransitions.length ? "" : "text-alloy-midnight/40"
                     }`}
                 >
@@ -170,7 +170,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                 </label>
                 {draft.movement === "move_through_transition" ?
                     <select
-                        className="ml-2 rounded border border-alloy-forge/15 bg-white px-2 py-1 text-[10px]"
+                        className="ml-2 rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
                         value={draft.transition_ref ?? ""}
                         onChange={(event) => apply({ ...draft, transition_ref: event.target.value || undefined })}
                         data-testid={`stage-outcome-transition-${outcomeKey}`}
@@ -189,7 +189,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                   */}
                 {availableTransitions.length ? null : (
                     <p
-                        className="mt-1 text-[10px] leading-snug text-alloy-midnight/50"
+                        className="mt-1 text-[0.6875rem] leading-snug text-alloy-midnight/50"
                         data-testid={`stage-outcome-no-transitions-${outcomeKey}`}
                     >
                         No outgoing transitions are configured for {stageLabel}. Create a transition
@@ -200,10 +200,10 @@ export default function LifecycleStageOutcomeBehaviorEditor({
 
             <section className="space-y-1">
                 <div className="flex items-center gap-2">
-                    <h5 className="text-[10px] font-semibold text-alloy-midnight/70">Create follow-up work</h5>
+                    <h5 className="text-[0.6875rem] font-semibold text-alloy-midnight/70">Create follow-up work</h5>
                     <button
                         type="button"
-                        className="text-[10px] font-medium text-alloy-pine"
+                        className="text-[0.6875rem] font-medium text-alloy-pine"
                         data-testid={`stage-outcome-follow-up-add-${outcomeKey}`}
                         onClick={() =>
                             apply({
@@ -219,7 +219,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     </button>
                 </div>
                 {draft.follow_up_work.map((followUp, index) => (
-                    <div key={index} className="space-y-1 rounded bg-alloy-midnight/[0.025] p-1.5">
+                    <div key={index} className="space-y-1 rounded-md bg-alloy-midnight/[0.025] p-1.5">
                         <div className="flex flex-wrap items-center gap-1">
                             <select
                                 value={followUp.template_key}
@@ -228,7 +228,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                                     next[index] = { ...followUp, template_key: event.target.value };
                                     apply({ ...draft, follow_up_work: next });
                                 }}
-                                className="rounded border border-alloy-forge/15 bg-white px-1 py-0.5 text-[10px]"
+                                className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
                             >
                                 <option value="">Select Work Template…</option>
                                 {workTemplates.map((work) => (
@@ -237,7 +237,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                             </select>
                             <button
                                 type="button"
-                                className="text-[10px] text-red-700"
+                                className="text-[0.6875rem] text-red-700"
                                 onClick={() =>
                                     apply({
                                         ...draft,
@@ -263,10 +263,10 @@ export default function LifecycleStageOutcomeBehaviorEditor({
 
             <section className="space-y-1">
                 <div className="flex items-center gap-2">
-                    <h5 className="text-[10px] font-semibold text-alloy-midnight/70">Create attention</h5>
+                    <h5 className="text-[0.6875rem] font-semibold text-alloy-midnight/70">Create attention</h5>
                     <button
                         type="button"
-                        className="text-[10px] font-medium text-alloy-pine"
+                        className="text-[0.6875rem] font-medium text-alloy-pine"
                         data-testid={`stage-outcome-attention-add-${outcomeKey}`}
                         onClick={() =>
                             apply({
@@ -282,10 +282,10 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     </button>
                 </div>
                 {draft.attention_items.map((attention, index) => (
-                    <div key={index} className="space-y-1 rounded bg-alloy-midnight/[0.025] p-1.5">
+                    <div key={index} className="space-y-1 rounded-md bg-alloy-midnight/[0.025] p-1.5">
                         <div className="flex flex-wrap items-center gap-1">
                             <input
-                                className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px]"
+                                className="min-w-0 flex-1 rounded-md border border-alloy-forge/15 px-2 py-0.5 text-[0.6875rem]"
                                 value={attention.reason}
                                 placeholder="Attention label"
                                 onChange={(event) => {
@@ -296,7 +296,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                             />
                             <button
                                 type="button"
-                                className="text-[10px] text-red-700"
+                                className="text-[0.6875rem] text-red-700"
                                 onClick={() =>
                                     apply({
                                         ...draft,
@@ -320,7 +320,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                 ))}
             </section>
 
-            <p className="text-[10px] text-alloy-midnight/50">
+            <p className="text-[0.6875rem] text-alloy-midnight/50">
                 <span className="font-medium">Summary · </span>{summary}
             </p>
         </div>

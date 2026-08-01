@@ -53,10 +53,10 @@ export function WorkItemAttentionSection({
     return (
         <section className="space-y-2" data-testid={`work-item-attention-${templateKey}`}>
             <div>
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                <h4 className="text-[0.6875rem] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                     Attention for this work
                 </h4>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-alloy-midnight/45">
+                <p className="mt-0.5 text-[0.6875rem] leading-relaxed text-alloy-midnight/45">
                     Raised when {workLabel} needs someone to look at it. Stage-wide signals stay with the stage.
                 </p>
             </div>
@@ -78,7 +78,7 @@ export function WorkItemAttentionSection({
                     }}
                 />
             ) : (
-                <p className="text-[11px] text-alloy-midnight/45" data-testid={`work-item-attention-empty-${templateKey}`}>
+                <p className="text-[0.6875rem] text-alloy-midnight/45" data-testid={`work-item-attention-empty-${templateKey}`}>
                     No attention rules for {workLabel} yet. Add one from the stage attention section to have Alloy
                     flag this work when it goes quiet or runs late.
                 </p>
@@ -107,10 +107,10 @@ export function WorkItemFollowUpSection({
     return (
         <section className="space-y-2" data-testid={`work-item-follow-up-${work.template_key}`}>
             <div>
-                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                <h4 className="text-[0.6875rem] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                     What happens next
                 </h4>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-alloy-midnight/45">
+                <p className="mt-0.5 text-[0.6875rem] leading-relaxed text-alloy-midnight/45">
                     Set on each outcome above. Shown here so the chain is visible in one place.
                 </p>
             </div>
@@ -120,7 +120,7 @@ export function WorkItemFollowUpSection({
                     {withFollowUp.map((o) => (
                         <li
                             key={o.outcomeKey}
-                            className="flex flex-wrap items-baseline gap-x-1.5 text-[12px]"
+                            className="flex flex-wrap items-baseline gap-x-1.5 text-[0.75rem]"
                             data-testid={`work-item-follow-up-${work.template_key}-${o.outcomeKey}`}
                         >
                             <span className="font-medium text-alloy-midnight/80">{o.label}</span>
@@ -130,14 +130,14 @@ export function WorkItemFollowUpSection({
                     ))}
                 </ul>
             ) : (
-                <p className="text-[11px] text-alloy-midnight/45">
+                <p className="text-[0.6875rem] text-alloy-midnight/45">
                     No outcome creates follow-up work. Staff finish {summary.label} and nothing is scheduled after it.
                 </p>
             )}
 
             {summary.exitOutcome ? (
                 <p
-                    className="pt-1 text-[12px] text-alloy-midnight/65"
+                    className="pt-1 text-[0.75rem] text-alloy-midnight/65"
                     data-testid={`work-item-exit-${work.template_key}`}
                 >
                     <span className="font-medium text-alloy-midnight/80">{summary.exitOutcome.label}</span>

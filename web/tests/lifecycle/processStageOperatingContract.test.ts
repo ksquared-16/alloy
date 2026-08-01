@@ -380,7 +380,10 @@ describe("Process Stage operating contract — statuses (16–21)", () => {
         );
         expect(editor).toContain("resolveOutcomeStatusOptions");
         expect(editor).toContain("isConfiguredClosedStatus");
-        expect(editor).toContain("Closes record");
+        // The exit path now reads as a sentence, so the badge says "Closes the record" — the same
+        // words the Stage Overview already uses for the same fact. The guard that matters is
+        // unchanged: the flag is DERIVED from the configured status, never typed.
+        expect(editor).toContain("Closes the record");
         expect(editor).not.toContain("Close Record");
     });
 
