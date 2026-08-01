@@ -19,6 +19,7 @@ Canonical Alloy platform doctrine. Start at [`../README.md`](../README.md) for t
 | [`operator/`](./operator/) | Interaction model, workspaces, queues, drawers, card systems |
 | [`experience/`](./experience/) | Presentation runtime, motion, loading/reveal |
 | [`modules/`](./modules/) | Domain modules (communications, billing, documents, AI, …) |
+| [`trust/`](./trust/) | Trust Platform doctrine (publication in progress — see folder index) |
 | [`analytics/`](./analytics/) | Metric / analytics platform |
 | [`commercial/`](./commercial/) | Commercial / offerings platform |
 | [`runtime/`](./runtime/) | Runtime ownership references (implementation-adjacent platform truth) |
