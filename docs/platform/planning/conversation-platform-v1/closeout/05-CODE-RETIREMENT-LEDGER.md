@@ -233,3 +233,74 @@ Recorded so they are never mistaken for debt and "cleaned up":
 | `evaluateEligibility` (pure, versioned) | Purity makes it replayable; versioning makes policy change diffable. |
 | `eligibility_snapshot` on the message row | The audit record of what was authorized. Must not become recomputable. |
 | `tests/documents/signerConvergence.test.ts` | Exists because review alone failed to catch A-5. |
+
+---
+
+# Part D — GoHighLevel retirement (2026-08-01)
+
+**Final disposition**
+
+```text
+GoHighLevel integration: fully retired
+Active runtime routes: 0
+Active callers: 0
+Active environment variables: 0
+Active UI/configuration: 0
+Supported reactivation path: none
+Historical migration references: retained only for replay
+```
+
+Commits: `ea3eaf377` (backend + cleaning product), `<follow-up>` (browser-side GHL components).
+
+## D-1 · Deleted routes
+
+| Route | Prior purpose | Replacement |
+| --- | --- | --- |
+| `POST /dispatch` | Offer a cleaning job to contractors by SMS | none — vertical retired |
+| `POST /contractor-reply` | Accept an offer via 5-digit code | none |
+| `POST /stripe/charge` | Charge a card, authenticated by `GHL_WORKFLOW_SECRET` | `POST /admin/payments/run` (own dedicated secret) |
+| `GET /stripe/card-status`, `POST /stripe/setup-intent`, `POST /stripe/webhook` | Cleaning funnel card capture | none |
+| `routes/leads`, `quote`, `discounts`, `webhooks`, `debug` | Legacy cleaning product API | none |
+| `web /book`, `/book-v2`, `/payment`, `/api/book-v2` | Cleaning booking + payment UI | none |
+
+No tombstones were added: these were reachable only by GoHighLevel workflows, which are themselves retired, so a `410` would serve no caller.
+
+## D-2 · Deleted services and helpers
+
+`backend/app/ghl_client.py` (LeadConnector client) · `services/legacy_dispatch_guard.py` (Phase 0 containment, R-4 condition met) · `lead_processing.py` · `pricing.py` · `utils.py` reduced to `normalize_phone` (its only non-GHL caller).
+
+## D-3 · Deleted browser-side GHL — found only by post-deletion build verification
+
+| Artifact | Why it mattered |
+| --- | --- |
+| `components/GhlScript.tsx` | **Mounted in the root `app/layout.tsx`** — loaded `link.msgsndr.com/js/form_embed.js` and called `LeadConnector.init()` on *every page of the product* |
+| `components/GhlBookingEmbed.tsx` | iframe to `api.leadconnectorhq.com/widget/booking/...`; zero consumers |
+| `components/GhlEmbed.tsx` | GHL form embed |
+| `components/CollapsibleQuoteForm.tsx` | Sole consumer of `GhlEmbed`; zero consumers of its own |
+
+**This was the most active GHL integration in the product and the first inventory missed it**, because that sweep covered `web/app` and `web/lib` but not `web/components`. It surfaced only when the production build was run. Recorded here because the lesson generalises: an identifier inventory is only as good as its search roots, and `grep -i ghl` is additionally poisoned by the substring in "highlight".
+
+## D-4 · Removed environment variables
+
+`GHL_WORKFLOW_SECRET`, `GHL_API_KEY`, `GHL_LOCATION_ID`, `GHL_API_VERSION`, `GHL_STAGE_ID_*`, `GHL_STRIPE_CUSTOMER_ID`, and every remaining `GHL_*` key, plus `JOB_STORE` / `OFFER_STORE` and the cleaning custom-field catalogue. Alloy no longer reads any GHL variable.
+
+## D-5 · Shared code — GHL branch removed, behaviour preserved
+
+`supabase_client.py`: removed the "Priority 2: GHL contact_id via external_mappings" branch inside the live `link_stripe_customer_to_supabase`, and the two now-dead `resolve_*_from_ghl` helpers. The payment executor depends on this module; its non-GHL resolution paths (direct UUID, email) are intact.
+
+## D-6 · Deliberately retained
+
+| Artifact | Why |
+| --- | --- |
+| `web/lib/booking.ts` | Builds a booking URL path from `NEXT_PUBLIC_BOOKING_PATH`. Contains no GHL call. Consumed by `CleaningQuoteForm`, `SpecialtyCleaningQuoteForm`, `FirstFreeTermsModal` and five public pages — deleting it would have been cleaning-product removal, out of scope. |
+| `lib/booking*.ts`, `lib/pricing/*`, `lib/book-v2/*` | Shared with Create Lead, household primary contact, form intake and admin quote catalogue |
+| `api/action-links/consume-accept-job` | Action-links infrastructure, retained by decision |
+| 1 historical migration mentioning GHL | Required for clean replay; no runtime depends on it |
+
+## D-7 · Verification evidence
+
+`next build` green · web 25 failed / 785 passed (unchanged pre-existing baseline) · backend 93 tests / 2 errors (the pre-existing absent-package errors; count fell from 124 because the 31 containment tests were deleted with their routes) · migration preflight 302/302, 0 orphans, 0 pending, 0 migrations touched · route inventory: 3 routers mounted (stripe, messages_sender, sms_inbound) · import inventory clean · no `msgsndr`/`leadconnectorhq`/`LeadConnector` reference remains in `web`.
+
+## D-8 · Known consequence, not repaired here
+
+`getBookingPath()` still defaults to `/book`, and that route was deleted with the cleaning product. Four call sites (`FirstFreeTermsModal`, `CleaningQuoteForm`, and the cleaning marketing pages) therefore link to a removed route. This is a cleaning-product consequence, not a GHL one, and repairing it would mean deleting or rewriting those marketing pages — explicitly out of scope for this branch. **Flagged for a decision.**
