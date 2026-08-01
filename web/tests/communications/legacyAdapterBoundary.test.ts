@@ -32,7 +32,21 @@ const code = (p: string) =>
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/\/\/.*$/gm, "");
 
-const SOURCES = [...walk("app"), ...walk("lib")];
+// Walks tests/ as well as app/ and lib/. The first version walked only app and
+// lib, so a stale `@/lib/communications/executeCommunicationsSend` import in a
+// test file survived the rename and broke the Vercel build. Same blind spot
+// that hid web/components/GhlScript.tsx during the GHL retirement: an inventory
+// is only as good as its search roots.
+// Two different scopes, deliberately:
+//   PRODUCTION — who actually CALLS the adapter. A test that mocks it is not a
+//                caller, so tests must not inflate this count.
+//   ALL        — who IMPORTS the dead module path. This must include tests,
+//                because the deploy-time module verifier checks every tracked
+//                file, and a stale import in a test broke the Vercel build.
+// The first version used one scope for both, which is how that stale import
+// survived the rename — the same blind spot that hid web/components/GhlScript.
+const PRODUCTION_SOURCES = [...walk("app"), ...walk("lib")];
+const SOURCES = [...PRODUCTION_SOURCES, ...walk("tests")];
 
 const ADAPTER = "lib/communications/executeLegacyCommunicationsSendAdapter.ts";
 
@@ -43,14 +57,22 @@ const ALLOWED_ADAPTER_CALLERS = [
 ];
 
 describe("legacy adapter is bounded", () => {
-    it("the old canonical-looking name is gone from live code", () => {
+    it("nothing imports or mocks the dead module path", () => {
+        // This is what the deploy-time module verifier checks. A stale import
+        // fails the production build, so it is asserted here first.
         for (const f of SOURCES) {
-            expect(code(f), f).not.toMatch(/\bexecuteCommunicationsSend\b/);
+            const src = code(f);
+            expect(src, `${f} imports the dead path`).not.toMatch(
+                /from\s+"@\/lib\/communications\/executeCommunicationsSend"/
+            );
+            expect(src, `${f} mocks the dead path`).not.toMatch(
+                /vi\.mock\(\s*"@\/lib\/communications\/executeCommunicationsSend"/
+            );
         }
     });
 
     it("has exactly the documented callers — a fourth fails this test", () => {
-        const callers = SOURCES.filter(
+        const callers = PRODUCTION_SOURCES.filter(
             (f) => f !== ADAPTER && /executeLegacyCommunicationsSendAdapter/.test(code(f))
         ).sort();
         expect(callers).toEqual([...ALLOWED_ADAPTER_CALLERS].sort());

@@ -46,8 +46,11 @@ vi.mock("@/lib/communications/communicationPermissions", async () => {
     };
 });
 
-vi.mock("@/lib/communications/executeCommunicationsSend", () => ({
-    executeCommunicationsSend: (...args: unknown[]) => mockExecuteCommunicationsSend(...args),
+// The apply route converged onto the canonical send command in Phase 1 Slice 1,
+// so that is what must be mocked. Mocking the legacy adapter here silently
+// stopped intercepting and let the real command reach a stub supabase.
+vi.mock("@/lib/communications/send/canonicalSend", () => ({
+    canonicalSend: (...args: unknown[]) => mockExecuteCommunicationsSend(...args),
 }));
 
 vi.mock("@/lib/supabaseAdmin", () => ({
@@ -103,12 +106,12 @@ describe("POST /api/admin/ai/task-assist/apply", () => {
             role: "admin",
         });
         mockExecuteCommunicationsSend.mockResolvedValue({
-            ok: true,
-            communication_message_id: "cm-test-1",
-            thread_id: "th-test-1",
-            channel: "sms",
-            process_trigger_attempted_note: "queued",
-        });
+        outcome: "sent_to_queue",
+        reason: "queued",
+        message: "Message queued for delivery.",
+        messageId: "msg-1",
+        threadId: "thr-1",
+    });
         mockAssertCommsSend.mockResolvedValue({ ok: true });
     });
 
@@ -144,7 +147,7 @@ describe("POST /api/admin/ai/task-assist/apply", () => {
         expect(mockExecuteCommunicationsSend).not.toHaveBeenCalled();
     });
 
-    it("calls executeCommunicationsSend for a valid approved SMS apply", async () => {
+    it("calls the canonical send command for a valid approved SMS apply", async () => {
         const res = await POST(
             postJson({
                 proposal: baseProposal(),
@@ -157,18 +160,28 @@ describe("POST /api/admin/ai/task-assist/apply", () => {
         expect(res.status).toBe(200);
         expect(mockExecuteCommunicationsSend).toHaveBeenCalledTimes(1);
         const arg = mockExecuteCommunicationsSend.mock.calls[0]![0] as {
-            textRaw: string;
-            recipientPersonIdRaw: string;
-            sendMetadataAugment: Record<string, unknown>;
-            quickMessage: boolean;
+            bodyRaw: string;
+            recipient: { kind: string; personId: string };
+            audience: string;
+            category: string;
+            purpose: string;
+            idempotencyKey: string;
+            metadata: Record<string, unknown>;
         };
-        expect(arg.textRaw).toBe("Approved body");
-        expect(arg.recipientPersonIdRaw).toBe(personId);
-        expect(arg.quickMessage).toBe(false);
-        expect(arg.sendMetadataAugment?.source).toBe("task_assist_apply_v1");
+        expect(arg.bodyRaw).toBe("Approved body");
+        // The BOS proposal becomes a TYPED person recipient that the server
+        // re-resolves — never a raw address.
+        expect(arg.recipient.kind).toBe("person");
+        expect(arg.recipient.personId).toBe(personId);
+        // Classification is explicit and the purpose is server-owned.
+        expect(arg.audience).toBe("external");
+        expect(arg.category).toBe("operational");
+        expect(arg.purpose).toBe("assisted_operator_message");
+        expect(arg.idempotencyKey).toContain(personId);
+        expect(arg.metadata?.source).toBe("task_assist_apply_v1");
         const j = (await res.json()) as { ok?: boolean; send?: { communication_message_id?: string } };
         expect(j.ok).toBe(true);
-        expect(j.send?.communication_message_id).toBe("cm-test-1");
+        expect(j.send?.communication_message_id).toBe("msg-1");
     });
 
     it("returns 400 for workflow-like keys on apply body", async () => {
@@ -220,7 +233,7 @@ describe("POST /api/admin/ai/task-assist/apply", () => {
         expect(j.error).toBe("Send not permitted for this role.");
     });
 
-    it("passes operator final_body to executeCommunicationsSend, not proposal draft_body", async () => {
+    it("passes operator final_body to the canonical send command, not proposal draft_body", async () => {
         const res = await POST(
             postJson({
                 proposal: baseProposal({ draft_body: "NEVER SEND THIS" }),
@@ -231,8 +244,9 @@ describe("POST /api/admin/ai/task-assist/apply", () => {
             }),
         );
         expect(res.status).toBe(200);
-        const arg = mockExecuteCommunicationsSend.mock.calls[0]![0] as { textRaw: string };
-        expect(arg.textRaw).toBe("SEND THIS INSTEAD");
-        expect(arg.textRaw).not.toContain("NEVER SEND");
+        const arg = mockExecuteCommunicationsSend.mock.calls[0]![0] as { bodyRaw: string };
+        expect(arg.bodyRaw).toBe("SEND THIS INSTEAD");
+        // The AI's draft never reaches the send: the operator's final body wins.
+        expect(arg.bodyRaw).not.toContain("NEVER SEND");
     });
 });
