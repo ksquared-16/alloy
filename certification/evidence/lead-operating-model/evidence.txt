@@ -1,0 +1,22 @@
+L0 draft materialized at revision 1
+L0 draft outcomes: [{"label": "Reached / Qualified", "successful": true, "outcome_key": "reached_family", "completes_work": true}, {"label": "Tour Scheduled", "successful": true, "outcome_key": "tour_scheduled", "comple
+L0 published rules unchanged by authoring: true
+L1 validate can_publish=true errors=0
+L1 publish http=200 revisions 0 -> 1
+L1 runtime now carries the corrected rules
+L2 rules referencing lead_to_tour: 1 (expected 1 — tour_scheduled only)
+L2 interested retained as non-moving — historical evidence preserved
+L3 published Work View predicates: new_leads=[{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}] | tours=[{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}] | follow_up=(absent) | all_work=[]
+L3 new_leads predicate: [{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}]
+L3 tours predicate: [{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}]
+L4 subject opp=00000000-0000-4000-8000-400000000001 work=00000000-0000-4000-8000-900000000001
+L4 execute http=200 ok=true | family lead/open/- -> lead/open/- | work=completed
+L5 execute http=200 | family lead/open/- -> lead/open/- | open work 1 -> 2
+L6 execute http=200 | family lead/open/- | open work 2 -> 2
+L7 execute http=200 | family lead/open/- -> lead/open/-
+L7 family remains in Lead and is NOT closed — closure stays an operator decision
+L8 subject opp=00000000-0000-4000-8000-400000000002 work=00000000-0000-4000-8000-900000000002 state=lead/open/-
+L8 execute http=200 ok=true | family lead/open/- -> tour/open/- | work=completed
+L8 durable opportunity status after the move: open
+L9 opportunities with durable status 'tour_scheduled': 0
+L10 editor state: status=published draft_revision=3 base_revision=present | revisions=1

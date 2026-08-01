@@ -1,0 +1,46 @@
+[32m✓[0m App already serving at http://localhost:3011
+[32m✓[0m Communications mocked (no real email/SMS; local-delivery only)
+  Authenticating operator + running certification specs…
+
+Running 12 tests using 1 worker
+
+[certify] captured session server-valid on cold load: true (url=http://localhost:3011/workspace)
+  ✓   1 [setup] › playwright/auth.setup.ts:18:6 › authenticate seeded operator (13.2s)
+[lead] L0 draft materialized at revision 1
+[lead] L0 draft outcomes: [{"label": "Reached / Qualified", "successful": true, "outcome_key": "reached_family", "completes_work": true}, {"label": "Tour Scheduled", "successful": true, "outcome_key": "tour_scheduled", "comple
+[lead] L0 published rules unchanged by authoring: true
+  ✓   2 [certify] › playwright/lead-operating-model.cert.spec.ts:115:5 › L0 author the corrected Lead configuration into the DRAFT (1.4s)
+[lead] L1 validate can_publish=true errors=0
+[lead] L1 publish http=200 revisions 0 -> 1
+[lead] L1 runtime now carries the corrected rules
+  ✓   3 [certify] › playwright/lead-operating-model.cert.spec.ts:156:5 › L1 validate and publish the corrected model through the canonical path (890ms)
+[lead] L2 rules referencing lead_to_tour: 1 (expected 1 — tour_scheduled only)
+[lead] L2 interested retained as non-moving — historical evidence preserved
+  ✓   4 [certify] › playwright/lead-operating-model.cert.spec.ts:180:5 › L2 the retired behaviour is GONE from the published model (240ms)
+[lead] L3 published Work View predicates: new_leads=[{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}] | tours=[{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}] | follow_up=(absent) | all_work=[]
+[lead] L3 new_leads predicate: [{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}]
+[lead] L3 tours predicate: [{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}]
+  ✓   5 [certify] › playwright/lead-operating-model.cert.spec.ts:201:5 › L3 Work View predicates are published, and use STAGE not status (476ms)
+[lead] L4 subject opp=00000000-0000-4000-8000-400000000001 work=00000000-0000-4000-8000-900000000001
+[lead] L4 execute http=200 ok=true | family lead/open/- -> lead/open/- | work=completed
+  ✓   6 [certify] › playwright/lead-operating-model.cert.spec.ts:232:5 › L4 Reached / Qualified completes the work and the family STAYS in Lead (779ms)
+[lead] L5 execute http=200 | family lead/open/- -> lead/open/- | open work 1 -> 2
+  ✓   7 [certify] › playwright/lead-operating-model.cert.spec.ts:249:5 › L5 Left Message stays in Lead and creates follow-up work (595ms)
+[lead] L6 execute http=200 | family lead/open/- | open work 2 -> 2
+  ✓   8 [certify] › playwright/lead-operating-model.cert.spec.ts:265:5 › L6 Awaiting Response stays in Lead and creates follow-up work (629ms)
+[lead] L7 execute http=200 | family lead/open/- -> lead/open/-
+[lead] L7 family remains in Lead and is NOT closed — closure stays an operator decision
+  ✓   9 [certify] › playwright/lead-operating-model.cert.spec.ts:276:5 › L7 Unable to Reach never auto-closes the Lead (356ms)
+[lead] L8 subject opp=00000000-0000-4000-8000-400000000002 work=00000000-0000-4000-8000-900000000002 state=lead/open/-
+[lead] L8 execute http=200 ok=true | family lead/open/- -> tour/open/- | work=completed
+[lead] L8 durable opportunity status after the move: open
+  ✓  10 [certify] › playwright/lead-operating-model.cert.spec.ts:291:5 › L8 Tour Scheduled is the ONLY thing that moves the family to Tour (648ms)
+[lead] L9 opportunities with durable status 'tour_scheduled': 0
+  ✓  11 [certify] › playwright/lead-operating-model.cert.spec.ts:312:5 › L9 no family anywhere carries a legacy tour_scheduled durable status (107ms)
+[lead] L10 editor state: status=published draft_revision=3 base_revision=present | revisions=1
+  ✓  12 [certify] › playwright/lead-operating-model.cert.spec.ts:318:5 › L10 draft, validation, publication and runtime remain separate and visible (298ms)
+
+  12 passed (22.7s)
+[32m✓[0m Authentication established (reusable session captured)
+[32m✓[0m Runtime verification ready — evidence in certification/evidence/
+rc=0
