@@ -276,7 +276,7 @@ No implementation may violate those laws.
 | Philosophy | Canonical (published) |
 | Manifesto | Canonical (published) |
 | Runtime | Canonical (published) |
-| Knowledge Architecture | Planned |
+| Knowledge Architecture | Canonical (published) |
 | Privacy Runtime | Planned |
 | Reasoning Runtime | Planned |
 | Operational Learning | Planned |
