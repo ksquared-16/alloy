@@ -82,14 +82,31 @@ export default function BusinessProcessParticipationCard({
             data-testid="business-process-participation-card"
             data-component="BusinessProcessParticipationCard"
         >
-            <div className="flex items-start gap-3 border-b border-alloy-stone/15 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                    <p className="config-runtime-section-header">Process participation</p>
-                    <p className="text-[12.5px] text-alloy-midnight/55">What this process tracks and how children move. The platform manages this for you.</p>
-                </div>
-            </div>
+            {/* Read-only reference, not an editing surface — the card's own copy says so three
+                separate times. It used to occupy ~215px at the very top of the stage page, above
+                the publication bar and the operating plan, to tell an operator there was nothing
+                for them to do. Collapsed by default: the summary row carries every fact, and the
+                detail is one click away for anyone who wants it. Presentation only — the
+                participation config, its API and its draft/publication path are untouched. */}
+            <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
+                    <span className="config-runtime-section-header shrink-0">Process participation</span>
+                    <span
+                        className="min-w-0 flex-1 truncate text-[0.75rem] text-alloy-midnight/50"
+                        data-testid="participation-summary"
+                    >
+                        Tracks {subjectLabel.toLowerCase()} in {contextLabel.toLowerCase()} context · one
+                        participant per child · inherits household stage
+                    </span>
+                    <span className="inline-flex shrink-0 items-center rounded-md bg-alloy-pine/[0.08] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-alloy-pine">
+                        Platform managed
+                    </span>
+                    <span className="shrink-0 text-[0.625rem] text-alloy-midnight/40 transition-transform group-open:rotate-90">
+                        ›
+                    </span>
+                </summary>
 
-            <div className="flex flex-col gap-3 px-4 py-3">
+            <div className="flex flex-col gap-3 border-t border-alloy-stone/15 px-4 py-3">
                 {/* read-only definition facts */}
                 <div className="flex flex-wrap gap-2">
                     <Fact label="Tracks" value={subjectLabel} />
@@ -123,6 +140,7 @@ export default function BusinessProcessParticipationCard({
 
                 {error ? <p className="text-[12.5px] text-alloy-ember">{error}</p> : null}
             </div>
+            </details>
         </section>
     );
 }

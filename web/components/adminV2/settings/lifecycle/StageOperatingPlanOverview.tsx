@@ -27,7 +27,7 @@ function Pill({ children, tone = "quiet" }: { children: React.ReactNode; tone?: 
               ? "border-alloy-forge/20 bg-alloy-midnight/[0.03] text-alloy-midnight/60"
               : "border-alloy-forge/15 bg-white text-alloy-midnight/60";
     return (
-        <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${cls}`}>
+        <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[0.6875rem] font-medium ${cls}`}>
             {children}
         </span>
     );
@@ -42,7 +42,7 @@ export default function StageOperatingPlanOverview({
 }) {
     if (!plan) {
         return (
-            <p className="text-[12px] text-alloy-midnight/45" data-testid="stage-overview-empty">
+            <p className="text-[0.75rem] text-alloy-midnight/45" data-testid="stage-overview-empty">
                 This stage has no operating plan yet. Add a work item below to describe what staff do here.
             </p>
         );
@@ -53,12 +53,12 @@ export default function StageOperatingPlanOverview({
     return (
         <div className="space-y-4" data-testid="stage-overview">
             {plan.purpose?.trim() ? (
-                <p className="text-[13px] leading-relaxed text-alloy-midnight/75" data-testid="stage-overview-purpose">
+                <p className="text-[0.8125rem] leading-relaxed text-alloy-midnight/75" data-testid="stage-overview-purpose">
                     {plan.purpose.trim()}
                 </p>
             ) : null}
 
-            <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/40" data-testid="stage-overview-headline">
+            <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-alloy-midnight/40" data-testid="stage-overview-headline">
                 {summary.headline}
             </p>
 
@@ -72,15 +72,15 @@ export default function StageOperatingPlanOverview({
                             data-testid={`stage-overview-work-${w.templateKey}`}
                         >
                             <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[13px] font-semibold text-alloy-midnight">{w.label}</span>
+                                <span className="text-[0.8125rem] font-semibold text-alloy-midnight">{w.label}</span>
                                 {w.primary ? <Pill tone="accent">Primary</Pill> : null}
                                 {w.required ? <Pill>Required</Pill> : <Pill>Optional</Pill>}
                                 <Pill>{w.dueExpectation}</Pill>
                             </div>
                             {w.purpose ? (
-                                <p className="mt-1 text-[12px] leading-relaxed text-alloy-midnight/60">{w.purpose}</p>
+                                <p className="mt-1 text-[0.75rem] leading-relaxed text-alloy-midnight/60">{w.purpose}</p>
                             ) : null}
-                            <p className="mt-1.5 text-[11px] text-alloy-midnight/45">
+                            <p className="mt-1.5 text-[0.6875rem] text-alloy-midnight/45">
                                 {w.actionCount} {w.actionCount === 1 ? "action" : "actions"} ·{" "}
                                 {w.outcomes.length} {w.outcomes.length === 1 ? "outcome" : "outcomes"}
                                 {w.attentionLabels.length
@@ -89,7 +89,7 @@ export default function StageOperatingPlanOverview({
                             </p>
                             {w.exitOutcome ? (
                                 <p
-                                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-alloy-pine"
+                                    className="mt-1.5 inline-flex items-center gap-1 text-[0.6875rem] font-medium text-alloy-pine"
                                     data-testid={`stage-overview-exit-${w.templateKey}`}
                                 >
                                     <ArrowRight size={11} />
@@ -101,22 +101,22 @@ export default function StageOperatingPlanOverview({
                     ))}
                 </div>
             ) : (
-                <p className="text-[12px] text-alloy-midnight/45">No work items configured for {stageLabel}.</p>
+                <p className="text-[0.75rem] text-alloy-midnight/45">No work items configured for {stageLabel}.</p>
             )}
 
             {/* Ways out, in product language rather than transition identities. */}
             {summary.exitPaths.length ? (
                 <div className="space-y-1.5" data-testid="stage-overview-exits">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/40">Ways out</p>
+                    <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-alloy-midnight/40">Ways out</p>
                     {summary.exitPaths.map((p) => (
                         <div
                             key={p.transitionRef}
-                            className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[12px]"
+                            className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[0.75rem]"
                             data-testid={`stage-overview-exit-path-${p.transitionRef}`}
                         >
                             <span className="font-medium text-alloy-midnight/80">{p.label}</span>
                             {p.closesRecord ? <Pill tone="closing">Closes the record</Pill> : null}
-                            <span className="text-[11px] text-alloy-midnight/45">
+                            <span className="text-[0.6875rem] text-alloy-midnight/45">
                                 {p.usedByOutcomes.length
                                     ? `used by ${p.usedByOutcomes.join(", ")}`
                                     : "not used by any outcome yet"}
@@ -125,7 +125,7 @@ export default function StageOperatingPlanOverview({
                     ))}
                 </div>
             ) : (
-                <p className="text-[12px] text-alloy-midnight/45" data-testid="stage-overview-no-exits">
+                <p className="text-[0.75rem] text-alloy-midnight/45" data-testid="stage-overview-no-exits">
                     No ways out of this stage yet. Add an outgoing path so outcomes can move families onward.
                 </p>
             )}
@@ -133,12 +133,12 @@ export default function StageOperatingPlanOverview({
             {/* Stage-level attention only. Work-scoped attention belongs on its work item. */}
             {summary.stageAttentionLabels.length ? (
                 <div className="space-y-1" data-testid="stage-overview-stage-attention">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/40">
+                    <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-alloy-midnight/40">
                         Stage-level attention
                     </p>
                     <ul className="space-y-0.5">
                         {summary.stageAttentionLabels.map((label) => (
-                            <li key={label} className="flex items-center gap-1.5 text-[12px] text-alloy-midnight/65">
+                            <li key={label} className="flex items-center gap-1.5 text-[0.75rem] text-alloy-midnight/65">
                                 <CircleDot size={10} className="shrink-0 text-alloy-midnight/30" />
                                 {label}
                             </li>
@@ -169,14 +169,14 @@ export function WorkItemOutcomeEffects({
 
     return (
         <div className="space-y-1.5" data-testid={`work-item-outcome-effects-${templateKey}`}>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/40">
+            <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-alloy-midnight/40">
                 What can happen
             </p>
             {work.outcomes.map((o) => (
-                <div key={o.outcomeKey} className="text-[12px]" data-testid={`work-item-outcome-${o.outcomeKey}`}>
+                <div key={o.outcomeKey} className="text-[0.75rem]" data-testid={`work-item-outcome-${o.outcomeKey}`}>
                     <span className="font-medium text-alloy-midnight/80">{o.label}</span>
                     {o.automatic ? (
-                        <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-alloy-pine">
+                        <span className="ml-1.5 inline-flex items-center gap-1 text-[0.6875rem] font-medium text-alloy-pine">
                             <Sparkles size={9} />
                             automatic
                         </span>

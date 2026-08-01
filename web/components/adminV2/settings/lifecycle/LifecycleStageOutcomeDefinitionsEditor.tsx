@@ -60,9 +60,15 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
             }
         >
             <div className="mb-1 flex items-center justify-between gap-2">
+                {/* Inside a work item the parent already renders the "Available Outcomes"
+                    heading, so repeating it here announced one concept twice. The DESCRIPTION
+                    stays either way — one heading, one description, which is what the section
+                    needed. Standalone (no work template) it still owns its own heading. */}
                 <div>
-                    <h3 className="text-[11px] font-semibold text-alloy-midnight/75">Outcome Definitions</h3>
-                    <p className="text-[10px] text-alloy-midnight/50">
+                    {workTemplateKey ? null : (
+                        <h3 className="stage-section-label">Outcome Definitions</h3>
+                    )}
+                    <p className="stage-field__hint">
                         {workTemplateKey ?
                             "Define what operators can record for this work and what happens after."
                         :   "Define outcomes once. Work Templates select from these Available Outcomes."}
@@ -70,7 +76,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                 </div>
                 <button
                     type="button"
-                    className="text-[10px] font-medium text-alloy-pine"
+                    className="text-[0.6875rem] font-medium text-alloy-pine"
                     onClick={addOutcome}
                     data-testid={
                         workTemplateKey ?
@@ -88,10 +94,10 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                         workTemplateOutcomeRefs(row).includes(outcome.outcome_key),
                     );
                     return (
-                        <article key={outcome.outcome_key} className="rounded border border-alloy-forge/10 p-2">
+                        <article key={outcome.outcome_key} className="rounded-md border border-alloy-forge/10 p-2">
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
-                                    className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-xs"
+                                    className="min-w-0 flex-1 rounded-md border border-alloy-forge/15 px-2 py-1 text-xs"
                                     value={outcome.label}
                                     onChange={(event) => {
                                         const outcomes = [...draft.outcomes];
@@ -99,7 +105,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                         onChange({ ...draft, outcomes });
                                     }}
                                 />
-                                <label className="flex items-center gap-1 text-[10px]">
+                                <label className="flex items-center gap-1 text-[0.6875rem]">
                                     <input
                                         type="checkbox"
                                         checked={Boolean(outcome.completes_work ?? outcome.successful)}
@@ -122,7 +128,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                 {work ?
                                     <button
                                         type="button"
-                                        className="text-[10px] text-alloy-midnight/70"
+                                        className="text-[0.6875rem] text-alloy-midnight/70"
                                         data-testid={`outcome-unlink-${outcome.outcome_key}`}
                                         onClick={() => {
                                             // Remove only this Work Template’s reference — retain stage-owned definition.
@@ -139,7 +145,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                 :   null}
                                 <button
                                     type="button"
-                                    className="text-[10px] text-red-700"
+                                    className="text-[0.6875rem] text-red-700"
                                     data-testid={`outcome-delete-definition-${outcome.outcome_key}`}
                                     title={
                                         referencingTemplates.length > 0 ?
@@ -183,7 +189,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                 </button>
                             </div>
                             {referencingTemplates.length === 0 ?
-                                <p className="mt-1 text-[10px] text-alloy-midnight/45">
+                                <p className="mt-1 text-[0.6875rem] text-alloy-midnight/45">
                                     Not used by a Work Template
                                 </p>
                             :   null}
@@ -201,7 +207,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                     );
                 })}
                 {!scopedOutcomes.length ?
-                    <p className="text-[10px] text-alloy-midnight/45">
+                    <p className="text-[0.6875rem] text-alloy-midnight/45">
                         {workTemplateKey ? "No Available Outcomes defined for this work yet." : "No outcomes defined."}
                     </p>
                 :   null}

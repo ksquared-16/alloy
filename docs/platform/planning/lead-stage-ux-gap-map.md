@@ -244,3 +244,139 @@ says it belongs.*
 
 Still deferred, unchanged: **G6** (requirement timing) and **G9** (findings beside the object).
 Requirements were left alone deliberately — the brief scopes timing to a later slice.
+
+---
+
+# Premium Process Configuration UX — the layout sprint
+
+Semantics were already correct. This sprint changed only presentation. The reusable rules live in
+[stage-configuration-layout-rules.md](stage-configuration-layout-rules.md); this section records
+what was measured and what moved.
+
+## The finding
+
+The stage editor had been built **outside the design system this repository already had**.
+`configurationRuntime.css` has defined a `config-typo-*` scale since Configuration Runtime V1.
+
+| Measured before any change | |
+|---|---|
+| Distinct font sizes in the stage editor | **9** across 269 usages |
+| Radius families at one nesting depth | **4** |
+| Uses of `config-typo-*` | **0** |
+
+So the brief's "do not create a new visual language" was not a constraint to work around — it was
+the fix. Every rule added either reuses a `--cr-*` token or composes a class already in that file.
+
+## The contradiction the first screenshot showed
+
+On a 1512px viewport the editor column was **689px**, while a 352px process rail beside it held two
+cards and ~550px of nothing — and the editor's own dropdowns truncated their values
+(`Placement / De⌄`, `No status chan⌄`). The page had 800px of emptiness and not enough room, at the
+same time.
+
+## Measured, before → after
+
+Three defined states, measured identically in both phases against the same tenant. The baseline was
+captured by restoring the pre-sprint `web/` tree over the same running app — not by recollection.
+
+**Collapsed** — what a director sees before touching anything:
+
+| Lead | Before | After |
+|---|---|---|
+| Editor width (1512px viewport) | 689px | **997px** (+45%) |
+| Page height | 794px | **738px** |
+| Readable content | 836 chars | **912 chars** |
+| Director questions answered | 5/5 | 5/5 |
+
+The collapsed page got **shorter and more informative at once**. That is the density objective, and
+it is the one number here that could not be bought by widening the column.
+
+**Expanded** — where grid discipline is judged:
+
+| Lead | Before | After |
+|---|---|---|
+| Distinct font sizes | **9** — 8, 9, 10, 10.5, 11, 12, 13, 14, 16px | **6** — 10, 11, 12, 13, 14, 16px |
+| Radius families | 7 | 6 |
+| Content density | 1259 ch/1000px | **1376 ch/1000px** (+9%) |
+| Page height | 3824px | 6345px |
+| Labelled controls | 252 | 456 |
+
+Every sub-10px size is gone. 14px and 16px belong to the page shell (section title, workspace
+title) and were left alone; the stage editor's own content is now exactly the four steps
+10/11/12/13.
+
+**The last two rows are not a regression, and they are not a win either — they are a change of
+subject.** The old expanded page opened onto *"Select a work item to configure purpose, timing, and
+outcomes."* and rendered none of it. The 204 extra controls are the work-item editor, which now
+renders without a selection step. The page is taller because it finally contains the stage's largest
+editor — and density still rose 9%, so the added content is packed tighter than what was there
+before.
+
+An earlier version of this table claimed a dead-whitespace reduction. It was withdrawn: the ratio
+compared an after-page that renders the work-item editor against a before-page that hid it, so the
+number measured content volume, not whitespace. The same confound retired a grid-adherence metric
+that scored the top-6 control edges — with the control count nearly doubling, the denominator moved
+for reasons unrelated to alignment. Font-size and radius counts are reported instead because they
+are unaffected by how much is on screen.
+
+## What changed
+
+**Allocation.** The process rail collapses to a strip once a process is selected; one click
+restores it, and manual choice wins for the session. Navigation yields to work.
+
+**Grid.** `.stage-grid` / `.stage-field` / `.stage-control` — one label treatment, one control
+height, one set of columns. Four label styles and three control heights inside a single screen
+became one of each.
+
+**Exit paths.** Three unrelated dropdowns became a path with its trigger stated above the controls:
+
+```
+Continue to Tour → Tour   [Automatic]   Triggered by Tour Scheduled, tour booking scheduled (automatic)
+```
+
+The trigger line is derived from `summarizeStageOperatingPlan` — the module the Overview and the
+work items already read — so a path cannot describe a trigger the configuration does not have.
+
+**Reading order.** Overview → Operator work → Ways out → Attention → Requirements → Identity →
+Context. Operator work opens by default; Identity and Context describe how a stage is *stored* and
+now follow the work instead of preceding it.
+
+**Disclosure.** Every collapsed section states its contents:
+
+```
+Operator work   1 work item · 2 ways out · 4 attention rules   ✓ Configured
+Requirements    56 required fields                             ✓ Configured
+Stage identity  Not described                                    Optional
+Stage Context   One row per family                             ✓ Configured
+```
+
+**Noise.** Removed: a paragraph restating the heading below it; two sentences of schema language
+about transition ownership; a four-line triple-announcement of "outcomes"; a participation card
+occupying ~215px above the fold to say "nothing to configure" three ways (now a one-line summary
+row that expands).
+
+**Never opens onto nothing.** The work list auto-selects its primary item, and a one-item queue is
+not rendered at all — a one-item picker is not a choice.
+
+## Two things this sprint got wrong first, and how they were caught
+
+1. **The first "after" measurement was flattering and wrong.** It compared the new page-as-it-opens
+   against a fully-collapsed baseline, and this sprint changes which sections default to open. Fixed
+   by measuring three *defined* states in both phases.
+
+2. **The grid metric punished correctness.** Counting distinct control edges scores a deeply nested
+   but perfectly aligned layout worse than a shallow sloppy one. Replaced with adherence — the share
+   of controls landing on the dominant columns.
+
+A third was caught by the tests rather than by measurement: renaming "Available Outcomes" to "What
+can happen" broke three unit tests that pin the product's outcome vocabulary. **They were right.**
+"Outcomes" is what the Overview counts and the certified Lead model is written in; a friendlier
+heading would have made the page use two words for one concept. The heading was restored and the
+duplicate *below* it removed instead.
+
+## Scale check
+
+Verified across **Lead, Tour and Placement / Decision** — one layout at three configuration depths.
+A stage with less configuration looks lighter, not different. **Waitlist is not configured in this
+tenant** (the seed has four stages: New Lead, Tour, Placement / Decision, Closed), so it could not
+be reviewed; the same layout applies to it unchanged when it is authored.

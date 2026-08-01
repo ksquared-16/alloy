@@ -418,23 +418,21 @@ test("L14 Contact Family is configured in one place — purpose through attentio
     await page.getByTestId("lifecycle-stage-tab-lead").click();
     await expect(page.getByTestId("stage-editor-v2-overview")).toBeVisible({ timeout: 60_000 });
 
-    // Open the operating plan, then the work item.
-    for (const name of [/Operational Experience/, /Possible Outcomes/]) {
-        const button = page.getByRole("button", { name }).first();
-        if (await button.count()) await button.click().catch(() => {});
-        await page.waitForTimeout(500);
+    // Operator work opens by default; nothing needs expanding. If some future change closes it
+    // again this still passes, but the assertion below is what matters.
+    const experienceHeader = page.locator("#stage-section-experience > button").first();
+    if ((await experienceHeader.getAttribute("aria-expanded")) === "false") {
+        await experienceHeader.click().catch(() => {});
     }
-    const workItems = page.getByTestId("stage-operating-plan-work-items-collapsible");
-    if (await workItems.count()) await workItems.first().locator("summary").click().catch(() => {});
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(800);
 
-    // The work queue lists items; the detail panel renders the SELECTED one. Without this the
-    // panel correctly reads "Select a work item…" and nothing under it exists to assert on.
-    const workButton = page.getByRole("button", { name: /Contact Family/ }).first();
-    await expect(workButton).toBeVisible({ timeout: 30_000 });
-    await workButton.click();
-    await page.waitForTimeout(600);
-
+    /**
+     * NO SELECTION STEP. This used to click a work item out of a queue list, because the detail
+     * panel opened empty and read "Select a work item…" — a wasted first screen on the surface
+     * the operator came for. The panel now lands on the primary work item, and a one-item queue
+     * is not rendered at all. Asserting the composed panel WITHOUT a click is strictly stronger
+     * than the old flow: it proves the operator reaches the configuration with zero steps.
+     */
     const followUp = page.getByTestId("work-item-follow-up-contact_family");
     const attention = page.getByTestId("work-item-attention-contact_family");
     await expect(followUp).toBeVisible({ timeout: 30_000 });
@@ -465,9 +463,14 @@ test("L15 stage-level attention keeps only what the STAGE owns", async () => {
 
     // Collapsed, the heading alone must already carry the split — that is the point of the
     // count. Assert it before expanding.
+    //
+    // The count is now a badge beside the heading rather than "(2)" in the text. What matters is
+    // that the number is legible while collapsed and equals the stage-owned rules, so this asserts
+    // the heading and the count separately instead of pinning one punctuation style.
     const collapsed = (await section.innerText()).replace(/\s+/g, " ");
     record(`L15 collapsed heading: ${collapsed.slice(0, 120)}`);
-    expect(collapsed).toMatch(/Stage-level attention \(2\)/i);
+    expect(collapsed.toLowerCase()).toContain("stage-level attention");
+    expect(collapsed).toMatch(/(?:\(2\)|\b2\b)/);
 
     await section.locator("summary").first().click();
     await page.waitForTimeout(400);

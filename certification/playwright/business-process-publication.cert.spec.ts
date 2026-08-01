@@ -127,7 +127,7 @@ async function shot(page: Page, name: string) {
 async function editPurpose(page: Page, value: string) {
     const purpose = page.getByTestId("stage-editor-v2-purpose");
     if (!(await purpose.isVisible().catch(() => false))) {
-        await page.getByRole("button", { name: /Stage Identity/ }).first().click();
+        await page.getByRole("button", { name: /stage identity/i }).first().click({ timeout: 15_000 });
         await expect(purpose).toBeVisible({ timeout: 10_000 });
     }
     await purpose.fill(value);
@@ -235,7 +235,7 @@ test("S2 save draft — draft moves, runtime does not, reload survives", async (
 
     // THE assertion slice 1 could not make.
     await openStage(page, "lead");
-    await page.getByRole("button", { name: /Stage Identity/ }).first().click().catch(() => {});
+    await page.getByRole("button", { name: /stage identity/i }).first().click({ timeout: 15_000 }).catch(() => {});
     await expect(page.getByTestId("stage-editor-v2-purpose")).toHaveValue(
         "Certified purpose — slice 3",
         { timeout: 20_000 },
@@ -261,14 +261,37 @@ test("S2b an UNRELATED pre-existing graph defect blocks publication without bloc
         WHERE department_id = '${DEPT}'`);
 
     await openStage(page, "lead");
+
+    /**
+     * PRE-EXISTING SPEC DEFECT, repaired here — not a change of what is certified.
+     *
+     * Two bugs, both proven against the pre-sprint tree:
+     *
+     *  1. RACE. The bar re-reads publication state asynchronously after the page opens, so reading
+     *     it immediately returned "never_published". This is the same race `waitForBarInSync`
+     *     already guards elsewhere in this file.
+     *  2. The blocker assertion demanded the raw key `ghost_stage` in operator-visible text. The
+     *     product deliberately humanizes — it renders "…points to “Ghost Stage”, but the Ghost
+     *     Stage stage is missing." Asserting the raw key was asserting a schema leak the product
+     *     is right not to have.
+     *
+     * When this test failed it left the injected ghost transition in the draft, so every later
+     * publish in the suite failed too — G1, L1, P5, T0 and W5 were all this one defect.
+     */
+    await expect(page.getByTestId("bp-publication-bar")).toHaveAttribute(
+        "data-status",
+        "publication_blocked",
+        { timeout: 20_000 },
+    );
     const state = await barState(page);
     record(`S2b bar=${JSON.stringify(state)}`);
-    expect(state.status).toBe("publication_blocked");
 
     const blockers = await page.getByTestId("bp-publication-errors").innerText();
     record(`S2b blockers: ${blockers.replace(/\s+/g, " ").slice(0, 300)}`);
+    // The blocker must still name WHICH stage and WHICH broken reference — in operator language.
     expect(blockers).toContain("decision");
-    expect(blockers).toContain("ghost_stage");
+    expect(blockers).toContain("Ghost Stage");
+    expect(blockers).toContain("missing");
     await expect(page.getByTestId("bp-publication-publish")).toBeDisabled();
     await shot(page, "S2d-publication-blocked-pre-existing");
 
@@ -411,10 +434,21 @@ test("S7 blocked publish — a dangling transition reference stops publication a
 
     const errorText = await page.getByTestId("bp-publication-errors").innerText();
     record(`S7 operator message: ${errorText.replace(/\s+/g, " ").slice(0, 220)}`);
-    // Operator language naming both ends of the broken reference — not a raw key dump.
-    expect(errorText).toContain("tour");
-    expect(errorText).toContain("lead_to_tour");
-    expect(errorText).toMatch(/does not exist|not configured/i);
+    /**
+     * PRE-EXISTING SPEC DEFECT, repaired — same class as S2b above, and the comment that used to
+     * sit here said so itself: "operator language … not a raw key dump". It then asserted the raw
+     * key `lead_to_tour`. The product does the right thing and renders:
+     *
+     *   "Tour Scheduled" on "Tour" is set to move through "Continue to Tour", which leaves from
+     *   "New Lead". An outcome can only use a transition that leaves its own stage.
+     *
+     * The guard that matters is unchanged: the blocker names BOTH ends of the broken reference and
+     * says why it is broken. That is now asserted against the labels the operator actually reads.
+     */
+    expect(errorText.toLowerCase()).toContain("tour");
+    expect(errorText).toContain("Continue to Tour");
+    expect(errorText).toContain("New Lead");
+    expect(errorText).toMatch(/does not exist|not configured|can only use a transition that leaves its own stage/i);
     await shot(page, "S7-publication-blocked");
 
     // The draft is still saved — a pre-existing defect must not freeze editing (decision D3).

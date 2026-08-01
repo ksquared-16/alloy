@@ -58,7 +58,7 @@ function AttentionRuleForm({
     if (readOnly) {
         const displayLabel = rule.label?.trim() || defaultAttentionRuleLabel(kind);
         return (
-            <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.03] px-3 py-2 text-[11px] text-alloy-midnight/70">
+            <div className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/[0.03] px-3 py-2 text-[0.6875rem] text-alloy-midnight/70">
                 <span className="font-medium text-alloy-midnight/85">{displayLabel}</span>
                 {rule.severity ?
                     <span className="ml-2 text-alloy-midnight/50">({rule.severity})</span>
@@ -69,12 +69,12 @@ function AttentionRuleForm({
 
     return (
         <div
-            className="rounded-xl border border-alloy-forge/12 bg-white p-3"
+            className="rounded-lg border border-alloy-forge/12 bg-white p-3"
             data-testid={`stage-attention-rule-workspace-${rule.rule_key}`}
         >
             <div className="grid gap-2 sm:grid-cols-2">
                 <label className="block space-y-0.5">
-                    <span className="text-[10px] font-medium text-alloy-midnight/60">Rule type</span>
+                    <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">Rule type</span>
                     <select
                         className="config-runtime-select text-xs"
                         value={kind}
@@ -92,7 +92,7 @@ function AttentionRuleForm({
                     </select>
                 </label>
                 <label className="block space-y-0.5">
-                    <span className="text-[10px] font-medium text-alloy-midnight/60">Label</span>
+                    <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">Label</span>
                     <input
                         className="config-runtime-input text-xs"
                         value={rule.label ?? ""}
@@ -101,7 +101,7 @@ function AttentionRuleForm({
                     />
                 </label>
                 <label className="block space-y-0.5">
-                    <span className="text-[10px] font-medium text-alloy-midnight/60">Severity</span>
+                    <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">Severity</span>
                     <select
                         className="config-runtime-select text-xs"
                         value={rule.severity ?? entry?.defaultSeverity ?? "medium"}
@@ -121,7 +121,7 @@ function AttentionRuleForm({
                 {entry?.supportsDuration ?
                     <div className="grid grid-cols-[1fr_auto] gap-2 sm:col-span-2">
                         <label className="block space-y-0.5">
-                            <span className="text-[10px] font-medium text-alloy-midnight/60">After</span>
+                            <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">After</span>
                             <input
                                 type="number"
                                 min={0}
@@ -145,7 +145,7 @@ function AttentionRuleForm({
                             />
                         </label>
                         <label className="block space-y-0.5">
-                            <span className="text-[10px] font-medium text-alloy-midnight/60">Unit</span>
+                            <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">Unit</span>
                             <select
                                 className="config-runtime-select text-xs"
                                 data-testid={`stage-attention-duration-unit-${rule.rule_key}`}
@@ -176,7 +176,7 @@ function AttentionRuleForm({
                 :   null}
                 {entry?.supportsThreshold ?
                     <label className="block space-y-0.5">
-                        <span className="text-[10px] font-medium text-alloy-midnight/60">Minimum attempts</span>
+                        <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">Minimum attempts</span>
                         <input
                             type="number"
                             min={0}
@@ -192,7 +192,7 @@ function AttentionRuleForm({
                 :   null}
                 {kind === "work_overdue" && workTemplates.length ?
                     <label className="block space-y-0.5 sm:col-span-2">
-                        <span className="text-[10px] font-medium text-alloy-midnight/60">Work item (optional)</span>
+                        <span className="text-[0.6875rem] font-medium text-alloy-midnight/60">Work item (optional)</span>
                         <select
                             className="config-runtime-select text-xs"
                             value={rule.template_key ?? ""}
@@ -213,16 +213,16 @@ function AttentionRuleForm({
                 :   null}
             </div>
             {entry?.description ?
-                <p className="mt-1.5 text-[10px] text-alloy-midnight/45">{entry.description}</p>
+                <p className="mt-1.5 text-[0.6875rem] text-alloy-midnight/45">{entry.description}</p>
             :   null}
             {unsupportedReason ?
-                <p className="mt-1 text-[10px] text-alloy-ember/90" data-attention-rule-unsupported="true">
+                <p className="mt-1 text-[0.6875rem] text-alloy-ember/90" data-attention-rule-unsupported="true">
                     Unsupported at runtime: {unsupportedReason}
                 </p>
             :   null}
             <button
                 type="button"
-                className="mt-2 text-[10px] font-medium text-red-700/80"
+                className="mt-2 text-[0.6875rem] font-medium text-red-700/80"
                 onClick={() => onRemove(index)}
             >
                 Remove rule
@@ -285,7 +285,7 @@ export default function LifecycleStageAttentionRulesEditor({
     };
 
     const footer = (
-        <div className="text-[11px]">
+        <div className="text-[0.6875rem]">
             <AdminV2NavLink
                 href="/admin/settings/attention-sla-rules"
                 className="font-medium text-alloy-pine hover:underline"
@@ -301,7 +301,7 @@ export default function LifecycleStageAttentionRulesEditor({
 
         return (
             <div className="space-y-3" data-testid="lifecycle-stage-attention-rules-editor">
-                <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
+                <p className="text-[0.6875rem] leading-relaxed text-alloy-midnight/60">
                     Attention rules for <span className="font-medium">{stageLabel}</span>.
                 </p>
                 <div
@@ -310,10 +310,10 @@ export default function LifecycleStageAttentionRulesEditor({
                 >
                     <aside className="w-full shrink-0 space-y-2 lg:w-44" data-testid="stage-operating-plan-attention-queue">
                         <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-semibold text-alloy-midnight/75">Rules</span>
+                            <span className="text-[0.6875rem] font-semibold text-alloy-midnight/75">Rules</span>
                             <button
                                 type="button"
-                                className="text-[10px] font-medium text-alloy-pine"
+                                className="text-[0.6875rem] font-medium text-alloy-pine"
                                 onClick={addRule}
                                 data-testid="stage-attention-add-rule"
                             >
@@ -364,7 +364,7 @@ export default function LifecycleStageAttentionRulesEditor({
 
     return (
         <div className="space-y-3" data-testid="lifecycle-stage-attention-rules-editor">
-            <p className="text-[11px] leading-relaxed text-alloy-midnight/60">
+            <p className="text-[0.6875rem] leading-relaxed text-alloy-midnight/60">
                 Attention rules for <span className="font-medium">{stageLabel}</span>. Stored on this stage
                 operating plan — evaluation wiring is separate from org-wide Needs Attention buckets.
             </p>
@@ -387,7 +387,7 @@ export default function LifecycleStageAttentionRulesEditor({
             {!readOnly ?
                 <button
                     type="button"
-                    className="text-[10px] font-medium text-alloy-pine"
+                    className="text-[0.6875rem] font-medium text-alloy-pine"
                     onClick={addRule}
                     data-testid="stage-attention-add-rule"
                 >
@@ -396,7 +396,7 @@ export default function LifecycleStageAttentionRulesEditor({
             :   null}
 
             {!rules.length ?
-                <p className="text-[11px] text-alloy-midnight/50">No attention rules configured for this stage.</p>
+                <p className="text-[0.6875rem] text-alloy-midnight/50">No attention rules configured for this stage.</p>
             :   null}
 
             {footer}

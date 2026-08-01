@@ -6,7 +6,7 @@
  * APIs only; no new process/stage runtime and no parallel builder.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import LifecycleActivationBoard from "@/components/adminV2/settings/lifecycle/LifecycleActivationBoard";
 import BusinessProcessCollectionRail, {
     businessProcessHealthHint,
@@ -239,6 +239,21 @@ export default function LifecycleBuilderPrimary({
         setDeleteConfirmTarget(entry);
     }, []);
 
+    /**
+     * Collapsed once a process is open. Manual toggling wins for the rest of the session —
+     * the effect below only reacts to a *change* in whether anything is selected, so a director
+     * who reopens the rail keeps it open while they browse stages.
+     */
+    const [railCollapsed, setRailCollapsed] = useState(false);
+    const hasSelection = Boolean(selectedCatalogEntry) || creatingNew;
+    const prevHasSelection = useRef(hasSelection);
+    useEffect(() => {
+        if (prevHasSelection.current !== hasSelection) {
+            prevHasSelection.current = hasSelection;
+            setRailCollapsed(hasSelection);
+        }
+    }, [hasSelection]);
+
     const headerMeta = useMemo(() => {
         if (!selectedCatalogEntry) return null;
         return `${businessProcessStageSummary(selectedCatalogEntry)} · ${businessProcessHealthHint(selectedCatalogEntry)}`;
@@ -267,14 +282,25 @@ export default function LifecycleBuilderPrimary({
                 </p>
             :   null}
 
+            {/* The rail is navigation; the workspace is the work. With a process selected the
+                rail held two cards and ~550px of nothing while the editor beside it truncated
+                its own dropdowns — so it collapses to a strip and the width goes to the work.
+                One click restores it, and the collapse is remembered for the session. */}
             <div
-                className="grid min-h-0 flex-1 items-start gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]"
+                className={`grid min-h-0 flex-1 items-start gap-4 ${
+                    railCollapsed
+                        ? "xl:grid-cols-[2.75rem_minmax(0,1fr)]"
+                        : "xl:grid-cols-[22rem_minmax(0,1fr)]"
+                }`}
                 data-testid="business-process-collection-shell"
+                data-rail-collapsed={railCollapsed ? "true" : "false"}
             >
                 <BusinessProcessCollectionRail
                     items={catalog}
                     selectedId={selectedCatalogId}
                     loading={catalogLoading}
+                    collapsed={railCollapsed}
+                    onToggleCollapsed={() => setRailCollapsed((v) => !v)}
                     onSelect={selectCatalogEntry}
                     onCreateNew={() => {
                         setCreatingNew(true);
