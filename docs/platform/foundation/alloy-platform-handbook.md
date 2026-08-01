@@ -241,6 +241,7 @@ The Trust Platform is Alloy’s **cognitive platform**: trusted operational reas
 - [`../trust/trust-philosophy.md`](../trust/trust-philosophy.md)
 - [`../trust/trust-platform-manifesto.md`](../trust/trust-platform-manifesto.md)
 - [`../trust/trust-runtime.md`](../trust/trust-runtime.md)
+- [`../trust/trust-platform-decisions.md`](../trust/trust-platform-decisions.md)
 
 ---
 

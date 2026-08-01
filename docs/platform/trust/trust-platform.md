@@ -250,7 +250,8 @@ The Trust Platform documentation should be read in this order.
 ### Integration
 
 14. [`Platform Integration`](./platform-integration.md)
-15. [`Platform Decisions`](../foundation/platform-decisions.md)
+15. [`Trust Platform Decisions`](./trust-platform-decisions.md)
+16. [`Platform Decisions`](../foundation/platform-decisions.md) (Alloy-wide register)
 
 ---
 

@@ -474,7 +474,8 @@ It is foundational infrastructure shared by every capability in Alloy.
 - [`Knowledge Platform`](./knowledge-platform.md)
 - Objective Platform — **TODO:** link when canonical Objective Platform doctrine is published
 - Records Platform — **TODO:** link when canonical Records Platform doctrine is published
-- [`Platform Decisions`](../foundation/platform-decisions.md)
+- [`Trust Platform Decisions`](./trust-platform-decisions.md)
+- [`Platform Decisions`](../foundation/platform-decisions.md) (Alloy-wide register)
 
 ---
 

@@ -42,6 +42,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 | Trust Governance | [`trust-governance.md`](./trust-governance.md) | published (canonical) | 2026-08-01 |
 | Trust Economics | [`trust-economics.md`](./trust-economics.md) | published (canonical) | 2026-08-01 |
 | Platform Integration | [`platform-integration.md`](./platform-integration.md) | published (canonical) | 2026-08-01 |
+| Trust Platform Decisions | [`trust-platform-decisions.md`](./trust-platform-decisions.md) | published (canonical) | 2026-08-01 |
 
 **Status vocabulary for this index**
 
@@ -72,6 +73,7 @@ docs/platform/trust/
   trust-governance.md
   trust-economics.md
   platform-integration.md
+  trust-platform-decisions.md
 ```
 
 ---

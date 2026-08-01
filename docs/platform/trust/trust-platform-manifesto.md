@@ -294,7 +294,8 @@ Implementation convenience is never sufficient justification for changing consti
 - [`Trust Runtime`](./trust-runtime.md)
 - [`Decision Contracts`](./decision-contract.md)
 - [`Decision Packages`](./decision-package.md)
-- [`Platform Decisions`](../foundation/platform-decisions.md)
+- [`Trust Platform Decisions`](./trust-platform-decisions.md)
+- [`Platform Decisions`](../foundation/platform-decisions.md) (Alloy-wide register)
 
 ---
 
