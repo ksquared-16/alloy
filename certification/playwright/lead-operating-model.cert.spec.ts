@@ -408,3 +408,90 @@ test("L13 the attempt policy gate is authored where the runtime reads it", async
     expect(Number(ruleLevel)).toBeGreaterThan(0);
     expect(Number(targetLevel)).toBe(0);
 });
+
+test("L14 Contact Family is configured in one place — purpose through attention", async () => {
+    await page.goto("/adminV2/settings/organization/processes");
+    await page.waitForLoadState("domcontentloaded");
+    const close = page.getByRole("button", { name: "Close", exact: true });
+    if (await close.count()) await close.first().click().catch(() => {});
+    await page.getByTestId("business-process-tab-stages").click();
+    await page.getByTestId("lifecycle-stage-tab-lead").click();
+    await expect(page.getByTestId("stage-editor-v2-overview")).toBeVisible({ timeout: 60_000 });
+
+    // Open the operating plan, then the work item.
+    for (const name of [/Operational Experience/, /Possible Outcomes/]) {
+        const button = page.getByRole("button", { name }).first();
+        if (await button.count()) await button.click().catch(() => {});
+        await page.waitForTimeout(500);
+    }
+    const workItems = page.getByTestId("stage-operating-plan-work-items-collapsible");
+    if (await workItems.count()) await workItems.first().locator("summary").click().catch(() => {});
+    await page.waitForTimeout(600);
+
+    // The work queue lists items; the detail panel renders the SELECTED one. Without this the
+    // panel correctly reads "Select a work item…" and nothing under it exists to assert on.
+    const workButton = page.getByRole("button", { name: /Contact Family/ }).first();
+    await expect(workButton).toBeVisible({ timeout: 30_000 });
+    await workButton.click();
+    await page.waitForTimeout(600);
+
+    const followUp = page.getByTestId("work-item-follow-up-contact_family");
+    const attention = page.getByTestId("work-item-attention-contact_family");
+    await expect(followUp).toBeVisible({ timeout: 30_000 });
+    await expect(attention).toBeVisible({ timeout: 30_000 });
+
+    const followUpText = (await followUp.innerText()).replace(/\s+/g, " ");
+    const attentionText = (await attention.innerText()).replace(/\s+/g, " ");
+    record(`L14 follow-up: ${followUpText.slice(0, 240)}`);
+    record(`L14 attention: ${attentionText.slice(0, 200)}`);
+
+    // Follow-up reads as a chain, in operator words, next to the outcomes that cause it.
+    expect(followUpText).toContain("Left Message");
+    expect(followUpText).toContain("Follow up tomorrow");
+    expect(followUpText).toContain("Follow up in 3 days");
+    expect(followUpText.toLowerCase()).toContain("retrying until 3 attempts");
+    expect(followUpText.toLowerCase()).toContain("escalate");
+    // And the way out of the stage is stated here too.
+    expect(followUpText).toContain("moves the family on");
+
+    // Work-scoped attention sits with the work, not in a distant panel.
+    expect(attentionText.toLowerCase()).toContain("attention for this work");
+    await shot(page, "L14-contact-family-composed");
+});
+
+test("L15 stage-level attention keeps only what the STAGE owns", async () => {
+    const section = page.getByTestId("stage-operating-plan-attention-section");
+    await expect(section).toBeVisible({ timeout: 30_000 });
+
+    // Collapsed, the heading alone must already carry the split — that is the point of the
+    // count. Assert it before expanding.
+    const collapsed = (await section.innerText()).replace(/\s+/g, " ");
+    record(`L15 collapsed heading: ${collapsed.slice(0, 120)}`);
+    expect(collapsed).toMatch(/Stage-level attention \(2\)/i);
+
+    await section.locator("summary").first().click();
+    await page.waitForTimeout(400);
+    const text = (await section.innerText()).replace(/\s+/g, " ");
+    record(`L15 expanded: ${text.slice(0, 260)}`);
+    expect(text.toLowerCase()).toContain("attention about a specific piece of work lives with that work item");
+    // The work-scoped rules are NOT duplicated here.
+    expect(text).not.toContain("No contact attempt recorded");
+});
+
+test("L16 the composition did NOT change persistence", async () => {
+    // Presentation only. All four rules remain in ONE flat stage array, each keeping the
+    // `template_key` that decides where it renders. Nothing was copied or re-parented.
+    const total = sql(`select jsonb_array_length(
+        payload->'processes'->0->'stages'->0->'stage_operating_plan_v1'->'attention_rules')
+        from business_process_drafts where department_id='${DEPT}'`);
+    const scoped = sql(`select count(*) from business_process_drafts d,
+        jsonb_array_elements(d.payload->'processes'->0->'stages'->0->'stage_operating_plan_v1'->'attention_rules') r
+        where d.department_id='${DEPT}' and coalesce(r->>'template_key','') = 'contact_family'`);
+    const stageOwned = sql(`select count(*) from business_process_drafts d,
+        jsonb_array_elements(d.payload->'processes'->0->'stages'->0->'stage_operating_plan_v1'->'attention_rules') r
+        where d.department_id='${DEPT}' and coalesce(r->>'template_key','') = ''`);
+    record(`L16 attention_rules: ${total} total = ${scoped} work-scoped + ${stageOwned} stage-owned, one array`);
+    expect(Number(total)).toBe(4);
+    expect(Number(scoped)).toBe(2);
+    expect(Number(stageOwned)).toBe(2);
+});
