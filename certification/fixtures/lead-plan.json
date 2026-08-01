@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "lead",
+  "journey_segment": "family",
+  "purpose": "Reach the family, understand their needs, determine fit, and establish the next operational step.",
+  "outgoing_transitions": [
+    {
+      "transition_ref": "lead_to_tour",
+      "source_stage_key": "lead",
+      "target_stage_key": "tour",
+      "label": "Continue to Tour",
+      "available": true,
+      "status_key": "open"
+    },
+    {
+      "transition_ref": "lead_to_closed",
+      "source_stage_key": "lead",
+      "target_stage_key": "closed",
+      "label": "Close as Lost",
+      "available": true,
+      "status_key": "closed",
+      "closes_record": true
+    }
+  ],
+  "work_templates": [
+    {
+      "template_key": "contact_family",
+      "label": "Contact Family",
+      "description": "Reach the family, understand their needs, determine fit, and establish the next operational step.",
+      "required": true,
+      "primary": true,
+      "due_policy": {
+        "kind": "offset_days",
+        "days": 1
+      },
+      "owner_strategy": "record_owner",
+      "work_definition_key": "contact_family",
+      "execution_mode": "direct_action",
+      "primary_action": {
+        "action_ref": "quick_message",
+        "override_label": "Send Message"
+      },
+      "helpful_actions": [
+        {
+          "action_ref": "call_parent",
+          "override_label": "Call Family"
+        },
+        {
+          "action_ref": "schedule_tour",
+          "override_label": "Schedule Tour"
+        },
+        {
+          "action_ref": "send_form"
+        }
+      ],
+      "outcome_refs": [
+        {
+          "outcome_ref": "reached_family"
+        },
+        {
+          "outcome_ref": "tour_scheduled"
+        },
+        {
+          "outcome_ref": "left_message"
+        },
+        {
+          "outcome_ref": "needs_follow_up"
+        },
+        {
+          "outcome_ref": "unable_to_reach"
+        },
+        {
+          "outcome_ref": "not_interested"
+        }
+      ]
+    }
+  ],
+  "outcomes": [
+    {
+      "outcome_key": "reached_family",
+      "label": "Reached / Qualified",
+      "successful": true,
+      "completes_work": true
+    },
+    {
+      "outcome_key": "tour_scheduled",
+      "label": "Tour Scheduled",
+      "successful": true,
+      "completes_work": true
+    },
+    {
+      "outcome_key": "left_message",
+      "label": "Left Message"
+    },
+    {
+      "outcome_key": "needs_follow_up",
+      "label": "Awaiting Response"
+    },
+    {
+      "outcome_key": "unable_to_reach",
+      "label": "Unable to Reach"
+    },
+    {
+      "outcome_key": "not_interested",
+      "label": "Closed Lost",
+      "completes_work": true
+    },
+    {
+      "outcome_key": "interested",
+      "label": "Interested (retired)"
+    }
+  ],
+  "outcome_rules": [
+    {
+      "rule_key": "reached_qualified_complete",
+      "when_outcome_key": "reached_family",
+      "targets": [
+        {
+          "kind": "mark_stage_work_complete"
+        },
+        {
+          "kind": "no_movement"
+        }
+      ]
+    },
+    {
+      "rule_key": "tour_scheduled_to_tour",
+      "when_outcome_key": "tour_scheduled",
+      "targets": [
+        {
+          "kind": "mark_stage_work_complete"
+        },
+        {
+          "kind": "move_to_stage",
+          "transition_ref": "lead_to_tour"
+        }
+      ]
+    },
+    {
+      "rule_key": "left_message_follow_up",
+      "when_outcome_key": "left_message",
+      "targets": [
+        {
+          "kind": "no_movement"
+        },
+        {
+          "kind": "create_next_work",
+          "template_key": "contact_family",
+          "follow_up_due_policy": {
+            "anchor": "outcome_recorded_at",
+            "offset_value": 1,
+            "offset_unit": "days",
+            "direction": "after",
+            "missing_anchor_behavior": "use_outcome_recorded_at"
+          }
+        }
+      ]
+    },
+    {
+      "rule_key": "awaiting_response_follow_up",
+      "when_outcome_key": "needs_follow_up",
+      "targets": [
+        {
+          "kind": "no_movement"
+        },
+        {
+          "kind": "create_next_work",
+          "template_key": "contact_family",
+          "follow_up_due_policy": {
+            "anchor": "outcome_recorded_at",
+            "offset_value": 3,
+            "offset_unit": "days",
+            "direction": "after",
+            "missing_anchor_behavior": "use_outcome_recorded_at"
+          }
+        }
+      ]
+    },
+    {
+      "rule_key": "unable_to_reach_retry",
+      "when_outcome_key": "unable_to_reach",
+      "targets": [
+        {
+          "kind": "no_movement"
+        },
+        {
+          "kind": "create_next_work",
+          "template_key": "contact_family",
+          "when_attempt_count_lt": 3,
+          "follow_up_due_policy": {
+            "anchor": "outcome_recorded_at",
+            "offset_value": 2,
+            "offset_unit": "days",
+            "direction": "after",
+            "missing_anchor_behavior": "use_outcome_recorded_at"
+          }
+        },
+        {
+          "kind": "create_needs_attention",
+          "when_attempt_count_gte": 3,
+          "attention_reason": "Unable to reach after 3 attempts \u2014 decide whether to keep trying or close",
+          "wait_bucket": "waiting_on_staff"
+        }
+      ]
+    },
+    {
+      "rule_key": "closed_lost_close",
+      "when_outcome_key": "not_interested",
+      "targets": [
+        {
+          "kind": "mark_stage_work_complete"
+        },
+        {
+          "kind": "move_to_stage",
+          "transition_ref": "lead_to_closed"
+        }
+      ]
+    },
+    {
+      "rule_key": "interested_retired_no_movement",
+      "when_outcome_key": "interested",
+      "targets": [
+        {
+          "kind": "no_movement"
+        }
+      ]
+    }
+  ],
+  "attention_rules": [
+    {
+      "rule_key": "first_contact_overdue",
+      "kind": "work_overdue",
+      "label": "Contact Family overdue",
+      "severity": "medium",
+      "threshold": 1,
+      "template_key": "contact_family",
+      "threshold_duration": {
+        "offset_value": 1,
+        "offset_unit": "days"
+      },
+      "targets": [
+        {
+          "kind": "create_needs_attention",
+          "wait_bucket": "waiting_on_staff",
+          "attention_reason": "Contact Family overdue"
+        }
+      ]
+    },
+    {
+      "rule_key": "no_contact_attempt",
+      "kind": "work_overdue",
+      "label": "No contact attempt recorded",
+      "severity": "medium",
+      "threshold": 2,
+      "template_key": "contact_family",
+      "threshold_duration": {
+        "offset_value": 2,
+        "offset_unit": "days"
+      },
+      "targets": [
+        {
+          "kind": "create_needs_attention",
+          "wait_bucket": "waiting_on_staff",
+          "attention_reason": "No contact attempt recorded after 2 days"
+        }
+      ]
+    },
+    {
+      "rule_key": "stage_age_7d",
+      "kind": "stage_age_exceeded",
+      "label": "Lead stage age > 7 days",
+      "severity": "medium",
+      "threshold": 7,
+      "threshold_duration": {
+        "offset_value": 7,
+        "offset_unit": "days"
+      },
+      "targets": [
+        {
+          "kind": "create_needs_attention",
+          "wait_bucket": "waiting_on_staff",
+          "attention_reason": "Lead stage aging beyond 7 days"
+        }
+      ]
+    },
+    {
+      "rule_key": "missing_required_fields",
+      "kind": "missing_requirements",
+      "label": "Missing stage-required information",
+      "severity": "medium",
+      "targets": [
+        {
+          "kind": "create_needs_attention",
+          "wait_bucket": "waiting_on_staff",
+          "attention_reason": "Missing required Lead stage information"
+        }
+      ]
+    }
+  ]
+}

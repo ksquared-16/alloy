@@ -1,6 +1,8 @@
 # Lead Operating Model V1
 
-**Status: DRAFT — awaiting Kelly's approval. B2 (premium UI) must not begin until this is approved and B1.7 is certified.**
+**Status: APPROVED and CERTIFIED (B1.7). 12/12, `rc=0`.**
+Kelly's decisions of 2026-08-01 are incorporated below and are live in the published configuration.
+B2 (premium UI) may now begin against this contract.
 
 This is the product contract for the Lead stage. It is written against the **actual persisted
 configuration** in the certification tenant, not against what the configuration was assumed to be.
@@ -215,7 +217,110 @@ the draft/publication model that Platform V1 now guarantees.
 
 ---
 
-## Open decisions for Kelly
+## Approved decisions — as published
+
+| # | Decision | Published as |
+|---|---|---|
+| 1 | Reached / Qualified **completes** Contact Family and does **not** move the family | `reached_qualified_complete` → `mark_stage_work_complete` + `no_movement` |
+| 2 | Attempt policy is **configuration**, never platform code; never auto-closes | `unable_to_reach_retry` → follow-up while `when_attempt_count_lt: 3`, attention at `when_attempt_count_gte: 3`, no close target |
+| 3 | `interested` retired as a stage-moving outcome, history preserved | outcome retained, removed from `outcome_refs`, rule → `no_movement` |
+| 4 | Work Views use authoritative **stage**, not status | `filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" \| "tour" }]`; All Leads `[]` |
+
+Decision 3 deliberately keeps the `interested` **outcome** while removing its movement rule and
+its place in the work item's `outcome_refs`. Renaming or deleting the key would orphan every
+historical record that referenced it; this way it is unselectable going forward, moves nothing,
+and old evidence still resolves.
+
+---
+
+## Published configuration (B1.7)
+
+`certification/fixtures/lead-plan.json` is the authored plan. Certified by
+`certification/playwright/lead-operating-model.cert.spec.ts` — **12/12, rc=0**, log at
+`certification/evidence/lead-operating-model-12of12.log`.
+
+### Outcomes as published
+
+| Outcome | Completes work | Movement | Follow-up | Attention |
+|---|---|---|---|---|
+| Reached / Qualified | ✅ | **none** | — | — |
+| Tour Scheduled | ✅ | `lead_to_tour` | — | — |
+| Left Message | no | none | Contact Family +1d | — |
+| Awaiting Response | no | none | Contact Family +3d | — |
+| Unable to Reach | no | none | Contact Family +2d while attempts < 3 | Needs Attention at ≥ 3 attempts |
+| Closed Lost | ✅ | `lead_to_closed` (`closes_record`, `status_key: closed`) | — | — |
+| *Interested (retired)* | no | **none** | — | — |
+
+### Actions — registered capabilities only
+
+`quick_message` (primary, "Send Message") · `call_parent` ("Call Family") · `schedule_tour`
+("Schedule Tour") · `send_form`.
+
+**`log_call` does not exist** in `action_definitions`; the model originally named it and was
+corrected to `call_parent` rather than inventing a capability. The editor configures *references*
+to registered actions — it never becomes a second execution authority.
+
+### Attention as published
+
+| Rule | Owner | Creates | Clears when |
+|---|---|---|---|
+| `first_contact_overdue` | Work Item (`contact_family`) | Needs Attention after +1d | work completed |
+| `no_contact_attempt` | Work Item (`contact_family`) | Needs Attention after +2d | work completed |
+| `stage_age_7d` | Stage | Needs Attention after 7d in Lead | stage exit |
+| `missing_required_fields` | Stage | Needs Attention | required fields supplied |
+
+All warn; none block. The attempt-threshold signal lives on the `unable_to_reach` rule rather
+than as a separate attention rule, because it is a property of the outcome being recorded.
+
+---
+
+## Certification evidence
+
+```
+L0  draft materialized at revision 1;  authored;  published rules UNCHANGED by authoring
+L1  validate can_publish=true errors=0 → publish http=200 → revisions 0 → 1
+L2  reached_family_to_tour: GONE      interested_to_tour: GONE
+    rules referencing lead_to_tour: 1  (tour_scheduled only)
+    interested retained as non-moving — historical evidence preserved
+L3  new_leads  [{field_key: opportunity_stage, operator: equals, value: lead}]
+    tours      [{field_key: opportunity_stage, operator: equals, value: tour}]
+    all_work   []   (sanctioned include-all)     no opportunity_status anywhere
+L4  Reached / Qualified:  family lead/open/- → lead/open/-   work=completed   ← THE correction
+L5  Left Message:         family stays lead;  open work 1 → 2
+L6  Awaiting Response:    family stays lead
+L7  Unable to Reach:      family stays lead, NOT closed — closure stays an operator decision
+L8  Tour Scheduled:       family lead/open/- → tour/open/-   work=completed
+    durable opportunity status after the move: open   (never `tour_scheduled`)
+L9  opportunities carrying a legacy `tour_scheduled` status: 0
+L10 status=published  draft_revision=3  base_revision=present  revisions=1
+```
+
+**L4 and L8 together are the whole point.** A recorded phone call leaves the family in Lead; only
+a scheduled tour moves them. Before this slice both did the same thing.
+
+---
+
+## Remaining backend ambiguity
+
+- **`follow_up` Work View has no predicate.** Lead, Tour and All Leads were the three the decision
+  named; `follow_up` still resolves through `compat_queue_key`. It needs a product definition
+  ("what makes work follow-up?") before it can be expressed as a predicate.
+- **Outcome availability is not gated by attempt count.** The platform gates *targets*
+  (`when_attempt_count_lt` / `_gte`), not whether an outcome is offered. So "Unable to Reach
+  becomes available after the threshold" is expressed as *behaviour* that changes at the
+  threshold, not as a hidden option. Gating availability would be a platform primitive.
+- **Contact-attempt evidence is inferred from work instances**, not from a first-class attempt
+  counter. `when_attempt_count_*` reads that inference. If attempts need to be counted
+  independently of work items, that is a platform addition.
+- **Schedule Tour → booking is not certified end to end.** L8 proves the outcome resolves the
+  transition and moves the family. It does not prove the `schedule_tour` action creates a
+  canonical booking record, because that command was not exercised. Stated rather than implied.
+
+---
+
+## Superseded
+
+Earlier open decisions for Kelly
 
 1. **Does "Reached / Qualified" complete the Contact Family work item, or leave it open?** The
    model above completes it and relies on the operator taking the next action. The alternative
