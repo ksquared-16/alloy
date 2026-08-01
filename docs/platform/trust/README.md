@@ -32,7 +32,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 | Trust Platform Manifesto | [`trust-platform-manifesto.md`](./trust-platform-manifesto.md) | published (canonical) | 2026-08-01 |
 | Trust Platform | [`trust-platform.md`](./trust-platform.md) | published (canonical) | 2026-08-01 |
 | Trust Runtime | [`trust-runtime.md`](./trust-runtime.md) | published (canonical) | 2026-08-01 |
-| Decision Contract | [`decision-contract.md`](./decision-contract.md) | stub — awaiting GPT | — |
+| Decision Contract | [`decision-contract.md`](./decision-contract.md) | published (canonical) | 2026-08-01 |
 | Decision Package | [`decision-package.md`](./decision-package.md) | stub — awaiting GPT | — |
 | Knowledge Platform | [`knowledge-platform.md`](./knowledge-platform.md) | stub — awaiting GPT | — |
 | Information Classification | [`information-classification.md`](./information-classification.md) | stub — awaiting GPT | — |
