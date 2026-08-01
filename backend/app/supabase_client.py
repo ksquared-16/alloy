@@ -1119,39 +1119,7 @@ def upsert_job(job_payload: Dict, internal_id: Optional[str] = None) -> Dict:
         )
         raise
 
-def resolve_opportunity_id_from_ghl(ghl_opportunity_id: str) -> Optional[str]:
-    """
-    Resolve Supabase opportunity ID from GHL opportunity ID via external_mappings.
-    
-    Args:
-        ghl_opportunity_id: GHL opportunity ID
-    
-    Returns:
-        Supabase opportunity UUID if found, None otherwise
-    """
-    mapping = find_external_mapping("ghl", "opportunity", ghl_opportunity_id, "opportunities")
-    if mapping:
-        return mapping.get("internal_id")
-    return None
 
-def resolve_contact_id_from_ghl(ghl_contact_id: str) -> Optional[str]:
-    """
-    Resolve Supabase contact ID from GHL contact ID via external_mappings.
-    
-    Args:
-        ghl_contact_id: GHL contact ID
-    
-    Returns:
-        Supabase contact UUID if found, None otherwise
-    """
-    logger.info("SUPA_WRITE_ATTEMPT entity=contact action=resolve ghl_contact_id=%s", ghl_contact_id[:8] + "***" if len(ghl_contact_id) > 8 else ghl_contact_id)
-    mapping = find_external_mapping("ghl", "contact", ghl_contact_id, "contacts")
-    if mapping:
-        internal_id = mapping.get("internal_id")
-        logger.info("SUPA_WRITE_SUCCESS entity=contact action=resolve ghl_contact_id=%s internal_id=%s", ghl_contact_id[:8] + "***", internal_id)
-        return internal_id
-    logger.warning("SUPA_WRITE_FAILED entity=contact action=resolve ghl_contact_id=%s error=mapping_not_found", ghl_contact_id[:8] + "***")
-    return None
 
 def link_stripe_customer_to_supabase(
     stripe_customer_id: str,
@@ -1273,18 +1241,7 @@ def link_stripe_customer_to_supabase(
                         resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id
                     )
         
-        # Priority 2: GHL contact_id via external_mappings
-        if not resolved_supabase_contact_id and ghl_contact_id:
-            resolved_supabase_contact_id = resolve_contact_id_from_ghl(ghl_contact_id)
-            if resolved_supabase_contact_id:
-                contact_resolution_path = "mapping"
-                logger.info(
-                    "CONTACT_RESOLVE path=mapping contact_id=%s ghl_contact_id=%s",
-                    resolved_supabase_contact_id[:8] + "***" if len(resolved_supabase_contact_id) > 8 else resolved_supabase_contact_id,
-                    ghl_contact_id[:8] + "***" if len(ghl_contact_id) > 8 else ghl_contact_id
-                )
-        
-        # Priority 3: Email lookup
+        # Priority 2: Email lookup
         if not resolved_supabase_contact_id and email:
             contact = find_contact_by_email(email.strip().lower())
             if contact:

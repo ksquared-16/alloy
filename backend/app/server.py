@@ -4,13 +4,12 @@ FastAPI application setup and route registration.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import leads, dispatch, quote, debug, webhooks, stripe, discounts, messages_sender, sms_inbound
-from .ghl_client import fetch_contractors
+from .routes import stripe, messages_sender, sms_inbound
 
 # Create FastAPI app
 app = FastAPI(
     title="Alloy Dispatcher API",
-    description="API for dispatching cleaning jobs and managing leads",
+    description="Alloy platform API: communications dispatch, inbound SMS, and payment execution",
     version="1.0.0",
 )
 
@@ -24,13 +23,7 @@ app.add_middleware(
 )
 
 # Register routers
-app.include_router(leads.router)
-app.include_router(dispatch.router)
-app.include_router(quote.router)
-app.include_router(debug.router)
-app.include_router(webhooks.router)
 app.include_router(stripe.router)
-app.include_router(discounts.router)
 app.include_router(messages_sender.router, prefix="/internal")
 app.include_router(sms_inbound.router, prefix="/sms")
 
