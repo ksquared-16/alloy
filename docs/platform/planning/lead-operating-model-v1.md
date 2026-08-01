@@ -300,6 +300,77 @@ a scheduled tour moves them. Before this slice both did the same thing.
 
 ---
 
+## Schedule Tour, end to end — certified 8/8 (B1.7 closure)
+
+`certification/playwright/schedule-tour.cert.spec.ts`. The last backend gap is closed: the **real**
+command was exercised, not a manually injected outcome.
+
+### The canonical command path, as traced
+
+```
+POST /api/admin/tours/bookings                    capability: schedule_tour
+  → createTourBooking · runPlatformTransaction
+      tour_bookings insert          [durable]     compensating delete registered
+      applyTourBookingOpportunityIntegration      kind: confirmed_mirror
+        → emitDomainLifecycleSignalEvent          domain=tour_booking  signal=scheduled
+          → applyConfiguredStageRulesForDomainSignal
+              reads the PUBLISHED projection only
+              matches rules by exact {domain, signal}
+              → move_to_stage lead_to_tour
+      emitTourBookingLifecycleEvent [activity]    workflow_events, entity=tour_bookings
+      confirmation comms            [outside]     a comms failure never revokes a booking
+```
+
+There is **one** execution path. Nothing was added.
+
+### The contradiction that had to be fixed first
+
+The published Lead model keyed its rule on `when_outcome_key: "tour_scheduled"` — a *human-recorded*
+outcome. The command emits a **domain signal**. Nothing matched, so an operator would have had to
+book a tour **and then separately record "Tour Scheduled"** — precisely the double step the product
+model rejects.
+
+The configuration now also carries:
+
+```json
+{ "rule_key": "tour_booking_scheduled_to_tour",
+  "when_domain_signal": { "domain": "tour_booking", "signal": "scheduled" },
+  "targets": [{ "kind": "mark_stage_work_complete" },
+              { "kind": "move_to_stage", "transition_ref": "lead_to_tour" }] }
+```
+
+The booking now drives the transition by itself. The manual `tour_scheduled` outcome is retained
+for tours booked outside the system; both converge on the same targets.
+
+### Evidence
+
+```
+T0  published rule carries when_domain_signal {tour_booking, scheduled}
+T1  BEFORE  stage=lead  bookings=0
+T2  command http=201 · bookings=1 state=confirmed · stage lead → tour · status stayed `open`
+    booking events: tour_confirmed
+T3  opportunities carrying a legacy `tour_scheduled` status: 0
+T4  duplicate submission → http=400 "an active non-terminal booking already exists"
+    bookings 1 → 1 · stage tour → tour        (server-side, not button disabling)
+T5  missing inputs → http=400 "opportunity_id and location_id required"; no booking, no movement
+T6  published transition removed → http=400
+    "tour_booking: scheduled signal failed — Transition "lead_to_tour" is not configured on this stage."
+    bookings=0 · stage lead → lead
+```
+
+### The compensation contract, as it actually is
+
+T6 was written expecting the booking to survive a failed downstream signal. **It does not.** The
+platform transaction fails the `business_process` step and **compensates — the booking is rolled
+back.** That is a defensible contract (no booking the process cannot honour) and the opposite of
+the Firefly shape where a partial write survived, but it is not the contract that was assumed, so
+the test now asserts the invariant and records which branch it took rather than encoding a guess.
+
+**Idempotency is server-side.** The duplicate guard is an active-booking check inside the command;
+a double click, a retry, or a replay all hit it.
+
+---
+
 ## Remaining backend ambiguity
 
 - **`follow_up` Work View has no predicate.** Lead, Tour and All Leads were the three the decision
@@ -312,9 +383,17 @@ a scheduled tour moves them. Before this slice both did the same thing.
 - **Contact-attempt evidence is inferred from work instances**, not from a first-class attempt
   counter. `when_attempt_count_*` reads that inference. If attempts need to be counted
   independently of work items, that is a platform addition.
-- **Schedule Tour → booking is not certified end to end.** L8 proves the outcome resolves the
-  transition and moves the family. It does not prove the `schedule_tour` action creates a
-  canonical booking record, because that command was not exercised. Stated rather than implied.
+- ~~Schedule Tour → booking is not certified end to end.~~ **Closed** — certified 8/8 above.
+- **No `activity_log` entry is written against the opportunity** when a tour is booked. The audit
+  trail lives in `workflow_events` keyed on the *booking*, which is deliberate (the emitter never
+  speaks opportunity-status vocabulary). But an operator reading the family's activity feed will
+  not see the tour there. Worth a product decision.
+- **The representative seed ships no `tour_availability_rules`**, so Schedule Tour cannot succeed
+  in a freshly seeded tenant at all. Certification seeds a window explicitly as named setup. The
+  seed arguably should carry one, so the command is exercisable out of the box.
+- **`isSlotOffered` requires an exact slot-boundary match.** Correct, but it means a booking time
+  that is not on the configured grid is refused with a generic "slot is not available" message.
+  An operator picking 10:15 on a 45-minute grid gets no hint why.
 
 ---
 
