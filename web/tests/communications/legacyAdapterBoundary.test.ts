@@ -38,7 +38,6 @@ const ADAPTER = "lib/communications/executeLegacyCommunicationsSendAdapter.ts";
 
 /** Exactly the callers documented in the adapter header. */
 const ALLOWED_ADAPTER_CALLERS = [
-    "app/api/admin/communications/send/route.ts",
     "app/api/admin/communications/family-note/route.ts",
     "lib/communications/communicationScheduledSendsService.ts",
 ];
@@ -69,6 +68,7 @@ describe("legacy adapter is bounded", () => {
 
 describe("converged provider-bound routes use the canonical send command", () => {
     const CONVERGED = [
+        "app/api/admin/communications/send/route.ts",
         "app/api/admin/communications/family-send/route.ts",
         "app/api/admin/ai/task-assist/apply/route.ts",
         "app/api/admin/opportunities/[id]/form-deliver/route.ts",
@@ -88,8 +88,23 @@ describe("converged provider-bound routes use the canonical send command", () =>
         for (const f of CONVERGED) {
             const src = code(f);
             expect(src, `${f}: audience`).toMatch(/audience:\s*"(external|internal)"/);
-            expect(src, `${f}: category`).toMatch(/category:\s*"(transactional|operational|marketing|emergency)"/);
+            // Two legitimate shapes: a route that owns its category states a
+            // literal; a route that accepts the operator's choice passes a
+            // validated variable and REJECTS a missing one. Both are explicit —
+            // what neither may do is default silently.
+            const literalCategory = /category:\s*"(transactional|operational|marketing|emergency)"/.test(src);
+            const validatedCategory = /(^|\s)category\s*,/m.test(src) && /missing_category/.test(src);
+            expect(literalCategory || validatedCategory, `${f}: category is explicit`).toBe(true);
             expect(src, `${f}: purpose`).toMatch(/purpose:\s*"[a-z_]+"/);
+        }
+    });
+
+    it("no converged route defaults a missing category", () => {
+        for (const f of CONVERGED) {
+            const src = code(f);
+            if (!/(^|\s)category\s*,/m.test(src)) continue;
+            // A route reading the category from the request must reject absence.
+            expect(src, `${f} must reject a missing category`).toMatch(/missing_category/);
         }
     });
 

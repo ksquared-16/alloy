@@ -6,25 +6,26 @@
  * canonicalSend.ts) is the real authority. Two equally canonical-looking send
  * functions is the condition that let this one quietly own policy for months.
  *
- * REMAINING CALLERS (3), and why each is still here:
- *
- *   app/api/admin/communications/send/route.ts
- *       Typed-recipient enforcement has landed (free-text is refused), but the
- *       send body still flows through this adapter. Removal condition: port the
- *       route body to canonicalSend, including quick-message entity rewriting.
- *       Target: Slice 1 follow-up.
+ * ZERO provider-bound EXTERNAL routes use it. All four converged onto
+ * canonicalSend in Slice 1. The two remaining callers are both outside the
+ * provider-bound external denominator:
  *
  *   app/api/admin/communications/family-note/route.ts
- *       Internal activity note (channel in_app), NOT a provider-bound send, so
- *       it is outside the convergence denominator. Removal condition: a
- *       canonical internal/activity fact path. Target: a later Phase 1 slice.
+ *       An internal activity fact (channel in_app, no recipient, kind "note").
+ *       It is not an outbound communication and must not be forced through
+ *       provider dispatch to flatten a metric.
+ *       Removal condition: a canonical internal/activity fact path that can
+ *       persist a note without the communications send pipeline.
+ *       Target: a later Phase 1 slice.
  *
  *   lib/communications/communicationScheduledSendsService.ts
- *       The scheduled-send queue, which has its own lease and timing concerns.
- *       Removal condition: scheduler convergence. Target: Phase 2.
+ *       The scheduled-send queue, which has its own lease and timing concerns
+ *       (it currently has no lease — recorded as debt D-4).
+ *       Removal condition: scheduler convergence.
+ *       Target: Phase 2.
  *
- * `tests/communications/legacyAdapterBoundary.test.ts` fails if a fourth caller
- * appears.
+ * `tests/communications/legacyAdapterBoundary.test.ts` fails if a third caller
+ * appears, or if any converged route regresses onto it.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
