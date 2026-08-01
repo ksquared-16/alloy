@@ -224,7 +224,12 @@ class TestGuardOrdering(unittest.TestCase):
         with open(stripe_routes.__file__, "r", encoding="utf-8") as fh:
             source = fh.read()
         start = source.index('@router.post("/admin/payments/run")')
-        body = source[start : source.index("@router.post", start + 10)]
+        # Slice to the next route, or to EOF. The GoHighLevel retirement deleted
+        # /stripe/charge, /stripe/card-status, /stripe/setup-intent and
+        # /stripe/webhook, so this is now the only route in the module and there
+        # may be no following decorator to bound the slice.
+        next_route = source.find("@router.", start + 10)
+        body = source[start:] if next_route == -1 else source[start:next_route]
         self.assertLess(
             body.index("require_payment_executor_auth"),
             body.index("stripe.api_key = STRIPE_SECRET_KEY"),

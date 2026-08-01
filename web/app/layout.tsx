@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
-import GhlScript from "@/components/GhlScript";
 import StagingBanner from "@/components/StagingBanner";
 import { QuoteModalProvider } from "@/lib/quoteModal";
 import ConditionalSiteLayout from "@/components/ConditionalSiteLayout";
@@ -32,7 +31,6 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${poppins.variable} font-sans antialiased`}>
         <MetaPixel />
-        <GhlScript />
         <StagingBanner />
         <QuoteModalProvider>
           <ConditionalSiteLayout>{children}</ConditionalSiteLayout>
