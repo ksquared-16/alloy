@@ -7,9 +7,9 @@ supersedes: []
 
 # Trust Platform
 
-**Status:** Publication in progress. GPT is the platform architect; this tree is the canonical home for Trust Platform doctrine as each document is published.
+**Status:** Initial Trust Platform corpus published (August 2026). GPT is the platform architect; this tree is the canonical home for Trust Platform doctrine.
 
-**Front door (published):** [`trust-platform.md`](./trust-platform.md).
+**Front door:** [`trust-platform.md`](./trust-platform.md).
 
 **Role of this folder:** Repository placement, frontmatter, cross-references, formatting, and publication index — **not** architectural design. Published bodies are assumed canonical as received from GPT.
 
@@ -41,7 +41,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 | Operational Learning | [`operational-learning.md`](./operational-learning.md) | published (canonical) | 2026-08-01 |
 | Trust Governance | [`trust-governance.md`](./trust-governance.md) | published (canonical) | 2026-08-01 |
 | Trust Economics | [`trust-economics.md`](./trust-economics.md) | published (canonical) | 2026-08-01 |
-| Platform Integration | [`platform-integration.md`](./platform-integration.md) | stub — awaiting GPT | — |
+| Platform Integration | [`platform-integration.md`](./platform-integration.md) | published (canonical) | 2026-08-01 |
 
 **Status vocabulary for this index**
 

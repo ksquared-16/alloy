@@ -281,7 +281,7 @@ No implementation may violate those laws.
 | Reasoning Runtime | Canonical (published) |
 | Operational Learning | Canonical (published) |
 | Trust Governance | Canonical (published) |
-| Platform Integration | Planned |
+| Platform Integration | Canonical (published) |
 
 ---
 
