@@ -40,7 +40,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 | Reasoning Runtime | [`reasoning-runtime.md`](./reasoning-runtime.md) | published (canonical) | 2026-08-01 |
 | Operational Learning | [`operational-learning.md`](./operational-learning.md) | published (canonical) | 2026-08-01 |
 | Trust Governance | [`trust-governance.md`](./trust-governance.md) | published (canonical) | 2026-08-01 |
-| Trust Economics | [`trust-economics.md`](./trust-economics.md) | stub — awaiting GPT | — |
+| Trust Economics | [`trust-economics.md`](./trust-economics.md) | published (canonical) | 2026-08-01 |
 | Platform Integration | [`platform-integration.md`](./platform-integration.md) | stub — awaiting GPT | — |
 
 **Status vocabulary for this index**
