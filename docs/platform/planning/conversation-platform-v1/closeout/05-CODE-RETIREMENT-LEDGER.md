@@ -304,3 +304,52 @@ No tombstones were added: these were reachable only by GoHighLevel workflows, wh
 ## D-8 · Known consequence, not repaired here
 
 `getBookingPath()` still defaults to `/book`, and that route was deleted with the cleaning product. Four call sites (`FirstFreeTermsModal`, `CleaningQuoteForm`, and the cleaning marketing pages) therefore link to a removed route. This is a cleaning-product consequence, not a GHL one, and repairing it would mean deleting or rewriting those marketing pages — explicitly out of scope for this branch. **Flagged for a decision.**
+
+## D-9 · `sync/` — the standalone GHL sync service (2026-08-01)
+
+The last GHL artifact. A separate Python service that pulled from GoHighLevel
+and upserted into Supabase.
+
+| | |
+| --- | --- |
+| **Prior purpose** | GHL → Supabase sync of contacts, opportunities and jobs |
+| **Replacement** | none — GoHighLevel is retired |
+| **Deleted** | 784 files: 10 source/config files + a committed 774-file `.venv` |
+
+**Caller evidence, verified before deletion:** no deployment manifest
+(`vercel.json`, `Procfile`, `Dockerfile`, `docker-compose`, `railway`,
+`render.yaml`, `fly.toml`) references it; no `package.json` script invokes it;
+no CI workflow runs it; no module in `web/` or `backend/` imports it (the three
+apparent hits were the unrelated word "synced" in comments).
+
+**Nothing inside was non-GHL.** Every file in `sync/src` is GHL-laden, including
+`supabase_db.py` (28 GHL references — it is the GHL-side writer, not a shared
+Supabase client).
+
+**Committed `.venv` was isolated:** python3.9, whereas `backend/.venv` is
+python3.10. Its `requirements.txt` was only `python-dotenv` and `requests`, both
+still used by `backend`, so **no shared root dependency was removed**.
+
+**Documentation corrected** (claimed GHL was active): `backend/main.py`
+docstring, root `README.md` (project tree, service list, and the "Sync
+(optional)" setup section). `backend/README_refactor.md` is marked **HISTORICAL**
+rather than rewritten, since it accurately describes prior work.
+
+**Verification:** backend 93 tests / 2 errors (pre-existing absent-package only)
+· migration preflight 302/302, 0 orphans, 0 pending · precise GHL search returns
+only retirement docstrings · 0 committed GHL virtual environments.
+
+```text
+Active GHL application routes: 0
+Active GHL services: 0
+Active GHL callers: 0
+Active GHL environment variables: 0
+Active GHL deployment configuration: 0
+Committed GHL virtual environments: 0
+Supported GHL reactivation path: none
+Historical migration references: 1, retained for replay
+```
+
+**Deferred cleaning debt, recorded not fixed:** `getBookingPath()` still defaults
+to the deleted `/book` route (4 call sites). Not a GHL or Conversation Platform
+blocker. See D-8.
