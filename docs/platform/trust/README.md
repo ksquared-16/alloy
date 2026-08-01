@@ -28,7 +28,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 
 | Document | Path | Status | Published |
 |----------|------|--------|-----------|
-| Trust Philosophy | [`trust-philosophy.md`](./trust-philosophy.md) | stub — awaiting GPT | — |
+| Trust Philosophy | [`trust-philosophy.md`](./trust-philosophy.md) | published (canonical) | 2026-08-01 |
 | Trust Platform Manifesto | [`trust-platform-manifesto.md`](./trust-platform-manifesto.md) | stub — awaiting GPT | — |
 | Trust Platform | [`trust-platform.md`](./trust-platform.md) | published (canonical) | 2026-08-01 |
 | Trust Runtime | [`trust-runtime.md`](./trust-runtime.md) | stub — awaiting GPT | — |

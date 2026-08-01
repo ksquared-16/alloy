@@ -273,7 +273,7 @@ No implementation may violate those laws.
 
 | Capability | Status |
 |------------|--------|
-| Philosophy | Planned |
+| Philosophy | Canonical (published) |
 | Manifesto | Planned |
 | Runtime | Planned |
 | Knowledge Architecture | Planned |
