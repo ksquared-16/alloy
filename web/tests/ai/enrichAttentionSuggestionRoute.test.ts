@@ -14,11 +14,15 @@ import * as supabaseAdmin from "@/lib/supabaseAdmin";
 const orgId = "22222222-2222-2222-2222-222222222222";
 const userId = "33333333-3333-3333-3333-333333333333";
 
-const { mockGetAdminContextCached, mockGetAdminAccessContextCached, mockMaybeSingle } = vi.hoisted(() => ({
-    mockGetAdminContextCached: vi.fn(),
-    mockGetAdminAccessContextCached: vi.fn(),
-    mockMaybeSingle: vi.fn(),
-}));
+const { mockGetAdminContextCached, mockGetAdminAccessContextCached, mockMaybeSingle, mockTrustInsert } = vi.hoisted(
+    () => ({
+        mockGetAdminContextCached: vi.fn(),
+        mockGetAdminAccessContextCached: vi.fn(),
+        mockMaybeSingle: vi.fn(),
+        /** Records Trust Runtime persistence so the route's writes are visible to assertions. */
+        mockTrustInsert: vi.fn(),
+    }),
+);
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>("@/lib/admin/getAdminContext");
@@ -40,10 +44,23 @@ vi.mock("@/lib/admin/getAdminAccessContext", async () => {
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: vi.fn(() => ({
-        from: () => ({
+        from: (table: string) => ({
             select: () => ({
                 eq: () => ({
                     maybeSingle: mockMaybeSingle,
+                }),
+            }),
+            // The route now writes Trust Runtime rows on the deterministic path.
+            insert: (row: unknown) => {
+                mockTrustInsert(table, row);
+                return {
+                    select: () => ({ single: async () => ({ data: { id: "event-1" }, error: null }) }),
+                    then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
+                };
+            },
+            update: () => ({
+                eq: () => ({
+                    eq: async () => ({ error: null }),
                 }),
             }),
         }),
