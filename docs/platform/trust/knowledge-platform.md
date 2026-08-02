@@ -388,7 +388,7 @@ The following decisions are permanent.
 - Knowledge Providers own retrieval.
 - Learning proposes Knowledge.
 - Reasoning consumes Knowledge.
-- Objective Runtime never consumes Knowledge directly.
+- Execution authorities never consume Knowledge directly.
 
 ---
 
@@ -412,7 +412,7 @@ Never:
 | Records Platform | Provides Truth |
 | Trust Runtime | Consumes Knowledge |
 | Operational Learning | Produces Knowledge Candidates |
-| Objective Platform | Never directly consumes Knowledge |
+| Execution authorities | Never directly consume Knowledge |
 | Operational Intelligence | Measures Knowledge effectiveness |
 
 ---

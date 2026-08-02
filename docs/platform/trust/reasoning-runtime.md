@@ -50,11 +50,15 @@ Decision Contract
 
 ↓
 
-Knowledge Retrieval
+Information Classification
 
 ↓
 
 Privacy Runtime
+
+↓
+
+Authorized Knowledge Retrieval
 
 ↓
 
@@ -66,7 +70,7 @@ Decision Package
 
 ↓
 
-Objective Runtime
+Execution authority  ·  registered command · Business Process Execution · Objective
 ```
 
 The runtime consumes prepared information.
@@ -86,7 +90,7 @@ The runtime owns:
 - confidence estimation
 - proposal generation
 - explanation generation
-- trust evaluation
+- evidence assembly for trust evaluation
 
 The runtime never owns:
 
@@ -96,6 +100,7 @@ The runtime never owns:
 - execution
 - learning promotion
 - operational truth
+- Trust Vector and Trust Score semantics
 
 ---
 
@@ -299,6 +304,8 @@ Confidence is one input into Trust evaluation.
 
 Trust evaluation occurs after reasoning.
 
+The Reasoning Runtime owns **proposal generation and confidence**, and supplies the evidence trust evaluation consumes. [`Trust Governance`](./trust-governance.md) owns the Trust Vector and Trust Score semantics — the dimensions, their meaning and their thresholds.
+
 Trust considers:
 
 - Grounding
@@ -392,18 +399,18 @@ Never:
 
 ## Relationship To Other Runtimes
 
-| Runtime | Responsibility |
+| Runtime / owner | Responsibility |
 |----------|----------------|
 | Privacy Runtime | Prepares reasoning context |
-| Reasoning Runtime | Produces recommendations |
-| Validation Runtime | Verifies proposals |
-| Objective Runtime | Executes approved decisions |
+| Reasoning Runtime | Produces proposals and confidence |
+| Validation Engine (Trust Runtime) | Orchestrates deterministic validation; domain validators own the rules |
+| Trust Governance | Owns Trust Vector and Trust Score semantics |
+| Operational Commands / Business Process Execution | Perform durable mutation |
+| Objective Platform | Coordinates objectives |
 
-Each runtime owns exactly one responsibility.
+Each responsibility has exactly one owner.
 
-Validation Runtime — **TODO:** link when canonical Validation Runtime doctrine is published
-
-Objective Runtime — **TODO:** link when canonical Objective Runtime doctrine is published
+There is **no separate Validation Runtime**. Validation is an engine of the [`Trust Runtime`](./trust-runtime.md) that calls validators owned elsewhere.
 
 ---
 

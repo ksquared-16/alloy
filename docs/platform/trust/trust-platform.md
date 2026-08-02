@@ -84,7 +84,7 @@ Reasoning never becomes truth.
 
 Reasoning produces recommendations.
 
-Execution remains the responsibility of the Objective Platform.
+Execution remains the responsibility of the execution authorities — Operational Commands and Business Process Execution, with the Objective Platform coordinating objectives.
 
 Truth remains the responsibility of the Records Platform.
 
@@ -131,10 +131,12 @@ The Trust Platform never owns:
 - Relationships
 - Permissions
 - Business Rules
-- Objective execution
+- Operational execution
 - Workflow state
 - Financial truth
 - Identity authority
+
+Scope is decided by the [`Reasoning Boundary Test`](./trust-platform-manifesto.md#reasoning-boundary-test), not by whether an operation happens to be deterministic. Existing deterministic evaluators do not move into the Trust Platform merely because reasoning has one owner.
 
 ---
 
@@ -153,7 +155,11 @@ Decision Contract
 
 ↓
 
-Information Retrieval
+Resolve Required Truth and Context
+
+↓
+
+Information Classification
 
 ↓
 
@@ -161,11 +167,11 @@ Privacy Transformation
 
 ↓
 
-Knowledge Retrieval
+Authorized Knowledge Retrieval
 
 ↓
 
-Reasoning Strategy
+Strategy Selection
 
 ↓
 
@@ -173,29 +179,36 @@ Reasoning
 
 ↓
 
-Validation
+Deterministic Validation
+
+↓
+
+Trust Evaluation
 
 ↓
 
 Decision Package
 ```
 
+This ordering is canonical. Knowledge **metadata** may be resolved earlier for planning and budgeting; knowledge **content** enters the reasoning context only after privacy preparation.
+
 The Trust Runtime never executes decisions.
 
-The Objective Runtime executes approved Decision Packages.
+A Decision Package is evidence. Durable mutation is performed by Operational Commands and Business Process Execution; the Objective Platform coordinates objectives where applicable.
 
 ---
 
-## Relationship to the Objective Platform
+## Relationship to Execution
 
-These platforms are peers.
+The Trust Platform is a peer of the execution authorities, never a substitute for them.
 
 | Platform | Responsibility |
 |----------|----------------|
-| Trust Platform | Determines what should happen |
-| Objective Platform | Executes what has been approved |
+| Trust Platform | Proposes what should happen, with evidence |
+| Operational Commands / Business Process Execution | Perform durable operational mutation |
+| Objective Platform | Coordinate objectives across obligations and contributions |
 
-Reasoning and execution remain permanently separated.
+Reasoning and execution remain permanently separated. A Decision Package is never directly executable.
 
 ---
 

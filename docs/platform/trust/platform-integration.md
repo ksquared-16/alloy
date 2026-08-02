@@ -295,9 +295,9 @@ It never becomes the platform.
 
 ---
 
-## Objective Platform
+## Execution authorities
 
-The Trust Platform and Objective Platform are peers.
+The Trust Platform is a peer of the execution authorities.
 
 ```text
 Decision Contract
@@ -308,24 +308,24 @@ Trust Platform
 
 ↓
 
-Decision Package
+Decision Package  ·  evidence
 
 ↓
 
-Objective Runtime
+Human decision · Objective · registered command invocation
 
 ↓
 
-Execution
+Operational Commands / Business Process Execution
 
 ↓
 
 Operational Truth
 ```
 
-Trust determines.
+Trust proposes, with evidence.
 
-Objectives execute.
+Operational Commands and Business Process Execution perform durable mutation. The Objective Platform coordinates objectives where an outcome spans obligations and contributions; it is not the general execution runtime.
 
 The separation is permanent.
 
@@ -339,7 +339,7 @@ Trust Runtime reasons over Truth.
 
 Trust Runtime never modifies Truth.
 
-Only Objective Runtime produces Truth changes.
+Only execution authorities produce Truth changes.
 
 ---
 
@@ -375,7 +375,8 @@ Knowledge never performs reasoning.
 | Relationships | Identity |
 | Knowledge | Understanding |
 | Trust | Reasoning |
-| Objective | Execution |
+| Operational Commands / Business Process Execution | Durable mutation |
+| Objective | Objective coordination |
 | Business Processes | Operational Work |
 | Communications | Conversation |
 | Operational Intelligence | Measurement |
@@ -401,11 +402,11 @@ Trust Runtime
 
 ↓
 
-Decision Package
+Decision Package  ·  evidence
 
 ↓
 
-Objective Runtime (optional)
+Execution authority (optional)
 
 ↓
 
@@ -437,10 +438,10 @@ The Trust Platform guarantees:
 
 ## Frozen Decisions
 
-- Every platform reasons through the Trust Platform.
+- Every platform reasons through the Trust Platform, as scoped by the [`Reasoning Boundary Test`](./trust-platform-manifesto.md#reasoning-boundary-test).
 - Platforms contribute capabilities.
-- Platforms never implement reasoning.
-- Objective Runtime remains the only execution runtime.
+- Platforms never implement independent reasoning.
+- The Trust Platform never performs durable mutation; Operational Commands and Business Process Execution do.
 - Records remain the only operational truth.
 
 ---

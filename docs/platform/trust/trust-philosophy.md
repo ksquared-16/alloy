@@ -95,7 +95,7 @@ Reasoning should never become truth.
 
 Operational truth remains owned by the Records Platform.
 
-Execution remains owned by the Objective Platform.
+Execution remains owned by the execution authorities — Operational Commands and Business Process Execution, with the Objective Platform coordinating objectives.
 
 ---
 

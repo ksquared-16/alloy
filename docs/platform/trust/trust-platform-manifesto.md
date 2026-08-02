@@ -39,6 +39,26 @@ No capability may implement independent reasoning outside the Trust Platform.
 
 Processing, BOS, Communications, Search, Operational Intelligence, Configuration, and future platforms all consume Trust Platform reasoning.
 
+#### What "reasoning" means
+
+The Trust Platform owns reasoning that is **probabilistic, interpretive, generative, semantic, inferential, or otherwise uncertainty-reducing**, and that produces a proposal or a Decision Package.
+
+The Trust Platform does **not** absorb deterministic domain evaluation, eligibility enforcement, deterministic business validation, authorization, stage resolution, readiness evaluation, operational calculations, or business rules owned by existing Alloy platforms. Those keep their existing owners.
+
+#### Reasoning Boundary Test
+
+Apply in order. The first clause that matches decides ownership.
+
+| # | Question | If yes |
+|---|----------|--------|
+| 1 | Does the operation **change durable operational state**? | It belongs to the registered command, Business Process Execution, or Objective execution authority. Never to the Trust Platform. |
+| 2 | Does it **apply authoritative rules or calculate known truth**? | It stays with its existing deterministic owner. |
+| 3 | Does it **resolve ambiguity or produce a proposal under uncertainty**? | It belongs to the Trust Platform and must be expressed as a Decision Contract. |
+
+A deterministic strategy executed inside an explicitly submitted Decision Contract is valid Trust Runtime execution.
+
+An existing deterministic evaluator does **not** move into the Trust Runtime merely because reasoning has one owner. It moves only when a capability submits a Decision Contract for it.
+
 ---
 
 ### Law 2 — Truth Is Never Owned By Reasoning
@@ -57,7 +77,9 @@ Recommendations never become authoritative facts until executed through the Obje
 
 The Trust Platform never performs operational execution.
 
-Execution belongs exclusively to the Objective Platform.
+Durable operational mutation belongs to **Operational Commands and Business Process Execution**. The **Objective Platform** coordinates objectives where an outcome spans obligations and contributions; it is not the general execution runtime.
+
+A Decision Package is **evidence** supporting a human decision, an Objective, or a registered command invocation. It is never directly executable.
 
 Reasoning and execution remain permanently separated.
 
@@ -202,6 +224,10 @@ Every Decision Package should be evaluated across measurable dimensions includin
 - economics
 - human oversight
 
+**Trust Governance owns Trust Vector and Trust Score semantics** — the dimensions, their meaning, and their thresholds. The Trust Runtime assembles the evidence those semantics are applied to.
+
+Trust evaluation has exactly one owner.
+
 Trust is continuously improved.
 
 ---
@@ -242,7 +268,7 @@ The Trust Platform owns:
 - Knowledge retrieval
 - Privacy transformation
 - Reasoning orchestration
-- Validation
+- Validation orchestration (deterministic business validation remains owned by domain validators)
 - Operational learning
 - Trust governance
 

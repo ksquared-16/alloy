@@ -9,6 +9,8 @@ supersedes: []
 
 **Status:** Initial Trust Platform corpus published (August 2026). GPT is the platform architect; this tree is the canonical home for Trust Platform doctrine.
 
+**Amended 2026-08-02 — architecture-owner ratification.** Four conflicts found during Trust Runtime V1 implementation assessment were resolved by the architecture owner and encoded as [`Decisions 019–022`](./trust-platform-decisions.md), with Decision 014 amended: the Reasoning Boundary and its test, Decision Package immutability and lineage, the canonical V1 runtime order, and single ownership of validation, trust evaluation and execution. Amended documents: `trust-platform.md`, `trust-philosophy.md`, `trust-platform-manifesto.md`, `trust-runtime.md`, `reasoning-runtime.md`, `privacy-runtime.md`, `decision-contract.md`, `decision-package.md`, `knowledge-platform.md`, `trust-governance.md`, `platform-integration.md`, `trust-platform-decisions.md`.
+
 **Front door:** [`trust-platform.md`](./trust-platform.md).
 
 **Role of this folder:** Repository placement, frontmatter, cross-references, formatting, and publication index — **not** architectural design. Published bodies are assumed canonical as received from GPT.

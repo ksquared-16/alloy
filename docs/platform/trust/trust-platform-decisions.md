@@ -309,21 +309,23 @@ Every capability shares one reasoning infrastructure.
 
 ## Decision 014
 
-### Objective Runtime remains the only execution runtime
+### Execution belongs to the execution authorities, not to reasoning
+
+**Amended 2026-08-02.** Supersedes the original wording, "Objective Runtime remains the only execution runtime". See Decision 022.
 
 #### Decision
 
 The Trust Platform never executes operational work.
 
+Durable operational mutation belongs to **Operational Commands and Business Process Execution**. The **Objective Platform** coordinates objectives where an outcome spans obligations and contributions; it is not the general execution runtime.
+
 #### Rationale
 
-Execution already has an owner.
+Execution already has an owner, and in Alloy that owner is the registered command path. The Objective Platform is an orchestration layer that explicitly owns no business truth, so it cannot be the universal execution runtime.
 
 #### Consequence
 
-Trust Platform determines.
-
-Objective Platform executes.
+Trust proposes, with evidence. A Decision Package is never directly executable.
 
 ---
 
@@ -406,6 +408,121 @@ Architectural consistency compounds over time.
 Doctrine changes require architectural review.
 
 Implementation shortcuts do not.
+
+---
+
+## Decision 019
+
+### The Reasoning Boundary
+
+**Ratified 2026-08-02 by the architecture owner, resolving the scope ambiguity in Law 1.**
+
+#### Decision
+
+The Trust Platform owns reasoning that is **probabilistic, interpretive, generative, semantic, inferential, or otherwise uncertainty-reducing**, and that produces a proposal or a Decision Package.
+
+The Trust Platform does **not** absorb deterministic domain evaluation, eligibility enforcement, deterministic business validation, authorization, stage resolution, readiness evaluation, operational calculations, or business rules owned by existing Alloy platforms.
+
+The [`Reasoning Boundary Test`](./trust-platform-manifesto.md#reasoning-boundary-test) decides ownership.
+
+#### Rationale
+
+Read without a boundary, "no capability may implement independent reasoning outside the Trust Platform" plus "deterministic" as a listed Reasoning Strategy would pull every certified deterministic evaluator in Alloy into the Trust Runtime — and would contradict Decision 008, which holds validation independent of reasoning.
+
+#### Consequence
+
+A deterministic strategy executed inside an explicitly submitted Decision Contract is valid Trust Runtime execution.
+
+An existing deterministic evaluator moves into the Trust Runtime only when a capability submits a Decision Contract for it. Determinism alone never triggers migration.
+
+---
+
+## Decision 020
+
+### Decision Package immutability and lineage
+
+**Ratified 2026-08-02, resolving the conflict between stated immutability and a stated post-creation lifecycle.**
+
+#### Decision
+
+A Decision Package is immutable **at creation**.
+
+Presented, accepted, rejected, overridden, executed and observed outcomes are **append-only events or observations referencing** the package.
+
+A materially modified recommendation creates a **new Decision Contract and a new Decision Package**, with lineage to the previous package.
+
+No mutable post-creation lifecycle state may be placed on the Decision Package row.
+
+#### Rationale
+
+Auditability, replay and reproducibility all require that a historical package never changes. A lifecycle column on the package row would silently defeat all three.
+
+#### Consequence
+
+Persistence is insert-only for contracts and packages, with a separate append-only observation store. Immutability is enforced in the database, not by service convention.
+
+---
+
+## Decision 021
+
+### Canonical V1 runtime order
+
+**Ratified 2026-08-02, resolving three mutually inconsistent orderings across three canonical documents.**
+
+#### Decision
+
+```text
+Decision Contract
+→ resolve required truth and context
+→ classify information
+→ apply privacy transformations
+→ retrieve authorized knowledge
+→ select strategy
+→ execute reasoning
+→ deterministic validation
+→ trust evaluation
+→ Decision Package
+```
+
+Knowledge **metadata** may be resolved earlier for planning and budgeting. Knowledge **content** enters the reasoning context only after privacy preparation.
+
+#### Rationale
+
+`trust-platform.md`, `trust-runtime.md` and `reasoning-runtime.md` each stated a different position for knowledge retrieval relative to privacy transformation, and each declared its lifecycle changeable only by architectural review. An implementer could not choose.
+
+#### Consequence
+
+`trust-platform.md`, `trust-runtime.md`, `reasoning-runtime.md` and `privacy-runtime.md` are normalized to this order.
+
+---
+
+## Decision 022
+
+### Ownership of validation, trust evaluation and execution
+
+**Ratified 2026-08-02, resolving three declared owners for trust evaluation and an execution-runtime naming collision.**
+
+#### Decision
+
+| Concern | Owner |
+|---|---|
+| Proposal generation and confidence | Reasoning Runtime |
+| Deterministic business validation rules | The existing domain or platform validator that owns the rule |
+| Validation orchestration | Trust Runtime Validation Engine — calls those validators, owns no duplicate rules |
+| Trust Vector and Trust Score semantics | Trust Governance |
+| Trust evidence assembly | Trust Runtime |
+| Durable operational mutation | Operational Commands / Business Process Execution |
+| Objective coordination | Objective Platform |
+
+A Decision Package is **evidence** supporting a human decision, an Objective, or a registered command invocation. It is never directly executable.
+
+#### Rationale
+
+Alloy's standing law is one canonical owner per concern. The corpus assigned trust evaluation to three owners, described Validation as both an internal engine and a peer runtime, and named the Objective Runtime as the universal executor — but Alloy's Objective Platform owns no business truth and is not the general execution runtime.
+
+#### Consequence
+
+Language asserting that the Trust Runtime owns all deterministic evaluators, that the Trust Engine independently owns trust evaluation, or that the Objective Runtime directly executes Decision Packages is retired throughout the corpus. There is no separate Validation Runtime.
 
 ---
 

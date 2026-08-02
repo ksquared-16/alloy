@@ -62,7 +62,7 @@ Trust Runtime
 
 ↓
 
-Decision Package
+Decision Package  ·  evidence
 
 ↓
 
@@ -70,7 +70,7 @@ Human Judgment
 
 ↓
 
-Objective Runtime
+Registered command · Business Process Execution · Objective
 
 ↓
 
@@ -79,7 +79,7 @@ Execution
 
 The Trust Runtime owns the package.
 
-The Objective Runtime consumes the package.
+An execution authority consumes the package as **evidence**. The package is never itself executable.
 
 The Records Platform records the resulting truth.
 
@@ -95,7 +95,10 @@ The Records Platform records the resulting truth.
 | Trust Evaluation | Trust Runtime |
 | Validation Results | Trust Runtime |
 | Human Decision | Operator / Organization |
-| Execution | Objective Runtime |
+| Trust Vector and Trust Score semantics | Trust Governance |
+| Deterministic business validation rules | Owning domain validator |
+| Execution | Operational Commands / Business Process Execution |
+| Objective coordination | Objective Platform |
 | Operational Truth | Records Platform |
 
 ---
@@ -251,17 +254,9 @@ The runtime determines when alternatives are useful.
 
 ## Learning Metadata
 
-Decision Packages include learning metadata.
+Decision Packages carry learning metadata declared **at creation** — which learning policy applies, and whether this decision is eligible to produce Learning Candidates.
 
-Examples:
-
-- Accepted
-- Rejected
-- Modified
-- Overridden
-- Deferred
-
-These outcomes feed Operational Learning.
+Outcomes — accepted, rejected, modified, overridden, deferred — are **observations referencing the package**, never fields on it. Operational Learning consumes the package together with its observation stream.
 
 Customer information never becomes learning.
 
@@ -271,43 +266,24 @@ Only generalized operational outcomes.
 
 ## Lifecycle
 
-Every Decision Package follows the same lifecycle.
+A Decision Package is **immutable at creation**. It therefore carries no lifecycle column and no post-creation mutable state.
+
+What follows creation is an **append-only stream of observations referencing the package**:
 
 ```text
-Created
-
-↓
-
-Presented
-
-↓
-
-Accepted
-
-↓
-
-Rejected
-
-↓
-
-Modified
-
-↓
-
-Executed
-
-↓
-
-Observed
-
-↓
-
-Archived
+Decision Package  ·  immutable
+        │
+        ├── observed: presented
+        ├── observed: accepted | rejected | overridden
+        ├── observed: executed   (by an execution authority)
+        └── observed: outcome
 ```
 
-Decision Packages are immutable.
+Observations are recorded by `CaptureOutcome()`. They never modify the package.
 
-Subsequent changes create new Decision Packages.
+A **materially modified recommendation is not an edit.** It creates a new Decision Contract and a new Decision Package, carrying lineage to its predecessor.
+
+Do not place presented, accepted, rejected, overridden, executed or observed state on the Decision Package row.
 
 ---
 
@@ -375,11 +351,12 @@ Platforms may not:
 The following decisions are permanent.
 
 - Every Decision Contract produces exactly one Decision Package.
-- Decision Packages are immutable.
+- Decision Packages are immutable **at creation**; outcomes are append-only observations referencing them.
+- A materially modified recommendation creates a new Decision Contract and a new Decision Package with lineage to its predecessor.
 - Raw provider responses never leave the Trust Runtime.
 - Confidence and Trust remain separate concepts.
-- Validation is deterministic.
-- Decision Packages never execute themselves.
+- Validation is deterministic, and its rules are owned by domain validators.
+- A Decision Package is evidence, never a directly executable instruction.
 
 ---
 
@@ -393,6 +370,8 @@ Never:
 - Skip deterministic validation.
 - Treat confidence as trust.
 - Mutate Decision Packages after creation.
+- Place post-creation lifecycle state on a Decision Package row.
+- Execute directly from a Decision Package.
 
 ---
 
@@ -401,7 +380,9 @@ Never:
 | Platform | Relationship |
 |----------|--------------|
 | Trust Runtime | Produces Decision Packages |
-| Objective Runtime | Executes approved Decision Packages |
+| Trust Governance | Owns Trust Vector and Trust Score semantics |
+| Operational Commands / Business Process Execution | Execute, using an approved Decision Package as evidence |
+| Objective Platform | Coordinates objectives where an outcome spans obligations |
 | Records Platform | Records resulting truth |
 | Operational Intelligence | Measures package quality |
 | Operational Learning | Learns from package outcomes |

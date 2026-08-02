@@ -71,7 +71,7 @@ Human Judgment
 
 ↓
 
-Objective Runtime
+Registered command · Business Process Execution · Objective
 ```
 
 Reasoning proposes.
@@ -205,7 +205,9 @@ Trust considers:
 - Economic efficiency
 - Human oversight
 
-Trust remains platform-owned.
+**Trust Governance owns Trust Vector and Trust Score semantics** — the dimensions, their meaning and their thresholds. The Trust Runtime assembles the evidence; Governance defines what that evidence means.
+
+Trust evaluation has exactly one owner.
 
 ---
 
@@ -324,8 +326,9 @@ Never:
 
 | Platform | Relationship |
 |----------|--------------|
-| Trust Runtime | Produces Decision Packages |
-| Objective Runtime | Executes governed decisions |
+| Trust Runtime | Produces Decision Packages and assembles trust evidence |
+| Operational Commands / Business Process Execution | Execute governed decisions |
+| Objective Platform | Coordinates objectives |
 | Operational Intelligence | Reports governance metrics |
 | Operational Learning | Learns from governed outcomes |
 | Records Platform | Stores resulting truth |

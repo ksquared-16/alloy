@@ -52,8 +52,8 @@ The Trust Runtime owns:
 - Knowledge retrieval
 - Reasoning strategy selection
 - Reasoning orchestration
-- Proposal validation
-- Trust evaluation
+- Validation orchestration
+- Trust evidence assembly
 - Operational learning
 - Runtime events
 
@@ -63,10 +63,14 @@ The runtime never owns:
 - Relationships
 - Permissions
 - Business Rules
-- Objective execution
+- Operational execution
+- Deterministic business validation rules
+- Trust Vector and Trust Score semantics
 - Workflow state
 - Customer identity
 - Operational truth
+
+Scope is decided by the [`Reasoning Boundary Test`](./trust-platform-manifesto.md#reasoning-boundary-test).
 
 ---
 
@@ -137,11 +141,11 @@ Requested
 
 ↓
 
-Prepared
+Prepared  ·  required truth and context resolved
 
 ↓
 
-Knowledge Retrieved
+Classified  ·  information classes assigned
 
 ↓
 
@@ -149,11 +153,23 @@ Privacy Transformed
 
 ↓
 
+Knowledge Retrieved  ·  authorized knowledge enters the reasoning context
+
+↓
+
+Strategy Selected
+
+↓
+
 Reasoning Completed
 
 ↓
 
-Validation
+Deterministic Validation
+
+↓
+
+Trust Evaluated
 
 ↓
 
@@ -180,7 +196,11 @@ Learning
 Archived
 ```
 
-Execution begins only after the Decision Package leaves the Trust Runtime.
+This ordering is canonical for V1.
+
+Knowledge **metadata** may be resolved earlier for planning and budgeting. Knowledge **content** enters the reasoning context only after privacy preparation.
+
+Execution begins only after the Decision Package leaves the Trust Runtime, and only through an execution authority — never from the package itself.
 
 ---
 
@@ -211,6 +231,8 @@ Produces reasoning context.
 Retrieves required knowledge assets.
 
 Knowledge providers are selected by runtime policy.
+
+Runs **after** `PrepareContext()` has applied privacy policy. Knowledge metadata may be resolved earlier for planning; content enters the reasoning context only after privacy preparation.
 
 ---
 
@@ -320,7 +342,9 @@ Reasoning techniques remain replaceable.
 
 ### Validation Engine
 
-Verifies recommendations using deterministic platform rules.
+**Orchestrates** deterministic verification. It calls the validators owned by the domain or platform that owns each rule — Records, Relationship, Business Process Execution, Objective, Financial — and records their results in the Decision Package.
+
+The Validation Engine owns no business rules and never duplicates one. A rule that exists in a domain validator is invoked, never re-implemented.
 
 Validation never depends upon reasoning.
 
@@ -328,11 +352,9 @@ Validation never depends upon reasoning.
 
 ### Trust Engine
 
-Calculates Trust Vector.
+Assembles the evidence a Trust evaluation requires — grounding, privacy, evidence quality, validation results, historical reliability, economics, required oversight — and applies the Trust Vector and Trust Score semantics **owned by [`Trust Governance`](./trust-governance.md)**.
 
-Produces Trust Score.
-
-Evaluates evidence quality.
+The Trust Engine does not own trust evaluation. It computes trust from governance-owned semantics, so dimensions and thresholds can change without a runtime change.
 
 ---
 
@@ -421,12 +443,13 @@ The Trust Runtime guarantees:
 - reproducibility
 - privacy policy enforcement
 - platform-wide consistency
+- a Decision Package is evidence and is never directly executable
 
 ---
 
-## Relationship to Objective Runtime
+## Relationship to Execution
 
-The Trust Runtime and Objective Runtime are peers.
+The Trust Runtime is a peer of the execution authorities.
 
 ```text
 Decision Contract
@@ -437,24 +460,24 @@ Trust Runtime
 
 ↓
 
-Decision Package
+Decision Package  ·  evidence, never directly executable
 
 ↓
 
-Objective Runtime
+Human decision · Objective · registered command invocation
 
 ↓
 
-Execution
+Operational Commands / Business Process Execution
 
 ↓
 
 Truth
 ```
 
-The Trust Runtime determines what should happen.
+The Trust Runtime proposes what should happen and supplies the evidence for that proposal.
 
-The Objective Runtime performs what has been approved.
+Durable mutation is performed by Operational Commands and Business Process Execution. The Objective Platform coordinates objectives where an outcome spans obligations and contributions.
 
 The separation is permanent.
 
