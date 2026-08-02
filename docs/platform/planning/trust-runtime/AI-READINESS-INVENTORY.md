@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: inventory
+status: proposed
 mission: ai-readiness-and-trust-runtime-preparation
 last_reviewed: 2026-08-01
 ---

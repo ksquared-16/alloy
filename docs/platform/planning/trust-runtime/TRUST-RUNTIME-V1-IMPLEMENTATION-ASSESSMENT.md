@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: assessment
+status: proposed
 mission: trust-runtime-v1-implementation-assessment
 last_reviewed: 2026-08-01
 ---
@@ -11,19 +11,22 @@ last_reviewed: 2026-08-01
 pipeline change. This document is doctrine comprehension, repository impact
 analysis, and a phased plan.
 
-**Doctrine read (16 documents, `docs/platform/trust/`).** The Trust Platform
-corpus is **not on this branch** — it landed on `origin/staging` via
-`agent/cursor/1-trust-platform-pub` (`fd66d5e35`…`17272e700`), and this branch
-forked at `3fc2e0f4e`, 56 commits behind. Every quotation below is read from
-`origin/staging`, not from the working tree. Also read: the Objective Platform
-handoff, the AI Readiness Inventory, `CLAUDE.md`, and the existing foundational
-doctrine for Records, Relationships, Business Process, Objective,
-Communications, Configuration and Operational Intelligence.
+**Doctrine read (16 documents, `docs/platform/trust/`).** Also read: the
+Objective Platform handoff, the AI Readiness Inventory, `CLAUDE.md`, and the
+existing foundational doctrine for Records, Relationships, Business Process,
+Objective, Communications, Configuration and Operational Intelligence.
 
-**Status: PLAN PROVISIONAL.** Four doctrinal conflicts (§11) bind the design of
-the first slice. Everything not dependent on them is specified below; the parts
-that are dependent are stated as explicit assumptions and must be ratified
-before code is written.
+**Status: RATIFIED — 2026-08-02.** The four doctrinal conflicts this assessment
+raised were resolved by the architecture owner and encoded as
+[`Trust Platform Decisions 019–022`](../../trust/trust-platform-decisions.md),
+with Decision 014 amended. §11 records each resolution. The plan below is no
+longer provisional.
+
+**Branch.** Originally written on `agent/claude/objective-platform-promotion`,
+which was 56 commits behind `origin/staging`. This work now lives on
+`agent/claude/trust-runtime-v1`, forked from `origin/staging` at `b7a63e289`,
+carrying only Trust Runtime documentation — no Objective Platform
+implementation commits. The Trust Platform corpus is present on this base.
 
 ---
 
@@ -167,7 +170,7 @@ for free — OI already reads `workflow_events`.
 | Table | Why doctrine requires it |
 |---|---|
 | `trust_decision_contracts` | Contracts are immutable and replayable; reproducibility requires the contract itself (Trust Governance §Reproducibility) |
-| `trust_decision_packages` | Packages are permanent operational artifacts; "historical Decision Packages are never modified" |
+| `trust_decision_packages` | Immutable at creation; insert-only; carries `supersedes_package_id` lineage ([`Decision 020`](../../trust/trust-platform-decisions.md)) |
 | `trust_decision_observations` | `CaptureOutcome()` — accepted/rejected/modified/overridden/deferred, append-only, referencing a package |
 | `trust_reasoning_usage` | Economics: latency, strategy, escalation level, cache utilization, cost. The telemetry *schema* exists with no persistence (`retention_mode: "durable_future"`) — Economics and Governance both block on this |
 
@@ -247,8 +250,8 @@ Ordered by dependency. Bracketed labels mark what V1 needs versus later.
 | 5 | **Privacy Engine** | Requirements → retrieve → classify → apply policy → transform → construct Reasoning Context. Identity tokenization with a runtime-internal mapping; progressive disclosure | **V1** |
 | 6 | **Strategy Engine** | Deterministic strategy selection; least-cost-sufficient ordering; deterministic escalation ladder | **V1** |
 | 7 | **Reasoning Runtime** | Capability resolution → provider resolution → reasoning steps → evidence → confidence. Provider selection strictly internal and strictly after strategy selection | **V1** (deterministic strategy only) |
-| 8 | **Validation Engine** | Deterministic verification of the proposal, independent of reasoning, versioned | **V1** |
-| 9 | **Trust Engine** | Trust Vector (grounding, privacy, evidence, validation, reliability, human oversight) → Trust Score. Separate from confidence | **V1** |
+| 8 | **Validation Engine** | **Orchestrates** deterministic verification by calling the domain validators that own each rule, and records their results. Owns no business rules ([`Decision 022`](../../trust/trust-platform-decisions.md)) | **V1** |
+| 9 | **Trust Engine** | Assembles trust evidence and applies the Trust Vector / Trust Score semantics **owned by Trust Governance**. Separate from confidence | **V1** |
 | 10 | **Decision Package builder** | Immutable artifact; failure outcomes are packages too | **V1** |
 | 11 | **Economics recorder** | Latency, strategy, escalation level, cache utilization, cost per decision | **V1** |
 | 12 | **Runtime event vocabulary** | Closed set over `workflow_events`, code-owned, atomic where the Objective precedent requires it | **V1** |
@@ -285,23 +288,24 @@ Ordered by dependency. Bracketed labels mark what V1 needs versus later.
 
 | # | Risk | Severity | Mitigation |
 |---|---|---|---|
-| 1 | **Scope explosion from Law 1.** "No capability may implement independent reasoning outside the Trust Platform" + "deterministic" listed as a Reasoning Strategy ⇒ a literal reading pulls the Stage Resolver, Action Evaluator, Participation Resolver, `classifyNonFormSource`, `documentFacts`, the Objective authorization conjunction and every validator into the Trust Runtime. That is a multi-quarter rewrite of certified, working systems and would violate Decision 008 (validation independent of reasoning) | **Critical** | **§11.1 — blocking clarification.** Need an explicit Reasoning Boundary Test before any consumer migrates |
-| 2 | **Merge risk.** This branch is 23 ahead / 56 behind `origin/staging`, unpushed and unmerged, and holds the entire Objective Platform. Building a second platform on top compounds an already-flagged "single biggest merge risk" | **High** | Rebase and re-certify the Objective Platform **before** Trust code lands, or land Trust on a branch forked from current staging |
+| 1 | ~~**Scope explosion from Law 1.**~~ **Retired by [`Decision 019`](../../trust/trust-platform-decisions.md).** Original statement retained for the record: "No capability may implement independent reasoning outside the Trust Platform" + "deterministic" listed as a Reasoning Strategy ⇒ a literal reading pulls the Stage Resolver, Action Evaluator, Participation Resolver, `classifyNonFormSource`, `documentFacts`, the Objective authorization conjunction and every validator into the Trust Runtime. That is a multi-quarter rewrite of certified, working systems and would violate Decision 008 (validation independent of reasoning) | ~~Critical~~ **Retired** | The Reasoning Boundary Test now decides ownership; existing deterministic evaluators do not migrate |
+| 2 | ~~**Merge risk** from building on the stale, unmerged Objective Platform branch~~ | ~~High~~ **Retired 2026-08-02** | Resolved: work moved to `agent/claude/trust-runtime-v1`, forked from `origin/staging` at `b7a63e289`, carrying only Trust Runtime documentation |
 | 3 | **The Trust Runtime becomes the one place PII can leak.** Today the blast radius of a privacy bug is one stubbed, disabled feature. After V1 it is every consumer | **High** | Privacy Engine certified independently, adversarially, with a "no raw identity may reach a strategy" DB/unit invariant; ship with policy still defaulting off |
 | 4 | **Unbounded cost.** Economics doctrine mandates budgets; there is no persistence, no budget model and no cost surface today. Volume is dominated by document regions (~108k/yr) and semantic search (~375k/yr) — both currently zero, both easy to switch on | **High** | No probabilistic strategy ships before persisted economics and a hard per-class ceiling |
 | 5 | **Certifying a live path that has never carried traffic.** All four prerequisites exist and none has run in production. A live provider cannot be certified without either a real key or recorded-fixture provider | Medium | Recorded-fixture provider adapter as a certification artifact; live path certified separately and last |
 | 6 | **Immutability by convention.** Objective learned this: append-only "by construction and tests" on a shared table is weaker than a trigger | Medium | DB-level immutability + append-only triggers on all four Trust tables, following the M1/M4 precedent |
 | 7 | **Doctrine ratified faster than it is proven.** Fifteen documents were published `status: canonical` in one day with no implementation. Several forward-reference platforms that do not exist (Validation Runtime, Objective Platform doctrine, Records Platform doctrine — all TODO links) | Medium | Treat V1 as the ratification instrument: what the slice cannot express is a doctrine defect, reported, not worked around |
-| 8 | **Two "Objective Platform" meanings.** The corpus repeatedly calls the Objective Platform the *execution* platform. Alloy's Objective Platform is a **participant-obligation orchestration layer** that "owns no business truth" — it is not the general execution runtime; Command Runtime is. A Decision Package cannot simply be "handed to the Objective Runtime" | Medium | §11.4 — needs naming resolution before any package→execution wiring |
+| 8 | ~~**Two "Objective Platform" meanings.**~~ **Retired by [`Decision 022`](../../trust/trust-platform-decisions.md).** Original statement retained: The corpus repeatedly calls the Objective Platform the *execution* platform. Alloy's Objective Platform is a **participant-obligation orchestration layer** that "owns no business truth" — it is not the general execution runtime; Command Runtime is. A Decision Package cannot simply be "handed to the Objective Runtime" | ~~Medium~~ **Retired** | Execution authority is Operational Commands / Business Process Execution; Objective coordinates; a package is evidence, never executable |
 | 9 | **Regression of certified deterministic paths.** The deterministic paths in production are the thing worth protecting | Medium | Every consumer migration is additive: deterministic path stays the default until its Decision Class is certified |
 
 ---
 
 ## 8. Recommended implementation sequence
 
-**Phase 0 — Ratification (no code).** Resolve §11.1–§11.4. Rebase the Objective
-Platform onto current `origin/staging` and re-certify, or fork Trust from
-staging. *Exit: four answers recorded; a clean base.*
+**Phase 0 — Ratification (no code). ✅ COMPLETE 2026-08-02.** §11.1–§11.4
+resolved and encoded as Decisions 019–022 with Decision 014 amended; work forked
+from `origin/staging` at `b7a63e289` onto `agent/claude/trust-runtime-v1`.
+*Exit met: four answers recorded; a clean base.*
 
 **Phase 1 — Kernel, deterministic only.** Contract type, Decision Class
 registry, Decision Engine, Information Classification, Privacy Engine, Strategy
@@ -442,118 +446,115 @@ these.
 
 ---
 
-## 11. Blocking clarifications — architectural, not implementation
+## 11. Resolved — architecture-owner ratification (2026-08-02)
 
-Per the mission's own instruction, work stops here rather than resolving these
-by interpretation. Each changes the shape of Slice 1.
+All four blockers are **resolved**. Each resolution is encoded in the Trust
+Platform corpus; the ADR number is the citable source of truth.
 
-### 11.1 — What counts as "reasoning"? (Critical)
+### 11.1 — Reasoning boundary → **RESOLVED**, [`Decision 019`](../../trust/trust-platform-decisions.md)
 
-Law 1: *"No capability may implement independent reasoning outside the Trust
-Platform."* Law 16: *"No parallel reasoning runtime may exist."* Decision 013:
-*"The Trust Runtime is the only reasoning runtime inside Alloy."*
+The Trust Platform owns reasoning that is probabilistic, interpretive,
+generative, semantic, inferential or otherwise uncertainty-reducing, and that
+produces a proposal or a Decision Package. It does **not** absorb deterministic
+domain evaluation, eligibility enforcement, deterministic business validation,
+authorization, stage resolution, readiness evaluation, operational calculations,
+or business rules owned by existing platforms.
 
-But the Strategy Engine lists **`deterministic`** and **`rule evaluation`** as
-Reasoning Strategies, and Trust Economics' preferred order *begins* with
-Deterministic.
+The **Reasoning Boundary Test** — now in
+[`Manifesto Law 1`](../../trust/trust-platform-manifesto.md#reasoning-boundary-test) —
+decides ownership, first match wins:
 
-Read literally, every deterministic inference in Alloy is reasoning and must be
-routed through the Trust Runtime: the Stage Resolver, the Action Evaluator, the
-Participation Resolver, `classifyNonFormSource`, `documentFacts`, the Objective
-authorization conjunction, the relationship-authority resolver, every validator.
-That is a rewrite of certified systems, and it directly contradicts Decision 008
-("validation never belongs to reasoning") and the readiness inventory's
-prohibited class.
+| # | Question | If yes |
+|---|---|---|
+| 1 | Does it change durable operational state? | Registered command / Business Process Execution / Objective execution authority |
+| 2 | Does it apply authoritative rules or calculate known truth? | Its existing deterministic owner |
+| 3 | Does it resolve ambiguity or produce a proposal under uncertainty? | Trust Platform, as a Decision Contract |
 
-**Question.** Does "reasoning" mean *any* inference, or specifically *the
-reduction of operational uncertainty where the outcome is not determined by
-configuration, rules or authoritative truth*? Equivalently: is there a
-**Reasoning Boundary Test** that tells an engineer whether a given computation
-must become a Decision Contract? Without it, every subsequent scoping decision
-is a guess.
+A deterministic strategy executed inside an explicitly submitted Decision
+Contract is valid Trust Runtime execution. Existing deterministic evaluators do
+not move merely because they are deterministic.
 
-*Assumption if unanswered:* the narrow reading — a computation is reasoning only
-when its outcome is **not** determined by configuration, rules or authoritative
-truth. Certified deterministic engines stay where they are; the Trust Runtime's
-`deterministic` strategy means *a Decision Contract may be satisfied without
-probability*, not *all determinism is a contract*.
+**Consequence for this plan:** Risk 1 (scope explosion) is retired. The Stage
+Resolver, Action Evaluator, Participation Resolver, relationship-authority
+resolver, `classifyNonFormSource`, `documentFacts` and every validator stay
+where they are. §5–§9 stand unchanged.
 
-### 11.2 — Immutable Decision Packages with a mutable lifecycle
+### 11.2 — Package immutability → **RESOLVED**, [`Decision 020`](../../trust/trust-platform-decisions.md)
 
-`decision-package.md` states both *"Decision Packages are immutable"* /
-*"Historical Decision Packages are never modified"* **and** a lifecycle
-`Created → Presented → Accepted → Rejected → Modified → Executed → Observed →
-Archived`, plus Learning Metadata carrying outcomes (Accepted / Rejected /
-Modified / Overridden / Deferred).
+Immutable at creation. No lifecycle column, no post-creation mutable state on
+the package row. Presented / accepted / rejected / overridden / executed /
+observed are **append-only observations referencing** the package, recorded by
+`CaptureOutcome()`. A materially modified recommendation creates a **new**
+Decision Contract and a **new** Decision Package with **lineage** to its
+predecessor.
 
-**Question.** Is the lifecycle an append-only **observation stream referencing**
-an immutable package (which `CaptureOutcome()` supports), or does the package
-row itself carry a mutable lifecycle column? These produce different schemas and
-different immutability triggers.
+**Consequence for this plan:** confirms the four-table footprint in §3 —
+insert-only `trust_decision_contracts` and `trust_decision_packages`, plus
+append-only `trust_decision_observations`. Adds one column:
+`trust_decision_packages.supersedes_package_id` for lineage.
 
-*Assumption if unanswered:* append-only observations; the package row is
-insert-only with no updatable column.
+### 11.3 — Canonical V1 order → **RESOLVED**, [`Decision 021`](../../trust/trust-platform-decisions.md)
 
-### 11.3 — Runtime step order: Knowledge before Privacy, or after?
+```text
+Decision Contract
+→ resolve required truth and context
+→ classify information
+→ apply privacy transformations
+→ retrieve authorized knowledge
+→ select strategy
+→ execute reasoning
+→ deterministic validation
+→ trust evaluation
+→ Decision Package
+```
 
-Three canonical documents state the order three ways:
+Knowledge **metadata** may be resolved earlier for planning and budgeting;
+knowledge **content** enters the reasoning context only after privacy
+preparation. `trust-platform.md`, `trust-runtime.md`, `reasoning-runtime.md` and
+`privacy-runtime.md` are normalized to this order.
 
-| Document | Order |
+**Consequence for this plan:** the Trust Runtime pipeline has one canonical step
+sequence, and it is directly testable — see the ordering scenario in §10.
+
+### 11.4 — Ownership → **RESOLVED**, [`Decision 022`](../../trust/trust-platform-decisions.md), with [`Decision 014`](../../trust/trust-platform-decisions.md) amended
+
+| Concern | Owner |
 |---|---|
-| `trust-platform.md` (front door) | Information Retrieval → **Privacy Transformation** → **Knowledge Retrieval** → Reasoning |
-| `trust-runtime.md` (lifecycle) | Prepared → **Knowledge Retrieved** → **Privacy Transformed** → Reasoning |
-| `reasoning-runtime.md` (position) | Contract → **Knowledge Retrieval** → **Privacy Runtime** → Reasoning |
+| Proposal generation and confidence | Reasoning Runtime |
+| Deterministic business validation rules | The existing domain / platform validator that owns the rule |
+| Validation orchestration | Trust Runtime Validation Engine — owns no duplicate rules |
+| Trust Vector and Trust Score semantics | Trust Governance |
+| Trust evidence assembly | Trust Runtime |
+| Durable operational mutation | Operational Commands / Business Process Execution |
+| Objective coordination | Objective Platform |
 
-`privacy-runtime.md`'s own lifecycle omits knowledge retrieval entirely.
+A Decision Package is **evidence** supporting a human decision, an Objective, or
+a registered command invocation. It is never directly executable. There is no
+separate Validation Runtime.
 
-This is not cosmetic: it determines whether knowledge retrieval may be
-parameterized by privacy-transformed context, and both `trust-runtime.md` and
-`reasoning-runtime.md` declare "update only when the runtime lifecycle changes"
-— so the order cannot be chosen by an implementer.
-
-**Question.** Which ordering is canonical, and should the other two documents be
-corrected?
-
-*Assumption if unanswered:* the front door governs — privacy transformation
-precedes knowledge retrieval, since knowledge is by definition non-customer and
-retrieving it against a minimized context is strictly safer.
-
-### 11.4 — Three owners for Trust Evaluation, and one undefined Validation Runtime
-
-Alloy's own standing law is *one canonical owner per concern*
-(`platform-decisions.md`, 2026-07). The Trust corpus assigns **Trust
-evaluation** to three:
-
-- `trust-runtime.md` — a **Trust Engine** inside the Trust Runtime
-- `reasoning-runtime.md` — *"The runtime owns … trust evaluation"*
-- `trust-governance.md` — *"The Trust Governance Platform owns … trust
-  evaluation"*
-
-Separately, `trust-runtime.md` places **Validation** as an *engine inside* the
-Trust Runtime, while `reasoning-runtime.md` lists a **Validation Runtime** as a
-*peer runtime* alongside Privacy, Reasoning and Objective — with a TODO link to
-doctrine that does not exist.
-
-And throughout the corpus, *"the Objective Runtime executes approved Decision
-Packages."* In Alloy, the Objective Platform is a participant-obligation
-orchestration layer that explicitly **owns no business truth**; general
-operational execution belongs to **Command Runtime** via
-`POST /api/admin/actions/execute`. A Decision Package cannot be handed to the
-Objective Runtime for execution in the general case.
-
-**Questions.** (a) Who owns Trust evaluation? (b) Is Validation an engine of the
-Trust Runtime or a peer runtime requiring its own doctrine? (c) Does "Objective
-Runtime" in the Trust corpus mean Alloy's Objective Platform, or the general
-execution runtime — and if the latter, should the corpus say Command Runtime?
-
-*Assumptions if unanswered:* (a) the Trust Engine computes the Trust Vector,
-Governance sets the thresholds and review policy that consume it; (b) Validation
-is an engine of the Trust Runtime in V1, with a peer runtime deferred until its
-doctrine is published; (c) execution means Alloy's **Command Runtime**, and the
-corpus's "Objective Runtime" is a naming collision to be corrected.
+**Consequence for this plan:** Risk 8 (the Objective/Command Runtime naming
+collision) is retired. The Validation Engine in §5 is an orchestrator, not a
+rules owner — which materially *shrinks* V1. The Trust Engine assembles
+evidence and applies Governance-owned semantics.
 
 ---
 
+## 12. Remaining architectural questions — not blocking V1
+
+Neither of these blocks the first slice. Both must be answered before the phase
+in which they land.
+
+1. **Knowledge Asset ownership and authoring surface** (Phase 4). The Knowledge
+   Platform doctrine defines assets, versioning, providers and retrieval, but
+   not who authors an Organization Knowledge Asset in Alloy, or through which
+   Configuration domain. Alloy's Configuration Platform is object-centric and
+   Organization-published; a Knowledge Asset does not obviously map onto an
+   existing configuration object.
+2. **Reasoning budget placement** (Phase 2). Trust Economics mandates budgets at
+   organization, business-process, decision-class, capability, strategy and
+   contract scope. Where budgets are configured, and by which operator role, is
+   undefined. V1 ships a code-owned per-class ceiling, which is sufficient
+   because no probabilistic strategy runs until Phase 3.
 ## What was deliberately not done
 
 No Trust Runtime code. No AI added. No schema. No prompt. No pipeline change. No
@@ -564,7 +565,10 @@ conflicts rather than resolving them. Nothing pushed, merged or rebased.
 
 ## Related
 
-- [`docs/platform/trust/`](../../trust/) — the 16-document Trust Platform corpus
-  (**on `origin/staging`, not on this branch**)
+- [`docs/platform/trust/`](../../trust/) — the Trust Platform corpus
+- [`trust-platform-decisions.md`](../../trust/trust-platform-decisions.md) — Decisions 019–022
 - [`AI-READINESS-INVENTORY.md`](./AI-READINESS-INVENTORY.md)
-- [`../objective-platform/OBJECTIVE-PLATFORM-HANDOFF.md`](../objective-platform/OBJECTIVE-PLATFORM-HANDOFF.md)
+- [`TRUST-RUNTIME-V1-IMPLEMENTATION-PLAN.md`](./TRUST-RUNTIME-V1-IMPLEMENTATION-PLAN.md)
+- `docs/platform/planning/objective-platform/OBJECTIVE-PLATFORM-HANDOFF.md` —
+  **not on this base**; it lives on the unmerged
+  `agent/claude/objective-platform-promotion` branch
