@@ -112,7 +112,7 @@ import {
 } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
 import { projectOperationalRecommendationQueuePreview } from "@/lib/adminV2/bos/recommendations/adapters/projectOperationalRecommendationQueuePreview";
 import { tryBuildOperationalRecommendationFromAttention } from "@/lib/adminV2/bos/recommendations/adapters/tryBuildOperationalRecommendationFromAttention";
-import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/ai/buildOperationalSummary";
+import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/operationalSummary/buildOperationalSummary";
 import { childDesiredStartSummaryFromOcmRows } from "@/lib/ui-v2/childDesiredStartQueuePresentation";
 import {
     buildOpportunityChildLifecycleSummary,

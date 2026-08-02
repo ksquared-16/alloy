@@ -1,10 +1,17 @@
 /**
- * Deterministic, conservative redaction for future AI-bound payloads.
+ * Deterministic, conservative redaction of a JSON-safe object.
+ *
+ * Platform privacy primitive. It is NOT AI-specific: the Processing commit audit
+ * uses it to keep identity out of audit payloads, and the Trust Runtime Privacy
+ * Engine uses it to build a Reasoning Context. Behaviour is unchanged from its
+ * previous home under `lib/ai/` — this module is the doctrine-correct owner.
+ *
  * Pure functions — does not mutate inputs.
- * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
+ * @see docs/platform/trust/privacy-runtime.md
  */
 
-import type { AiPiiMode } from "@/lib/ai/aiPolicy";
+/** How aggressively identity-shaped values are minimized. */
+export type PiiMode = "strict" | "standard" | "none";
 
 export type RedactionKind =
     | "email"
@@ -82,14 +89,14 @@ function redactPersonName(s: string, path: string, kind: RedactionKind, steps: R
     return `${parts[0]!.slice(0, 1)}. ${parts[parts.length - 1]!.slice(0, 1)}…`;
 }
 
-function shouldRedactNameKey(key: string, piiMode: AiPiiMode): boolean {
+function shouldRedactNameKey(key: string, piiMode: PiiMode): boolean {
     if (piiMode === "none") return false;
     if (CHILD_NAME_KEY.test(key) || PARENT_NAME_KEY.test(key)) return true;
     if (piiMode === "strict" && GENERIC_NAME_KEY.test(key)) return true;
     return false;
 }
 
-function redactLeaf(key: string, value: unknown, path: string, piiMode: AiPiiMode, steps: RedactionStep[]): unknown {
+function redactLeaf(key: string, value: unknown, path: string, piiMode: PiiMode, steps: RedactionStep[]): unknown {
     if (value == null) return value;
     if (piiMode === "none") {
         if (typeof value === "string" && NOTE_KEY.test(key)) {
@@ -140,7 +147,7 @@ function redactLeaf(key: string, value: unknown, path: string, piiMode: AiPiiMod
 function cloneWalk(
     input: Record<string, unknown>,
     basePath: string,
-    piiMode: AiPiiMode,
+    piiMode: PiiMode,
     steps: RedactionStep[],
     depth: number,
     maxDepth: number,
@@ -173,7 +180,7 @@ function cloneWalk(
 }
 
 export type RedactObjectForAiOptions = {
-    pii_mode?: AiPiiMode;
+    pii_mode?: PiiMode;
     max_depth?: number;
 };
 

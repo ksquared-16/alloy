@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { AI_POLICY_METADATA_KEY, parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
 import {
-    applyStubOperationalSummaryOverlay,
     buildOperationalSummaryDeterministic,
     toOperationalSummaryQueuePreview,
-} from "@/lib/ai/buildOperationalSummary";
+} from "@/lib/operationalSummary/buildOperationalSummary";
+import { applyStubOperationalSummaryOverlay } from "@/lib/ai/buildOperationalSummary";
 import { aiUsageTelemetryPayloadV1ToJson } from "@/lib/ai/enrichmentContracts";
 import { safeParseOperationalSummaryV1 } from "@/lib/ai/operationalSummarySchema";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";

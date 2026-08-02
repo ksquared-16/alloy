@@ -4,6 +4,7 @@
  * @see docs/sprints/archive/05_2026/ai_enrichment_and_agent_actions_v1.md
  */
 
+import type { PiiMode } from "@/lib/privacy/redactObject";
 import type { AiProviderKey } from "@/lib/ai/providerTypes";
 
 export const AI_POLICY_METADATA_KEY = "ai_policy" as const;
@@ -20,7 +21,8 @@ export const AI_ALLOWED_FEATURES = [
 
 export type AiAllowedFeature = (typeof AI_ALLOWED_FEATURES)[number];
 
-export type AiPiiMode = "strict" | "standard" | "none";
+/** Alias of the platform privacy primitive's mode — one owner, one vocabulary. */
+export type AiPiiMode = PiiMode;
 
 export type AiLoggingMode = "minimal" | "verbose";
 

@@ -27,7 +27,7 @@ export {
     type AiRetentionMode,
 } from "@/lib/ai/aiPolicy";
 
-export { redactObjectForAi, type RedactObjectForAiResult, type RedactionStep, type RedactionKind } from "@/lib/ai/redaction";
+export { redactObjectForAi, type RedactObjectForAiResult, type RedactionStep, type RedactionKind } from "@/lib/privacy/redactObject";
 
 export {
     NEEDS_ATTENTION_SUGGESTION_ENRICHMENT_AGENT_KEY,
@@ -49,11 +49,11 @@ export { aiUsageTelemetryPayloadV1Schema, safeParseAiUsageTelemetryPayloadV1 } f
 
 export { safeParseOperationalSummaryV1 } from "@/lib/ai/operationalSummarySchema";
 
+export { applyStubOperationalSummaryOverlay } from "@/lib/ai/buildOperationalSummary";
 export {
     buildOperationalSummaryDeterministic,
-    applyStubOperationalSummaryOverlay,
     toOperationalSummaryQueuePreview,
-} from "@/lib/ai/buildOperationalSummary";
+} from "@/lib/operationalSummary/buildOperationalSummary";
 
 export {
     isAiEnrichmentStubEnvEnabled,
