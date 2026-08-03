@@ -30,6 +30,12 @@ export type TourCommsTemplateContext = {
     publicBookingUrl?: string | null;
     ctaText?: string | null;
     ctaUrl?: string | null;
+    /** Pre-rendered list of offered tour times, one line per option, each with its own secure link. */
+    tourOptionsBlock?: string | null;
+    /** No-login fallback URL for the invitation as a whole. */
+    invitationActionUrl?: string | null;
+    /** Single-use decline link. */
+    declineUrl?: string | null;
     /** Pre-formatted labels (optional); computed via {@link formatTourCommsDateTimeLabels} when omitted. */
     tourDateLabel?: string | null;
     tourTimeLabel?: string | null;
@@ -124,5 +130,10 @@ export function buildTourCommsMergeFields(ctx: TourCommsTemplateContext): Record
         public_booking_url: String(ctx.publicBookingUrl ?? "").trim(),
         cta_text: String(ctx.ctaText ?? "").trim(),
         cta_url: String(ctx.ctaUrl ?? "").trim(),
+        // Invitation-only tokens. Empty for every post-booking event key, which is why
+        // the invitation templates are the only ones that reference them.
+        tour_options_block: String(ctx.tourOptionsBlock ?? "").trim(),
+        invitation_action_url: String(ctx.invitationActionUrl ?? "").trim(),
+        decline_url: String(ctx.declineUrl ?? "").trim(),
     };
 }
