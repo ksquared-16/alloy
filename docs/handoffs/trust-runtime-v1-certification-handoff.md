@@ -178,40 +178,77 @@ privacy → knowledge → strategy → reasoning → validation → package.
 
 ### What is NOT proven — conditions 1 and 2 remain open
 
-**The operator surface was never reached.** The `Enhance draft (preview)` control
-lives in `OperationalAttentionEnhanceDraft`, rendered through
-`OperationalAttentionHeaderStrip` → `OpportunityInquirySummaryRightColumn` →
-`OpportunityDrawerInquiryWorkflowOverview` — the adminV2 Focus Panel drawer. Every
-adminV2 Work View in the cert tenant refuses to render (see §4), so that drawer is
-inaccessible.
-
-Consequently:
-
 - **Condition 1 — existing operator-facing behavior is preserved: UNPROVEN.**
 - **Condition 2 — a deterministic suggestion is displayed: UNPROVEN.**
 
-Conditions 3–9 have the seam evidence above. The enrichment call was issued from a
-`/legacy-admin/opportunities` page because that was the only reachable authenticated
-surface; the page is only the origin of the `fetch`, and the route exercised is the
-same one the adminV2 drawer calls. That does not substitute for observing the
-rendered control, and it is not recorded as if it did.
+Conditions 3–9 have the seam evidence above. **S15 stays NOT RUN. Gap 3 stays open.**
 
-**S15 stays NOT RUN. Gap 3 stays open.**
+The reason is structural, and §4 states it precisely. It is **not** the tenant
+configuration problem this handoff originally claimed.
 
 ---
 
-## 4. Cert tenant Work Views are blocked by mixed row grain (follow-up B)
+## 4. Why S15 cannot close — the consumer is not on the operator surface
 
-Every Work View in the `northwind-early-learning` cert tenant renders only:
+### Correction — the earlier diagnosis in this handoff was wrong
 
-> **This Work View can't be shown until its configuration is fixed.**
+An earlier revision of this document recorded the blocker as a **cert tenant
+mixed-grain Work View misconfiguration**, on the strength of this error:
+
 > Work View "New Leads": lens spans 2 Row Grains (family, child) — a surface cannot
 > be grain-ambiguous
 
-Confirmed on **New Leads** and **All Work**. This is pre-existing tenant
-configuration, unrelated to Trust Runtime, and it is the direct blocker on Gap 3:
-the operator Focus Panel path is inaccessible, so Trust operator-surface QA cannot
-close until it is corrected. See follow-up B.
+That error is real, but it is **an artifact of entering through the wrong surface**.
+`/adminV2/workspace` is not the operator's Work View route. The canonical operator
+surfaces are **`/workspace`, `/workspace/work-unit/<slug>` and `/organization`**.
+
+At `http://localhost:3011/workspace/work-unit/new-leads` **every Work View renders
+correctly** — New Leads, Tours, Follow Up, All Work; a real lead list; and a working
+Focus Panel showing WHAT'S NEXT (*Contact Family*, "Lead stage age > 7 days"),
+HOUSEHOLD, ASSIGNMENTS and CHILDREN. There is no tenant configuration defect
+blocking Gap 3. **Follow-up B as originally written is withdrawn.**
+
+### The actual blocker: the Slice 1 consumer is not wired into Presentation Runtime V2
+
+The `Enhance draft (preview)` control is `OperationalAttentionEnhanceDraft`. Its only
+render path is:
+
+```
+OpportunityDrawerOverviewBody
+  → OpportunityDrawerInquiryWorkflowOverview
+    → OpportunityInquirySummaryRightColumn
+      → OperationalAttentionHeaderStrip
+        → OperationalAttentionEnhanceDraft      ← the Trust Runtime V1 consumer
+```
+
+The Work Unit surface does not render that body. It renders
+`OpportunityFocusPanelBody`, via
+`FocusPanelSurface → InlineOpportunityFocusPanel`. Three independent confirmations:
+
+1. **Module-graph reachability.** Walking imports from
+   `OpportunityFocusPanelBody.tsx` across **1166 modules** finds **no path** to
+   `OperationalAttentionEnhanceDraft`. The same walk from
+   `OpportunityDrawerOverviewBody.tsx` reaches it in four hops.
+2. **Explicit suppression in code.** `components/admin/AdminEntityDrawer.tsx`
+   returns `null` for the `opportunity` route when
+   `isWorkUnitQueueSurfacePath(pathname)` — *"on work-unit surfaces the INLINE Focus
+   Panel region (FP.SURFACE → InlineOpportunityFocusPanel) owns the record surface —
+   the modal/drawer chrome must never mount there"*
+   ([Presentation Runtime V2](../platform/experience/presentation-runtime-v2.md)).
+   On `/workspace/work-unit/*` the drawer body, and therefore the enhance control,
+   never mounts.
+3. **Observed DOM.** On `/workspace/work-unit/new-leads`, with a lead selected and
+   its WHAT'S NEXT drill-in open, the page contains **zero** `[data-drawer-slot]`
+   elements, **zero** `[data-attention-surface]` elements and **no** button matching
+   /enhance/.
+
+**Consequence for certification.** Trust Runtime V1 Slice 1's single operator-facing
+consumer lives on a record surface that Presentation Runtime V2 has retired for
+work-unit routes. Slice 1's governed decision is real and its seam is proven, but on
+the surface operators actually use, **the enrichment has no control to invoke it and
+no place to display it.** S15 is not blocked by tenant data or by this branch — it is
+unsatisfiable until the consumer is ported to the Focus Panel. See the revised
+follow-up B.
 
 ---
 
@@ -278,23 +315,45 @@ opportunities).
 - Out of scope for a Trust branch: the fix is a platform-wide grant/revoke decision,
   not a Slice 1 revision.
 
-### B. Repair certification tenant mixed-grain Work View configuration
+### B. *(WITHDRAWN)* Repair certification tenant mixed-grain Work View configuration
 
-- Current Work Views span **family** and **child** row grains; a surface cannot be
-  grain-ambiguous.
-- The operator Focus Panel path is inaccessible as a result.
-- **Trust operator-surface QA (conditions 1 and 2, scenario S15) cannot close until
-  this is corrected.**
-- Tenant configuration repair, not application code.
+Raised on a wrong diagnosis and **withdrawn** — see §4. The Work Views render
+correctly at `/workspace/work-unit/<slug>`; the grain error appears only when
+entering through `/adminV2/workspace`, which is not the operator route. No tenant
+repair is required. Replaced by B′.
+
+### B′. Port the Trust Runtime enrichment consumer onto the Work Unit Focus Panel
+
+- `OperationalAttentionEnhanceDraft` is reachable **only** from
+  `OpportunityDrawerOverviewBody`; `OpportunityFocusPanelBody` has no path to it
+  across 1166 modules.
+- `AdminEntityDrawer` deliberately returns `null` for opportunity routes on work-unit
+  surfaces (Presentation Runtime V2), so the drawer body never mounts where operators
+  work.
+- **Scenario S15 and QA conditions 1 and 2 are unsatisfiable until this is done** —
+  no amount of tenant configuration or test data changes it.
+- This is a Presentation Runtime wiring decision, **not** a Slice 1 revision and
+  **not** Slice 2. Whether the enrichment affordance belongs on the Focus Panel at
+  all is a product call for Kelly, not an engineering default.
 
 ---
 
-## 8. Where to resume
+## 8. Operator surfaces — use these, not `/admin` or `/legacy-admin`
+
+The canonical operator surfaces are **`/workspace`**,
+**`/workspace/work-unit/<slug>`** and **`/organization`**. `/adminV2/workspace`
+redirects but is not the operator route and produced the false grain diagnosis in §4;
+`/admin/*` and `/legacy-admin/*` are legacy and must not be used to judge operator
+behavior. Clicking a Today's Work row on `/workspace` lands on
+`/workspace/work-unit/new-leads` — that is the surface certification must observe.
+
+## 9. Where to resume
 
 1. Remove the tracked `web/node_modules` symlink locally and `npm ci` (§5).
 2. Run Gap 2 — full `npm run typecheck`, no strictness reduction, no Trust
    exclusions, no substituting the scoped project.
-3. Close follow-up B, then finish Gap 3 conditions 1 and 2 on the adminV2 drawer.
+3. Gap 3 conditions 1 and 2 need a **decision from Kelly** on follow-up B′ first —
+   they cannot be closed by testing harder.
 4. Re-establish the base-vs-branch baseline against the *current* staging SHA before
    attributing any suite failure. The prior figures (12 `tests/workspace`, 5
    `tests/queues`) were measured against an older base and have **not** been

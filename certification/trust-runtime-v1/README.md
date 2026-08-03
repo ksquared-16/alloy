@@ -123,12 +123,26 @@ tables (+1 each) and `workflow_events` (0 → 10, all `trust_*`, correct org) ch
 The target opportunity row is byte-identical before and after
 (`md5 da31ee2ca66f016a07f6a69d4e768875`).
 
-**Still unproven — conditions 1 and 2.** The operator surface was never reached. The
-`Enhance draft (preview)` control lives in the adminV2 Focus Panel drawer, and every
-Work View in the cert tenant refuses to render: *"lens spans 2 Row Grains (family,
-child) — a surface cannot be grain-ambiguous"*. Until that tenant configuration is
-repaired (follow-up B), **preservation of existing operator-facing behavior and
-display of the deterministic suggestion are unobserved, and S15 stays NOT RUN.**
+**Still unproven — conditions 1 and 2, and the reason is structural.**
+
+The canonical operator surface is `/workspace/work-unit/<slug>` — not `/adminV2/*`,
+`/admin/*` or `/legacy-admin/*`. On that surface every Work View renders correctly
+(New Leads, Tours, Follow Up, All Work, with a working Focus Panel). An earlier
+revision of this record blamed a cert-tenant mixed-grain Work View
+misconfiguration; **that diagnosis was wrong** and is withdrawn — the grain error
+appears only when entering through `/adminV2/workspace`.
+
+The real blocker: `OperationalAttentionEnhanceDraft` — the Trust Runtime V1
+consumer — is reachable **only** from `OpportunityDrawerOverviewBody`. The Work Unit
+surface renders `OpportunityFocusPanelBody`, which has **no path** to it across 1166
+modules, and `AdminEntityDrawer` deliberately returns `null` for opportunity routes
+on work-unit paths (Presentation Runtime V2). Observed DOM confirms it: zero
+`[data-drawer-slot]`, zero `[data-attention-surface]`, no `/enhance/` button.
+
+**Slice 1's only operator-facing consumer sits on a record surface that Presentation
+Runtime V2 has retired for work-unit routes.** S15 is unsatisfiable until the
+consumer is ported (follow-up B′) — it cannot be closed by testing harder, by tenant
+configuration, or by anything on this branch.
 
 ## 5. Provider and egress proof
 
