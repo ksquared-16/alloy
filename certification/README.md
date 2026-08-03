@@ -40,8 +40,31 @@ Subcommands: `up · env · serve · verify · status · down` (see the script he
 | Communications safety | no provider credentials in the cert env → sends record the objective result but nothing leaves the machine; auth emails caught by the stack's local mail catcher (:54424) | ✅ committed |
 | Orchestration | `alloy-certify` | ✅ committed |
 
-Ports **544xx** are chosen to not collide with the default (543xx), processing-cert (553xx), or runtime-realization
-(563xx) stacks, so all can run concurrently.
+## This is the ONE shared stack — do not start your own
+
+`alloy-cert` is the single local Supabase stack for this machine. Every session **shares** it.
+
+> **Superseded guidance.** This README used to say that ports 544xx were chosen not to collide with the default
+> (543xx), processing-cert (553xx), and runtime-realization (563xx) stacks "so all can run concurrently." That
+> sentence was a root cause of a containment failure: sessions read it as licence to allocate a fresh port range and
+> stand up a stack of their own. Docker reached **35 containers across 4 stacks** — one still running two days after
+> the worktree that created it had been deleted, another started from a temp scratchpad directory. Concurrency
+> across stacks is no longer a goal. **One stack, shared, leased.**
+
+Join it — never run `supabase start` yourself:
+
+```bash
+alloy-stack use        # join the shared stack (starts it only if nobody has it up)
+alloy-stack status     # what is running, and which sessions hold leases
+alloy-stack release    # at sprint end — stops the stack if you are the last one out
+```
+
+`supabase start` outside this stack is **blocked** by a `PreToolUse` hook
+([`scripts/local-dev/hooks/guard-supabase-start.sh`](../scripts/local-dev/hooks/guard-supabase-start.sh)), because
+documentation alone demonstrably did not hold. If you believe you genuinely need an isolated stack —
+schema-destructive testing is the only real case — that is a decision for Kelly, not a workaround.
+
+See [`docs/platform/governance/local-docker-containment.md`](../docs/platform/governance/local-docker-containment.md).
 
 ## Credentials (local-only, non-secret by design)
 
@@ -76,5 +99,11 @@ spec that logs in **within the same test** (no reuse) authenticates fully.
 ## Teardown
 
 ```bash
-certification/alloy-certify down    # stops the app + stack cleanly
+alloy-stack release                 # drop your lease; stops the stack if you are the last one out
 ```
+
+`alloy-sprint-finish <slot>` does this for you, so a finished sprint never leaves containers behind. Stopping keeps
+the data volumes, so the next `alloy-stack use` comes back with the seeded tenant intact.
+
+`certification/alloy-certify down` still stops the app + stack directly, but prefer `alloy-stack release` — it
+respects other sessions' leases instead of pulling the stack out from under them.

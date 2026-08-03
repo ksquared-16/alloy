@@ -41,6 +41,24 @@ Work **only** in the returned worktree. Permanent ports are **3011–3016**. Do 
 - Do not push, merge, rebase, create/update a PR, trigger Vercel, or modify `staging` until Kelly explicitly authorizes promotion.
 - Do not modify sibling worktrees or the canonical checkout during implementation.
 
+## Local Docker — one shared stack
+
+**Never run `supabase start`.** There is one local Supabase stack on this machine (`alloy-cert`) and every session
+shares it. Starting your own creates 8–11 containers that outlive the session — that is how Docker reached 35
+containers across 4 stacks and stalled everyone's progress.
+
+```bash
+alloy-stack use        # join the shared stack (starts it only if nobody has it up)
+alloy-stack status     # what is running, and which sessions hold leases
+alloy-stack release    # at sprint end — stops the stack if you are the last one out
+```
+
+`alloy-sprint-finish` releases your lease for you. `supabase start` outside the shared stack is blocked by a
+`PreToolUse` hook. "I'll just use my own disposable Postgres" is the exact reasoning that caused this — if you think
+you need an isolated stack, ask Kelly rather than starting one.
+
+Required reading: [`docs/platform/governance/local-docker-containment.md`](docs/platform/governance/local-docker-containment.md)
+
 ## First response
 
 On the first reply to Kelly, print only the compact assignment card from `managed-sprint-operations.md` §4 (root, sprint, slot, provider, worktree, branch, port, localhost or “server not required”, auth readiness, server status, and operator commands). No implementation theory in that first message.

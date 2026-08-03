@@ -213,6 +213,21 @@ main() {
   alloy_manifest_append_history "$wt_name" "sprint-start" "slot ${resolved_slot} provider ${provider}"
   alloy_manifest_enforce_or_warn "$wt_name"
 
+  # Integration-debt gate. Surfaced HERE, before dependencies and implementation
+  # are layered onto a stale base — >=50 behind warns, >=100 blocks until a
+  # reconciliation decision is recorded. Cheap to act on now, expensive later.
+  local debt_evidence
+  if ! debt_evidence="$(alloy_assert_integration_debt_acceptable "$ALLOY_WORKTREE_PATH" "$wt_name")"; then
+    printf '%s\n' "$debt_evidence" | sed 's/^/  /'
+    alloy_die "sprint start blocked: integration debt exceeds the block threshold (see above)"
+  fi
+  printf '%s\n' "$debt_evidence" | sed 's/^/  /'
+
+  # The toolkit must not be owned by a worker worktree, or deleting a slot
+  # breaks every alloy-* command on the machine.
+  alloy_durability_toolkit_not_in_worktree >/dev/null || \
+    alloy_warn "toolkit resolves through a worktree — run: alloy-toolkit install origin/staging"
+
   alloy_sprint_install_deps "$ALLOY_WORKTREE_PATH" "$wt_name"
 
   # Prepare managed env (auth paths remain optional until login).
