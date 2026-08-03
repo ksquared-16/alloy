@@ -11,7 +11,7 @@ Concurrent workers could run `npm run typecheck` / `build` / full Vitest in para
 ## Fix
 
 - Evolved `alloy-validate` into a host-wide **validation lease broker** (enriched lease, FIFO queue, heartbeat, status/cancel).
-- Added `vac` / `vac-run` aliases; `web/package.json` heavy scripts route through `vac-run` (fail-closed).
+- Added `vac` / `vac-run` aliases for local workers. Vercel/CI keep direct `next build` / `tsc` / `vitest` in `web/package.json` (broker locks are host-local only).
 - Result reuse: identical kind by commit+fingerprint; successful `build` satisfies later `typecheck`.
 
 ## Automated cert results (2026-07-29)
