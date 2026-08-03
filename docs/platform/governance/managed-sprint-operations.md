@@ -182,3 +182,53 @@ Both providers must read **this** document before beginning an Alloy sprint and 
 - Not Director / Company OS / mission orchestration
 - Not a replacement for `workspace-orchestration.md` machine limits
 - Not permission to edit `/Users/Kelly/Alloy-Claude` from the Cursor workspace (see `agent-repo-boundaries.md`)
+
+## Day boundaries — END OF DAY and START OF DAY
+
+A day's work is finished when it can survive the machine, not when the editor closes. On 2026-08-03 an
+audit found **880 commits across 79 branches existing only on one laptop**, five of six active slots
+never pushed, and slots sitting 230–265 commits behind. Both failures are day-boundary failures: work
+that was never made durable, and bases that were never refreshed.
+
+**This is not a one-commit-per-day rule.** Meaningful checkpoint commits and pushes throughout the day
+are preferred — the gates below only assert that a day does not *end* with work stranded, and does not
+*start* on a stale base.
+
+### END OF DAY — `alloy-day-end [slot]`
+
+Fail-closed. Every item must hold:
+
+| Check | Why |
+|---|---|
+| Coherent work committed | a dirty tree is work only this machine knows about |
+| All commits pushed | `DURABILITY_UNPUSHED_COMMITS=0` |
+| Remote SHA equals local | the remote has *this* commit, not merely *a* commit |
+| Handoff updated | tomorrow starts from whatever the handoff says |
+| Clean tree | no stray artifacts left to be discovered later |
+| No owned processes or leases | no dev server, no Docker stack lease held overnight |
+
+`--no-handoff-check` is available for a slot with no handoff surface. There is no override for the
+durability checks: **a branch that exists only on this machine is not a finished day.**
+
+### START OF DAY — `alloy-day-start [slot]`
+
+1. **fetch origin**
+2. **report ahead/behind** against `origin/staging`
+3. **rebase onto current `origin/staging`** — *before* any new implementation, not after
+4. **run configured smoke tests** (`ALLOY_SMOKE_CMD`)
+5. **push the rebased branch with `--force-with-lease`**
+6. **then resume work**
+
+The integration-debt gate still applies: ≥50 behind warns, ≥100 blocks until a reconciliation decision
+is recorded. A dirty tree stops the sequence rather than being rebased over — that is what yesterday's
+`alloy-day-end` exists to prevent. A conflicted rebase aborts rather than leaving a half-rebased tree.
+
+`--force-with-lease`, never `--force`: if the remote moved under you, the push is refused so you look
+before overwriting.
+
+### Why rebase daily rather than at promotion time
+
+Slot 4 reached 265 behind and needed **six controlled promotions**, a decomposition report, two
+corrected slice boundaries and two rounds of type repair. Slot 6 reached 230 behind and needed a full
+reconstruction with commits dropped as superseded. Neither was caused by bad work — both were caused by
+integrating late. A daily rebase converts that into a few minutes each morning.
