@@ -109,16 +109,40 @@ not by the grant the migration believed it was setting. See follow-up A.
 
 ---
 
-## 2. Gap 2 — full-project typecheck: **NOT RUN**
+## 2. Gap 2 — full-project typecheck: **INFRASTRUCTURE-BLOCKED**
 
-`npm run typecheck` was never executed on this branch. It was queued behind Gap 3
-and the session was stopped first. It remains exactly as the prior session left it:
-open, with the scoped `tsconfig.trustcert.json` proof passing and whole-repository
-type safety unverified.
+Run 2026-08-03T22:07:51Z, after `rm web/node_modules && npm ci` (§5) — the first
+Trust typecheck ever measured against *this* worktree's dependency tree rather than
+Slot 4's.
 
-A prerequisite surfaced that the next session must handle first — see the
-repository defect in §5. Without a real worktree-local `node_modules`, a typecheck
-in this worktree measures Slot 4's dependency tree, not this one's.
+`npm run typecheck` (`node --max-old-space-size=8192 tsc -p tsconfig.build.json
+--noEmit`) is **killed: exit 144 (128 + signal 16), zero bytes of output.**
+Reproduced at 8192 / 4096 / 2048 MB heaps. `--listFilesOnly` on the same project is
+killed too, so this is **not** a type-checking memory ceiling — merely constructing
+the program exceeds it. Host at launch: load average 41.06 / 49.33 / 53.62, ~233 MB
+free of 24 GB, node v22.21.1 arm64, 8851 TS files in scope. The branch-owned dev
+server was stopped first; no other agent's process was touched. No strictness was
+reduced and no Trust file was excluded.
+
+**Bisected**, so the blocker is named:
+
+| Scope | Result |
+|---|---|
+| `lib/trust` + `tests/trust` | exit 0 |
+| + `lib/privacy/redactObject`, `lib/operationalSummary/*`, `lib/ai/aiPolicy`, `lib/ai/enrichmentContracts` | **exit 0, 0 errors, 11s** |
+| `lib/queues/QueueService.ts` alone (no Trust) | exit 144 |
+| `lib/pos/…/auditExistingChildCommit.ts` alone (no Trust) | exit 144 |
+| `app/api/admin/ai/enrich-attention-suggestion/route.ts` alone | exit 144 |
+
+The ceiling is environmental and scales with program size — not Trust-specific, not a
+type error. `web/tsconfig.slice1scope.json` (committed) is the strongest scope that
+executes here: the Trust kernel, the Trust suite, and every leaf module the
+prerequisite refactor moved, **exit 0, 0 errors**. It cannot reach the route or the
+two relocated-utility consumers, so whole-repository type safety on this branch stays
+unverified.
+
+**Reported as infrastructure-blocked. Not a pass.** A host with real headroom — or CI
+— must run the unmodified `npm run typecheck` before Slice 1 is certified.
 
 ---
 

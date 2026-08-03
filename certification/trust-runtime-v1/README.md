@@ -98,16 +98,50 @@ is redundant and its stated intent is not achieved by GRANT alone.
 **Result: 20 of 21 isolated invariants + 16 of 16 full-chain assertions pass on the
 full chain.** Follow-up A in the handoff.
 
-### Gap 2 — full-project typecheck: **STILL NOT RUN**
+### Gap 2 — full-project typecheck: **INFRASTRUCTURE-BLOCKED, not passed**
 
-`npm run typecheck` has not been executed on this branch. The scoped project
-(`tsconfig.trustcert.json`, covering `lib/trust` and `tests/trust`) passes with
-`rc=0` and carries the S14 compile-time proof, but whole-repository type safety
-remains unverified.
+Attempted 2026-08-03T22:07:51Z on a genuine worktree-local `node_modules`
+(`npm ci`, 0 exit — the tracked Slot 4 symlink was removed first, so this is the
+first time any Trust typecheck measured *this* worktree's dependency tree).
 
-A prerequisite blocks it: `web/node_modules` is tracked on `origin/staging` as a
-symlink into the Slot 4 worktree, so a typecheck run in any other worktree measures
-Slot 4's dependency tree. See handoff §5.
+```
+npm run typecheck
+  → node --max-old-space-size=8192 node_modules/typescript/bin/tsc \
+        -p tsconfig.build.json --noEmit
+```
+
+| | |
+|---|---|
+| Result | **killed — exit 144 (128 + signal 16)**, zero bytes of output |
+| Reproduced at heaps | 8192 MB, 4096 MB, 2048 MB — identical outcome |
+| Also killed | `--listFilesOnly` on the same project — so this is **not** a type-checking memory ceiling |
+| Project size | 8851 `.ts`/`.tsx`/`.mts` files under `web/` (excluding `node_modules`, `.next`) |
+| Host at launch | load average 41.06 / 49.33 / 53.62; ~233 MB free of 24 GB; node v22.21.1 arm64 |
+| Before running | the branch-owned dev server on :3011 was stopped; **no other agent's process was touched** |
+| Strictness | unchanged — no `skipLibCheck` added, no Trust file excluded, no scoped project substituted for the full command |
+
+**Bisected, so the blocker is named rather than guessed.** The ceiling is
+environmental and scales with program size; it is not Trust-specific and it is not a
+type error:
+
+| Scope | Result |
+|---|---|
+| `lib/trust` + `tests/trust` (`tsconfig.trustcert.json`) | **exit 0** |
+| + `lib/privacy/redactObject`, `lib/operationalSummary/*`, `lib/ai/aiPolicy`, `lib/ai/enrichmentContracts` (`tsconfig.slice1scope.json`) | **exit 0, 0 errors, 11s** |
+| `lib/queues/QueueService.ts` **alone**, no Trust files | exit 144 |
+| `lib/pos/processingCase/commit/auditExistingChildCommit.ts` **alone**, no Trust files | exit 144 |
+| `app/api/admin/ai/enrich-attention-suggestion/route.ts` **alone** | exit 144 |
+
+Each of those three modules transitively pulls in a large share of the application,
+and any program containing one exceeds this environment's ceiling — with or without
+Trust in the program.
+
+**Strongest scope that actually executes:** `tsconfig.slice1scope.json` — the whole
+Trust kernel, the Trust test suite, and every *leaf* module the prerequisite refactor
+moved. **exit 0, 0 errors.** It cannot reach the route or the two relocated-utility
+consumers, so **whole-repository type safety on this branch remains unverified.**
+
+**This is reported as infrastructure-blocked. It is not a pass.**
 
 ### Gap 3 — observed browser QA: **PARTIALLY CLOSED; S15 still NOT RUN**
 
