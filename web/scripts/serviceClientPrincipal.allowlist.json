@@ -13,7 +13,7 @@
     "",
     "All three lists may only shrink. A stale entry fails the check."
   ],
-  "reviewed": "2026-07-31",
+  "reviewed": "2026-08-03",
   "reviewed_by": "assignment asg_d203f547736c16 (mission msn_2d054741a54698fa4c, W-4)",
   "exceptions": [
     {
@@ -97,63 +97,12 @@
       "reason": "Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:17-20); entity_type is validated against a fixed allow-list (:32-38). Read-only, returns only fields explicitly flagged for public booking."
     },
     {
-      "route": "app/api/book-v2/availability/route.ts",
-      "model": "public-catalog-read + env-pinned-org",
-      "reason": "Read-only availability for the public booking funnel; timezone defaults to the ALLOY_PUBLIC_ORG_ID org. No caller-supplied row selector, no write."
-    },
-    {
-      "route": "app/api/book-v2/validate-promo/route.ts",
-      "model": "public-catalog-read",
-      "reason": "Validates a promo code against a quote subtotal and returns the verdict. Read-only; selects by the submitted code, which is the credential being tested, not a row identifier granting access to someone else's data."
-    },
-    {
       "route": "app/api/vendor-application/route.ts",
       "model": "public-intake-create + env-pinned-org",
       "reason": "Unauthenticated vendor application intake. Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:33-37). Creates only — it selects no existing row by a caller-supplied id."
-    },
-    {
-      "route": "app/api/book-v2/quote-start/route.ts",
-      "model": "public-intake-create + env-pinned-org",
-      "reason": "Entry point of the public booking funnel; creates the person/opportunity and RETURNS the ids. Creates only — no caller-supplied id selects a pre-existing row."
-    },
-    {
-      "route": "app/api/book-v2/specialty-quote-start/route.ts",
-      "model": "public-intake-create + env-pinned-org",
-      "reason": "Same shape as quote-start for the specialty vertical: creates and returns ids rather than accepting one."
     }
   ],
-  "baseline": [
-    {
-      "route": "app/api/book-v2/confirm/route.ts",
-      "frozen": "2026-07-31",
-      "why_not_an_exception": "Accepts caller-supplied `opportunity_id`, `customer_id` and `person_id` from the request body (:626-631) and reads and updates those rows with a service-role client (:787, :818, :855). Nothing proves the caller is entitled to them — the id is unguessable, which is obscurity, not authorization.",
-      "w15_note": "The booking funnel needs a bearer capability for the in-progress quote (the action_links shape), or the ids must be re-derived server-side from something the caller has proven."
-    },
-    {
-      "route": "app/api/book-v2/quote-refine/route.ts",
-      "frozen": "2026-07-31",
-      "why_not_an_exception": "Accepts caller-supplied `opportunity_id` (:230) and updates that opportunity (:334) plus typed field values (:380), with no token and no principal.",
-      "w15_note": "Same capability-token remedy as confirm."
-    },
-    {
-      "route": "app/api/book-v2/service-details/route.ts",
-      "frozen": "2026-07-31",
-      "why_not_an_exception": "Requires caller-supplied `opportunity_id` (:57-59), reads it (:84) and updates it (:191) with a service-role client and no authorization of any kind.",
-      "w15_note": "Same capability-token remedy as confirm."
-    },
-    {
-      "route": "app/api/book-v2/opportunity-discount/route.ts",
-      "frozen": "2026-07-31",
-      "why_not_an_exception": "Requires caller-supplied `opportunity_id` (:44-46), reads it (:53) and writes discount fields to it (:84, :142). Unauthenticated write to a named existing row.",
-      "w15_note": "Same capability-token remedy as confirm."
-    },
-    {
-      "route": "app/api/book-v2/ensure-customer/route.ts",
-      "frozen": "2026-07-31",
-      "why_not_an_exception": "Accepts a caller-supplied `person_id` and materializes a customer for it (:32) with a service-role client. The org is env-pinned, but the subject is not — an arbitrary person_id is accepted.",
-      "w15_note": "Bind person_id to the funnel capability rather than trusting the body."
-    }
-  ],
+  "baseline": [],
   "advisory_transitive_only": [
     {
       "route": "app/api/leads/gutters/route.ts",
@@ -167,5 +116,6 @@
       "route": "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
       "reason": "Per-tenant subaccount variant of the same handler and the same model."
     }
-  ]
+  ],
+  "reviewed_note": "Dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink)."
 }

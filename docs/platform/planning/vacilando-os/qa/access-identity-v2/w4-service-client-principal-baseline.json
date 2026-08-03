@@ -1,14 +1,14 @@
 {
   "generated_by": "web/scripts/checkServiceClientPrincipal.mjs",
   "counts": {
-    "routes": 539,
-    "holds_service_client_direct": 520,
-    "reaches_service_client_transitive": 536,
-    "resolves_principal": 507,
-    "subject_resolves_principal": 494,
-    "subject_unresolved": 26,
-    "listed_exceptions": 21,
-    "listed_baseline": 5,
+    "routes": 559,
+    "holds_service_client_direct": 537,
+    "reaches_service_client_transitive": 556,
+    "resolves_principal": 536,
+    "subject_resolves_principal": 520,
+    "subject_unresolved": 17,
+    "listed_exceptions": 17,
+    "listed_baseline": 0,
     "transitive_only_unresolved": 3,
     "listed_advisory": 3
   },
@@ -34,42 +34,6 @@
     },
     {
       "route": "app/api/action/[token]/route.ts",
-      "list": "exceptions"
-    },
-    {
-      "route": "app/api/book-v2/availability/route.ts",
-      "list": "exceptions"
-    },
-    {
-      "route": "app/api/book-v2/confirm/route.ts",
-      "list": "baseline"
-    },
-    {
-      "route": "app/api/book-v2/ensure-customer/route.ts",
-      "list": "baseline"
-    },
-    {
-      "route": "app/api/book-v2/opportunity-discount/route.ts",
-      "list": "baseline"
-    },
-    {
-      "route": "app/api/book-v2/quote-refine/route.ts",
-      "list": "baseline"
-    },
-    {
-      "route": "app/api/book-v2/quote-start/route.ts",
-      "list": "exceptions"
-    },
-    {
-      "route": "app/api/book-v2/service-details/route.ts",
-      "list": "baseline"
-    },
-    {
-      "route": "app/api/book-v2/specialty-quote-start/route.ts",
-      "list": "exceptions"
-    },
-    {
-      "route": "app/api/book-v2/validate-promo/route.ts",
       "list": "exceptions"
     },
     {
@@ -126,5 +90,5 @@
     "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
     "app/api/webhooks/twilio/sms-status/route.ts"
   ],
-  "allowlist_reviewed": "2026-07-31"
+  "allowlist_reviewed": "2026-08-03"
 }
