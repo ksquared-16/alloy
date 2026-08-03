@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "tsBuildInfoFile": "./tsconfig.trustcert.tsbuildinfo" },
+  "include": [
+    "lib/trust/**/*.ts",
+    "tests/trust/**/*.ts",
+    "next-env.d.ts"
+  ]
+}
