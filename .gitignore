@@ -26,6 +26,11 @@ __pycache__/
 # Node
 node_modules/
 **/node_modules/
+# Slash-less too: the patterns above match DIRECTORIES only, so a *symlink* named
+# node_modules was not ignored and `git add -A` committed one pointing into another
+# worktree (staging 52e2d0947). These catch that shape.
+node_modules
+**/node_modules
 
 # Vercel
 .vercel/
