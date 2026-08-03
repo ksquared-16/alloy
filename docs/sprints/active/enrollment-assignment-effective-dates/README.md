@@ -33,3 +33,16 @@ alloy-worker-resume 3
 alloy-worker-doctor 3
 alloy-sprint-finish 3
 ```
+
+## Local commits (not pushed)
+
+| SHA | Summary |
+|-----|---------|
+| `4ce9a8b10` | Audit + decisions |
+| `b122587e5` | Effective-date / readiness / quote foundations |
+| `ea365a2f2` | Household Make primary |
+| `6db5bf7c6` | Enrollment Date outcome stamp |
+| `0161ecb35` | Assignments card presentation model |
+| `f9afc6dd3` | Restore stamp files after parallel-commit conflict |
+
+**HEAD:** `f9afc6dd3` · clean · `6` ahead of `origin/staging` @ `3195fae4a`
