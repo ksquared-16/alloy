@@ -12,7 +12,7 @@
 | Worktree | `/Users/Kelly/Code/alloy-worktrees/wt3-enrollment-assignment-effective-dates` |
 | Branch | `agent/cursor/3-enrollment-assignment-effective-dates` |
 | Staging base (exact) | `3195fae4a301e75cac43db934dcb163168e25674` |
-| Final HEAD | `27006656a8b76a733d578b5a6cb9f2cd5fafe4b4` |
+| Final HEAD | `9f9524ab3ddbf638ea332b0ea30f54cc53b265d4` |
 | Ahead of staging | local only — **not pushed** |
 | Server | toolkit-owned on 3013 when running; stop with finish |
 | Auth | `qa-slot3-performance@example.com` storage present/valid |
@@ -73,12 +73,12 @@ Evidence: `.alloy-agent-evidence/enrollment-assignment-effective-dates/`
 ## Promotion guidance
 
 1. Do **not** push until Kelly authorizes.
-2. From worktree: `git fetch origin && git status` — rebase/merge onto newer staging only if Kelly asks (`alloy-worktree-sync` when clean).
-3. PR into `staging` once authorized; then `alloy-sprint-finish 3`.
-4. Reinstall toolkit from canonical checkout after merge if needed.
+2. `alloy-sprint-finish 3` is currently **blocked** by Vacilando durability (HEAD not on origin). After Kelly authorizes:  
+   `git -C …/wt3-enrollment-assignment-effective-dates push -u origin agent/cursor/3-enrollment-assignment-effective-dates`  
+   then re-run `alloy-sprint-finish 3`.
+3. Staging has moved **2 commits** past the original base since sprint start (`behind 2` at finish attempt). Reconcile only when Kelly asks (`alloy-worktree-sync` when clean, or explicit merge).
+4. PR into `staging` once authorized; then finish the slot.
 
 ## Exact next action
 
-**Kelly:** review branch locally on slot 3 (`http://localhost:3013`) with a seeded Enrollment lead — open Assignments card, set requested days, generate quote, confirm Household Make primary, then authorize push/PR when satisfied.
-
-**Worker follow-up (if continued):** seed or locate QA enrollment opportunity → complete browser scenario checklist → attach screenshots to evidence pack → then request promotion.
+**Kelly:** authorize `git push -u origin agent/cursor/3-enrollment-assignment-effective-dates` when ready for remote durability / review, or review locally on slot 3 first (`alloy-dev-start wt3-enrollment-assignment-effective-dates` → `http://localhost:3013`) with a seeded Enrollment lead.
