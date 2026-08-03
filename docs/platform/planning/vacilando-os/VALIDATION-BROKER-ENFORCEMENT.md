@@ -13,9 +13,11 @@ Vacilando **owns** heavy validation for implement workers. Workers must not be a
 3. **Policy + package prompt** (`worker-operating-policy.md`, implement compiler): forbid raw compiler; instruct `vac run`.
 4. **Conductor watchdog** (every 15s): terminate processes matching unbrokered heavy patterns **unless** `ALLOY_VALIDATE_EXECUTING=1` (set by `alloy-validate`). Audit: `validation.broker.enforce`.
 
-## Worktree package.json
+## Worktree package.json vs Vercel / CI
 
-Canonical `web/package.json` routes `typecheck` / `typecheck:tests` / `build` / `test` through `vac-run`. Older worktrees that still call `node …/tsc` directly remain dangerous under `npm run typecheck` — the **watchdog** is the backstop until those trees pick up the brokered scripts.
+`web/package.json` keeps **direct** `next build` / `tsc` / `vitest` scripts so Vercel and GitHub Actions can run them without the local Alloy lock broker (`vac-run` uses `/dev/fd` locks and host leases that do not exist on Vercel).
+
+Local Vacilando **implement workers** must still use `vac run <kind>` / `vac-run` (allowedTools + policy). The **watchdog** remains the backstop against raw unbrokered `tsc` / `next build` on the operator machine.
 
 ## Operator
 
