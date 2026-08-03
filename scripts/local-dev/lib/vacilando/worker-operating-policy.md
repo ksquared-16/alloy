@@ -22,3 +22,9 @@ This governs how you operate, not just where. It applies whether you are Claude 
 
 **Enforcement help.** For long commands, run them through the governed runner so soft/hard budgets, progress tracking, and stall detection are handled for you:
 `node scripts/local-dev/lib/vacilando/command-budget.mjs run <class> -- <command…>` (classes above). It never returns "still running": it returns complete, stalled (with the stall diagnosed), blocked, or failed.
+
+**Host-wide validation broker (non-negotiable).** Typecheck, `typecheck:tests`, production `build`, and full Vitest must run through the broker so slots cannot pile onto one host:
+
+- Prefer: `vac run typecheck` · `vac run typecheck:tests` · `vac run build` · `vac run test` (or `cd web && npm run typecheck|build|test` when those scripts route through `vac-run`).
+- Focused Vitest of a single file/path may run directly (`npx vitest run path/to/file`).
+- **Forbidden:** `npx tsc`, `npm exec tsc`, `node …/typescript/bin/tsc`, raw `next build`. Vacilando's Claude allowlist omits those patterns; the conductor **terminates** unbrokered heavy PIDs that still appear (e.g. stale package.json scripts). If typecheck is refused or killed, switch to `vac run` — do not retry the raw compiler.

@@ -10,6 +10,8 @@ import os from "node:os";
 import { join } from "node:path";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { getBrief } from "./mission-brief.mjs";
+import { getMission, updateMission } from "./commands/missions.mjs";
+import { archiveMission } from "./mission-archive.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const DIR = join(RUNTIME_ROOT, "vacilando", "evidence");
@@ -246,6 +248,128 @@ export function buildMissionCompletionPackage(missionId) {
     deferredItems: [],
     directorRecommendation: cert.directorRecommendation,
     confidence: cert.confidence,
+  };
+}
+
+/**
+ * Operator rejects a premature completion gate — mission stays open.
+ */
+export function rejectMissionCompletion(missionId, {
+  actor = "operator",
+  response = null,
+  nowMs,
+} = {}) {
+  if (!missionId) return { ok: false, error: "missing_mission_id" };
+  const mission = getMission(missionId);
+  if (!mission && !getBrief(missionId)) return { ok: false, error: "mission_not_found" };
+
+  const at = new Date(nowMs ?? Date.now()).toISOString();
+  updateMission(missionId, {
+    status: "executing",
+    kickoff_status: "executing",
+    completed_at: null,
+    completion_certified_at: null,
+    completion_certified_by: null,
+    completion_response: null,
+    completion_rejected_at: at,
+    completion_rejected_by: actor,
+    completion_rejection_reason: response || "Operator rejected completion — work is not finished",
+    pending_approval: null,
+    archived: false,
+    archived_at: null,
+    archive_reason: null,
+    archive_class: null,
+    archive_read_only: false,
+  }, { nowMs });
+
+  try {
+    appendTimelineEvent(missionId, {
+      type: "progress",
+      headline: "You sent completion back",
+      summary: response || "Completion rejected — mission remains open until real deliverables are finished.",
+      visibility: "summary",
+      actor,
+      nowMs,
+    });
+  } catch { /* optional */ }
+
+  return { ok: true, mission: getMission(missionId) };
+}
+
+/**
+ * Operator certifies mission completion (completion approval).
+ * This is the action behind "Needs approval" / awaiting_completion_approval.
+ */
+export function certifyMissionCompletion(missionId, {
+  actor = "operator",
+  response = null,
+  force = false,
+  nowMs,
+} = {}) {
+  if (!missionId) return { ok: false, error: "missing_mission_id" };
+  const mission = getMission(missionId);
+  if (!mission && !getBrief(missionId)) return { ok: false, error: "mission_not_found" };
+
+  const pkg = buildMissionCompletionPackage(missionId);
+  const cert = canCertifyMission(missionId);
+  // awaiting_completion_approval is only derived when cert.ready — force covers intentional gaps.
+  if (!cert.ready && !force) {
+    return {
+      ok: false,
+      error: "not_ready_to_certify",
+      detail: "Acceptance evidence is incomplete — review Evidence, or certify with force only if you intentionally accept gaps.",
+      certification: cert,
+      completionPackage: pkg,
+    };
+  }
+
+  const at = new Date(nowMs ?? Date.now()).toISOString();
+  updateMission(missionId, {
+    status: "completed",
+    kickoff_status: "completed",
+    completed_at: at,
+    completion_certified_at: at,
+    completion_certified_by: actor,
+    completion_response: response || "Operator certified completion",
+    completion_rejected_at: null,
+    completion_rejected_by: null,
+    completion_rejection_reason: null,
+    pending_approval: null,
+  }, { nowMs });
+
+  try {
+    appendTimelineEvent(missionId, {
+      type: "mission_completed",
+      headline: "You certified mission completion",
+      summary: response || "Completion package accepted — mission closed.",
+      visibility: "summary",
+      actor,
+      detail: {
+        directorRecommendation: cert.directorRecommendation,
+        confidence: cert.confidence,
+        forced: Boolean(force),
+      },
+      nowMs,
+    });
+  } catch { /* timeline optional */ }
+
+  // Keep the mission inspectable under Mission History (not a limbo between Active and Archive).
+  let archiveEntry = null;
+  try {
+    archiveEntry = archiveMission(missionId, {
+      reason: "Operator certified completion",
+      archiveClass: "accepted_certification_record",
+      actor,
+      nowMs,
+    });
+  } catch { /* history filter still includes completed */ }
+
+  return {
+    ok: true,
+    mission: getMission(missionId),
+    completionPackage: pkg,
+    certification: cert,
+    archive: archiveEntry,
   };
 }
 

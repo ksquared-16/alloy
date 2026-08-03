@@ -5,7 +5,12 @@
 // native window affordances the browser page can't provide on its own, without
 // the SPA needing to know it's running in Electron.
 
-const { ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("vacilandoNative", {
+  // Dock badge = count of conversations that currently need the operator.
+  setDockBadge: (count) => { try { ipcRenderer.send("dock:set-badge", Number(count) || 0); } catch { /* ignore */ } },
+});
 
 function wireTitleBar() {
   // titleBarStyle:"hiddenInset" hides the OS title bar behind the app's own

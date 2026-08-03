@@ -94,6 +94,11 @@ export function recordHeartbeat({
 
 export function classifyHealth(telemetry, { nowMs = Date.now() } = {}) {
   const issues = [];
+  // Terminal / parked workers stay put — do not reclassify as unresponsive from stale heartbeats.
+  if (["stopped", "complete", "failed"].includes(telemetry.status)) {
+    telemetry.detectedIssues = [];
+    return telemetry;
+  }
   const hbAge = telemetry.lastHeartbeatAt
     ? nowMs - Date.parse(telemetry.lastHeartbeatAt)
     : Infinity;

@@ -60,5 +60,5 @@ the shell.
 | Var | Default | Purpose |
 |---|---|---|
 | `VACILANDO_PORT` | `3021` | Port the server binds / the window loads |
-| `VACILANDO_ROUTE` | `#/director` | Hash route to open |
+| `VACILANDO_ROUTE` | `#/missions` | Hash route to open (Mission Control) |
 | `VACILANDO_NODE` | auto | Explicit Node binary for the server child |

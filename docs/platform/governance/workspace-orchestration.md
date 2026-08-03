@@ -160,11 +160,11 @@ Do **not** start ad-hoc Next servers on invented ports for managed agents — th
 | Playwright | **1** | Browser-heavy |
 | Full-tree `rg` / `find` on `web/` | **Avoid** | Use path-scoped search |
 
-**Agent rule:** Run `npm run workspace:doctor` before starting `typecheck` or full test suites.
+**Agent rule:** Run `npm run workspace:doctor` before starting heavy validation. Heavy checks are **host-brokered** — `npm run typecheck|typecheck:tests|build|test` and `vac run <kind>` acquire a single machine-wide validation lease (see `scripts/local-dev/alloy-validate`). Do not run raw `tsc` / `next build` / full `vitest run`.
 
 **Expensive validation doctrine:**
 
-> One intentional typecheck at a time. Focused tests for iteration. Full graph only when tests/scripts change.
+> One intentional heavy validation at a time (typecheck, build, or full test suite), enforced by the host lease. Focused Vitest files may run concurrently. Full graph only when needed.
 
 ### Process cleanup
 

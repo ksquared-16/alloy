@@ -40,6 +40,8 @@ This is **not** caused by giant generated Supabase `Database` types or recursive
 
 Run all commands from `web/`.
 
+These package scripts route through the **host-wide validation broker** (`scripts/local-dev/vac-run` → `alloy-validate`). They acquire a single machine-wide lease so concurrent worktrees cannot thrash the host. Check `vac status` for the active lease and FIFO queue. Use `--force` only when you must ignore a cached result: `vac run typecheck --force`.
+
 | Command | Graph | When to use |
 |---------|-------|-------------|
 | `npm run typecheck` | **Production/build** (`tsconfig.build.json`) | **Default pre-merge check** for app, API, `lib/`, components changes |
@@ -48,13 +50,15 @@ Run all commands from `web/`.
 
 ### Heap requirements
 
-All three scripts invoke:
+The broker invokes `tsc` with:
 
 ```text
 node --max-old-space-size=8192 node_modules/typescript/bin/tsc …
 ```
 
 This sets an **8 GB Node heap** cross-platform (macOS, Linux, Windows) without shell-specific `NODE_OPTIONS` syntax.
+
+**Do not** run raw `npx tsc --noEmit` (wrong heap / graph) or parallel full typechecks across worktrees.
 
 **Do not weaken** `strict`, `skipLibCheck`, or other correctness compiler options to improve performance.
 

@@ -20,7 +20,7 @@ import { deriveVerdict } from "./director-review.mjs";
 import { compile } from "./mission-compiler.mjs";
 import { createMission, getMission, updateMission, readMissions } from "./commands/missions.mjs";
 import { getPackage, packageForMission, updatePackage } from "./commands/mission-packages.mjs";
-import { checkStartPreconditions, runMissionTurn, stopMission, isLive, readLatestReport } from "./mission-executor.mjs";
+import { checkStartPreconditions, runMissionTurn, stopMission, isLive, readLatestReport, isImplementMission } from "./mission-executor.mjs";
 import { evaluateMission, readAcceptance } from "./acceptance.mjs";
 import { writeAuditEvent } from "./commands/audit.mjs";
 import { createRequest, updateRequest } from "./commands/director-requests.mjs";
@@ -30,8 +30,8 @@ import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "./commands/executor.mjs";
 import { freeDiskGb, runGc } from "./disk-hygiene.mjs";
-import { precheckProvider } from "./provider-runtime.mjs";
-import { ensureObjective, getObjective, advanceOnAccept, intentForPhase, clearProposedNext, setMode, adoptPhases } from "./objective.mjs";
+import { precheckProvider, reconnectInfo } from "./provider-runtime.mjs";
+import { ensureObjective, getObjective, advanceOnAccept, intentForPhase, clearProposedNext, setMode, adoptPhases, setWaitingOn } from "./objective.mjs";
 
 const PROVISION_HARD_GB = 5; // pre-provision floor: below this, reclaim then fail fast
 
@@ -367,15 +367,25 @@ export async function conductObjectiveNext({ capability_id }) {
     const o = getObjective(capability_id);
     if (!cap || !o || o.mode !== "autonomous") return { ok: false, error: "not_autonomous" };
     const phase = o.phases.find((p) => p.status !== "done");
-    if (!phase) return { ok: false, complete: true };
+    if (!phase) { setWaitingOn(capability_id, null); return { ok: false, complete: true }; }
     const ACTIVE = new Set(["starting", "running", "provisioning", "waiting_for_acceptance", "waiting_for_operator"]);
     const active = readMissions(null, 300).some((m) => m.objective_capability_id === capability_id && m.phase_id === phase.id && ACTIVE.has(m.status));
-    if (active) return { ok: true, active: true };
+    if (active) { setWaitingOn(capability_id, null); return { ok: true, active: true }; }
     // Don't relaunch into an auth wall — wait until the provider is reconnected, so
     // a claude/cursor OAuth expiry self-heals the moment the operator reconnects.
     const provider = cap.owner?.provider_default || "claude";
     const pre = await precheckProvider(provider);
-    if (!pre.ok) return { ok: false, waiting: "provider_auth", provider };
+    if (!pre.ok) {
+      const info = reconnectInfo(provider) || {};
+      setWaitingOn(capability_id, {
+        kind: "provider_auth",
+        provider,
+        detail: pre.detail || pre.error || `${provider} needs to reconnect`,
+        reconnect_cmd: pre.reconnect_cmd || info.command || null,
+      });
+      return { ok: false, waiting: "provider_auth", provider };
+    }
+    setWaitingOn(capability_id, null);
     return conductNext(cap, phase, { autonomous: true }) || { ok: false };
   } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 }
@@ -406,7 +416,20 @@ export function previewAction(action, mission_id) {
       ] };
   }
   if (action === "stop") return { ...base, summary: `Stop "${mission.title}"`, effects: ["Terminates the provider process", "Preserves all mission state and outputs"] };
-  if (action === "steer") return { ...base, summary: `Send a steering instruction to "${mission.title}"`, effects: [`Resumes provider session ${mission.provider_session_id || "(none — a fresh turn)"}`, `Runs another turn in ${identity.worktree_name}`] };
+  if (action === "steer") {
+    const pkg = mission.package_id ? getPackage(mission.package_id) : packageForMission(mission_id);
+    const fresh = isImplementMission(mission, pkg);
+    return {
+      ...base,
+      summary: `Send a steering instruction to "${mission.title}"`,
+      effects: [
+        fresh
+          ? "Starts a fresh provider turn (implement missions clear session so Bash allowlist applies)"
+          : `Resumes provider session ${mission.provider_session_id || "(none — a fresh turn)"}`,
+        `Runs another turn in ${identity.worktree_name}`,
+      ],
+    };
+  }
   if (action === "accept") return { ...base, summary: `Accept "${mission.title}"`, effects: ["Runs the acceptance gate", "Marks the mission completed (operator sign-off)", "Writes the mission into capability history"] };
   if (action === "close") return { ...base, summary: `Close "${mission.title}"`, effects: ["Winds the work down (accepted → closed)", "Frees the capacity it held", "Preserves all artifacts and evidence"] };
   return { ...base, ok: false, error: "unknown_action" };
@@ -494,18 +517,27 @@ export function steerMission({ mission_id, instruction, confirm }) {
     return { ok: false, error: "confirmation_required", preview: previewAction("steer", mission_id) };
   }
 
-  const resume = mission.provider_session_id || null;
+  // Implement missions need a fresh Claude turn when Bash allowlist is required:
+  // resumed sessions keep the prior --allowedTools / permission posture (e.g. the
+  // old Bash(npx *) that enabled raw tsc). Force a fresh session so the brokered
+  // allowlist from providers.mjs applies. Non-implement continues may resume.
+  const forceFresh = isImplementMission(mission, pkg);
+  const resume = forceFresh ? null : (mission.provider_session_id || null);
   const req = createRequest({
     slot: mission.worker_slot, worktree: identity.worktree_name, provider: identity.provider || mission.provider,
     instruction, request_type: "worker-instruction", mission_id,
   });
   // Clear any stale failure from a prior attempt so the UI doesn't show a dead
-  // run's error banner over a fresh, live turn.
-  updateMission(mission_id, { pending_question: null, status: "starting", active_request_id: req.request_id, error_code: null, error_message: null, acceptance_error: null });
+  // run's error banner over a fresh, live turn. Clear session when forcing fresh.
+  updateMission(mission_id, {
+    pending_question: null, status: "starting", active_request_id: req.request_id,
+    error_code: null, error_message: null, acceptance_error: null,
+    ...(forceFresh ? { provider_session_id: null } : {}),
+  });
   updateRequest(req.request_id, { status: "starting", started_at: new Date().toISOString() });
 
   setImmediate(() => {
-    runMissionTurn({ ...mission, pending_question: null }, pkg, { provider: identity.provider || mission.provider || "claude", identity, resume, instruction })
+    runMissionTurn({ ...mission, pending_question: null, ...(forceFresh ? { provider_session_id: null } : {}) }, pkg, { provider: identity.provider || mission.provider || "claude", identity, resume, instruction })
       .then(() => {
         const after = getMission(mission_id);
         updateRequest(req.request_id, { status: after?.status === "failed" ? "failed" : "worker-responded", completed_at: new Date().toISOString() });
@@ -516,8 +548,8 @@ export function steerMission({ mission_id, instruction, confirm }) {
       });
   });
 
-  audit("steer", targetOf(mission, identity), "succeeded", { confirmed: true, summary: resume ? "resumed session" : "fresh turn", input: { mission_id } });
-  return { ok: true, mission_id, status: "starting", resumed: Boolean(resume), request_id: req.request_id };
+  audit("steer", targetOf(mission, identity), "succeeded", { confirmed: true, summary: forceFresh ? "fresh turn (implement allowBash)" : (resume ? "resumed session" : "fresh turn"), input: { mission_id } });
+  return { ok: true, mission_id, status: "starting", resumed: Boolean(resume), fresh_for_implement: forceFresh, request_id: req.request_id };
 }
 
 export function stop({ mission_id, confirm }) {
@@ -570,9 +602,21 @@ export function accept({ mission_id, confirm }) {
     }
   }
   const result = evaluateMission(mission, pkg, { worktreePath: identity.worktree_path });
+  // Accept advances the objective spine. Only a full evidence pass may do that.
+  // needs_operator (e.g. migration awaiting_authorization) must be resolved first —
+  // otherwise Accept rubber-stamps judgment and autonomous mode races into the next
+  // phase while shared DB work is still outstanding (Access & Roles Phase 0, 2026-07-29).
   if (result.gate === "fail") {
     audit("accept", targetOf(mission, identity), "blocked", { confirmed: true, error: "gate failed" });
     return { ok: false, error: "gate_failed", result };
+  }
+  if (result.gate !== "pass") {
+    const review = (result.criteria || []).filter((c) => c.status === "operator_review");
+    const detail = review.length
+      ? `Resolve before Accept: ${review.map((c) => `${c.criterion_id}${(c.evidence || [])[0]?.detail ? ` — ${String((c.evidence || [])[0].detail).slice(0, 120)}` : ""}`).join("; ")}`
+      : `Acceptance gate is ${result.gate}; only gate=pass may Accept and advance.`;
+    audit("accept", targetOf(mission, identity), "blocked", { confirmed: true, error: "gate_needs_operator", summary: detail.slice(0, 240) });
+    return { ok: false, error: "gate_needs_operator", detail, result };
   }
   updateMission(mission_id, { status: "completed", completed_at: new Date().toISOString(), acceptance_gate: result.gate, pending_approval: null });
   try {
@@ -592,7 +636,7 @@ export function accept({ mission_id, confirm }) {
   let conductor = null;
   try {
     const cap = mission.capability_id ? getCapability(mission.capability_id) : null;
-    if (cap && result.gate !== "fail") {
+    if (cap) {
       // If this was the audit/plan mission (not an "— implement:" phase), adopt the
       // phases it produced — the plan becomes the script the conductor sequences.
       const isImplement = /—\s*implement:/i.test(String(mission.intent || pkg.title || ""));

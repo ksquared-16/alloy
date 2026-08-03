@@ -53,7 +53,8 @@ const LOCAL_DEV_DIR = resolveLocalDevDir();
 const SERVER_ENTRY = path.join(LOCAL_DEV_DIR, "lib", "vacilando-server.mjs");
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.VACILANDO_PORT || 3021);
-const START_ROUTE = process.env.VACILANDO_ROUTE || "#/director";
+// Mission Control home — never open the legacy Director board by default.
+const START_ROUTE = process.env.VACILANDO_ROUTE || "#/missions";
 const APP_URL = `http://${HOST}:${PORT}/${START_ROUTE}`;
 
 // Server readiness bounds. The first projection can be slow on a memory-pressured

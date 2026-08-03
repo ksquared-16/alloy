@@ -19,7 +19,7 @@ alloy_die() {
 }
 
 alloy_info() {
-  printf '%s\n' "$*"
+  printf '%s\n' "$*" >&2
 }
 
 alloy_warn() {
@@ -54,6 +54,8 @@ alloy_resolve_runtime_paths() {
   ALLOY_LOGS_DIR="${ALLOY_RUNTIME_ROOT}/logs"
   ALLOY_LOCKS_DIR="${ALLOY_RUNTIME_ROOT}/locks"
   ALLOY_VALIDATE_LOCK_DIR="${ALLOY_LOCKS_DIR}/validate.lock"
+  ALLOY_VALIDATE_QUEUE_DIR="${ALLOY_LOCKS_DIR}/validate.queue"
+  ALLOY_VALIDATE_RESULTS_DIR="${ALLOY_RUNTIME_ROOT}/validate-results"
   ALLOY_AUTH_DIR="${ALLOY_RUNTIME_ROOT}/auth"
   ALLOY_BROWSER_PIDS_DIR="${ALLOY_RUNTIME_ROOT}/browser-pids"
   ALLOY_BROWSER_PROFILES_DIR="${ALLOY_RUNTIME_ROOT}/browser-profiles"
@@ -61,7 +63,8 @@ alloy_resolve_runtime_paths() {
   ALLOY_INITIATIVES_DIR="${ALLOY_RUNTIME_ROOT}/initiatives"
   # Export so nested env/subprocess invocations cannot fall back to production.
   export ALLOY_RUNTIME_ROOT ALLOY_METADATA_DIR ALLOY_PIDS_DIR ALLOY_LOGS_DIR \
-    ALLOY_LOCKS_DIR ALLOY_VALIDATE_LOCK_DIR ALLOY_AUTH_DIR \
+    ALLOY_LOCKS_DIR ALLOY_VALIDATE_LOCK_DIR ALLOY_VALIDATE_QUEUE_DIR \
+    ALLOY_VALIDATE_RESULTS_DIR ALLOY_AUTH_DIR \
     ALLOY_BROWSER_PIDS_DIR ALLOY_BROWSER_PROFILES_DIR ALLOY_EVIDENCE_DIR \
     ALLOY_INITIATIVES_DIR
 }
@@ -128,6 +131,7 @@ alloy_load_config() {
   NODE_OPTIONS_DEFAULT="${NODE_OPTIONS_DEFAULT:---max-old-space-size=4096}"
   ALLOY_CLEAN_ARTIFACT_AGE_HOURS="${ALLOY_CLEAN_ARTIFACT_AGE_HOURS:-24}"
   ALLOY_VALIDATE_POLL_SECONDS="${ALLOY_VALIDATE_POLL_SECONDS:-5}"
+  ALLOY_VALIDATE_HEARTBEAT_STALE_SECONDS="${ALLOY_VALIDATE_HEARTBEAT_STALE_SECONDS:-90}"
   export ALLOY_FIRST_AGENT_PORT ALLOY_MAX_AGENTS
 }
 
@@ -137,7 +141,9 @@ alloy_ensure_runtime_dirs() {
     "$ALLOY_METADATA_DIR" \
     "$ALLOY_PIDS_DIR" \
     "$ALLOY_LOGS_DIR" \
-    "$ALLOY_LOCKS_DIR"
+    "$ALLOY_LOCKS_DIR" \
+    "${ALLOY_VALIDATE_QUEUE_DIR:-$ALLOY_LOCKS_DIR/validate.queue}" \
+    "${ALLOY_VALIDATE_RESULTS_DIR:-$ALLOY_RUNTIME_ROOT/validate-results}"
 }
 
 # True when the resolved runtime root is a certification/test fixture tree.

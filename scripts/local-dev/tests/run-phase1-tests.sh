@@ -39,8 +39,10 @@ for f in \
   "$ROOT"/install.sh \
   "$ROOT"/lib/common.sh \
   "$ROOT"/lib/lock.sh \
+  "$ROOT"/lib/validate-reuse.sh \
   "$ROOT"/tests/run-phase1-tests.sh \
   "$ROOT"/tests/test-install-and-validators.sh \
+  "$ROOT"/tests/test-validation-broker.sh \
   "$ROOT"/alloy-worktree-create \
   "$ROOT"/alloy-worktree-sync \
   "$ROOT"/alloy-worktree-remove \
@@ -48,6 +50,8 @@ for f in \
   "$ROOT"/alloy-dev-stop \
   "$ROOT"/alloy-dev-status \
   "$ROOT"/alloy-validate \
+  "$ROOT"/vac \
+  "$ROOT"/vac-run \
   "$ROOT"/alloy-health \
   "$ROOT"/alloy-audit \
   "$ROOT"/alloy-clean
@@ -211,7 +215,7 @@ kill "$WAIT_PID" 2>/dev/null || true
 wait "$WAIT_PID" 2>/dev/null
 WAIT_RC=$?
 set -e
-grep -q "validation lock held" /tmp/alloy-validate-wait.out && pass "validate reports lock owner while busy" || fail "validate did not report lock owner"
+grep -q "validation lease held\|validation lock held" /tmp/alloy-validate-wait.out && pass "validate reports lock owner while busy" || fail "validate did not report lock owner"
 if [[ -d "$LOCK_DIR" ]]; then
   pass "foreign lock remains after waiter kill"
 else
@@ -272,6 +276,18 @@ if [[ "$focused_rc" -eq 0 ]]; then
   pass "focused install/validator suite"
 else
   fail "focused install/validator suite"
+fi
+
+echo
+echo "== Validation broker suite (host-wide lease) =="
+set +e
+bash "$ROOT/tests/test-validation-broker.sh"
+broker_rc=$?
+set -e
+if [[ "$broker_rc" -eq 0 ]]; then
+  pass "validation broker suite"
+else
+  fail "validation broker suite"
 fi
 
 echo

@@ -16,33 +16,11 @@ import { acceptanceEvidenceCoverage, canCertifyMission } from "./evidence.mjs";
 import { readTimelineSummary } from "./timeline.mjs";
 import { getMission, readMissions } from "./commands/missions.mjs";
 import { listWorkerTelemetry } from "./worker-health.mjs";
+import { deriveMissionPosture } from "./mission-posture.mjs";
 
 export function deriveMissionStatus(missionId) {
-  const mission = getMission(missionId);
-  const brief = getBrief(missionId);
-  const objective = getObjectiveByMission(missionId);
-  const openDecisions = listDecisions(missionId, { status: "open" });
-  const assignments = listAssignments(missionId);
-  const cert = brief ? canCertifyMission(missionId) : { ready: false };
-
-  if (!brief && !mission) return { status: "unknown", label: "Unknown" };
-  if (mission?.kickoff_status === "awaiting_kickoff_approval" || objective?.status === "awaiting_kickoff_approval") {
-    return { status: "awaiting_kickoff_approval", label: "Awaiting Kickoff Approval" };
-  }
-  if (openDecisions.length) return { status: "decision_required", label: "Decision Required" };
-  if (assignments.some((a) => a.status === "blocked")) return { status: "blocked", label: "Blocked" };
-  if (assignments.some((a) => a.status === "paused")) return { status: "paused", label: "Paused" };
-  if (cert.ready && assignments.length && assignments.every((a) => a.status === "complete")) {
-    return { status: "awaiting_completion_approval", label: "Awaiting Completion Approval" };
-  }
-  if (assignments.some((a) => a.status === "verification")) return { status: "validation", label: "Validation" };
-  if (assignments.some((a) => ["running", "ready", "waiting"].includes(a.status))) {
-    return { status: "executing", label: "Executing" };
-  }
-  if (objective?.status === "executing" || mission?.kickoff_status === "executing") {
-    return { status: "executing", label: "Executing" };
-  }
-  return { status: "draft", label: "Draft" };
+  const posture = deriveMissionPosture(missionId);
+  return { status: posture.status, label: posture.label, posture };
 }
 
 export function missionProgress(missionId) {
@@ -70,7 +48,8 @@ export function missionProgress(missionId) {
 /** Structured Director summary — five required answers. */
 export function buildDirectorSummary(missionId) {
   const brief = getBrief(missionId);
-  const status = deriveMissionStatus(missionId);
+  const posture = deriveMissionPosture(missionId);
+  const status = { status: posture.status, label: posture.label };
   const progress = missionProgress(missionId);
   const groups = phaseDeliverableGroups(missionId);
   const current = groups.find((g) => g.status === "running")
@@ -83,33 +62,24 @@ export function buildDirectorSummary(missionId) {
   const timeline = readTimelineSummary(missionId, { limit: 8 });
   const latest = timeline[timeline.length - 1] || null;
   const coverage = acceptanceEvidenceCoverage(missionId);
-  const workers = listWorkerTelemetry().filter((t) => t.missionId === missionId);
+  const workers = listWorkerTelemetry().filter((t) => t.missionId === missionId && !["stopped", "complete", "failed"].includes(t.status));
 
-  const where = current
-    ? `${status.label} · ${current.title} (${progress.accepted_deliverables}/${progress.total_deliverables} deliverables)`
-    : `${status.label} · ${progress.percent}% by accepted deliverables`;
+  const where = posture.busy && current
+    ? `${posture.label} · ${current.title}`
+    : posture.detail;
 
   const whatChanged = latest ? latest.summary : "No timeline events yet";
-  const areBlocked = blocked.length > 0 || openDecisions.length > 0;
+  const areBlocked = blocked.length > 0 || openDecisions.length > 0 || posture.id === "operator_review";
   const blockedDetail = openDecisions.length
     ? `Decision required: ${openDecisions[0].title}`
-    : blocked.length
-      ? `${blocked.length} assignment(s) blocked/paused`
-      : "No";
+    : posture.id === "operator_review"
+      ? "Waiting on your direction — worker is idle"
+      : blocked.length
+        ? `${blocked.length} assignment(s) blocked/paused`
+        : "No";
 
-  const userInputRequired = openDecisions.length > 0
-    || status.status === "awaiting_kickoff_approval"
-    || status.status === "awaiting_completion_approval";
-
-  let next = "Continue executing ready assignments";
-  if (status.status === "awaiting_kickoff_approval") next = "Approve kickoff to begin execution";
-  else if (openDecisions.length) next = `Answer decision: ${openDecisions[0].title}`;
-  else if (assignments.some((a) => a.status === "verification")) next = "Director validating worker completion";
-  else if (assignments.some((a) => a.status === "ready")) {
-    const nextAsg = assignments.find((a) => a.status === "ready");
-    next = `Start assignment: ${nextAsg.title}`;
-  } else if (status.status === "awaiting_completion_approval") next = "Review completion package and certify";
-  else if (progress.percent === 100) next = "Mission deliverables complete";
+  const userInputRequired = posture.needsYou;
+  const next = posture.next;
 
   return {
     schema_version: "vacilando.director_summary.v1",
@@ -118,6 +88,7 @@ export function buildDirectorSummary(missionId) {
     brief_version: brief?.version || null,
     content_hash: brief?.contentHash || null,
     status,
+    posture,
     progress,
     current_phase: current,
     open_decisions: openDecisions,
