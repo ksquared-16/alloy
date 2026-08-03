@@ -1,4 +1,10 @@
 import type { FormIntakeChildHint, FormIntakeMeta } from "./formLeadCaptureTypes";
+import type { FormSchemaV1 } from "@/lib/forms/schema";
+import {
+    resolveGuardianFromCollectionEnvelope,
+    type CollectionEnvelope,
+    type EnvelopeGuardian,
+} from "./resolveGuardianFromCollectionEnvelope";
 
 /** Per-child value paths (repeater / multi-child forms). */
 export type FormIntakeChildFieldPaths = {
@@ -131,6 +137,10 @@ export function buildFormIntakeMetaFromPayload(input: {
     linkMetadata: Record<string, unknown> | null | undefined;
     /** Stored on intake for trace only */
     submissionId?: string | null;
+    /** Canonical structured representation of collection-bound responses (preferred source). */
+    collectionEnvelope?: CollectionEnvelope | null;
+    /** Published schema — supplies the nested field bindings the envelope values are keyed by. */
+    schema?: FormSchemaV1 | null;
 }): BuildFormIntakeMetaResult {
     const paths = mergeFieldPaths(input.linkMetadata ?? undefined);
 
@@ -147,23 +157,68 @@ export function buildFormIntakeMetaFromPayload(input: {
         };
     }
 
-    const email = readTrimmedString(input.values, paths.guardian_email);
-    const phone = readTrimmedString(input.values, paths.guardian_phone);
-    if (!email && !phone) {
-        return {
-            ok: false,
-            reason_code: "missing_guardian_contact",
-            reason: "Guardian email or phone is required for intake — map fields via link intake_field_paths or use default guardian_* field ids.",
-        };
+    // ── guardian resolution: STRUCTURED FIRST, flat as fallback ─────────────────────────────────
+    // The collection envelope is the canonical representation of a collection-bound response. When a
+    // form projects guardians into a collection its flat guardian questions are suppressed, so flat
+    // resolution alone would silently fail to open a case.
+    const flatEmail = readTrimmedString(input.values, paths.guardian_email);
+    const flatPhone = readTrimmedString(input.values, paths.guardian_phone);
+
+    const structured = resolveGuardianFromCollectionEnvelope(input.collectionEnvelope, input.schema);
+    const structuredGuardian: EnvelopeGuardian | null = structured.ok ? structured.primary : null;
+
+    // A structured guardian that cannot be contacted is a REAL failure, not a reason to fall back to
+    // flat values — falling back would quietly ignore what the respondent actually submitted.
+    if (!structured.ok && structured.reason_code === "no_usable_contact") {
+        return { ok: false, reason_code: "missing_guardian_contact", reason: structured.reason };
     }
 
-    let first_name = readTrimmedString(input.values, paths.guardian_first_name);
-    let last_name = readTrimmedString(input.values, paths.guardian_last_name);
-    if (!first_name && !last_name) {
-        const full = readTrimmedString(input.values, paths.guardian_full_name);
-        const sp = splitFullName(full);
-        first_name = sp.first_name;
-        last_name = sp.last_name;
+    let email: string | null;
+    let phone: string | null;
+    let first_name: string | null;
+    let last_name: string | null;
+    let guardian_person_id: string | null = null;
+    let guardian_source: "collection_envelope" | "flat_values" = "flat_values";
+    let guardian_conflict: string | null = null;
+
+    if (structuredGuardian) {
+        guardian_source = "collection_envelope";
+        email = structuredGuardian.email;
+        phone = structuredGuardian.phone;
+        first_name = structuredGuardian.first_name;
+        last_name = structuredGuardian.last_name;
+        guardian_person_id = structuredGuardian.person_id;
+
+        // Do not silently merge. If a legacy flat value materially disagrees, record it for operator
+        // review rather than picking one arbitrarily.
+        const conflicts: string[] = [];
+        if (flatEmail && structuredGuardian.email && flatEmail.toLowerCase() !== structuredGuardian.email.toLowerCase()) {
+            conflicts.push("email");
+        }
+        if (flatPhone && structuredGuardian.phone && flatPhone.replace(/\D/g, "") !== structuredGuardian.phone.replace(/\D/g, "")) {
+            conflicts.push("phone");
+        }
+        if (conflicts.length > 0) {
+            guardian_conflict = `Flat guardian ${conflicts.join(" and ")} disagree(s) with the submitted parent/guardian collection; the collection was used and this needs operator review.`;
+        }
+    } else {
+        email = flatEmail;
+        phone = flatPhone;
+        if (!email && !phone) {
+            return {
+                ok: false,
+                reason_code: "missing_guardian_contact",
+                reason: "Guardian email or phone is required for intake — map fields via link intake_field_paths or use default guardian_* field ids.",
+            };
+        }
+        first_name = readTrimmedString(input.values, paths.guardian_first_name);
+        last_name = readTrimmedString(input.values, paths.guardian_last_name);
+        if (!first_name && !last_name) {
+            const full = readTrimmedString(input.values, paths.guardian_full_name);
+            const sp = splitFullName(full);
+            first_name = sp.first_name;
+            last_name = sp.last_name;
+        }
     }
 
     const multiChildren =
@@ -194,7 +249,12 @@ export function buildFormIntakeMetaFromPayload(input: {
             phone,
             first_name,
             last_name,
+            ...(guardian_person_id ? { person_id: guardian_person_id } : {}),
         },
+        guardian_source,
+        ...(guardian_conflict ? { guardian_conflict } : {}),
+        // Every guardian the family submitted — selecting a lead contact must not discard the rest.
+        ...(structured.all.length > 0 ? { guardians: structured.all } : {}),
         ...(multiChildren.length > 0
             ? { children: multiChildren }
             : singleChild
