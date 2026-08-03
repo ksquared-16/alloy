@@ -55,6 +55,7 @@ export type RenderTourCommsTemplateInput = {
 };
 
 const DEFAULT_EMAIL_SUBJECT: Partial<Record<TourCommsEventKey, string>> = {
+    tour_invitation: "Come visit {{location_name}} — pick a time that works",
     tour_confirmation: "Your tour is scheduled — {{tour_display_label}}",
     tour_reminder: "Reminder: tour on {{tour_display_label}}",
     tour_reschedule: "Your tour has been rescheduled — {{tour_display_label}}",
@@ -63,6 +64,25 @@ const DEFAULT_EMAIL_SUBJECT: Partial<Record<TourCommsEventKey, string>> = {
 };
 
 const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
+    // Leads with who the tour is for and where. No login, no ids, no platform words.
+    tour_invitation: [
+        "Hello {{parent_name}},",
+        "",
+        "We would love to show {{child_name}} around {{location_name}}.",
+        "{{site_line}}",
+        "",
+        "Here are some times that work for us — choose whichever suits you:",
+        "",
+        "{{tour_options_block}}",
+        "",
+        "None of these work? See more times: {{invitation_action_url}}",
+        "Not the right time for your family? Let us know: {{decline_url}}",
+        "",
+        "We look forward to meeting you.",
+        "",
+        "Warmly,",
+        "{{org_name}}",
+    ].join("\n"),
     tour_confirmation: [
         "Hello {{parent_name}},",
         "",
@@ -130,6 +150,9 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
 };
 
 const DEFAULT_SMS_BODY: Partial<Record<TourCommsEventKey, string>> = {
+    // SMS carries one link, not the option list — the page shows the times.
+    tour_invitation:
+        "Hi {{parent_name}}, we'd love to show {{child_name}} around {{location_name}}. Pick a tour time here: {{invitation_action_url}}",
     tour_confirmation:
         "Hi {{parent_name}}, your tour is set for {{tour_display_label}} at {{location_name}}. Details: {{add_to_calendar_url}}",
     tour_reminder: "Reminder: tour {{tour_display_label}} at {{location_name}}. Reply if you need to reschedule.",
