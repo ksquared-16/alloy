@@ -326,5 +326,5 @@ child-valid actions; Runtime must not invent one. A surface with no action must 
 | Canonical child identity (3A) | `web/lib/lifecycle/childParticipationIdentity.ts` |
 | Canonical grain translation (3B) | `web/lib/lifecycle/grainVocabulary.ts` |
 | Participation membership provider | `web/lib/queues/childGrainProcessInstanceQueue.ts` |
-| Live proof harness | `web/scripts/tmp-proveChildProvider.ts` |
+| Live proof harness | _removed before merge — a one-off Phase D/E proof against a hardcoded Firefly org id, run by hand via `npx tsx`. The behaviour it demonstrated is covered by `web/tests/runtime/childGrain*.test.ts`._ |
 | Docs | `docs/runtime/{GRAIN-AUTHORITY-MAP,SECOND-SURFACE-INVENTORY,REFUSAL-HONEST-NOT-FATAL,OPEN-DECISION-*}.md` |

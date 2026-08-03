@@ -4,7 +4,7 @@ import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 
 describe("mergeTourScheduledDefaultsIntoLeadPlan", () => {
     it("adds Tour Scheduled defaults when the published plan lacks them", () => {
-        const published = {
+        const published: StageOperatingPlanV1 = {
             version: 1,
             lifecycle_key: "enrollment",
             stage_key: "lead",
@@ -23,7 +23,8 @@ describe("mergeTourScheduledDefaultsIntoLeadPlan", () => {
             ],
             outcomes: [{ outcome_key: "left_message", label: "Left Message" }],
             outcome_rules: [],
-        } as StageOperatingPlanV1;
+            attention_rules: [],
+        };
 
         const { plan, report } = mergeTourScheduledDefaultsIntoLeadPlan(published);
         expect(report.changed).toBe(true);
@@ -35,7 +36,7 @@ describe("mergeTourScheduledDefaultsIntoLeadPlan", () => {
     });
 
     it("does not overwrite a tenant outcome_rule that already handles tour_scheduled", () => {
-        const published = {
+        const published: StageOperatingPlanV1 = {
             version: 1,
             lifecycle_key: "enrollment",
             stage_key: "lead",
@@ -68,7 +69,8 @@ describe("mergeTourScheduledDefaultsIntoLeadPlan", () => {
                     targets: [{ kind: "no_movement" }],
                 },
             ],
-        } as StageOperatingPlanV1;
+            attention_rules: [],
+        };
 
         const { plan, report } = mergeTourScheduledDefaultsIntoLeadPlan(published);
         expect(report.added_outcomes).toEqual([]);

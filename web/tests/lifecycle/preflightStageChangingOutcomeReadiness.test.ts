@@ -4,25 +4,31 @@ import {
     resolveStageChangingDestinationsFromOutcome,
 } from "@/lib/lifecycle/preflightStageChangingOutcomeReadiness";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { EffectiveRequirementMissing } from "@/lib/lifecycle/requirementTimingTypes";
+
+/**
+ * Shaped to the canonical `EffectiveRequirementMissing`. These fixtures previously
+ * used `ruleId` and `timing`, neither of which exists on that type — the identity
+ * field is `key`, and timing belongs to the rule meta, not to a missing entry.
+ */
+const missingProgramRequirement: EffectiveRequirementMissing = {
+    key: "child:program_interest",
+    label: "Program",
+    scope: "child",
+    enforcement: "blocking",
+};
 
 describe("formatTransitionReadinessBlockMessage", () => {
     it("names a single missing Program requirement clearly", () => {
-        expect(
-            formatTransitionReadinessBlockMessage([
-                {
-                    ruleId: "child:program_interest",
-                    label: "Program",
-                    enforcement: "blocking",
-                    timing: "stage_exit",
-                },
-            ]),
-        ).toBe("Cannot move stage — Program is required.");
+        expect(formatTransitionReadinessBlockMessage([missingProgramRequirement])).toBe(
+            "Cannot move stage — Program is required.",
+        );
     });
 });
 
 describe("resolveStageChangingDestinationsFromOutcome", () => {
     it("resolves move_to_stage destinations from outcome rules", () => {
-        const plan = {
+        const plan: StageOperatingPlanV1 = {
             version: 1,
             lifecycle_key: "enrollment",
             stage_key: "lead",
@@ -36,6 +42,7 @@ describe("resolveStageChangingDestinationsFromOutcome", () => {
                     targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
                 },
             ],
+            attention_rules: [],
             outgoing_transitions: [
                 {
                     transition_ref: "lead_to_tour",
@@ -45,7 +52,7 @@ describe("resolveStageChangingDestinationsFromOutcome", () => {
                     available: true,
                 },
             ],
-        } as StageOperatingPlanV1;
+        };
 
         expect(resolveStageChangingDestinationsFromOutcome({ plan, outcomeKey: "tour_scheduled" })).toEqual([
             { destinationStageKey: "tour", transitionRef: "lead_to_tour" },
@@ -53,7 +60,7 @@ describe("resolveStageChangingDestinationsFromOutcome", () => {
     });
 
     it("returns empty when outcome has no stage movement", () => {
-        const plan = {
+        const plan: StageOperatingPlanV1 = {
             version: 1,
             lifecycle_key: "enrollment",
             stage_key: "lead",
@@ -67,7 +74,8 @@ describe("resolveStageChangingDestinationsFromOutcome", () => {
                     targets: [{ kind: "no_movement" }],
                 },
             ],
-        } as StageOperatingPlanV1;
+            attention_rules: [],
+        };
 
         expect(resolveStageChangingDestinationsFromOutcome({ plan, outcomeKey: "left_message" })).toEqual([]);
     });
@@ -78,22 +86,8 @@ describe("preflightStageChangingOutcomeReadiness atomicity", () => {
         vi.resetModules();
         vi.doMock("@/lib/lifecycle/evaluateTransitionRequirementPreflight", () => ({
             evaluateTransitionRequirementPreflight: vi.fn(async () => ({
-                missingRequirements: [
-                    {
-                        ruleId: "child:program_interest",
-                        label: "Program",
-                        enforcement: "blocking",
-                        timing: "stage_exit",
-                    },
-                ],
-                blockingRequirements: [
-                    {
-                        ruleId: "child:program_interest",
-                        label: "Program",
-                        enforcement: "blocking",
-                        timing: "stage_exit",
-                    },
-                ],
+                missingRequirements: [missingProgramRequirement],
+                blockingRequirements: [missingProgramRequirement],
             })),
         }));
 
@@ -101,7 +95,7 @@ describe("preflightStageChangingOutcomeReadiness atomicity", () => {
             "@/lib/lifecycle/preflightStageChangingOutcomeReadiness"
         );
 
-        const plan = {
+        const plan: StageOperatingPlanV1 = {
             version: 1,
             lifecycle_key: "enrollment",
             stage_key: "decision_pending",
@@ -115,7 +109,8 @@ describe("preflightStageChangingOutcomeReadiness atomicity", () => {
                     targets: [{ kind: "move_to_stage", stage_key: "waitlist" }],
                 },
             ],
-        } as StageOperatingPlanV1;
+            attention_rules: [],
+        };
 
         const result = await preflightStageChangingOutcomeReadiness({
             supabase: {} as never,
