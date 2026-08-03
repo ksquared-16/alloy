@@ -123,6 +123,11 @@ export type TourActionAuthorization =
           invitation: TourInvitationRow;
           actionKind: TourActionKind;
           capability: (typeof TOUR_ACTION_CAPABILITY)[TourActionKind];
+          /**
+           * True when the credential is already spent and the route opted into replay.
+           * The route MUST return the existing result and perform no mutation.
+           */
+          replay: boolean;
       }
     | { ok: false; code: TourAuthFailureCode; message: string };
 
@@ -146,6 +151,12 @@ export async function authorizeTourAction(args: {
     supabase: SupabaseClient;
     plaintextToken: string;
     requiredAction: TourActionKind;
+    /**
+     * Opt in to authorizing an already-spent credential as a REPLAY. Only routes that
+     * can return the parent's existing result should set this; the returned
+     * authorization carries `replay: true` and must not be used to mutate.
+     */
+    allowConsumedReplay?: boolean;
 }): Promise<TourActionAuthorization> {
     const token = String(args.plaintextToken ?? "").trim();
     if (!token) return deny("invalid");
@@ -171,8 +182,14 @@ export async function authorizeTourAction(args: {
     if (!link.invitation_id || !link.recipient_person_id) return deny("legacy_unscoped");
 
     // Consumption / bounded reuse.
-    if (TOUR_ACTION_REUSE[link.action_kind] === "single_use" && link.consumed_at) return deny("consumed");
-    if (link.max_uses !== null && link.use_count >= link.max_uses) return deny("consumed");
+    //
+    // NOT decided here. The decision is deferred to the END of this function so that a
+    // spent credential still runs every binding check below — recipient, invitation
+    // state, org/opportunity/location agreement. Replay is therefore strictly MORE
+    // checked than a first use, never less.
+    const spent =
+        (TOUR_ACTION_REUSE[link.action_kind] === "single_use" && link.consumed_at != null) ||
+        (link.max_uses !== null && link.use_count >= link.max_uses);
 
     const { data: invData, error: invErr } = await args.supabase
         .from("tour_invitations")
@@ -212,12 +229,18 @@ export async function authorizeTourAction(args: {
         return deny("context_mismatch");
     }
 
+    // A spent credential authorizes ONLY as a replay, and only where the route asked
+    // for it. `replay: true` is the route's instruction to return the result the
+    // parent already has — it never licenses a new mutation.
+    if (spent && !args.allowConsumedReplay) return deny("consumed");
+
     return {
         ok: true,
         link,
         invitation,
         actionKind: link.action_kind,
         capability: TOUR_ACTION_CAPABILITY[link.action_kind],
+        replay: spent,
     };
 }
 
