@@ -13,7 +13,7 @@ import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
 import FocusPanelCardGrid from "@/components/admin/focusPanel/FocusPanelCardGrid";
-import { SUMMARY_GRID } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import type { FocusPanelCardGridSpec } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import { system5IconForCard } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 import {
     isElevatedLevel,
@@ -145,8 +145,32 @@ const CHILDREN_MODEL = cardModel("children", "Children", "users");
 const WORK_MODEL = cardModel("current_work", "Current work", "check");
 const READINESS_MODEL = cardModel("readiness_kpi", "Readiness", "gauge");
 
+/**
+ * HARNESS-LOCAL fixture composition — the four cards this page actually renders.
+ *
+ * Not a platform authority and deliberately not imported from one: the operator Summary composition
+ * is resolved from the active `LayoutDoc` (published, else the code-owned default) and contains a
+ * different card set. This harness exists to verify CARD rendering, so it owns its own fixture rows.
+ */
+const HARNESS_GRID: FocusPanelCardGridSpec = {
+    rows: [
+        {
+            cells: [
+                { key: "current_work", span: 1, density: "standard", tier: "work" },
+                { key: "household", span: 2, density: "standard", tier: "reference" },
+            ],
+        },
+        {
+            cells: [
+                { key: "children", span: 2, density: "standard", tier: "reference" },
+                { key: "readiness_kpi", span: 1, density: "compact", tier: "metric" },
+            ],
+        },
+    ],
+};
+
 function compositionModel(key: FocusPanelCardModel["key"], title: string): FocusPanelCardModel {
-    const cell = SUMMARY_GRID.rows.flatMap((r) => r.cells).find((c) => c.key === key);
+    const cell = HARNESS_GRID.rows.flatMap((r) => r.cells).find((c) => c.key === key);
     return {
         ...MODEL,
         key,
@@ -158,12 +182,12 @@ function compositionModel(key: FocusPanelCardModel["key"], title: string): Focus
 }
 
 /**
- * Faithful Overview composition preview — the REAL `FocusPanelCardGrid` engine and
- * the REAL `SUMMARY_GRID` footprint spans, rendering the production pure cards.
- * Only the data is fixture. This mirrors the operator Summary surface composition.
+ * Composition preview — the REAL `FocusPanelCardGrid` engine rendering the production pure cards
+ * over the harness-local fixture rows (`HARNESS_GRID`). Only the data and the composition are
+ * fixture; this is NOT the operator Summary composition, which resolves from a `LayoutDoc`.
  */
 function OverviewComposition({ context }: { context: OperationalContext }) {
-    const rows = SUMMARY_GRID.rows.map((row) => ({
+    const rows = HARNESS_GRID.rows.map((row) => ({
         cells: row.cells.map((cell) => ({ key: cell.key, span: cell.span, density: cell.density })),
     }));
     // Composition Engine input — same Core Four, composed from card semantics.
@@ -244,8 +268,11 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
                 return { ok: true };
             },
             saveInquiryChild: async () => ({ ok: true }),
+            savePersonChildPhoto: async () => ({ ok: false, status: 501, error: "Not implemented in dev verify" }),
+            clearPersonChildPhoto: async () => ({ ok: false, status: 501, error: "Not implemented in dev verify" }),
             openAddEmergencyContact: () => {},
             openAddEmergencyContactForChild: () => {},
+            openAddAuthorizedPickup: () => {},
             savePersonChildRelationship: async () => ({ ok: true }),
             removeEmergencyContactRole: async () => ({ ok: true }),
             tour: {

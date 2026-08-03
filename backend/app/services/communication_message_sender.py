@@ -18,6 +18,7 @@ from .communication_workflow_events import emit_for_communication_message
 from .communications.binding_resolver import find_binding_by_id, resolve_outbound_binding
 from .communications.identity_resolver import resolve_persisted_outbound_identity
 from .communications.status_callback import build_sms_status_callback_url
+from .dispatch_eligibility import revalidate_for_dispatch
 from ..settings import PUBLIC_TWILIO_STATUS_CALLBACK_BASE
 from .communications.secret_ref import (
     is_legacy_global_twilio_binding,
@@ -117,9 +118,15 @@ def process_communication_messages(
     """Dequeue communication_messages outbound queued; SMS + email."""
     base_url = _get_base_url()
     headers = _get_headers()
+    # Picks up queued rows AND deferred rows whose next-attempt time has passed.
+    # A policy-deferred message is preserved for later dispatch rather than
+    # failed, and it is not re-evaluated before its deterministic next attempt —
+    # so a quiet-hours hold cannot become an endless re-block loop.
+    now_cutoff = datetime.now(timezone.utc).isoformat()
     params: Dict[str, str] = {
         "direction": "eq.outbound",
-        "status": "eq.queued",
+        "status": "in.(queued,deferred)",
+        "or": f"(deferred_until.is.null,deferred_until.lte.{now_cutoff})",
         "order": "created_at.asc",
         "limit": str(max(1, min(limit, 50))),
         "select": "*",
@@ -141,6 +148,9 @@ def process_communication_messages(
         return {"processed": 0, "sent": 0, "failed": 0, "message_ids": [], "errors": []}
 
     sent = failed = 0
+    # Policy outcomes are counted separately from provider failures so a caller
+    # can distinguish "we refused to send" from "the provider rejected it".
+    policy_stopped = 0
     mids: List[str] = []
     errors: List[str] = []
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -163,6 +173,49 @@ def process_communication_messages(
 
         thr = _get_thread(base_url, headers, thread_id)
         entity_type = (thr or {}).get("primary_entity_type") or "communications_unknown"
+
+        # ---- DISPATCH-TIME POLICY REVALIDATION -------------------------------
+        # The final boundary before a provider call. Re-runs only the checks
+        # whose inputs can change between enqueue and now, and fails closed on a
+        # missing or malformed snapshot — which is how rows inserted by raw SQL
+        # or seed scripts are caught.
+        #
+        # A policy outcome is NOT a provider failure: `blocked` and `deferred`
+        # are distinct lifecycle states so an operator can tell "we refused to
+        # send" from "the provider rejected it".
+        decision = revalidate_for_dispatch(row)
+        if decision.outcome != "send_now":
+            patch: Dict[str, Any] = {"eligibility_decision": decision.to_audit()}
+            if decision.outcome == "defer_until" and decision.defer_until:
+                patch["status"] = "deferred"
+                patch["deferred_until"] = decision.defer_until.isoformat()
+            else:
+                patch["status"] = "blocked"
+                patch["error"] = f"policy:{decision.reason}"[:ERROR_TRUNCATE]
+
+            _patch_comm_message(base_url, headers, str(msg_id), patch)
+            policy_stopped += 1
+            mids.append(str(msg_id))
+            logger.info(
+                "COMM_MSG_POLICY id=%s outcome=%s reason=%s",
+                str(msg_id)[-8:],
+                decision.outcome,
+                decision.reason,
+            )
+            emit_for_communication_message(
+                org_id=org_id,
+                entity_type=str(entity_type),
+                entity_id=org_id,
+                event_type="message_blocked" if decision.outcome == "blocked" else "message_deferred",
+                message_id=str(msg_id),
+                thread_id=thread_id,
+                channel=channel,
+                direction="outbound",
+                body_text=None,
+                extra=decision.to_audit(),
+            )
+            continue
+
         entity_id = str((thr or {}).get("primary_entity_id") or "")
         if not entity_id:
             err = "thread missing entity_id"
@@ -433,6 +486,10 @@ def process_communication_messages(
         "processed": len(rows),
         "sent": sent,
         "failed": failed,
+        # Reported separately from `failed`: a policy stop is not a provider
+        # failure, and collapsing them would make a compliance block look like
+        # an outage (and vice versa).
+        "policy_stopped": policy_stopped,
         "message_ids": mids,
         "errors": errors,
     }

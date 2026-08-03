@@ -9,6 +9,7 @@
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { formatHouseholdLeadDisplayTitle } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
 import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import {
     buildHouseholdChildrenLookup,
@@ -36,6 +37,7 @@ import {
     applyRelatedSubjectLocationVisibility,
     relatedSubjectVisibilityForLocation,
 } from "@/lib/queues/queueMembershipLocationScope";
+import { buildOperationalStateQueueContext } from "@/lib/workUnits/buildOperationalStateQueueContext";
 import {
     buildAttentionSummary,
     buildNextBestAction,
@@ -82,13 +84,27 @@ function readInquiryChildrenFromRow(row: Record<string, unknown>): unknown[] {
     return [];
 }
 
+/**
+ * Case / household identity for queue row subject + `customer.display_name`.
+ * Prefer `_customer_name` (household) over opportunity `title` — lead titles are
+ * often the primary contact name, which must not displace authored household name.
+ * Format to `{Base} Family` so queue subject matches Focus Panel household titles.
+ */
 function resolveCaseDisplayName(row: Record<string, unknown>): string {
-    return (
-        trimOrNull(row.title) ??
-        trimOrNull(row.name) ??
-        trimOrNull(row._customer_name) ??
-        "Case"
-    );
+    const householdBase =
+        trimOrNull(row._customer_name)
+        ?? trimOrNull(row["customer.display_name"])
+        ?? trimOrNull(row["customer.name"]);
+    if (householdBase) {
+        return formatHouseholdLeadDisplayTitle(householdBase);
+    }
+    const titleOrName = trimOrNull(row.title) ?? trimOrNull(row.name);
+    if (titleOrName) {
+        // Opportunity name may already be household-formatted (`Lyons Family`) after create;
+        // formatHouseholdLeadDisplayTitle is idempotent for those.
+        return formatHouseholdLeadDisplayTitle(titleOrName);
+    }
+    return "Case";
 }
 
 function resolveStatusKey(row: Record<string, unknown>): string {
@@ -316,12 +332,94 @@ function buildRelatedSubjectsSummary(
     return [];
 }
 
+/**
+ * Process / lifecycle stage label for the queue row Stage field.
+ * Prefer the record's stage_key (or membership stage_key) — never the Work View /
+ * queue lane label (e.g. "New Leads"), which is a filter surface, not the stage.
+ */
+function resolveProcessStageLabel(
+    row: Record<string, unknown>,
+    queue: PartialQueueRowContextQueueMeta,
+): string {
+    const fromRow =
+        trimOrNull(row._lifecycle_stage_title)
+        ?? trimOrNull(row.stage_label)
+        ?? trimOrNull(row._stage_label)
+        ?? trimOrNull(row.enrollment_track_stage_label);
+    if (fromRow) return fromRow;
+
+    const stageKey =
+        trimOrNull(row.stage_key)
+        ?? trimOrNull(queue.stage_key);
+    if (stageKey) return humanizeSnakeCaseToken(stageKey);
+
+    // Legacy lanes without a stage_key — last resort only.
+    return queue.label.trim() || queue.key;
+}
+
+/**
+ * Lead / opportunity site when children do not yet carry placement on the row.
+ * Create Lead persists opportunity.location_id; compact enrichment must surface it.
+ */
+function resolveOpportunityPlacementFallback(
+    row: Record<string, unknown>,
+): SubjectPlacementContext | undefined {
+    const location_id = trimOrNull(row.location_id) ?? trimOrNull(row._location_id);
+    const location_label =
+        trimOrNull(row._location_label)
+        ?? trimOrNull(row._location_name)
+        ?? trimOrNull(row._room_label);
+    if (!location_id && !location_label) return undefined;
+    return {
+        location_id,
+        location_label,
+        program_key: null,
+        program_label: null,
+        room_id: null,
+        room_label: null,
+        schedule_key: null,
+        schedule_label: null,
+    };
+}
+
+function mergePlacementWithOpportunityFallback(
+    fromChildren: SubjectPlacementContext | undefined,
+    row: Record<string, unknown>,
+): SubjectPlacementContext | undefined {
+    const fromOpportunity = resolveOpportunityPlacementFallback(row);
+    if (!fromChildren) return fromOpportunity;
+    if (fromChildren.location_id || fromChildren.location_label) return fromChildren;
+    if (!fromOpportunity) return fromChildren;
+    return {
+        ...fromChildren,
+        location_id: fromOpportunity.location_id ?? fromChildren.location_id,
+        location_label: fromOpportunity.location_label ?? fromChildren.location_label,
+    };
+}
+
 function resolveLifecycleKey(queue: PartialQueueRowContextQueueMeta): string {
     return trimOrNull(queue.lifecycle_key) ?? "enrollment";
 }
 
-function resolveStageKey(queue: PartialQueueRowContextQueueMeta): string {
-    return trimOrNull(queue.stage_key) ?? queue.key;
+/**
+ * The SUBJECT's stage, not the lane's.
+ *
+ * A Work View scopes a list of stages, so rows inside one lane are routinely in different
+ * stages — taking the stage from the lane made every row in a view read identically. Stage is a
+ * persisted column written by outcome execution and intake (`lifecycle_stage_key` materialized by
+ * the Canonical Operational Projection, else the raw `stage_key`); the lane is only a last resort
+ * for rows that carry no stage of their own.
+ */
+function resolveStageKey(
+    row: Record<string, unknown>,
+    queue: PartialQueueRowContextQueueMeta
+): string {
+    return (
+        trimOrNull(row.lifecycle_stage_key)
+        ?? trimOrNull(row.stage_key)
+        ?? trimOrNull(queue.stage_key)
+        ?? queue.key
+    );
 }
 
 function resolveSubjectGrain(queue: PartialQueueRowContextQueueMeta): LifecycleSubjectType {
@@ -364,7 +462,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
     const statusLabel = resolveStatusLabel(row, statusKey);
     const caseDisplayName = resolveCaseDisplayName(row);
     const lifecycleKey = resolveLifecycleKey(input.queue);
-    const stageKey = resolveStageKey(input.queue);
+    const stageKey = resolveStageKey(row, input.queue);
     // Honest representation: opportunity preview rows are still case-shaped in production.
     // Declared queue grain (input.queue.subject_grain) may differ until phase 6 child/candidate rows ship.
     // TODO(phase-6): when queue returns child/candidate row ids, set row_subject from OCM/candidate.
@@ -401,7 +499,10 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
 
     const boringCaseLabel = resolveBoringCaseStatusLabel(statusKey, statusLabel);
     const inquiryChildren = readInquiryChildrenFromRow(row);
-    const placement_context = resolveRowPlacementContextFromInquiryChildren(inquiryChildren);
+    const placement_context = mergePlacementWithOpportunityFallback(
+        resolveRowPlacementContextFromInquiryChildren(inquiryChildren),
+        row,
+    );
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -410,7 +511,10 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             subject_id: subjectId,
             display_name: subjectDisplayName,
         },
-        row_stage: input.queue.label.trim() || input.queue.key,
+        row_stage: resolveProcessStageLabel(row, input.queue),
+        ...(input.queue.stage_labels_by_key
+            ? { stage_labels_by_key: input.queue.stage_labels_by_key }
+            : {}),
         lifecycle_key: lifecycleKey,
         row_status_key: statusKey,
         row_status_label: statusLabel,
@@ -433,6 +537,19 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             active_subject: activeSubject,
         },
         ...(placement_context ? { placement_context } : {}),
+        operational_state: buildOperationalStateQueueContext({
+            orgId: trimOrNull(row.org_id) ?? "",
+            grain: "case",
+            subjectType: "case",
+            subjectId: caseId,
+            currentStageKey: stageKey,
+            persistedStageEnteredAt: trimOrNull(row.stage_entered_at),
+            intakeCreatedAt: trimOrNull(row.created_at),
+            // Intake-only fallback: still in lead with no persisted entry stamp.
+            neverTransitioned:
+                !trimOrNull(row.stage_entered_at) &&
+                (trimOrNull(stageKey)?.toLowerCase() === "lead"),
+        }),
     };
 }
 

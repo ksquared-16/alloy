@@ -418,28 +418,32 @@ export async function projectStageWorkRuntime(params: {
     }
     if (!departmentId) return null;
 
-    const { data: openRows, error: openErr } = await params.supabase
-        .from("operational_tasks")
-        .select("id, title, due_at, status, source, metadata, updated_at")
-        .eq("org_id", params.orgId)
-        .eq("entity_type", "opportunities")
-        .eq("entity_id", params.opportunityId)
-        .eq("status", "open")
-        .order("due_at", { ascending: true })
-        .limit(24);
-
+    // The open + completed task reads are INDEPENDENT — run them concurrently (was serial). Same two
+    // queries, same bounded semantics (24 each, distinct orders); only the ~1 round-trip of serial
+    // latency is removed from the commit-critical compose path.
+    const [openResult, completedResult] = await Promise.all([
+        params.supabase
+            .from("operational_tasks")
+            .select("id, title, due_at, status, source, metadata, updated_at")
+            .eq("org_id", params.orgId)
+            .eq("entity_type", "opportunities")
+            .eq("entity_id", params.opportunityId)
+            .eq("status", "open")
+            .order("due_at", { ascending: true })
+            .limit(24),
+        params.supabase
+            .from("operational_tasks")
+            .select("id, title, due_at, status, source, metadata, updated_at")
+            .eq("org_id", params.orgId)
+            .eq("entity_type", "opportunities")
+            .eq("entity_id", params.opportunityId)
+            .eq("status", "completed")
+            .order("updated_at", { ascending: false })
+            .limit(24),
+    ]);
+    const { data: openRows, error: openErr } = openResult;
     if (openErr) return null;
-
-    const { data: completedRows, error: completedErr } = await params.supabase
-        .from("operational_tasks")
-        .select("id, title, due_at, status, source, metadata, updated_at")
-        .eq("org_id", params.orgId)
-        .eq("entity_type", "opportunities")
-        .eq("entity_id", params.opportunityId)
-        .eq("status", "completed")
-        .order("updated_at", { ascending: false })
-        .limit(24);
-
+    const { data: completedRows, error: completedErr } = completedResult;
     if (completedErr) return null;
 
     return projectStageWorkRuntimeSync({

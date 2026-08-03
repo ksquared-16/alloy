@@ -15,6 +15,11 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
+import {
+    summarizeCommitPlan,
+    summarizeIdentityConfidence,
+} from "@/lib/pos/processingIdentity/operator/reviewSummary";
+
 type Readiness =
     | "needs_understanding_review"
     | "needs_identity_review"
@@ -103,20 +108,6 @@ type ReviewState = {
     subjectEligibility?: SubjectEligibility[];
     planEligible?: boolean;
     identityBlockers?: string[];
-};
-
-const READINESS_LABEL: Record<Readiness, string> = {
-    needs_understanding_review: "Needs understanding review",
-    needs_identity_review: "Needs identity review",
-    needs_plan_review: "Needs plan review",
-    ready_for_approval: "Ready for approval",
-    approved_ready_to_commit: "Approved — ready to commit",
-    committing: "Committing",
-    partially_committed: "Partially committed",
-    committed: "Committed",
-    stale_plan: "Stale plan",
-    needs_information: "Needs information",
-    exception: "Exception",
 };
 
 const DECISION_OPTIONS: { value: string; label: string }[] = [
@@ -258,21 +249,65 @@ export default function IdentityReviewPanel({
             }),
         );
 
-    const buildPlan = () => run("plan", () => postJson(`/api/admin/processing/cases/${caseId}/identity/plan`, {}));
+    /**
+     * One operator gesture: reviewing this summary and confirming IS the approval, and the commit.
+     * Plan → approve → execute still each run and are still each recorded (the approval artifact,
+     * its plan version and content hash, and the attempt are unchanged) — what collapses is the
+     * number of times the operator has to say yes to the same reviewed thing, not the audit trail.
+     * Still explicit: nothing here runs without this click, and no intake source reaches it.
+     */
+    const confirmAndCommit = useCallback(
+        async (current: {
+            planId: string;
+            contentHash: string;
+            needsPlan: boolean;
+            blockingConflicts: string[];
+            approved: boolean;
+        }) => {
+            setBusy("confirm");
+            setActionError(null);
+            try {
+                let planId = current.planId;
+                let contentHash = current.contentHash;
 
-    const approve = (planId: string, blockingConflicts: string[]) =>
-        run("approve", () =>
-            postJson(`/api/admin/processing/cases/${caseId}/identity/approve`, { planId, blockingConflicts }),
-        );
+                if (current.needsPlan) {
+                    const built = await postJson(
+                        `/api/admin/processing/cases/${caseId}/identity/plan`,
+                        {},
+                    );
+                    if (!built.ok) throw new Error(built.error || "Could not build the commit plan");
+                    const plan = (built.data as { plan?: { planId?: string; contentHash?: string } } | null)
+                        ?.plan;
+                    planId = plan?.planId?.trim() || planId;
+                    contentHash = plan?.contentHash?.trim() || contentHash;
+                }
+                if (!planId) throw new Error("Could not build the commit plan");
 
-    const execute = (planId: string, contentHash: string) =>
-        run("execute", () =>
-            postJson(`/api/admin/processing/cases/${caseId}/identity/execute`, {
-                planId,
-                // Stable per plan version + hash → idempotent retry resumes the same attempt.
-                executionIdempotencyKey: `exec:${planId}:${contentHash}`,
-            }),
-        );
+                if (!current.approved) {
+                    const approved = await postJson(
+                        `/api/admin/processing/cases/${caseId}/identity/approve`,
+                        { planId, blockingConflicts: current.blockingConflicts },
+                    );
+                    if (!approved.ok) throw new Error(approved.error || "Could not approve the plan");
+                }
+
+                const committed = await postJson(
+                    `/api/admin/processing/cases/${caseId}/identity/execute`,
+                    {
+                        planId,
+                        executionIdempotencyKey: `exec:${planId}:${contentHash}`,
+                    },
+                );
+                if (!committed.ok) throw new Error(committed.error || "Could not create the records");
+            } catch (e) {
+                setActionError(e instanceof Error ? e.message : "Could not create the records");
+            } finally {
+                setBusy(null);
+                await load();
+            }
+        },
+        [caseId, load],
+    );
 
     if (loading) {
         return (
@@ -301,20 +336,30 @@ export default function IdentityReviewPanel({
     const { readiness, plan, planDiff, approval, latestAttempt, resolutions, facts, blockingConflictCount } = state;
     const approvalStale = Boolean(plan && approval && approval.planContentHash !== plan.contentHash);
     const planEligible = state.planEligible !== false && (state.identityBlockers?.length ?? 0) === 0;
-    const canApprove = readiness === "ready_for_approval" && planEligible;
-    const canExecute = readiness === "approved_ready_to_commit" || readiness === "partially_committed";
-    const canBuildPlan = planEligible && busy === null;
     const blockingConflictIds = blockingConflictCount > 0 ? ["unresolved"] : [];
+    const confidence = summarizeIdentityConfidence(resolutions);
+    const planSummary = summarizeCommitPlan(planDiff?.entries ?? []);
+    // Confirm covers plan → approve → execute, so it is available whenever identity is settled;
+    // a committed case has nothing left to confirm.
+    const canConfirm =
+        planEligible && readiness !== "committed" && readiness !== "committing";
     const eligibilityByRef = new Map((state.subjectEligibility ?? []).map((e) => [e.subjectRef, e]));
 
     return (
         <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Identity review</span>
-                <span className="rounded-full bg-alloy-bend-pine/[0.08] px-2 py-0.5 text-[11px] font-medium text-alloy-bend-pine">
-                    {READINESS_LABEL[readiness]}
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Review</span>
+                <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        confidence.level === "needs_decision"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
+                    }`}
+                >
+                    {confidence.level === "needs_decision" ? "Needs your decision" : "Ready"}
                 </span>
             </div>
+            <p className="mb-2.5 text-[12px] text-stone-600">{confidence.summary}</p>
 
             {actionError ? <div className="mb-2 text-[11.5px] text-amber-700">{actionError}</div> : null}
 
@@ -433,46 +478,21 @@ export default function IdentityReviewPanel({
                 )}
             </div>
 
-            {/* Plan build + diff */}
+            {/* What confirming will create — operator language, no plan ids or hashes. */}
             <div className="mb-3">
-                <div className="mb-1 flex items-center justify-between">
-                    <Eyebrow>Commit plan</Eyebrow>
-                    <button
-                        type="button"
-                        disabled={!canBuildPlan}
-                        title={!planEligible ? "Resolve blocking identity subjects before building a plan" : undefined}
-                        onClick={() => void buildPlan()}
-                        className="rounded-md border border-stone-300 px-2.5 py-1 text-[11.5px] font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
-                    >
-                        {busy === "plan" ? "Building…" : plan ? "Rebuild plan" : "Build plan"}
-                    </button>
-                </div>
-                {!plan || !planDiff ? (
-                    <div className="text-[12px] text-stone-400">No plan yet. Resolve subjects, then build a plan.</div>
-                ) : (
-                    <div className="rounded-md border border-stone-200 p-2.5">
-                        <div className="mb-1.5 flex items-center gap-2 text-[11px] text-stone-500">
-                            <span className="font-medium text-stone-700">v{planDiff.version}</span>
-                            <span className="font-mono">{planDiff.contentHash.slice(0, 10)}</span>
-                            {plan.supersededBy ? <span className="text-amber-700">superseded</span> : null}
-                            {planDiff.atomicGroups.length > 0 ? (
-                                <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px]">atomic: {planDiff.atomicGroups.join(", ")}</span>
-                            ) : null}
-                        </div>
-                        <ul className="space-y-1">
-                            {planDiff.entries.map((op) => (
-                                <li key={op.opId} className="flex items-baseline gap-2 text-[12px]">
-                                    <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] uppercase text-stone-500">{op.kind}</span>
-                                    <span className="min-w-0 flex-1">
-                                        <span className="text-stone-800">{op.label}</span>
-                                        {op.reason ? <span className="text-stone-400"> · {op.reason}</span> : null}
-                                    </span>
-                                    {op.atomicGroup ? <span className="text-[9.5px] text-alloy-bend-pine">{op.atomicGroup}</span> : null}
-                                    <span className="text-[9.5px] text-stone-400">{op.risk}</span>
-                                </li>
-                            ))}
-                        </ul>
+                <Eyebrow>What this creates</Eyebrow>
+                {planSummary.lines.length === 0 ? (
+                    <div className="text-[12px] text-stone-400">
+                        Nothing to create yet — settle the records above.
                     </div>
+                ) : (
+                    <ul className="mt-1 space-y-0.5">
+                        {planSummary.lines.map((line, i) => (
+                            <li key={`${line}-${i}`} className="text-[12px] text-stone-700">
+                                {line}
+                            </li>
+                        ))}
+                    </ul>
                 )}
             </div>
 
@@ -515,27 +535,32 @@ export default function IdentityReviewPanel({
                 </div>
             ) : null}
 
-            {/* Approve + execute — deliberate operator actions */}
+            {/* One deliberate operator gesture: reviewing this and confirming IS approve + commit. */}
             <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 pt-2.5">
                 <button
                     type="button"
-                    disabled={!plan || !canApprove || busy !== null}
-                    onClick={() => plan && void approve(plan.planId, blockingConflictIds)}
-                    className="rounded-md border border-alloy-bend-pine/40 px-3 py-1.5 text-[12.5px] font-medium text-alloy-bend-pine hover:bg-alloy-bend-pine/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-                    title={canApprove ? "Approve this exact plan version" : "Plan is not ready for approval"}
-                >
-                    {busy === "approve" ? "Approving…" : "Approve plan"}
-                </button>
-                <button
-                    type="button"
-                    disabled={!plan || !canExecute || busy !== null}
-                    onClick={() => plan && void execute(plan.planId, plan.contentHash)}
+                    disabled={!canConfirm || busy !== null}
+                    onClick={() =>
+                        void confirmAndCommit({
+                            planId: plan?.planId ?? "",
+                            contentHash: plan?.contentHash ?? "",
+                            needsPlan: !plan || approvalStale || Boolean(plan.supersededBy),
+                            blockingConflicts: blockingConflictIds,
+                            approved: Boolean(approval) && !approvalStale,
+                        })
+                    }
                     className="rounded-md bg-[#00A283] px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:cursor-not-allowed disabled:opacity-40"
-                    title={canExecute ? "Execute the approved plan" : "Approve the plan before executing"}
+                    title={
+                        canConfirm
+                            ? "Create these records"
+                            : "Settle the records above before confirming"
+                    }
                 >
-                    {busy === "execute" ? "Committing…" : "Execute approved plan"}
+                    {busy === "confirm" ? "Creating…" : "Confirm and create"}
                 </button>
-                <span className="text-[10px] leading-tight text-stone-400">Explicit action · no source auto-executes</span>
+                <span className="text-[10px] leading-tight text-stone-400">
+                    Explicit action · no source auto-executes
+                </span>
             </div>
         </section>
     );

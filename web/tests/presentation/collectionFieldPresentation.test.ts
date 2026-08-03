@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 
 import { describe, expect, it } from "vitest";
+import { formatAgeFromDateOfBirthIso } from "@/lib/fields/derived/ageFromDateOfBirth";
 import {
     COLLECTION_ITEM_FIELD_CATALOG,
     DEFAULT_CHILDREN_COLLECTION_PRESENTATION,
@@ -180,13 +181,15 @@ describe("collectionFieldPresentation", () => {
                 includedFields: ["first_name", "age"],
             },
         );
-        expect(display).toMatch(/^Lennon \(2y\)$/);
+        const age = formatAgeFromDateOfBirthIso("2024-01-15", "years_months");
+        expect(age).toBeTruthy();
+        expect(display).toBe(`Lennon (${age})`);
     });
 
     it("maps legacy children.summary to count + list", () => {
         const legacy = legacyCollectionPresentationFromFieldKey("children.summary");
         expect(renderCollectionFieldPresentation("children", familyContext(), legacy!)).toBe(
-            "3 children: Lennon Kurzman, Wrigley Kurzman, Sam Lee",
+            "3 children · Lennon Kurzman, Wrigley Kurzman, Sam Lee",
         );
     });
 

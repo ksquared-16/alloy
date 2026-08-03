@@ -34,12 +34,13 @@ export function resolveEffectiveStageOperatingPlanForAttention(
 
 function stageEnteredMsForOpportunity(
     opportunity: OpportunityAttentionEntityInput,
-    rowContext?: { lastStatusTransitionAtIso?: string | null } | null,
+    rowContext?: { lastStatusTransitionAtIso?: string | null; stageEnteredAtIso?: string | null } | null,
     nowMs?: number,
 ): number {
+    // Prefer authoritative stage membership entry — never invent from unrelated updated_at.
     const iso =
+        rowContext?.stageEnteredAtIso?.trim() ||
         rowContext?.lastStatusTransitionAtIso?.trim() ||
-        opportunity.updated_at?.trim() ||
         opportunity.created_at?.trim() ||
         null;
     if (iso) {
@@ -59,7 +60,7 @@ export function tryEvaluateStageAttentionForOpportunity(input: {
     tasks?: StageAttentionTaskSnapshot[];
     readiness?: ReadinessResult | null;
     readinessProfile?: ReadinessAttentionProjectionProfileV1 | null;
-    rowContext?: { lastStatusTransitionAtIso?: string | null } | null;
+    rowContext?: { lastStatusTransitionAtIso?: string | null; stageEnteredAtIso?: string | null } | null;
     nowMs?: number;
 }): ProjectedStageAttentionReason[] | undefined {
     try {

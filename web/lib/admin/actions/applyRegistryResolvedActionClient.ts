@@ -28,6 +28,8 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
+import { dispatchStartBosCommandSession } from "@/contexts/BosCommandSessionContext";
 import {
     dispatchOpenAddInquiryChildModal,
     isAddInquiryChildActionKey,
@@ -55,6 +57,10 @@ import {
     mapRegistrySurfaceToEnrollmentSource,
     resolveEnrollmentStatusActionFromResolvedAction,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionClient";
+import {
+    dispatchOpenChangeLeadLocationModal,
+    resolveChangeLeadLocationActionFromResolvedAction,
+} from "@/lib/admin/actions/changeLeadLocationActionClient";
 import type { EnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 
 export type RegistryActionSurfaceContext = {
@@ -92,6 +98,8 @@ export type ApplyRegistryResolvedActionHost = {
         sourceSurface?: import("@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract").EnrollmentStatusTransitionSourceSurface;
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     }) => void;
+    /** Change lead location — family default site modal. */
+    openChangeLeadLocation?: (input: { opportunityId: string }) => void;
     /** Dedicated modal — household primary contact (requires contact row target). */
     openMakePrimaryContact?: (input: { opportunityId: string; targetPersonId: string }) => void;
     openCreateLead?: () => void;
@@ -222,6 +230,22 @@ export async function applyRegistryResolvedActionClient(
         return { ok: true };
     }
 
+    if (resolveChangeLeadLocationActionFromResolvedAction(a)) {
+        const oid = host.entityId?.trim();
+        if (!oid) {
+            return {
+                ok: false,
+                error: "Select a record first.",
+            };
+        }
+        if (host.openChangeLeadLocation) {
+            host.openChangeLeadLocation({ opportunityId: oid });
+            return { ok: true };
+        }
+        dispatchOpenChangeLeadLocationModal({ opportunity_id: oid });
+        return { ok: true };
+    }
+
     if (isScheduleTourRegistryAction(a) && !host.entityId?.trim()) {
         const delegated = applyScheduleTourWithoutSelectedRecord(a, host);
         if (delegated) return delegated;
@@ -268,6 +292,20 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (formKey === "create_lead") {
+            if (isBosCreateLeadSessionEnabled()) {
+                dispatchStartBosCommandSession({
+                    actionKey: "create_lead",
+                    displayLabel: a.label?.trim() || "Create Lead",
+                    placement: host.workUnitId ? "work_unit_actions" : "workspace_actions_menu",
+                    contextResolution: "bos_proposal",
+                    workspace: {
+                        departmentId: host.departmentId ?? null,
+                        workUnitId: host.workUnitId ?? null,
+                        surface: host.workUnitId ? "work_unit" : "workspace",
+                    },
+                });
+                return { ok: true };
+            }
             if (host.openCreateLead) {
                 host.openCreateLead();
                 return { ok: true };

@@ -10,13 +10,16 @@
  */
 
 import type { NestedSurfaceConfig, NestedSurfaceGroupConfig } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
-import { generateDefaultIdentityFieldPlacements } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
-import { migrateIdentityDisclosureGroup } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
-import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import {
+    generateDefaultIdentityFieldPlacements,
+    identityFieldLayoutWidthForPurpose,
     resolveIdentityPlacementLabelMode,
     type IdentityFieldPlacement,
 } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
+import { chunkNestedSurfaceFieldsForHalfRowLayout } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
+import { migrateIdentityDisclosureGroup } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompat";
+import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 
 /** Canonical Parent / Guardian template group (not a runtime section). */
 export const HOUSEHOLD_PARENT_GUARDIAN_ROLE_GROUP = "contact_edit" as const;
@@ -102,13 +105,42 @@ function resolveAuthoritativeTierKeys(
     return dedupeHouseholdIdentityFieldRefs(templateKeys.map(bridgeTemplateFieldRef));
 }
 
-function mergeFieldMaps<T extends Record<string, unknown>>(
-    template: T | undefined,
-    runtime: T | undefined,
-): T | undefined {
+function mergeFieldMaps<T>(
+    template: Record<string, T> | undefined,
+    runtime: Record<string, T> | undefined,
+): Record<string, T> | undefined {
     if (!template && !runtime) return undefined;
     // Template (published role) wins on key conflict when inheriting.
-    return { ...(runtime ?? {}), ...(template ?? {}) } as T;
+    return { ...(runtime ?? {}), ...(template ?? {}) };
+}
+
+/** Remap contact.* → person.* keys so purpose widths / icons match bridged field refs. */
+function remapHouseholdFieldMap<T>(map: Record<string, T> | undefined): Record<string, T> | undefined {
+    if (!map) return undefined;
+    const out: Record<string, T> = {};
+    for (const [key, value] of Object.entries(map)) {
+        out[normalizeHouseholdIdentityFieldRef(key)] = value;
+    }
+    return out;
+}
+
+/** Summary phone/email always stack — coerce leftover half pairings out of the map. */
+function normalizeSummaryReachabilityWidths(
+    map: Record<string, "full" | "half" | "third"> | undefined,
+): Record<string, "full" | "half" | "third"> | undefined {
+    if (!map) return undefined;
+    const out: Record<string, "full" | "half" | "third"> = { ...map };
+    for (const key of Object.keys(out)) {
+        if (isCompactIconValueIdentityField(key)) out[key] = "full";
+    }
+    return out;
+}
+
+function mergeHouseholdFieldMaps<T>(
+    template: Record<string, T> | undefined,
+    runtime: Record<string, T> | undefined,
+): Record<string, T> | undefined {
+    return mergeFieldMaps(remapHouseholdFieldMap(template), remapHouseholdFieldMap(runtime));
 }
 
 function normalizePlacementFieldRef(placement: IdentityFieldPlacement): IdentityFieldPlacement {
@@ -153,31 +185,75 @@ function buildAuthoritativePlacements(
         keys: string[] | undefined,
     ): IdentityFieldPlacement[] => {
         if (!keys) return [];
-        return keys.map((fieldRef, index) => {
+        const purpose =
+            tier === "context_fact" ? ("context_facts" as const) : tier === "details" ? ("details" as const) : ("summary" as const);
+        // Pack with purpose-scoped widths (Summary full vs Context Facts half stay independent).
+        // Never assign row=index — that forced one field per row and broke half stacking.
+        // Layout widths: Parent / Guardian template is authoritative (like summary keys).
+        // Do not gap-fill from primary_contact — that leaked Context Facts half pairings
+        // into Summary and forced phone|email onto one row after "Full" authoring.
+        const layoutGroup: NestedSurfaceGroupConfig = {
+            ...template,
+            fieldModes: mergedFieldModes,
+            fieldLayoutWidths: remapHouseholdFieldMap(template.fieldLayoutWidths),
+            fieldLayoutWidthsByPurpose: {
+                summary: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.summary),
+                context_facts: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.context_facts),
+                details: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.details),
+            },
+            fieldIcons: mergeHouseholdFieldMaps(template.fieldIcons, runtime.fieldIcons),
+        };
+        const widthFor = (fieldRef: string) => {
+            // Summary phone/email always stack (see identityFieldLayoutWidthForPurpose).
+            if (purpose === "summary" && isCompactIconValueIdentityField(fieldRef)) {
+                return "full" as const;
+            }
+            const purposeMap = layoutGroup.fieldLayoutWidthsByPurpose?.[purpose];
+            const explicit =
+                purposeMap?.[fieldRef]
+                ?? (purpose === "summary" ? layoutGroup.fieldLayoutWidths?.[fieldRef] : undefined);
+            if (explicit) return explicit;
+            // Template placement width only — never runtime primary_contact halves.
             const key = `${tier}:${fieldRef}`;
-            const templatePlacement = templateByTierField.get(key);
-            const runtimeOverride = runtimeByTierField.get(key);
-            return {
-                fieldRef,
-                tier,
-                // Published key order is authoritative — do not inherit conflicting
-                // pre-bridge row indices from contact.* alias placements.
-                row: index,
-                column: templatePlacement?.column ?? 1,
-                width: templatePlacement?.width ?? "full",
-                icon: templatePlacement?.icon,
-                labelMode: resolveIdentityPlacementLabelMode(
-                    {
-                        fieldRef,
-                        labelMode: runtimeOverride?.labelMode ?? templatePlacement?.labelMode,
-                    },
-                    mergedFieldModes,
+            return (
+                templateByTierField.get(key)?.width
+                ?? identityFieldLayoutWidthForPurpose(layoutGroup, fieldRef, purpose)
+            );
+        };
+        const chunks = chunkNestedSurfaceFieldsForHalfRowLayout(keys, widthFor);
+        const out: IdentityFieldPlacement[] = [];
+        chunks.forEach((chunk, rowIndex) => {
+            chunk.forEach((fieldRef, columnIndex) => {
+                const key = `${tier}:${fieldRef}`;
+                const templatePlacement = templateByTierField.get(key);
+                const runtimeOverride = runtimeByTierField.get(key);
+                const width = widthFor(fieldRef);
+                const icon =
+                    templatePlacement?.icon
+                    ?? runtimeOverride?.icon
+                    ?? layoutGroup.fieldIcons?.[fieldRef];
+                out.push({
                     fieldRef,
-                ),
-                hideWhenEmpty: templatePlacement?.hideWhenEmpty,
-                policy: runtimeOverride?.policy ?? templatePlacement?.policy,
-            };
+                    tier,
+                    row: rowIndex + 1,
+                    column: (columnIndex + 1) as 1 | 2 | 3,
+                    width,
+                    icon,
+                    labelMode: resolveIdentityPlacementLabelMode(
+                        {
+                            fieldRef,
+                            labelMode: runtimeOverride?.labelMode ?? templatePlacement?.labelMode,
+                        },
+                        mergedFieldModes,
+                        fieldRef,
+                    ),
+                    hideWhenEmpty: templatePlacement?.hideWhenEmpty ?? runtimeOverride?.hideWhenEmpty,
+                    policy: runtimeOverride?.policy ?? templatePlacement?.policy,
+                    linkTarget: runtimeOverride?.linkTarget ?? templatePlacement?.linkTarget,
+                });
+            });
         });
+        return out;
     };
 
     return [
@@ -241,10 +317,20 @@ export function resolveHouseholdRoleMergedGroup(
         selectedFieldKeys: summaryKeys,
         contextFieldKeys: contextKeys,
         expandedFieldKeys: detailKeys,
-        fieldPolicies: mergeFieldMaps(template.fieldPolicies, runtime.fieldPolicies),
-        fieldLabels: mergeFieldMaps(template.fieldLabels, runtime.fieldLabels),
-        fieldLayoutWidths: mergeFieldMaps(template.fieldLayoutWidths, runtime.fieldLayoutWidths),
-        fieldModes: mergeFieldMaps(template.fieldModes, runtime.fieldModes),
+        fieldPolicies: mergeHouseholdFieldMaps(template.fieldPolicies, runtime.fieldPolicies),
+        fieldLabels: mergeHouseholdFieldMaps(template.fieldLabels, runtime.fieldLabels),
+        fieldIcons: mergeHouseholdFieldMaps(template.fieldIcons, runtime.fieldIcons),
+        fieldLayoutWidths: remapHouseholdFieldMap(template.fieldLayoutWidths),
+        fieldLayoutWidthsByPurpose: {
+            // Normalize Summary phone/email to full so stored maps match stacking
+            // (Builder "separate rows" must not leave half in the published template).
+            summary: normalizeSummaryReachabilityWidths(
+                remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.summary),
+            ),
+            context_facts: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.context_facts),
+            details: remapHouseholdFieldMap(template.fieldLayoutWidthsByPurpose?.details),
+        },
+        fieldModes: mergeHouseholdFieldMaps(template.fieldModes, runtime.fieldModes),
         evidenceCollections:
             template.evidenceCollections !== undefined
                 ? template.evidenceCollections
@@ -273,7 +359,10 @@ export function resolveHouseholdRoleMergedGroup(
         selectedFieldKeys: summaryKeys,
         contextFieldKeys: contextKeys,
         expandedFieldKeys: detailKeys,
-        fieldModes: mergeFieldMaps(template.fieldModes, runtime.fieldModes),
+        fieldModes: mergeHouseholdFieldMaps(template.fieldModes, runtime.fieldModes),
+        fieldIcons: mergedBase.fieldIcons,
+        fieldLayoutWidths: mergedBase.fieldLayoutWidths,
+        fieldLayoutWidthsByPurpose: mergedBase.fieldLayoutWidthsByPurpose,
         fieldPlacements,
     };
 }

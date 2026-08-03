@@ -60,6 +60,7 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "row_count",
     "row_count_unit",
     "row_stage",
+    "stage_labels_by_key",
     "row_status_label",
     "row_status_key",
     "lifecycle_key",
@@ -94,6 +95,13 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "placement_context.location_label",
     "waitlist_context.position_label",
     "waitlist_context.wait_since",
+    "operational_state.stage_key",
+    "operational_state.entered_at",
+    "operational_state.source",
+    "operational_state.age_compact",
+    "operational_state.age_accessible",
+    "personal_seen.unseen",
+    "personal_seen.occurrence_key",
     "drawer_open.entity_type",
     "drawer_open.entity_id",
     "drawer_open.stage_focus_key",
@@ -120,7 +128,10 @@ export const QUEUE_PREVIEW_CONTEXT_EMPTIED_PATHS = [
 export const QUEUE_PREVIEW_CONTEXT_DROPPED_PATHS = [
     "row_grouping_key",
     "next_best_action.action_key",
-    "drawer_open.active_subject", // full LifecycleSubjectRef (+ case_anchor) — only `.stage_key` was read; row_stage covers it for case grain
+    // Full LifecycleSubjectRef (+ case_anchor) — only `.stage_key` is read, and it is promoted onto
+    // `stage_focus_key` below. (It is NOT covered by `row_stage`: that is the lane label, and a
+    // Work View scopes several stages, so rows in one lane hold different stages.)
+    "drawer_open.active_subject",
     "drawer_open.active_subject_group",
     "placement_context.program_key",
     "placement_context.room_id",
@@ -205,6 +216,9 @@ export function projectQueuePreviewRowContext(context: QueueRowContext): QueueRo
         contract_version: context.contract_version,
         row_subject: projectSubject(context.row_subject),
         row_stage: context.row_stage,
+        ...(context.stage_labels_by_key
+            ? { stage_labels_by_key: context.stage_labels_by_key }
+            : {}),
         lifecycle_key: context.lifecycle_key,
         row_status_key: context.row_status_key,
         row_status_label: context.row_status_label,
@@ -267,6 +281,21 @@ export function projectQueuePreviewRowContext(context: QueueRowContext): QueueRo
                 ...(waitSince ? { wait_since: waitSince } : {}),
             };
         }
+    }
+    if (context.operational_state) {
+        projected.operational_state = {
+            stage_key: context.operational_state.stage_key,
+            entered_at: context.operational_state.entered_at,
+            source: context.operational_state.source,
+            age_compact: context.operational_state.age_compact,
+            age_accessible: context.operational_state.age_accessible,
+        };
+    }
+    if (context.personal_seen) {
+        projected.personal_seen = {
+            unseen: context.personal_seen.unseen === true,
+            occurrence_key: context.personal_seen.occurrence_key,
+        };
     }
 
     return projected;

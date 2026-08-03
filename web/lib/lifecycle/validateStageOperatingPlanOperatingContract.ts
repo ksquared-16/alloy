@@ -11,6 +11,7 @@ import {
 import { resolveWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
 import {
     resolveOutcomeStatusOptions,
+    statusDomainOperatorLabel,
     type OutcomeStatusConfiguredRow,
 } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
@@ -144,6 +145,9 @@ function validateOutcomeBehavior(
 
     if (kind === "close_record") {
         const controlId = `${controlBase}-status`;
+        const domainLabel = statusDomainOperatorLabel(entityType);
+        const stageLabel = plan.stage_key?.trim() || "this stage";
+        const outcomeLabel = outcomeKey.trim() || "this outcome";
         const resolved = resolveOutcomeStatusOptions({
             configuredStatuses,
             purpose: "close_record",
@@ -151,10 +155,14 @@ function validateOutcomeBehavior(
             selectedStatusKey: draft.status_key,
         });
         if (!resolved.available) {
+            // Actionable guidance — not a blocking picker error nobody can clear here.
             issues.push({
                 code: "outcome_close_status_missing",
-                severity: "error",
-                message: resolved.unavailableReason ?? "Close record is unavailable.",
+                severity: "warning",
+                message:
+                    `Outcome "${outcomeLabel}" on stage "${stageLabel}" is configured to close the record, `
+                    + `but no closed ${domainLabel} values are configured. `
+                    + `Add a closed status under Organization → Statuses (${domainLabel}), then return here to select it.`,
                 controlId,
                 outcome_key: outcomeKey,
             });
@@ -163,8 +171,8 @@ function validateOutcomeBehavior(
                 code: "outcome_close_status_invalid",
                 severity: "error",
                 message: resolved.invalidSelectedStatusKey
-                    ? `Status "${resolved.invalidSelectedStatusKey}" is not a configured closed status — repair it.`
-                    : "Select a configured closed status.",
+                    ? `Status "${resolved.invalidSelectedStatusKey}" is not a configured closed ${domainLabel} — select a closed status for outcome "${outcomeLabel}" on stage "${stageLabel}".`
+                    : `Select a configured closed ${domainLabel} for outcome "${outcomeLabel}" on stage "${stageLabel}".`,
                 controlId,
                 outcome_key: outcomeKey,
             });
@@ -290,6 +298,8 @@ export function validateStageOperatingPlanOperatingContract(
         try {
             const draft = readOutcomeAutomationDraft(outcomeKey, plan.outcome_rules, {
                 transitionOptions: [...transitionOptions],
+                configuredStatuses,
+                entityType,
             });
             if (draft.kind === "none") continue;
             issues.push(

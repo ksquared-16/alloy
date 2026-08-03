@@ -60,6 +60,7 @@ import {
     readCreateNewOverride,
     type IdentityResolutionEligibility,
 } from "./identityResolutionEligibility";
+import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -312,6 +313,53 @@ export async function buildPlan(
         sourceResolutionVersions =
             sourceResolutionVersions ?? Array.from(new Set(rows.map((r) => r.generation_id)));
     }
+    // Thread intake-resolved work_unit_id + location_id (stored on create_lead_intake) onto the
+    // lead subject so createLead persists them. Without work_unit_id, Work Unit membership excludes
+    // the row; without location_id, queue/focus location chips stay empty despite required intake.
+    {
+        const leadSubject = resolutionSet.subjects.find((s) => s.role === "lead");
+        const needsWorkUnit =
+            leadSubject && !(typeof leadSubject.values?.work_unit_id === "string" && leadSubject.values.work_unit_id);
+        const needsLocation =
+            leadSubject && !(typeof leadSubject.values?.location_id === "string" && leadSubject.values.location_id);
+        if (leadSubject && (needsWorkUnit || needsLocation)) {
+            const { data: caseRow } = await deps.supabase
+                .from("processing_cases")
+                .select("metadata")
+                .eq("org_id", deps.orgId)
+                .eq("id", input.caseId)
+                .maybeSingle();
+            const intake = (caseRow as {
+                metadata?: {
+                    create_lead_intake?: { work_unit_id?: unknown; location_id?: unknown };
+                };
+            } | null)?.metadata?.create_lead_intake;
+            const workUnitId =
+                typeof intake?.work_unit_id === "string" && intake.work_unit_id.trim()
+                    ? intake.work_unit_id.trim()
+                    : null;
+            const locationId =
+                typeof intake?.location_id === "string" && intake.location_id.trim()
+                    ? intake.location_id.trim()
+                    : null;
+            if ((needsWorkUnit && workUnitId) || (needsLocation && locationId)) {
+                resolutionSet = {
+                    subjects: resolutionSet.subjects.map((s) => {
+                        if (s.role !== "lead") return s;
+                        return {
+                            ...s,
+                            values: {
+                                ...(s.values ?? {}),
+                                ...(needsWorkUnit && workUnitId ? { work_unit_id: workUnitId } : {}),
+                                ...(needsLocation && locationId ? { location_id: locationId } : {}),
+                            },
+                        };
+                    }),
+                };
+            }
+        }
+    }
+
     const recs = buildRecommendations(resolutionSet);
     if (recs.operations.length === 0) {
         throw new OperatorServiceError(
@@ -421,6 +469,14 @@ export async function executeApprovedPlanForCase(
             severity: "warning",
             code: "partial_commit",
             message: attempt.operations.filter((o) => o.status === "failed" || o.status === "async_failed").map((o) => `${o.opId}:${o.error}`).join(","),
+        });
+    }
+
+    if (attempt.outcome === "committed" || attempt.outcome === "partially_committed") {
+        await applyCreateLeadPostCommitPersistence(deps.supabase, {
+            orgId: deps.orgId,
+            caseId: input.caseId,
+            attempt,
         });
     }
 

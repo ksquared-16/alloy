@@ -479,8 +479,8 @@ export function InlineOpportunityFocusPanel() {
                     data-adminv2-record-modal-scroll
                     className={
                         isActivityMode
-                            ? `${activityBodyFillClass} px-2 py-2 [scrollbar-gutter:stable]`
-                            : "min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-gutter:stable]"
+                            ? `${activityBodyFillClass} bg-white px-2 py-2 [scrollbar-gutter:stable]`
+                            : "min-h-0 flex-1 overflow-y-auto bg-white px-4 py-3 [scrollbar-gutter:stable]"
                     }
                 >
                     {/* Keyed `swap` wrapper — remounts + settles the body on a record switch. */}
@@ -537,7 +537,7 @@ export function InlineOpportunityFocusPanel() {
                                                 }
                                               : null,
                                           primaryAction: operational.action,
-                                          subjectSnapshot: operational.subjectSnapshot,
+                                          subjectIdentityTruth: operational.subjectIdentityTruth,
                                       }
                                     : null
                             }

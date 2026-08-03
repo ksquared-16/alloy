@@ -27,10 +27,11 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 
 | Category | Status |
 |----------|--------|
-| **Shipped BOS capabilities** | Orchestrator, Task Assist, Workflow Assist (narrow), Needs Attention insight, Config/Layout Assist foundation, legacy `admin/agent` config commits |
+| **Shipped BOS capabilities** | Orchestrator, Task Assist, Workflow Assist (narrow), Needs Attention insight, Config/Layout Assist foundation, legacy `admin/agent` config commits, **Create Lead actionable command session (V1)** |
 | **Config/Layout Assist expansion** | **Partially implemented** — apply catalog incomplete; **paused** |
-| **Autonomous orchestration** (enrollment, subsidy, director, monitoring) | **Not implemented** — **later** |
+| **Autonomous orchestration** (enrollment, subsidy, director, monitoring) | **Not implemented** — **later** (distinct from human-confirmed command sessions) |
 
+**Create Lead command session (July 2026 — local/certified on branch):** Actions → Create Lead opens a scoped BOS session. Conversation and Form share one draft; confirm uses registered `create_lead` / Processing identity authority. See `docs/sprints/active/bos-actionable-interface/` and `docs/platform/modules/ai-platform.md` § V6.
 ## What BOS is
 
 | Term | Definition |

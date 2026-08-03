@@ -6,9 +6,11 @@ import type { NestedSurfaceConfig } from "@/lib/adminV2/settings/surfaces/nested
 import {
     fieldPresentationLabel,
     groupShowAvatarForNestedGroup,
+    groupUseProfilePhotosForNestedGroup,
     nestedGroupLabel,
     groupDefsFor,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
 import { fieldIsLinked, fieldIsSaveable, fieldShouldRender } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import type {
     HouseholdEvidenceChild,
@@ -30,7 +32,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
 import { resolveIdentityFieldRows, type IdentityFieldRowInput } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows";
 import { resolveIdentityFieldIcon } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldIcon";
-import { isIdentityFieldInlineSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityInlineChildSave";
+import { isIdentityFieldSaveSupported } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldMutationBinding";
 import { resolveIdentityFieldLinkContract, normalizeIdentityFieldLinkTarget } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import type { PersonContactValues } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { CONTACT_EDIT_FIELD_MAP, personContactSaveKeyForIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/household/householdSurfaceFields";
@@ -41,6 +43,9 @@ import {
     resolveCompactIdentitySummaryLabelMode,
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
 import { composeContextCollectionRows } from "@/lib/adminV2/runtime/focusPanel/identity/composeIdentityContextRows";
+import { resolveIdentityFieldEditControl } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { assignmentOwnsProgramRoomField, isLocationIdentityFieldRef, isProgramIdentityFieldRef, isRoomIdentityFieldRef } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import { trimOrNull } from "@/lib/completion/valueEmpty";
 import {
     enabledEvidenceSections,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
@@ -122,17 +127,10 @@ function buildRecordRows(args: {
 }): ReturnType<typeof resolveIdentityFieldRows> {
     const group = args.config.groups.find((g) => g.key === args.groupKey);
     if (!group) return [];
-    let placements = placementsForIdentityGroupPurpose(args.config, args.groupKey, args.purpose);
-    if (args.editGroupKey && args.editGroupKey !== args.groupKey) {
-        const editPlacements = placementsForIdentityGroupPurpose(args.config, args.editGroupKey, args.purpose);
-        const seen = new Set(placements.map((placement) => `${placement.tier}:${placement.fieldRef}`));
-        for (const placement of editPlacements) {
-            const key = `${placement.tier}:${placement.fieldRef}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            placements.push(placement);
-        }
-    }
+    // Display membership is the authored group only. `editGroupKey` inherits
+    // editability/link policy — it must not inject child_edit / contact_edit fields
+    // into the published Focus surface (that leaked Start date and scrambled order).
+    const placements = placementsForIdentityGroupPurpose(args.config, args.groupKey, args.purpose);
     const inputs: IdentityFieldRowInput[] = [];
     for (const placement of placements) {
         const policy = resolveIdentityFieldPolicy({
@@ -170,7 +168,7 @@ function buildRecordRows(args: {
             : resolveIdentityFieldValue(args.subject, placement.fieldRef);
         const saveSupported =
             args.isFieldSaveSupported?.(placement.fieldRef)
-            ?? isIdentityFieldInlineSaveSupported(placement.fieldRef);
+            ?? isIdentityFieldSaveSupported(placement.fieldRef);
         const linkContract = resolveIdentityFieldLinkContract(placement.fieldRef);
         const hasExplicitPolicy = Boolean(
             placement.policy
@@ -181,13 +179,61 @@ function buildRecordRows(args: {
                   ]
                 : undefined),
         );
-        // Enrollment fields default to Linked when no explicit policy is stored.
-        const effectivePolicy =
-            policy === "read-only" && linkContract.canOfferLinked && !hasExplicitPolicy
-                ? "linked"
-                : policy;
-        const editable = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
-        const linked = fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked;
+        const childHasPrimary =
+            args.subject.kind === "child"
+            && "hasCommittedPrimaryAssignment" in args.subject.value
+            && (args.subject.value as ChildrenEvidenceChild).hasCommittedPrimaryAssignment === true;
+        const assignmentOwned = assignmentOwnsProgramRoomField(placement.fieldRef);
+        const isProgramField = isProgramIdentityFieldRef(placement.fieldRef);
+        const isRoomField = isRoomIdentityFieldRef(placement.fieldRef);
+        const isLocationField = isLocationIdentityFieldRef(placement.fieldRef);
+        const childEvidence =
+            args.subject.kind === "child" ? (args.subject.value as ChildrenEvidenceChild) : null;
+        // Program: Editable before primary assignment (desired program select). Once a
+        // primary classroom exists, Assignments owns Program (derived / Linked).
+        // Location: Editable per child (siblings may differ; sites change). Legacy Linked
+        // configs coerce to Editable — Location is never Assignments-owned.
+        // Room: Linked → Assignments (room is never a free inquiry dropdown here).
+        // Older configs authored Program as Linked — without a primary, that is treated
+        // as Editable so operators can set Desired Program from a dropdown.
+        const effectivePolicy = (() => {
+            if (assignmentOwned && childHasPrimary) return "linked";
+            if (isLocationField) {
+                if (policy === "read-only" || policy === "hidden") return policy;
+                return "editable";
+            }
+            if (isProgramField && !childHasPrimary) {
+                if (policy === "read-only" || policy === "hidden") return policy;
+                return "editable";
+            }
+            if (hasExplicitPolicy) return policy;
+            if (isRoomField) return "linked";
+            if (assignmentOwned) return "linked";
+            if (policy === "read-only" && linkContract.canOfferLinked) return "linked";
+            return policy;
+        })();
+        const editableBase = args.canMutate && fieldIsSaveable(effectivePolicy) && saveSupported;
+        // Primary assignment locks Program/Room even if authored Editable.
+        const editable = editableBase && !(assignmentOwned && childHasPrimary);
+        const linked =
+            (fieldIsLinked(effectivePolicy) && linkContract.canOfferLinked)
+            || (assignmentOwned && childHasPrimary && linkContract.canOfferLinked)
+            || (isRoomField && !hasExplicitPolicy && linkContract.canOfferLinked);
+        const primaryRoomName = childEvidence ? trimOrNull(childEvidence.room) : null;
+        // Program never shows "Determined by primary classroom…" — the field value IS the program.
+        // Room may still point operators to Assignments before a primary exists.
+        const derivedSourceLabel =
+            isProgramField
+                ? null
+                : assignmentOwned && childHasPrimary && primaryRoomName
+                  ? `Determined by primary classroom: ${primaryRoomName}`
+                  : assignmentOwned && childHasPrimary
+                    ? "Determined by primary classroom"
+                    : isRoomField && !childHasPrimary
+                      ? "Set up in Assignments"
+                      : isLocationField && childEvidence?.locationInherited
+                        ? "Inherited from lead"
+                        : null;
         const linkTarget = linked
             ? normalizeIdentityFieldLinkTarget(placement.linkTarget, placement.fieldRef)
                 ?? linkContract.defaultTarget
@@ -213,13 +259,48 @@ function buildRecordRows(args: {
                 catalogLabel(placement.fieldRef, args.tenantFieldDefinitions),
             ),
             value,
-            icon: resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
+            icon:
+                group.fieldModes?.[placement.fieldRef]?.showIcon === false
+                    ? undefined
+                    : resolveIdentityFieldIcon({ group, fieldRef: placement.fieldRef }),
             policy: effectivePolicy,
             editable,
             linked,
-            linkLabel: linked ? linkContract.linkLabel : null,
+            linkLabel: linked
+                ? (childHasPrimary && isProgramField
+                    ? "Change in Assignments"
+                    : childHasPrimary && derivedSourceLabel
+                      ? "Change in Assignments"
+                      : isRoomField && !childHasPrimary
+                        ? "Set up in Assignments"
+                        : linkContract.linkLabel)
+                : null,
             linkDestination: linked ? (linkTarget?.toCard ?? linkContract.destinationCard) : null,
             linkTarget,
+            derivedSourceLabel,
+            editControl: (() => {
+                const control = resolveIdentityFieldEditControl(
+                    placement.fieldRef,
+                    args.tenantFieldDefinitions,
+                );
+                if (control.kind === "placement_select" && args.subject.kind === "child") {
+                    const child = args.subject.value as ChildrenEvidenceChild;
+                    if (control.placement === "program") {
+                        return {
+                            ...control,
+                            siteLocationId: child.locationId ?? null,
+                            programCategoryId: child.programCategoryId ?? null,
+                        };
+                    }
+                    if (control.placement === "site") {
+                        return {
+                            ...control,
+                            siteLocationId: child.locationId ?? null,
+                        };
+                    }
+                }
+                return control;
+            })(),
         });
     }
     return resolveIdentityFieldRows(inputs);
@@ -270,6 +351,7 @@ function buildContactRecordVM(args: {
 }): IdentityRecordVM {
     const subject = contactSubject(args.contact);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
     const summaryRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
@@ -304,7 +386,7 @@ function buildContactRecordVM(args: {
         id: args.contact.personId,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, args.contact.name),
         avatar: {
-            imageUrl: args.contact.imageUrl ?? null,
+            imageUrl: useProfilePhotos ? args.contact.imageUrl ?? null : null,
             initials: args.contact.initials || initialsFor(args.contact.name),
             visible: showAvatar,
             role: inferAvatarRoleFromSectionKey(args.groupKey),
@@ -326,6 +408,7 @@ function buildChildRecordVM(args: {
 }): IdentityRecordVM {
     const subject = childSubject(args.child);
     const showAvatar = groupShowAvatarForNestedGroup(args.config, args.groupKey);
+    const useProfilePhotos = groupUseProfilePhotosForNestedGroup(args.config, args.groupKey);
     const summaryRows = buildRecordRows({
         config: args.config,
         groupKey: args.groupKey,
@@ -354,11 +437,12 @@ function buildChildRecordVM(args: {
         editGroupKey: "child_edit",
     });
     const name = "name" in args.child ? args.child.name : "Child";
+    const rawImageUrl = "imageUrl" in args.child ? args.child.imageUrl ?? null : null;
     return finalizeIdentityRecordVM({
         id: args.child.id,
         title: composedIdentityDisplayName(subject, args.config, args.groupKey, name),
         avatar: {
-            imageUrl: "imageUrl" in args.child ? args.child.imageUrl ?? null : null,
+            imageUrl: useProfilePhotos ? rawImageUrl : null,
             initials: initialsFor(name),
             visible: showAvatar,
             role: "child",

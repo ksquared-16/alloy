@@ -4,6 +4,7 @@
 
 import type { ActionWorkspaceGatherField, ActionWorkspaceBosSuggestion } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { lifecycleEntityLabel } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import {
@@ -14,31 +15,35 @@ import {
 } from "@/lib/lifecycle/resolveActionIntakeSpec";
 import type { ActionIntakePasteExtractionResult } from "@/lib/lifecycle/actionIntakePasteParserTypes";
 import { applyActionIntakePasteExtraction } from "@/lib/lifecycle/applyActionIntakePasteExtraction";
-import { CREATE_LEAD_GATHER_FIELDS } from "@/lib/admin/actions/createLeadPlatformGather";
+import {
+    CREATE_LEAD_KNOWN_FIELD_LABELS,
+    CREATE_LEAD_PLATFORM_CONTACT_KEYS,
+} from "@/lib/admin/actions/createLeadPlatformGather";
 
-const CONTEXT_OPTIONAL_KEYS = new Set(["source", "intake_notes", "child_age"]);
-const PLATFORM_CONFIDENCE_KEYS = new Set([
-    "location_id",
-    "email",
-    "phone",
-    ...CONTEXT_OPTIONAL_KEYS,
-]);
+/** Role is section-owned; never prefix these Create Lead field labels. */
+const CREATE_LEAD_ROLE_FREE_LABELS: Readonly<Record<string, string>> = {
+    ...CREATE_LEAD_KNOWN_FIELD_LABELS,
+};
 
 function sectionForEntity(entity: LifecycleRequirementEntityKey): {
     section: ActionWorkspaceGatherField["section"];
     section_label: string;
 } {
-    if (entity === "person") return { section: "person", section_label: "Parent / guardian" };
-    if (entity === "child") return { section: "child", section_label: "Child" };
+    if (entity === "person") return { section: "person", section_label: lifecycleEntityLabel("person") };
+    if (entity === "child") return { section: "child", section_label: lifecycleEntityLabel("child") };
     if (entity === "opportunity") return { section: "context", section_label: "Lead" };
-    return { section: "context", section_label: "Context" };
+    return { section: "context", section_label: "Lead" };
+}
+
+export function createLeadDisplayFieldLabel(payloadKey: string, fallbackLabel: string): string {
+    return CREATE_LEAD_ROLE_FREE_LABELS[payloadKey] ?? fallbackLabel;
 }
 
 export function actionIntakeFieldToGatherField(field: ActionIntakeSpec["required"][number]): ActionWorkspaceGatherField {
     const { section, section_label } = sectionForEntity(field.entity);
     return {
         payload_key: field.payload_key,
-        field_label: field.field_label,
+        field_label: createLeadDisplayFieldLabel(field.payload_key, field.field_label),
         section,
         section_label,
         tier: field.tier === "required" ? "required" : "optional",
@@ -49,14 +54,23 @@ export function actionIntakeFieldToGatherField(field: ActionIntakeSpec["required
     };
 }
 
-/** Merge configured intake fields with optional context helpers for parsing/manual entry. */
+/** Merge configured intake fields. Code-owned contact only when missing — never palette extras. */
 export function gatherFieldsFromActionIntakeSpec(spec: ActionIntakeSpec): ActionWorkspaceGatherField[] {
     const fromSpec = [...spec.required, ...spec.recommended, ...spec.optional].map(actionIntakeFieldToGatherField);
     const seen = new Set(fromSpec.map((f) => f.payload_key));
-    const extras = CREATE_LEAD_GATHER_FIELDS.filter(
-        (f) => PLATFORM_CONFIDENCE_KEYS.has(f.payload_key) && !seen.has(f.payload_key),
-    );
-    return [...fromSpec, ...extras];
+    const contactExtras: ActionWorkspaceGatherField[] = [];
+    for (const key of CREATE_LEAD_PLATFORM_CONTACT_KEYS) {
+        if (seen.has(key)) continue;
+        contactExtras.push({
+            payload_key: key,
+            field_label: CREATE_LEAD_KNOWN_FIELD_LABELS[key] ?? key,
+            section: "person",
+            section_label: lifecycleEntityLabel("person"),
+            tier: "optional",
+            value_kind: key === "email" ? "email" : "phone",
+        });
+    }
+    return [...fromSpec, ...contactExtras];
 }
 
 export function gatherSectionsFromFields(

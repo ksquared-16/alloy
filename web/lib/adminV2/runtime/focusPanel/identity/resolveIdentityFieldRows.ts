@@ -9,6 +9,8 @@ import {
     isNestedSurfaceFieldThirdWidth,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
 import type { IdentityFieldCellVM, IdentityFieldRowVM, IdentityFieldPlacement } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceTypes";
+import { isCompactIconValueIdentityField } from "@/lib/adminV2/runtime/focusPanel/identity/resolveCompactIdentitySummaryLabelMode";
+import { normalizeIdentityStorageTier } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 
 export type IdentityFieldRowInput = {
     placement: IdentityFieldPlacement;
@@ -21,6 +23,8 @@ export type IdentityFieldRowInput = {
     linkLabel?: string | null;
     linkDestination?: IdentityFieldCellVM["linkDestination"];
     linkTarget?: IdentityFieldCellVM["linkTarget"];
+    derivedSourceLabel?: string | null;
+    editControl?: IdentityFieldCellVM["editControl"];
 };
 
 /** Build row VMs from ordered placements (summary or expanded tier). */
@@ -28,8 +32,12 @@ export function resolveIdentityFieldRows(
     inputs: readonly IdentityFieldRowInput[],
 ): IdentityFieldRowVM[] {
     const visible = inputs.filter((input) => {
-        if (input.placement.hideWhenEmpty && !input.value?.trim()) return false;
-        return input.policy !== "hidden";
+        if (input.policy === "hidden") return false;
+        const empty = !input.value?.trim();
+        // Explicit hideWhenEmpty drops the cell. Hidden label/icon alone must keep
+        // placement — runtime renders "—" so the next field does not shift up.
+        if (empty && input.placement.hideWhenEmpty) return false;
+        return true;
     });
     if (visible.length === 0) return [];
 
@@ -39,7 +47,13 @@ export function resolveIdentityFieldRows(
     });
 
     const keys = ordered.map((input) => input.placement.fieldRef);
+    // Summary reachability lines must stack even when a stale placement still says half
+    // (Builder can look "full row" after force-full width reads while VM placements lag).
+    const packingSummaryTier = ordered.every(
+        (input) => normalizeIdentityStorageTier(input.placement.tier) === "summary",
+    );
     const layoutFor = (fieldRef: string): NestedSurfaceFieldLayoutWidth => {
+        if (packingSummaryTier && isCompactIconValueIdentityField(fieldRef)) return "full";
         const input = ordered.find((row) => row.placement.fieldRef === fieldRef);
         return input?.placement.width ?? "full";
     };
@@ -62,8 +76,10 @@ export function resolveIdentityFieldRows(
                 linkLabel: input.linkLabel ?? null,
                 linkDestination: input.linkDestination ?? null,
                 linkTarget: input.linkTarget ?? null,
+                derivedSourceLabel: input.derivedSourceLabel ?? null,
                 hideWhenEmpty: input.placement.hideWhenEmpty ?? false,
                 width,
+                editControl: input.editControl,
                 column: (columnIndex + 1) as 1 | 2 | 3,
             } satisfies IdentityFieldCellVM & { column?: 1 | 2 | 3 };
         }),

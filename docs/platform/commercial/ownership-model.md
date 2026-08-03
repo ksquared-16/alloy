@@ -52,6 +52,12 @@ Offerings express *type* (Full Day). Variants express *quantity* (2 days/week vs
 
 **No-quantity offerings** (Drop-In, Hourly, Before School, After School) receive a single transparent default variant (`quantity_type = null`, `quantity_value = null`). The UI omits the variant sub-header for these. Rates still attach to the variant, never directly to the offering.
 
+### Deferred evolution — Schedule Offerings
+
+Day-count Enrollment Commitments (`quantity_type = 'days'`, operator labels like “1 day/week” … “5 days/week”) are the **shipped interim** for childcare-shaped schedule intensity. They are not the long-term generalized schedule product model.
+
+**Do not** treat 1–5 Day variants as the final Schedule Offerings design. Future work should evolve toward configurable Schedule Offerings (org/location vocabulary beyond hardcoded day counts), without redesigning Tuition Plans or rate attachment in this phase. Related deferred note: per-location schedule offerings over `childcare_schedule_type` in `docs/platform/modules/commercial-configuration.md`.
+
 ## Rate scoping
 
 `location_id = null` → org default. Non-null → location override. Rates fall back to the org default when no location row exists. This is resolved client-side in `buildTuitionRateMap`.

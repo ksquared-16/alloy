@@ -20,6 +20,8 @@ import {
     parseRuleLevelsV1,
     type LifecycleStageFieldRulesStored,
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
+import { parseRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
+import { replacePatchedStageFieldRules } from "@/lib/lifecycle/replacePatchedStageFieldRules";
 
 export async function persistLifecycleStageFieldRules(
     supabase: SupabaseClient,
@@ -40,27 +42,38 @@ export async function persistLifecycleStageFieldRules(
     const explicit_rule_levels_v1 = parseRuleLevelsV1(
         "rule_levels_v1" in params.fieldRules ? params.fieldRules.rule_levels_v1 : undefined
     );
+    const explicit_rule_meta_v1 = parseRuleMetaV1(
+        "rule_meta_v1" in params.fieldRules ? params.fieldRules.rule_meta_v1 : undefined
+    );
 
     const operator = asOperatorStageKey(stage);
+    const builderPatch = buildBuilderStageFieldRulesPatch({
+        builderStageKey: stage,
+        required_rule_ids: required,
+        recommended_rule_ids: recommended,
+        existingMetadata: params.existingMetadata,
+        mergedPalette,
+        explicit_rule_levels_v1,
+        explicit_rule_meta_v1,
+    });
     let metadataPatch: Record<string, unknown>;
     if (operator) {
-        metadataPatch = buildLifecycleFieldRulesOverridePatch({
-            stage: operator,
-            required_rule_ids: required,
-            recommended_rule_ids: recommended,
-            existingMetadata: params.existingMetadata,
-            mergedPalette,
-            explicit_rule_levels_v1,
-        });
+        // Dual-write: progression is the operator source of truth; keep builder_stage
+        // in sync so Create Lead / readiness cannot read a stale shadow row.
+        metadataPatch = deepMergeJsonObjects(
+            buildLifecycleFieldRulesOverridePatch({
+                stage: operator,
+                required_rule_ids: required,
+                recommended_rule_ids: recommended,
+                existingMetadata: params.existingMetadata,
+                mergedPalette,
+                explicit_rule_levels_v1,
+                explicit_rule_meta_v1,
+            }),
+            builderPatch,
+        );
     } else {
-        metadataPatch = buildBuilderStageFieldRulesPatch({
-            builderStageKey: stage,
-            required_rule_ids: required,
-            recommended_rule_ids: recommended,
-            existingMetadata: params.existingMetadata,
-            mergedPalette,
-            explicit_rule_levels_v1,
-        });
+        metadataPatch = builderPatch;
     }
 
     const hasRules = required.length > 0 || recommended.length > 0;
@@ -73,7 +86,10 @@ export async function persistLifecycleStageFieldRules(
             : null;
 
     let metadata = params.existingMetadata;
-    metadata = deepMergeJsonObjects(metadata, metadataPatch);
+    metadata = replacePatchedStageFieldRules(
+        deepMergeJsonObjects(metadata, metadataPatch),
+        metadataPatch,
+    );
     if (builderReset) metadata = deepMergeJsonObjects(metadata, builderReset);
 
     const { data: updated, error } = await supabase

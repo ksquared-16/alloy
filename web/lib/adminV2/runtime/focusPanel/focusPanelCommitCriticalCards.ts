@@ -69,3 +69,26 @@ export const COMMIT_CRITICAL_CARD_SPECS: readonly CommitCriticalCardSpec[] = [
         build: (context) => buildReadinessCardModel(context),
     },
 ];
+
+/**
+ * WHY `scheduling` IS NOT HERE — a promotion that was made, certified, and then reverted.
+ *
+ * Its data precondition holds: `buildSchedulingCardModel` reads exactly one field,
+ * `_inquiry_children`, which the answer already carries in the shape the shared builder consumes
+ * (pinned by `focusPanelSchedulingCommitCritical.test.ts`). So it *could* be built at commit, and on
+ * a default-composition surface it would rightly be.
+ *
+ * It is withheld because of the dormant-capability law established via `readiness_kpi`: commit-critical
+ * work may only be spent on a card that participates in the RESOLVED composition. Whether it
+ * participates is tenant-dependent — the Firefly published doc resolves to four cards and excludes
+ * `scheduling` — and this producer cannot tell: `FocusPanelWorkModeFromAnswerInput` carries no
+ * composition, and the published doc arrives from a SEPARATE client fetch
+ * (`usePublishedFocusPanelSummaryDoc`) long after commit. Gating on it would make the commit path
+ * wait on a network round trip, which is the opposite of the point.
+ *
+ * So promoting it buys nothing on the only certified tenant while spending commit work and inflating
+ * `ready_count`/`card_ready` for a card that tenant never renders. Reverted rather than granted an
+ * exception. Revisit when the resolved composition is available at this boundary — the Child second
+ * surface, which uses the default composition, is the natural place to prove it.
+ */
+

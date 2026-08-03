@@ -2,6 +2,8 @@
  * Executable action registry for Settings library, catalog filtering, and documentation.
  */
 
+import { getPlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+
 export type ActionDefinitionCategory =
     | "record"
     | "communication"
@@ -91,6 +93,18 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
             "Change the lead status through the Mutation Runtime. Domain-specific: operates on Lead Status only.",
         defaultSurface: "record_header",
         defaultSlot: "primary",
+    },
+    {
+        key: "change_lead_location",
+        label: "Change lead location",
+        category: "workflow",
+        settingsConfigurable: true,
+        description:
+            "Set the family default site (opportunities.location_id). Children keep their own sites; optional update for children still inheriting the lead default.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        interactionHost: "inline_form",
+        icon: "MapPin",
     },
     {
         key: "close_lead",
@@ -241,6 +255,24 @@ export function filterSettingsActionCatalogDefinitions(definitions: ActionCatalo
         const key = d.key.trim();
         if (isInternalOrPlaceholderActionKey(key)) return false;
         if (d.action_type === "ui_intent" && key.includes("placeholder")) return false;
+
+        // P0.S1 honesty: a DB definition never implies a runnable organization Command.
+        // Unknown-to-registry keys keep prior behavior (library / org_id gates below).
+        const capability = getPlatformCapability(key);
+        if (capability) {
+            if (
+                capability.maturity === "placeholder" ||
+                capability.maturity === "unavailable" ||
+                capability.maturity === "processing_only" ||
+                capability.maturity === "workflow_only" ||
+                capability.maturity === "configuration_maintenance"
+            ) {
+                return false;
+            }
+            if (capability.catalogVisibility === "hidden" || capability.catalogVisibility === "internal_only") {
+                return false;
+            }
+        }
 
         const entry = actionRegistryEntryForKey(key);
         if (entry) return entry.settingsConfigurable;

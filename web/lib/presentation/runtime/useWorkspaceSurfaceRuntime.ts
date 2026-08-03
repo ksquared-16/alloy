@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { prefetchWorkUnitProvisioningFromHref } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
+import { isWorkUnitPrimaryRevealActive } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useWorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVmContext";
@@ -167,8 +168,16 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         };
     }, [orgId]);
 
-    // Default department for org-level workspace actions (Create Lead) — the first process's dept.
+    // Workspace SCOPE hint — what BOS reads to load an intake spec and the process-effective slash
+    // catalog. A hint may be approximate, so the first process is fine here; nulling it would strip
+    // BOS of process context entirely and gray every slash command.
     const defaultDepartmentId = cards[0]?.departmentId ?? null;
+
+    // The department ASSERTED when creating a record, which is a different question: "first by sort
+    // order" is a config artifact, not operator intent, and asserting it silently books the lead
+    // against the wrong department. Implied only when the org has a single process; otherwise the
+    // workspace names none and the server resolves the entry department from configuration.
+    const createLeadDepartmentId = cards.length === 1 ? (cards[0]?.departmentId ?? null) : null;
 
     // ── Work View counts: canonical-location totals (ONE count source) ─────────────────
     // Each configured view's nav entry carries its canonical location (host work unit +
@@ -403,10 +412,24 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         // its default subject's complete VM), so even an instant click consumes warm/in-flight work
         // instead of starting cold. The remaining destinations stay idle-scheduled so they never
         // compete with the commit-critical path.
-        warmDestination(hrefs[0]);
+        // Don't warm even the primary destination while a Work Unit reveal is active (retained
+        // workspace behind a live work unit): it competes with the selected reveal, and if the
+        // operator entered that very destination it is a duplicate of the main load.
+        if (!isWorkUnitPrimaryRevealActive()) warmDestination(hrefs[0]);
         const rest = hrefs.slice(1);
         if (!rest.length) return;
+        let retryTimer: ReturnType<typeof setTimeout> | undefined;
         const run = () => {
+            // AMPLIFICATION FIX: the secondary-destination warms are speculative (warm the OTHER work
+            // views so switching is instant). `requestIdleCallback(timeout:2500)` fires them within
+            // 2.5s regardless — which, against a slow backend, lands DURING a Work Unit reveal and
+            // saturates the DB, inflating the selected panel's own requests (the exact opposite of the
+            // "never compete with the commit-critical path" intent). Hold them while a primary reveal
+            // is active and re-check shortly; they warm once the panel is meaningful.
+            if (isWorkUnitPrimaryRevealActive()) {
+                retryTimer = setTimeout(run, 500);
+                return;
+            }
             for (const href of rest) warmDestination(href);
         };
         const w = window as Window & {
@@ -415,10 +438,16 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         };
         if (w.requestIdleCallback) {
             const handle = w.requestIdleCallback(run, { timeout: 2500 });
-            return () => w.cancelIdleCallback?.(handle);
+            return () => {
+                w.cancelIdleCallback?.(handle);
+                if (retryTimer) clearTimeout(retryTimer);
+            };
         }
         const timer = window.setTimeout(run, 500);
-        return () => window.clearTimeout(timer);
+        return () => {
+            window.clearTimeout(timer);
+            if (retryTimer) clearTimeout(retryTimer);
+        };
     }, [processEntryHrefs, warmDestination]);
 
     // A retained return is composition-ready the instant the seed paints: the retained snapshot +
@@ -435,6 +464,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             processConfig: visibleProcessSnapshot?.config ?? processConfig,
             rightRailActions,
             defaultDepartmentId,
+            createLeadDepartmentId,
             // Header + process tiles commit only when config + metrics + counts have settled,
             // or from the previous complete snapshot during refresh. Prevents default-header
             // flash and partial KPI morphs. A retained return is ready immediately from its seed
@@ -455,6 +485,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
             processConfig,
             rightRailActions,
             defaultDepartmentId,
+            createLeadDepartmentId,
             processSnapshotSelection.ready,
             retainedReady,
         ],

@@ -241,7 +241,7 @@ describe("Doctrine §8.4 — billing signal evidence builder", () => {
         expect(evidence.statusTone).toBe("ready");
     });
 
-    it("billing evidence has blocked status when some items missing", () => {
+    it("billing evidence has blocked status when an authoritative source resolved an item as absent", () => {
         const ctx: OperationalContext = {
             ...caseCtx(),
             signals: {
@@ -250,14 +250,19 @@ describe("Doctrine §8.4 — billing signal evidence builder", () => {
                     billingConfigured: false,
                     billingContactName: "Sarah Johnson",
                     billingContactEmail: null,
-                    tuitionRateLabel: null, // missing
+                    tuitionRateLabel: null, // unresolved until the financial-config API answers
                     feeBalanceCents: null,
                 },
             },
         };
-        const evidence = buildBillingPreviewCardEvidence(ctx);
-        expect(evidence.isConfigured).toBe(false);
-        expect(evidence.statusTone).toBe("blocked");
+        // Unresolved → HELD, no verdict. `tuition_rate_label` has no writer in the platform, so a
+        // null here means "nothing has told us", not "the operator did not configure it".
+        expect(buildBillingPreviewCardEvidence(ctx).statusTone).toBe("neutral");
+
+        // The financial-config API answered and found no rate → now "missing" is a real answer.
+        const resolved = buildBillingPreviewCardEvidence(ctx, []);
+        expect(resolved.isConfigured).toBe(false);
+        expect(resolved.statusTone).toBe("blocked");
     });
 
     it("buildOperationalContext types file has OperationalBillingSignal and NULL_BILLING_SIGNAL", () => {

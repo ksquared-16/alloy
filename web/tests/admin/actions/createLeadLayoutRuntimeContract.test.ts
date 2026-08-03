@@ -96,7 +96,7 @@ export const CREATE_LEAD_LAYOUT_RUNTIME_CONTRACT = {
         "customer_persons (primary + additional guardians + role contacts)",
         "customer_members (child relationship per included child)",
         "persons (primary + additional guardians + children)",
-        "opportunity_persons (family_member + explicit emergency/billing roles)",
+        "opportunity_persons (primary_contact/guardian + explicit emergency/billing roles)",
         "contacts (compatibility rows for customer_member_contacts FK)",
         "customer_member_contacts (child-scoped guardian/emergency/billing links)",
         "locations (household mailing address when intake includes address)",

@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-29
 supersedes: []
 ---
 
@@ -75,6 +75,34 @@ Work completed → Outcome selected (human confirms)
 Work carries operational progress. Anything phrased as an activity — Confirm Tour, Conduct
 Tour, Follow Up, Send Reminder, Collect Paperwork, Extend Offer — is a work template on a
 stage, spawned on stage entry, completed with an outcome. It is never a status.
+
+### Command-result sufficiency (completion)
+
+When an integrated capability publishes an objective result (for example a successful
+communication send), Current Work may auto-complete **only** under this precedence:
+
+1. **Explicit** work-template `completion_policy.sufficient_command_results` wins — including
+   overrides such as reply-required.
+2. If that list is absent, a **platform-owned default** may apply for recognized canonical
+   work templates only (enrollment `contact_family`: a successful registered communication
+   send satisfies the contact attempt with outcome `left_message`).
+3. If neither exists, **infer nothing** — unknown or custom work never auto-completes from a
+   send. Failed sends never satisfy a success-mapped requirement.
+
+Operators never configure or see raw runtime result keys in the UI; those keys are engine
+vocabulary. Attempt cadence (`min_attempts` / window / repeat) remains independently
+operator-editable and does not imply sufficiency.
+
+### Close-record classification
+
+An outcome rule is `close_record` **only** when supported by an explicit close semantic or a
+target status resolved as terminal/closed for the **correct status domain** (lead/case vs
+child enrollment), via the canonical closed-status resolver
+(`isConfiguredClosedStatus` / `isClosedStatusKeyForEntity`). Setting a non-closed status
+without a stage move (for example status=`open`) is **not** a close. True closes still
+require a configured closed status; when none exist, validation is operator-language guidance
+(warning) that names the outcome, stage, and status domain — never a blocking picker error
+that cannot be cleared from the current surface.
 
 ## Readiness vs membership (disambiguated)
 

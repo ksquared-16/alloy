@@ -242,7 +242,10 @@ export function ProvisionedWorkUnitSurface() {
                     stageWorkRuntime={op ? op.focusPanelStageWork?.stage_work_runtime ?? null : null}
                     publishedStageInputs={op ? op.focusPanelStageWork?.published_stage_inputs ?? null : null}
                     workIntentRuntime={op ? op.focusPanelStageWork?.work_intent_runtime ?? null : null}
-                    subjectSnapshot={op ? op.focusPanelSubjectSnapshot ?? null : null}
+                    // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
+                    subjectIdentityTruth={op ? op.subjectIdentityTruth ?? null : null}
+                    // A — the published Summary composition for the committed scope: the panel presents
+                    // the PUBLISHED composition at commit, not the code default standing in for a fetch.
                     summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}
                 >
                     <WorkUnitSurfaceBodyFromModel model={effectiveModel} intents={intents} />

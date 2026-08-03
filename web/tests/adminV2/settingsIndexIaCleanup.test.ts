@@ -20,11 +20,15 @@ describe("Settings index IA — Configuration Runtime domains", () => {
         expect(domains).toContain("Experience");
     });
 
-    it("Processes tile lives under Operations with editable mode", () => {
+    it("Processes tile lives under Operations after Automation", () => {
         const operations = CONFIGURATION_WORKSPACE_DOMAINS.find((d) => d.id === "operations");
+        const labels = operations?.items.filter((i) => !i.advanced).map((i) => i.label) ?? [];
+        expect(labels.slice(0, 2)).toEqual(["Automation", "Processes"]);
+        expect(labels).not.toContain("Commands");
         const processes = operations?.items.find((i) => i.href === "/organization/processes");
         expect(processes?.label).toBe("Processes");
-        expect(processes?.emphasis).toBe(true);
+        expect(operations?.items.find((i) => i.href === "/organization/commands")).toBeUndefined();
+        expect(operations?.items.find((i) => i.href === "/admin/workflows")?.emphasis).toBe(true);
     });
 
     it("Surfaces tile lives under Experience as Surfaces", () => {

@@ -186,10 +186,16 @@ export type WorkspaceSurfaceModel = {
      */
     rightRailActions: ResolvedActionForClient[];
     /**
-     * Default department for org-level workspace actions (e.g. Create Lead) — the first
+     * Workspace scope HINT for BOS (intake spec + process-effective slash catalog) — the first
      * configured process's department. Null when no process is configured.
      */
     defaultDepartmentId: string | null;
+    /**
+     * Department ASSERTED when creating a record from the workspace. Null unless the org has
+     * exactly one process — "first by sort order" is not operator intent — in which case the
+     * server resolves the create-lead entry department from configuration.
+     */
+    createLeadDepartmentId: string | null;
     ready: boolean;
 };
 
@@ -518,9 +524,9 @@ function queueRowLocationLabel(context: QueueRowContext): string | null {
     const placement = context.placement_context;
     if (!placement) return null;
     return (
+        placement.location_label?.trim() ||
         placement.room_label?.trim() ||
         placement.program_label?.trim() ||
-        placement.location_label?.trim() ||
         null
     );
 }

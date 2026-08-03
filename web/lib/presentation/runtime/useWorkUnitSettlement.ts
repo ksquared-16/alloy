@@ -267,7 +267,12 @@ export function mergeWorkUnitSettlement(
     if (settlement.rightRailActions && settlement.rightRailActions.length > 0) {
         changed = true;
         rightRailActions = settlement.rightRailActions;
-        departmentId = settlement.departmentId ?? model.departmentId;
+    }
+    // Department scope can arrive from Settlement even when Actions already committed from the
+    // snapshot projection (or when the rail stays empty). Never leave Create Lead on a null dept.
+    if (settlement.departmentId && settlement.departmentId !== departmentId) {
+        changed = true;
+        departmentId = settlement.departmentId;
     }
 
     if (!changed) return model;

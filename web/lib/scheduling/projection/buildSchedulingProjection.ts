@@ -30,9 +30,11 @@ import type {
 } from "@/lib/childcareOperational/enrollmentOperationalTypes";
 import { compareIsoDates } from "@/lib/childcareOperational/effectiveDating";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
+import { PROPOSED_DRAFT_ASSIGNMENT_ID_PREFIX } from "@/lib/scheduling/projection/proposedDraftAssignmentId";
 import type {
     Assignment,
     AssignmentRoom,
+    AssignmentTypePresentation,
     ChildScheduling,
     ChildSchedulingStatus,
     ChildSchedulingSubject,
@@ -41,6 +43,7 @@ import type {
     SchedulingCalculationMeta,
     SchedulingProjection,
 } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
 
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -52,21 +55,49 @@ export function formatWeekdays(weekdays: number[]): string {
         .join(", ");
 }
 
+const EMPTY_TYPE: AssignmentTypePresentation = {
+    id: null,
+    key: null,
+    label: null,
+    iconKey: null,
+    visualTone: null,
+    billingParticipation: null,
+    attendanceParticipation: null,
+    staffingParticipation: null,
+};
+
+function billingFromType(type: AssignmentTypePresentation): Assignment["billing"] {
+    const participation = type.billingParticipation === "eligible" ? "eligible" : "none";
+    if (participation === "none") {
+        return { participation: "none", label: "No billing" };
+    }
+    const label =
+        type.key === "primary_classroom" || type.label?.toLowerCase().includes("primary")
+            ? "Tuition"
+            : "Recurring billing eligible";
+    return { participation: "eligible", label };
+}
+
 // ---------------------------------------------------------------------------
 // Pure stitch
 // ---------------------------------------------------------------------------
 
-/** One assignment row paired with the resolved pattern + room (already loaded). */
+/** One assignment row paired with the resolved pattern + room + type (already loaded). */
 export type AssignmentInput = {
     row: ScheduleAssignmentRow;
     weekdays: number[];
     patternResolved: boolean;
+    patternLabel: string | null;
+    arriveTime: string | null;
+    departTime: string | null;
     room: AssignmentRoom;
+    assignmentType: AssignmentTypePresentation;
 };
 
 export type PureChildSchedulingInput = {
     subject: ChildSchedulingSubject;
     agreementStatus: string | null; // null => no operational agreement
+    enrollmentAgreementId?: string | null;
     assignments: AssignmentInput[];
     asOf: string; // YYYY-MM-DD
     /** A pre-enrollment proposed draft (already resolved from participation), or null. */
@@ -74,19 +105,33 @@ export type PureChildSchedulingInput = {
 };
 
 function mapAssignment(input: AssignmentInput): Assignment {
-    const { row, weekdays, room } = input;
+    const { row, weekdays, room, assignmentType, patternLabel, arriveTime, departTime } = input;
     const openEnded = !row.end_date;
+    const subjectType = row.subject_type === "staff" ? "staff" : "child";
+    const subjectId =
+        subjectType === "staff"
+            ? row.subject_person_id ?? ""
+            : row.customer_member_id ?? "";
     return {
         id: row.id,
-        childId: row.customer_member_id,
+        subjectId,
+        subjectType,
+        childId: row.customer_member_id ?? subjectId,
         room,
         weekdays,
-        arriveTime: null,
-        departTime: null,
+        arriveTime,
+        departTime,
         effectiveFrom: row.start_date,
         effectiveTo: row.end_date ?? null,
         openEnded,
         kind: row.assignment_kind === "temporary" ? "temporary" : "base",
+        status: row.status,
+        isPrimary: row.is_primary === true,
+        commitmentKind: row.commitment_kind === "proposed" ? "proposed" : "committed",
+        assignmentType,
+        patternId: row.schedule_pattern_id ?? null,
+        patternLabel,
+        billing: billingFromType(assignmentType),
         supersedes: row.supersedes_assignment_id ?? undefined,
     };
 }
@@ -130,11 +175,12 @@ function scheduleViewFrom(
 
 function historyEntry(a: Assignment): ScheduleHistoryEntry {
     const days = formatWeekdays(a.weekdays);
-    const roomName = a.room.name ?? "Schedule";
+    const typeOrRoom = a.assignmentType.label ?? a.room.name ?? "Assignment";
+    const primary = a.isPrimary ? "Primary · " : "";
     return {
         effectiveFrom: a.effectiveFrom,
         effectiveTo: a.effectiveTo,
-        summary: days ? `${roomName} · ${days}` : roomName,
+        summary: days ? `${primary}${typeOrRoom} · ${days}` : `${primary}${typeOrRoom}`,
     };
 }
 
@@ -155,6 +201,7 @@ function resolveStatus(
 /** Pure: resolve one child's scheduling projection from already-loaded rows. */
 export function buildChildScheduling(input: PureChildSchedulingInput): ChildScheduling {
     const currentAssignments: Assignment[] = [];
+    const proposedAssignments: Assignment[] = [];
     const upcomingByStart = new Map<string, Assignment[]>();
     const temporaryViews: ScheduleView[] = [];
     const historyEntries: ScheduleHistoryEntry[] = [];
@@ -163,6 +210,16 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
     for (const item of input.assignments) {
         const assignment = mapAssignment(item);
         if (!item.patternResolved) partialReasons.add("schedule pattern unresolved");
+        // Proposed (planning) rows never become committed current/upcoming truth.
+        if (assignment.commitmentKind === "proposed") {
+            if (!isScheduleAssignmentTerminalStatus(item.row.status)) {
+                proposedAssignments.push(assignment);
+                if (!assignment.room.id) partialReasons.add("room unresolved");
+            } else {
+                historyEntries.push(historyEntry(assignment));
+            }
+            continue;
+        }
         const bucket = bucketFor(item.row, input.asOf);
         switch (bucket) {
             case "current":
@@ -187,7 +244,16 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
 
     const current =
         currentAssignments.length > 0
-            ? scheduleViewFrom("current", currentAssignments, false)
+            ? scheduleViewFrom(
+                  "current",
+                  [...currentAssignments].sort((a, b) => {
+                      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+                      const at = a.arriveTime ?? "99:99";
+                      const bt = b.arriveTime ?? "99:99";
+                      return at.localeCompare(bt);
+                  }),
+                  false
+              )
             : null;
 
     const upcoming: ScheduleView[] = [...upcomingByStart.entries()]
@@ -196,8 +262,22 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
 
     historyEntries.sort((a, b) => compareIsoDates(b.effectiveFrom, a.effectiveFrom));
 
-    // A proposed draft only surfaces when there is no committed current schedule.
-    const proposed = current == null ? input.proposed ?? null : null;
+    // Ledger proposed rows win over participation-metadata draft when present.
+    // Proposed still surfaces alongside committed current (planning vs truth).
+    const proposedFromRows =
+        proposedAssignments.length > 0
+            ? scheduleViewFrom(
+                  "current",
+                  [...proposedAssignments].sort((a, b) => {
+                      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+                      const at = a.arriveTime ?? "99:99";
+                      const bt = b.arriveTime ?? "99:99";
+                      return at.localeCompare(bt);
+                  }),
+                  false
+              )
+            : null;
+    const proposed = proposedFromRows ?? (current == null ? input.proposed ?? null : null);
 
     const status = resolveStatus(
         input.agreementStatus,
@@ -209,6 +289,7 @@ export function buildChildScheduling(input: PureChildSchedulingInput): ChildSche
     return {
         child: input.subject,
         status,
+        enrollmentAgreementId: input.enrollmentAgreementId ?? null,
         current,
         proposed,
         upcoming,
@@ -349,7 +430,9 @@ async function loadProposedDraftForChild(
     const depart = meta.scheduleTimes?.default?.depart ?? null;
     const effectiveFrom = startDate ?? "";
     const assignment: Assignment = {
-        id: `proposed:${customerMemberId}`,
+        id: `${PROPOSED_DRAFT_ASSIGNMENT_ID_PREFIX}${customerMemberId}`,
+        subjectId: customerMemberId,
+        subjectType: "child",
         childId: customerMemberId,
         room: { id: roomId, name: await resolveRoom(roomId), program: await resolveProgram(meta.program_category_id ?? null) },
         weekdays,
@@ -359,6 +442,22 @@ async function loadProposedDraftForChild(
         effectiveTo: meta.end_date?.trim() || null,
         openEnded: !meta.end_date,
         kind: "base",
+        status: "proposed",
+        isPrimary: true,
+        commitmentKind: "proposed",
+        assignmentType: {
+            ...EMPTY_TYPE,
+            key: scheduleType,
+            label: scheduleTypeLabel,
+        },
+        patternId: null,
+        patternLabel: scheduleTypeLabel,
+        billing: billingFromType({
+            ...EMPTY_TYPE,
+            key: scheduleType,
+            label: scheduleTypeLabel,
+            billingParticipation: "eligible",
+        }),
     };
     return {
         bucket: "current",
@@ -389,6 +488,48 @@ async function loadPatterns(
         .in("id", distinct);
     if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
     for (const row of (data ?? []) as SchedulePatternRow[]) map.set(row.id, row);
+    return map;
+}
+
+type AssignmentTypeRow = {
+    id: string;
+    key: string;
+    label: string;
+    icon_key: string | null;
+    visual_tone: AssignmentTypePresentation["visualTone"];
+    billing_participation: AssignmentTypePresentation["billingParticipation"];
+    attendance_participation: AssignmentTypePresentation["attendanceParticipation"];
+    staffing_participation: AssignmentTypePresentation["staffingParticipation"];
+};
+
+async function loadAssignmentTypes(
+    supabase: SupabaseClient,
+    orgId: string,
+    typeIds: string[]
+): Promise<Map<string, AssignmentTypePresentation>> {
+    const map = new Map<string, AssignmentTypePresentation>();
+    const distinct = [...new Set(typeIds.filter(Boolean))];
+    if (distinct.length === 0) return map;
+    const { data, error } = await supabase
+        .from("operational_assignment_types")
+        .select(
+            "id, key, label, icon_key, visual_tone, billing_participation, attendance_participation, staffing_participation"
+        )
+        .eq("org_id", orgId)
+        .in("id", distinct);
+    if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
+    for (const raw of (data ?? []) as AssignmentTypeRow[]) {
+        map.set(raw.id, {
+            id: raw.id,
+            key: raw.key,
+            label: raw.label,
+            iconKey: raw.icon_key,
+            visualTone: raw.visual_tone,
+            billingParticipation: raw.billing_participation,
+            attendanceParticipation: raw.attendance_participation,
+            staffingParticipation: raw.staffing_participation,
+        });
+    }
     return map;
 }
 
@@ -454,9 +595,17 @@ export async function loadSchedulingProjectionForChild(
         return programLabelCache.get(id) ?? null;
     }
 
-    // No operational agreement → pre-enrollment child. Surface the PROPOSED draft (if any)
-    // from the enrollment participation; otherwise a true empty state.
-    if (!agreement) {
+    // Always load by customer_member_id so proposed (no agreement) and committed rows
+    // compose into one projection. Agreement remains the committed authority when present.
+    const [assignmentRows, placements] = await Promise.all([
+        listScheduleAssignments(supabase, orgId, { customerMemberId }),
+        agreement
+            ? listChildPlacements(supabase, orgId, { enrollmentAgreementId: agreement.id })
+            : Promise.resolve([] as ChildPlacementRow[]),
+    ]);
+
+    // No ledger rows yet → fall back to participation-metadata draft (compat).
+    if (!agreement && assignmentRows.length === 0) {
         const proposed = await loadProposedDraftForChild(
             supabase,
             orgId,
@@ -476,6 +625,7 @@ export async function loadSchedulingProjectionForChild(
         const child = buildChildScheduling({
             subject,
             agreementStatus: null,
+            enrollmentAgreementId: null,
             assignments: [],
             asOf: todayYmd,
             proposed,
@@ -483,31 +633,47 @@ export async function loadSchedulingProjectionForChild(
         return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
     }
 
-    const [assignmentRows, placements] = await Promise.all([
-        listScheduleAssignments(supabase, orgId, { enrollmentAgreementId: agreement.id }),
-        listChildPlacements(supabase, orgId, { enrollmentAgreementId: agreement.id }),
-    ]);
-
     const patterns = await loadPatterns(
         supabase,
         orgId,
         assignmentRows.map((a) => a.schedule_pattern_id)
     );
+    const assignmentTypes = await loadAssignmentTypes(
+        supabase,
+        orgId,
+        assignmentRows
+            .map((a) => a.operational_assignment_type_id)
+            .filter((id): id is string => Boolean(id))
+    );
 
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {
         const pattern = patterns.get(row.schedule_pattern_id) ?? null;
+        const hours = readPatternDefaultHours(
+            (pattern?.metadata ?? null) as Record<string, unknown> | null
+        );
         const placement = placementForAssignment(placements, row);
+        // Prefer assignment-owned room; fall back to covering placement (compat).
+        const roomId = row.room_location_id ?? placement?.room_location_id ?? null;
+        const programId = row.program_category_id ?? placement?.program_category_id ?? null;
         const room: AssignmentRoom = {
-            id: placement?.room_location_id ?? null,
-            name: await roomLabel(placement?.room_location_id ?? null),
-            program: await programLabel(placement?.program_category_id ?? null),
+            id: roomId,
+            name: await roomLabel(roomId),
+            program: await programLabel(programId),
         };
+        const type =
+            (row.operational_assignment_type_id
+                ? assignmentTypes.get(row.operational_assignment_type_id)
+                : null) ?? EMPTY_TYPE;
         assignments.push({
             row,
             weekdays: pattern?.weekdays ?? [],
             patternResolved: pattern != null,
+            patternLabel: pattern?.label?.trim() || null,
+            arriveTime: hours?.arrive ?? null,
+            departTime: hours?.depart ?? null,
             room,
+            assignmentType: type,
         });
     }
 
@@ -525,7 +691,8 @@ export async function loadSchedulingProjectionForChild(
 
     const child = buildChildScheduling({
         subject,
-        agreementStatus: agreement.status,
+        agreementStatus: agreement?.status ?? null,
+        enrollmentAgreementId: agreement?.id ?? null,
         assignments,
         asOf: todayYmd,
     });

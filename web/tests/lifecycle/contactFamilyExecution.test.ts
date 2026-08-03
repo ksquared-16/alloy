@@ -1,11 +1,11 @@
 /**
  * Contact Family — integrated and external execution paths.
  *
- * Asserts the decision logic (not the DB): the integrated path completes work only
- * when configuration declares the objective result sufficient, stamping integrated
- * provenance; the external path records an operator declaration with external_manual
- * provenance and fabricates no send. The real config resolver runs; DB-boundary
- * collaborators are stubbed.
+ * Asserts the decision logic (not the DB): the integrated path completes work via
+ * effective sufficiency (explicit config → platform default for canonical templates
+ * → no inference), stamping integrated provenance; the external path records an
+ * operator declaration with external_manual provenance and fabricates no send.
+ * DB-boundary collaborators are stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -20,31 +20,39 @@ vi.mock("@/lib/admin/operationalWork/operationalWorkService", () => ({
     listWorkForEntity: vi.fn(),
 }));
 vi.mock("@/lib/admin/operationalWork/operationalWorkMetadata", () => ({
-    parseOperationalWorkViewFromTaskRow: vi.fn(() => ({
-        context_snapshot: { lifecycle_stage_key: "lead" },
-        work_definition_key: "contact_family",
-    })),
+    parseOperationalWorkViewFromTaskRow: vi.fn(() => currentWorkView),
 }));
 vi.mock("@/lib/lifecycle/lifecycleBuilderConfig", () => ({
     lifecycleBuilderFromDepartmentMetadata: vi.fn(() => ({})),
     activeLifecycleProcess: vi.fn(() => ({ stages: [{ key: "lead", is_active: true }] })),
 }));
-vi.mock("@/lib/lifecycle/stageOperatingPlanV1", () => ({
-    resolveStageOperatingPlanForStage: vi.fn(() => currentPlan),
+vi.mock("@/lib/lifecycle/resolveEffectiveStageOperatingPlan", () => ({
+    resolveEffectiveStageOperatingPlan: vi.fn(() => ({
+        plan: currentPlan,
+        source: currentPlan ? "explicit" : null,
+        stageRecord: null,
+        processKey: "enrollment",
+    })),
 }));
 
 import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
 import { reportExternalContact } from "@/lib/lifecycle/reportExternalContact";
 import { completeStageWorkWithOutcome } from "@/lib/lifecycle/completeStageWorkWithOutcome";
 import { listWorkForEntity } from "@/lib/admin/operationalWork/operationalWorkService";
+import { parseOperationalWorkViewFromTaskRow } from "@/lib/admin/operationalWork/operationalWorkMetadata";
 
 const complete = vi.mocked(completeStageWorkWithOutcome);
 const listWork = vi.mocked(listWorkForEntity);
+const parseWork = vi.mocked(parseOperationalWorkViewFromTaskRow);
 
 // The plan the resolver mock returns — carries the real completion_policy shape.
 let currentPlan: unknown;
+let currentWorkView: {
+    context_snapshot: { lifecycle_stage_key: string };
+    work_definition_key: string;
+};
 
-const planWithPolicy = {
+const planWithExplicitPolicy = {
     journey_segment: "family",
     stage_key: "lead",
     work_templates: [
@@ -61,10 +69,48 @@ const planWithPolicy = {
     outcomes: [{ outcome_key: "left_message", label: "Left Message" }],
 };
 
-const planNoPolicy = {
+/** Canonical contact_family with attempt cadence but no explicit sufficiency — platform default applies. */
+const planContactFamilyNoSufficiency = {
     journey_segment: "family",
     stage_key: "lead",
-    work_templates: [{ template_key: "contact_family", work_definition_key: "contact_family" }],
+    work_templates: [
+        {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: { min_attempts: 3, window_days: 7 },
+        },
+    ],
+    outcomes: [{ outcome_key: "left_message", label: "Left Message" }],
+};
+
+/** Explicit reply-required override — sent must not complete. */
+const planReplyRequired = {
+    journey_segment: "family",
+    stage_key: "lead",
+    work_templates: [
+        {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: {
+                sufficient_command_results: [
+                    { capability: "communications_send", result: "replied", satisfies_outcome_key: "reached_family" },
+                ],
+            },
+        },
+    ],
+    outcomes: [{ outcome_key: "reached_family", label: "Reached Family" }],
+};
+
+/** Unknown/custom work — no platform default; no inference. */
+const planCustomWorkNoPolicy = {
+    journey_segment: "family",
+    stage_key: "lead",
+    work_templates: [
+        {
+            template_key: "custom_outreach",
+            work_definition_key: "custom_outreach",
+        },
+    ],
     outcomes: [{ outcome_key: "left_message", label: "Left Message" }],
 };
 
@@ -91,10 +137,15 @@ beforeEach(() => {
     listWork.mockClear();
     complete.mockResolvedValue({ ok: true, work_closed: false } as never);
     listWork.mockResolvedValue({ ok: true, rows: [{ id: "task-1", status: "open", metadata: {} }] } as never);
-    currentPlan = planWithPolicy;
+    currentPlan = planWithExplicitPolicy;
+    currentWorkView = {
+        context_snapshot: { lifecycle_stage_key: "lead" },
+        work_definition_key: "contact_family",
+    };
+    parseWork.mockImplementation(() => currentWorkView as never);
 });
 
-describe("integrated contact — config-driven completion, integrated provenance", () => {
+describe("integrated contact — effective sufficiency + integrated provenance", () => {
     it("completes the open work with the CONFIGURED outcome (not sent_text) and integrated provenance", async () => {
         const res = await associateOutboundCommunicationToContactAttempt({
             ...baseIntegrated,
@@ -104,22 +155,52 @@ describe("integrated contact — config-driven completion, integrated provenance
         expect(res.associated).toBe(true);
         expect(res.outcome_key).toBe("left_message");
         expect(complete).toHaveBeenCalledTimes(1);
-        const arg = complete.mock.calls[0][0];
+        const arg = complete.mock.calls[0]![0];
         expect(arg.outcomeKey).toBe("left_message");
         expect(arg.declaration).toEqual({ provenance: "integrated", channel: "sms" });
-        // Explicit root Subject carried through, not inferred.
         expect(arg.subject).toEqual({ journey_segment: "family", opportunity_id: "opp-1" });
     });
 
-    it("an UNCONFIGURED successful send does not complete Current Work", async () => {
-        currentPlan = planNoPolicy;
+    it("canonical Contact Family without explicit sufficiency uses the platform default (sent → left_message)", async () => {
+        currentPlan = planContactFamilyNoSufficiency;
+        const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "sent" });
+        expect(res.associated).toBe(true);
+        expect(res.outcome_key).toBe("left_message");
+        expect(complete).toHaveBeenCalledTimes(1);
+    });
+
+    it("unknown/custom work without explicit sufficiency derives nothing (no inference)", async () => {
+        currentPlan = planCustomWorkNoPolicy;
+        currentWorkView = {
+            context_snapshot: { lifecycle_stage_key: "lead" },
+            work_definition_key: "custom_outreach",
+        };
         const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "sent" });
         expect(res.associated).toBe(false);
         expect(res.reason).toBe("no_configured_sufficiency");
         expect(complete).not.toHaveBeenCalled();
     });
 
+    it("explicit reply-required override wins over the platform default (sent does not complete)", async () => {
+        currentPlan = planReplyRequired;
+        const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "sent" });
+        expect(res.associated).toBe(false);
+        expect(res.reason).toBe("no_configured_sufficiency");
+        expect(complete).not.toHaveBeenCalled();
+    });
+
+    it("explicit reply-required completes only when the configured result arrives", async () => {
+        currentPlan = planReplyRequired;
+        const res = await associateOutboundCommunicationToContactAttempt({
+            ...baseIntegrated,
+            result: "replied",
+        });
+        expect(res.associated).toBe(true);
+        expect(res.outcome_key).toBe("reached_family");
+    });
+
     it("a FAILED send cannot satisfy a success-mapped requirement", async () => {
+        currentPlan = planContactFamilyNoSufficiency;
         const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "failed" });
         expect(res.associated).toBe(false);
         expect(complete).not.toHaveBeenCalled();
@@ -149,7 +230,7 @@ describe("external contact — operator declaration, external_manual provenance,
         });
         expect(res.ok).toBe(true);
         expect(complete).toHaveBeenCalledTimes(1);
-        const arg = complete.mock.calls[0][0];
+        const arg = complete.mock.calls[0]![0];
         expect(arg.outcomeKey).toBe("reached_family");
         expect(arg.declaration).toEqual({ provenance: "external_manual", channel: "phone", note: "spoke with parent" });
         expect(arg.subject).toEqual({ journey_segment: "family", opportunity_id: "opp-1" });

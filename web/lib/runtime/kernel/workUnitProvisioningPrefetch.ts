@@ -74,6 +74,7 @@ export function prefetchWorkUnitProvisioning(
             throw err;
         });
     cache.set(url, { promise, startedAt: now });
+    traceSeedEvent("register", "prefetch", url, null);
     // Keep the stored promise "handled" so a prefetch that is never consumed (or errors) does not surface
     // as an unhandled rejection. Consumers (K2) attach their own try/catch when they await it.
     void promise.catch(() => {});
@@ -81,6 +82,100 @@ export function prefetchWorkUnitProvisioning(
     // so callers can chain off the answer — e.g. to prepare its default subject's VM — without a second
     // fetch or a second cache identity.
     return promise;
+}
+
+/**
+ * INTERNAL seed primitive (RA-3). Writes a server-composed answer into the SAME cache K2 consumes.
+ * It takes a raw URL key deliberately — but it is **module-private** so no layer outside the kernel can
+ * hand-build (and thus drift) that key: `seedProvisioningForRoute` is the SOLE public seed seam, and it
+ * derives the key here via `provisioningAnswerUrl` (the one key builder). Key parity with K2's consume
+ * is therefore a structural in-kernel invariant, not a convention callers must honor.
+ *
+ * It is NOT a new cache, endpoint, or contract: identical key + identical `Promise<ProvisioningAnswer>`
+ * entry shape as an intent prefetch — only a different WARM SOURCE (server, not hover). The caller passes
+ * an already-committable answer (`operational` | `empty`); a gate failure / `error` terminal is filtered
+ * to `null` at the compose boundary and never reaches here. Idempotent: it will not clobber a still-fresh
+ * entry for the same URL (so a Strict-Mode double-invoke, or an intent prefetch that already warmed this
+ * URL, wins/stays), and it is a no-op on the server (the cache is browser-side).
+ */
+function seedProvisioning(
+    url: string,
+    answer: ProvisioningAnswer | null,
+    now: number = Date.now(),
+    producer: string = "unlabelled",
+): void {
+    if (typeof window === "undefined" || answer == null || answer.terminal === "error") return;
+    const existing = cache.get(url);
+    if (existing && isFresh(existing, now)) return; // never clobber a fresher warm entry
+    cache.set(url, { promise: Promise.resolve(answer), startedAt: now });
+    logCurrentWorkInit("provisioning.seed", { cacheKey: url, cache: "seed", preloadSource: "seed", note: "server-composed answer seeded" });
+    traceSeedEvent("register", producer, url, answer);
+}
+
+/**
+ * SEED/CONSUME TRACE — default-off diagnostic for seed-authority regressions.
+ *
+ * Retained (not experiment scaffolding) because the contract it observes is one the runtime can break
+ * silently: a seed registered under the wrong key, or consumed twice, or never consumed, produces a
+ * wasted compose rather than a visible fault. The durable source guards in
+ * `seedAuthorityLifecycle.test.ts` pin the ownership; this shows the live sequence when something still
+ * looks wrong.
+ *
+ * The experiment-only parts are gone: caller stacks, visible-subject-at-event, and the overwrite probe
+ * were there to CLASSIFY the queue-row registrations, which is now settled and documented
+ * (SUBJECT-AUTHORITY.md §6).
+ *
+ * Gated on `localStorage.ALLOY_SEED_TRACE === "1"`, default off, and it writes only to a window array —
+ * never the console, never a server log — so no subject identifier reaches ordinary output. Deliberately
+ * NOT a bare `process.env` check: this runs in the BROWSER, where Next only exposes `NEXT_PUBLIC_*`, so
+ * an env flag would compile to `undefined` and the trace would silently never fire.
+ */
+function traceSeedEvent(
+    kind: "register" | "consume-hit" | "consume-miss",
+    producer: string,
+    url: string,
+    answer: ProvisioningAnswer | null,
+): void {
+    if (typeof window === "undefined") return;
+    try {
+        if (window.localStorage?.getItem("ALLOY_SEED_TRACE") !== "1") return;
+    } catch {
+        return;
+    }
+    const w = window as unknown as { __alloySeedTrace?: unknown[] };
+    (w.__alloySeedTrace ??= []).push({
+        kind,
+        producer,
+        t: Math.round(typeof performance !== "undefined" ? performance.now() : 0),
+        url,
+        subjectInKey: new URL(url, "http://x").searchParams.get("subject_id"),
+        lensInKey: new URL(url, "http://x").searchParams.get("work_view_id"),
+        composedSubject:
+            answer != null && answer.terminal === "operational" ? answer.recordOfAttention?.id ?? null : null,
+        terminal: answer?.terminal ?? null,
+    });
+}
+
+/** A route's attention identity — the coordinates the kernel keys its cache on. */
+export type ProvisioningRouteIdentity = { target: string; lens?: string | null; subject?: string | null };
+
+/**
+ * THE CANONICAL SERVER→KERNEL PRELOAD SEAM for the provisioning cache (RA-1).
+ *
+ * Callers (the RSC route layout / `ProvisioningAnswerSeed`) hand the kernel a ROUTE IDENTITY + the
+ * server-composed answer; the kernel derives K2's cache key itself (`provisioningAnswerUrl`). No other
+ * layer needs to know — or can drift from — the key scheme. Key parity with K2's consume is therefore an
+ * in-kernel invariant (both go through `provisioningAnswerUrl`), guarded by the seed-contract unit test.
+ */
+export function seedProvisioningForRoute(
+    route: ProvisioningRouteIdentity,
+    answer: ProvisioningAnswer | null,
+    now: number = Date.now(),
+    /** TEMPORARY (producer search): who registered this seed. Diagnostic only. */
+    producer: string = "unlabelled",
+): void {
+    if (!route.target) return;
+    seedProvisioning(provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null), answer, now, producer);
 }
 
 export type ProvisioningFetchResult =
@@ -139,9 +234,16 @@ export function consumeFreshProvisioning(
     now: number = Date.now(),
 ): Promise<ProvisioningAnswer> | null {
     const entry = cache.get(url);
-    if (!entry) return null;
+    if (!entry) {
+        traceSeedEvent("consume-miss", "kernel-consume", url, null);
+        return null;
+    }
     cache.delete(url);
-    if (!isFresh(entry, now)) return null;
+    if (!isFresh(entry, now)) {
+        traceSeedEvent("consume-miss", "kernel-consume", url, null);
+        return null;
+    }
+    traceSeedEvent("consume-hit", "kernel-consume", url, null);
     return entry.promise;
 }
 

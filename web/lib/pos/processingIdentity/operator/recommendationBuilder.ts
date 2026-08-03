@@ -207,23 +207,97 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                 }
                 if (sub.householdRef) {
                     const personRef = sub.decision === "link" && sub.selectedRecordId ? sub.selectedRecordId : `@${sub.ref}`;
+                    const parentSubjects = subjects.filter((entry) => entry.role === "parent");
+                    const isPrimaryParent = parentSubjects[0]?.ref === sub.ref;
                     operations.push({
                         ref: `${sub.ref}:link`,
                         opKind: "link",
                         commandKey: IDENTITY_COMMAND_KEYS.linkPersonToHousehold,
-                        payload: { person_id: personRef, household_id: `@${sub.householdRef}` },
+                        payload: {
+                            person_id: personRef,
+                            household_id: `@${sub.householdRef}`,
+                            role_type: isPrimaryParent ? "primary_contact" : "guardian",
+                            primary: isPrimaryParent,
+                        },
                         dependsOnRefs: dedupeRefs([sub.decision === "create" ? sub.ref : undefined, sub.householdRef]),
                         evidenceRefs,
                         resolutionRefs,
-                        reason: "link guardian to household",
+                        reason: isPrimaryParent
+                            ? "link primary guardian to household"
+                            : "link secondary guardian to household",
                     });
+                    const lead = subjects.find((entry) => entry.role === "lead");
+                    if (lead && !isPrimaryParent) {
+                        const leadId =
+                            lead.decision === "link" && lead.selectedRecordId
+                                ? lead.selectedRecordId
+                                : `@${lead.ref}`;
+                        operations.push({
+                            ref: `${sub.ref}:lead-link`,
+                            opKind: "link",
+                            commandKey: IDENTITY_COMMAND_KEYS.linkPersonToLead,
+                            payload: {
+                                person_id: personRef,
+                                lead_id: leadId,
+                                role_type: "guardian",
+                                role: "secondary_guardian",
+                            },
+                            dependsOnRefs: dedupeRefs([
+                                sub.decision === "create" ? sub.ref : undefined,
+                                lead.decision === "create" ? lead.ref : undefined,
+                            ]),
+                            evidenceRefs,
+                            resolutionRefs,
+                            reason: "link secondary guardian to lead",
+                        });
+                    }
                 }
                 break;
             case "child":
                 if (sub.decision === "create") {
-                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createChild, payload: { household_id: `@${sub.householdRef}`, display_name: String(sub.values?.display_name ?? "Child"), dob: sub.values?.dob ?? null }, after: { display_name: sub.values?.display_name, dob: sub.values?.dob }, dependsOnRefs: sub.householdRef ? [sub.householdRef] : [], reason: "new child" });
+                    // Persist split names — display_name alone leaves child:first_name / child:last_name
+                    // readiness gaps even when the Children card shows the composed name.
+                    operations.push({
+                        ...common,
+                        opKind: "create",
+                        commandKey: IDENTITY_COMMAND_KEYS.createChild,
+                        payload: {
+                            household_id: `@${sub.householdRef}`,
+                            display_name: String(sub.values?.display_name ?? "Child"),
+                            first_name: sub.values?.first_name ?? null,
+                            last_name: sub.values?.last_name ?? null,
+                            dob: sub.values?.dob ?? null,
+                        },
+                        after: {
+                            display_name: sub.values?.display_name,
+                            first_name: sub.values?.first_name,
+                            last_name: sub.values?.last_name,
+                            dob: sub.values?.dob,
+                        },
+                        dependsOnRefs: sub.householdRef ? [sub.householdRef] : [],
+                        reason: "new child",
+                    });
                 } else if (sub.decision === "update") {
-                    operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateChild, targetId: sub.selectedRecordId ?? null, payload: { child_id: sub.selectedRecordId, display_name: sub.values?.display_name, dob: sub.values?.dob }, after: { display_name: sub.values?.display_name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update matched child" });
+                    operations.push({
+                        ...common,
+                        opKind: "update",
+                        commandKey: IDENTITY_COMMAND_KEYS.updateChild,
+                        targetId: sub.selectedRecordId ?? null,
+                        payload: {
+                            child_id: sub.selectedRecordId,
+                            display_name: sub.values?.display_name,
+                            first_name: sub.values?.first_name,
+                            last_name: sub.values?.last_name,
+                            dob: sub.values?.dob,
+                        },
+                        after: {
+                            display_name: sub.values?.display_name,
+                            first_name: sub.values?.first_name,
+                            last_name: sub.values?.last_name,
+                        },
+                        preconditionRecordVersion: sub.preconditionRecordVersion ?? null,
+                        reason: "update matched child",
+                    });
                 } else if (sub.decision === "link" && sub.selectedRecordId) {
                     operations.push({
                         ...common,
@@ -237,7 +311,33 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                 break;
             case "lead":
                 if (sub.decision === "create") {
-                    operations.push({ ...common, opKind: "create", commandKey: IDENTITY_COMMAND_KEYS.createLead, payload: { household_id: `@${sub.householdRef}`, primary_person_id: sub.values?.primary_person_id ?? `@${sub.dependsOn?.[0] ?? ""}`, name: String(sub.values?.name ?? "Lead") }, after: { name: sub.values?.name }, dependsOnRefs: sub.dependsOn ?? (sub.householdRef ? [sub.householdRef] : []), reason: "new lead" });
+                    // work_unit_id carries the lifecycle binding resolved at intake (create_lead_intake).
+                    // Without it the opportunity is created with work_unit_id NULL, which the canonical
+                    // Work-Unit lead membership predicate (workUnitLeadMembership.ts, `.eq(work_unit_id)`)
+                    // excludes — so the new lead never appears in its Work Unit Work View.
+                    const leadWorkUnitId =
+                        typeof sub.values?.work_unit_id === "string" && sub.values.work_unit_id.trim()
+                            ? sub.values.work_unit_id
+                            : null;
+                    const leadLocationId =
+                        typeof sub.values?.location_id === "string" && sub.values.location_id.trim()
+                            ? sub.values.location_id.trim()
+                            : null;
+                    operations.push({
+                        ...common,
+                        opKind: "create",
+                        commandKey: IDENTITY_COMMAND_KEYS.createLead,
+                        payload: {
+                            household_id: `@${sub.householdRef}`,
+                            primary_person_id: sub.values?.primary_person_id ?? `@${sub.dependsOn?.[0] ?? ""}`,
+                            name: String(sub.values?.name ?? "Lead"),
+                            ...(leadWorkUnitId ? { work_unit_id: leadWorkUnitId } : {}),
+                            ...(leadLocationId ? { location_id: leadLocationId } : {}),
+                        },
+                        after: { name: sub.values?.name },
+                        dependsOnRefs: sub.dependsOn ?? (sub.householdRef ? [sub.householdRef] : []),
+                        reason: "new lead",
+                    });
                 } else if (sub.decision === "update") {
                     operations.push({ ...common, opKind: "update", commandKey: IDENTITY_COMMAND_KEYS.updateLead, targetId: sub.selectedRecordId ?? null, payload: { lead_id: sub.selectedRecordId, name: sub.values?.name }, after: { name: sub.values?.name }, preconditionRecordVersion: sub.preconditionRecordVersion ?? null, reason: "update lead" });
                 }

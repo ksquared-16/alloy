@@ -10,7 +10,6 @@ import { completionOutcomesForPicker } from "@/lib/workIntent/stageWorkOutcomeEf
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import { resolveOutgoingProcessTransitions } from "@/lib/lifecycle/resolveOutgoingProcessTransitions";
-import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
 import {
     actionsFromConfigRefs,
@@ -43,6 +42,7 @@ import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAc
 import { resolveStageWorkOutcomeCompletionState } from "./resolveStageWorkOutcomeCompletionState";
 import { isGenericUmbrellaLifecycleAction } from "./currentWorkActionSurfacePolicy";
 import { resolveWorkTemplateExecutionMode } from "@/lib/lifecycle/resolveWorkTemplateExecutionMode";
+import { buildProcessAwareActionAllowlist } from "@/lib/lifecycle/processRuntimeCommandProjection";
 
 export type BuildCurrentWorkSurfaceVMInput = {
     context: OperationalContext;
@@ -412,6 +412,25 @@ function mergeActionVms(
     return merged;
 }
 
+/**
+ * When a tour booking already exists, What's Next must not keep advertising "Schedule tour".
+ * Rewrite schedule_tour → reschedule_tour so the CTA matches Tour card / helpful-action truth.
+ */
+export function alignTourScheduleActionForBookingState(
+    action: CurrentWorkActionVM,
+    tourScheduled: boolean,
+): CurrentWorkActionVM {
+    if (!tourScheduled) return action;
+    const key = (action.handlerKey || action.key || "").trim();
+    if (key !== "schedule_tour") return action;
+    return {
+        ...action,
+        key: "reschedule_tour",
+        handlerKey: "reschedule_tour",
+        label: "Reschedule tour",
+    };
+}
+
 /** Config-owned helpful actions: explicit template config first; legacy catalog/header fallback only when undefined. */
 function resolveHelpfulActions(args: {
     explicitRefs: CurrentWorkTemplateConfigOverlay["helpful_actions"] | undefined;
@@ -479,30 +498,23 @@ function filterOutcomesByTemplateRefs(
 function contextAllowedActionKeys(args: {
     actionCatalog: StageActionCatalogV1 | null | undefined;
     templateConfig: CurrentWorkTemplateConfigOverlay | null | undefined;
-}): ReadonlySet<string> {
-    const keys = new Set<string>();
-    for (const candidate of args.actionCatalog?.candidate_actions ?? []) {
-        const key = candidate.action_key.trim();
-        if (!key) continue;
-        keys.add(key);
-        keys.add(normalizeActionRefToIntentKey(key));
-    }
+    commandProjection?: import("@/lib/lifecycle/processRuntimeCommandProjection").ProcessRuntimeCommandProjection | null;
+}): { keys: ReadonlySet<string>; enforce: boolean } {
     const template = args.templateConfig;
-    const refs = [
+    const explicitTemplateRefs = [
         template?.primary_action?.action_ref,
         ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
         ...(template?.alternate_paths ?? []).flatMap((row) =>
             "action_ref" in row ? [row.action_ref] : [],
         ),
         ...(template?.communication_actions ?? []).map((row) => row.action_ref),
-    ];
-    for (const ref of refs) {
-        const key = ref?.trim();
-        if (!key) continue;
-        keys.add(key);
-        keys.add(normalizeActionRefToIntentKey(key));
-    }
-    return keys;
+    ].filter((ref): ref is string => Boolean(ref?.trim()));
+
+    return buildProcessAwareActionAllowlist({
+        projection: args.commandProjection,
+        stageActionCatalog: args.actionCatalog,
+        explicitTemplateRefs,
+    });
 }
 
 /**
@@ -565,14 +577,17 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
             ? CURRENT_WORK_RECORD_OUTCOME_CTA
             : null;
 
+    const allowlist = contextAllowedActionKeys({
+        actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
+        templateConfig,
+        commandProjection: context.publishedStageInputs?.commandProjection ?? null,
+    });
     const classified = classifyRecordHeaderActionsForCurrentWork({
         recordHeaderSlots: context.recordHeaderActions ?? null,
         showOutcomeCompletion,
         primaryActionLabel,
-        allowedActionKeys: contextAllowedActionKeys({
-            actionCatalog: context.publishedStageInputs?.actionCatalog ?? null,
-            templateConfig,
-        }),
+        allowedActionKeys: allowlist.keys,
+        enforceActionAllowlist: allowlist.enforce,
     });
 
     const configCompletedKeys = new Set(completedChecklistKeys ?? []);
@@ -725,8 +740,12 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
 
     // Command integrity (Slice F): thread each action's resolved execution state onto the VM so
     // the card renders enabled only what is provably executable, and config errors stay observable.
-    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T =>
-        action ? ({ ...action, execution: resolveCurrentWorkActionExecution(action) } as T) : action;
+    const tourScheduled = context.signals.tour.scheduled === true;
+    const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T => {
+        if (!action) return action;
+        const aligned = alignTourScheduleActionForBookingState(action, tourScheduled);
+        return { ...aligned, execution: resolveCurrentWorkActionExecution(aligned) } as T;
+    };
     const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
         actions.map((action) => withActionExecution(action)!);
 

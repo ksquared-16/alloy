@@ -130,6 +130,8 @@ storage is deferred. The tuition grid remains in `commercial_tuition_rates`.
 
 The schedule type vocabulary (`childcare_schedule_type` option set) is an org option set today. Future work: per-location schedule offerings. This is deferred.
 
+**Tuition day-count commitments** (1–5 days/week via `program_offering_variants`) are likewise an interim stand-in pending Schedule Offerings evolution — see **Deferred evolution — Schedule Offerings** in `docs/platform/commercial/ownership-model.md`. Do not rebuild tuition on schedule offerings until that design lands.
+
 ---
 
 ## Related docs

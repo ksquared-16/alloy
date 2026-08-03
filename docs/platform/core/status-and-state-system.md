@@ -34,6 +34,10 @@ meaningful with its domain. Four domains:
   → count people.
 - **`status_definitions.entity_type` discriminates the domain** (`opportunities` / `opportunity_customer_members`
   / `persons` / `customers`). The evaluator resolves each domain from its own row field — never a shared set.
+- **Closed / terminal detection is canonical** in `resolveOutcomeStatusOptions`
+  (`isConfiguredClosedStatus` / `isClosedStatusKeyForEntity`). Process Builder close-record
+  classification, validation, and pickers must reuse that resolver — do not re-interpret
+  `terminal` / `is_terminal` / `is_closed` in parallel.
 - **Status is produced by the Execution Runtime — it is not the driver.** Status does not own queue behavior, actions, work, readiness, or dashboards. Those come from configured processes. See `../modules/business-process-execution-platform.md` § Status.
 
 > **Person / Account Status are not yet Work View conditions** — see *Work View conditions* below. Account
@@ -90,6 +94,12 @@ generated from stage membership.
 2. **Domain actions** — `schedule_tour`, `waitlist_child`, `enroll_child`, `mark_enrolled`,
    `withdraw_child`, `close_lead` — resolve to outcome executions with preflight/readiness
 3. **Workflow effects** — event-triggered automation (origin: `automation`) — same typed domains
+
+**Destructive vs status transitions (P4.S1):** Commands that delete, archive, cancel, withdraw,
+void, or **replace** a designation are not ordinary status updates. They use the Command Runtime
+destructive/replacement policy contract (preview + confirmation + permission class). Replacement
+(e.g. make primary contact) displaces a designation without deleting the prior record. Facade
+commit for these Classes remains gated separately from Mutation Runtime status transitions.
 
 Removed by the Enrollment Alignment sprint: operator-facing generic status mutation
 (`update_status` / `update_enrollment_status` modal) and status PATCH as a transition path.

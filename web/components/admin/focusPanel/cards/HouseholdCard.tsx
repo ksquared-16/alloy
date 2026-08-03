@@ -46,15 +46,17 @@ import {
     applyHouseholdDisplayView,
     type HouseholdNestedDisplayView,
 } from "@/lib/adminV2/runtime/focusPanel/household/householdNestedSurfaceRuntime";
-import { CHILDREN_SURFACE_ID, HOUSEHOLD_SURFACE_ID } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+import {
+    CHILDREN_SURFACE_ID,
+    HOUSEHOLD_SURFACE_ID,
+    isNestedGroupEnabled,
+    nestedGroupLabel,
+    type NestedSurfaceConfig,
+} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import AddSectionMenu from "@/components/admin/focusPanel/drillIn/AddSectionMenu";
 import InlineSectionControls from "@/components/admin/focusPanel/drillIn/InlineSectionControls";
-import {
-    nestedGroupLabel,
-    type NestedSurfaceConfig,
-} from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import {
     isEditableHouseholdPersonId,
@@ -122,9 +124,16 @@ export default function HouseholdCard({
     const composer = useFocusPanelComposer();
     const publishedDoc = usePublishedFocusPanelSummaryDoc(true);
     const composingHouseholdSurface = composer?.isComposingSurface(HOUSEHOLD_SURFACE_ID) ?? false;
+    // Surfaces composer session owns the nested Household config (draft/published seed).
+    // Always project through composer when present — do not fall back to a separate
+    // published-doc fetch that can lag or omit nestedSurfaces while the canvas is open.
+    // Live Work Unit has no composer → read published Focus Panel summary metadata.
     const nestedConfig = useMemo(
-        () => (composingHouseholdSurface ? composer?.configFor(HOUSEHOLD_SURFACE_ID) ?? null : readHouseholdNestedConfigFromDoc(publishedDoc)),
-        [composer, composingHouseholdSurface, publishedDoc],
+        () =>
+            composer?.enabled
+                ? composer.configFor(HOUSEHOLD_SURFACE_ID)
+                : readHouseholdNestedConfigFromDoc(publishedDoc),
+        [composer, publishedDoc],
     );
     const {
         state: disclosure,
@@ -708,6 +717,9 @@ export default function HouseholdCard({
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
                 }
+                onAddAuthorizedPickup={
+                    canEdit && mutation ? () => mutation.openAddAuthorizedPickup() : undefined
+                }
                 composing={showComposeCanvas}
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
@@ -733,6 +745,9 @@ export default function HouseholdCard({
                 onEditContact={onEditContact}
                 onAddEmergencyContact={
                     canEdit && mutation ? () => mutation.openAddEmergencyContact() : undefined
+                }
+                onAddAuthorizedPickup={
+                    canEdit && mutation ? () => mutation.openAddAuthorizedPickup() : undefined
                 }
             />
         );
@@ -802,6 +817,7 @@ function CollapsedBody({
     onSelectIdentity,
     onOpenChild,
     onAddEmergencyContact,
+    onAddAuthorizedPickup,
     onEditContact,
 }: {
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
@@ -814,6 +830,7 @@ function CollapsedBody({
     onSelectIdentity?: (personId: string, sectionKey: string) => void;
     onOpenChild?: (childId: string) => void;
     onAddEmergencyContact?: () => void;
+    onAddAuthorizedPickup?: () => void;
     onEditContact?: (personId: string) => void;
 }) {
     const identityVm = useMemo(
@@ -830,6 +847,8 @@ function CollapsedBody({
     const secondarySection = identityVm.sections.find((section) => section.key === "other_parent_guardian");
     const primaryRecord = primarySection?.items[0] ?? null;
     const secondaryRecords = secondarySection?.items ?? [];
+    const sectionEnabled = (key: string) =>
+        nestedConfig ? isNestedGroupEnabled(nestedConfig, key) : false;
     const allStats: { key: HouseholdEvidenceGroupKey; label: string; count: number }[] = [
         { key: "children", label: "Children", count: evidence.childCount },
         {
@@ -853,7 +872,13 @@ function CollapsedBody({
             count: evidence.authorizedPickupCount,
         },
     ];
-    const stats = allStats.filter((s) => s.count > 0);
+    // Show chips for nonempty sections, and for operator-enabled optional shells at 0.
+    const stats = allStats.filter(
+        (s) =>
+            s.count > 0
+            || ((s.key === "emergency_contacts" || s.key === "authorized_pickups")
+                && sectionEnabled(s.key)),
+    );
     // The primary contact NAME is already the card answer (insight). Collapsed
     // evidence shows reachability (how to reach them) + the address — never repeats
     // the name.
@@ -1022,6 +1047,7 @@ function ExpandedBody({
     onSaveField,
     onSaveFields,
     onAddEmergencyContact,
+    onAddAuthorizedPickup,
     composing,
     composePurpose = null,
     nestedConfig,
@@ -1036,6 +1062,7 @@ function ExpandedBody({
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onSaveFields?: (args: { personId: string; fields: Array<{ fieldRef: string; value: string }> }) => Promise<{ ok: boolean } | void>;
     onAddEmergencyContact?: () => void;
+    onAddAuthorizedPickup?: () => void;
     composing: boolean;
     composePurpose?: IdentityConfigurationPurpose | null;
     nestedConfig: NestedSurfaceConfig | null;
@@ -1092,6 +1119,7 @@ function ExpandedBody({
                         onSaveField={onSaveField}
                         onSaveFields={onSaveFields}
                         onAddEmergencyContact={onAddEmergencyContact}
+                        onAddAuthorizedPickup={onAddAuthorizedPickup}
                         nestedConfig={nestedConfig}
                         composing={composing}
                         composePurpose={composePurpose}
@@ -1106,27 +1134,36 @@ function ExpandedBody({
 
 
 /** Household groups render runtime rows; Add field is one per selected region. */
-function EmergencyEmptyState({
+function RelationshipEmptyState({
+    kind,
     onAdd,
     composing,
 }: {
+    kind: "emergency_contacts" | "authorized_pickups";
     onAdd?: () => void;
     composing: boolean;
 }) {
+    const isEmergency = kind === "emergency_contacts";
+    const label = isEmergency ? "emergency contact" : "authorized pickup";
     return (
-        <div className="alloy-os-household__empty-action" data-household-emergency-empty="true">
-            <p className="alloy-os-household__row-detail">No emergency contacts on file</p>
+        <div
+            className="alloy-os-household__empty-action"
+            data-household-emergency-empty={isEmergency ? "true" : undefined}
+            data-household-pickup-empty={isEmergency ? undefined : "true"}
+        >
+            <p className="alloy-os-household__row-detail">No {label}s on file</p>
             {onAdd && !composing ? (
                 <button
                     type="button"
                     className="alloy-os-ucard__action alloy-os-ucard__action--system5"
-                    data-household-add-emergency="true"
+                    data-household-add-emergency={isEmergency ? "true" : undefined}
+                    data-household-add-pickup={isEmergency ? undefined : "true"}
                     onClick={onAdd}
                 >
-                    Add emergency contact →
+                    Add {label} →
                 </button>
             ) : composing ? (
-                <p className="alloy-os-household__row-detail" data-household-emergency-compose-hint="true">
+                <p className="alloy-os-household__row-detail" data-household-relationship-compose-hint="true">
                     Configure fields below · operators add contacts from runtime
                 </p>
             ) : null}
@@ -1144,6 +1181,7 @@ function GroupRows({
     onSaveField,
     onSaveFields,
     onAddEmergencyContact,
+    onAddAuthorizedPickup,
     nestedConfig = null,
     composing = false,
     composePurpose = null,
@@ -1158,6 +1196,7 @@ function GroupRows({
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
     onSaveFields?: (args: { personId: string; fields: Array<{ fieldRef: string; value: string }> }) => Promise<{ ok: boolean } | void>;
     onAddEmergencyContact?: () => void;
+    onAddAuthorizedPickup?: () => void;
     nestedConfig?: NestedSurfaceConfig | null;
     composing?: boolean;
     composePurpose?: IdentityConfigurationPurpose | null;
@@ -1168,7 +1207,23 @@ function GroupRows({
     }
 
     if (group.key === "emergency_contacts" && group.contacts.length === 0) {
-        return <EmergencyEmptyState onAdd={onAddEmergencyContact} composing={composing} />;
+        return (
+            <RelationshipEmptyState
+                kind="emergency_contacts"
+                onAdd={onAddEmergencyContact}
+                composing={composing}
+            />
+        );
+    }
+
+    if (group.key === "authorized_pickups" && group.contacts.length === 0) {
+        return (
+            <RelationshipEmptyState
+                kind="authorized_pickups"
+                onAdd={onAddAuthorizedPickup}
+                composing={composing}
+            />
+        );
     }
 
     const identitySection = buildHouseholdIdentityCardVM({

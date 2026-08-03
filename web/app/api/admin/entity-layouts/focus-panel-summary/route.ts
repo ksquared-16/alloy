@@ -32,7 +32,12 @@ function highestVersion(records: EntityLayoutRecord[]): EntityLayoutRecord | nul
 
 function summarize(record: EntityLayoutRecord | null) {
     if (!record) return null;
-    return { id: record.id, version: record.version, doc: record.doc };
+    return {
+        id: record.id,
+        version: record.version,
+        doc: record.doc,
+        updatedAt: record.updatedAt ?? null,
+    };
 }
 
 export async function GET(request: Request) {

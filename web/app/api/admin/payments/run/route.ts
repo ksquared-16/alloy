@@ -11,6 +11,13 @@ const BACKEND_URL =
   process.env.BACKEND_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 /**
+ * Service credential for the payment executor. SERVER-ONLY — deliberately not
+ * NEXT_PUBLIC_, so it is never bundled into browser JavaScript.
+ */
+const PAYMENT_EXECUTOR_SECRET = process.env.PAYMENT_EXECUTOR_SECRET ?? "";
+const PAYMENT_EXECUTOR_HEADER = "X-ALLOY-PAYMENT-EXECUTOR-SECRET";
+
+/**
  * POST /api/admin/payments/run
  * Proxy to backend POST /admin/payments/run.
  * All Stripe PaymentIntent logic runs in the Python backend (single runtime).
@@ -51,8 +58,21 @@ export async function POST(request: NextRequest) {
     has_client_idempotency: typeof body.idempotency_key === "string" && String(body.idempotency_key).trim().length > 0,
   });
 
-  const payload: Record<string, unknown> = { job_id: jobId };
-  if (typeof body.amount_cents === "number") payload.amount_cents = body.amount_cents;
+  /**
+   * Phase 0 containment. The executor is now an authenticated internal service
+   * endpoint, so this proxy supplies:
+   *   - trusted organization context, resolved from the SESSION (never the body)
+   *   - a stable idempotency key
+   *   - the dedicated server-only service credential
+   *
+   * `amount_cents` is deliberately NOT forwarded. The executor resolves the
+   * payable amount from server-side records and rejects a caller-supplied
+   * amount outright. A client-stated amount travels as `expected_amount_cents`,
+   * an optimistic consistency check that can only cause a rejection — it can
+   * never widen financial authority.
+   */
+  const payload: Record<string, unknown> = { job_id: jobId, org_id: ctx.orgId };
+  if (typeof body.amount_cents === "number") payload.expected_amount_cents = body.amount_cents;
   if (typeof body.payment_target === "string" && body.payment_target.trim()) payload.payment_target = body.payment_target.trim();
   if (typeof body.schedule_id === "string" && body.schedule_id.trim()) payload.schedule_id = body.schedule_id.trim();
   if (typeof body.ad_hoc_charge_type === "string" && body.ad_hoc_charge_type.trim()) {
@@ -63,8 +83,25 @@ export async function POST(request: NextRequest) {
     payload.payment_method_id = body.payment_method_id.trim();
   }
   if (typeof body.save_payment_method === "boolean") payload.save_payment_method = body.save_payment_method;
-  if (typeof body.idempotency_key === "string" && body.idempotency_key.trim()) {
-    payload.idempotency_key = body.idempotency_key.trim();
+  /**
+   * Idempotency is mandatory at the executor. Previously it was optional, so a
+   * retry created a NEW PaymentIntent. When the client does not supply a key we
+   * derive a stable one from (org, job, amount intent) rather than letting the
+   * request through unkeyed.
+   */
+  const clientKey =
+    typeof body.idempotency_key === "string" && body.idempotency_key.trim() ? body.idempotency_key.trim() : null;
+  payload.idempotency_key =
+    clientKey ?? `alloy:${ctx.orgId}:${jobId}:${typeof body.amount_cents === "number" ? body.amount_cents : "canonical"}`;
+
+  if (!PAYMENT_EXECUTOR_SECRET) {
+    // Fail closed, and say so plainly: a misconfigured deployment must not fall
+    // back to calling an unauthenticated executor.
+    console.error("[PAYMENTS_RUN] PAYMENT_EXECUTOR_SECRET is not configured");
+    return NextResponse.json(
+      { error: "Payments are not configured on this deployment", code: "PAYMENT_EXECUTOR_UNCONFIGURED" },
+      { status: 503 }
+    );
   }
 
   const backendUrl = `${BACKEND_URL.replace(/\/$/, "")}/admin/payments/run`;
@@ -76,7 +113,10 @@ export async function POST(request: NextRequest) {
   });
   const res = await fetch(backendUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      [PAYMENT_EXECUTOR_HEADER]: PAYMENT_EXECUTOR_SECRET,
+    },
     body: JSON.stringify(payload),
   });
 

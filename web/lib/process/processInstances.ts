@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { stageEnteredAtNowIso } from "@/lib/lifecycle/operationalStateEnteredAt";
 
 export const PROCESS_INSTANCES_TABLE = "process_instances" as const;
 
@@ -36,6 +37,8 @@ export type ProcessInstanceRow = {
     context_type: string | null;
     context_id: string | null;
     stage_key: string | null;
+    /** When the instance entered its current stage_key (null before first stage write / backfill). */
+    stage_entered_at: string | null;
     state: string | null;
     close_reason_key: string | null;
     metadata: Record<string, unknown>;
@@ -70,6 +73,7 @@ export function buildEnrollmentProcessInstanceInsert(args: {
     for (const [k, v] of Object.entries(args.participation ?? {})) {
         if (v !== undefined && v !== null && v !== "") metadata[k] = v;
     }
+    const stageKey = args.stageKey ?? null;
     return {
         org_id: args.orgId,
         process_key: ENROLLMENT_PROCESS_KEY,
@@ -77,7 +81,9 @@ export function buildEnrollmentProcessInstanceInsert(args: {
         subject_id: args.subjectId,
         context_type: ENROLLMENT_CONTEXT_TYPE,
         context_id: args.contextId,
-        stage_key: args.stageKey ?? null,
+        stage_key: stageKey,
+        // Only stamp entry when the instance starts with an explicit stage membership.
+        ...(stageKey ? { stage_entered_at: stageEnteredAtNowIso() } : {}),
         state: args.state ?? null,
         metadata,
     };
@@ -103,9 +109,10 @@ export async function moveProcessInstanceStage(
     supabase: SupabaseClient,
     args: { orgId: string; instanceId: string; stageKey: string },
 ): Promise<{ error?: string }> {
+    const nowIso = stageEnteredAtNowIso();
     const { error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
-        .update({ stage_key: args.stageKey, updated_at: new Date().toISOString() })
+        .update({ stage_key: args.stageKey, stage_entered_at: nowIso, updated_at: nowIso })
         .eq("id", args.instanceId)
         .eq("org_id", args.orgId);
     return error ? { error: error.message } : {};
@@ -134,9 +141,10 @@ export async function moveEnrollmentInstanceStageByScope(
     supabase: SupabaseClient,
     args: { orgId: string; opportunityId: string; customerMemberId: string; stageKey: string },
 ): Promise<{ moved: number; error?: string }> {
+    const nowIso = stageEnteredAtNowIso();
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
-        .update({ stage_key: args.stageKey, updated_at: new Date().toISOString() })
+        .update({ stage_key: args.stageKey, stage_entered_at: nowIso, updated_at: nowIso })
         .eq("org_id", args.orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
         .eq("context_id", args.opportunityId)

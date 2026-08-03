@@ -88,6 +88,9 @@ function fieldModesToSets(
 
 /** Read published household detail surface config from the Focus Panel summary doc. */
 export function readHouseholdNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
+    // Prefer importing the canonical reader from householdNestedSurfaceConfig in
+    // card/runtime call sites. This re-export stays on the generic path to avoid a
+    // circular import with nestedSurfaceEditorModel → this module → identitySurfaceCompat.
     return readNestedSurfaceConfigFromDoc(doc, HOUSEHOLD_SURFACE_ID);
 }
 
@@ -151,12 +154,18 @@ export function householdDetailFieldKeysFromNestedConfig(config: NestedSurfaceCo
 /** Default display options seed for a household evidence group. */
 export function defaultHouseholdGroupDisplayOptions(groupKey: string): NestedSurfaceGroupDisplayOptions {
     if (groupKey === "children") {
-        return { visible: true, showDob: false, showAge: false };
+        return { visible: true, showDob: false, showAge: false, showAvatar: true, useProfilePhotos: true };
     }
     if (groupKey === "address") {
         return { visible: true };
     }
-    return { visible: true, showPhone: true, showEmail: true };
+    return {
+        visible: true,
+        showPhone: true,
+        showEmail: true,
+        showAvatar: true,
+        useProfilePhotos: true,
+    };
 }
 
 /** Default contact field modes for the contact drill-in surface. */

@@ -11,6 +11,7 @@ import {
     asOperatorStageKey,
     findStage,
     lifecycleBuilderFromDepartmentMetadata,
+    type LifecycleBuilderProcessRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { effectiveFieldRulesForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
@@ -18,6 +19,10 @@ import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1"
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import {
+    projectProcessRuntimeCommands,
+    type ProcessRuntimeCommandProjection,
+} from "@/lib/lifecycle/processRuntimeCommandProjection";
 
 export type PublishedStageInputsForCurrentWork = {
     operatingPlan: StageOperatingPlanV1;
@@ -29,6 +34,10 @@ export type PublishedStageInputsForCurrentWork = {
     processStages: Array<{ key: string; label: string }>;
     processTracks?: ProcessTracksV1 | null;
     operatorGuidance?: string | null;
+    /** Active lifecycle process record — enables P6.S2 command authority projection. */
+    process?: LifecycleBuilderProcessRecord | null;
+    /** Precomputed runtime Command projection (process selection + stage recommendation). */
+    commandProjection?: ProcessRuntimeCommandProjection | null;
 };
 
 function trimOrNull(value: unknown): string | null {
@@ -74,6 +83,14 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
             ?.filter((s) => s.is_active !== false)
             .map((s) => ({ key: s.key, label: s.label.trim() || s.key })) ?? [];
 
+    const commandProjection = process
+        ? projectProcessRuntimeCommands({
+              process,
+              stageKey,
+              stageActionCatalog: actionCatalog,
+          })
+        : null;
+
     return {
         operatingPlan: plan,
         actionCatalog,
@@ -84,5 +101,7 @@ export function resolvePublishedStageInputsForCurrentWork(params: {
         processStages,
         processTracks: process?.tracks_v1 ?? null,
         operatorGuidance: stage?.operator_guidance?.trim() || null,
+        process: process ?? null,
+        commandProjection,
     };
 }

@@ -1,10 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 
-import OpportunityRecordCreateWorkModal from "@/components/admin/opportunity/OpportunityRecordCreateWorkModal";
-import SendFormToOpportunityModal from "@/components/admin/opportunity/SendFormToOpportunityModal";
-import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
+// These three modals are rendered ONLY while their `*Open` flag is true (`{open ? <Modal/> : null}`),
+// i.e. after an explicit operator action — never at first paint. Statically importing them (esp. the
+// ~958-line OpportunityEnrollmentPacketModal + its forms/packet builder) forced that weight into the
+// initial Work Unit chunk that must download+hydrate before the first provisioning request. Lazy-load
+// on open (ssr:false) so they leave the first-paint critical path.
+const OpportunityRecordCreateWorkModal = dynamic(
+    () => import("@/components/admin/opportunity/OpportunityRecordCreateWorkModal"),
+    { ssr: false },
+);
+const SendFormToOpportunityModal = dynamic(
+    () => import("@/components/admin/opportunity/SendFormToOpportunityModal"),
+    { ssr: false },
+);
+const OpportunityEnrollmentPacketModal = dynamic(
+    () => import("@/components/admin/opportunity/OpportunityEnrollmentPacketModal"),
+    { ssr: false },
+);
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
@@ -12,6 +27,7 @@ import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/Add
 import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
 import RelationshipActionGuidedModal from "@/components/layout/RelationshipActionGuidedModal";
 import { ChangeEnrollmentStatusModal } from "@/components/admin/opportunity/actions/ChangeEnrollmentStatusModal";
+import { ChangeLeadLocationModal } from "@/components/admin/opportunity/actions/ChangeLeadLocationModal";
 import {
     ADMINV2_OPEN_RELATIONSHIP_ACTION_MODAL,
     parseOpenRelationshipActionModalDetail,
@@ -20,6 +36,11 @@ import {
     ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL,
     parseOpenEnrollmentStatusModalDetail,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionClient";
+import {
+    ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL,
+    parseOpenChangeLeadLocationModalDetail,
+} from "@/lib/admin/actions/changeLeadLocationActionClient";
+import { CHANGE_LEAD_LOCATION_ACTION_KEY } from "@/lib/admin/actions/changeLeadLocationContract";
 import type {
     EnrollmentStatusTransitionScope,
     EnrollmentStatusTransitionSourceSurface,
@@ -160,7 +181,13 @@ export function useOpportunityDrawerVmRegistryModals({
     modals: ReactNode;
     registryHostExtensions: Pick<
         ApplyRegistryResolvedActionHost,
-        "openForm" | "openCreateWork" | "openAddInquiryChild" | "openAddPerson" | "openRelationshipAction" | "openEnrollmentStatus"
+        | "openForm"
+        | "openCreateWork"
+        | "openAddInquiryChild"
+        | "openAddPerson"
+        | "openRelationshipAction"
+        | "openEnrollmentStatus"
+        | "openChangeLeadLocation"
     >;
 } {
     const oid = opportunityId?.trim() ?? "";
@@ -183,6 +210,7 @@ export function useOpportunityDrawerVmRegistryModals({
         sourceSurface: EnrollmentStatusTransitionSourceSurface;
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     } | null>(null);
+    const [changeLeadLocationOpen, setChangeLeadLocationOpen] = useState(false);
     const pendingTourScheduleRef = useRef<{ id: string; action_key?: string } | null>(null);
     const prevOidRef = useRef<string | null>(null);
 
@@ -237,6 +265,14 @@ export function useOpportunityDrawerVmRegistryModals({
                 sourceSurface: input.sourceSurface ?? "opportunity_drawer",
                 initialScope: input.initialScope,
             });
+        },
+        [oid],
+    );
+
+    const openChangeLeadLocation = useCallback(
+        (input: { opportunityId: string }) => {
+            if (input.opportunityId.trim() !== oid) return;
+            setChangeLeadLocationOpen(true);
         },
         [oid],
     );
@@ -393,6 +429,12 @@ export function useOpportunityDrawerVmRegistryModals({
             });
         };
 
+        const onOpenChangeLeadLocation = (ev: Event) => {
+            const detail = parseOpenChangeLeadLocationModalDetail(ev);
+            if (!detail || !matchesDrawer(detail.opportunity_id)) return;
+            openChangeLeadLocation({ opportunityId: detail.opportunity_id });
+        };
+
         window.addEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
@@ -402,6 +444,7 @@ export function useOpportunityDrawerVmRegistryModals({
         window.addEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
         window.addEventListener(ADMINV2_OPEN_RELATIONSHIP_ACTION_MODAL, onOpenRelationshipAction as EventListener);
         window.addEventListener(ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL, onOpenEnrollmentStatus as EventListener);
+        window.addEventListener(ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL, onOpenChangeLeadLocation as EventListener);
 
         return () => {
             window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
@@ -413,8 +456,9 @@ export function useOpportunityDrawerVmRegistryModals({
             window.removeEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
             window.removeEventListener(ADMINV2_OPEN_RELATIONSHIP_ACTION_MODAL, onOpenRelationshipAction as EventListener);
             window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL, onOpenEnrollmentStatus as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL, onOpenChangeLeadLocation as EventListener);
         };
-    }, [oid, openAddInquiryChild, openAddPerson, openCreateWorkFromEvent, openRelationshipAction, openEnrollmentStatus]);
+    }, [oid, openAddInquiryChild, openAddPerson, openCreateWorkFromEvent, openRelationshipAction, openEnrollmentStatus, openChangeLeadLocation]);
 
     useEffect(() => {
         const pending = pendingTourScheduleRef.current;
@@ -449,6 +493,7 @@ export function useOpportunityDrawerVmRegistryModals({
             setAddPersonState(null);
             setRelationshipActionState(null);
             setEnrollmentStatusState(null);
+            setChangeLeadLocationOpen(false);
         }
     }, [oid]);
 
@@ -772,6 +817,24 @@ export function useOpportunityDrawerVmRegistryModals({
                         }}
                     />
                 :   null}
+                {changeLeadLocationOpen ?
+                    <ChangeLeadLocationModal
+                        open
+                        opportunityId={oid}
+                        record={record}
+                        onClose={() => setChangeLeadLocationOpen(false)}
+                        onSuccess={(nextRecord) => {
+                            if (nextRecord) {
+                                patchRecord(() => nextRecord);
+                            }
+                            dispatchOpportunityDrawerScopedUpdate(oid, CHANGE_LEAD_LOCATION_ACTION_KEY, [
+                                "header_actions",
+                                "activity",
+                            ]);
+                            void reloadOpportunityDisplayVm?.();
+                        }}
+                    />
+                :   null}
             </>
         );
     }, [
@@ -781,6 +844,7 @@ export function useOpportunityDrawerVmRegistryModals({
         actionHost.patchRecord,
         applyTourBookingPatch,
         canMutate,
+        changeLeadLocationOpen,
         createWorkOpen,
         createWorkPrefill,
         departmentId,
@@ -810,8 +874,17 @@ export function useOpportunityDrawerVmRegistryModals({
             openAddPerson,
             openRelationshipAction,
             openEnrollmentStatus,
+            openChangeLeadLocation,
         }),
-        [openAddInquiryChild, openAddPerson, openCreateWorkDirect, openForm, openRelationshipAction, openEnrollmentStatus],
+        [
+            openAddInquiryChild,
+            openAddPerson,
+            openCreateWorkDirect,
+            openForm,
+            openRelationshipAction,
+            openEnrollmentStatus,
+            openChangeLeadLocation,
+        ],
     );
 
     return { modals, registryHostExtensions };

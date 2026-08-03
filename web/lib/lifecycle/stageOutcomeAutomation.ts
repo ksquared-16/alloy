@@ -22,6 +22,10 @@ import {
     stageKeyFromTransitionRef,
     type StageOutcomeTransitionOption,
 } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import {
+    isClosedStatusKeyForEntity,
+    type OutcomeStatusConfiguredRow,
+} from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 
 export type OutcomeAutomationKind =
     | "none"
@@ -97,7 +101,55 @@ function rulesForOutcome(rules: StageOutcomeRuleV1[], outcomeKey: string): Stage
     );
 }
 
-function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutomationKind {
+function entityTypeForStatusTarget(kind: StageOutcomeRuleTargetV1["kind"]): string | null {
+    if (kind === "update_family_case_status") return "opportunities";
+    if (kind === "update_child_enrollment_status") return "opportunity_customer_members";
+    return null;
+}
+
+function statusKeyFromTarget(target: StageOutcomeRuleTargetV1): string | null {
+    return trimKey(target.status_key) ?? trimKey(target.disposition_key);
+}
+
+/**
+ * A status-update target is close_record only when the target status resolves as
+ * terminal/closed for the correct status domain (via the canonical closed-status
+ * resolver). Setting status to open (or any non-closed key) is not a close.
+ */
+function statusUpdateIsCloseRecord(
+    targets: StageOutcomeRuleTargetV1[],
+    options?: {
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
+): boolean {
+    for (const target of targets) {
+        const domain = entityTypeForStatusTarget(target.kind);
+        if (!domain) continue;
+        const statusKey = statusKeyFromTarget(target);
+        if (!statusKey) continue;
+        // Prefer the target's own domain; fall back to plan entityType when present.
+        const entityType = domain;
+        if (
+            isClosedStatusKeyForEntity({
+                statusKey,
+                entityType,
+                configuredStatuses: options?.configuredStatuses,
+            })
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function detectAutomationKind(
+    targets: StageOutcomeRuleTargetV1[],
+    options?: {
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
+): OutcomeAutomationKind {
     if (!targets.length) return "none";
 
     const kinds = new Set(targets.map((t) => t.kind));
@@ -107,12 +159,24 @@ function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutom
     if (kinds.has("reopen_work") || kinds.has("create_next_work")) return "repeat_work";
     // Transition-owned moves first — they may also carry companion status updates.
     if (kinds.has("move_to_stage")) return "move_to_stage";
-    // Status-only close / disposition (any configured status key — including legacy invalid).
+    // Status-only updates: close_record only when the target status is terminal/closed
+    // for the correct domain. Non-closed status sets (e.g. open) stay in stage.
     if (kinds.has("update_family_case_status") || kinds.has("update_child_enrollment_status")) {
-        return "close_record";
+        return statusUpdateIsCloseRecord(targets, options) ? "close_record" : "stay_in_stage";
     }
     if (kinds.has("no_movement")) return "stay_in_stage";
     return "none";
+}
+
+/** Exported for regression tests — classification must stay aligned with validation. */
+export function classifyOutcomeAutomationKind(
+    targets: StageOutcomeRuleTargetV1[],
+    options?: {
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
+    },
+): OutcomeAutomationKind {
+    return detectAutomationKind(targets, options);
 }
 
 function readFollowUpTarget(targets: StageOutcomeRuleTargetV1[]): StageOutcomeRuleTargetV1 | null {
@@ -129,6 +193,8 @@ export function readOutcomeAutomationDraft(
     options?: {
         preferAttemptGte?: boolean;
         transitionOptions?: StageOutcomeTransitionOption[];
+        configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+        entityType?: string;
     },
 ): OutcomeAutomationDraft {
     const matching = rulesForOutcome(rules, outcomeKey);
@@ -142,7 +208,10 @@ export function readOutcomeAutomationDraft(
             ?? rule;
     }
 
-    const kind = detectAutomationKind(rule.targets);
+    const kind = detectAutomationKind(rule.targets, {
+        configuredStatuses: options?.configuredStatuses,
+        entityType: options?.entityType,
+    });
     const draft: OutcomeAutomationDraft = { kind };
 
     if (rule.when_attempt_count_lt != null) draft.when_attempt_count_lt = rule.when_attempt_count_lt;
@@ -156,8 +225,13 @@ export function readOutcomeAutomationDraft(
             if (transitionRef) draft.transition_ref = transitionRef;
             if (target.stage_key) draft.stage_key = target.stage_key;
         }
-        if (target.kind === "update_family_case_status" && target.status_key) {
-            draft.status_key = target.status_key;
+        if (target.kind === "update_family_case_status") {
+            const statusKey = statusKeyFromTarget(target);
+            if (statusKey) draft.status_key = statusKey;
+        }
+        if (target.kind === "update_child_enrollment_status") {
+            const statusKey = statusKeyFromTarget(target);
+            if (statusKey) draft.status_key = statusKey;
         }
         const followUp = readFollowUpTarget(rule.targets);
         if (followUp && (target.kind === "reopen_work" || target.kind === "create_next_work")) {

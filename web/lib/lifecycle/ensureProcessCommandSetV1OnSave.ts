@@ -1,0 +1,125 @@
+/**
+ * Ensure process `command_set_v1` on Business Process saves (P6.S3).
+ *
+ * - Absent V1 → stamp from deterministic legacy migrate (no UX change).
+ * - Present V1 → maintain; optionally upsert newly seen stage-catalog keys as enabled.
+ * - Never replace an explicit empty V1 with legacy fallback.
+ */
+
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { LifecycleBuilderV1 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
+import { migrateLegacyProcessCommands } from "@/lib/lifecycle/migrateLegacyProcessCommands";
+import {
+    listEnabledCommandKeys,
+    type BusinessProcessCommandSetV1,
+} from "@/lib/lifecycle/processCommandSetV1";
+import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
+
+function resolveCanon(key: string): string {
+    const resolved = tryResolvePlatformCapability(key);
+    if (resolved.status === "known") return resolved.capability.canonicalCommandKey;
+    return key.trim();
+}
+
+function upsertMissingCatalogKeys(
+    existing: BusinessProcessCommandSetV1,
+    process: LifecycleBuilderProcessRecord
+): BusinessProcessCommandSetV1 {
+    const enabled = new Set(listEnabledCommandKeys(existing, resolveCanon));
+    const disabled = new Set(
+        existing.commands
+            .filter((c) => !c.enabled)
+            .map((c) => resolveCanon(c.capability_key))
+            .filter(Boolean)
+    );
+    const next: BusinessProcessCommandSetV1 = {
+        version: 1,
+        commands: [...existing.commands],
+    };
+    for (const stage of process.stages ?? []) {
+        for (const row of stage.action_catalog_v1?.candidate_actions ?? []) {
+            const key = row.action_key.trim();
+            if (!key) continue;
+            const canon = resolveCanon(key);
+            if (!canon || enabled.has(canon) || disabled.has(canon)) continue;
+            // Also skip if already present under any alias form.
+            if (
+                next.commands.some(
+                    (c) => resolveCanon(c.capability_key) === canon
+                )
+            ) {
+                continue;
+            }
+            next.commands.push({ capability_key: canon, enabled: true });
+            enabled.add(canon);
+        }
+    }
+    return next;
+}
+
+/**
+ * Stamp or maintain command_set_v1 on a single process.
+ */
+export function ensureProcessCommandSetV1OnSave(
+    process: LifecycleBuilderProcessRecord,
+    opts?: {
+        lifecycleConfiguredActions?: readonly LifecycleConfiguredActionRow[] | null;
+        /** When true and V1 present, append newly seen stage catalog keys. Default true. */
+        upsertFromStageCatalogs?: boolean;
+    }
+): LifecycleBuilderProcessRecord {
+    if (process.command_set_v1) {
+        if (opts?.upsertFromStageCatalogs === false) {
+            return process;
+        }
+        // Explicit empty remains intentional — do not migrate-fill.
+        if (process.command_set_v1.commands.length === 0) {
+            return process;
+        }
+        const maintained = upsertMissingCatalogKeys(process.command_set_v1, process);
+        return { ...process, command_set_v1: maintained };
+    }
+
+    const migrated = migrateLegacyProcessCommands({
+        process,
+        lifecycleConfiguredActions: opts?.lifecycleConfiguredActions,
+    });
+    return { ...process, command_set_v1: migrated.commands };
+}
+
+/**
+ * Apply ensureProcessCommandSetV1OnSave to every process in a builder config.
+ */
+export function ensureBuilderCommandSetsOnSave(
+    config: LifecycleBuilderV1,
+    opts?: {
+        lifecycleConfiguredActions?: readonly LifecycleConfiguredActionRow[] | null;
+        upsertFromStageCatalogs?: boolean;
+    }
+): LifecycleBuilderV1 {
+    return {
+        ...config,
+        processes: config.processes.map((p) => ensureProcessCommandSetV1OnSave(p, opts)),
+    };
+}
+
+export function isCapabilityInProcessSelection(
+    process: LifecycleBuilderProcessRecord | null | undefined,
+    capabilityKey: string
+): boolean {
+    if (!process) return true;
+    const selectionKeys = listEnabledCommandKeys(
+        process.command_set_v1 ??
+            migrateLegacyProcessCommands({ process }).commands,
+        resolveCanon
+    );
+    const want = resolveCanon(capabilityKey);
+    const intent = normalizeActionRefToIntentKey(capabilityKey);
+    return (
+        selectionKeys.includes(want) ||
+        selectionKeys.includes(intent) ||
+        selectionKeys.some((k) => normalizeActionRefToIntentKey(k) === intent)
+    );
+}

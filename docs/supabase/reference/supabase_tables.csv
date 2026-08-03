@@ -146,6 +146,7 @@ public,operational_authority_assignments,BASE TABLE,true,false,true
 public,operational_expectation_ratifications,BASE TABLE,true,false,true
 public,operational_expectations,BASE TABLE,true,false,true
 public,operational_tasks,BASE TABLE,true,false,true
+public,operator_stage_membership_acks,BASE TABLE,true,false,true
 public,opportunities,BASE TABLE,true,false,true
 public,opportunity_customer_members,BASE TABLE,true,false,true
 public,opportunity_persons,BASE TABLE,true,false,true

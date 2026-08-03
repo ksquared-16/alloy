@@ -211,6 +211,22 @@ describe("relationship section runtime resolution", () => {
         expect(parentMatch).toBe("other_parent_guardian");
     });
 
+    it("unions platform parent roles so family_member matches Other Parent despite stale criteria", () => {
+        let config = defaultHouseholdRelationshipSectionConfig();
+        config = setHouseholdRelationshipSectionCriteria(config, "other_parent_guardian", {
+            roleKeys: ["parent", "guardian"],
+            excludeRoleKeys: ["emergency", "pickup", "billing"],
+        });
+        const match = resolveHouseholdContactSectionKey({
+            config,
+            roleType: "family_member",
+            isPrimary: false,
+            assignedPersonIds: new Set(["p1"]),
+            personId: "p2",
+        });
+        expect(match).toBe("other_parent_guardian");
+    });
+
     it("invalid definition references fail safe without throwing", () => {
         let config = defaultHouseholdRelationshipSectionConfig();
         config = {

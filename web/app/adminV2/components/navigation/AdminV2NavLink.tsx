@@ -1,8 +1,13 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react";
+import { useSyncExternalStore, type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 import { commitAdminV2NavLinkNavigation } from "@/lib/adminV2/navigation/adminV2SoftNavLinkCommit";
+import {
+    getAdminV2NavigationTransitionSnapshot,
+    subscribeAdminV2NavigationTransition,
+} from "@/lib/adminV2/navigation/adminV2NavigationTransition";
+import { adminV2SoftNavClickedKey } from "@/lib/adminV2/shellNavigation";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
 function normalizeNavPath(path: string): string {
@@ -51,10 +56,27 @@ export function AdminV2NavLink({
     const adminDrawer = useAdminDrawerOptional();
     const hrefPath = href.split(/[?#]/)[0] ?? href;
     const isCurrentRoute = normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
-    const isHighlighted = Boolean(active || (!highlightFromActiveOnly && isCurrentRoute));
+    const realHighlight = Boolean(active || (!highlightFromActiveOnly && isCurrentRoute));
+
+    // IMMEDIATE ACKNOWLEDGEMENT: the nav transition snapshot is set SYNCHRONOUSLY on click (before any
+    // prepare/await), so subscribing here lights up the exact item the operator clicked the instant
+    // they click it — no waiting for the route (which, on a slow load, is seconds away) to change the
+    // pathname-derived highlight. This is the same pending signal the workspace tiles already consume
+    // (`data-adminv2-nav-pending`); the sidebar link simply wasn't wired to it. The prior current item
+    // keeps its highlight (brief overlap reads as "moving from here to there") — never a blank moment
+    // where the click seems to have done nothing.
+    const navSnapshot = useSyncExternalStore(
+        subscribeAdminV2NavigationTransition,
+        getAdminV2NavigationTransitionSnapshot,
+        getAdminV2NavigationTransitionSnapshot,
+    );
+    const isPending =
+        navSnapshot.isTransitioning && navSnapshot.clickedKey === adminV2SoftNavClickedKey(href);
+    const isHighlighted = realHighlight || isPending;
     const merged = [
         "adminv2-nav-link",
         isHighlighted ? "adminv2-nav-link--active" : "",
+        isPending ? "adminv2-nav-link--pending" : "",
         className,
     ]
         .filter(Boolean)
@@ -75,7 +97,9 @@ export function AdminV2NavLink({
             style={style}
             title={title}
             aria-label={ariaLabel}
-            aria-current={isHighlighted ? "page" : undefined}
+            aria-current={realHighlight ? "page" : undefined}
+            aria-busy={isPending || undefined}
+            data-adminv2-nav-pending={isPending ? "true" : undefined}
             onClick={handleClick}
             onMouseEnter={onMouseEnter}
             onFocus={onFocus}

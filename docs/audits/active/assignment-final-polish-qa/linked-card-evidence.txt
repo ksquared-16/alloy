@@ -1,0 +1,12 @@
+assignLinked=1
+afterAssign cards=[{"key":"current_work","sched":null,"surface":null,"open":null,"text":"WHAT'S NEXT Open Contact Family Reach the family, understa"},{"key":"household","sched":null,"surface":null,"open":null,"text":"HOUSEHOLD Needs contact Kurzman household KK Kelly Kurzman"}]
+openers=0
+listCount=0
+list wait fail
+body={
+  "hasRoot": true,
+  "text": "LK\nLennon Kurzman\nPre-K · Mon–Fri · Aug 24, 2026 · +4 more\nStarts Aug 24, 2026\n›\nWK\nWrigley Kurzman\nNo schedule yet\nNeeds a room\n›",
+  "rows": 0,
+  "dayFilter": 0,
+  "create": 0
+}

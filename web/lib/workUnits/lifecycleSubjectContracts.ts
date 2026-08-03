@@ -64,7 +64,7 @@ export type QueueRowSubjectPresentation = {
     display_name: string;
     /** ISO date-of-birth when known from inquiry / household child payload. */
     date_of_birth?: string | null;
-    /** Compact age label (e.g. `2y`, `3m`) derived from DOB or inquiry age. */
+    /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
     age_label?: string | null;
     /** Gender label when hydrated on queue row inquiry child payload. */
     gender_label?: string | null;
@@ -114,7 +114,7 @@ export type RelatedSubjectSummary = {
     schedule_label?: string | null;
     /** ISO date-of-birth when known from inquiry / household child payload. */
     date_of_birth?: string | null;
-    /** Compact age label (e.g. `2y`, `3m`) derived from DOB or inquiry age. */
+    /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
     age_label?: string | null;
     /** Gender label when hydrated on queue row inquiry child payload. */
     gender_label?: string | null;
@@ -189,6 +189,13 @@ export type QueueRowContext = {
 
     /** Operator stage label for the queue lane (e.g. "Tours", "New Leads"). */
     row_stage: string;
+    /**
+     * Configured stage key → the tenant's authored label. Additive and optional: configured stages
+     * are the only runtime stage vocabulary, so a per-row stage can render in the operator's own
+     * words ("Tours") rather than a humanized key ("Tour"). Absent when no stage list is in scope,
+     * in which case the key is humanized.
+     */
+    stage_labels_by_key?: Record<string, string>;
     lifecycle_key: string;
     row_status_key: string;
     row_status_label: string;
@@ -235,6 +242,32 @@ export type QueueRowContext = {
     waitlist_context?: {
         position_label?: string | null;
         wait_since?: string | null;
+    } | null;
+
+    /**
+     * Time in current operational stage / cohort membership (not Work View age, not updated_at).
+     * Additive — CondensedQueueRow shows compact age at the right edge when present.
+     */
+    operational_state?: {
+        /** Authoritative stage key for this row subject. */
+        stage_key: string | null;
+        /** ISO entry time for the current stage membership occurrence. */
+        entered_at: string | null;
+        /** Resolver provenance. */
+        source: "persisted_stage_entered_at" | "intake_created_at" | "unknown";
+        /** Compact label (`12m`, `3h`, `2d`) — null when unknown. */
+        age_compact: string | null;
+        /** Accessible full label — null when unknown. */
+        age_accessible: string | null;
+    } | null;
+
+    /**
+     * Personal seen/unseen for the current operator on this stage membership occurrence.
+     * Absent when the viewer is anonymous or acknowledgement is not hydrated.
+     */
+    personal_seen?: {
+        unseen: boolean;
+        occurrence_key: string | null;
     } | null;
 };
 

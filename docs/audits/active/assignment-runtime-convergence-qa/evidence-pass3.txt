@@ -1,0 +1,6 @@
+ROOM_META=[]
+RAW_pre_k=false CAP_CELL=0
+PASS3_FAIL page.goto: Timeout 30000ms exceeded.
+Call log:
+  - navigating to "http://127.0.0.1:3015/organization/locations", waiting until "domcontentloaded"
+

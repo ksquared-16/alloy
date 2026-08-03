@@ -254,6 +254,15 @@ export async function insertOpportunityWithPersonFirst(
     ) as Record<string, unknown>;
     stripLegacyTextStatusFromWritePayload(insertPayload);
 
+    // Stamp stage membership entry when the insert establishes a stage_key.
+    if (
+        typeof insertPayload.stage_key === "string" &&
+        insertPayload.stage_key.trim() &&
+        insertPayload.stage_entered_at == null
+    ) {
+        insertPayload.stage_entered_at = new Date().toISOString();
+    }
+
     const { data, error } = await supabase.from("opportunities").insert(insertPayload).select("id").single();
     if (error || !data) {
         throw new Error(error?.message ?? "Opportunity insert failed");

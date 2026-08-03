@@ -17,6 +17,8 @@ export type ProcessDraftChildFacts = {
     startDate: string | null;
     programCategoryId: string | null;
     siteLocationId: string | null;
+    /** Operator-facing site name for `location_id` — never the UUID. */
+    siteLocationLabel: string | null;
 };
 
 function metaStr(meta: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -77,12 +79,20 @@ export async function resolveProcessDraftFactsForChildren(
                 .filter((v): v is string => !!v && UUID_RE.test(v)),
         ),
     ];
-    const roomLabelById = new Map<string, string>();
-    if (roomLocationIds.length) {
-        const { data } = await supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", roomLocationIds);
+    const siteLocationIds = [
+        ...new Set(
+            mine
+                .map((pi) => metaStr(pi.metadata, "site_location_id") ?? metaStr(pi.metadata, "location_id"))
+                .filter((v): v is string => !!v && UUID_RE.test(v)),
+        ),
+    ];
+    const locationIdsForLabel = [...new Set([...roomLocationIds, ...siteLocationIds])];
+    const locationLabelById = new Map<string, string>();
+    if (locationIdsForLabel.length) {
+        const { data } = await supabase.from("locations").select("id, label").eq("org_id", orgId).in("id", locationIdsForLabel);
         for (const r of data ?? []) {
             const rec = r as { id: string; label?: string | null };
-            if (rec.label?.trim()) roomLabelById.set(String(rec.id), rec.label.trim());
+            if (rec.label?.trim()) locationLabelById.set(String(rec.id), rec.label.trim());
         }
     }
 
@@ -91,17 +101,24 @@ export async function resolveProcessDraftFactsForChildren(
         const roomRaw = metaStr(pi.metadata, "room_location_id") ?? metaStr(pi.metadata, "program_room_cohort_key");
         const scheduleType = metaStr(pi.metadata, "schedule_type");
         const startDate = metaStr(pi.metadata, "start_date");
+        const siteLocationId = metaStr(pi.metadata, "site_location_id") ?? metaStr(pi.metadata, "location_id");
         const programLabel = programCategoryId ? programLabelById.get(programCategoryId) ?? null : null;
-        const roomLabel = roomRaw ? (roomLabelById.get(roomRaw) ?? (UUID_RE.test(roomRaw) ? null : humanizeToken(roomRaw))) : null;
-        // Only record when there is at least one participation fact worth showing.
-        if (!programLabel && !roomLabel && !scheduleType && !startDate && !programCategoryId) continue;
+        const roomLabel = roomRaw
+            ? (locationLabelById.get(roomRaw) ?? (UUID_RE.test(roomRaw) ? null : humanizeToken(roomRaw)))
+            : null;
+        const siteLocationLabel = siteLocationId ? locationLabelById.get(siteLocationId) ?? null : null;
+        // Location-only Create Lead participation must still surface (site is often set before program).
+        if (!programLabel && !roomLabel && !scheduleType && !startDate && !programCategoryId && !siteLocationId) {
+            continue;
+        }
         out.set(pi.subject_id, {
             programLabel,
             roomLabel,
             scheduleLabel: humanizeToken(scheduleType),
             startDate,
             programCategoryId,
-            siteLocationId: metaStr(pi.metadata, "site_location_id") ?? metaStr(pi.metadata, "location_id"),
+            siteLocationId,
+            siteLocationLabel,
         });
     }
     return out;

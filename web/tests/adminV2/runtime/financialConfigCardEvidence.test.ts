@@ -64,12 +64,31 @@ const ENROLLMENT_NO_RATE: FinancialConfigEnrollment = {
 // ── Evidence shape ───────────────────────────────────────────────────────────
 
 describe("buildBillingPreviewCardEvidence", () => {
-    it("returns isConfigured=false and blocked tone when no signals and no truth", () => {
-        // Both readiness items (contact + tuition) are unmet → blocked, not neutral
+    it("HOLDS — no verdict — when no authoritative source has answered for tuition", () => {
+        // Was: "blocked tone when no signals and no truth". That asserted the fabrication this
+        // card shipped with: `tuition_rate_label` / `billing_configured` are written NOWHERE in the
+        // platform, so every record reported "N items missing" with a BLOCKED tone — a business
+        // conclusion manufactured from unwired plumbing. Unresolved is not unmet.
         const ev = buildBillingPreviewCardEvidence(ctx({}));
         expect(ev.isConfigured).toBe(false);
-        expect(ev.statusTone).toBe("blocked");
+        expect(ev.statusTone).toBe("neutral");
+        expect(ev.statusChip).toBeNull();
+        expect(ev.answerLine).not.toMatch(/missing|not configured/i);
+        const tuition = ev.readinessItems.find((i) => i.label === "Tuition rate");
+        expect(tuition?.resolved).toBe(false);
+        // Held, not resolved-empty.
         expect(ev.isEmpty).toBe(false);
+    });
+
+    it("reports missing only for items an authoritative source RESOLVED as absent", () => {
+        // The financial-config API answered (empty result) → tuition is resolved-and-absent, and
+        // the contact is genuinely unset. Now "missing" is truthful.
+        const ev = buildBillingPreviewCardEvidence(ctx({}), []);
+        const tuition = ev.readinessItems.find((i) => i.label === "Tuition rate");
+        expect(tuition?.resolved).toBe(true);
+        expect(tuition?.met).toBe(false);
+        expect(ev.statusTone).toBe("blocked");
+        expect(ev.statusChip).toMatch(/missing/i);
     });
 
     it("shows blocked state when billing contact is missing", () => {

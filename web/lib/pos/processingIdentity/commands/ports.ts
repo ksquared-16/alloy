@@ -83,6 +83,7 @@ export interface IdentityCommandPorts {
             status_key: string;
             stage_key: string;
             work_unit_id: string | null;
+            location_id?: string | null;
         },
     ): Promise<UpsertResult>;
 
@@ -259,6 +260,10 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async createLead(ctx, input) {
+            const locationId =
+                typeof input.location_id === "string" && input.location_id.trim()
+                    ? input.location_id.trim()
+                    : null;
             const { data, error } = await ctx.supabase
                 .from("opportunities")
                 .insert({
@@ -268,7 +273,9 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                     name: input.name,
                     status_key: input.status_key,
                     stage_key: input.stage_key,
+                    stage_entered_at: new Date().toISOString(),
                     ...(input.work_unit_id ? { work_unit_id: input.work_unit_id } : {}),
+                    ...(locationId ? { location_id: locationId } : {}),
                 })
                 .select("id")
                 .single();
@@ -322,9 +329,19 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
         },
 
         async updateProcessParticipation(ctx, input) {
+            const patch: Record<string, unknown> = {
+                ...input.patch,
+                updated_at: new Date().toISOString(),
+            };
+            if (
+                Object.prototype.hasOwnProperty.call(input.patch, "stage_key") &&
+                patch.stage_entered_at == null
+            ) {
+                patch.stage_entered_at = new Date().toISOString();
+            }
             let q = ctx.supabase
                 .from("process_instances")
-                .update({ ...input.patch, updated_at: new Date().toISOString() })
+                .update(patch)
                 .eq("id", input.participation_id)
                 .eq("org_id", ctx.orgId);
             if (input.expected_version) q = q.eq("updated_at", input.expected_version);

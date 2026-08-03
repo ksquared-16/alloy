@@ -158,6 +158,29 @@ export function resetOpportunityStageWorkCacheForTests(): void {
     listeners.clear();
 }
 
+/**
+ * SEED a server-composed stage-work slice into this cache (Runtime V1 Realization — CP-2, D-001 pattern).
+ *
+ * The Provisioning Answer already carries `focusPanelStageWork` for the committed subject; seeding it here
+ * — under the SAME (org/opp/dept/stage) key the drawer VM's `resolveStageWorkSliceForVm` builds — lets the
+ * client's warm-cache check (`getOpportunityStageWorkWarm`) consume it, removing the duplicate `/stage-work`
+ * fetch on the cold reveal. Idempotent: it never clobbers a still-fresh entry (a real fetch, or a prior
+ * seed, wins), and it is keyed identically to the fetch path so a key drift simply misses (falls back to
+ * the fetch — no wrong data). Returns whether it seeded (for the parity test).
+ */
+export function seedOpportunityStageWork(
+    params: OpportunityStageWorkParams,
+    slice: OpportunityStageWorkSlice,
+): boolean {
+    const key = opportunityStageWorkCacheKey(params);
+    if (!key) return false;
+    const existing = cache.get(key);
+    if (existing && Date.now() - existing.fetchedAt <= CACHE_TTL_MS) return false; // don't clobber a fresh entry
+    cache.set(key, { slice, fetchedAt: Date.now() });
+    notify();
+    return true;
+}
+
 /** Test-only warm seed. */
 export function seedOpportunityStageWorkCacheForTests(
     params: OpportunityStageWorkParams,

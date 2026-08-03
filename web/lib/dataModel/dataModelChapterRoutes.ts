@@ -9,7 +9,10 @@
  * of a category page.
  */
 
-import { CANONICAL_ORGANIZATION_DATA_MODEL_HREF } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    CANONICAL_ORGANIZATION_DATA_MODEL_HREF,
+    CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
 
 export const DATA_MODEL_WORKSPACE_SECTIONS = [
     "entities",
@@ -49,8 +52,8 @@ export const DATA_MODEL_WORKSPACE_SECTION_META: Record<
         description: "Canonical edges between Entities and relationship-role vocabulary.",
     },
     calculations: {
-        label: "Operational Calculations",
-        description: "Configured derived values and metrics (deep product in next sprint).",
+        label: "Operational Intelligence",
+        description: "Redirects to the Organization Operational Intelligence product.",
     },
 };
 
@@ -125,7 +128,9 @@ export type DataModelEntityRoute =
  * Resolve inbound route params onto the Entity-centric workspace.
  *
  * `?tab=` always wins when present, so an Entity deep-link is never overridden by
- * a stale `?section=`. Operational Calculations stays a separate deferred pane.
+ * a stale `?section=`. Operational Intelligence resolves as `mode: "calculations"`
+ * for inbound compatibility; the Organization Data Model page redirects to the
+ * canonical OI product.
  */
 export function resolveDataModelEntityRoute(params: {
     section?: string | null;
@@ -161,5 +166,8 @@ export function dataModelEntityHref(
         : CANONICAL_ORGANIZATION_DATA_MODEL_HREF;
 }
 
-/** Quiet secondary entry for the deferred Operational Calculations experience. */
-export const DATA_MODEL_CALCULATIONS_HREF = dataModelSectionHref("calculations");
+/**
+ * Compatibility alias — legacy Data Model calculations deep links resolve to the
+ * first-class Operational Intelligence Organization product.
+ */
+export const DATA_MODEL_CALCULATIONS_HREF = CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF;

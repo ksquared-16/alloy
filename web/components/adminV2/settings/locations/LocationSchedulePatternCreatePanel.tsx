@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * Canonical `schedule_patterns` · shared with Locations — this panel creates rows through
+ * the same `/api/admin/schedule-patterns` endpoint (via `createSchedulePattern` below) that
+ * the Scheduling Studio → Patterns editor uses. There is no separate Locations-only store.
+ */
+
 import { useState } from "react";
 import {
     createSchedulePattern,

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import { minimalSettledOpportunityDrawerViewModel } from "@/tests/adminV2/viewModel/fixtures/minimalSettledOpportunityDrawerViewModel";
 
 const webRoot = join(process.cwd());
@@ -67,11 +68,12 @@ describe("deriveOpportunityFocusPanelPresentation", () => {
             statusLabel: "New",
         });
 
-        const firstRowKeys = grid.rows[0]?.cells.map((c) => c.key) ?? [];
-        const secondRowKeys = grid.rows[1]?.cells.map((c) => c.key) ?? [];
-        // Code SUMMARY_GRID fallback (published Enrollment doc overrides at runtime).
-        expect(firstRowKeys).toEqual(["current_work", "household"]);
-        expect(secondRowKeys).toEqual(["children", "readiness_kpi"]);
+        // Summary declares no second composition: it derives from the SAME authority the runtime
+        // resolves — the code-owned default composition (a published org doc overrides it).
+        // Reading order is the composition's order, one card per gridRow.
+        expect(grid.rows.map((r) => r.cells.map((c) => c.key))).toEqual(
+            FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.map((entry) => [entry.key]),
+        );
 
         // Card models for catalog / Linked cards are still built (composer + Linked host).
         expect(cards.get("attention")?.insight).toBe("Missing immunizations");

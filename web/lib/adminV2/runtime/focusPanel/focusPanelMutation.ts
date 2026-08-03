@@ -32,6 +32,7 @@ import {
     type InquiryChildOcmPatch,
 } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import type { ChildFocusSavePatch } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
+import { setChildAvatarSessionPreview } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
 import type { InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
@@ -74,6 +75,10 @@ export type FocusPanelSaveResult =
     | { ok: true }
     | { ok: false; status: number; error: string };
 
+export type FocusPanelPhotoSaveResult =
+    | { ok: true; photoUrl: string | null }
+    | { ok: false; status: number; error: string };
+
 /** Tour status actions (action-only card — no inline form). */
 export type FocusPanelTourMutation = {
     cancelTour: (bookingId: string) => Promise<FocusPanelSaveResult>;
@@ -100,6 +105,22 @@ export type FocusPanelMutation = {
         patch: ChildFocusSavePatch;
         identityBaseline: InquiryChildIdentityPatch;
     }) => Promise<FocusPanelSaveResult>;
+    /**
+     * Mark a just-uploaded document (existing documents-upload path) as a child's
+     * canonical profile photo — persists `persons.metadata.profile_photo_document_id`
+     * (+ a cached signed URL) and refreshes Focus Panel truth so every card sharing this
+     * child's evidence (Children, Assignments/Scheduling) shows the same image.
+     */
+    savePersonChildPhoto: (args: {
+        childId: string;
+        personId: string;
+        documentId: string;
+    }) => Promise<FocusPanelPhotoSaveResult>;
+    /** Clear canonical profile photo — initials fallback. */
+    clearPersonChildPhoto: (args: {
+        childId: string;
+        personId: string;
+    }) => Promise<FocusPanelPhotoSaveResult>;
     /** Open the existing add-emergency-contact relationship modal. */
     openAddEmergencyContact: () => void;
     /** Child-scoped add emergency contact (focused child drill-in). */
@@ -107,6 +128,8 @@ export type FocusPanelMutation = {
         customerMemberId: string;
         childPersonId?: string | null;
     }) => void;
+    /** Open the add-authorized-pickup relationship modal (household scope). */
+    openAddAuthorizedPickup: () => void;
     /** Patch canonical relationship fields (not Person-owned fields). */
     savePersonChildRelationship: (
         relationshipId: string,
@@ -272,6 +295,19 @@ function trimId(value: unknown): string | null {
     return text.length > 0 ? text : null;
 }
 
+function inquiryChildRowMatchesTarget(r: Record<string, unknown>, targetId: string): boolean {
+    const rowId = trimId(r.id);
+    const rowPersonId = trimId(r.person_id);
+    const rowMemberId = trimId(r.customer_member_id);
+    if (rowId === targetId || rowPersonId === targetId || rowMemberId === targetId) return true;
+    // Synthetic unlinked ids: `unlinked:{customer_member_id}`
+    if (targetId.startsWith("unlinked:")) {
+        const memberFromTarget = targetId.slice("unlinked:".length).trim();
+        if (memberFromTarget && rowMemberId === memberFromTarget) return true;
+    }
+    return false;
+}
+
 /**
  * Merge saved inquiry-child edits back into Focus Panel subject truth. Pure.
  * Updates the matching `_inquiry_children` row by child id / person id.
@@ -293,14 +329,12 @@ export function mergeInquiryChildIntoFocusPanelTruth(
     const ocm = args.patch.ocmPatch;
     const personId = trimId(args.row.person_id);
 
-    const nextRows = rows.map((raw) => {
-        if (!raw || typeof raw !== "object") return raw;
-        const r = raw as Record<string, unknown>;
-        const rowId = trimId(r.id);
-        const rowPersonId = trimId(r.person_id);
-        if (rowId !== targetId && rowPersonId !== targetId) return raw;
-
+    let matchedByTarget = false;
+    const applyRowPatch = (r: Record<string, unknown>): Record<string, unknown> => {
         const next: Record<string, unknown> = { ...r };
+        // Keep person_id on the inquiry row when a photo bind supplies it — needed for
+        // subsequent avatar edit/remove without re-resolving.
+        if (personId) next.person_id = personId;
         if (identity.first_name !== undefined) next.first_name = identity.first_name;
         if (identity.last_name !== undefined) next.last_name = identity.last_name;
         if (identity.dob !== undefined) {
@@ -314,13 +348,51 @@ export function mergeInquiryChildIntoFocusPanelTruth(
         if (ocm.location_id !== undefined) next.location_id = ocm.location_id;
         if (ocm.start_date !== undefined) next.start_date = ocm.start_date;
         if (ocm.notes !== undefined) next.notes = ocm.notes;
+        const display = args.patch.displayPatch;
+        if (display?.desired_program_label !== undefined) {
+            next.desired_program_label = display.desired_program_label;
+        } else if (ocm.program_category_id !== undefined && !ocm.program_category_id) {
+            // Cleared program FK — drop the stale display label so evidence does not keep
+            // a prior Program name after the operator empties the field.
+            next.desired_program_label = null;
+        }
+        if (display?.location_label !== undefined) {
+            next.location_label = display.location_label;
+        }
         if (args.patch.profilePatch) {
             for (const [key, value] of Object.entries(args.patch.profilePatch)) {
                 next[key] = value;
             }
         }
         return next;
+    };
+
+    let nextRows = rows.map((raw) => {
+        if (!raw || typeof raw !== "object") return raw;
+        const r = raw as Record<string, unknown>;
+        if (!inquiryChildRowMatchesTarget(r, targetId)) return raw;
+        matchedByTarget = true;
+        return applyRowPatch(r);
     });
+
+    // Photo / ensure-person path: childId may be a synthetic evidence id — fall back to a
+    // unique person_id match so photo_url still lands on the inquiry row.
+    if (!matchedByTarget && personId) {
+        const personMatchIndexes: number[] = [];
+        nextRows.forEach((raw, index) => {
+            if (!raw || typeof raw !== "object") return;
+            if (trimId((raw as Record<string, unknown>).person_id) === personId) {
+                personMatchIndexes.push(index);
+            }
+        });
+        if (personMatchIndexes.length === 1) {
+            const only = personMatchIndexes[0]!;
+            nextRows = nextRows.map((raw, index) => {
+                if (index !== only || !raw || typeof raw !== "object") return raw;
+                return applyRowPatch(raw as Record<string, unknown>);
+            });
+        }
+    }
 
     let merged: Record<string, unknown> = { ...truth, _inquiry_children: nextRows };
     if (personId && (identity.dob !== undefined || identity.first_name !== undefined || identity.last_name !== undefined)) {
@@ -390,6 +462,20 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
             const cmId = trimId(row.customer_member_id);
             if (!cmId) return { ok: false, status: 400, error: "No child record to edit" };
 
+            // Predictive merge: update Focus Panel / summary surfaces immediately, then confirm.
+            const baselineTruth = getTruth?.() ?? truth;
+            const optimisticMerged = mergeInquiryChildIntoFocusPanelTruth(baselineTruth, {
+                childId,
+                row,
+                patch,
+            });
+            dispatchOpportunityDrawerRecordPatch(opportunityId, optimisticMerged);
+            dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                entityType: "opportunities",
+                entityId: opportunityId,
+                record: optimisticMerged,
+            });
+
             let savedPerson: Record<string, unknown> | undefined;
             try {
                 if (Object.keys(patch.identityPatch).length > 0) {
@@ -427,9 +513,19 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     }
                 }
                 if (patch.profilePatch && Object.keys(patch.profilePatch).length > 0) {
-                    await patchCustomerMemberFromInquiryChild(cmId, patch.profilePatch);
+                    // gender_label is Focus Panel display-only (not a customer_member column).
+                    const { gender_label: _genderLabel, ...apiProfile } = patch.profilePatch;
+                    if (Object.keys(apiProfile).length > 0) {
+                        await patchCustomerMemberFromInquiryChild(cmId, apiProfile);
+                    }
                 }
             } catch (e) {
+                dispatchOpportunityDrawerRecordPatch(opportunityId, baselineTruth);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: baselineTruth,
+                });
                 return {
                     ok: false,
                     status: 500,
@@ -437,7 +533,7 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 };
             }
 
-            const merged = mergeInquiryChildIntoFocusPanelTruth(truth, {
+            const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
                 childId,
                 row,
                 patch,
@@ -450,6 +546,71 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 record: merged,
             });
             return { ok: true };
+        },
+        savePersonChildPhoto: async ({ childId, personId, documentId }) => {
+            const pid = personId.trim();
+            const docId = documentId.trim();
+            if (!pid || !docId) return { ok: false, status: 400, error: "Missing person or document" };
+
+            try {
+                const res = await f(`/api/admin/persons/${encodeURIComponent(pid)}/profile-photo`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ document_id: docId }),
+                });
+                const json = (await res.json().catch(() => ({}))) as { photoUrl?: string; error?: string };
+                if (!res.ok || !json.photoUrl) {
+                    return { ok: false, status: res.status, error: json.error ?? "Could not save photo" };
+                }
+
+                setChildAvatarSessionPreview(childId, json.photoUrl);
+
+                const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
+                    childId,
+                    row: { person_id: pid },
+                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: json.photoUrl } },
+                });
+                dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: merged,
+                });
+                return { ok: true, photoUrl: json.photoUrl };
+            } catch (e) {
+                return { ok: false, status: 500, error: e instanceof Error ? e.message : "Could not save photo" };
+            }
+        },
+        clearPersonChildPhoto: async ({ childId, personId }) => {
+            const pid = personId.trim();
+            if (!pid) return { ok: false, status: 400, error: "Missing person" };
+            try {
+                const res = await f(`/api/admin/persons/${encodeURIComponent(pid)}/profile-photo`, {
+                    method: "DELETE",
+                    credentials: "include",
+                });
+                if (!res.ok) {
+                    const json = (await res.json().catch(() => ({}))) as { error?: string };
+                    return { ok: false, status: res.status, error: json.error ?? "Could not remove photo" };
+                }
+                setChildAvatarSessionPreview(childId, null);
+
+                const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
+                    childId,
+                    row: { person_id: pid },
+                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: null } },
+                });
+                dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: merged,
+                });
+                return { ok: true, photoUrl: null };
+            } catch (e) {
+                return { ok: false, status: 500, error: e instanceof Error ? e.message : "Could not remove photo" };
+            }
         },
         openAddEmergencyContact: () => {
             // Household Focus Panel — one-surface identity-resolved flow (not the
@@ -489,6 +650,25 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     anchorCustomerMemberId: customerMemberId.trim(),
                     scope: "this_child",
                     selectedChildCustomerMemberIds: [customerMemberId.trim()],
+                },
+            });
+        },
+        openAddAuthorizedPickup: () => {
+            const customerId =
+                typeof truth.customer_id === "string" ? truth.customer_id.trim() : "";
+            dispatchOpenRelationshipActionModal({
+                action_key: "add_authorized_pickup",
+                opportunity_id: opportunityId,
+                source_surface: "opportunity_drawer",
+                initial_proposal: {
+                    actionKey: "add_authorized_pickup",
+                    sourceSurface: "opportunity_drawer",
+                    sourceRecordId: opportunityId,
+                    sourceEntityType: "opportunity",
+                    sourceOpportunityId: opportunityId,
+                    sourceCustomerId: customerId,
+                    scope: "all_children_in_household",
+                    confirmationRequired: true,
                 },
             });
         },

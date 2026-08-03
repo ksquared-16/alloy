@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { opportunityOverviewRelationshipReadLabel } from "@/lib/admin/opportunityOverviewLabels";
-import { OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { formatOpportunityDisplayMultipleLocationsLabel } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 
 describe("opportunityOverviewRelationshipReadLabel location_id", () => {
     it("returns Multiple locations when inquiry children disagree", () => {
@@ -16,7 +16,7 @@ describe("opportunityOverviewRelationshipReadLabel location_id", () => {
             },
             "location_id"
         );
-        expect(label).toBe(OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL);
+        expect(label).toBe(formatOpportunityDisplayMultipleLocationsLabel(2));
     });
 
     it("returns child location when one child location is set", () => {

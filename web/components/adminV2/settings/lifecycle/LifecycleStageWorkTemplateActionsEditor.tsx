@@ -32,6 +32,7 @@ import {
 } from "@/lib/lifecycle/workTemplateConfigSource";
 import type { StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import type { LifecycleConfiguredActionRow } from "@/lib/lifecycle/lifecycleConfiguredActionRows";
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 
 type Props = {
     work: StageWorkTemplateV1;
@@ -45,6 +46,8 @@ type Props = {
     processTracks?: ProcessTracksV1 | null;
     stageDefinition?: { journey_segment?: string } | null;
     processDefinition?: { primary_entity?: string } | null;
+    /** P6.S3 — gates Work Template Command options to process selection. */
+    process?: LifecycleBuilderProcessRecord | null;
     onChange: (work: StageWorkTemplateV1) => void;
     /** Stage draft + transitions enable Outcome Definitions in this Work Template surface. */
     stageDraft?: StageOperatingPlanEditorDraft;
@@ -183,6 +186,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     processTracks,
     stageDefinition,
     processDefinition,
+    process,
     onChange,
     stageDraft,
     transitionOptions = [],
@@ -200,6 +204,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
         workTemplateKey: work.template_key,
         stageDefinition,
         processDefinition,
+        process: process ?? null,
     });
 
     const executionMode = workTemplateExecutionMode(work);

@@ -268,6 +268,80 @@ describe("household identity VM", () => {
 });
 
 describe("children identity VM", () => {
+    it("seeds child.gender into Detail Fields so Focus (details depth) can show it", () => {
+        const config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        const identity = config.groups.find((group) => group.key === "identity");
+        expect(identity?.expandedFieldKeys).toContain("child.gender");
+        expect(identity?.selectedFieldKeys).not.toContain("child.gender");
+
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: sampleChild({ gender: "Female" }),
+            groupKey: "identity",
+        });
+        const detailRefs = vm.detailRows.flatMap((row) => row.cells).map((cell) => cell.fieldRef);
+        expect(detailRefs).toContain("child.gender");
+    });
+
+    it("promotes summary-only child.gender onto Details during reconcile", () => {
+        const loaded: NestedSurfaceConfig = {
+            surfaceId: CHILDREN_SURFACE_ID,
+            groups: [
+                {
+                    key: "identity",
+                    selectedFieldKeys: ["child.first_name", "child.gender"],
+                    expandedFieldKeys: ["child.date_of_birth"],
+                },
+            ],
+        };
+        const reconciled = reconcileNestedSurfaceConfig(CHILDREN_SURFACE_ID, loaded);
+        const identity = reconciled.groups.find((group) => group.key === "identity");
+        expect(identity?.selectedFieldKeys).not.toContain("child.gender");
+        expect(identity?.expandedFieldKeys).toContain("child.gender");
+        expect(identity?.expandedFieldKeys).toContain("child.date_of_birth");
+    });
+
+    it("loads profile photos onto the identity avatar by default", () => {
+        const config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: sampleChild({
+                imageUrl: "https://cdn.example/emma.jpg",
+            }),
+            groupKey: "identity",
+        });
+        expect(vm.avatar?.visible).toBe(true);
+        expect(vm.avatar?.imageUrl).toBe("https://cdn.example/emma.jpg");
+    });
+
+    it("keeps initials-only when useProfilePhotos is disabled", () => {
+        let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
+        config = {
+            ...config,
+            groups: config.groups.map((group) =>
+                group.key === "identity"
+                    ? {
+                          ...group,
+                          displayOptions: {
+                              ...(group.displayOptions ?? {}),
+                              showAvatar: true,
+                              useProfilePhotos: false,
+                          },
+                      }
+                    : group,
+            ),
+        };
+        const vm = buildChildIdentityRecordVM({
+            config,
+            child: sampleChild({
+                imageUrl: "https://cdn.example/emma.jpg",
+            }),
+            groupKey: "identity",
+        });
+        expect(vm.avatar?.visible).toBe(true);
+        expect(vm.avatar?.imageUrl).toBeNull();
+    });
+
     it("children_surface policies drive runtime editability through child_edit inheritance", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = setFieldVisibilityInNestedGroup(config, "child_edit", "inquiry_child.program", "editable");

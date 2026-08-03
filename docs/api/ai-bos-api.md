@@ -6,6 +6,8 @@ The Business Operating System (BOS) assist surface: Task Assist, Workflow Assist
 
 > Doctrine: `docs/platform/modules/ai-platform.md`; BOS registry/envelopes in `web/lib/bos/`. Human-in-the-loop is frozen doctrine: assist **proposes**, humans (or gated apply) **commit**.
 
+**Operational command sessions (Create Lead V1):** Confirmed execution does **not** add a parallel BOS mutate API. Create Lead confirms through `POST /api/admin/actions/execute` (registered `create_lead`) via `executeCreateLeadCommand`. Session/draft state is client-hosted (`web/lib/bos/commandSession/*`); assist routes above remain for Task/Workflow/Config Assist, not for Create Lead commit.
+
 ---
 
 ## Auth & org scoping

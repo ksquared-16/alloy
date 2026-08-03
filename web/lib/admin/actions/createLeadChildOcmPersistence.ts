@@ -61,8 +61,9 @@ export function parseCreateLeadChildParticipationPayload(
     const dob = trimDateOnly(merged.child_date_of_birth);
 
     const ocm: CreateLeadChildOcmFields = {
-        // Lead-level location_id belongs on the opportunity — never infer child participation from it.
-        location_id: trimUuid(merged.child_location_id),
+        // Explicit child location wins; otherwise cascade Lead location so site participation
+        // matches the Lead form Location (same inheritance as later add-child).
+        location_id: trimUuid(merged.child_location_id) || trimUuid(merged.location_id),
         program_key: trimStableKey(merged.child_program),
         program_category_id:
             trimUuid(merged.child_program_category_id) ??

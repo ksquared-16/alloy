@@ -12,17 +12,36 @@ import {
     type FocusPanelCoordination,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
 import {
+    createEmptyFocusPanelCardLinkNavState,
+    navigateCardLinkWithHistory,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardLinkNavigation";
+import {
     useDismissSignal,
     useReportPerspective,
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { allowedPatternWeekdays } from "@/lib/locations/locationSchedulingConfig";
 import { resolveVisibleDayPills } from "@/lib/scheduling/dayPills";
+import { projectCompactScheduleForIdentity } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
+import type { Assignment as ProjectionAssignment, ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
 import {
-    formatCompactScheduleEffective,
-    projectCompactScheduleForIdentity,
-} from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
-import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+    AssignmentDetailView,
+    AssignmentSummaryList,
+    type AssignmentListActions,
+} from "@/components/adminV2/scheduling/AssignmentSummaryDetail";
+import {
+    scopeRoomsForAssignmentPicker,
+    type AssignmentTypeBehavior,
+} from "@/lib/operationalAssignments/assignmentTypeBehavior";
+import type { SiteOperationalRoom } from "@/lib/operationalAssignments/loadSiteOperationalRooms";
+import {
+    programCategoryIdForRoom,
+    resolveProgramOnRoomChange,
+} from "@/lib/operationalAssignments/assignmentProgramRoomResolution";
+import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
+import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
+import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -71,15 +90,7 @@ function money(m: Money | null | undefined, freq?: string): string {
 
 // ── Projection shapes (from ?view=projection) ────────────────────────────────
 type ProjRoom = { id: string | null; name: string | null; program: string | null };
-type ProjAssignment = {
-    room: ProjRoom;
-    weekdays: number[];
-    arriveTime: string | null;
-    departTime: string | null;
-    effectiveFrom: string;
-    effectiveTo: string | null;
-    openEnded: boolean;
-};
+type ProjAssignment = ProjectionAssignment;
 type ProjView = {
     effectiveFrom: string;
     effectiveTo: string | null;
@@ -92,14 +103,36 @@ type ChildStatus = "scheduled" | "proposed" | "needs-placement" | "upcoming-only
 type ChildProj = {
     child: { id: string; name: string; program: string | null; siteId: string | null; siteName: string | null };
     status: ChildStatus;
+    enrollmentAgreementId?: string | null;
     current: ProjView | null;
     proposed: ProjView | null;
+    history?: { effectiveFrom: string; effectiveTo: string | null; summary: string }[];
 };
 
 type SchedTypeOpt = { key: string; label: string; behavior: "continuous" | "rotating" };
+type AssignmentTypeOpt = {
+    id: string;
+    key: string | null;
+    label: string;
+    visualTone?: string | null;
+    behavior?: AssignmentTypeBehavior;
+};
 /** The site's configured scheduling constraints + preloaded patterns, from first-paint. */
-type SchedConfig = { operatingDays: number[]; scheduleTypes: SchedTypeOpt[]; patterns: Pattern[] };
-type PlacementOption = { roomId: string; roomName: string | null; classification: "recommended" | "eligible" | "blocked"; reason: string };
+type SchedConfig = {
+    operatingDays: number[];
+    scheduleTypes: SchedTypeOpt[];
+    patterns: Pattern[];
+    assignmentTypes: AssignmentTypeOpt[];
+    /** Instant operational room list (Category/Program filter client-side). */
+    operationalRooms: SiteOperationalRoom[];
+};
+type PlacementOption = {
+    roomId: string;
+    roomName: string | null;
+    classification: "recommended" | "eligible" | "blocked";
+    reason: string;
+    programCategoryId?: string | null;
+};
 type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
 type SchedChild = { id: string; personId: string | null; name: string; imageUrl: string | null; dobAge: string | null };
 
@@ -121,20 +154,110 @@ function formatDate(iso: string | null): string {
     if (!y || !m || !d) return iso;
     return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
-function fmtTime(t: string | null): string {
-    if (!t) return "";
-    const [hh, mm] = t.split(":").map(Number);
-    if (Number.isNaN(hh)) return t;
-    const ap = hh < 12 ? "AM" : "PM";
-    const h12 = hh % 12 === 0 ? 12 : hh % 12;
-    return `${h12}:${String(mm).padStart(2, "0")} ${ap}`;
-}
-
 async function schedApi(path: string, init?: RequestInit): Promise<any> {
     const res = await fetch(`/api/admin/scheduling${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? `Request failed (${res.status})`);
     return body;
+}
+
+async function executeAssignmentAction(body: Record<string, unknown>): Promise<void> {
+    const { operatorFacingAssignmentError } = await import(
+        "@/lib/operationalAssignments/operatorAssignmentErrors"
+    );
+    const res = await fetch("/api/admin/actions/execute", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json?.ok === false) {
+        const err = json?.error;
+        const message =
+            typeof err === "string"
+                ? err
+                : err && typeof err === "object" && typeof err.message === "string"
+                  ? err.message
+                  : `Action failed (${res.status})`;
+        throw new Error(operatorFacingAssignmentError(message));
+    }
+}
+
+/**
+ * After an assignment mutation, push the reloaded child projection into Focus Panel
+ * truth so Children / Household / Schedule cards recompose together.
+ */
+function publishScheduleProjectionToFocusPanel(args: {
+    opportunityId: string | null;
+    memberId: string;
+    fresh: ChildProj | null;
+    truth: Record<string, unknown>;
+    clearInquiryScheduleDraft: boolean;
+}): void {
+    const opportunityId = args.opportunityId?.trim() || "";
+    const memberId = args.memberId.trim();
+    if (!opportunityId || !memberId) return;
+
+    const prevBag =
+        args.truth._scheduling_projection && typeof args.truth._scheduling_projection === "object"
+            ? ({ ...(args.truth._scheduling_projection as Record<string, unknown>) } as Record<string, unknown>)
+            : {};
+    const prevBy =
+        prevBag.byMemberId && typeof prevBag.byMemberId === "object" && !Array.isArray(prevBag.byMemberId)
+            ? { ...(prevBag.byMemberId as Record<string, unknown>) }
+            : {};
+    if (args.fresh) {
+        prevBy[memberId] = args.fresh;
+    } else {
+        delete prevBy[memberId];
+    }
+
+    const patch: Record<string, unknown> = {
+        ...args.truth,
+        _scheduling_projection: { ...prevBag, byMemberId: prevBy },
+    };
+
+    if (args.clearInquiryScheduleDraft && Array.isArray(args.truth._inquiry_children)) {
+        patch._inquiry_children = (args.truth._inquiry_children as unknown[]).map((raw) => {
+            if (!raw || typeof raw !== "object") return raw;
+            const row = raw as Record<string, unknown>;
+            const id = String(row.id ?? "").trim();
+            const cm = String(row.customer_member_id ?? "").trim();
+            if (id !== memberId && cm !== memberId) return raw;
+            return {
+                ...row,
+                schedule_type: null,
+                program_room_cohort_key: null,
+                program_room_cohort_label: null,
+                desired_schedule_label: null,
+                start_date: null,
+            };
+        });
+    }
+
+    dispatchOpportunityDrawerRecordPatch(opportunityId, patch);
+    dispatchDrawerLayoutRuntimeBodyRecordPatch({
+        entityType: "opportunities",
+        entityId: opportunityId,
+        record: patch,
+    });
+}
+
+/** Shared create payload — proposed when no agreement, committed when agreement exists. */
+function childAssignmentCreatePayload(
+    child: SchedChild,
+    proj: ChildProj | null,
+    extra: Record<string, unknown>
+): Record<string, unknown> {
+    const agreementId = (proj?.enrollmentAgreementId ?? "").trim();
+    const siteId = (proj?.child.siteId ?? "").trim();
+    return {
+        subject_type: "child",
+        enrollment_agreement_id: agreementId || undefined,
+        customer_member_id: child.id,
+        site_location_id: siteId || undefined,
+        ...extra,
+    };
 }
 
 // ── Derived schedule state (business meaning leads) ──────────────────────────
@@ -157,7 +280,7 @@ function deriveScheduleState(p: ChildProj | null): ScheduleState {
         case "proposed":
             // A child WITH a (planned) schedule reads distinctly from one that still
             // needs a room — blue "has a schedule" vs gold "needs a room".
-            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Planning — active at enrollment" };
+            return { label: "Proposed", tone: "blue", sub: p.proposed?.effectiveFrom ? `Starts ${formatDate(p.proposed.effectiveFrom)}` : "Proposed — active at enrollment" };
         case "upcoming-only":
             return { label: "Future", tone: "blue", sub: p.current?.effectiveFrom ? `Starts ${formatDate(p.current.effectiveFrom)}` : null };
         case "ended":
@@ -170,11 +293,24 @@ function deriveScheduleState(p: ChildProj | null): ScheduleState {
 /** Compact status for the summary rows. */
 function summaryStatus(p: ChildProj): { label: string; color: string } {
     const s = deriveScheduleState(p);
-    if (p.status === "proposed" && p.proposed?.effectiveFrom) return { label: `Starts ${formatDate(p.proposed.effectiveFrom)}`, color: TONE_COLOR[s.tone] };
+    if (p.status === "proposed" && p.proposed?.effectiveFrom) return { label: "Proposed", color: TONE_COLOR[s.tone] };
     return { label: s.label, color: TONE_COLOR[s.tone] };
 }
 function existingView(p: ChildProj | null): ProjView | null {
     return p?.current ?? p?.proposed ?? null;
+}
+
+/** Plural list: committed + proposed planning rows (proposed never replaces committed). */
+function listAssignments(p: ChildProj | null): ProjAssignment[] {
+    const committed = p?.current?.assignments ?? [];
+    const proposed = p?.proposed?.assignments ?? [];
+    if (committed.length === 0) return proposed.filter((a) => a.subjectType !== "staff");
+    if (proposed.length === 0) return committed.filter((a) => a.subjectType !== "staff");
+    const seen = new Set(committed.map((a) => a.id));
+    return [
+        ...committed.filter((a) => a.subjectType !== "staff"),
+        ...proposed.filter((a) => a.subjectType !== "staff" && !seen.has(a.id)),
+    ];
 }
 
 /**
@@ -214,14 +350,26 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     // offers schedule types with no per-open fetch.
     const schedConfig: SchedConfig = useMemo(() => {
         const bag = (context.truth as Record<string, unknown>)?._scheduling_projection as
-            | { operatingDays?: unknown; scheduleTypes?: unknown; patterns?: unknown }
+            | {
+                  operatingDays?: unknown;
+                  scheduleTypes?: unknown;
+                  patterns?: unknown;
+                  assignmentTypes?: unknown;
+                  operationalRooms?: unknown;
+              }
             | undefined;
         const operatingDays = Array.isArray(bag?.operatingDays)
             ? (bag!.operatingDays as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
             : [];
         const scheduleTypes = Array.isArray(bag?.scheduleTypes) ? (bag!.scheduleTypes as SchedTypeOpt[]) : [];
         const patterns = Array.isArray(bag?.patterns) ? (bag!.patterns as Pattern[]) : [];
-        return { operatingDays, scheduleTypes, patterns };
+        const assignmentTypes = Array.isArray(bag?.assignmentTypes)
+            ? (bag!.assignmentTypes as AssignmentTypeOpt[]).filter((t) => t?.id && t?.label)
+            : [];
+        const operationalRooms = Array.isArray(bag?.operationalRooms)
+            ? (bag!.operationalRooms as SiteOperationalRoom[]).filter((r) => r?.roomId)
+            : [];
+        return { operatingDays, scheduleTypes, patterns, assignmentTypes, operationalRooms };
     }, [context.truth]);
 
     // Local overrides after a save (the prebuilt context does not re-compose on its own).
@@ -274,7 +422,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     );
     useDismissSignal(coordination, "scheduling", () => setActiveChildId(null));
 
-    const insight = children.length === 0 ? "No children to schedule" : children.length === 1 ? "1 child" : `${children.length} children`;
+    const insight =
+        children.length === 0
+            ? "No children to assign"
+            : children.length === 1
+              ? "1 child"
+              : `${children.length} children`;
 
     return (
         <UniversalCard
@@ -282,7 +435,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             // When a child is active the work surface leads with its own avatar identity
             // header, so the redundant "Schedule · <name>" heading is suppressed.
             insight={activeChild ? "" : insight}
-            supportingInsight={activeChild ? null : children.length > 0 ? "Room · weekly pattern · effective dates" : null}
+            supportingInsight={activeChild ? null : children.length > 0 ? "Room · Days · Effective · Time" : null}
             iconName={model.iconName}
             tier={model.tier}
             archetype={model.archetype}
@@ -300,16 +453,16 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         opportunityId={opportunityId}
                         projection={projById[activeChild.id] ?? null}
                         config={schedConfig}
+                        truth={context.truth as Record<string, unknown>}
                         reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
                         coordination={coordination}
-                        onClose={() => setActiveChildId(null)}
                         onBack={() => {
                             setActiveChildId(null);
                             coordination?.back?.();
                         }}
                     />
                 ) : children.length === 0 ? (
-                    <p style={{ fontSize: 12.5, color: T.muted }}>Link children to schedule them.</p>
+                    <p style={{ fontSize: 12.5, color: T.muted }}>Link children to add assignments.</p>
                 ) : (
                     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
                         {children.map((child) => {
@@ -321,22 +474,70 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                                 }).compactLine ?? "No schedule yet";
                             return (
                                 <li key={child.id} data-scheduling-child={child.id}>
-                                    <button type="button" onClick={() => setActiveChildId(child.id)} data-scheduling-open={child.id} style={rowBtnStyle}>
-                                        <CardAvatar name={child.name} imageUrl={child.imageUrl} size={30} recordId={child.id} />
-                                        <span style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
-                                            <span style={{ fontSize: 13.5, fontWeight: 600, color: T.forge }}>{child.name}</span>
-                                            <span
-                                                style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                                                data-scheduling-summary={child.id}
-                                            >
-                                                {detail}
+                                    <div style={{ ...rowBtnStyle, padding: 0, gap: 0 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const result = navigateCardLinkWithHistory({
+                                                    coordination,
+                                                    link: {
+                                                        id: "default:scheduling:child_identity",
+                                                        fromCard: "scheduling",
+                                                        toCard: "children",
+                                                        fromFieldKey: "child.identity",
+                                                        label: "Children",
+                                                    },
+                                                    destinationFocus: child.id,
+                                                    sourceFocus: child.id,
+                                                    nav: createEmptyFocusPanelCardLinkNavState(),
+                                                });
+                                                if (!result.ok) {
+                                                    // Quiet fallback — keep operator on Assignments.
+                                                    setActiveChildId(child.id);
+                                                }
+                                            }}
+                                            aria-label={`View ${child.name} in Children`}
+                                            data-scheduling-focus-children={child.id}
+                                            title="View in Children"
+                                            style={{
+                                                appearance: "none",
+                                                border: 0,
+                                                background: "transparent",
+                                                padding: "8px 4px 8px 10px",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                alignItems: "center",
+                                            }}
+                                        >
+                                            <CardAvatar name={child.name} imageUrl={child.imageUrl} size={30} recordId={child.id} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveChildId(child.id)}
+                                            data-scheduling-open={child.id}
+                                            style={{
+                                                ...rowBtnStyle,
+                                                flex: 1,
+                                                border: 0,
+                                                background: "transparent",
+                                                padding: "8px 10px 8px 4px",
+                                            }}
+                                        >
+                                            <span style={{ display: "grid", gap: 2, minWidth: 0, flex: 1 }}>
+                                                <span style={{ fontSize: 13.5, fontWeight: 600, color: T.forge }}>{child.name}</span>
+                                                <span
+                                                    style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                                    data-scheduling-summary={child.id}
+                                                >
+                                                    {detail}
+                                                </span>
                                             </span>
-                                        </span>
-                                        <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
-                                            <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
-                                            <span style={{ color: "#98a2b3" }}>›</span>
-                                        </span>
-                                    </button>
+                                            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+                                                <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
+                                                <span style={{ color: "#98a2b3" }}>›</span>
+                                            </span>
+                                        </button>
+                                    </div>
                                 </li>
                             );
                         })}
@@ -350,129 +551,567 @@ export default function SchedulingCard({ model, context, receded = false, coordi
 // ── The work surface: Detail (read-only) ⇄ Editor (edit | create) ────────────
 // Both render the SAME ScheduleRegions composition. Detail passes value nodes;
 // Editor passes control nodes into the same regions.
-type SurfaceMode = "detail" | "edit" | "create";
+type SurfaceMode = "detail" | "edit" | "create" | "assignment" | "pick-type";
 
 function ScheduleWorkSurface({
     child,
     opportunityId,
     projection,
     config,
+    truth,
     reloadChild,
     coordination,
-    onClose,
     onBack,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     projection: ChildProj | null;
     config: SchedConfig;
+    truth: Record<string, unknown>;
     reloadChild: () => Promise<ChildProj | null>;
     coordination?: FocusPanelCoordination;
-    onClose: () => void;
     onBack: () => void;
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
     const existing = existingView(proj);
-    // Existing schedule → open Detail INSTANTLY from the prebuilt projection (no fetch).
-    // No schedule → the create editor (which also renders instantly; deps load lazily).
     const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
-    const [detailBilling, setDetailBilling] = useState<BillingProjection | null>(null);
+    const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
+    const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+    const [pendingTypeId, setPendingTypeId] = useState<string | null>(null);
+    const [actionBusy, setActionBusy] = useState(false);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    /** Persist Assignments day filter across singular detail drill-in. */
+    const [listDayFilter, setListDayFilter] = useState<number | null>(null);
 
-    // Detail billing — enriches the tuition line in the background; never gates Detail.
-    useEffect(() => {
-        if (mode !== "detail" || !existing?.scheduleType) return;
-        let cancelled = false;
-        (async () => {
-            const siteId = proj?.child.siteId || "";
-            if (!siteId) return;
-            const bill = await schedApi(
-                `?view=billing&site_location_id=${encodeURIComponent(siteId)}&customer_member_id=${encodeURIComponent(child.id)}&schedule_type=${encodeURIComponent(existing.scheduleType!)}${existing.effectiveFrom ? `&start_date=${existing.effectiveFrom}` : ""}`
-            ).catch(() => null);
-            if (!cancelled) setDetailBilling(bill?.projection ?? null);
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [mode, existing?.scheduleType, existing?.effectiveFrom, proj?.child.siteId, child.id]);
+    const currentAssignments: ProjAssignment[] = useMemo(() => listAssignments(proj), [proj]);
+
+    const activeAssignment =
+        currentAssignments.find((a) => a.id === activeAssignmentId) ?? null;
 
     const previousFocus = coordination?.previousFocus ?? null;
-    const backLabel = previousFocus
-        ? `← Back to ${focusPanelCardBackLabel(previousFocus.card)}`
-        : null;
 
-    const header = (
-        <div
-            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}
-            data-schedule-nav="true"
-        >
-            {backLabel ? (
-                <button
-                    type="button"
-                    onClick={onBack}
-                    aria-label={backLabel}
-                    data-schedule-back="true"
-                    style={{
-                        all: "unset",
-                        cursor: "pointer",
-                        color: T.slate,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        lineHeight: 1.2,
-                        padding: "2px 0",
-                    }}
-                >
-                    {backLabel}
-                </button>
-            ) : null}
-            <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                data-schedule-close="true"
-                style={{
-                    all: "unset",
-                    marginLeft: "auto",
-                    cursor: "pointer",
-                    color: T.mid40,
-                    fontSize: 15,
-                    lineHeight: 1,
-                    padding: 2,
-                }}
-            >
-                ✕
-            </button>
-        </div>
-    );
-
-    const onSaved = async () => {
-        const fresh = await reloadChild();
-        setProj(fresh);
-        setDetailBilling(null);
+    /**
+     * Depth chrome matches Household/Children: ← Back in the body (not a modal ✕),
+     * form abandon via footer Cancel, dismiss elevation via scrim / ESC.
+     * Edit/create/pick-type do NOT put Cancel in the header (footer owns that).
+     */
+    const cancelToDetail = () => {
+        setPendingTypeId(null);
+        setEditingAssignmentId(null);
+        setActiveAssignmentId(null);
         setMode("detail");
     };
+    const headerBack: { label: string; onClick: () => void } | null =
+        mode === "assignment"
+            ? {
+                  label: "Assignments",
+                  onClick: () => {
+                      setActiveAssignmentId(null);
+                      setMode("detail");
+                  },
+              }
+            : mode === "edit" || mode === "create" || mode === "pick-type"
+              ? null
+              : previousFocus
+                ? { label: focusPanelCardBackLabel(previousFocus.card), onClick: onBack }
+                : null;
 
-    if (mode === "detail") {
+    const header = headerBack ? (
+        <div
+            style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}
+            data-schedule-nav="true"
+        >
+            <button
+                type="button"
+                onClick={headerBack.onClick}
+                aria-label={`Back to ${headerBack.label}`}
+                data-schedule-back="true"
+                data-schedule-back-target={headerBack.label}
+                className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                style={{ padding: "2px 0" }}
+            >
+                ← {headerBack.label}
+            </button>
+        </div>
+    ) : null;
+
+    const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean }) => {
+        const fresh = await reloadChild();
+        setProj(fresh);
+        publishScheduleProjectionToFocusPanel({
+            opportunityId,
+            memberId: child.id,
+            fresh,
+            truth,
+            clearInquiryScheduleDraft: Boolean(opts?.clearInquiryScheduleDraft),
+        });
+        setMode("detail");
+        setActiveAssignmentId(null);
+        setEditingAssignmentId(null);
+        setPendingTypeId(null);
+    };
+
+    const beginCreateAssignment = () => {
+        setActionError(null);
+        setEditingAssignmentId(null);
+        if (currentAssignments.length === 0) {
+            // First commitment uses the schedule create path (primary home).
+            setPendingTypeId(null);
+            setMode("create");
+            return;
+        }
+        // Always open the type picker — empty state deep-links to Studio Types (no seed/migrate dead end).
+        setPendingTypeId(null);
+        setMode("pick-type");
+    };
+
+    const runAction = async (
+        body: {
+            action_key: string;
+            entity_type: string;
+            entity_id: string;
+            payload: Record<string, unknown>;
+        },
+        opts?: { clearInquiryScheduleDraft?: boolean },
+    ): Promise<boolean> => {
+        setActionBusy(true);
+        setActionError(null);
+        try {
+            await executeAssignmentAction(body);
+            await onSaved(opts);
+            return true;
+        } catch (e) {
+            setActionError(e instanceof Error ? e.message : "Action failed");
+            return false;
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    if (mode === "assignment" && activeAssignment) {
         return (
-            <div data-schedule-surface="true" data-schedule-ready="true">
+            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-surface="detail">
                 {header}
-                <ScheduleDetail child={child} proj={proj} billing={detailBilling} operatingDays={config.operatingDays} onEdit={() => setMode("edit")} onCreate={() => setMode("create")} />
+                {actionError ? (
+                    <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
+                ) : null}
+                <AssignmentDetailView
+                    assignment={activeAssignment}
+                    siblings={currentAssignments}
+                    history={proj?.history ?? []}
+                    busy={actionBusy}
+                    onEdit={() => {
+                        if (activeAssignment.isPrimary) {
+                            setActiveAssignmentId(null);
+                            setEditingAssignmentId(null);
+                            setMode("edit");
+                            return;
+                        }
+                        setEditingAssignmentId(activeAssignment.id);
+                        setActiveAssignmentId(null);
+                        if (activeAssignment.assignmentType.id) {
+                            setPendingTypeId(activeAssignment.assignmentType.id);
+                            setMode("create");
+                            return;
+                        }
+                        if (config.assignmentTypes.length === 0) {
+                            setActionError("No Assignment Categories are configured for this organization.");
+                            setMode("detail");
+                            return;
+                        }
+                        setPendingTypeId(null);
+                        setMode("pick-type");
+                    }}
+                    onSetPrimary={
+                        activeAssignment.isPrimary
+                            ? undefined
+                            : () =>
+                                  runAction({
+                                      action_key: "assignment.set_primary",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: {
+                                          subject_type: "child",
+                                          ...childAssignmentCreatePayload(child, proj, {}),
+                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                          effective_date: activeAssignment.effectiveFrom,
+                                          promote_assignment_id: activeAssignment.id,
+                                          subject_label: child.name,
+                                      },
+                                  })
+                    }
+                    onDuplicate={
+                        activeAssignment.assignmentType.id
+                            ? () =>
+                                  runAction({
+                                      action_key: "assignment.create",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: childAssignmentCreatePayload(child, proj, {
+                                          schedule_pattern_id: activeAssignment.patternId,
+                                          start_date: activeAssignment.effectiveFrom,
+                                          room_location_id: activeAssignment.room.id,
+                                          assignment_type_id: activeAssignment.assignmentType.id,
+                                          duplicate_of: activeAssignment.id,
+                                          assignment_type_label: activeAssignment.assignmentType.label,
+                                          is_primary: false,
+                                      }),
+                                  })
+                            : undefined
+                    }
+                    onArchive={
+                        activeAssignment.isPrimary
+                            ? undefined
+                            : () =>
+                                  runAction({
+                                      action_key: "assignment.archive",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: { assignment_id: activeAssignment.id },
+                                  })
+                    }
+                    archiveBlockedReason={
+                        activeAssignment.isPrimary
+                            ? "Make another assignment primary before archiving this one."
+                            : null
+                    }
+                    onDelete={
+                        activeAssignment.commitmentKind === "proposed"
+                            ? () => setDeleteConfirmOpen(true)
+                            : undefined
+                    }
+                    onPromote={
+                        activeAssignment.commitmentKind === "proposed" &&
+                        (proj?.enrollmentAgreementId ?? "").trim()
+                            ? () =>
+                                  runAction({
+                                      action_key: "assignment.promote_proposed",
+                                      entity_type: "child",
+                                      entity_id: child.id,
+                                      payload: {
+                                          assignment_id: activeAssignment.id,
+                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                      },
+                                  })
+                            : undefined
+                    }
+                    promoteBlockedReason={
+                        activeAssignment.commitmentKind === "proposed" &&
+                        !(proj?.enrollmentAgreementId ?? "").trim()
+                            ? "This Assignment can only become active after enrollment is completed."
+                            : null
+                    }
+                />
+                <AdminDeleteConfirmModal
+                    isOpen={deleteConfirmOpen}
+                    onClose={() => setDeleteConfirmOpen(false)}
+                    isLoading={actionBusy}
+                    entityTypeLabel="proposed assignment"
+                    recordLabel={
+                        [
+                            activeAssignment.assignmentType.label,
+                            activeAssignment.room.name || activeAssignment.room.program,
+                        ]
+                            .filter(Boolean)
+                            .join(" · ") || child.name
+                    }
+                    onConfirm={async () => {
+                        const ok = await runAction(
+                            {
+                                action_key: "assignment.delete_proposed",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: { assignment_id: activeAssignment.id },
+                            },
+                            { clearInquiryScheduleDraft: true },
+                        );
+                        if (ok) {
+                            setDeleteConfirmOpen(false);
+                            setActiveAssignmentId(null);
+                            setMode("detail");
+                        }
+                    }}
+                />
             </div>
         );
     }
 
+    if (mode === "detail" || mode === "assignment") {
+        return (
+            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-list-surface="true">
+                {header}
+                <AssignmentListSurface
+                    child={child}
+                    proj={proj}
+                    assignments={currentAssignments}
+                    dayFilter={listDayFilter}
+                    onDayFilterChange={setListDayFilter}
+                    onCreate={beginCreateAssignment}
+                    onOpenAssignment={(id) => {
+                        setActiveAssignmentId(id);
+                        setMode("assignment");
+                    }}
+                    listActions={{
+                        busy: actionBusy,
+                        onEdit: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a) return;
+                            setActiveAssignmentId(id);
+                            setMode("assignment");
+                            // Detail owns the edit entry; open detail then operator hits Edit,
+                            // or jump straight into editor for primary.
+                            if (a.isPrimary) {
+                                setActiveAssignmentId(null);
+                                setEditingAssignmentId(null);
+                                setMode("edit");
+                                return;
+                            }
+                            setEditingAssignmentId(a.id);
+                            setActiveAssignmentId(null);
+                            if (a.assignmentType.id) {
+                                setPendingTypeId(a.assignmentType.id);
+                                setMode("create");
+                                return;
+                            }
+                            setPendingTypeId(null);
+                            setMode("pick-type");
+                        },
+                        onSetPrimary: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a || a.isPrimary) return;
+                            void runAction({
+                                action_key: "assignment.set_primary",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: {
+                                    ...childAssignmentCreatePayload(child, proj, {}),
+                                    subject_type: "child",
+                                    enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                    effective_date: a.effectiveFrom,
+                                    promote_assignment_id: a.id,
+                                    subject_label: child.name,
+                                },
+                            });
+                        },
+                        onDuplicate: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a?.assignmentType.id) return;
+                            void runAction({
+                                action_key: "assignment.create",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: childAssignmentCreatePayload(child, proj, {
+                                    schedule_pattern_id: a.patternId,
+                                    start_date: a.effectiveFrom,
+                                    room_location_id: a.room.id,
+                                    assignment_type_id: a.assignmentType.id,
+                                    duplicate_of: a.id,
+                                    assignment_type_label: a.assignmentType.label,
+                                    is_primary: false,
+                                }),
+                            });
+                        },
+                        onArchive: (id) => {
+                            const a = currentAssignments.find((row) => row.id === id);
+                            if (!a || a.isPrimary) return;
+                            void runAction({
+                                action_key: "assignment.archive",
+                                entity_type: "child",
+                                entity_id: child.id,
+                                payload: { assignment_id: a.id },
+                            });
+                        },
+                        archiveBlockedReasonFor: (a) =>
+                            a.isPrimary ? "Make another assignment primary before archiving this one." : null,
+                    }}
+                />
+            </div>
+        );
+    }
+
+    if (mode === "pick-type") {
+        return (
+            <div data-schedule-surface="true" data-schedule-ready="true" data-assignment-type-picker="true">
+                {header}
+                {actionError ? (
+                    <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
+                ) : null}
+                <AssignmentTypePicker
+                    types={config.assignmentTypes}
+                    onCancel={cancelToDetail}
+                    onPick={(typeId) => {
+                        setPendingTypeId(typeId);
+                        setMode("create");
+                    }}
+                    onConfigureTypes={() => {
+                        void import("@/lib/adminV2/workspaceModalEvents").then(({ dispatchAdminV2OpenSchedulingModal }) => {
+                            dispatchAdminV2OpenSchedulingModal({ mode: "studio", studioView: "types" });
+                        });
+                    }}
+                />
+            </div>
+        );
+    }
+
+    const editingAssignment =
+        editingAssignmentId != null
+            ? currentAssignments.find((a) => a.id === editingAssignmentId) ?? null
+            : null;
+    const createAsSecondary = Boolean(pendingTypeId) || Boolean(editingAssignment);
+    const selectedType =
+        config.assignmentTypes.find((t) => t.id === pendingTypeId) ??
+        (editingAssignment?.assignmentType.id
+            ? config.assignmentTypes.find((t) => t.id === editingAssignment.assignmentType.id) ?? {
+                  id: editingAssignment.assignmentType.id,
+                  key: editingAssignment.assignmentType.key,
+                  label: editingAssignment.assignmentType.label ?? "Assignment",
+              }
+            : null);
+
     return (
         <div data-schedule-surface="true" data-schedule-ready="true">
             {header}
+            {actionError ? (
+                <p style={{ color: T.ember, fontSize: 12, margin: "0 0 8px" }}>{actionError}</p>
+            ) : null}
             <ScheduleEditor
                 child={child}
                 opportunityId={opportunityId}
                 proj={proj}
                 config={config}
-                existing={mode === "edit" ? existing : null}
-                mode={mode}
-                onCancel={() => setMode(existing ? "detail" : "detail")}
+                existing={mode === "edit" ? existing : editingAssignment ? {
+                    effectiveFrom: editingAssignment.effectiveFrom,
+                    effectiveTo: editingAssignment.effectiveTo,
+                    openEnded: editingAssignment.openEnded,
+                    scheduleType: existing?.scheduleType,
+                    scheduleTypeLabel: existing?.scheduleTypeLabel,
+                    assignments: [editingAssignment],
+                } : null}
+                mode={mode === "edit" ? "edit" : "create"}
+                createAsSecondary={createAsSecondary}
+                assignmentTypeLabel={selectedType?.label ?? null}
+                assignmentTypeBehavior={selectedType?.behavior}
+                // Real program from assignment/child context — never a hardcoded null. When
+                // editing an existing assignment, its room already implies a canonical
+                // program (if any); ScheduleEditor keeps this current as the room changes.
+                programCategoryId={programCategoryIdForRoom(
+                    config.operationalRooms,
+                    (mode === "edit" ? existing?.assignments[0]?.room.id : editingAssignment?.room.id) ?? null
+                )}
+                onCancel={cancelToDetail}
                 onSaved={onSaved}
+                onCreateSecondary={async (payload) => {
+                    if (!selectedType?.id) {
+                        throw new Error("Choose an Assignment Category before creating.");
+                    }
+                    await executeAssignmentAction({
+                        action_key: "assignment.create",
+                        entity_type: "child",
+                        entity_id: child.id,
+                        payload: childAssignmentCreatePayload(child, proj, {
+                            schedule_pattern_id: payload.schedule_pattern_id,
+                            start_date: payload.start_date,
+                            room_location_id: payload.room_location_id,
+                            assignment_type_id: selectedType.id,
+                            assignment_type_label: selectedType.label,
+                            is_primary: false,
+                            supersedes_assignment_id: editingAssignmentId,
+                        }),
+                    });
+                    await onSaved();
+                }}
             />
+        </div>
+    );
+}
+
+function AssignmentTypePicker({
+    types,
+    onPick,
+    onCancel,
+    onConfigureTypes,
+}: {
+    types: AssignmentTypeOpt[];
+    onPick: (typeId: string) => void;
+    onCancel: () => void;
+    onConfigureTypes?: () => void;
+}) {
+    if (types.length === 0) {
+        return (
+            <div style={{ display: "grid", gap: 12, paddingTop: 4 }} data-assignment-type-picker-empty="true">
+                <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>Assignment Categories needed</div>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
+                        Configure Assignment Categories (Primary Classroom, Before Care, Enrichment, and similar)
+                        before creating additional assignments. You can return here afterward.
+                    </p>
+                </div>
+                {onConfigureTypes ? (
+                    <button
+                        type="button"
+                        data-configure-assignment-types="true"
+                        onClick={onConfigureTypes}
+                        style={{
+                            all: "unset",
+                            cursor: "pointer",
+                            background: T.pine,
+                            color: "#fff",
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            padding: "8px 14px",
+                            borderRadius: 10,
+                            width: "fit-content",
+                        }}
+                    >
+                        Configure Assignment Categories
+                    </button>
+                ) : null}
+                <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
+                    Cancel
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: "grid", gap: 12, paddingTop: 4 }}>
+            <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.forge }}>What category of assignment is this?</div>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: T.muted, lineHeight: 1.4 }}>
+                    Choose an Assignment Category — Primary Classroom, Before Care, Enrichment, and similar.
+                </p>
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+                {types.map((t) => (
+                    <li key={t.id}>
+                        <button
+                            type="button"
+                            data-assignment-type-option={t.key ?? t.id}
+                            onClick={() => onPick(t.id)}
+                            style={{
+                                all: "unset",
+                                display: "block",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                padding: "10px 12px",
+                                borderRadius: 10,
+                                border: `1px solid ${T.border}`,
+                                background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: T.forge,
+                            }}
+                        >
+                            {t.label}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+            <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
+                Cancel
+            </button>
         </div>
     );
 }
@@ -559,7 +1198,17 @@ function DayPills({ days, interactive, allowed, onToggle }: { days: number[]; in
 function BillingConsequence({ billing }: { billing: BillingProjection | null }) {
     const family = billing?.totals ? money(billing.totals.familyResponsibility, billing.totals.recurringFrequency) : null;
     return (
-        <div style={{ background: "#f9fafb", border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px", display: "grid", gap: 5 }} data-schedule-billing="true">
+        <div
+            style={{
+                background: "var(--alloy-os-surface-muted, #f6f8fa)",
+                border: `1px solid ${T.border}`,
+                borderRadius: 10,
+                padding: "9px 12px",
+                display: "grid",
+                gap: 5,
+            }}
+            data-schedule-billing="true"
+        >
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
                 <Wallet size={12.5} strokeWidth={2} />
                 <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Recurring tuition</span>
@@ -602,82 +1251,82 @@ function ScheduleRegions({
     surface: "detail" | "editor";
 }) {
     return (
-        <div style={{ display: "grid", gap: 13, paddingTop: 2 }} {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}>
-            <IdentityHeader child={child} state={state} />
-            {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
-            <Region icon={CalendarDays} label="Days">{days}</Region>
-            <Region icon={Clock} label="Daily hours">{hours}</Region>
-            <Region icon={DoorOpen} label="Site & room">{siteRoom}</Region>
-            <Region icon={CalendarRange} label="Effective">{effective}</Region>
-            <BillingConsequence billing={billing} />
-            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>{footer}</div>
+        <div
+            className="alloy-os-sched-surface"
+            style={{ display: "flex", flexDirection: "column", gap: 0, paddingTop: 2, minWidth: 0, minHeight: 0, flex: "1 1 auto" }}
+            {...(surface === "detail" ? { "data-schedule-detail": "true" } : { "data-schedule-editor": "true" })}
+        >
+            <div
+                data-schedule-scroll="true"
+                className="alloy-os-sched-scroll"
+                style={{ display: "grid", gap: 13, minWidth: 0, minHeight: 0, flex: "1 1 auto", paddingBottom: 8 }}
+            >
+                <IdentityHeader child={child} state={state} />
+                {state.sub ? <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div> : null}
+                <div
+                    data-schedule-days-hours-band="true"
+                    className="alloy-os-sched-days-hours-band"
+                >
+                    <Region icon={CalendarDays} label="Days">{days}</Region>
+                    <Region icon={Clock} label="Daily hours">{hours}</Region>
+                </div>
+                <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
+                <Region icon={CalendarRange} label="Effective">{effective}</Region>
+                <BillingConsequence billing={billing} />
+            </div>
+            <div
+                data-schedule-footer="true"
+                className="alloy-os-sched-footer"
+                style={{
+                    borderTop: `1px solid ${T.border}`,
+                    paddingTop: 12,
+                    paddingBottom: 2,
+                    background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
+                }}
+            >
+                {footer}
+            </div>
         </div>
     );
 }
 
-// ── Read-only Schedule Detail (the completed state) ──────────────────────────
-function ScheduleDetail({
+// ── Assignment list surface — the list IS the summary (no schedule regions) ─
+function AssignmentListSurface({
     child,
     proj,
-    billing,
-    operatingDays,
-    onEdit,
+    assignments,
     onCreate,
+    onOpenAssignment,
+    listActions,
+    dayFilter,
+    onDayFilterChange,
 }: {
     child: SchedChild;
     proj: ChildProj | null;
-    billing: BillingProjection | null;
-    /** The site's operating days — non-operating weekdays are hidden in the Days region. */
-    operatingDays: number[];
-    onEdit: () => void;
+    assignments: ProjAssignment[];
     onCreate: () => void;
+    onOpenAssignment: (id: string) => void;
+    listActions?: AssignmentListActions;
+    dayFilter?: number | null;
+    onDayFilterChange?: (day: number | null) => void;
 }) {
-    const view = existingView(proj);
-    const a = view?.assignments[0] ?? null;
     const state = deriveScheduleState(proj);
-    const hours = a?.arriveTime && a?.departTime ? `${fmtTime(a.arriveTime)} – ${fmtTime(a.departTime)}` : null;
-    const roomText = a?.room.name ? (a.room.program ? `${a.room.name} · ${a.room.program}` : a.room.name) : null;
-    // Detail Days mirror the editor: show only the site's operating days (closed days
-    // hidden), with unselected operating days grayed. A selected day outside operating
-    // days still shows (so the schedule reads truthfully).
-    const allowedDays = allowedPatternWeekdays(operatingDays);
 
     return (
-        <ScheduleRegions
-            surface="detail"
-            child={child}
-            state={state}
-            billing={billing}
-            days={a?.weekdays.length ? <DayPills days={a.weekdays} interactive={false} allowed={allowedDays} /> : <Empty>No days set</Empty>}
-            hours={hours ? <Value>{hours}</Value> : <Empty>Not set</Empty>}
-            siteRoom={
-                <div style={{ display: "grid", gap: 2 }}>
-                    <Value>{proj?.child.siteName ?? "—"}</Value>
-                    {roomText ? <span style={{ fontSize: 12.5, color: T.slate }}>{roomText}</span> : <Empty>Room pending</Empty>}
-                </div>
-            }
-            effective={
-                <span data-schedule-effective="true">
-                    <Value>
-                        {formatCompactScheduleEffective({
-                            effectiveFrom: view?.effectiveFrom ?? null,
-                            effectiveTo: view?.effectiveTo ?? null,
-                            openEnded: view?.openEnded,
-                        }) ?? "—"}
-                    </Value>
-                </span>
-            }
-            footer={
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button type="button" onClick={onEdit} data-schedule-edit="true" style={primaryBtn(false)}>
-                        Edit schedule
-                    </button>
-                    <button type="button" onClick={onCreate} data-schedule-create-new="true" style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.pine }}>
-                        Create new schedule →
-                    </button>
-                </div>
-            }
-        />
+        <div data-assignment-list="true" style={{ display: "grid", gap: 12, paddingTop: 2 }}>
+            <IdentityHeader child={child} state={state} />
+            {state.sub ? (
+                <div style={{ marginTop: -8, fontSize: 11, color: T.muted, paddingLeft: 48 }}>{state.sub}</div>
+            ) : null}
+            <AssignmentSummaryList
+                assignments={assignments}
+                onOpenAssignment={onOpenAssignment}
+                onCreate={onCreate}
+                listActions={listActions}
+                dayFilter={dayFilter}
+                onDayFilterChange={onDayFilterChange}
+            />
+        </div>
     );
 }
 
@@ -689,17 +1338,34 @@ function ScheduleEditor({
     config,
     existing,
     mode,
+    createAsSecondary = false,
+    assignmentTypeLabel = null,
+    assignmentTypeBehavior,
+    programCategoryId: initialProgramCategoryId = null,
     onCancel,
     onSaved,
+    onCreateSecondary,
 }: {
     child: SchedChild;
     opportunityId: string | null;
     proj: ChildProj | null;
     config: SchedConfig;
     existing: ProjView | null;
-    mode: SurfaceMode;
+    mode: "edit" | "create";
+    /** When true, create an independent secondary assignment (not a schedule successor). */
+    createAsSecondary?: boolean;
+    assignmentTypeLabel?: string | null;
+    assignmentTypeBehavior?: AssignmentTypeBehavior;
+    /** Real program from assignment/child context (never a hardcoded null) — the room's canonical program overrides this once a room is picked. */
+    programCategoryId?: string | null;
     onCancel: () => void;
     onSaved: () => Promise<void>;
+    onCreateSecondary?: (payload: {
+        schedule_pattern_id: string | null;
+        start_date: string;
+        room_location_id: string | null;
+        assignment_type_label: string;
+    }) => Promise<void>;
 }) {
     const ex = existing?.assignments[0] ?? null;
     // Site is known from the projection — NO sites fetch, NO editor gate.
@@ -722,6 +1388,14 @@ function ScheduleEditor({
     const [roomId, setRoomId] = useState<string | null>(ex?.room.id ?? null);
     const [roomName, setRoomName] = useState<string | null>(ex?.room.name ?? null);
     const [roomFromRec, setRoomFromRec] = useState<boolean>(false);
+    // Program resolution (pure helpers in assignmentProgramRoomResolution.ts): a room
+    // with a canonical program locks the program and shows it read-only; a room with
+    // none leaves whatever program was already resolved from context untouched.
+    const [programCategoryId, setProgramCategoryId] = useState<string | null>(initialProgramCategoryId);
+    const [programFromRoom, setProgramFromRoom] = useState<boolean>(
+        programCategoryIdForRoom(config.operationalRooms, roomId) === initialProgramCategoryId
+            && initialProgramCategoryId != null
+    );
     const [roomPicking, setRoomPicking] = useState(false);
     const [patternPicking, setPatternPicking] = useState(false);
 
@@ -790,8 +1464,33 @@ function ScheduleEditor({
     }
     const patternId = resolvePatternId();
     const state = deriveScheduleState(proj) ;
-    const editState: ScheduleState = mode === "create" && !existing ? { label: "New schedule", tone: "blue", sub: null } : { ...state, sub: null };
-    const canSave = days.length > 0 && !!start && !!roomId && (!arrive || !depart || depart > arrive);
+    const editState: ScheduleState =
+        mode === "create" && createAsSecondary
+            ? {
+                  label: assignmentTypeLabel ? `New · ${assignmentTypeLabel}` : "New assignment",
+                  tone: "blue",
+                  sub: "Independent commitment",
+              }
+            : mode === "create" && !existing
+              ? { label: "New schedule", tone: "blue", sub: null }
+              : { ...state, sub: null };
+    const roomReq =
+        assignmentTypeBehavior?.roomRequirement ??
+        (assignmentTypeBehavior?.requiresRoom ? "required" : "optional");
+    // Schedules that use operational space always require a room. Category
+    // "optional" still presents a required pick here; only `not_used` skips Room.
+    const roomRequired = roomReq !== "not_used";
+    const programReq =
+        assignmentTypeBehavior?.programRequirement ??
+        (assignmentTypeBehavior?.requiresProgram ? "required" : "optional");
+    const programUsed = programReq !== "not_used";
+    // Room prominence remains, but Category may not require space (Transportation, some Enrichment).
+    const canSave =
+        days.length > 0 &&
+        !!start &&
+        (!arrive || !depart || depart > arrive) &&
+        (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
+        (!roomRequired || Boolean(roomId));
 
     async function save() {
         setBusy(true);
@@ -802,6 +1501,20 @@ function ScheduleEditor({
                 // Patterns weren't opened — resolve the id lazily now (single shared load).
                 const ps = await ensurePatterns();
                 pid = ps.find((p) => p.scheduleTypeKey === scheduleType)?.id ?? ps[0]?.id ?? null;
+            }
+            if (createAsSecondary && onCreateSecondary) {
+                if (!pid) {
+                    setError("Choose a schedule pattern before saving this assignment.");
+                    setBusy(false);
+                    return;
+                }
+                await onCreateSecondary({
+                    schedule_pattern_id: pid,
+                    start_date: start,
+                    room_location_id: roomId || null,
+                    assignment_type_label: assignmentTypeLabel || "Assignment",
+                });
+                return;
             }
             const times = {
                 default: arrive && depart && depart > arrive ? { arrive, depart } : null,
@@ -829,6 +1542,7 @@ function ScheduleEditor({
             await onSaved();
         } catch (e) {
             setError((e as Error).message);
+        } finally {
             setBusy(false);
         }
     }
@@ -841,10 +1555,24 @@ function ScheduleEditor({
                 patternId={patternId}
                 start={start}
                 selectedRoomId={roomId}
+                seedRooms={config.operationalRooms}
+                purposeBehavior={assignmentTypeBehavior}
+                programCategoryId={programCategoryId}
+                onProgramResolved={(resolvedProgramCategoryId) => {
+                    setProgramCategoryId(resolvedProgramCategoryId);
+                    setProgramFromRoom(false);
+                }}
                 onPick={(id, name, recommended) => {
                     setRoomId(id);
                     setRoomName(name);
                     setRoomFromRec(recommended);
+                    const resolved = resolveProgramOnRoomChange({
+                        rooms: config.operationalRooms,
+                        roomId: id,
+                        priorProgramCategoryId: programCategoryId,
+                    });
+                    setProgramCategoryId(resolved.programCategoryId);
+                    setProgramFromRoom(resolved.programFromRoom);
                     setRoomPicking(false);
                 }}
                 onCancel={() => setRoomPicking(false)}
@@ -864,7 +1592,7 @@ function ScheduleEditor({
                     <div style={{ display: "grid", gap: 8 }}>
                         <DayPills days={days} interactive allowed={allowedDays} onToggle={toggleDay} />
                         <button type="button" onClick={openPatternPicker} data-pattern-shortcut="true" style={{ all: "unset", cursor: "pointer", fontSize: 11, fontWeight: 600, color: T.pine, width: "fit-content" }}>
-                            Use a schedule pattern →
+                            Use a schedule pattern
                         </button>
                         {patternPicking &&
                             (patterns == null ? (
@@ -883,11 +1611,30 @@ function ScheduleEditor({
                     </div>
                 }
                 hours={
-                    <div style={{ display: "grid", gap: 6 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                            <input type="time" value={arrive} onChange={(e) => setArrive(e.target.value)} data-arrive="true" className="alloy-os-sched-input" style={{ width: 118 }} />
-                            <span style={{ color: T.mid40 }}>–</span>
-                            <input type="time" value={depart} onChange={(e) => setDepart(e.target.value)} data-depart="true" className="alloy-os-sched-input" style={{ width: 118 }} />
+                    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                        <div
+                            className="alloy-os-sched-hours-row"
+                            style={{ display: "flex", flexWrap: "wrap", gap: "8px 10px", alignItems: "center", minWidth: 0 }}
+                        >
+                            <div data-arrive="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
+                                <AlloyTimeInput
+                                    value={arrive}
+                                    onChange={setArrive}
+                                    aria-label="Arrive"
+                                    testId="schedule-arrive"
+                                    className="alloy-time-input--sched"
+                                />
+                            </div>
+                            <span style={{ color: T.mid40, flex: "0 0 auto" }}>–</span>
+                            <div data-depart="true" style={{ minWidth: 0, flex: "0 1 auto" }}>
+                                <AlloyTimeInput
+                                    value={depart}
+                                    onChange={setDepart}
+                                    aria-label="Depart"
+                                    testId="schedule-depart"
+                                    className="alloy-time-input--sched"
+                                />
+                            </div>
                         </div>
                         {arrive && depart && depart <= arrive && <div style={{ fontSize: 11, color: T.ember }}>Depart must be after arrive.</div>}
                         {days.length > 1 && (
@@ -904,9 +1651,19 @@ function ScheduleEditor({
                                     return (
                                         <div key={d.i} style={{ display: "flex", gap: 8, alignItems: "center" }} data-perday-row={d.i}>
                                             <span style={{ width: 30, fontSize: 11.5, fontWeight: 600, color: T.slate }}>{WEEKDAY_LABEL[d.i]}</span>
-                                            <input type="time" value={row.arrive} onChange={(e) => setRow({ arrive: e.target.value })} className="alloy-os-sched-input" style={{ width: 118 }} />
+                                            <AlloyTimeInput
+                                                value={row.arrive}
+                                                onChange={(next) => setRow({ arrive: next })}
+                                                aria-label={`${WEEKDAY_LABEL[d.i]} arrive`}
+                                                className="alloy-time-input--sched"
+                                            />
                                             <span style={{ color: T.mid40, fontSize: 11 }}>–</span>
-                                            <input type="time" value={row.depart} onChange={(e) => setRow({ depart: e.target.value })} className="alloy-os-sched-input" style={{ width: 118 }} />
+                                            <AlloyTimeInput
+                                                value={row.depart}
+                                                onChange={(next) => setRow({ depart: next })}
+                                                aria-label={`${WEEKDAY_LABEL[d.i]} depart`}
+                                                className="alloy-time-input--sched"
+                                            />
                                         </div>
                                     );
                                 })}
@@ -915,39 +1672,73 @@ function ScheduleEditor({
                     </div>
                 }
                 siteRoom={
-                    <div style={{ display: "grid", gap: 6 }}>
-                        <div data-schedule-site-context="true" style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{siteName}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {roomName ? (
-                                <span data-room-value="true" style={{ fontSize: 12.5, fontWeight: 600, color: T.slate }}>{roomName}</span>
-                            ) : null}
-                            {roomName && roomFromRec ? <RecTag /> : null}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    // The room decision needs a pattern (schedule) to evaluate fit —
-                                    // load it as part of invoking Change, then open the picker.
-                                    void ensurePatterns();
-                                    setRoomPicking(true);
-                                }}
-                                data-room-change="true"
-                                style={{ all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine }}
-                            >
-                                {roomName ? "Change →" : "Select a room →"}
-                            </button>
+                    roomReq === "not_used" ? (
+                        <div
+                            data-room-not-used="true"
+                            data-assignment-program-resolved={programCategoryId ? "true" : "false"}
+                            style={{ fontSize: 12.5, color: T.muted }}
+                        >
+                            Operational space not used for this Category
+                            <div data-schedule-site-context="true" style={{ marginTop: 4, fontSize: 11.5, fontWeight: 500 }}>
+                                Site · {siteName}
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div
+                            style={{ display: "grid", gap: 6 }}
+                            data-assignment-program-resolved={programCategoryId ? "true" : "false"}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                {roomName ? (
+                                    <span data-room-value="true" style={{ fontSize: 15, fontWeight: 700, color: T.forge }}>
+                                        {roomName}
+                                    </span>
+                                ) : (
+                                    <span data-room-value="pending" style={{ fontSize: 13, fontWeight: 600, color: T.muted }}>
+                                        Select a room
+                                    </span>
+                                )}
+                                {roomName && roomFromRec ? <RecTag /> : null}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        void ensurePatterns();
+                                        setRoomPicking(true);
+                                    }}
+                                    data-room-change="true"
+                                    style={{ all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.pine }}
+                                >
+                                    {roomName ? "Change" : "Select"}
+                                </button>
+                            </div>
+                            <div data-schedule-site-context="true" style={{ fontSize: 11.5, fontWeight: 500, color: T.muted }}>
+                                Site · {siteName}
+                            </div>
+                            {programUsed && programFromRoom ? (
+                                <div
+                                    data-program-from-room="true"
+                                    style={{ fontSize: 11, fontWeight: 600, color: T.pine }}
+                                >
+                                    Program set by this room — read-only here (change the room to change it).
+                                </div>
+                            ) : programUsed && programCategoryId ? (
+                                <div style={{ fontSize: 11, color: T.muted }}>
+                                    Program resolved from the child&rsquo;s enrollment.
+                                </div>
+                            ) : null}
+                        </div>
+                    )
                 }
                 effective={
                     <div style={{ display: "grid", gap: 6 }}>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>Start</span>
-                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
+                                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
                             <label style={{ display: "grid", gap: 3 }}>
                                 <span style={{ fontSize: 10, color: T.mid40 }}>End</span>
-                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: 156 }} />
+                                <input type="date" value={end} disabled={openEnded} onChange={(e) => setEnd(e.target.value)} className="alloy-os-sched-input" style={{ width: "min(156px, 100%)", maxWidth: "100%" }} />
                             </label>
                             <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.slate, cursor: "pointer", paddingBottom: 7 }}>
                                 <AlloyCheck checked={openEnded} onChange={setOpenEnded} data-open-ended={openEnded ? "true" : "false"} />
@@ -958,14 +1749,31 @@ function ScheduleEditor({
                     </div>
                 }
                 footer={
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 10.5, color: T.muted }}>{mode === "create" ? "New schedule — configure the minimum." : "Editing the current schedule."}</span>
-                        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                        className="alloy-os-sched-footer-row"
+                        style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px 12px", minWidth: 0 }}
+                    >
+                        <span style={{ fontSize: 10.5, color: T.muted, flex: "1 1 140px", minWidth: 0 }}>
+                            {createAsSecondary
+                                ? assignmentTypeLabel
+                                    ? `${assignmentTypeLabel} — independent of the primary.`
+                                    : "New assignment — independent of the primary."
+                                : mode === "create"
+                                  ? "Create Assignment — configure the minimum."
+                                  : "Editing this Assignment."}
+                        </span>
+                        <div style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, flex: "0 0 auto" }}>
                             <button type="button" onClick={onCancel} style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                                 Cancel
                             </button>
                             <button type="button" disabled={busy || !canSave} onClick={save} data-schedule-commit="true" style={primaryBtn(busy || !canSave)}>
-                                {busy ? "Saving…" : mode === "create" ? "Save schedule" : "Save changes"}
+                                {busy
+                                    ? "Saving…"
+                                    : createAsSecondary
+                                      ? "Save assignment"
+                                      : mode === "create"
+                                        ? "Create Assignment"
+                                        : "Save Assignment"}
                             </button>
                         </div>
                     </div>
@@ -975,13 +1783,17 @@ function ScheduleEditor({
     );
 }
 
-// ── Room picker (invokes the placement resolver; ranking stays owned there) ──
+// ── Room picker — seed + scored fit; ineligible rooms stay visible for override ──
 function RoomPicker({
     siteId,
     childId,
     patternId,
     start,
     selectedRoomId,
+    seedRooms,
+    purposeBehavior,
+    programCategoryId,
+    onProgramResolved,
     onPick,
     onCancel,
 }: {
@@ -990,24 +1802,55 @@ function RoomPicker({
     patternId: string | null;
     start: string;
     selectedRoomId: string | null;
+    seedRooms: SiteOperationalRoom[];
+    purposeBehavior?: AssignmentTypeBehavior;
+    programCategoryId?: string | null;
+    /** Server-resolved Program from child/assignment context (`?view=options`), adopted
+     *  only when no Program is already known client-side — never overrides a Program
+     *  a Room selection already implied. */
+    onProgramResolved?: (programCategoryId: string) => void;
     onPick: (id: string, name: string | null, recommended: boolean) => void;
     onCancel: () => void;
 }) {
-    const [options, setOptions] = useState<PlacementOption[] | null>(null);
+    const seedOptions = useMemo((): PlacementOption[] => {
+        const active = seedRooms.filter((r) => r.active !== false);
+        const scoped = scopeRoomsForAssignmentPicker(active, purposeBehavior ?? {});
+        return scoped.map((r) => ({
+            roomId: r.roomId,
+            roomName: r.roomName,
+            classification: "eligible" as const,
+            reason: "Operational space",
+            programCategoryId: r.programCategoryId,
+        }));
+    }, [seedRooms, purposeBehavior]);
+
+    const [scored, setScored] = useState<PlacementOption[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [overridePending, setOverridePending] = useState<PlacementOption | null>(null);
+
     useEffect(() => {
-        // The fit resolver evaluates against a schedule (pattern) — wait for it to
-        // resolve (loaded as part of invoking Change) rather than fire a request the
-        // resolver would reject.
         if (!patternId) return;
         let cancelled = false;
         setError(null);
         (async () => {
             try {
                 const o = await schedApi(
-                    `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(childId)}${start ? `&start_date=${start}` : ""}`
+                    `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(childId)}${start ? `&start_date=${start}` : ""}${programCategoryId ? `&program_category_id=${encodeURIComponent(programCategoryId)}` : ""}`
                 );
-                if (!cancelled) setOptions(o.options ?? []);
+                if (cancelled) return;
+                const raw = (o.options ?? []) as PlacementOption[];
+                // Keep Category allow-list / not_used scoping — do not drop program mismatches.
+                const scoped = scopeRoomsForAssignmentPicker(
+                    raw.map((r) => ({
+                        ...r,
+                        programCategoryId: r.programCategoryId ?? null,
+                    })),
+                    purposeBehavior ?? {},
+                );
+                setScored(scoped);
+                if (!programCategoryId && typeof o.programCategoryId === "string" && o.programCategoryId) {
+                    onProgramResolved?.(o.programCategoryId);
+                }
             } catch (e) {
                 if (!cancelled) setError((e as Error).message);
             }
@@ -1015,34 +1858,174 @@ function RoomPicker({
         return () => {
             cancelled = true;
         };
-    }, [siteId, patternId, childId, start]);
+        // `onProgramResolved` intentionally omitted — an inline callback from the parent;
+        // depending on it would refetch every render without changing behavior.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [siteId, patternId, childId, start, purposeBehavior, programCategoryId]);
+
+    const options = useMemo(() => {
+        const list = scored ?? seedOptions;
+        const rank = (c: PlacementOption["classification"]) =>
+            c === "recommended" ? 0 : c === "eligible" ? 1 : 2;
+        return [...list].sort((a, b) => rank(a.classification) - rank(b.classification));
+    }, [scored, seedOptions]);
+
+    function choose(option: PlacementOption) {
+        if (option.classification === "blocked") {
+            setOverridePending(option);
+            return;
+        }
+        setOverridePending(null);
+        onPick(option.roomId, option.roomName, option.classification === "recommended");
+    }
 
     return (
-        <div style={{ display: "grid", gap: 10, paddingTop: 4 }} data-room-picker="true">
+        <div style={{ display: "grid", gap: 10, paddingTop: 4, minHeight: 0 }} data-room-picker="true">
+            <div
+                style={{ display: "flex", alignItems: "center", gap: 8 }}
+                data-schedule-nav="true"
+            >
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    aria-label="Back to assignment"
+                    data-schedule-back="true"
+                    data-schedule-back-target="Assignment"
+                    data-room-picker-back="true"
+                    className="alloy-os-ucard__action alloy-os-ucard__action--system5"
+                    style={{ padding: "2px 0" }}
+                >
+                    ← Back
+                </button>
+            </div>
             {label("Choose a room")}
+            <p style={{ margin: 0, fontSize: 11.5, color: T.muted, lineHeight: 1.4 }}>
+                Eligible rooms match this child&rsquo;s age and program as of the start date. Ineligible rooms stay
+                listed — you can override when needed.
+            </p>
             {error && <ErrorNote message={error} />}
-            {!options ? (
-                <Thinking label="Evaluating rooms…" />
+            {options.length === 0 ? (
+                <span style={{ fontSize: 12, color: T.muted }}>
+                    No operational spaces configured for this site
+                    {programCategoryId ? " and Category" : ""}.
+                </span>
             ) : (
-                <div style={{ display: "grid", gap: 6 }}>
+                <div
+                    style={{ display: "grid", gap: 6, maxHeight: "min(42vh, 320px)", overflowY: "auto" }}
+                    data-room-options-ready={scored ? "scored" : "seed"}
+                >
                     {options.map((o) => {
                         const blocked = o.classification === "blocked";
                         const selected = o.roomId === selectedRoomId;
+                        const pending = overridePending?.roomId === o.roomId;
                         return (
-                            <button key={o.roomId} type="button" disabled={blocked} onClick={() => onPick(o.roomId, o.roomName, o.classification === "recommended")} data-room-option={o.roomId}
-                                style={{ all: "unset", cursor: blocked ? "not-allowed" : "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", border: selected ? `1px solid ${T.pine}` : `1px solid ${T.border}`, background: blocked ? "#f9fafb" : selected ? "rgba(0,162,131,.06)" : "#fff", borderRadius: 8, padding: "8px 12px", opacity: blocked ? 0.7 : 1 }}>
+                            <button
+                                key={o.roomId}
+                                type="button"
+                                onClick={() => choose(o)}
+                                data-room-option={o.roomId}
+                                data-room-classification={o.classification}
+                                data-room-override-pending={pending ? "true" : undefined}
+                                style={{
+                                    all: "unset",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    border: pending
+                                        ? `1px solid ${T.ember}`
+                                        : selected
+                                          ? `1px solid ${T.pine}`
+                                          : `1px solid ${T.border}`,
+                                    background: blocked
+                                        ? pending
+                                            ? "rgba(180,83,42,.06)"
+                                            : "#f9fafb"
+                                        : selected
+                                          ? "rgba(0,162,131,.06)"
+                                          : "#fff",
+                                    borderRadius: 8,
+                                    padding: "8px 12px",
+                                }}
+                            >
                                 <span style={{ color: blocked ? T.muted : T.forge, minWidth: 0 }}>
                                     <span style={{ fontWeight: 600 }}>{o.roomName ?? "Room"}</span>
                                     <span style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}>{o.reason}</span>
                                 </span>
-                                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: o.classification === "recommended" ? T.pine : blocked ? T.ember : T.muted, flex: "0 0 auto" }}>
-                                    {o.classification === "recommended" ? "Recommended" : o.classification === "blocked" ? "Ineligible" : "Eligible"}
+                                <span
+                                    style={{
+                                        fontSize: 9,
+                                        fontWeight: 700,
+                                        textTransform: "uppercase",
+                                        letterSpacing: ".04em",
+                                        color:
+                                            o.classification === "recommended"
+                                                ? T.pine
+                                                : blocked
+                                                  ? T.ember
+                                                  : T.muted,
+                                        flex: "0 0 auto",
+                                    }}
+                                >
+                                    {o.classification === "recommended"
+                                        ? "Recommended"
+                                        : o.classification === "blocked"
+                                          ? "Ineligible"
+                                          : "Eligible"}
                                 </span>
                             </button>
                         );
                     })}
                 </div>
             )}
+            {overridePending ? (
+                <div
+                    data-room-override-confirm="true"
+                    style={{
+                        display: "grid",
+                        gap: 8,
+                        border: `1px solid ${T.ember}`,
+                        background: "#fffaf7",
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                    }}
+                >
+                    <div style={{ fontSize: 12, color: T.forge, lineHeight: 1.4 }}>
+                        <strong>{overridePending.roomName ?? "This room"}</strong> is ineligible
+                        {overridePending.reason ? ` — ${overridePending.reason}` : ""}. Use it anyway?
+                    </div>
+                    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                        <button
+                            type="button"
+                            onClick={() => setOverridePending(null)}
+                            style={{ all: "unset", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}
+                        >
+                            Keep browsing
+                        </button>
+                        <button
+                            type="button"
+                            data-room-override-confirm-use="true"
+                            onClick={() => {
+                                const next = overridePending;
+                                setOverridePending(null);
+                                onPick(next.roomId, next.roomName, false);
+                            }}
+                            style={{
+                                all: "unset",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "#fff",
+                                background: "var(--alloy-os-bend-pine, #00A283)",
+                                borderRadius: 7,
+                                padding: "7px 12px",
+                            }}
+                        >
+                            Use anyway
+                        </button>
+                    </div>
+                </div>
+            ) : null}
             <div style={{ display: "flex", borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
                 <button type="button" onClick={onCancel} style={{ all: "unset", marginLeft: "auto", cursor: "pointer", fontSize: 12, fontWeight: 600, color: T.slate }}>
                     Cancel
@@ -1053,12 +2036,6 @@ function RoomPicker({
 }
 
 // ── Small presentational pieces ──────────────────────────────────────────────
-function Value({ children }: { children: ReactNode }) {
-    return <span style={{ fontSize: 13, fontWeight: 600, color: T.forge }}>{children}</span>;
-}
-function Empty({ children }: { children: ReactNode }) {
-    return <span style={{ fontSize: 12.5, color: T.muted, fontStyle: "italic" }}>{children}</span>;
-}
 function RecTag() {
     return <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: T.pine }}>Recommended</span>;
 }
@@ -1097,7 +2074,16 @@ function label(s: string) {
     return <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: T.mid40, marginBottom: 7 }}>{s}</div>;
 }
 function primaryBtn(disabled: boolean): CSSProperties {
-    return { fontSize: 12.5, fontWeight: 600, color: "#fff", background: disabled ? "#98a2b3" : T.pine, border: "none", borderRadius: 7, padding: "8px 16px", cursor: disabled ? "default" : "pointer" };
+    return {
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: "#fff",
+        background: disabled ? "#98a2b3" : "var(--alloy-os-bend-pine, #00A283)",
+        border: "none",
+        borderRadius: 7,
+        padding: "8px 16px",
+        cursor: disabled ? "default" : "pointer",
+    };
 }
 
 const rowBtnStyle: CSSProperties = {
@@ -1112,6 +2098,6 @@ const rowBtnStyle: CSSProperties = {
     border: `1px solid ${T.border}`,
     borderRadius: 10,
     padding: "8px 12px",
-    background: "#fff",
+    background: "var(--alloy-os-fp-card-surface, var(--alloy-os-surface, #fff))",
 };
 const patternChip: CSSProperties = { all: "unset", cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.slate, background: T.stone, border: `1px solid ${T.border}`, borderRadius: 999, padding: "6px 11px" };

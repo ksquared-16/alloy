@@ -14,6 +14,7 @@ import {
 } from "@/lib/pos/processingPublicRuntime";
 import { readLinkEmbedUrl, writeLinkEmbedUrl } from "@/lib/forms/intakeRuntimeOrchestrationStorage";
 import { resolveLinkLocationLabel } from "@/lib/forms/locationSpecificPublicLinkMetadata";
+import { linkScopeLocationId, readShareEmbedPath } from "@/lib/admin/forms/distributionLinkReuse";
 import type { ProcessingFormPublicLinkRow, ProcessingMintedPublicLink } from "./useProcessingFormApi";
 
 type SiteOption = { id: string; label: string };
@@ -25,6 +26,8 @@ type MintArgs = {
     publishedVersionId?: string | null;
     locationId?: string;
     locationName?: string;
+    /** Rotate to a fresh token, deactivating any prior link for this scope. */
+    regenerate?: boolean;
 };
 
 type Props = {
@@ -57,6 +60,10 @@ const STATUS_LABELS = {
 } as const;
 
 function resolveLinkShareUrl(link: ProcessingFormPublicLinkRow, origin: string | null): string | null {
+    // Retrievable posture: the reconstructable embed path is persisted in link metadata, so any operator
+    // can re-copy the URL in any session. Fall back to the legacy per-tab sessionStorage cache.
+    const persisted = readShareEmbedPath(link.metadata);
+    if (persisted) return origin ? `${origin.replace(/\/$/, "")}${persisted}` : persisted;
     const stored = readLinkEmbedUrl(link.id);
     if (stored) return stored;
     return null;
@@ -235,6 +242,38 @@ export default function ProcessingFormDistributionPanel({
         }
     };
 
+    const regenerateLink = async (link: ProcessingFormPublicLinkRow) => {
+        if (!canMutate) return;
+        setBusy(true);
+        setErr(null);
+        try {
+            const publishedVersionId = await loadPublishedVersionId(formId);
+            const locationId = linkScopeLocationId(link.metadata) ?? undefined;
+            const created = await mintProcessingPublicLink(formId, {
+                formName,
+                formKey,
+                existingMeta,
+                publishedVersionId,
+                regenerate: true,
+                ...(locationId
+                    ? { locationId, locationName: siteCatalog[locationId] ?? "Location" }
+                    : {}),
+            });
+            const embedUrl = resolveProcessingPublicShareUrl({
+                embedUrl: created.embed_url,
+                embedPath: created.embed_path,
+                origin,
+            });
+            if (embedUrl) writeLinkEmbedUrl(created.id, embedUrl);
+            setMinted(created);
+            await reload();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Could not regenerate link");
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const toggleSite = (siteId: string) => {
         setSelectedSiteIds((prev) => (prev.includes(siteId) ? prev.filter((id) => id !== siteId) : [...prev, siteId]));
     };
@@ -394,11 +433,33 @@ export default function ProcessingFormDistributionPanel({
                                             >
                                                 Open
                                             </a>
+                                            <button
+                                                type="button"
+                                                disabled={!canMutate || busy}
+                                                className="config-secondary-btn text-[10px] disabled:opacity-50"
+                                                onClick={() => void regenerateLink(link)}
+                                                data-testid={`processing-form-regenerate-link-${link.id}`}
+                                                title="Rotate to a fresh link — the current URL stops working"
+                                            >
+                                                {busy ? "Working…" : "Regenerate"}
+                                            </button>
                                         </div>
                                     ) : (
-                                        <p className="mt-1 text-[10px] text-alloy-midnight/40">
-                                            Link active — copy URL from the one-time reveal after minting.
-                                        </p>
+                                        <div className="mt-1 space-y-1">
+                                            <p className="text-[10px] text-alloy-midnight/40">
+                                                This link was minted before links were retrievable, so its URL can’t be
+                                                shown. Regenerate a fresh, copyable link (the old one stops working).
+                                            </p>
+                                            <button
+                                                type="button"
+                                                disabled={!canMutate || busy}
+                                                className="config-secondary-btn text-[10px] disabled:opacity-50"
+                                                onClick={() => void regenerateLink(link)}
+                                                data-testid={`processing-form-regenerate-link-${link.id}`}
+                                            >
+                                                {busy ? "Regenerating…" : "Regenerate link"}
+                                            </button>
+                                        </div>
                                     )}
                                 </li>
                             );
@@ -411,9 +472,9 @@ export default function ProcessingFormDistributionPanel({
                         className="rounded-lg bg-alloy-ember/[0.06] px-3 py-2 ring-1 ring-alloy-ember/20"
                         data-testid="processing-form-one-time-link"
                     >
-                        <p className="text-[11px] font-semibold text-alloy-midnight">Copy this link now</p>
+                        <p className="text-[11px] font-semibold text-alloy-midnight">Your distribution link</p>
                         <p className="mt-1 text-[10px] text-alloy-midnight/55">
-                            For security, the full URL is shown once after minting.
+                            Copy it now, or come back anytime — it stays retrievable from the list above.
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                             <code className="break-all rounded bg-white px-2 py-1 font-mono text-[10px]">{mintedShareUrl}</code>

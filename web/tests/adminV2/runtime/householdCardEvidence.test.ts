@@ -71,6 +71,24 @@ describe("buildHouseholdCardEvidence", () => {
         expect(ev.missingCriticalWarning).toBeNull();
     });
 
+    it("carries profile photo URLs on contacts and children when present", () => {
+        const record = baseRecord();
+        (record._opportunity_persons as Record<string, unknown>[])[0]!.photo_url =
+            "https://cdn.example/sarah.jpg";
+        (record._opportunity_persons as Record<string, unknown>[])[1]!.photo_url =
+            "https://cdn.example/mike.jpg";
+        (record._inquiry_children as Record<string, unknown>[])[0]!.photo_url =
+            "https://cdn.example/emma.jpg";
+
+        const ev = buildHouseholdCardEvidence(ctx(record));
+        expect(ev.primaryContact?.imageUrl).toBe("https://cdn.example/sarah.jpg");
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        expect(otherParent?.contacts[0]?.imageUrl).toBe("https://cdn.example/mike.jpg");
+        const children = ev.groups.find((g) => g.key === "children");
+        expect(children?.children[0]?.imageUrl).toBe("https://cdn.example/emma.jpg");
+        expect(children?.children[1]?.imageUrl ?? null).toBeNull();
+    });
+
     it("classifies evidence groups by relationship role", () => {
         const ev = buildHouseholdCardEvidence(ctx(baseRecord()));
         const keys = ev.groups.map((g) => g.key);
@@ -103,6 +121,56 @@ describe("buildHouseholdCardEvidence", () => {
         expect(otherParent?.contacts.some((c) => c.name === "Sarah Johnson")).toBe(false);
     });
 
+    it("surfaces create-lead family_member secondary as Other Parent (not Additional)", () => {
+        const record = baseRecord();
+        record._opportunity_persons = [
+            {
+                person_id: "p-sarah",
+                role_type: "primary_contact",
+                name: "Sarah Johnson",
+                phone: "555-123-4567",
+                email: "sarah@example.com",
+            },
+            {
+                person_id: "p-mike",
+                role_type: "family_member",
+                name: "Michael Johnson",
+                phone: "555-111-2222",
+            },
+        ];
+        let config = defaultNestedSurfaceConfig(HOUSEHOLD_SURFACE_ID);
+        // Stale Additional criteria that historically claimed family_member via "member".
+        config = {
+            ...config,
+            groups: config.groups.map((group) => {
+                if (group.key === "other_parent_guardian") {
+                    return {
+                        ...group,
+                        relationshipCriteria: {
+                            roleKeys: ["parent", "guardian"],
+                            excludeRoleKeys: ["emergency", "pickup", "billing"],
+                        },
+                    };
+                }
+                if (group.key === "household_members") {
+                    return {
+                        ...group,
+                        enabled: true,
+                        relationshipCriteria: {
+                            roleKeys: ["additional", "contact", "member"],
+                        },
+                    };
+                }
+                return group;
+            }),
+        };
+        const ev = buildHouseholdCardEvidence(ctx(record), { nestedConfig: config });
+        const otherParent = ev.groups.find((g) => g.key === "other_parent_guardian");
+        const additional = ev.groups.find((g) => g.key === "household_members");
+        expect(otherParent?.contacts.map((c) => c.name)).toEqual(["Michael Johnson"]);
+        expect(additional?.contacts.some((c) => c.name === "Michael Johnson") ?? false).toBe(false);
+    });
+
     it("does not duplicate the primary person in Other Parent / Guardian", () => {
         const record = baseRecord();
         record._opportunity_persons = [
@@ -133,7 +201,9 @@ describe("buildHouseholdCardEvidence", () => {
         expect(children?.count).toBe(1);
         const child = children?.children[0];
         expect(child?.name).toBe("Emma Johnson");
-        expect(Object.keys(child ?? {}).sort()).toEqual(["id", "name"]);
+        // Belonging-only: name (+ optional identity photo). No operational child fields.
+        expect(Object.keys(child ?? {}).sort()).toEqual(["id", "imageUrl", "name"]);
+        expect(child?.imageUrl ?? null).toBeNull();
         const serialized = JSON.stringify(ev.groups);
         expect(serialized).not.toContain("Age 6");
         expect(serialized).not.toContain("Preschool");

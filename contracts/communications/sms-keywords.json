@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "Canonical SMS compliance keyword contract, shared by both runtimes.",
+    "Inbound SMS is handled in Python (backend/app/routes/sms_inbound.py) while the",
+    "preference vocabulary and the composer live in TypeScript. Rather than",
+    "duplicating the vocabulary in two languages and hoping they stay aligned,",
+    "both runtimes load THIS file and a parity test on each side fails the build",
+    "if either drifts.",
+    "",
+    "STOP semantics are carrier-mandated: a STOP suppresses ALL SMS to that",
+    "number, including transactional and operational. It is not a marketing-only",
+    "opt-out."
+  ],
+  "version": "2026-07-31.1",
+  "keywords": {
+    "stop": ["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout", "opt-out"],
+    "start": ["start", "unstop", "optin", "opt-in"],
+    "help": ["help", "info"]
+  },
+  "affected_preference_categories": ["sms_transactional", "sms_operational", "sms_marketing"],
+  "target_state": {
+    "stop": "opted_out",
+    "start": "opted_in",
+    "help": null
+  },
+  "help_response": "Alloy messaging. Reply STOP to unsubscribe. Msg&data rates may apply. Contact your school for assistance.",
+  "stop_response": "You have been unsubscribed and will receive no further messages. Reply START to resubscribe.",
+  "start_response": "You are resubscribed to messages. Reply STOP to unsubscribe."
+}

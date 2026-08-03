@@ -77,11 +77,25 @@ function extractRelatedFromRecord(record: Record<string, unknown>) {
     const inquiry_children = Array.isArray(inquiryRaw)
         ? inquiryRaw
               .filter((x): x is Record<string, unknown> => x != null && typeof x === "object" && !Array.isArray(x))
+              // Spread first: re-listing fields here silently dropped every child-profile-grain
+              // value (dob, gender, custom_fields, and the customer_member_id they resolve
+              // through), so rules bound to those read null on every record and reported captured
+              // data as missing. Normalizing the typed keys after the spread keeps the shape
+              // without the loss.
               .map((row) => ({
+                  ...row,
                   id: typeof row.id === "string" ? row.id : undefined,
                   person_id: typeof row.person_id === "string" ? row.person_id : null,
+                  customer_member_id:
+                      typeof row.customer_member_id === "string" ? row.customer_member_id : null,
                   first_name: typeof row.first_name === "string" ? row.first_name : null,
                   last_name: typeof row.last_name === "string" ? row.last_name : null,
+                  dob:
+                      typeof row.dob === "string"
+                          ? row.dob
+                          : typeof row.date_of_birth === "string"
+                            ? row.date_of_birth
+                            : null,
                   location_id: typeof row.location_id === "string" ? row.location_id : null,
                   program_category_id:
                       typeof row.program_category_id === "string" ? row.program_category_id : null,

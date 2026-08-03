@@ -8,6 +8,7 @@ import { namespacesForNestedGroupPicker,
     applyNestedSurfaceFieldDrop,
     fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
+    fieldIconForNestedGroup,
     fieldShowIconForNestedGroup,
     fieldShowLabelForNestedGroup,
     fieldVisibilityForNestedGroup,
@@ -15,6 +16,7 @@ import { namespacesForNestedGroupPicker,
     identityConfigurationFieldKeys,
     removeFieldFromNestedGroup,
     selectedFieldKeys,
+    setFieldIconInNestedGroup,
     setFieldPresentationLabel,
     setFieldPresentationModeInNestedGroup,
     setFieldVisibilityInNestedGroup,
@@ -22,6 +24,22 @@ import { namespacesForNestedGroupPicker,
     fieldLinkTargetForNestedGroup,
     type NestedSurfaceConfig,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceEditorModel";
+
+/** Icons available for identity field authoring — keys match IdentityFieldValue runtime map. */
+const IDENTITY_FIELD_ICON_OPTIONS = [
+    { key: "phone", label: "Phone" },
+    { key: "mail", label: "Email" },
+    { key: "cake", label: "Birthday" },
+    { key: "graduation-cap", label: "Program" },
+    { key: "door-open", label: "Room" },
+    { key: "calendar-clock", label: "Schedule" },
+    { key: "calendar-days", label: "Date" },
+    { key: "badge-check", label: "Badge" },
+    { key: "building", label: "Building" },
+    { key: "user", label: "Person" },
+    { key: "users", label: "People" },
+    { key: "home", label: "Home" },
+] as const;
 import type { IdentityFieldTier } from "@/lib/adminV2/settings/surfaces/identityFieldPlacement";
 import { configurationPurposeFromTierArg } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import type { NestedSurfaceFieldDropZone } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldLayout";
@@ -31,6 +49,7 @@ import {
     type SurfaceFieldVisibility,
 } from "@/lib/adminV2/settings/surfaces/nestedSurfaceFieldPolicy";
 import { identityFieldVisibilityOptionsForBuilder } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
+import { resolveCanonicalIdentityFieldLabel } from "@/lib/adminV2/runtime/focusPanel/identity/identityCanonicalFieldMetadata";
 import {
     IDENTITY_LINK_CARD_OPTIONS,
     IDENTITY_LINK_OPEN_OPTIONS,
@@ -41,7 +60,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldLinkContract";
 import { useFocusPanelComposer } from "@/lib/adminV2/settings/surfaces/focusPanelComposerContext";
 import { useTenantFieldDefinitions } from "@/lib/adminV2/settings/surfaces/useTenantFieldDefinitions";
-import { availableFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/compositionFieldAdapter";
+import { identityPickerFieldsForNamespaces } from "@/lib/adminV2/settings/surfaces/identityPickerFieldCatalog";
 import NestedSurfaceAddField from "@/components/admin/focusPanel/drillIn/NestedSurfaceAddField";
 
 export type LayoutSurfaceFieldMeta = {
@@ -66,21 +85,47 @@ type Props = {
 
 function humanizeFieldKey(fieldKey: string): string {
     const leaf = fieldKey.includes(".") ? fieldKey.slice(fieldKey.lastIndexOf(".") + 1) : fieldKey;
-    return leaf.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    // Never surface storage suffixes like location_id → "Location Id" in Builder.
+    const withoutIdSuffix = leaf.replace(/_id$/i, "");
+    return withoutIdSuffix.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Never return raw canonical refs in Builder UI. */
+/** Never return raw canonical refs / storage keys in Builder UI. */
 function catalogLabelFor(
     surfaceId: string,
     groupKey: string,
     fieldKey: string,
     tenantDefs: ReturnType<typeof useTenantFieldDefinitions>["tenantFieldDefinitions"],
 ): string {
+    const canonical = resolveCanonicalIdentityFieldLabel(fieldKey, tenantDefs).trim();
+    if (
+        canonical
+        && canonical !== fieldKey
+        && !/^[a-z_]+\./i.test(canonical)
+        && !/_id$/i.test(canonical)
+        && canonical.toLowerCase() !== "location id"
+    ) {
+        return canonical;
+    }
+
     const namespaces = namespacesForNestedGroupPicker(surfaceId, groupKey);
-    const all = namespaces.length > 0 ? availableFieldsForNamespaces(namespaces, tenantDefs) : [];
-    const fromCatalog = all.find((f) => f.key === fieldKey)?.label?.trim();
-    if (fromCatalog && fromCatalog !== fieldKey && !/^[a-z_]+\./i.test(fromCatalog)) return fromCatalog;
-    if (fromCatalog && fromCatalog !== fieldKey) return humanizeFieldKey(fieldKey);
+    const picker = namespaces.length > 0
+        ? identityPickerFieldsForNamespaces({ namespaces, tenantFieldDefinitions: tenantDefs })
+        : [];
+    const fromPicker = picker.find((f) => f.key === fieldKey)?.label?.trim();
+    if (
+        fromPicker
+        && fromPicker !== fieldKey
+        && !/^[a-z_]+\./i.test(fromPicker)
+        && fromPicker.toLowerCase() !== "location id"
+    ) {
+        // Prefer the placement operator noun ("Location") over longer Settings copy.
+        if (fieldKey === "inquiry_child.location_id" || fieldKey === "child.location") {
+            return "Location";
+        }
+        return fromPicker;
+    }
+
     return humanizeFieldKey(fieldKey) || "Unavailable field";
 }
 
@@ -126,12 +171,17 @@ export default function NestedSurfaceFieldLayoutSurface({
         return fields.map((f) => f.fieldKey);
     }, [composing, config, groupKey, fields, fieldMetaByKey, tier]);
 
+    const layoutPurpose = useMemo(
+        () => (tier ? configurationPurposeFromTierArg(tier) : "summary" as const),
+        [tier],
+    );
+
     const rowChunks = useMemo(() => {
         if (!config) return orderedKeys.map((key) => [key]);
         return chunkNestedSurfaceFieldsForHalfRowLayout(orderedKeys, (fieldKey) =>
-            fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey),
+            fieldLayoutWidthForNestedGroup(config, groupKey, fieldKey, { purpose: layoutPurpose }),
         );
-    }, [config, groupKey, orderedKeys]);
+    }, [config, groupKey, orderedKeys, layoutPurpose]);
 
     const mutate = useCallback(
         (next: NestedSurfaceConfig) => composer?.updateConfig(surfaceId, next),
@@ -176,10 +226,14 @@ export default function NestedSurfaceFieldLayoutSurface({
                 <div
                     key={`${chunk.join("-")}-${rowIndex}`}
                     className={clsx(
+                        "identity-field-grid__row",
+                        chunk.length === 2 && "identity-field-grid__row--pair",
+                        chunk.length === 3 && "identity-field-grid__row--triple",
                         "alloy-os-child-truth__inline-row",
                         chunk.length === 2 && "alloy-os-child-truth__inline-row--pair",
                     )}
-                    data-children-inline-row={chunk.length === 2 ? "pair" : "single"}
+                    data-identity-row={chunk.length === 3 ? "triple" : chunk.length === 2 ? "pair" : "single"}
+                    data-children-inline-row={chunk.length === 2 ? "pair" : chunk.length === 3 ? "triple" : "single"}
                 >
                     {chunk.map((fieldKey) => {
                         const meta =
@@ -635,16 +689,53 @@ function FieldInstance({
                                 type="button"
                                 className={clsx("fp-layout-field__toggle", showIcon && "is-on")}
                                 aria-pressed={showIcon}
-                                onClick={() =>
-                                    onMutate(
-                                        setFieldPresentationModeInNestedGroup(config, groupKey, fieldKey, {
-                                            showIcon: !showIcon,
-                                        }),
-                                    )
-                                }
+                                onClick={() => {
+                                    if (showIcon) {
+                                        onMutate(setFieldIconInNestedGroup(config, groupKey, fieldKey, null));
+                                        return;
+                                    }
+                                    // Turning Icon on: enable + seed a sensible default glyph.
+                                    const seeded =
+                                        fieldIconForNestedGroup(config, groupKey, fieldKey)
+                                        ?? (fieldKey.includes("phone")
+                                            ? "phone"
+                                            : fieldKey.includes("email") || fieldKey.includes("mail")
+                                              ? "mail"
+                                              : fieldKey.includes("program")
+                                                ? "graduation-cap"
+                                                : fieldKey.includes("dob") || fieldKey.includes("birth")
+                                                  ? "cake"
+                                                  : "badge-check");
+                                    onMutate(setFieldIconInNestedGroup(config, groupKey, fieldKey, seeded));
+                                }}
                             >
                                 Icon
                             </button>
+                            {showIcon ? (
+                                <select
+                                    className="fp-inline-field-row__behavior"
+                                    value={fieldIconForNestedGroup(config, groupKey, fieldKey) ?? ""}
+                                    aria-label={`Icon for ${catalogLabel}`}
+                                    data-identity-field-icon-picker={fieldKey}
+                                    onChange={(e) =>
+                                        onMutate(
+                                            setFieldIconInNestedGroup(
+                                                config,
+                                                groupKey,
+                                                fieldKey,
+                                                e.target.value || null,
+                                            ),
+                                        )
+                                    }
+                                >
+                                    <option value="">Select icon…</option>
+                                    {IDENTITY_FIELD_ICON_OPTIONS.map((opt) => (
+                                        <option key={opt.key} value={opt.key}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : null}
                         </div>
                         <button
                             type="button"

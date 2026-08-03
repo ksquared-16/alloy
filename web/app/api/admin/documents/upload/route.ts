@@ -22,6 +22,8 @@ import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processin
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
 import { buildDocumentTextUpdate, extractPdfText, looksLikePdf } from "@/lib/pos/processingCase/structure/pdfTextExtract";
+import { OCR_METHOD, looksLikeImage, ocrImageBytes, ocrPdfBytes, type OcrResult } from "@/lib/pos/processingCase/structure/ocrExtract";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     capabilitiesForFormat,
     detectProcessingSourceFormat,
@@ -59,6 +61,37 @@ const CANONICAL_ENTITY_TYPE: Record<string, string> = {
 
 function sanitizeFilename(name: string): string {
     return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 180) || "file";
+}
+
+/**
+ * Persist a governed OCR result onto the document row (single writer for both the image and the
+ * scanned-PDF paths). Records text + confidence + method + provenance so the SAME extraction review
+ * runs over OCR text and the published form retains source→OCR→published lineage.
+ */
+async function applyOcrDocumentUpdate(
+    supabase: SupabaseClient,
+    args: { orgId: string; docId: string; baseMeta: Record<string, unknown>; ocr: OcrResult }
+): Promise<void> {
+    const { ocr } = args;
+    await supabase
+        .from("documents")
+        .update({
+            extracted_text: ocr.text,
+            extraction_status: ocr.text.trim() ? "complete" : "empty",
+            extraction_provider: OCR_METHOD,
+            metadata: {
+                ...args.baseMeta,
+                ocr_derived: true,
+                ocr_confidence: ocr.confidence,
+                ocr_low_confidence: ocr.lowConfidence,
+                ocr_method: ocr.method,
+                ocr_source_kind: ocr.sourceKind,
+                ocr_page_count: ocr.pageCount,
+                ocr_truncated: ocr.truncated,
+            },
+        })
+        .eq("org_id", args.orgId)
+        .eq("id", args.docId);
 }
 
 /** POST multipart: file + entity_type + entity_id; optional doc_type, title. Admin only (matches canMutate). */
@@ -150,19 +183,28 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const { data: existingTitles } = await supabase.from("documents").select("title").eq("org_id", ctx.orgId);
-    const existingDisplayNames = ((existingTitles ?? []) as Array<{ title?: string | null }>)
-        .map((row) => (row.title ?? "").trim())
-        .filter(Boolean);
+    // Profile photos are identity assets — skip org-wide title scan + OCR/POS intake.
+    // Awaiting tesseract on a face photo was hanging Focus Panel "Save photo" indefinitely.
+    const isProfilePhoto = (docType ?? "").trim().toLowerCase() === "profile_photo";
 
-    const proposedTitle =
-        titleRaw ??
-        proposeImportDisplayName({
-            fileName: origName,
-            receivedAt: new Date().toISOString(),
-            existingDisplayNames,
-        });
-    const title = resolveDisplayNameWithCollision(proposedTitle, existingDisplayNames);
+    let title: string;
+    if (isProfilePhoto) {
+        title = (titleRaw ?? origName ?? "Profile photo").trim() || "Profile photo";
+    } else {
+        const { data: existingTitles } = await supabase.from("documents").select("title").eq("org_id", ctx.orgId);
+        const existingDisplayNames = ((existingTitles ?? []) as Array<{ title?: string | null }>)
+            .map((row) => (row.title ?? "").trim())
+            .filter(Boolean);
+
+        const proposedTitle =
+            titleRaw ??
+            proposeImportDisplayName({
+                fileName: origName,
+                receivedAt: new Date().toISOString(),
+                existingDisplayNames,
+            });
+        title = resolveDisplayNameWithCollision(proposedTitle, existingDisplayNames);
+    }
 
     const { data: row, error: insErr } = await supabase
         .from("documents")
@@ -182,6 +224,7 @@ export async function POST(request: NextRequest) {
                 processing_intent: processingIntent,
                 ...processingIntentMetadata(processingIntent),
                 source_format: sourceFormat,
+                ...(isProfilePhoto ? { profile_photo: true } : {}),
             },
         })
         .select("*")
@@ -203,6 +246,34 @@ export async function POST(request: NextRequest) {
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
 
+    if (isProfilePhoto) {
+        try {
+            await emitEvent({
+                org_id: ctx.orgId,
+                event_type: "document_uploaded",
+                entity_type: "documents",
+                entity_id: docId,
+                payload: {
+                    canonical_entity_type: canonicalType,
+                    entity_id: rowEntityId,
+                    doc_type: docType,
+                    storage_path: storagePath,
+                    actor_user_id: ctx.userId,
+                    profile_photo: true,
+                },
+            });
+        } catch (e) {
+            console.warn("[documents/upload] emitEvent profile_photo", e instanceof Error ? e.message : e);
+        }
+        return NextResponse.json({
+            document,
+            raw: row,
+            processing_case_id: null,
+            classification_key: null,
+            extraction_candidate_count: null,
+        });
+    }
+
     // POS-FP11b: best-effort text-only PDF extraction. We already have the bytes in
     // memory. On success the text lands on `documents.extracted_text` so the structure
     // preview (below) can use it. NEVER blocks the upload — any failure is swallowed and
@@ -212,6 +283,21 @@ export async function POST(request: NextRequest) {
             const pdfResult = await extractPdfText(new Uint8Array(buffer));
             const textUpdate = buildDocumentTextUpdate(pdfResult);
             await supabase.from("documents").update(textUpdate).eq("org_id", ctx.orgId).eq("id", docId);
+
+            // Scanned PDF: a real PDF with no native text layer. Detect it (no_text) and run the
+            // governed OCR path — rasterize pages server-side, OCR them, and record the same OCR
+            // provenance as image sources so the identical review-and-correction flow applies.
+            if (!pdfResult.text) {
+                const ocr = await ocrPdfBytes(new Uint8Array(buffer));
+                if (ocr && ocr.text.trim()) {
+                    await applyOcrDocumentUpdate(supabase, {
+                        orgId: ctx.orgId,
+                        docId,
+                        baseMeta: (row as { metadata?: Record<string, unknown> }).metadata ?? {},
+                        ocr,
+                    });
+                }
+            }
         } catch (e) {
             console.warn("[documents/upload] pdf text extraction", e instanceof Error ? e.message : e);
         }
@@ -228,6 +314,23 @@ export async function POST(request: NextRequest) {
                 .eq("id", docId);
         } catch (e) {
             console.warn("[documents/upload] text file extraction", e instanceof Error ? e.message : e);
+        }
+    } else if (looksLikeImage(mimeType, origName)) {
+        // Governed OCR path (Phase 7 Stage B): scanned / image-based source has no native text or form
+        // fields. OCR it server-side and preserve text + confidence + method; the same review-and-
+        // correction flow then runs over the OCR text. Best-effort — never blocks the upload.
+        try {
+            const ocr = await ocrImageBytes(new Uint8Array(buffer));
+            if (ocr) {
+                await applyOcrDocumentUpdate(supabase, {
+                    orgId: ctx.orgId,
+                    docId,
+                    baseMeta: (row as { metadata?: Record<string, unknown> }).metadata ?? {},
+                    ocr,
+                });
+            }
+        } catch (e) {
+            console.warn("[documents/upload] image OCR extraction", e instanceof Error ? e.message : e);
         }
     }
 

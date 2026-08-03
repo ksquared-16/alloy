@@ -338,14 +338,16 @@ export default function FocusPanelRuntimeComposerCanvas({
         e.preventDefault();
         e.stopPropagation();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        const move = (ev: globalThis.PointerEvent) => {
-            const { col, row } = cellFromPointer(ev.clientX, ev.clientY);
-            setGhost(applySnappedMove(area, col, row));
+        // Preserve grab point so the card does not teleport under the cursor mid-drag.
+        const origin = cellFromPointer(e.clientX, e.clientY);
+        const grabColOffset = origin.col - area.colStart;
+        const grabRowOffset = origin.row - area.rowStart;
+        const gridAtStart = grid;
+        const resolveTarget = (clientX: number, clientY: number) => {
+            const { col, row } = cellFromPointer(clientX, clientY);
+            return applySnappedMove(area, col - grabColOffset, row - grabRowOffset);
         };
-        const up = (ev: globalThis.PointerEvent) => {
-            const { col, row } = cellFromPointer(ev.clientX, ev.clientY);
-            const snapped = applySnappedMove(area, col, row);
-            applyGrid(moveArea(grid, area.card, snapped.colStart, snapped.rowStart));
+        const cleanup = () => {
             setGhost(null);
             interacting.current = false;
             setArranging(false);
@@ -356,11 +358,23 @@ export default function FocusPanelRuntimeComposerCanvas({
             }
             window.removeEventListener("pointermove", move);
             window.removeEventListener("pointerup", up);
-            window.removeEventListener("pointercancel", up);
+            window.removeEventListener("pointercancel", cancel);
+        };
+        const move = (ev: globalThis.PointerEvent) => {
+            setGhost(resolveTarget(ev.clientX, ev.clientY));
+        };
+        const up = (ev: globalThis.PointerEvent) => {
+            const snapped = resolveTarget(ev.clientX, ev.clientY);
+            applyGrid(moveArea(gridAtStart, area.card, snapped.colStart, snapped.rowStart));
+            cleanup();
+        };
+        const cancel = () => {
+            // Invalid/cancelled drop returns the card to its exact original position.
+            cleanup();
         };
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
-        window.addEventListener("pointercancel", up);
+        window.addEventListener("pointercancel", cancel);
     };
 
     const startResize = (e: PointerEvent, area: FocusPanelGridArea, axis: "w" | "h" | "wh") => {

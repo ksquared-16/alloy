@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import type { CommercialProduct, CommercialType } from "@/lib/commercial/commercialProducts";
+import { operatorFriendlyCommercialError } from "@/lib/commercial/operatorFriendlyCommercialError";
 
 const SELECT_COLS =
     "id, org_id, location_id, program_key, name, description, commercial_type, category_id, amount_cents, cadence_key, revenue_category, revenue_category_id, effective_start, effective_end, behavior, is_active, metadata, source_table, source_id, created_at, updated_at";
@@ -71,7 +72,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data, error } = await supabase
         .from("commercial_products").update(patch).eq("id", id).eq("org_id", ctx.orgId).select(SELECT_COLS).maybeSingle();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            { error: operatorFriendlyCommercialError(error.message, "Could not update catalog item.") },
+            { status: error.code === "23505" ? 409 : 400 },
+        );
+    }
     if (!data) return NextResponse.json({ error: "Product not found" }, { status: 404 });
     return NextResponse.json({ product: mapRow(data as Record<string, unknown>) });
 }
@@ -86,6 +92,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (!existing) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
     const { error } = await supabase.from("commercial_products").delete().eq("id", id).eq("org_id", ctx.orgId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+        return NextResponse.json(
+            { error: operatorFriendlyCommercialError(error.message, "Could not delete catalog item.") },
+            { status: 400 },
+        );
+    }
     return NextResponse.json({ deleted: true });
 }

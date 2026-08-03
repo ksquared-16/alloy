@@ -1,0 +1,88 @@
+import { describe, expect, it } from "vitest";
+
+import {
+    assignmentOwnsProgramRoomField,
+    primaryAssignmentFromScheduling,
+    programRoomEditableWhenNoPrimaryAssignment,
+} from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
+import type { ChildScheduling } from "@/lib/scheduling/projection/schedulingProjectionTypes";
+
+describe("assignmentProgramRoomGating", () => {
+    it("detects primary assignment program and room", () => {
+        const scheduling = {
+            status: "scheduled",
+            current: {
+                assignments: [
+                    {
+                        isPrimary: true,
+                        room: { program: "Preschool", name: "Room A" },
+                    },
+                ],
+            },
+            proposed: null,
+        } as unknown as ChildScheduling;
+        expect(primaryAssignmentFromScheduling(scheduling)).toEqual({
+            program: "Preschool",
+            room: "Room A",
+        });
+    });
+
+    it("blocks program field edit when primary assignment exists", () => {
+        const scheduling = {
+            status: "scheduled",
+            current: { assignments: [{ isPrimary: true, room: { program: "Toddler", name: "B" } }] },
+            proposed: null,
+        } as unknown as ChildScheduling;
+        expect(programRoomEditableWhenNoPrimaryAssignment("inquiry_child.program", scheduling)).toBe(false);
+        expect(assignmentOwnsProgramRoomField("child.room")).toBe(true);
+    });
+
+    it("allows program edit before committed assignment", () => {
+        expect(
+            programRoomEditableWhenNoPrimaryAssignment("inquiry_child.program", {
+                status: "needs-placement",
+                current: null,
+                proposed: null,
+            } as unknown as ChildScheduling),
+        ).toBe(true);
+    });
+
+    it("does not treat proposed-only drafts as Program owners", () => {
+        const scheduling = {
+            status: "proposed",
+            current: null,
+            proposed: {
+                assignments: [
+                    {
+                        isPrimary: true,
+                        commitmentKind: "proposed",
+                        room: { program: "Toddler", name: "Toddler 2" },
+                    },
+                ],
+            },
+            child: { id: "m1", name: "Lennon", program: null, ageGroup: null, siteId: null, siteName: null },
+        } as unknown as ChildScheduling;
+        expect(primaryAssignmentFromScheduling(scheduling)).toBeNull();
+        expect(programRoomEditableWhenNoPrimaryAssignment("inquiry_child.program", scheduling)).toBe(true);
+    });
+
+    it("falls back to subject program when assignment room.program is empty", () => {
+        const scheduling = {
+            status: "scheduled",
+            child: { id: "m1", name: "Lennon", program: "Pre-K", ageGroup: null, siteId: null, siteName: null },
+            current: {
+                assignments: [
+                    {
+                        isPrimary: true,
+                        room: { program: null, name: "Pre-K" },
+                    },
+                ],
+            },
+            proposed: null,
+        } as unknown as ChildScheduling;
+        expect(primaryAssignmentFromScheduling(scheduling)).toEqual({
+            program: "Pre-K",
+            room: "Pre-K",
+        });
+    });
+});

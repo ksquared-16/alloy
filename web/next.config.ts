@@ -44,15 +44,45 @@ const nextConfig: NextConfig = {
    * server's `.next` (the one the operator's browser is on). Unset → default `.next` (dev unaffected).
    */
   ...(process.env.ALLOY_PROD_CERT_DIST ? { distDir: ".next-prodcert" } : {}),
+  /**
+   * Next 16 blocks cross-origin `/_next/*` in dev. Operators often open 127.0.0.1 while
+   * NEXT_PUBLIC_APP_URL is localhost (or the reverse) — allow both so assets can load.
+   */
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   /** Build SHA inlined for client + server (see resolveBuildSha) — proves the deployed commit. */
   env: {
     NEXT_PUBLIC_BUILD_SHA: BUILD_SHA,
   },
   /** Align with turbopack.root — avoids monorepo parent lockfile overriding trace root. */
   outputFileTracingRoot: webRoot,
-  /** Load `unpdf` (server-only, text-only PDF extraction) from node_modules at runtime
-   *  rather than bundling it — see lib/pos/processingCase/structure/pdfTextExtract.ts. */
-  serverExternalPackages: ["unpdf"],
+  /**
+   * OCR ships an English model at `ocr-data/eng.traineddata`, loaded at RUNTIME by a path string
+   * (`process.cwd()/ocr-data` — see ocrExtract.ts). Next's file tracer cannot detect a dynamic path,
+   * so on serverless (Vercel) the model would be missing from the function bundle → OCR fails with an
+   * honest "couldn't read" state. Force-include it (and the tesseract.js WASM core + node worker
+   * script, which are likewise loaded by path) for the upload route that performs OCR.
+   */
+  outputFileTracingIncludes: {
+    "/api/admin/documents/upload": [
+      "./ocr-data/**",
+      "./node_modules/tesseract.js/src/worker-script/**",
+      "./node_modules/tesseract.js-core/**",
+      // mupdf loads its WASM binary by path at runtime — the tracer can't see a dynamic path.
+      "./node_modules/mupdf/dist/*.wasm",
+    ],
+  },
+  /**
+   * Server-only packages loaded from node_modules at runtime rather than bundled:
+   *  - `unpdf`      — text-only PDF text extraction (pdfTextExtract.ts).
+   *  - `tesseract.js` — OCR engine. MUST be external: it spawns a Node worker thread that loads a
+   *    sibling `worker-script/node/index.js` by path; bundling breaks that path (`/ROOT/node_modules/...`
+   *    not found → worker hangs the upload). External keeps the on-disk layout intact.
+   *  - `mupdf`      — scanned-PDF page rasterization (WASM). MUST be external: its `mupdf-wasm.wasm`
+   *    is loaded by path at runtime, and (unlike pdf.js, which throws "Cannot transfer object of
+   *    unsupported type" once bundled in the Next server) it renders reliably in-server.
+   *  See lib/pos/processingCase/structure/{pdfTextExtract,ocrExtract}.ts.
+   */
+  serverExternalPackages: ["unpdf", "tesseract.js", "mupdf"],
   typescript: {
     /** Production build typecheck — app + API routes only (excludes tests/scripts). */
     tsconfigPath: "./tsconfig.build.json",
@@ -117,6 +147,14 @@ const nextConfig: NextConfig = {
       { source: "/settings/processes/:path*", destination: "/organization/processes", permanent: false },
       { source: "/settings/business-processes", destination: "/organization/processes", permanent: false },
       { source: "/settings/business-processes/:path*", destination: "/organization/processes", permanent: false },
+      /**
+       * Action Buttons developer CRUD — do not redirect to the rejected operator Commands product.
+       * `/organization/commands` remains an internal capability diagnostics route only.
+       */
+      { source: "/settings/actions", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/settings/actions/:path*", destination: "/adminV2/settings/actions", permanent: false },
+      { source: "/configuration/commands", destination: "/organization/commands", permanent: false },
+      { source: "/configuration/commands/:path*", destination: "/organization/commands", permanent: false },
       { source: "/settings/financials", destination: "/organization/financials", permanent: false },
       { source: "/settings/financials/:path*", destination: "/organization/financials", permanent: false },
       { source: "/settings/locations", destination: "/organization/locations", permanent: false },
@@ -130,7 +168,7 @@ const nextConfig: NextConfig = {
       { source: "/settings/statuses", destination: "/organization/data-model?section=statuses", permanent: false },
       { source: "/settings/option-sets", destination: "/organization/data-model?section=option-sets", permanent: false },
       { source: "/settings/relationships", destination: "/organization/data-model?section=relationships", permanent: false },
-      { source: "/settings/calculations", destination: "/organization/data-model?section=calculations", permanent: false },
+      { source: "/settings/calculations", destination: "/organization/operational-intelligence", permanent: false },
       { source: "/settings/data-model", destination: "/organization/data-model", permanent: false },
       { source: "/settings/data-model/:path*", destination: "/organization/data-model", permanent: false },
       /**
@@ -211,8 +249,22 @@ const nextConfig: NextConfig = {
       { source: "/organization/access/:path*", destination: "/adminV2/settings/organization/access/:path*" },
       { source: "/organization/processes", destination: "/adminV2/settings/organization/processes" },
       { source: "/organization/processes/:path*", destination: "/adminV2/settings/organization/processes/:path*" },
+      { source: "/organization/commands", destination: "/adminV2/settings/organization/commands" },
+      { source: "/organization/commands/:path*", destination: "/adminV2/settings/organization/commands/:path*" },
       { source: "/organization/data-model", destination: "/adminV2/settings/organization/data-model" },
       { source: "/organization/data-model/:path*", destination: "/adminV2/settings/organization/data-model/:path*" },
+      { source: "/organization/operational-intelligence", destination: "/adminV2/settings/organization/operational-intelligence" },
+      {
+        source: "/organization/operational-intelligence/:path*",
+        destination: "/adminV2/settings/organization/operational-intelligence/:path*",
+      },
+      /** Organization Calculations — Path B authoring surface (not OI). */
+      { source: "/organization/calculations", destination: "/adminV2/settings/organization/calculations" },
+      {
+        source: "/organization/calculations/:path*",
+        destination: "/adminV2/settings/organization/calculations/:path*",
+      },
+
       /**
        * Organization Programs & Locations — relationship landing.
        * Must precede exact `/organization` rewrite. Collections remain at
@@ -246,10 +298,8 @@ const nextConfig: NextConfig = {
        */
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
-      {
-        source: "/workspace/work-unit/:workUnitSlug/:recordId",
-        destination: "/adminV2/workspace/work-unit/:workUnitSlug/:recordId",
-      },
+      // RA-2: the legacy `/:recordId` path form is retired — a selected record is the `?subject_id`
+      // query, which rides along the base rewrite above. No path-recordId rewrite.
       /**
        * Legacy `/admin/*` (non-settings) rewrites to `app/adminV2/*`.
        * Settings hub is served via `/settings` rewrite above.

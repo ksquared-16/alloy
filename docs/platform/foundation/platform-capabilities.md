@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-13
+last_reviewed: 2026-08-01
 supersedes: []
 ---
 
@@ -142,14 +142,21 @@ The frozen [Operational Expectations architecture](../core/operational-expectati
 | Record Experience Builder | **Planned** | Deferred from parity sprint | |
 | Placement priority | **Complete** | Opt-in ordered cohort ranking layer | Childcare waitlist is one use; off by default |
 
+## Trust Platform
+
+| Capability | Status | Description | Notes |
+|------------|--------|-------------|-------|
+| Trust Platform (cognitive / reasoning) | **Planned** | Trusted operational reasoning: Decision Contracts → Trust Runtime → Decision Packages; privacy, knowledge, learning, economics, governance | Entry: [`../trust/trust-platform.md`](../trust/trust-platform.md); corpus index [`../trust/README.md`](../trust/README.md). Not an AI/prompt/model layer — AI is one possible reasoning implementation |
+
 ## AI / BOS
 
 | Capability | Status | Description | Notes |
 |------------|--------|-------------|-------|
 | BOS foundation | **Complete** | Orchestrator, Task Assist, Workflow Assist | Human-in-the-loop |
+| BOS actionable interface (Create Lead) | **Complete** (local) | Command session: Conversation + Form → registered `create_lead` | Placement over Operational Command Runtime; Processing identity gate preserved; slash/briefing deferred |
 | Needs-attention enrich | **Complete** | Gated enrichment | |
 | Config/Layout Assist foundation | **Complete** | Proposals table | Apply catalog partial |
-| Autonomous agents | **Future** | Explicitly not roadmap execution | Paused |
+| Autonomous agents | **Future** | Explicitly not roadmap execution | Paused — distinct from human-confirmed BOS command sessions |
 | BOS identity system | **Complete** | Visual doctrine frozen | |
 
 ## Security & governance

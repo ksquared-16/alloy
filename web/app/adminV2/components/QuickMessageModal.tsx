@@ -494,6 +494,9 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                         recipient_person_id: recipient.person_id,
                         channel,
                         body: body.trim(),
+                        // Explicit classification. The server never infers a
+                        // category, so the caller must state one.
+                        category: "operational",
                     };
                     if (channel === "email") {
                         payload.subject = subject.trim();

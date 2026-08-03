@@ -93,7 +93,11 @@ test("Scheduling V1 lifecycle acceptance", async ({ page }) => {
     const daysAfterPattern = await page.locator('[data-day][aria-pressed="true"]').count();
     console.log(`PATTERN_OPTS=${patternOpts} DAYS_AFTER_PATTERN=${daysAfterPattern}`);
     await snap(page, "L05-create");
-    await page.locator('[data-schedule-close="true"]').click();
+    // Dismiss elevation like Household/Children (scrim / backdrop) — no modal ✕.
+    await page
+        .locator('[data-fp-depth-scrim="true"], .alloy-os-focus-panel-linked-host__backdrop')
+        .first()
+        .click();
     await page.waitForTimeout(500);
 
     // Reload → persistence + resolved labels in summary.

@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { formatFocusPanelDobAgeLine } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import type {
     OperationalContext,
     OperationalContextSignals,
@@ -61,7 +62,7 @@ describe("buildChildrenCardEvidence", () => {
         expect(evidence.count).toBe(1);
         const emma = evidence.children[0]!;
         expect(emma.name).toBe("Emma Johnson");
-        expect(emma.dobAge).toBe("Mar 3, 2020 · 6y");
+        expect(emma.dobAge).toBe(formatFocusPanelDobAgeLine("2020-03-03", "6y"));
         expect(emma.program).toBe("Preschool");
         expect(emma.room).toBe("Sunflower");
         expect(emma.schedule).toBe("M–F · Full day");
@@ -171,6 +172,25 @@ describe("buildChildrenCardEvidence", () => {
             }),
         );
         expect(evidence.children[0]!.status).toBeNull();
+    });
+
+    it("reads gender from raw inquiry child profile (drawer mapping strips it)", () => {
+        const evidence = buildChildrenCardEvidence(
+            ctx({
+                id: "opp-1",
+                _inquiry_children: [
+                    {
+                        id: "c1",
+                        customer_member_id: "cm-1",
+                        display_name: "Blake Wenc",
+                        first_name: "Blake",
+                        last_name: "Wenc",
+                        gender: "male",
+                    },
+                ],
+            }),
+        );
+        expect(evidence.children[0]!.gender).toBe("Male");
     });
 
     it("does NOT import drawer VM types — it observes the Operational Context", () => {

@@ -1,11 +1,13 @@
 import { findDateInText, INTAKE_US_DATE_RE, parseFlexibleDate } from "@/lib/intake/normalize/date";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
+import { stripGenderFromName, type ParsedGender } from "@/lib/intake/normalize/gender";
 
 export type ParsedChildBlockEntry = {
     first_name: string;
     last_name: string | null;
     dob: string | null;
     raw_name: string;
+    gender: ParsedGender;
 };
 
 const CHILD_BLOCK_HEADER_RE =
@@ -73,17 +75,22 @@ function stripDateTokensFromFragment(fragment: string): string {
         .trim();
 }
 
-function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string } | null {
+function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string; gender: ParsedGender } | null {
     const trimmed = fragment.trim();
     if (!trimmed) return null;
 
-    const withoutDates = stripDateTokensFromFragment(trimmed);
+    // Strip gender tokens (girl/boy/…) FIRST — before date stripping — so a trailing "Girl" is captured
+    // as gender (female) rather than being swallowed by the greedy "DOB …" date strip, AND so it never
+    // becomes the child's last name ("Caitlyn Girl" -> first "Caitlyn"; surname inferred downstream).
+    const { name: withoutGender, gender } = stripGenderFromName(trimmed);
+    const withoutDates = stripDateTokensFromFragment(withoutGender);
     const split = splitPersonName(withoutDates);
     if (split) {
         return {
             first_name: split.first,
             last_name: split.last,
             raw_name: `${split.first} ${split.last}`.trim(),
+            gender,
         };
     }
 
@@ -93,6 +100,7 @@ function parseNameFromFragment(fragment: string): { first_name: string; last_nam
             first_name: firstOnly[1],
             last_name: null,
             raw_name: firstOnly[1],
+            gender,
         };
     }
 
@@ -116,6 +124,7 @@ export function parseChildBlockEntries(line: string): ParsedChildBlockEntry[] {
             last_name: name.last_name,
             dob: parseDobFromFragment(fragment),
             raw_name: name.raw_name,
+            gender: name.gender,
         });
     }
 

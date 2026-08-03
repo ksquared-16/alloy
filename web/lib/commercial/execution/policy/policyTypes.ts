@@ -91,14 +91,60 @@ export type PolicyField = {
     showWhen?: { field: string; in: string[] };
 };
 
+/** Operator-facing policy categories — types are specialized rules within a category. */
+export const COMMERCIAL_POLICY_CATEGORIES = [
+    "pricing",
+    "billing",
+    "eligibility",
+    "workflow",
+    "exception",
+] as const;
+export type CommercialPolicyCategory = (typeof COMMERCIAL_POLICY_CATEGORIES)[number];
+
+export const COMMERCIAL_POLICY_CATEGORY_LABELS: Record<CommercialPolicyCategory, string> = {
+    pricing: "Pricing",
+    billing: "Billing",
+    eligibility: "Eligibility",
+    workflow: "Workflow",
+    exception: "Exception",
+};
+
+export const COMMERCIAL_POLICY_CATEGORY_HELP: Record<CommercialPolicyCategory, string> = {
+    pricing: "How list prices are reduced or adjusted.",
+    billing: "How charges are calculated across a billing period.",
+    eligibility: "Who a price or product applies to.",
+    workflow: "Human review gates before charges finalize.",
+    exception: "One-off overrides such as waivers.",
+};
+
 export type CommercialPolicyTypeDef = {
     key: CommercialPolicyType;
     label: string;
     description: string;
     /** A plain-language example for the operator (no jargon, no IDs). */
     example: string;
+    category: CommercialPolicyCategory;
     fields: PolicyField[];
 };
+
+export function commercialPolicyCategory(type: CommercialPolicyType): CommercialPolicyCategory {
+    return COMMERCIAL_POLICY_REGISTRY[type].category;
+}
+
+/** Policy types grouped by category for authoring UIs. */
+export function commercialPolicyTypesByCategory(): Array<{
+    category: CommercialPolicyCategory;
+    label: string;
+    help: string;
+    types: CommercialPolicyType[];
+}> {
+    return COMMERCIAL_POLICY_CATEGORIES.map((category) => ({
+        category,
+        label: COMMERCIAL_POLICY_CATEGORY_LABELS[category],
+        help: COMMERCIAL_POLICY_CATEGORY_HELP[category],
+        types: COMMERCIAL_POLICY_TYPES.filter((t) => COMMERCIAL_POLICY_REGISTRY[t].category === category),
+    })).filter((group) => group.types.length > 0);
+}
 
 const APPLIES_TO_OPTIONS = [
     { value: "tuition", label: "Tuition only" },
@@ -116,6 +162,7 @@ export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, Commercial
         label: "Discount",
         description: "Reduce the price of tuition, fees, or everything by a percentage or a fixed amount.",
         example: "10% off tuition for staff families.",
+        category: "pricing",
         fields: [
             { key: "basis", label: "Discount type", control: "select", options: DISCOUNT_BASIS_OPTIONS },
             { key: "value", label: "Percentage", control: "percent", suffix: "%", showWhen: { field: "basis", in: ["percentage"] } },
@@ -128,6 +175,7 @@ export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, Commercial
         label: "Sibling discount",
         description: "Reduce tuition for additional children in the same household.",
         example: "15% off the second and later children's tuition.",
+        category: "pricing",
         fields: [
             { key: "basis", label: "Discount type", control: "select", options: DISCOUNT_BASIS_OPTIONS },
             { key: "value", label: "Percentage", control: "percent", suffix: "%", showWhen: { field: "basis", in: ["percentage"] } },
@@ -141,6 +189,7 @@ export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, Commercial
         label: "Waiver",
         description: "Waive a charge entirely (reduces the amount to $0).",
         example: "Waive registration fees during a promotion.",
+        category: "exception",
         fields: [{ key: "applies_to", label: "Waive", control: "select", options: APPLIES_TO_OPTIONS }],
     },
     proration: {
@@ -148,6 +197,7 @@ export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, Commercial
         label: "Proration",
         description: "How a partial-period charge is calculated when a child joins or leaves mid-period.",
         example: "Charge by the day when a child starts mid-month.",
+        category: "billing",
         fields: [
             { key: "method", label: "Method", control: "select", options: [
                 { value: "none", label: "No proration (full period)" },
@@ -162,6 +212,7 @@ export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, Commercial
         label: "Eligibility",
         description: "Restrict who a price or product applies to. Recorded for review; enforced with attendance/enrollment data.",
         example: "Restrict a subsidized rate to eligible families.",
+        category: "eligibility",
         fields: [],
     },
     approval: {
@@ -169,6 +220,7 @@ export const COMMERCIAL_POLICY_REGISTRY: Record<CommercialPolicyType, Commercial
         label: "Approval required",
         description: "Flag matching charges so they must be reviewed before they can be finalized.",
         example: "Require review for any waived tuition.",
+        category: "workflow",
         fields: [{ key: "required", label: "Require review", control: "yesno" }],
     },
 };

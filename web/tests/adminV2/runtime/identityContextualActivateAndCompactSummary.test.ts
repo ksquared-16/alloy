@@ -52,20 +52,20 @@ function recordWithLinkedCells(
 }
 
 describe("resolveIdentityContextualActivateAction", () => {
-    it("prefers Schedule → for linked scheduling fields", () => {
+    it("prefers Assignments → for linked scheduling fields", () => {
         const action = resolveIdentityContextualActivateAction(
             recordWithLinkedCells([
                 {
                     fieldRef: "inquiry_child.schedule_type",
                     label: "Schedule",
-                    linkLabel: "Schedule",
+                    linkLabel: "Assignments",
                     linkDestination: "scheduling",
                 },
             ]),
         );
         expect(action).toEqual({
             fieldRef: "inquiry_child.schedule_type",
-            label: "Schedule →",
+            label: "Assignments →",
             destination: "scheduling",
         });
     });
@@ -145,8 +145,8 @@ describe("resolveCompactIdentitySummaryLabelMode", () => {
 
 describe("linked identity field presentation polish", () => {
     it("destination-aware link labels omit generic Open/Details", () => {
-        expect(resolveIdentityFieldLinkContract("child.schedule").linkLabel).toBe("Schedule");
-        expect(resolveIdentityFieldLinkContract("inquiry_child.start_date").linkLabel).toBe("Schedule");
+        expect(resolveIdentityFieldLinkContract("child.schedule").linkLabel).toBe("Assignments");
+        expect(resolveIdentityFieldLinkContract("inquiry_child.start_date").linkLabel).toBe("Assignments");
     });
 
     it("IdentityFieldValue uses inline nav cue without separate Open button or underline-everything", () => {
@@ -187,17 +187,24 @@ describe("linked identity field presentation polish", () => {
             "utf8",
         );
         expect(summary).not.toContain("Schedule →");
+        expect(summary).not.toContain("Assignments →");
         expect(summary).not.toContain("Details →");
         expect(summary).not.toContain("resolveIdentityContextualActivateAction");
         expect(summary).not.toContain("data-identity-open-details");
     });
 
-    it("compact summary hides empty placeholders (no lone — between phone/email)", () => {
+    it("compact summary hides empty placeholders via pre-pack filter (no lone — between phone/email)", () => {
+        const resolver = readFileSync(
+            join(process.cwd(), "lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldRows.ts"),
+            "utf8",
+        );
+        expect(resolver).toContain('labelMode ?? "visible") === "hidden"');
+        expect(resolver).toContain("hideWhenEmpty");
         const field = readFileSync(
             join(process.cwd(), "components/admin/focusPanel/identity/IdentityFieldValue.tsx"),
             "utf8",
         );
-        expect(field).toContain("labelMode === \"hidden\"");
-        expect(field).toContain("hideEmpty");
+        // Late nulls left pair/triple holes — filtering belongs in the shared row resolver.
+        expect(field).not.toContain("if (hideEmpty) return null");
     });
 });

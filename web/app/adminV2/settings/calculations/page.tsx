@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { dataModelSectionHref } from "@/lib/dataModel/dataModelChapterRoutes";
+import { CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
 export const dynamic = "force-dynamic";
 
-/** Compatibility: `/settings/calculations` → Data Model Operational Calculations category. */
+/** Compatibility: `/settings/calculations` → Organization Operational Intelligence. */
 export default function AdminV2SettingsCalculationsPage() {
-    redirect(dataModelSectionHref("calculations"));
+    redirect(CANONICAL_ORGANIZATION_OPERATIONAL_INTELLIGENCE_HREF);
 }

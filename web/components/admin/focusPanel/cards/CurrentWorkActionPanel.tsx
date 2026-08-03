@@ -1,11 +1,31 @@
 "use client";
 
 import { useCallback } from "react";
+import dynamic from "next/dynamic";
 
-import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
-import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
-import FormDeliverySurface from "@/components/admin/focusPanel/cards/FormDeliverySurface";
+
+// These three surfaces render ONLY inside a specific Current Work action branch (form_delivery /
+// communications_composer / inline_form) — never at first paint. Load them dynamically so their subtrees
+// (the ~1.4k-line Communications runtime + FamilyCommunicationWorkspaceView, Form Delivery, the tour
+// scheduler) leave the Work Unit initial-path graph; each loads when the operator opens that action.
+// (Phase 4 ownership — this also re-removes the Communications module a prior split dropped, which this
+// panel had been re-dragging onto first paint.)
+const CommunicationsDrawerSection = dynamic(
+    () => import("@/components/admin/communications/CommunicationsDrawerSection"),
+    { ssr: false },
+);
+const FormDeliverySurface = dynamic(
+    () => import("@/components/admin/focusPanel/cards/FormDeliverySurface"),
+    { ssr: false },
+);
+const OpportunityTourScheduleActionModal = dynamic(
+    () =>
+        import("@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal").then(
+            (m) => m.OpportunityTourScheduleActionModal,
+        ),
+    { ssr: false },
+);
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,

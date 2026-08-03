@@ -128,6 +128,15 @@ export async function applyFormLeadCaptureIntake(
             oppPayload.location_id = linkDefaults.default_location_id;
         }
 
+        const hintStage =
+            typeof (oppHint as { stage_key?: unknown }).stage_key === "string"
+                ? String((oppHint as { stage_key: string }).stage_key).trim()
+                : "";
+        if (hintStage) {
+            oppPayload.stage_key = hintStage;
+            oppPayload.stage_entered_at = new Date().toISOString();
+        }
+
         await normalizeOpportunityWritePayload(supabase, oppPayload, "forms/applyFormLeadCaptureIntake");
 
         const { data: oppRow, error: oppErr } = await supabase.from("opportunities").insert(oppPayload).select("id").single();

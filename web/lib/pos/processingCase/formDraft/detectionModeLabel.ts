@@ -14,13 +14,15 @@ export function resolveDetectionMode(draft: StoredFormDraftPreview | null): Dete
 }
 
 export function detectionModeLabel(draft: StoredFormDraftPreview | null): string {
+    // OCR-derived documents take precedence — the operator must know detection came from OCR.
+    if (draft?.ocr?.derived) return "Detected using OCR — review recommended";
     switch (resolveDetectionMode(draft)) {
         case "acroform":
-            return "AcroForm fields detected";
+            return "Detected from fillable PDF";
         case "text_assisted":
-            return "Text-assisted detection — review required";
+            return "Detected from document text";
         case "manual_required":
-            return "Manual setup required";
+            return "We could not reliably read this page";
         case "manual_review":
             return "Operator-reviewed setup";
         default:

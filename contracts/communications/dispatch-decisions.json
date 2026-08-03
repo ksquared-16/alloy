@@ -1,0 +1,67 @@
+{
+  "$comment": [
+    "Canonical dispatch decision contract, shared by both runtimes.",
+    "",
+    "The TypeScript enqueue gate owns the AUTHORING decision; the Python",
+    "dispatcher re-runs only the checks whose inputs can change between enqueue",
+    "and the provider call. Python does not reimplement the policy engine — it",
+    "reads the immutable snapshot and revalidates live state.",
+    "",
+    "Both runtimes load this file and each has a parity test, so a block reason",
+    "or a lifecycle state cannot be added on one side alone."
+  ],
+  "version": "2026-07-31.1",
+  "snapshot_schema_versions_supported": [1],
+  "snapshot_required_fields": [
+    "snapshotVersion",
+    "policyVersion",
+    "decision",
+    "audience",
+    "category",
+    "purpose",
+    "recipient",
+    "authorizedBy",
+    "identity",
+    "quietHours",
+    "evaluatedAt"
+  ],
+  "outcomes": ["send_now", "defer_until", "blocked"],
+  "lifecycle_states": {
+    "queued": "awaiting dispatch",
+    "deferred": "policy says not now; deferred_until carries a deterministic next attempt",
+    "blocked": "policy says never; terminal, and NOT a provider failure",
+    "sent": "handed to the provider",
+    "failed": "provider rejected or errored — a TRANSPORT failure, never a policy outcome"
+  },
+  "block_reasons": [
+    "SNAPSHOT_MISSING",
+    "SNAPSHOT_MALFORMED",
+    "SNAPSHOT_VERSION_UNSUPPORTED",
+    "CATEGORY_MISSING",
+    "CATEGORY_INVALID",
+    "AUDIENCE_INVALID",
+    "RECIPIENT_UNRESOLVED",
+    "OPTED_OUT",
+    "MARKETING_REQUIRES_OPT_IN",
+    "SUPPRESSED",
+    "IDENTITY_MISSING",
+    "IDENTITY_DISABLED",
+    "IDENTITY_WRONG_ORG",
+    "IDENTITY_CHANNEL_UNSUPPORTED",
+    "STRUCTURAL_INVALID",
+    "INTERNAL_TO_PROVIDER"
+  ],
+  "defer_reasons": ["QUIET_HOURS"],
+  "$preference_mapping_note": "Which stored preference governs a (category, channel) pair. Declared here rather than asserted by string-matching either implementation, because both build these keys programmatically. Each runtime has a parity test that drives its own mapping function through this table.",
+  "preference_mapping": {
+    "transactional": { "email": "email_transactional", "sms": "sms_transactional", "in_app": null },
+    "operational": { "email": "email_operational", "sms": "sms_operational", "in_app": null },
+    "marketing": { "email": "email_marketing", "sms": "sms_marketing", "in_app": null },
+    "emergency": { "email": "emergency", "sms": "emergency", "in_app": "emergency" }
+  },
+  "opt_out_exempt_categories": ["transactional", "emergency"],
+  "quiet_hours_exempt_categories": ["transactional", "emergency"],
+  "suppression_exempt_categories": ["emergency"],
+  "suppressing_delivery_events": ["bounced", "complaint"],
+  "$suppression_note": "Only hard bounce and spam complaint suppress. A transient delivery failure is a retry concern, not a consent concern, and must not become permanent suppression."
+}

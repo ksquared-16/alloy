@@ -25,6 +25,9 @@ import {
     formatFocusPanelDate,
     formatFocusPanelDobAgeLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { resolveInquiryChildGenderLabelFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import { personDrawerGenderDisplayLabel } from "@/lib/admin/person/personDrawerGenderField";
+import { primaryAssignmentFromScheduling } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
@@ -50,8 +53,27 @@ export type ChildrenEvidenceChild = {
     age?: string | null;
     /** Person gender label when present on the child row (display only unless write contract exists). */
     gender?: string | null;
+    allergies?: string | null;
+    medicalNotes?: string | null;
+    specialInstructions?: string | null;
     /** Age band label when present on the child row (computed / projected — read-only). */
     ageBand?: string | null;
+    /**
+     * Site / school location display label (never the raw `location_id` UUID).
+     * Child-owned label when set; otherwise inherits the lead/opportunity site label.
+     */
+    location?: string | null;
+    /**
+     * Effective site id for Program options + Location selects:
+     * child-owned `location_id`, else lead/opportunity site.
+     */
+    locationId?: string | null;
+    /** Child-owned site id only (null when unset — display may still inherit lead). */
+    locationOwnedId?: string | null;
+    /** True when display/effective site comes from the lead because the child has none. */
+    locationInherited?: boolean;
+    /** Stored program category FK — used when editing Program (select value). */
+    programCategoryId?: string | null;
     initial: string;
     /** Identity profile image (evidence model); null → initials fallback. */
     imageUrl: string | null;
@@ -79,6 +101,8 @@ export type ChildrenEvidenceChild = {
     flags: ChildEvidenceFlag[];
     /** OCM participation notes when present. */
     notes?: string | null;
+    /** Primary assignment owns Program/Room when true — inquiry Program is read-only. */
+    hasCommittedPrimaryAssignment?: boolean;
 };
 
 export type ChildrenCardEvidence = {
@@ -98,6 +122,27 @@ function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
     const text = String(value).trim();
     return text.length > 0 ? text : null;
+}
+
+/** Match drawer row → raw `_inquiry_children` entry (policy may reorder vs raw index). */
+function rawInquiryChildForRow(
+    row: { id?: string | null; person_id?: string | null; customer_member_id?: string | null },
+    rawRows: readonly Record<string, unknown>[],
+): Record<string, unknown> {
+    const id = trimOrNull(row.id);
+    const personId = trimOrNull(row.person_id);
+    const memberId = trimOrNull(row.customer_member_id);
+    return (
+        rawRows.find((raw) => {
+            const rid = trimOrNull(raw.id);
+            const rpid = trimOrNull(raw.person_id);
+            const rcm = trimOrNull(raw.customer_member_id);
+            if (id && (rid === id || rcm === id || rpid === id)) return true;
+            if (memberId && (rcm === memberId || rid === memberId)) return true;
+            if (personId && rpid === personId) return true;
+            return false;
+        }) ?? {}
+    );
 }
 
 function statusTone(statusKey: string | null): ChildStatusTone {
@@ -139,8 +184,18 @@ export function buildChildrenCardEvidence(
 ): ChildrenCardEvidence {
     const { rows, rawRows } = normalizeFocusPanelChildrenRowsFromTruth(context.truth);
     const schedulingByMember = readSchedulingProjectionByMemberId(context.truth);
+    // Lead/opportunity site — Create Lead writes here even when child participation
+    // location_id is still empty; Program options and Location display inherit it.
+    const opportunitySiteId =
+        trimOrNull(context.truth.location_id)
+        ?? trimOrNull(context.truth._location_id);
+    const opportunitySiteLabel =
+        trimOrNull(context.truth._location_label)
+        ?? trimOrNull(context.truth._location_name)
+        ?? trimOrNull(context.truth["opportunity.location"]);
 
     const children: ChildrenEvidenceChild[] = rows.map((row, index) => {
+        const raw = rawInquiryChildForRow(row, rawRows);
         const name = childName(row);
         const memberId =
             trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
@@ -148,11 +203,33 @@ export function buildChildrenCardEvidence(
             ?? trimOrNull(row.person_id);
         const schedulingProjection = memberId ? schedulingByMember[memberId] ?? null : null;
         const scheduleCompact = projectCompactScheduleForIdentity(schedulingProjection);
-        const program = trimOrNull(row.desired_program_label);
+        // Canonical gate (shared with the Identity surface's Program/Room fields):
+        // once a committed Primary Assignment exists, it — not the inquiry's desired
+        // Program/Room — is operational truth.
+        const primaryAssignment = primaryAssignmentFromScheduling(schedulingProjection);
+        const hasCommittedPrimaryAssignment = primaryAssignment != null;
+        const program =
+            primaryAssignment?.program
+            ?? trimOrNull(schedulingProjection?.child?.program)
+            ?? trimOrNull(row.desired_program_label)
+            ?? trimOrNull((raw as { desired_program_label?: unknown }).desired_program_label);
+        const childLocationId =
+            trimOrNull(row.location_id)
+            ?? trimOrNull((raw as { location_id?: unknown }).location_id)
+            ?? trimOrNull(schedulingProjection?.child?.siteId);
+        // Site name for Location fields — never expose the UUID storage key as display truth.
+        const location =
+            trimOrNull(row.location_label)
+            ?? trimOrNull((raw as { location_label?: unknown }).location_label)
+            ?? trimOrNull(schedulingProjection?.child?.siteName)
+            ?? (childLocationId && opportunitySiteId && childLocationId === opportunitySiteId
+                ? opportunitySiteLabel
+                : null)
+            ?? (!childLocationId ? opportunitySiteLabel : null);
         const room =
-            scheduleCompact.roomLabel
-            ?? trimOrNull(row.program_room_cohort_label)
-            ?? trimOrNull(row.location_label);
+            primaryAssignment?.room
+            ?? scheduleCompact.roomLabel
+            ?? trimOrNull(row.program_room_cohort_label);
         const schedule = scheduleCompact.scheduleLabel ?? trimOrNull(row.desired_schedule_label);
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;
@@ -176,6 +253,8 @@ export function buildChildrenCardEvidence(
         const startsLabel = startDate ? `starts ${startDate}` : null;
         const detailValueByKey: Record<string, string | null> = {
             "inquiry_child.program": program,
+            "inquiry_child.location_id": location,
+            "child.location": location,
             "child.room": room,
             "inquiry_child.schedule_type": schedule,
             "inquiry_child.desired_schedule_type": schedule,
@@ -209,26 +288,59 @@ export function buildChildrenCardEvidence(
                 : null;
 
         return {
-            id: trimOrNull(row.id) ?? trimOrNull(row.person_id) ?? `child-${index}`,
+            id:
+                trimOrNull(row.id)
+                ?? trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
+                ?? trimOrNull(row.person_id)
+                ?? trimOrNull(raw.customer_member_id)
+                ?? trimOrNull(raw.person_id)
+                ?? `child-${index}`,
             name,
-            customerMemberId: trimOrNull((row as { customer_member_id?: unknown }).customer_member_id),
-            personId: trimOrNull(row.person_id),
+            customerMemberId:
+                trimOrNull((row as { customer_member_id?: unknown }).customer_member_id)
+                ?? trimOrNull(raw.customer_member_id),
+            personId: trimOrNull(row.person_id) ?? trimOrNull(raw.person_id),
             firstName: trimOrNull(row.first_name),
             lastName: trimOrNull(row.last_name),
             preferredName: trimOrNull((row as { preferred_name?: unknown }).preferred_name),
             nickname: trimOrNull((row as { nickname?: unknown }).nickname),
             dob: trimOrNull(row.dob)?.slice(0, 10) ?? null,
             age: trimOrNull(row.age),
+            // Drawer-row mapping strips profile fields — gender lives on raw inquiry rows
+            // (and after inline save merge into `_inquiry_children`). Prefer display labels.
             gender:
-                trimOrNull((row as { gender_label?: unknown }).gender_label)
+                personDrawerGenderDisplayLabel(raw)
+                ?? trimOrNull((raw as { gender_label?: unknown }).gender_label)
+                ?? resolveInquiryChildGenderLabelFromRaw(raw)
+                ?? trimOrNull((row as { gender_label?: unknown }).gender_label)
                 ?? trimOrNull((row as { gender?: unknown }).gender),
+            allergies:
+                trimOrNull((raw as { allergies?: unknown }).allergies)
+                ?? trimOrNull((row as { allergies?: unknown }).allergies),
+            medicalNotes:
+                trimOrNull((raw as { medical_notes?: unknown }).medical_notes)
+                ?? trimOrNull((row as { medical_notes?: unknown }).medical_notes),
+            specialInstructions:
+                trimOrNull((raw as { special_instructions?: unknown }).special_instructions)
+                ?? trimOrNull((row as { special_instructions?: unknown }).special_instructions),
             ageBand:
                 trimOrNull((row as { age_band?: unknown }).age_band)
-                ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label),
+                ?? trimOrNull((row as { age_band_label?: unknown }).age_band_label)
+                ?? trimOrNull((raw as { age_band?: unknown }).age_band)
+                ?? trimOrNull((raw as { age_band_label?: unknown }).age_band_label),
             initial: name.charAt(0).toUpperCase(),
-            imageUrl: resolveChildPhotoUrlFromRaw(rawRows[index] ?? {}),
+            imageUrl:
+                resolveChildPhotoUrlFromRaw(raw)
+                ?? resolveChildPhotoUrlFromRaw(row as unknown as Record<string, unknown>),
             dobAge,
             program,
+            location,
+            locationId: childLocationId ?? opportunitySiteId,
+            locationOwnedId: childLocationId,
+            locationInherited: !childLocationId && Boolean(opportunitySiteId),
+            programCategoryId:
+                trimOrNull(row.program_category_id)
+                ?? trimOrNull((raw as { program_category_id?: unknown }).program_category_id),
             room,
             schedule,
             teacher,
@@ -242,6 +354,7 @@ export function buildChildrenCardEvidence(
             missingLine,
             flags: [],
             notes: trimOrNull((row as { notes?: unknown }).notes),
+            hasCommittedPrimaryAssignment,
         };
     });
 

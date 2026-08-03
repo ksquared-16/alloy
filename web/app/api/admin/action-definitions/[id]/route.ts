@@ -5,7 +5,10 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { invalidateConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 
-/** PATCH org-owned action definition label only (Settings V1). Admin only. */
+/**
+ * PATCH org-owned action definition.
+ * Bounded fields only: label and/or is_active. Admin only.
+ */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -24,10 +27,28 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const label = String((body as { label?: unknown }).label ?? "").trim();
-    if (!label) return NextResponse.json({ error: "label is required" }, { status: 400 });
-    if (label.length > 120) {
-        return NextResponse.json({ error: "label must be at most 120 characters" }, { status: 400 });
+    const raw = body as { label?: unknown; is_active?: unknown };
+    const hasLabel = raw.label !== undefined;
+    const hasActive = raw.is_active !== undefined;
+    if (!hasLabel && !hasActive) {
+        return NextResponse.json({ error: "label or is_active is required" }, { status: 400 });
+    }
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+    if (hasLabel) {
+        const label = String(raw.label ?? "").trim();
+        if (!label) return NextResponse.json({ error: "label is required" }, { status: 400 });
+        if (label.length > 120) {
+            return NextResponse.json({ error: "label must be at most 120 characters" }, { status: 400 });
+        }
+        updates.label = label;
+    }
+    if (hasActive) {
+        if (typeof raw.is_active !== "boolean") {
+            return NextResponse.json({ error: "is_active must be a boolean" }, { status: 400 });
+        }
+        updates.is_active = raw.is_active;
     }
 
     const supabase = createAdminClient();
@@ -42,7 +63,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const defOrgId = (existing as { org_id?: string | null }).org_id ?? null;
     if (defOrgId == null) {
-        return NextResponse.json({ error: "Platform-managed action labels cannot be edited here" }, { status: 403 });
+        return NextResponse.json(
+            { error: "Platform-managed Commands cannot be edited here" },
+            { status: 403 }
+        );
     }
     if (defOrgId !== ctx.orgId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -50,7 +74,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const { data: updated, error: upErr } = await supabase
         .from("action_definitions")
-        .update({ label, updated_at: new Date().toISOString() })
+        .update(updates)
         .eq("id", defId)
         .eq("org_id", ctx.orgId)
         .select("id, org_id, key, label, entity_type, action_type, is_active")
@@ -63,7 +87,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     } catch {
         /* non-fatal */
     }
-    // B — bust the cached `act:` action projection so the Work Unit answer reflects the publish (see B5).
     invalidateConfigReadCache(`act:${ctx.orgId}:`);
 
     return NextResponse.json({ definition: updated });
