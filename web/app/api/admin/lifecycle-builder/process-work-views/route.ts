@@ -11,7 +11,12 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
     type LifecycleBuilderProcessRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { persistWorkViewsForProcessSave } from "@/lib/lifecycle/persistWorkViewsV1";
+import {
+    persistWorkViewsForProcessSave,
+    readWorkViewsForEditor,
+} from "@/lib/lifecycle/persistWorkViewsV1";
+import { summarizeBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { BusinessProcessDraftEditConflictError } from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
 import { resolveProcessWorkViews } from "@/lib/lifecycle/workViewsCompatibility";
 import { parseWorkViewsV1, type WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { lifecycleBuilderDepartmentNotFoundError, lifecycleBuilderDepartmentScopeError } from "@/lib/lifecycle/lifecycleBuilderRouteErrors";
@@ -55,7 +60,15 @@ export async function GET(request: NextRequest) {
         if (!row) {
             return NextResponse.json({ error: lifecycleBuilderDepartmentNotFoundError(departmentId) }, { status: 404 });
         }
-        const config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        // The DRAFT is what a save lands in, so it is what the editor must show. Reading the
+        // published projection here would make an operator's saved edit vanish on reload.
+        const { builderMetadata, editorState } = await readWorkViewsForEditor(createAdminClient(), {
+            orgId: ctx.orgId,
+            departmentId,
+            processId,
+            actorUserId: ctx.userId,
+        });
+        const config = lifecycleBuilderFromDepartmentMetadata(builderMetadata);
         const process = findProcess(config, processId);
         if (!process) {
             return NextResponse.json({ error: "Process not found" }, { status: 404 });
@@ -74,6 +87,8 @@ export async function GET(request: NextRequest) {
             saved_work_views_v1: saved,
             compatibility_seed: !saved?.length,
             stages,
+            // The editor needs both to save safely and to tell the operator where runtime stands.
+            configuration_state: summarizeBusinessProcessEditorState(editorState),
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to load work views" }, { status: 500 });
@@ -118,21 +133,28 @@ export async function POST(request: NextRequest) {
         if (!row) {
             return NextResponse.json({ error: lifecycleBuilderDepartmentNotFoundError(departmentId) }, { status: 404 });
         }
-        const metadata =
-            row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                ? (row.metadata as Record<string, unknown>)
-                : {};
-
         const result = await persistWorkViewsForProcessSave(createAdminClient(), {
             orgId: ctx.orgId,
             departmentId,
             processId,
-            metadata,
             workViews: parsed as WorkViewConfigV1Stored[],
+            actorUserId: ctx.userId,
+            expectedDraftRevision:
+                typeof body.draft_revision === "number" ? body.draft_revision : undefined,
         });
 
-        return NextResponse.json({ ok: true, work_views_v1: result.workViews });
+        return NextResponse.json({
+            ok: true,
+            work_views_v1: result.workViews,
+            draft: { draft_revision: result.draftRevision },
+            // Said plainly, because the runtime will NOT change until someone publishes.
+            publication_required: result.publicationRequired,
+        });
     } catch (e) {
+        // A colleague editing the same draft is a conflict the operator can resolve, not a 500.
+        if (e instanceof BusinessProcessDraftEditConflictError) {
+            return NextResponse.json({ error: e.message }, { status: 409 });
+        }
         return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to save work views" }, { status: 500 });
     }
 }

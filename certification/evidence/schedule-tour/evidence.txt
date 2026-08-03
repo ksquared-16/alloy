@@ -1,0 +1,15 @@
+T0 published Lead rules: reached_qualified_complete,tour_scheduled_to_tour,tour_booking_scheduled_to_tour,left_message_follow_up,awaiting_response_follow_up,unable_to_reach_retry,unable_to_reach_escalate,closed_lost_close,interested_retired_no_movement
+T0 trigger: {"domain": "tour_booking", "signal": "scheduled"}
+T1 subject=00000000-0000-4000-8000-400000000001
+T1 BEFORE stage=lead status=open bookings=0 open_work=0 activity=0
+T2 command http=201 error=-
+T2 bookings=1 state=confirmed
+T2 stage lead -> tour | status=open | open_work=1
+T2 booking events: tour_confirmed | opportunity activity_log 0 -> 0
+T3 opportunities with durable status 'tour_scheduled': 0
+T4 duplicate http=400 error="tour_bookings: an active non-terminal booking already exists for this opportunity"
+T4 bookings 1 -> 1 | stage tour -> tour
+T5 missing inputs http=400 error="opportunity_id and location_id required"
+T5 no booking, stage unchanged (lead)
+T6 command http=400 error="tour_booking: scheduled signal failed — lead/tour_booking_scheduled_to_tour: Transition "lead_to_tour" is not configured on this stage." | bookings=0 state=(none) | stage lead -> lead
+T6 CONTRACT: booking COMPENSATED — no orphan booking, no movement, operator informed

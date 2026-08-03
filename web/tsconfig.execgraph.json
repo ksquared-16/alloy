@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/businessProcesses/configuration/executionGraphValidation.ts",
+    "lib/businessProcesses/configuration/businessProcessPublishValidation.ts",
+    "lib/lifecycle/planStageOutcomeExecution.ts",
+    "lib/lifecycle/applyConfiguredStageAutomationRules.ts",
+    "lib/lifecycle/resolveEffectiveStageOperatingPlan.ts",
+    "lib/lifecycle/resolveOutgoingProcessTransitions.ts",
+    "lib/lifecycle/resolveStageTransitionExecutionTargets.ts",
+    "lib/lifecycle/completeStageWorkWithOutcome.ts",
+    "lib/lifecycle/executeStageOperatingOutcome.ts"
+  ]
+}

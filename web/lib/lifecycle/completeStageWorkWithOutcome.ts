@@ -32,7 +32,8 @@ import {
     type PlatformTransactionTrace,
 } from "@/lib/platform/transaction/platformTransaction";
 import { patchLifecycleWorkIntentAttemptMetadata } from "@/lib/lifecycle/patchLifecycleWorkIntentAttemptMetadata";
-import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { outcomeRulesForKey, resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { planStageOutcomeExecution } from "@/lib/lifecycle/planStageOutcomeExecution";
 import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWorkAfterStageOutcome";
 import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
@@ -417,6 +418,34 @@ async function resolveOutcomeExecutionPlan(
                 message: "Child-grain outcome cannot run with family/case subject grain",
             };
         }
+    }
+
+    /**
+     * PREFLIGHT THE WHOLE EFFECT SEQUENCE (Law 6).
+     *
+     * Transition references used to be resolved inside `executeStageOperatingOutcome`, which runs
+     * in the `business_process` step — AFTER the `work_state` step has already closed the work
+     * item. So a pure configuration error (an outcome naming a transition the stage does not
+     * declare) closed and then compensated a work row for no reason, and the operator saw a
+     * transaction that touched durable state before discovering it could not proceed.
+     *
+     * Resolving here means an unresolvable graph never reaches `validate`, so nothing is written
+     * at all. This is the same plan phase the automation path uses.
+     *
+     * ORDERING (promotion resolution): the grain reconciliation above is staging's and runs FIRST.
+     * Both guards return before any write, so neither can corrupt state, but failing on subject
+     * identity before configuration shape gives the operator the more fundamental reason. The two
+     * checks are independent — grain decides WHAT the outcome acts on, this decides whether the
+     * transition graph resolves at all — so both are kept.
+     */
+    const executionPlan = planStageOutcomeExecution(
+        outcomeRulesForKey(plan, outcomeKey).map((rule) => ({ stageKey, plan, rule })),
+    );
+    if (executionPlan.errors.length) {
+        return {
+            ok: false,
+            message: `This outcome cannot run: ${executionPlan.errors.join("; ")}`,
+        };
     }
 
     return {

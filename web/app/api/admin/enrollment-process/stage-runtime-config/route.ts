@@ -5,7 +5,6 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { isConfiguredStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { LifecycleStageQueueFiltersEmptyError } from "@/lib/lifecycle/lifecycleStageQueueFilters";
 import { LifecycleStageWorkUnitIdentityConflictError } from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
 import { parsePerspectivesV1 } from "@/lib/lifecycle/perspectiveConfigV1";
@@ -17,29 +16,9 @@ import {
     saveLifecycleStageRuntimeConfig,
     validateLifecycleStageRuntimeConfigSnapshot,
 } from "@/lib/lifecycle/saveLifecycleStageRuntimeConfig";
-import { parseStageV2DraftInput, persistStageV2DraftFields } from "@/lib/lifecycle/persistStageV2DraftFields";
+import { parseStageV2DraftInput } from "@/lib/lifecycle/persistStageV2DraftFields";
 import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { snapshotEnrollmentPipelineWorkUnit } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
-
-async function isValidStageForDepartment(
-    orgId: string,
-    departmentId: string,
-    stageRaw: string
-): Promise<boolean> {
-    const supabase = createAdminClient();
-    const { data } = await supabase
-        .from("departments")
-        .select("metadata")
-        .eq("id", departmentId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    if (!data) return false;
-    const metadata =
-        data.metadata !== null && typeof data.metadata === "object" && !Array.isArray(data.metadata)
-            ? (data.metadata as Record<string, unknown>)
-            : {};
-    return isConfiguredStageKey(metadata, stageRaw);
-}
 
 /** POST — canonical stage setup (statuses + optional work unit queue) in one transaction. */
 export async function POST(request: NextRequest) {
@@ -70,6 +49,10 @@ export async function POST(request: NextRequest) {
         status_rollup_v1?: unknown;
         perspectives_v1?: unknown;
         stage_v2_draft?: unknown;
+        /** Publication the editor loaded against — the PUBLICATION conflict token. */
+        base_revision_id?: string | null;
+        /** Draft revision the editor loaded — the DRAFT-EDIT conflict token. */
+        draft_revision?: number;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -153,12 +136,17 @@ export async function POST(request: NextRequest) {
     const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
 
-    if (!(await isValidStageForDepartment(ctx.orgId, departmentId, stageKey))) {
-        return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
-    }
+    // The stage inventory is the DRAFT's, and the orchestrator checks it there. A second gate on
+    // the published projection used to live here; it would now reject a stage the operator added
+    // to the draft but has not published yet — the editor refusing to open what it just created.
 
     try {
-        const result = await saveLifecycleStageRuntimeConfig(supabase, {
+        // The V2 stage fields are folded into the same in-memory draft mutation. They used to be a
+        // second, separate whole-column write issued from here after the orchestrator returned —
+        // a fifth lifecycle-builder write in one logical save, and one more way to tear a stage.
+        const v2Draft = parseStageV2DraftInput(body.stage_v2_draft);
+
+        const saveResult = await saveLifecycleStageRuntimeConfig(supabase, {
             orgId: ctx.orgId,
             departmentId,
             processId: body.process_id ?? null,
@@ -166,6 +154,14 @@ export async function POST(request: NextRequest) {
             selectedStatusKeys,
             workUnitName,
             fieldRules,
+            actorUserId: ctx.userId,
+            ...(v2Draft && Object.keys(v2Draft).length > 0 ? { stageV2Draft: v2Draft } : {}),
+            ...(body.base_revision_id !== undefined
+                ? { expectedBaseRevisionId: body.base_revision_id }
+                : {}),
+            ...(typeof body.draft_revision === "number"
+                ? { expectedDraftRevision: body.draft_revision }
+                : {}),
             ...(queueMembership ? { queueMembership } : {}),
             ...(stageOperatingPlan ? { stageOperatingPlan } : {}),
             ...(statusRollup ? { statusRollup } : {}),
@@ -174,27 +170,36 @@ export async function POST(request: NextRequest) {
                 : {}),
         });
 
-        // Persist V2 builder stage fields if provided
-        const v2Draft = parseStageV2DraftInput(body.stage_v2_draft);
-        if (v2Draft && Object.keys(v2Draft).length > 0) {
-            const { data: deptRow } = await supabase
-                .from("departments")
-                .select("metadata")
-                .eq("id", departmentId)
-                .eq("org_id", ctx.orgId)
-                .maybeSingle();
-            const currentMetadata =
-                deptRow?.metadata != null && typeof deptRow.metadata === "object" && !Array.isArray(deptRow.metadata)
-                    ? (deptRow.metadata as Record<string, unknown>)
-                    : {};
-            await persistStageV2DraftFields(supabase, {
-                orgId: ctx.orgId,
-                departmentId,
-                stageKey,
-                metadata: currentMetadata,
-                draft: v2Draft,
-            });
+        if (saveResult.status === "stale_conflict") {
+            // The two conflicts need different words because they need different recoveries:
+            // one means a colleague is editing, the other means a newer config is already live.
+            const isDraftEdit = saveResult.conflict?.kind === "draft_edit";
+            return NextResponse.json(
+                {
+                    error: isDraftEdit
+                        ? "Someone else changed this configuration while you were editing. " +
+                          "Reload to see their changes, then reapply yours."
+                        : "Someone else published a newer version of this configuration while you " +
+                          "were editing. Reload to see their changes, then reapply yours.",
+                    code: saveResult.conflict?.code,
+                    conflict: saveResult.conflict,
+                },
+                { status: 409 },
+            );
         }
+
+        if (saveResult.status === "blocked" || !saveResult.snapshot) {
+            return NextResponse.json(
+                {
+                    error: saveResult.errors[0]?.message ?? "This change cannot be saved.",
+                    errors: saveResult.errors,
+                    warnings: saveResult.warnings,
+                },
+                { status: 422 },
+            );
+        }
+
+        const result = saveResult.snapshot;
 
         const pipelineSnapshot =
             result.workUnitId && result.queueDefinitionRaw != null
@@ -237,6 +242,11 @@ export async function POST(request: NextRequest) {
             status_stages: result.statusStagesPayload,
             pipeline: pipelineSnapshot,
             queue_filter_validation: queueFilterValidation,
+            draft: saveResult.draft,
+            warnings: saveResult.warnings,
+            companion_writes: saveResult.companion_writes,
+            // The draft changed; runtime did not. Nothing here writes the published projection.
+            publication_required: saveResult.publication_required,
         });
     } catch (e) {
         if (e instanceof LifecycleStageWorkUnitIdentityConflictError) {

@@ -1,0 +1,4 @@
+G1 validate can_publish=true errors=0
+G1 publish http=200 revision=1
+G2 authoring issues: Selected transition is not a valid outgoing edge — repair it. Selected transition is not a valid outgoing edge — repair it. Outcome movement must reference a configured transition identity. Outcome movement must reference a configured transition identity.
+G2 save reached the server: false; draft 1 -> 1

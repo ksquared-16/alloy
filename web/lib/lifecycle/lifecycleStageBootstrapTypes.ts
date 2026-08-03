@@ -14,6 +14,8 @@ import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { PerspectiveConfigV1Stored } from "@/lib/lifecycle/perspectiveConfigV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StatusCategoryGroup, StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
+import type { BusinessProcessPublicationSummary } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 
 export type LifecycleStageBootstrapFieldPaletteEntry = {
     rule_id: string;
@@ -58,8 +60,18 @@ export type LifecycleStageBootstrapPayload = {
     base_actions: LifecycleBaseActionDefinition[];
     queue_membership: QueueMembershipV1 | null;
     queue_membership_status_options: QueueMembershipStatusOption[];
+    /**
+     * Statuses a transition may WRITE onto the record (case layer), as distinct from the queue
+     * dispositions above. Separate because the queue picker excludes case-layer rows by design.
+     */
+    record_status_vocabulary: OutcomeStatusConfiguredRow[];
     status_category_catalog: StatusCategoryGroup[];
     status_rollup_v1: StatusRollupV1 | null;
     stage_operating_plan: StageOperatingPlanV1 | null;
     perspectives_v1: PerspectiveConfigV1Stored[] | null;
+    /**
+     * Draft vs published vs runtime, so the editor can say which one it is showing.
+     * Null only when no draft could be materialized (a department with no configuration at all).
+     */
+    configuration_state: BusinessProcessPublicationSummary | null;
 };

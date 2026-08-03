@@ -14,7 +14,7 @@ const EVIDENCE = path.join(__dirname, "..", "evidence");
 
 test("operator surface loads and evidence is captured", async ({ page }) => {
     await page.goto("/workspace");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
     await page.screenshot({ path: path.join(EVIDENCE, "01-workspace.png"), fullPage: true });
     const authed = /workspace/.test(page.url());
     console.log(`[certify] workspace reached with reusable session: ${authed} (url=${page.url()})`);

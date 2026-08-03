@@ -27,8 +27,8 @@ export default function LifecycleStageWorkCompletionPolicyEditor({ policy, onCha
     return (
         <div className="mt-3 rounded-md border border-alloy-forge/10 bg-white p-2.5" data-testid={`${testIdPrefix}-completion-policy`}>
             <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-semibold text-alloy-midnight/70">Completion policy</span>
-                <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
+                <span className="text-[0.6875rem] font-semibold text-alloy-midnight/70">Completion policy</span>
+                <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/65">
                     <input
                         type="checkbox"
                         checked={enabled}
@@ -60,41 +60,41 @@ export default function LifecycleStageWorkCompletionPolicyEditor({ policy, onCha
 
             {enabled ?
                 <div className="grid gap-2 sm:grid-cols-2">
-                    <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
+                    <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/65">
                         Min attempts
                         <input
                             type="number"
                             min={1}
-                            className="w-14 rounded border border-alloy-forge/15 px-1 py-0.5"
+                            className="w-14 rounded-md border border-alloy-forge/15 px-1 py-0.5"
                             value={current.min_attempts ?? 1}
                             onChange={(e) => update({ min_attempts: Math.max(1, Number(e.target.value) || 1) })}
                             data-testid={`${testIdPrefix}-completion-policy-min`}
                         />
                     </label>
-                    <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
+                    <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/65">
                         Max attempts
                         <input
                             type="number"
                             min={1}
-                            className="w-14 rounded border border-alloy-forge/15 px-1 py-0.5"
+                            className="w-14 rounded-md border border-alloy-forge/15 px-1 py-0.5"
                             value={current.max_attempts ?? current.min_attempts ?? 1}
                             onChange={(e) => update({ max_attempts: Math.max(1, Number(e.target.value) || 1) })}
                             data-testid={`${testIdPrefix}-completion-policy-max`}
                         />
                     </label>
-                    <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
+                    <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/65">
                         Complete within
                         <input
                             type="number"
                             min={1}
-                            className="w-14 rounded border border-alloy-forge/15 px-1 py-0.5"
+                            className="w-14 rounded-md border border-alloy-forge/15 px-1 py-0.5"
                             value={current.window_days ?? 7}
                             onChange={(e) => update({ window_days: Math.max(1, Number(e.target.value) || 1) })}
                             data-testid={`${testIdPrefix}-completion-policy-window`}
                         />
                         days
                     </label>
-                    <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65">
+                    <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/65">
                         <input
                             type="checkbox"
                             checked={Boolean(current.repeat_until_outcome)}
@@ -109,12 +109,12 @@ export default function LifecycleStageWorkCompletionPolicyEditor({ policy, onCha
                         Repeat after incomplete outcomes
                     </label>
                     {current.repeat_until_outcome ?
-                        <label className="flex items-center gap-1 text-[10px] text-alloy-midnight/65 sm:col-span-2">
+                        <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/65 sm:col-span-2">
                             Repeat due in
                             <input
                                 type="number"
                                 min={1}
-                                className="w-14 rounded border border-alloy-forge/15 px-1 py-0.5"
+                                className="w-14 rounded-md border border-alloy-forge/15 px-1 py-0.5"
                                 value={current.repeat_due_days ?? 2}
                                 onChange={(e) =>
                                     update({ repeat_due_days: Math.max(1, Number(e.target.value) || 1) })
@@ -128,7 +128,7 @@ export default function LifecycleStageWorkCompletionPolicyEditor({ policy, onCha
             :   null}
 
             {summary ?
-                <p className="mt-2 text-[10px] text-alloy-midnight/55" data-testid={`${testIdPrefix}-completion-policy-summary`}>
+                <p className="mt-2 text-[0.6875rem] text-alloy-midnight/55" data-testid={`${testIdPrefix}-completion-policy-summary`}>
                     {summary}
                 </p>
             :   null}

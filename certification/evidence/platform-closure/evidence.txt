@@ -1,0 +1,26 @@
+P1 load http=200 draft_revision=14 status=published is_default=true
+P2 BEFORE published=(none) draft_revision=14
+P2 save http=200 publication_required=true draft 14 -> 15
+P3 unknown participation field after a save: survive me
+P3 reload http=200 draft participation present=true
+P4 stale token=16 http=409 error="Someone else changed this configuration while you were editing. Reload to see th"
+P5 validate can_publish=true errors=0
+P5 publish http=200 revisions 4 -> 5
+P5 projection changed=true
+R1 refuse http=400 error="Cannot remove processes from the Enrollment department via this action. Use Advanced Confi"
+R1 draft and projection both unchanged
+R2 BEFORE draft=[00000000-0000-4000-8000-0000000009e1,00000000-0000-4000-8000-0000000009f1] published=[(none)] draft_revision=1
+R2 remove http=200 publication_required=true error=-
+R2 AFTER draft=[00000000-0000-4000-8000-0000000009e1] published=[(none)]
+R2 unknown field on the SURVIVING process after a removal: survive me
+R3 stale removal token=1 http=409 error="Someone else changed this configuration while you were editing. Reload"
+R4 validate can_publish=true errors=0
+R4 publish http=200
+R4 published AFTER=[00000000-0000-4000-8000-0000000009e1]
+R4 unknown field in the PUBLISHED projection: survive me
+C1 both editors loaded draft_revision=17
+C1 A save http=200 draft 17 -> 18
+C1 B save http=409 error="Someone else changed this configuration while you were editing. Reload to see their change"
+C1 draft labels after both attempts: [All Work,Editor A 17,Follow Up,Tours]
+C1 conflict surfaced to editor B on screen: true
+C2 published labels (unchanged by the conflict): [All Work,Follow Up,New Leads,Tours]

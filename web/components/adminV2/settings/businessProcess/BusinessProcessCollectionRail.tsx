@@ -7,7 +7,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Plus, Search } from "lucide-react";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { ConfigurationPrimaryButton } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import {
@@ -53,12 +53,17 @@ export default function BusinessProcessCollectionRail({
     loading,
     onSelect,
     onCreateNew,
+    collapsed = false,
+    onToggleCollapsed,
 }: {
     items: LifecycleCatalogEntry[];
     selectedId: string | null;
     loading: boolean;
     onSelect: (entry: LifecycleCatalogEntry) => void;
     onCreateNew: () => void;
+    /** Collapsed to a strip once a process is selected — navigation yields to the work. */
+    collapsed?: boolean;
+    onToggleCollapsed?: () => void;
 }) {
     const [search, setSearch] = useState("");
 
@@ -72,14 +77,53 @@ export default function BusinessProcessCollectionRail({
         );
     }, [items, search]);
 
+    // After every hook — an early return above `useMemo` changes the hook count between renders.
+    if (collapsed && onToggleCollapsed) {
+        const selectedName = items.find((entry) => entry.id === selectedId)?.lifecycle_name;
+        return (
+            <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className="config-rail-collapsed hidden xl:flex"
+                title={`Show all business processes${selectedName ? ` (currently ${selectedName})` : ""}`}
+                aria-expanded={false}
+                data-testid="business-process-collection-rail-collapsed"
+            >
+                <PanelLeftOpen className="h-4 w-4 shrink-0 text-alloy-midnight/40" strokeWidth={2} aria-hidden />
+                <span className="config-rail-collapsed__label">
+                    {BUSINESS_PROCESS_COLLECTION_TITLE}
+                </span>
+                <span className="stage-count mt-auto" aria-hidden>
+                    {items.length}
+                </span>
+            </button>
+        );
+    }
+
     return (
         <aside
             className="locations-collection-rail process-config-setup-card hidden min-w-0 p-0 xl:block"
             data-testid="business-process-collection-rail"
         >
             <header className="locations-collection-rail__header">
-                <h2 className="locations-collection-rail__title">{BUSINESS_PROCESS_COLLECTION_TITLE}</h2>
-                <p className="locations-collection-rail__count">{BUSINESS_PROCESS_COLLECTION_SUBTITLE}</p>
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <h2 className="locations-collection-rail__title">{BUSINESS_PROCESS_COLLECTION_TITLE}</h2>
+                        <p className="locations-collection-rail__count">{BUSINESS_PROCESS_COLLECTION_SUBTITLE}</p>
+                    </div>
+                    {onToggleCollapsed ? (
+                        <button
+                            type="button"
+                            onClick={onToggleCollapsed}
+                            className="-mr-1 shrink-0 rounded-md p-1 text-alloy-midnight/35 transition-colors hover:bg-alloy-stone/60 hover:text-alloy-midnight/60"
+                            title="Collapse to give the editor more width"
+                            aria-expanded
+                            data-testid="business-process-collection-rail-collapse"
+                        >
+                            <PanelLeftClose className="h-4 w-4" strokeWidth={2} aria-hidden />
+                        </button>
+                    ) : null}
+                </div>
             </header>
             <div className="programs-collection-controls">
                 <div className="programs-collection-controls__search-wrap">

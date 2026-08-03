@@ -58,12 +58,14 @@ function countFieldRules(rules: LifecycleStageFieldRules | undefined): number {
 function SaveBar({
     effectiveSaveState,
     saveError,
+    saveNotice,
     saveDisabled,
     onSaveStage,
     previewHref,
 }: {
     effectiveSaveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice: string | null;
     saveDisabled: boolean;
     onSaveStage: () => void | Promise<void>;
     previewHref: string | null;
@@ -79,12 +81,21 @@ function SaveBar({
                 </span>
             :   null}
             {effectiveSaveState === "saved" ?
-                <span
-                    className="text-[10px] font-medium text-alloy-pine"
-                    data-testid="lifecycle-stage-save-saved"
-                >
-                    Saved
-                </span>
+                saveNotice ?
+                    // Saved, but not publishable yet. The count is the whole point of the message.
+                    <span
+                        className="max-w-[20rem] text-right text-[10px] font-medium text-amber-800"
+                        data-testid="lifecycle-stage-save-remaining-issues"
+                        role="status"
+                    >
+                        {saveNotice}
+                    </span>
+                :   <span
+                        className="text-[10px] font-medium text-alloy-pine"
+                        data-testid="lifecycle-stage-save-saved"
+                    >
+                        Saved
+                    </span>
             :   null}
             {effectiveSaveState === "error" && saveError ?
                 <span className="max-w-[14rem] text-right text-[10px] text-red-700" role="alert">
@@ -121,7 +132,9 @@ export type LifecycleStageWorkspaceHandle = {
     isQueueMembershipDirty: () => boolean;
     getStatusRollupDraft: () => StatusRollupV1 | null;
     isStatusRollupDirty: () => boolean;
-    getStageOperatingPlanDraft: () => import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null;
+    getStageOperatingPlanDraft: () =>
+        | import("@/lib/lifecycle/stageOperatingPlanDraftDelta").StageOperatingPlanDraftSave
+        | null;
     isStageOperatingPlanDirty: () => boolean;
 };
 
@@ -138,6 +151,7 @@ export default function LifecycleStageWorkspace({
     onStatusRollupChange,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     workspaceRef,
@@ -156,6 +170,7 @@ export default function LifecycleStageWorkspace({
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     workspaceRef?: React.RefObject<LifecycleStageWorkspaceHandle | null>;
@@ -242,6 +257,7 @@ export default function LifecycleStageWorkspace({
                 <SaveBar
                     effectiveSaveState={effectiveSaveState}
                     saveError={saveError}
+                    saveNotice={saveNotice ?? null}
                     saveDisabled={saveDisabled}
                     onSaveStage={onSaveStage}
                     previewHref={previewHref}
@@ -340,12 +356,11 @@ export default function LifecycleStageWorkspace({
                                     label: lane.label,
                                 })) ?? []
                             }
-                            configuredStatuses={(bootstrap?.queue_membership_status_options ?? []).map((row) => ({
-                                status_key: row.status_key,
-                                status_label: row.status_label,
-                                entity_type: statusEntityTypeForSubject(statusSubjectType),
-                                is_active: true,
-                            }))}
+                            configuredStatuses={
+                                // The record-status catalog, not the queue picker. The picker
+                                // drops case-layer rows, which is exactly what a transition writes.
+                                bootstrap?.record_status_vocabulary ?? []
+                            }
                         />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </ConfigurationRuntimeUniversalCard>

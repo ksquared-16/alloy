@@ -29,10 +29,16 @@ export default function LifecycleStageConfiguration({
     validationSlot: _validationSlot,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     onDeleteStage,
     workspaceHandleRef,
+    onValidateConfiguration,
+    onPublishConfiguration,
+    onReloadConfiguration,
+    publicationBusy,
+    publicationNotice,
 }: {
     departmentId: string;
     businessProcessKey: string;
@@ -50,10 +56,16 @@ export default function LifecycleStageConfiguration({
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
     workspaceHandleRef?: React.RefObject<StageEditorV2Handle | null>;
+    onValidateConfiguration?: () => void | Promise<void>;
+    onPublishConfiguration?: () => void | Promise<void>;
+    onReloadConfiguration?: () => void | Promise<void>;
+    publicationBusy?: boolean;
+    publicationNotice?: string | null;
 }) {
     const localRef = useRef<StageEditorV2Handle | null>(null);
     const ref = workspaceHandleRef ?? localRef;
@@ -75,10 +87,16 @@ export default function LifecycleStageConfiguration({
                 statusesError={statusesError}
                 saveState={saveState}
                 saveError={saveError}
+                saveNotice={saveNotice ?? null}
                 onSaveStage={onSaveStage}
                 onDirtyChange={onDirtyChange}
                 onDeleteStage={onDeleteStage}
                 entityDisplayLabels={bootstrap?.entity_display_labels ?? undefined}
+                onValidateConfiguration={onValidateConfiguration}
+                onPublishConfiguration={onPublishConfiguration}
+                onReloadConfiguration={onReloadConfiguration}
+                publicationBusy={publicationBusy}
+                publicationNotice={publicationNotice}
             />
         </div>
     );

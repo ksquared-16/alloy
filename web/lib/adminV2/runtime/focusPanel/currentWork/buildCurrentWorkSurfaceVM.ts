@@ -315,12 +315,27 @@ function resolveActionableWorkItem(
     return findOpenItemForTemplate(runtime, primaryWorkItem.template_key);
 }
 
+/**
+ * Why an outcome cannot be recorded, in a sentence an operator can act on.
+ *
+ * This used to return `null` for the two states that actually occur most often — no actionable
+ * work item at all, and an item that is no longer open — which left the card showing a bare
+ * "Blocked" chip with nothing behind it. A director could not tell whether the configuration was
+ * wrong, unpublished, or simply not applicable to this record, and had no next step to take.
+ *
+ * The `!item` case is not an edge: it is what a record looks like when its open work belongs to a
+ * work template the published plan does not define (for example work provisioned before the plan
+ * was authored). The runtime knew this; it just never said it.
+ */
 function outcomeCompletionBlockReason(
     item: StageWorkItemProjection | null,
     outcomes: ReturnType<typeof completionOutcomesForPicker>,
     canMutate: boolean,
 ): string | null {
-    if (!item || item.state !== "open") return null;
+    if (!item) {
+        return "No open work here matches this stage's configured work items, so there is no outcome to record.";
+    }
+    if (item.state !== "open") return "This work is already complete — there is no outcome left to record.";
     if (outcomes.length === 0) return "No completion outcomes configured for this work.";
     if (!item.requires_outcome_picker) return "This work item does not use outcome completion.";
     if (!canMutate) return "Read-only — completion requires edit access.";

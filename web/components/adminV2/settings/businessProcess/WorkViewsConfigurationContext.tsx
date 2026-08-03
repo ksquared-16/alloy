@@ -28,6 +28,10 @@ type WorkViewsResponse = {
     work_views_v1?: WorkViewConfigV1Stored[];
     compatibility_seed?: boolean;
     stages?: WorkViewFilterOption[];
+    /** Where the draft stood when this response was produced — the CAS token. */
+    configuration_state?: { draft_revision?: number };
+    /** The token minted by a save, so the next save presents a current one. */
+    draft?: { draft_revision?: number };
     error?: string;
 };
 
@@ -76,6 +80,14 @@ export function WorkViewsConfigurationProvider({
     const [error, setError] = useState<string | null>(null);
     const [compatibilitySeed, setCompatibilitySeed] = useState(false);
     const [savedFlash, setSavedFlash] = useState(false);
+    /**
+     * The draft token this editor loaded.
+     *
+     * Sending it back makes the save a compare-and-set, so a colleague who saved between our load
+     * and our save produces a conflict the operator can see instead of silently losing their work.
+     * Null means we never got one and the server must fall back to its own read.
+     */
+    const [draftRevision, setDraftRevision] = useState<number | null>(null);
 
     const dirty = useMemo(() => !workViewsV1Equal(baseline, drafts), [baseline, drafts]);
     const selected = drafts.find((row) => row.id === selectedId) ?? drafts[0] ?? null;
@@ -103,6 +115,7 @@ export function WorkViewsConfigurationProvider({
             setSelectedId(effective[0]?.id ?? null);
             setCompatibilitySeed(Boolean(viewsJson.compatibility_seed));
             setStageOptions(viewsJson.stages ?? []);
+            setDraftRevision(viewsJson.configuration_state?.draft_revision ?? null);
             setLayouts(layoutsJson.records ?? []);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load work views");
@@ -152,10 +165,14 @@ export function WorkViewsConfigurationProvider({
                     department_id: departmentId,
                     process_id: processId,
                     work_views_v1: enriched,
+                    ...(draftRevision != null ? { draft_revision: draftRevision } : {}),
                 }),
             });
             const json = (await res.json()) as WorkViewsResponse;
             if (!res.ok) throw new Error(json.error ?? "Save failed");
+            // Advance to the token the server just minted; without this the NEXT save would
+            // present a stale token and conflict with our own write.
+            if (json.draft?.draft_revision != null) setDraftRevision(json.draft.draft_revision);
             const saved = normalizeWorkViewsDisplayOrder(json.work_views_v1 ?? enriched);
             setBaseline(saved);
             setDrafts(saved);
@@ -167,7 +184,7 @@ export function WorkViewsConfigurationProvider({
         } finally {
             setSaving(false);
         }
-    }, [departmentId, drafts, processId, queueLanes]);
+    }, [departmentId, draftRevision, drafts, processId, queueLanes]);
 
     const value = useMemo(
         (): WorkViewsConfigurationContextValue => ({

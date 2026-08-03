@@ -79,7 +79,7 @@ function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPicker
 
 function ConfigSourceBadge({ source, fallbackHint }: { source: ReturnType<typeof helpfulActionsConfigSource>; fallbackHint?: string }) {
     return (
-        <p className="text-[10px] text-alloy-midnight/50" data-work-template-config-source={source}>
+        <p className="text-[0.6875rem] text-alloy-midnight/50" data-work-template-config-source={source}>
             {workTemplateConfigSourceLabel(source)}
             {source === "fallback" && fallbackHint ?
                 <span className="block text-alloy-midnight/40">{fallbackHint}</span>
@@ -111,7 +111,7 @@ function OrderedActionRows({
 }) {
     if (!refs.length) {
         return (
-            <p className="text-[10px] text-alloy-midnight/45" data-testid={`${testIdPrefix}-empty`}>
+            <p className="text-[0.6875rem] text-alloy-midnight/45" data-testid={`${testIdPrefix}-empty`}>
                 No {title.toLowerCase()} configured.
             </p>
         );
@@ -125,7 +125,7 @@ function OrderedActionRows({
                 return (
                     <li
                         key={`${ref}-${index}`}
-                        className="flex items-center gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5"
+                        className="flex items-center gap-2 rounded-md border border-alloy-forge/10 bg-white/80 px-2 py-1.5"
                         data-testid={`${testIdPrefix}-${ref}`}
                     >
                         <span className="min-w-0 flex-1">
@@ -133,16 +133,16 @@ function OrderedActionRows({
                                 {resolveLabel(ref)}
                             </span>
                             {description ?
-                                <span className="block truncate text-[10px] text-alloy-midnight/50">{description}</span>
+                                <span className="block truncate text-[0.6875rem] text-alloy-midnight/50">{description}</span>
                             :   null}
                             {invalid ?
-                                <span className="block text-[10px] text-amber-800">{invalid}</span>
+                                <span className="block text-[0.6875rem] text-amber-800">{invalid}</span>
                             :   null}
                         </span>
                         <div className="flex shrink-0 items-center gap-1">
                             <button
                                 type="button"
-                                className="rounded p-1 text-alloy-midnight/50 hover:bg-alloy-bend-pine/[0.06] disabled:opacity-30"
+                                className="rounded-md p-1 text-alloy-midnight/50 hover:bg-alloy-bend-pine/[0.06] disabled:opacity-30"
                                 disabled={index === 0}
                                 onClick={() => onMoveUp(index)}
                                 aria-label="Move up"
@@ -151,7 +151,7 @@ function OrderedActionRows({
                             </button>
                             <button
                                 type="button"
-                                className="rounded p-1 text-alloy-midnight/50 hover:bg-alloy-bend-pine/[0.06] disabled:opacity-30"
+                                className="rounded-md p-1 text-alloy-midnight/50 hover:bg-alloy-bend-pine/[0.06] disabled:opacity-30"
                                 disabled={index >= refs.length - 1}
                                 onClick={() => onMoveDown(index)}
                                 aria-label="Move down"
@@ -160,7 +160,7 @@ function OrderedActionRows({
                             </button>
                             <button
                                 type="button"
-                                className="rounded p-1 text-red-700/80 hover:bg-red-50"
+                                className="rounded-md p-1 text-red-700/80 hover:bg-red-50"
                                 onClick={() => onRemove(ref)}
                                 aria-label="Remove"
                             >
@@ -222,20 +222,20 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     return (
         <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
             <section data-testid={`work-template-primary-action-${work.template_key}`}>
-                <div className="mb-1 space-y-0.5">
-                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Execution Mode</h4>
-                    <p className="text-[10px] text-alloy-midnight/50">
-                        Direct Action launches a tool. Outcome Led has no Primary Action — Record Outcome is primary.
-                    </p>
+                <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <h4 className="stage-section-label">How operators start this work</h4>
                     <ConfigSourceBadge source={primaryActionConfigSource(work)} />
-                    <p className="text-[10px] text-alloy-midnight/45" data-testid={`work-template-execution-mode-${work.template_key}`}>
+                    <span
+                        className="stage-field__hint"
+                        data-testid={`work-template-execution-mode-${work.template_key}`}
+                    >
                         {workTemplateExecutionModeSourceLabel(work)}
-                    </p>
+                    </span>
                 </div>
 
                 <fieldset className="space-y-2" data-testid={`work-template-primary-mode-${work.template_key}`}>
                     <legend className="sr-only">Execution Mode</legend>
-                    <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-alloy-forge/12 bg-white px-2.5 py-2">
                         <input
                             type="radio"
                             name={radioName}
@@ -245,8 +245,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                             data-testid={`work-template-primary-select-${work.template_key}`}
                         />
                         <span className="min-w-0 flex-1">
-                            <span className="block text-[11px] font-medium text-alloy-midnight">Direct Action</span>
-                            <span className="mb-1.5 block text-[10px] text-alloy-midnight/50">
+                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Direct Action</span>
+                            <span className="stage-field__hint mb-1.5 block">
                                 Operators launch this action first, then may record an outcome.
                             </span>
                             {executionMode === "direct_action" ?
@@ -260,7 +260,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                             :   null}
                         </span>
                     </label>
-                    <label className="flex cursor-pointer items-start gap-2 rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-alloy-forge/12 bg-white px-2.5 py-2">
                         <input
                             type="radio"
                             name={radioName}
@@ -270,8 +270,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                             data-testid={`work-template-primary-none-${work.template_key}`}
                         />
                         <span>
-                            <span className="block text-[11px] font-medium text-alloy-midnight">Outcome Led</span>
-                            <span className="block text-[10px] text-alloy-midnight/50">
+                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Outcome Led</span>
+                            <span className="stage-field__hint block">
                                 No Primary Action. Record Outcome is the main operator action.
                             </span>
                         </span>
@@ -280,12 +280,10 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             </section>
 
             <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
-                <div className="mb-1 space-y-0.5">
-                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Helpful Actions</h4>
-                    <p className="text-[10px] text-alloy-midnight/50">
-                        Helpful Actions support this work. Stage transitions are configured by the process and
-                        appear automatically when valid.
-                    </p>
+                {/* "Helpful Actions support this work" restated the heading. The sentence about
+                    stage transitions now lives where they are configured — Ways out. */}
+                <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <h4 className="stage-section-label">Other actions available</h4>
                     <ConfigSourceBadge
                         source={helpfulActionsConfigSource(work)}
                         fallbackHint="Configure this section to take explicit control."
@@ -294,7 +292,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                 <div className="mb-2 flex items-center justify-end gap-2">
                     <button
                         type="button"
-                        className="text-[10px] text-alloy-midnight/50 hover:text-alloy-bend-pine"
+                        className="text-[0.6875rem] text-alloy-midnight/50 hover:text-alloy-bend-pine"
                         onClick={() => onChange(markWorkTemplateHelpfulActionsEmpty(work))}
                     >
                         Clear all
@@ -344,29 +342,34 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                 />
             </section>
 
+            {/* Two sentences of schema language ("Outgoing transitions… never by destination text
+                alone") became one operator-language pointer. The mechanism they described is now
+                visible: "Ways out" names every path and the outcomes that trigger it. The pointer
+                stays because the paths are configured in a sibling panel, and it keeps guarding
+                against per-work-item "alternate paths" returning. */}
             <p
-                className="rounded border border-alloy-forge/10 bg-alloy-midnight/[0.02] px-2 py-1.5 text-[10px] text-alloy-midnight/55"
+                className="stage-field__hint"
                 data-testid={`work-template-transitions-note-${work.template_key}`}
             >
-                Outgoing transitions are owned by this stage and appear on What's Next when configured.
-                Outcome automation moves records through those transitions — never by destination text alone.
+                Ways out of the stage are configured below, on the stage — not per work item.
             </p>
 
             <section data-testid={`work-template-outcome-refs-${work.template_key}`}>
-                <div className="mb-2 space-y-0.5">
-                    <h4 className="text-[11px] font-semibold text-alloy-midnight">Available Outcomes</h4>
-                    <p className="text-[10px] text-alloy-midnight/50">
-                        Define outcomes for this work, then configure automation under each definition.
-                    </p>
-                </div>
+                {/* "Available Outcomes", not "What can happen". Three unit tests pin this word,
+                    and they are right to: "Outcomes" is the product's own vocabulary — the
+                    Overview headline counts them, the summary module names them, and the certified
+                    Lead model is written in them. A cleverer heading here would make the page use
+                    two words for one concept, which is the noise this sprint is removing. */}
+                <h4 className="stage-section-label mb-1.5">Available Outcomes</h4>
                 {stageDraft && onStageDraftChange ?
                     <LifecycleStageOutcomeDefinitionsEditor
                         draft={stageDraft}
                         transitionOptions={transitionOptions}
+                        stageLabel={stageLabel}
                         workTemplateKey={work.template_key}
                         onChange={onStageDraftChange}
                     />
-                :   <p className="text-[10px] text-alloy-midnight/45">
+                :   <p className="text-[0.6875rem] text-alloy-midnight/45">
                         Outcome authoring requires the stage operating plan editor draft.
                     </p>
                 }

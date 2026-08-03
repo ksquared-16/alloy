@@ -28,8 +28,10 @@ import {
     updateProcessName,
     updateProcessDescription,
     updateStageDescription,
+    parseLifecycleBuilderV1,
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { syncWorkUnitSortOrderFromBuilderStages } from "@/lib/lifecycle/syncWorkUnitSortOrderFromBuilder";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
@@ -149,7 +151,31 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             );
         }
 
-        let config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        /**
+         * READ PRECEDENCE (Law 4, editor slices 2/3).
+         *
+         * This GET feeds the Stage editor's V2 fields — purpose, grain, description, operator
+         * guidance, action catalog — through the `stageRecord` prop. Reading the PUBLISHED
+         * projection here is what made a saved stage edit vanish on reload even though the stage
+         * save had correctly written the draft: the save wrote one place and this read looked at
+         * another.
+         *
+         * Found by browser certification, not by any unit test — the two halves only disagree once
+         * a real reload happens.
+         *
+         * The PATCH below still writes the projection directly; migrating it is the next editor
+         * family. That asymmetry is deliberate and temporary: reading the draft is strictly more
+         * correct today, because the draft is seeded from the projection and only ever diverges by
+         * an operator's own unpublished edits.
+         */
+        const editorState = await loadBusinessProcessEditorState(createAdminClient(), {
+            orgId: ctx.orgId,
+            departmentId,
+            actorUserId: ctx.userId,
+        });
+        const config =
+            (editorState ? parseLifecycleBuilderV1(editorState.draft_payload) : null) ??
+            lifecycleBuilderFromDepartmentMetadata(row.metadata);
 
         return NextResponse.json(payloadFromConfig(config));
     } catch (e) {

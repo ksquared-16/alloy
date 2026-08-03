@@ -24,6 +24,7 @@ import {
     Building2,
     Package,
 } from "lucide-react";
+import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
@@ -44,10 +45,12 @@ import {
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageCandidateAction } from "@/lib/lifecycle/stageActionCatalogV1";
+import type { StageOperatingPlanDraftSave } from "@/lib/lifecycle/stageOperatingPlanDraftDelta";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { enrollmentStageMembership } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
+import StageOperatingPlanOverview from "@/components/adminV2/settings/lifecycle/StageOperatingPlanOverview";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -59,7 +62,7 @@ export type StageEditorV2Handle = {
     isQueueMembershipDirty: () => boolean;
     getStatusRollupDraft: () => StatusRollupV1 | null;
     isStatusRollupDirty: () => boolean;
-    getStageOperatingPlanDraft: () => StageOperatingPlanV1 | null;
+    getStageOperatingPlanDraft: () => StageOperatingPlanDraftSave | null;
     isStageOperatingPlanDirty: () => boolean;
     getV2Draft: () => StageV2Draft;
     isV2Dirty: () => boolean;
@@ -83,7 +86,7 @@ type SectionStatus = "configured" | "incomplete" | "missing" | "optional";
 function SectionStatusBadge({ status }: { status: SectionStatus }) {
     if (status === "configured") {
         return (
-            <span className="flex items-center gap-1 rounded-full bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-semibold text-alloy-juniper">
+            <span className="flex items-center gap-1 rounded-full bg-alloy-juniper/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-alloy-juniper">
                 <Check size={9} strokeWidth={3} />
                 Configured
             </span>
@@ -91,21 +94,21 @@ function SectionStatusBadge({ status }: { status: SectionStatus }) {
     }
     if (status === "incomplete") {
         return (
-            <span className="rounded-full bg-alloy-ember/10 px-2 py-0.5 text-[10px] font-semibold text-alloy-ember">
+            <span className="rounded-full bg-alloy-ember/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-alloy-ember">
                 Incomplete
             </span>
         );
     }
     if (status === "missing") {
         return (
-            <span className="flex items-center gap-1 rounded-full bg-alloy-ember/15 px-2 py-0.5 text-[10px] font-semibold text-alloy-ember">
+            <span className="flex items-center gap-1 rounded-full bg-alloy-ember/15 px-2 py-0.5 text-[0.6875rem] font-semibold text-alloy-ember">
                 <AlertCircle size={9} />
                 Required setup missing
             </span>
         );
     }
     return (
-        <span className="rounded-full bg-alloy-midnight/6 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/40">
+        <span className="rounded-full bg-alloy-midnight/6 px-2 py-0.5 text-[0.6875rem] font-medium text-alloy-midnight/40">
             Optional
         </span>
     );
@@ -117,6 +120,7 @@ function Section({
     id,
     icon,
     title,
+    summary,
     status,
     collapsed,
     onToggle,
@@ -125,6 +129,12 @@ function Section({
     id: string;
     icon: ReactNode;
     title: string;
+    /**
+     * What this section contains, stated on the header row. Progressive disclosure (objective 7)
+     * fails when a collapsed section is a bare title — the operator has to open it to find out
+     * whether it holds anything, which is the opposite of disclosure.
+     */
+    summary?: string;
     status: SectionStatus;
     collapsed: boolean;
     onToggle: () => void;
@@ -138,20 +148,30 @@ function Section({
             <button
                 type="button"
                 onClick={onToggle}
-                className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-alloy-stone/50"
+                className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-alloy-stone/50"
                 aria-expanded={!collapsed}
             >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-alloy-midnight/10 bg-alloy-stone text-alloy-midnight/50">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-alloy-midnight/10 bg-alloy-stone text-alloy-midnight/50">
                     {icon}
                 </div>
-                <span className="flex-1 text-[13px] font-semibold text-alloy-midnight">{title}</span>
+                <span className="shrink-0 text-[0.8125rem] font-semibold text-alloy-midnight">{title}</span>
+                {summary ? (
+                    <span
+                        className="min-w-0 flex-1 truncate text-[0.75rem] text-alloy-midnight/45"
+                        data-testid={`stage-section-summary-${id}`}
+                    >
+                        {summary}
+                    </span>
+                ) : (
+                    <span className="flex-1" />
+                )}
                 <SectionStatusBadge status={status} />
                 {collapsed
                     ? <ChevronRight size={13} className="ml-1 shrink-0 text-alloy-midnight/30" />
                     : <ChevronDown size={13} className="ml-1 shrink-0 text-alloy-midnight/30" />}
             </button>
             {!collapsed && (
-                <div className="px-5 pb-7 pt-1">
+                <div className="px-5 pb-5 pt-1">
                     {children}
                 </div>
             )}
@@ -199,17 +219,17 @@ function GrainSelector({ value, onChange }: { value: StageGrain | undefined; onC
                         data-testid={`grain-option-${grain}`}
                     >
                         {future && (
-                            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-alloy-midnight/20 px-1.5 py-px text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/50 whitespace-nowrap">
+                            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-alloy-midnight/20 px-1.5 py-px text-[0.6875rem] font-semibold uppercase tracking-wide text-alloy-midnight/50 whitespace-nowrap">
                                 Coming soon
                             </span>
                         )}
                         <span className={active ? "text-alloy-juniper" : "text-alloy-midnight/35"}>
                             {GRAIN_ICONS[grain]}
                         </span>
-                        <span className={`text-[11px] font-semibold leading-tight ${active ? "text-alloy-juniper" : "text-alloy-midnight/60"}`}>
+                        <span className={`text-[0.6875rem] font-semibold leading-tight ${active ? "text-alloy-juniper" : "text-alloy-midnight/60"}`}>
                             {GRAIN_LABELS[grain]}
                         </span>
-                        <span className="text-[10px] leading-tight text-alloy-midnight/35">
+                        <span className="text-[0.6875rem] leading-tight text-alloy-midnight/35">
                             {GRAIN_DESCRIPTIONS[grain]}
                         </span>
                     </button>
@@ -247,7 +267,7 @@ const GRAIN_IMPACT: Record<StageGrain, { count: string; focus: string }> = {
 function GrainImpactCallout({ grain }: { grain: StageGrain }) {
     const impact = GRAIN_IMPACT[grain];
     return (
-        <div className="mt-3 rounded-lg border border-alloy-blue/15 bg-alloy-blue/4 px-4 py-3 space-y-1.5 text-[11px]">
+        <div className="mt-3 rounded-lg border border-alloy-blue/15 bg-alloy-blue/4 px-4 py-3 space-y-1.5 text-[0.6875rem]">
             <div className="flex gap-8">
                 <span className="w-24 shrink-0 font-medium text-alloy-blue/70">Queue count</span>
                 <span className="text-alloy-midnight/65">{impact.count}</span>
@@ -262,29 +282,31 @@ function GrainImpactCallout({ grain }: { grain: StageGrain }) {
 
 // ─── Field wrapper ────────────────────────────────────────────────────────────
 
+/**
+ * One field. Label, control, optional hint — on the shared `.stage-*` grid so a field rendered
+ * here lines up with one rendered by any sub-editor. Before this there were four label
+ * treatments and three control heights inside a single screen.
+ */
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
     return (
-        <div className="mb-4">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                {label}
-            </label>
+        <div className="stage-field">
+            <label className="stage-field__label">{label}</label>
             {children}
-            {hint ? <p className="mt-1 text-[10px] text-alloy-midnight/40">{hint}</p> : null}
+            {hint ? <p className="stage-field__hint">{hint}</p> : null}
         </div>
     );
 }
 
-const INPUT_CLS =
-    "w-full rounded-lg border border-alloy-forge/15 bg-white px-3 py-2 text-[13px] text-alloy-midnight placeholder:text-alloy-midnight/30 focus:border-alloy-juniper focus:outline-none focus:ring-1 focus:ring-alloy-juniper/20";
-const TEXTAREA_CLS = INPUT_CLS + " resize-none";
+const INPUT_CLS = "stage-control";
+const TEXTAREA_CLS = "stage-control";
 
 // ─── Subsection divider ───────────────────────────────────────────────────────
 
 function Subsection({ label, description, children }: { label: string; description?: string; children: ReactNode }) {
     return (
-        <div className="mt-5 border-t border-alloy-forge/8 pt-4">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-alloy-midnight/45">{label}</p>
-            {description ? <p className="mb-3 text-[11px] text-alloy-midnight/45">{description}</p> : null}
+        <div className="mt-4 border-t border-alloy-forge/8 pt-3">
+            <p className="stage-section-label mb-1">{label}</p>
+            {description ? <p className="stage-field__hint mb-2">{description}</p> : null}
             {children}
         </div>
     );
@@ -302,11 +324,11 @@ function CollapsibleSubsection({ label, description, children }: { label: string
                 {open
                     ? <ChevronDown size={11} className="shrink-0 text-alloy-midnight/35" />
                     : <ChevronRight size={11} className="shrink-0 text-alloy-midnight/35" />}
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-alloy-midnight/45">{label}</span>
+                <span className="text-[0.6875rem] font-semibold uppercase tracking-wider text-alloy-midnight/45">{label}</span>
             </button>
             {open && (
                 <div className="mt-3">
-                    {description ? <p className="mb-3 text-[11px] text-alloy-midnight/45">{description}</p> : null}
+                    {description ? <p className="mb-3 text-[0.6875rem] text-alloy-midnight/45">{description}</p> : null}
                     {children}
                 </div>
             )}
@@ -332,7 +354,7 @@ function SubjectResolutionField({
     ];
     return (
         <div>
-            <p className="mb-2.5 text-[11px] text-alloy-midnight/50">
+            <p className="mb-2.5 text-[0.6875rem] text-alloy-midnight/50">
                 When an action is invoked from family context but targets individual children, how should the runtime determine which children to act on?
             </p>
             <div className="space-y-1.5">
@@ -353,7 +375,7 @@ function SubjectResolutionField({
                             onChange={() => onChange(s)}
                             className="h-3.5 w-3.5 shrink-0 accent-alloy-juniper"
                         />
-                        <span className="text-[12px] text-alloy-midnight">{SUBJECT_RESOLUTION_LABELS[s]}</span>
+                        <span className="text-[0.75rem] text-alloy-midnight">{SUBJECT_RESOLUTION_LABELS[s]}</span>
                     </label>
                 ))}
             </div>
@@ -386,8 +408,8 @@ function PossibleOutcomesSection({
     if (!outcomes.length) {
         return (
             <div className="rounded-lg border border-dashed border-alloy-forge/20 px-4 py-6 text-center">
-                <p className="text-[12px] text-alloy-midnight/50">No outcomes configured yet.</p>
-                <p className="mt-1 text-[11px] text-alloy-midnight/35">
+                <p className="text-[0.75rem] text-alloy-midnight/50">No outcomes configured yet.</p>
+                <p className="mt-1 text-[0.6875rem] text-alloy-midnight/35">
                     Outcomes are defined in Operational Experience → Operating Plan. Each outcome maps operator actions to a durable state change.
                 </p>
             </div>
@@ -429,26 +451,26 @@ function PossibleOutcomesSection({
                             />
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <p className="text-[12px] font-semibold text-alloy-midnight">{outcome.label}</p>
+                                    <p className="text-[0.75rem] font-semibold text-alloy-midnight">{outcome.label}</p>
                                     {outcome.successful ? (
-                                        <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-alloy-juniper/10 px-1.5 py-0.5 text-[10px] font-medium text-alloy-juniper">
+                                        <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-alloy-juniper/10 px-1.5 py-0.5 text-[0.6875rem] font-medium text-alloy-juniper">
                                             <Check size={9} strokeWidth={3} />
                                             Successful
                                         </span>
                                     ) : null}
                                 </div>
                                 {stageTarget ? (
-                                    <p className="mt-1 text-[11px] text-alloy-blue">
+                                    <p className="mt-1 text-[0.6875rem] text-alloy-blue">
                                         Move to stage:{" "}
                                         <span className="font-semibold">{stageTarget.stage_key ?? "—"}</span>
                                     </p>
                                 ) : closeTarget ? (
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/55">Close lead</p>
+                                    <p className="mt-1 text-[0.6875rem] text-alloy-midnight/55">Close lead</p>
                                 ) : targets.length > 0 ? (
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/40">Stay in stage</p>
+                                    <p className="mt-1 text-[0.6875rem] text-alloy-midnight/40">Stay in stage</p>
                                 ) : null}
                                 {sideEffects.map((t, i) => (
-                                    <p key={i} className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                    <p key={i} className="mt-0.5 text-[0.6875rem] text-alloy-midnight/45">
                                         {OUTCOME_TARGET_LABELS[t.kind] ?? t.kind.replace(/_/g, " ")}
                                     </p>
                                 ))}
@@ -466,6 +488,7 @@ function PossibleOutcomesSection({
 function StickyTopbar({
     saveState,
     saveError,
+    saveNotice,
     saveDisabled,
     isDirty,
     onSave,
@@ -473,26 +496,42 @@ function StickyTopbar({
 }: {
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     saveDisabled: boolean;
     isDirty: boolean;
     onSave: () => void | Promise<void>;
     onDelete?: () => void;
 }) {
     return (
-        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-alloy-forge/10 bg-white/96 px-5 py-3 backdrop-blur-sm">
+        // Tightened: this bar and the publication bar sit directly on top of each other, and with
+        // nothing to report the save bar was ~55px of empty white above another full-width bar.
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-alloy-forge/10 bg-white/96 px-5 py-2 backdrop-blur-sm">
             <div className="flex items-center gap-2">
                 {isDirty && saveState !== "saving" ? (
-                    <span className="text-[10px] font-medium text-alloy-ember" data-testid="stage-editor-v2-unsaved">
+                    <span className="text-[0.6875rem] font-medium text-alloy-ember" data-testid="stage-editor-v2-unsaved">
                         Unsaved changes
                     </span>
                 ) : saveState === "saved" ? (
-                    <span className="flex items-center gap-1 text-[10px] font-medium text-alloy-juniper" data-testid="stage-editor-v2-saved">
-                        <Check size={11} strokeWidth={2.5} />
-                        Saved
-                    </span>
+                    saveNotice ? (
+                        // Saved, but the graph is not publishable yet. Saying only "Draft saved"
+                        // here and refusing at publish teaches operators to distrust both.
+                        <span
+                            className="flex items-center gap-1 max-w-[20rem] text-[0.6875rem] font-medium text-alloy-ember"
+                            data-testid="stage-editor-v2-remaining-issues"
+                            role="status"
+                        >
+                            <AlertCircle size={11} />
+                            {saveNotice}
+                        </span>
+                    ) : (
+                        <span className="flex items-center gap-1 text-[0.6875rem] font-medium text-alloy-juniper" data-testid="stage-editor-v2-saved">
+                            <Check size={11} strokeWidth={2.5} />
+                            Draft saved
+                        </span>
+                    )
                 ) : null}
                 {saveState === "error" && saveError ? (
-                    <span className="flex items-center gap-1 max-w-[12rem] text-[10px] text-alloy-ember" role="alert">
+                    <span className="flex items-center gap-1 max-w-[12rem] text-[0.6875rem] text-alloy-ember" role="alert">
                         <AlertCircle size={11} />
                         {saveError}
                     </span>
@@ -503,7 +542,7 @@ function StickyTopbar({
                     <button
                         type="button"
                         onClick={onDelete}
-                        className="text-[11px] font-medium text-alloy-midnight/40 hover:text-alloy-ember transition-colors"
+                        className="text-[0.6875rem] font-medium text-alloy-midnight/40 hover:text-alloy-ember transition-colors"
                         data-testid="lifecycle-activation-delete-stage"
                     >
                         Delete stage
@@ -540,10 +579,16 @@ export default function StageEditorV2({
     statusesError,
     saveState,
     saveError,
+    saveNotice,
     onSaveStage,
     onDirtyChange,
     onDeleteStage,
     workspaceRef,
+    onValidateConfiguration,
+    onPublishConfiguration,
+    onReloadConfiguration,
+    publicationBusy,
+    publicationNotice,
 }: {
     departmentId: string;
     businessProcessKey: string;
@@ -560,10 +605,17 @@ export default function StageEditorV2({
     statusesError: string | null;
     saveState: LifecycleStageSaveUiState;
     saveError: string | null;
+    saveNotice?: string | null;
     onSaveStage: () => void | Promise<void>;
     onDirtyChange?: (dirty: boolean) => void;
     onDeleteStage?: () => void;
     workspaceRef?: React.RefObject<StageEditorV2Handle | null>;
+    /** Publication workflow — draft is saved here, runtime only moves when the operator publishes. */
+    onValidateConfiguration?: () => void | Promise<void>;
+    onPublishConfiguration?: () => void | Promise<void>;
+    onReloadConfiguration?: () => void | Promise<void>;
+    publicationBusy?: boolean;
+    publicationNotice?: string | null;
 }) {
     // ── Sub-editor refs ──
     const fieldReqRef = useRef<LifecycleStageFieldRequirementsEditorHandle | null>(null);
@@ -586,17 +638,61 @@ export default function StageEditorV2({
         stageRecord?.action_catalog_v1?.candidate_actions ?? [],
     );
 
-    // ── Collapse state — all sections collapsed by default ──
+    // ── Collapse state ──
+    // Operational Experience opens; everything else starts collapsed. A director arrives asking
+    // "what do my staff do here?", and every section being shut meant the answer was always at
+    // least one click away on a page whose whole purpose is to answer it. Identity and Context
+    // are set once at stage creation — they stay closed until sought.
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({
         identity: true,
         representation: true,
-        experience: true,
+        experience: false,
         requirements: true,
         outcomes: true,
     });
     const toggleSection = useCallback((id: string) => {
         setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
     }, []);
+
+    /**
+     * What each section holds, said on its header row so a collapsed page still communicates.
+     * Derived from the same bootstrap the editors write — a summary cannot claim configuration
+     * the stage does not have.
+     */
+    const sectionSummaries: Record<string, string | undefined> = (() => {
+        const plan = bootstrap?.stage_operating_plan ?? null;
+        const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+        const workCount = plan?.work_templates?.length ?? 0;
+        const exitCount = plan?.outgoing_transitions?.length ?? 0;
+        const attentionCount = plan?.attention_rules?.length ?? 0;
+        const experience =
+            workCount || exitCount || attentionCount
+                ? [
+                      count(workCount, "work item"),
+                      // "ways out", not "way outs" — the plural is on the noun.
+                      count(exitCount, "way out", "ways out"),
+                      attentionCount ? count(attentionCount, "attention rule") : null,
+                  ]
+                      .filter(Boolean)
+                      .join(" · ")
+                : "Nothing configured yet";
+
+        const reqRules = bootstrap?.field_requirements ?? null;
+        const reqCount = reqRules
+            ? Object.values(reqRules as Record<string, unknown>).reduce<number>(
+                  (n, group) => n + (group && typeof group === "object" ? Object.keys(group).length : 0),
+                  0,
+              )
+            : 0;
+
+        return {
+            experience,
+            requirements: reqCount ? count(reqCount, "required field") : "No required fields",
+            identity: purpose?.trim() || description?.trim() || "Not described",
+            representation: grain ? `One row per ${GRAIN_LABELS[grain].toLowerCase()}` : undefined,
+        };
+    })();
 
     // ── V2 dirty tracking — committed baseline updated on stage switch or successful save ──
     const [savedV2, setSavedV2] = useState(() => ({
@@ -706,9 +802,9 @@ export default function StageEditorV2({
     if (bootstrapLoading && !bootstrap) {
         return (
             <div className="animate-pulse space-y-3 p-5" data-testid="stage-editor-v2-skeleton">
-                <div className="h-10 w-2/3 rounded-xl bg-alloy-forge/10" />
-                <div className="h-32 rounded-xl bg-alloy-forge/8" />
-                <div className="h-48 rounded-xl bg-alloy-forge/6" />
+                <div className="h-10 w-2/3 rounded-lg bg-alloy-forge/10" />
+                <div className="h-32 rounded-lg bg-alloy-forge/8" />
+                <div className="h-48 rounded-lg bg-alloy-forge/6" />
             </div>
         );
     }
@@ -718,11 +814,23 @@ export default function StageEditorV2({
             <StickyTopbar
                 saveState={effectiveSaveState}
                 saveError={saveError}
+                saveNotice={saveNotice ?? null}
                 saveDisabled={saveDisabled}
                 isDirty={isDirty}
                 onSave={onSaveStage}
                 onDelete={onDeleteStage}
             />
+
+            {onValidateConfiguration && onPublishConfiguration && onReloadConfiguration ? (
+                <BusinessProcessPublicationBar
+                    state={bootstrap?.configuration_state ?? null}
+                    busy={publicationBusy ?? false}
+                    notice={publicationNotice ?? null}
+                    onValidate={onValidateConfiguration}
+                    onPublish={onPublishConfiguration}
+                    onReload={onReloadConfiguration}
+                />
+            ) : null}
 
             {statusesError ? (
                 <p className="mx-5 mt-2 flex items-center gap-1.5 text-xs text-alloy-ember" role="alert">
@@ -733,133 +841,37 @@ export default function StageEditorV2({
 
             <div className="flex flex-col pb-16">
 
-                {/* ── Section 1: Stage Identity ── */}
-                <Section
-                    id="identity"
-                    icon={<Tag size={13} />}
-                    title="Stage Identity"
-                    status={sectionStatus.identity}
-                    collapsed={!!collapsed.identity}
-                    onToggle={() => toggleSection("identity")}
+                {/* ── Stage Overview ──
+                    The operating plan in operator language, above the editors and readable
+                    without expanding anything. Everything here is derived from the same draft the
+                    editors write, so the page cannot describe configuration it does not have. */}
+                <div
+                    className="border-b border-alloy-forge/10 px-5 py-4"
+                    data-testid="stage-editor-v2-overview"
                 >
-                    <div className="grid grid-cols-2 gap-4">
-                        <Field label="Stage name">
-                            <input
-                                className={INPUT_CLS}
-                                value={stageLabel}
-                                readOnly
-                                title="Rename in the stage list"
-                                data-testid="stage-editor-v2-label"
-                            />
-                            <p className="mt-1 text-[10px] text-alloy-midnight/35">Rename in the stage list on the left.</p>
-                        </Field>
-                        <Field label="Purpose" hint="Short description of this stage's role — shown to operators in the stage picker.">
-                            <input
-                                className={INPUT_CLS}
-                                value={purpose}
-                                onChange={(e) => setPurpose(e.target.value)}
-                                placeholder="e.g. Qualify and schedule family visits"
-                                maxLength={120}
-                                data-testid="stage-editor-v2-purpose"
-                            />
-                        </Field>
-                    </div>
+                    <StageOperatingPlanOverview
+                        plan={bootstrap?.stage_operating_plan ?? null}
+                        stageLabel={stageLabel || stageKey}
+                    />
+                </div>
 
-                    <Field label="Description" hint="Explain what operators are expected to accomplish in this stage.">
-                        <textarea
-                            className={TEXTAREA_CLS}
-                            rows={2}
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="What happens in this stage? What is the operator goal?"
-                            data-testid="stage-editor-v2-description"
-                        />
-                    </Field>
+                {/* ── Reading order (objective 9) ──
+                    Overview → Operator Work → Stage Exit → Attention → Requirements → Publish.
+                    Identity and Context describe how the stage is STORED and are set once when
+                    it is created; they used to sit between the overview and the work, so every
+                    visit to the thing operators actually configure began by scrolling past two
+                    sections nobody had come for. They now follow the work.
 
-                    <Field label="Allow stage skipping">
-                        <label className="mt-1 flex cursor-pointer items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={allowSkipping}
-                                onChange={(e) => setAllowSkipping(e.target.checked)}
-                                className="h-4 w-4 rounded accent-alloy-juniper"
-                                data-testid="stage-editor-v2-allow-skipping"
-                            />
-                            <span className="text-[12px] text-alloy-midnight">Operators can skip this stage</span>
-                        </label>
-                    </Field>
-                </Section>
-
-                {/* ── Section 2: Stage Context ── */}
-                <Section
-                    id="representation"
-                    icon={<Layers size={13} />}
-                    title="Stage Context"
-                    status={sectionStatus.representation}
-                    collapsed={!!collapsed.representation}
-                    onToggle={() => toggleSection("representation")}
-                >
-                    {/* Grain — the single authoritative setting for what one unit of work represents */}
-                    <Field label="Row type (grain)">
-                        <GrainSelector value={grain} onChange={setGrain} />
-                        {grain ? <GrainImpactCallout grain={grain} /> : null}
-                        <p className="mt-3 text-[11px] text-alloy-midnight/50">
-                            Stage grain is the authoritative row type for this stage. Work Views and surfaces use this grain — one queue row per <span className="font-medium text-alloy-midnight/70">{grain ? GRAIN_LABELS[grain].toLowerCase() : "unit of the selected type"}</span>.{" "}
-                            Surface layout and filters are configured in <span className="font-medium text-alloy-midnight/70">Work Views</span>.
-                        </p>
-                    </Field>
-
-                    {grain === "child" ? (
-                        <Field label="When multiple children are eligible…">
-                            <SubjectResolutionField value={subjectResolution} onChange={setSubjectResolution} />
-                        </Field>
-                    ) : null}
-
-                    {(() => {
-                        const membership = enrollmentStageMembership(stageKey);
-                        if (!membership) return null;
-                        const question =
-                            membership.grain === "child"
-                                ? "Which child records belong here?"
-                                : "Which leads belong here?";
-                        const subject = membership.grain === "child" ? "Children" : "Leads";
-                        return (
-                            <Subsection label="Stage membership" description={question}>
-                                <div
-                                    className="rounded-lg border border-alloy-stone/25 bg-alloy-stone/[0.03] px-4 py-3"
-                                    data-testid="stage-membership-context"
-                                >
-                                    <p className="text-[12px] text-alloy-midnight/70">
-                                        {subject} with <span className="font-medium text-alloy-midnight">stage = {stageKey}</span> belong to this stage.
-                                    </p>
-                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                        <span className="text-[11px] text-alloy-midnight/45">
-                                            {membership.grain === "child" ? "Child enrollment state:" : "Lead status:"}
-                                        </span>
-                                        {membership.states.map((s) => (
-                                            <span
-                                                key={s.key}
-                                                className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[11px] font-medium text-alloy-pine"
-                                                data-testid={`stage-membership-state-${s.key}`}
-                                            >
-                                                {s.label}
-                                            </span>
-                                        ))}
-                                    </div>
-                                    <p className="mt-2 text-[10.5px] text-alloy-midnight/40">
-                                        Records land here when an outcome moves them to this stage. Membership is the persisted stage — not a status filter.
-                                    </p>
-                                </div>
-                            </Subsection>
-                        );
-                    })()}
-                </Section>
-
+                    Attention stays inside Operational Experience rather than becoming a sibling
+                    section here. It is part of the operating-plan draft, and lifting it out
+                    would move state ownership for the sake of layout — the same thing the
+                    work-item slice established must not happen. */}
                 {/* ── Section 3: Operational Experience ── */}
                 <Section
                     id="experience"
                     icon={<BookOpen size={13} />}
-                    title="Operational Experience"
+                    title="Operator work"
+                    summary={sectionSummaries.experience}
                     status={sectionStatus.experience}
                     collapsed={!!collapsed.experience}
                     onToggle={() => toggleSection("experience")}
@@ -892,25 +904,15 @@ export default function StageEditorV2({
                                         stages: _allStages ?? [],
                                     }
                                 }
-                                configuredStatuses={(bootstrap?.queue_membership_status_options ?? []).map((row) => ({
-                                    status_key: row.status_key,
-                                    status_label: row.status_label,
-                                    entity_type: "opportunities",
-                                    is_active: true,
-                                }))}
+                                configuredStatuses={
+                                // The record-status catalog, not the queue picker. The picker
+                                // drops case-layer rows, which is exactly what a transition writes.
+                                bootstrap?.record_status_vocabulary ?? []
+                            }
                             />
 
-                            <Subsection label="Recommended actions">
-                                <div className="rounded-lg border border-dashed border-alloy-forge/15 px-4 py-4">
-                                    <p className="text-[12px] font-medium text-alloy-midnight/55">Process Actions supply the action catalog.</p>
-                                    <p className="mt-1 text-[11px] text-alloy-midnight/35">
-                                        Configure primary, helpful, and alternate-path actions per work template in the Operating Plan editor above.
-                                    </p>
-                                </div>
-                            </Subsection>
-
                             <Subsection label="Operator guidance">
-                                <p className="mb-2 text-[11px] text-alloy-midnight/45">
+                                <p className="mb-2 text-[0.6875rem] text-alloy-midnight/45">
                                     Shown to operators when they open a record in this stage. Use this to communicate context, priorities, or reminders.
                                 </p>
                                 <textarea
@@ -924,23 +926,23 @@ export default function StageEditorV2({
                             </Subsection>
                         </>
                     ) : (
-                        <p className="text-[12px] text-alloy-midnight/40">Select a stage to configure experience.</p>
+                        <p className="stage-field__hint">Select a stage to configure experience.</p>
                     )}
                 </Section>
-
                 {/* ── Section 4: Operational Requirements ── */}
                 <Section
                     id="requirements"
                     icon={<ClipboardCheck size={13} />}
-                    title="Operational Requirements"
+                    title="Requirements"
+                    summary={sectionSummaries.requirements}
                     status={sectionStatus.requirements}
                     collapsed={!!collapsed.requirements}
                     onToggle={() => toggleSection("requirements")}
                 >
                     {stageKey.trim() ? (
                         <>
-                            <p className="mb-3 text-[11px] text-alloy-midnight/50">
-                                Required fields block specific actions when missing. Entry and exit expectations guide operators without hard-locking the process.
+                            <p className="stage-field__hint mb-2.5">
+                                Required fields block specific actions when missing.
                             </p>
                             <LifecycleStageFieldRequirementsEditor
                                 ref={fieldReqRef}
@@ -954,24 +956,134 @@ export default function StageEditorV2({
                             />
                         </>
                     ) : (
-                        <p className="text-[12px] text-alloy-midnight/40">Select a stage to configure requirements.</p>
+                        <p className="stage-field__hint">Select a stage to configure requirements.</p>
                     )}
+                </Section>
+                {/* ── Section 1: Stage Identity ── */}
+                <Section
+                    id="identity"
+                    icon={<Tag size={13} />}
+                    title="Stage identity"
+                    summary={sectionSummaries.identity}
+                    status={sectionStatus.identity}
+                    collapsed={!!collapsed.identity}
+                    onToggle={() => toggleSection("identity")}
+                >
+                    <div className="stage-grid stage-grid--2">
+                        <Field label="Stage name" hint="Rename in the stage list on the left.">
+                            <input
+                                className={INPUT_CLS}
+                                value={stageLabel}
+                                readOnly
+                                title="Rename in the stage list"
+                                data-testid="stage-editor-v2-label"
+                            />
+                        </Field>
+                        <Field label="Purpose" hint="Shown to operators in the stage picker.">
+                            <input
+                                className={INPUT_CLS}
+                                value={purpose}
+                                onChange={(e) => setPurpose(e.target.value)}
+                                placeholder="e.g. Qualify and schedule family visits"
+                                maxLength={120}
+                                data-testid="stage-editor-v2-purpose"
+                            />
+                        </Field>
+                    </div>
+
+                    <div className="mt-3" />
+                    <Field label="Description" hint="Explain what operators are expected to accomplish in this stage.">
+                        <textarea
+                            className={TEXTAREA_CLS}
+                            rows={2}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="What happens in this stage? What is the operator goal?"
+                            data-testid="stage-editor-v2-description"
+                        />
+                    </Field>
+
+                    <Field label="Allow stage skipping">
+                        <label className="mt-1 flex cursor-pointer items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={allowSkipping}
+                                onChange={(e) => setAllowSkipping(e.target.checked)}
+                                className="h-4 w-4 rounded-md accent-alloy-juniper"
+                                data-testid="stage-editor-v2-allow-skipping"
+                            />
+                            <span className="text-[0.75rem] text-alloy-midnight">Operators can skip this stage</span>
+                        </label>
+                    </Field>
+                </Section>
+                {/* ── Section 2: Stage Context ── */}
+                <Section
+                    id="representation"
+                    summary={sectionSummaries.representation}
+                    icon={<Layers size={13} />}
+                    title="Stage Context"
+                    status={sectionStatus.representation}
+                    collapsed={!!collapsed.representation}
+                    onToggle={() => toggleSection("representation")}
+                >
+                    {/* Grain — the single authoritative setting for what one unit of work represents */}
+                    <Field label="Row type (grain)">
+                        <GrainSelector value={grain} onChange={setGrain} />
+                        {grain ? <GrainImpactCallout grain={grain} /> : null}
+                        <p className="mt-3 text-[0.6875rem] text-alloy-midnight/50">
+                            Stage grain is the authoritative row type for this stage. Work Views and surfaces use this grain — one queue row per <span className="font-medium text-alloy-midnight/70">{grain ? GRAIN_LABELS[grain].toLowerCase() : "unit of the selected type"}</span>.{" "}
+                            Surface layout and filters are configured in <span className="font-medium text-alloy-midnight/70">Work Views</span>.
+                        </p>
+                    </Field>
+
+                    {grain === "child" ? (
+                        <Field label="When multiple children are eligible…">
+                            <SubjectResolutionField value={subjectResolution} onChange={setSubjectResolution} />
+                        </Field>
+                    ) : null}
+
+                    {(() => {
+                        const membership = enrollmentStageMembership(stageKey);
+                        if (!membership) return null;
+                        const question =
+                            membership.grain === "child"
+                                ? "Which child records belong here?"
+                                : "Which leads belong here?";
+                        const subject = membership.grain === "child" ? "Children" : "Leads";
+                        return (
+                            <Subsection label="Stage membership" description={question}>
+                                <div
+                                    className="rounded-lg border border-alloy-stone/25 bg-alloy-stone/[0.03] px-4 py-3"
+                                    data-testid="stage-membership-context"
+                                >
+                                    <p className="text-[0.75rem] text-alloy-midnight/70">
+                                        {subject} with <span className="font-medium text-alloy-midnight">stage = {stageKey}</span> belong to this stage.
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                        <span className="text-[0.6875rem] text-alloy-midnight/45">
+                                            {membership.grain === "child" ? "Child enrollment state:" : "Lead status:"}
+                                        </span>
+                                        {membership.states.map((s) => (
+                                            <span
+                                                key={s.key}
+                                                className="rounded-full bg-alloy-pine/10 px-2 py-0.5 text-[0.6875rem] font-medium text-alloy-pine"
+                                                data-testid={`stage-membership-state-${s.key}`}
+                                            >
+                                                {s.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <p className="mt-2 text-[0.6875rem] text-alloy-midnight/40">
+                                        Records land here when an outcome moves them to this stage. Membership is the persisted stage — not a status filter.
+                                    </p>
+                                </div>
+                            </Subsection>
+                        );
+                    })()}
                 </Section>
 
                 {/* ── Section 5: Possible Outcomes ── */}
-                <Section
-                    id="outcomes"
-                    icon={<GitBranch size={13} />}
-                    title={outcomeCount > 0 ? `Possible Outcomes (${outcomeCount})` : "Possible Outcomes"}
-                    status={sectionStatus.outcomes}
-                    collapsed={!!collapsed.outcomes}
-                    onToggle={() => toggleSection("outcomes")}
-                >
-                    <p className="mb-3 text-[11px] text-alloy-midnight/50">
-                        What can happen when operators act from this stage. Each outcome produces a durable state change — a status transition, a stage movement, or follow-up work.
-                    </p>
-                    <PossibleOutcomesSection operatingPlan={bootstrap?.stage_operating_plan} />
-                </Section>
+
 
             </div>
         </div>

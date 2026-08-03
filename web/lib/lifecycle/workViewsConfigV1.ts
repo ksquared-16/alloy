@@ -7,6 +7,7 @@
 
 import { randomUUID } from "crypto";
 
+import { captureUnknownFields, withUnknownFields } from "@/lib/config/preserveUnknownFields";
 import {
     canonicalWorkViewConditionFieldKey,
 } from "@/lib/lifecycle/workViewConditionFieldRegistry";
@@ -151,6 +152,25 @@ function parseSort(raw: unknown): WorkViewSortV1 | null {
     return { field_key, direction };
 }
 
+/**
+ * Keys this parser owns. Anything else in a stored work view belongs to a newer writer and must
+ * survive the round trip untouched (Law 1/Law 7).
+ */
+const WORK_VIEW_OWNED_KEYS = [
+    "id",
+    "label",
+    "mission",
+    "match",
+    "filters_v1",
+    "sort_v1",
+    "sorts_v1",
+    "visible_in_runtime",
+    "display_order",
+    "queue_layout_id",
+    "focus_panel_layout_id",
+    "compat_queue_key",
+] as const;
+
 export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (!isRecord(raw)) return null;
     const id = typeof raw.id === "string" ? raw.id.trim() : "";
@@ -158,6 +178,7 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (!id || !label) return null;
 
     const stored: WorkViewConfigV1Stored = { id, label };
+    withUnknownFields(stored, captureUnknownFields(raw, WORK_VIEW_OWNED_KEYS));
     if (typeof raw.mission === "string" && raw.mission.trim()) stored.mission = raw.mission.trim();
     // `match` combinator (V3). Only persist when explicitly `any`; absent/`all` keeps the default AND
     // so legacy saved views are never silently reinterpreted.

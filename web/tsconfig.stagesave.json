@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/lifecycle/saveLifecycleStageRuntimeConfig.ts",
+    "lib/lifecycle/stageDraftTransforms.ts",
+    "lib/lifecycle/projectLifecycleStageQueueLanes.ts",
+    "lib/lifecycle/validateTouchedStageReferences.ts",
+    "lib/lifecycle/buildLifecycleStageBootstrap.ts",
+    "lib/businessProcesses/configuration/businessProcessConfigurationService.ts",
+    "lib/businessProcesses/configuration/businessProcessEditorState.ts",
+    "lib/businessProcesses/configuration/businessProcessPublishValidation.ts",
+    "app/api/admin/enrollment-process/stage-runtime-config/route.ts",
+    "app/api/admin/lifecycle-builder/stage-bootstrap/route.ts",
+    "app/api/admin/departments/[departmentId]/lifecycle-builder/route.ts",
+    "app/api/admin/business-process/configuration/route.ts",
+    "app/api/admin/business-process/configuration/validate/route.ts",
+    "app/api/admin/business-process/configuration/publish/route.ts"
+  ]
+}

@@ -236,6 +236,40 @@ describe("Process Stage operating contract — outcome editor (6–10)", () => {
         expect(draftIndex).toBeGreaterThan(tryIndex);
         expect(catchIndex).toBeGreaterThan(draftIndex);
     });
+
+    it("the draft assembly no longer validates by throwing", () => {
+        // D3, drafting half. Throwing here meant the request was never assembled, so a stage with
+        // any pre-existing defect could not be edited and the operator saw nothing at all.
+        const planEditor = read(
+            "components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx",
+        );
+        expect(planEditor).toContain("validate: false");
+        expect(planEditor).toContain("assessStageOperatingPlanEdit");
+    });
+
+    it("the save blocks only on what the edit introduced, and reports the rest", () => {
+        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
+        expect(board).toContain("assessment.blocking.length");
+        // Never a silent no-op: a blocked save names the defect and moves the operator to it.
+        expect(board).toContain("focusStageOperatingPlanControl");
+        // And a save that lands still says what the graph owes before publication.
+        expect(board).toContain("remainingIssuesSummary");
+    });
+
+    it("the transition status picker reads the record-status catalog, not the queue picker", () => {
+        // The queue picker excludes case-layer rows by design, so validating a transition's
+        // status against it made every canonical status unreachable.
+        for (const file of [
+            "components/adminV2/settings/lifecycle/StageEditorV2.tsx",
+            "components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx",
+        ]) {
+            const src = read(file);
+            const at = src.indexOf("configuredStatuses={");
+            expect(at, `${file} must pass configuredStatuses`).toBeGreaterThan(-1);
+            expect(src.slice(at, at + 400)).toContain("record_status_vocabulary");
+            expect(src.slice(at, at + 400)).not.toContain("queue_membership_status_options");
+        }
+    });
 });
 
 describe("Process Stage operating contract — transitions (11–15)", () => {
@@ -346,7 +380,10 @@ describe("Process Stage operating contract — statuses (16–21)", () => {
         );
         expect(editor).toContain("resolveOutcomeStatusOptions");
         expect(editor).toContain("isConfiguredClosedStatus");
-        expect(editor).toContain("Closes record");
+        // The exit path now reads as a sentence, so the badge says "Closes the record" — the same
+        // words the Stage Overview already uses for the same fact. The guard that matters is
+        // unchanged: the flag is DERIVED from the configured status, never typed.
+        expect(editor).toContain("Closes the record");
         expect(editor).not.toContain("Close Record");
     });
 

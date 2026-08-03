@@ -29,17 +29,21 @@ import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecyc
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import { loadQueueMembershipStatusOptions } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
 import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
-import { enrollmentQueueMembershipLegacyFallback } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 import { loadBusinessProcessStatusCategoryCatalog } from "@/lib/lifecycle/loadStatusCategoryCatalog";
 import { resolveStatusRollupForStage } from "@/lib/lifecycle/statusCategoryCatalog";
 import { queueMembershipSubjectForStatusOptions } from "@/lib/lifecycle/stageStatusRollup";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import {
     coercePerspectivesV1ForLanes,
     resolvePerspectivesForStage,
 } from "@/lib/lifecycle/perspectiveConfigV1";
 import { derivePerspectiveLanesFromPipeline } from "@/lib/lifecycle/lifecycleStagePerspectiveLanes";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    loadBusinessProcessEditorState,
+    summarizeBusinessProcessEditorState,
+} from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { loadRecordStatusVocabulary } from "@/lib/lifecycle/loadRecordStatusVocabulary";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
     return rows.map((r) => ({
@@ -65,6 +69,8 @@ export async function buildLifecycleStageBootstrap(params: {
     departmentId: string;
     builderStageKey: string;
     primaryRecordLabel?: string;
+    /** Recorded as the draft's creator when this load materializes it for the first time. */
+    actorUserId?: string | null;
 }): Promise<LifecycleStageBootstrapPayload> {
     const { supabase, orgId, departmentId, builderStageKey } = params;
     const primaryRecordLabel = params.primaryRecordLabel?.trim() || "Lead";
@@ -84,10 +90,30 @@ export async function buildLifecycleStageBootstrap(params: {
             ? (dept.metadata as Record<string, unknown>)
             : {};
 
+    /**
+     * THE READ PRECEDENCE (Law 4, editor slice 2).
+     *
+     * Everything publication-owned is read from the DRAFT, not from `departments.metadata`. Slice 1
+     * made the save write a draft; reading the projection back here is what made an operator's
+     * saved change appear to vanish on reload.
+     *
+     * `metadata` is still the source for the top-level SIBLING keys — field rules, progression
+     * requirements, activation. Those are category F: not publication-owned, and they must keep
+     * working exactly as before.
+     */
+    const editorState = await loadBusinessProcessEditorState(supabase, {
+        orgId,
+        departmentId,
+        actorUserId: params.actorUserId ?? null,
+    });
+    const builderMetadata: Record<string, unknown> = editorState
+        ? { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: editorState.draft_payload }
+        : metadata;
+
     const statusRows = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", {
         activeOnly: true,
     });
-    const stageKeys = await stageKeysForDepartment(supabase, orgId, metadata);
+    const stageKeys = await stageKeysForDepartment(supabase, orgId, builderMetadata);
     const statuses = buildEnrollmentStatusStagesPayload(mapStatusRows(statusRows), stageKeys);
 
     const pipeline = await loadStageWorkUnitSnapshotForDepartment(
@@ -98,7 +124,7 @@ export async function buildLifecycleStageBootstrap(params: {
     );
 
     let field_requirements: LifecycleStageBootstrapPayload["field_requirements"] = null;
-    if (isValidBootstrapBuilderStage(metadata, builderStageKey)) {
+    if (isValidBootstrapBuilderStage(builderMetadata, builderStageKey)) {
         const override = parseLifecycleProgressionRequirementsOverride(metadata);
         const orgFieldDefs = await loadOrgFieldDefinitionsForLifecycle(supabase, orgId);
         const entry = buildLifecycleRequirementsStageEntry(builderStageKey, metadata, orgFieldDefs, override);
@@ -218,12 +244,16 @@ export async function buildLifecycleStageBootstrap(params: {
         activation?.primary_record_label ?? primaryRecordLabel
     );
 
-    const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
+    const builder = lifecycleBuilderFromDepartmentMetadata(builderMetadata);
     const process = builder?.processes.find((p) => p.is_active) ?? null;
     const stageRecord = process?.stages.find((s) => s.key === builderStageKey && s.is_active) ?? null;
-    const queue_membership =
-        resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey) ??
-        enrollmentQueueMembershipLegacyFallback(builderStageKey, process?.key ?? "");
+    /**
+     * No code-default fallback once a process exists (decision D1). The legacy fallbacks that used
+     * to sit here made an unconfigured stage LOOK configured in the editor, and a save then wrote
+     * that appearance back as authored configuration. A stage with no membership must read as
+     * having no membership — that is the truth the operator needs in order to fix it.
+     */
+    const queue_membership = resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey);
     const subjectForOptions = queueMembershipSubjectForStatusOptions({
         stageKey: builderStageKey,
         trackKey: stageRecord?.track_key ?? null,
@@ -247,11 +277,11 @@ export async function buildLifecycleStageBootstrap(params: {
         subjectForOptions,
         builderStageKey,
     );
-    const stage_operating_plan =
-        resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey) ??
-        (process?.key === "enrollment"
-            ? defaultStageOperatingPlanForEnrollmentStage(builderStageKey)
-            : null);
+    // The vocabulary a TRANSITION may write — the case layer, which the queue-membership picker
+    // above deliberately excludes. Conflating the two made every canonical transition status
+    // unselectable and unvalidatable. See loadRecordStatusVocabulary.
+    const record_status_vocabulary = await loadRecordStatusVocabulary(supabase, orgId);
+    const stage_operating_plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey);
     const savedPerspectives = resolvePerspectivesForStage(stageRecord ?? {});
     const perspectiveLaneKeys = derivePerspectiveLanesFromPipeline(pipeline).map((lane) => lane.queueKey);
     const perspectives_v1 =
@@ -274,10 +304,12 @@ export async function buildLifecycleStageBootstrap(params: {
         base_actions,
         queue_membership,
         queue_membership_status_options,
+        record_status_vocabulary,
         status_category_catalog,
         status_rollup_v1,
         stage_operating_plan,
         perspectives_v1: perspectives_v1?.length ? perspectives_v1 : null,
+        configuration_state: editorState ? summarizeBusinessProcessEditorState(editorState) : null,
     };
 }
 

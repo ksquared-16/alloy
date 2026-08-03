@@ -38,7 +38,56 @@ import {
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
 
+import {
+    captureUnknownFields,
+    serializeWithUnknownFields,
+    withUnknownFields,
+} from "@/lib/config/preserveUnknownFields";
+
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
+
+/**
+ * Keys each level of the builder owns. Anything else was authored by a newer writer and must
+ * survive the round trip untouched (Law 1/Law 7 — see configuration-integrity-laws.md).
+ */
+const BUILDER_OWNED_KEYS = ["version", "active_process_id", "processes"] as const;
+
+const PROCESS_OWNED_KEYS = [
+    "id",
+    "key",
+    "name",
+    "description",
+    "primary_entity",
+    "sort_order",
+    "is_active",
+    "command_set_v1",
+    "tracks_v1",
+    "manual_status_transition_policy_v1",
+    "work_views_v1",
+    "participation_v1",
+    "stages",
+] as const;
+
+const STAGE_OWNED_KEYS = [
+    "id",
+    "key",
+    "label",
+    "description",
+    "sort_order",
+    "is_active",
+    "track_key",
+    "queue_membership_v1",
+    "status_rollup_v1",
+    "stage_operating_plan_v1",
+    "perspectives_v1",
+    "action_catalog_v1",
+    "grain",
+    "purpose",
+    "parent_stage_key",
+    "allow_skipping",
+    "operator_guidance",
+    "subject_resolution_strategy",
+] as const;
 
 export type LifecycleBuilderStageRecord = {
     id: string;
@@ -172,7 +221,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const perspectives = parsePerspectivesV1(sr.perspectives_v1);
             const actionCatalog = parseStageActionCatalogV1(sr.action_catalog_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
-            stages.push({
+            stages.push(withUnknownFields({
                 id: sid,
                 key: skey,
                 label,
@@ -191,7 +240,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(typeof sr.allow_skipping === "boolean" ? { allow_skipping: sr.allow_skipping } : {}),
                 ...(typeof sr.operator_guidance === "string" && sr.operator_guidance ? { operator_guidance: sr.operator_guidance } : {}),
                 ...(parseSubjectResolutionStrategy(sr.subject_resolution_strategy) ? { subject_resolution_strategy: parseSubjectResolutionStrategy(sr.subject_resolution_strategy) } : {}),
-            });
+            }, captureUnknownFields(sr, STAGE_OWNED_KEYS)));
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
         const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
@@ -199,7 +248,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         const workViews = parseWorkViewsV1(row.work_views_v1);
         const participation = parseParticipationConfigV1(row.participation_v1) ?? undefined;
-        processes.push({
+        processes.push(withUnknownFields({
             id,
             key,
             name,
@@ -212,19 +261,55 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             ...(workViews ? { work_views_v1: workViews } : {}),
             ...(participation ? { participation_v1: participation } : {}),
             stages,
-        });
+        }, captureUnknownFields(row, PROCESS_OWNED_KEYS)));
     }
+
+    const builderResidue = captureUnknownFields(o, BUILDER_OWNED_KEYS);
 
     if (!processes.length) {
         const activeRaw = typeof o.active_process_id === "string" ? o.active_process_id.trim() : "";
-        return { version: 1, active_process_id: activeRaw || null, processes: [] };
+        // Annotated: without it TS widens the `version: 1` literal to `number` and the object
+        // stops matching LifecycleBuilderV1.
+        const empty: LifecycleBuilderV1 = {
+            version: 1,
+            active_process_id: activeRaw || null,
+            processes: [],
+        };
+        return withUnknownFields(empty, builderResidue);
     }
 
     const activeRaw = typeof o.active_process_id === "string" ? o.active_process_id.trim() : "";
     const active_process_id =
         activeRaw && processes.some((p) => p.id === activeRaw) ? activeRaw : processes[0]!.id;
 
-    return { version: 1, active_process_id, processes };
+    const parsed: LifecycleBuilderV1 = { version: 1, active_process_id, processes };
+    return withUnknownFields(parsed, builderResidue);
+}
+
+/**
+ * Serialize the builder back to storable JSON, splicing every level's unowned residue back in.
+ * This is the write-side half of Law 7 — without it, parsing is lossless in memory but the
+ * database still receives an allowlist-shaped blob.
+ */
+export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<string, unknown> {
+    const processes = config.processes.map((process) => {
+        const stages = process.stages.map((stage) => serializeWithUnknownFields(stage));
+        const serialized: Record<string, unknown> = { ...serializeWithUnknownFields(process), stages };
+        // Work views carry their own residue and are nested one level deeper than the walk above.
+        if (process.work_views_v1) {
+            serialized.work_views_v1 = process.work_views_v1.map((view) =>
+                serializeWithUnknownFields(view),
+            );
+        }
+        // Participation is the same shape of problem: its parser is an allowlist reconstruction,
+        // so its residue rides a carrier one level deeper than this walk reaches. Omitting it
+        // meant a participation save silently deleted every field this branch could not name.
+        if (process.participation_v1) {
+            serialized.participation_v1 = serializeWithUnknownFields(process.participation_v1);
+        }
+        return serialized;
+    });
+    return { ...serializeWithUnknownFields(config), processes };
 }
 
 export function lifecycleBuilderFromDepartmentMetadata(metadata: unknown): LifecycleBuilderV1 {
@@ -239,7 +324,9 @@ export function mergeLifecycleBuilderIntoMetadata(
     metadata: Record<string, unknown>,
     config: LifecycleBuilderV1
 ): Record<string, unknown> {
-    return { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: config };
+    // Serialize rather than embedding the typed record directly: the typed record carries unowned
+    // residue on a symbol, which JSON.stringify would silently drop on the way to the database.
+    return { ...metadata, [LIFECYCLE_BUILDER_METADATA_KEY]: serializeLifecycleBuilderV1(config) };
 }
 
 export function activeLifecycleProcess(config: LifecycleBuilderV1): LifecycleBuilderProcessRecord | null {
