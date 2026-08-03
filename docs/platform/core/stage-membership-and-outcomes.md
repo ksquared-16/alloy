@@ -132,7 +132,7 @@ already holds it.
 | Concept | Authority | Notes |
 |---|---|---|
 | **Requested Start** | `process_instances.metadata.start_date` (participation) | Family preferred timing. Never rewritten by commitment. |
-| **Enrollment Date** | Process-instance `metadata.enrollment_date` stamped by configured paperwork-completion outcome | Not an arbitrary typed date; opportunity metadata is compat projection only. |
+| **Enrollment Date** | Process-instance `metadata.enrollment_date` stamped by configured paperwork-completion outcome (`stamp_enrollment_date` target) | Not an arbitrary typed date. `approve_enrollment` may invoke the same stamp as **compat only** — it does not own the meaning. Opportunity metadata is a compat projection only. |
 | **Start Date** | Earliest qualifying committed `schedule_assignments.start_date` for the child | Fallback: enrollment agreement `start_date` when no OA row exists. Later supersedes do not rewrite the original Start Date. |
 
 Requested care (`requested_days_per_week`, preferred `weekdays`) remains proposal intent.

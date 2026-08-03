@@ -7,6 +7,13 @@ supersedes: []
 
 # Assignment commitment authority — proposed vs committed
 
+**Guardrail:** `commitment_kind` distinguishes **proposal vs committed assignment state on a
+schedule_assignments row**. It must **not** become a parallel lifecycle, a replacement for
+Business Process stage/outcome state, a duplicate Start Date authority, or a generic status
+field. Committed operational truth remains the agreement + placement + schedule-assignment
+trio; Start Date resolves from the first qualifying **committed** assignment via
+`lib/enrollment/effectiveDateAuthority.ts`.
+
 ## Operator vocabulary
 
 | Internal | Operator-facing |
