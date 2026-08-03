@@ -118,6 +118,12 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
         ...(d.configuration_discovery && typeof d.configuration_discovery === "object" && !Array.isArray(d.configuration_discovery)
             ? { configuration_discovery: d.configuration_discovery as StoredFormDraftPreview["configuration_discovery"] }
             : {}),
+        // Relationship collections projected by apply (FP17). This parser is an explicit ALLOWLIST —
+        // anything not named here is silently dropped on every read, so a new draft-level construct
+        // must be added or it will vanish between apply and form generation.
+        ...(Array.isArray(d.collections)
+            ? { collections: d.collections as StoredFormDraftPreview["collections"] }
+            : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };
