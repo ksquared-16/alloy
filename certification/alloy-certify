@@ -181,10 +181,41 @@ cmd_status() {
     echo
 }
 
+# Stop only what this certification started. The stack is SHARED: a raw `sb stop` here
+# would tear it out from under every other session holding a lease, which is exactly the
+# bypass the lease model exists to prevent. Releasing is the sanctioned way to say "I am
+# done" — alloy-stack stops the stack itself, but only when the last holder leaves.
 cmd_down() {
-    [ -f "$SERVER_PID_FILE" ] && { kill "$(cat "$SERVER_PID_FILE")" 2>/dev/null || true; rm -f "$SERVER_PID_FILE"; info "app stopped"; }
-    sb stop >/dev/null 2>&1 || true
+    cmd_app_stop
+    local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
+    if [ -x "$stack" ]; then
+        "$stack" release "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || true
+    else
+        info "alloy-stack not found — leaving the shared stack alone (never a raw stop)"
+    fi
     green "Environment shut down cleanly"
+}
+
+# Stop the app without touching the shared stack or the lease.
+cmd_app_stop() {
+    local stopped=0 pid
+    if [ -f "$SERVER_PID_FILE" ]; then
+        pid="$(cat "$SERVER_PID_FILE" 2>/dev/null)"
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null && stopped=1
+        rm -f "$SERVER_PID_FILE"
+    fi
+    # The pid file records the launcher; Next spawns a child that outlives it and keeps
+    # the port bound, which is what left a dev server running after a "clean" teardown.
+    local held; held="$(lsof -ti "tcp:${APP_PORT}" 2>/dev/null || true)"
+    for pid in $held; do kill "$pid" 2>/dev/null && stopped=1; done
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1 || break
+        sleep 1
+    done
+    if lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1; then
+        for pid in $(lsof -ti "tcp:${APP_PORT}" 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
+    fi
+    [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
 }
 
 case "${1:-all}" in
@@ -195,6 +226,7 @@ case "${1:-all}" in
     serve) cmd_serve ;;
     verify) cmd_verify ;;
     status) cmd_status ;;
+    app-stop) cmd_app_stop ;;
     down) cmd_down ;;
     all) cmd_up; cmd_env; cmd_verify; cmd_status ;;
     *) die "unknown command: $1 (up|env|serve|verify|status|down|all)" ;;
