@@ -173,13 +173,14 @@ arbitrary object traversal from the render path.
 | **Commit** | `fc7e9aa84` (was `6ca61e346` before the 2026-08-03 rebase onto `db212fe1c`) |
 | **Evidence** | 78 lines deleted, whole file. **Zero callers** — `grep -rn 'public-booking-links' web/ --include='*.ts*'` returns nothing. **Exactly one INSERT** into `tour_public_booking_links` remains platform-wide, at `web/lib/tours/invitation/mintTourInvitation.ts:256`; the other three readers of the table (`authorizeTourAction`, `resolveTourPublicBookingLink`, `deleteOpportunityLead`) never insert. Unscoped links are refused by the **database**, not by convention: CHECK `tour_public_booking_links_scoped_complete_chk` in `supabase/migrations/20260801120000_tour_invitation_and_scoped_public_actions.sql`. Behaviour covered by `web/tests/tours/mintTourInvitation.test.ts` and `web/tests/tours/authorizeTourAction.test.ts` |
 
-> **Certification note.** The DB-level assertions behind this entry (the CHECK
-> rejecting each incomplete scoped link, and full-chain migration replay) were
-> proven on an isolated stack against real FK-backed fixtures at the time the
-> migration was authored. The re-run requested after the rebase is **still
-> outstanding** — it needs exclusive ownership of a Supabase-provisioned stack,
-> and the shared `alloy-cert` stack has been continuously leased by another
-> worker. The migration SQL is byte-identical to its certified state.
+> **Certification note — CLOSED 2026-08-03.** The DB-level assertions behind this
+> entry were re-run after the rebase, under an exclusive lease on the sanctioned
+> shared stack: 307 migrations replayed clean in full chain, the migration
+> re-applied twice on a live database without error, and 11/11 assertions passed
+> against real FK-backed fixtures both before and after the re-apply. Every
+> rejection names the constraint that fired, so the CHECK — not a foreign key —
+> is what refused each incomplete scoped link. Script and evidence:
+> `certification/interactive-tour/`.
 
 ---
 
