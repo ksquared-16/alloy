@@ -158,11 +158,68 @@ stack_age_seconds() {
   [[ "$t" -gt 0 ]] && printf '%s\n' "$(( now - t ))" || printf '999999\n'
 }
 
+lease_field() { sed -n "s/^$2=//p" "$1" | head -1; }
+
+# Process identity, recorded at lease creation so a REUSED pid cannot masquerade as the
+# original holder. PIDs wrap; a start timestamp plus the command line does not.
+proc_start_of() { ps -o lstart= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//'; }
+proc_cmd_of()   { ps -o command= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//' | cut -c1-120; }
+
+# Is the recorded holder still genuinely running?
+#   0 = the SAME process is alive   1 = not alive, or a different process now owns that pid
+lease_holder_process_alive() {
+  local f="$1" pid rec_start rec_cmd now_start now_cmd
+  pid="$(lease_field "$f" PID)"
+  [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  rec_start="$(lease_field "$f" PID_START)"
+  rec_cmd="$(lease_field "$f" PID_CMD)"
+  # No recorded identity (a lease written by an older alloy-stack): treat the live pid as the
+  # holder. FAIL SAFE — we would rather keep a lease than reclaim one we cannot identify.
+  [[ -z "$rec_start" && -z "$rec_cmd" ]] && return 0
+  now_start="$(proc_start_of "$pid")"
+  now_cmd="$(proc_cmd_of "$pid")"
+  [[ -n "$rec_start" && "$rec_start" != "$now_start" ]] && return 1   # pid reused
+  [[ -n "$rec_cmd"   && "$rec_cmd"   != "$now_cmd"   ]] && return 1   # pid reused
+  return 0
+}
+
+# Any live process still working inside this holder's worktree, or driving a certification?
+# A dead launcher pid does not prove the work stopped — a detached test runner may outlive it.
+lease_has_active_work() {
+  local wt="$1"
+  [[ -n "$wt" ]] || return 1
+  pgrep -f "$wt" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+# RECLAIM RULES — every one must hold, or the lease is preserved.
+#   1. recorded pid not alive, OR a different process now holds that pid
+#   2. lease metadata identifies the expected holder + worktree (present and parseable)
+#   3. no live process associated with that worktree / certification run
+#   4. the decision is logged by the caller
+#   5-7. reclaiming NEVER stops the stack, drops volumes, or touches the containment hook —
+#        this function only removes a lease FILE.
+lease_reclaimable() {
+  local f="$1" holder wt
+  holder="$(lease_field "$f" HOLDER)"
+  wt="$(lease_field "$f" WORKTREE)"
+  # (2) fail safe on missing/corrupt metadata — never destructively reclaim what we cannot identify
+  [[ -n "$holder" && -n "$wt" ]] || return 1
+  # (1) the holder process must be gone or replaced
+  lease_holder_process_alive "$f" && return 1
+  # (3) and nothing must still be running in that worktree
+  lease_has_active_work "$wt" && return 1
+  return 0
+}
+
 lease_is_stale() {
   local f="$1" wt age_h now mt
-  # shellcheck source=/dev/null
-  wt="$(sed -n 's/^WORKTREE=//p' "$f" | head -1)"
+  wt="$(lease_field "$f" WORKTREE)"
   [[ -n "$wt" && ! -d "$wt" ]] && return 0   # worktree deleted → definitively gone
+  # A crashed holder used to pin the shared stack for the full TTL. An interrupted
+  # certification must not block the next one for twelve hours.
+  lease_reclaimable "$f" && return 0
   now="$(date +%s)"
   mt="$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo "$now")"
   age_h=$(( (now - mt) / 3600 ))
@@ -174,6 +231,18 @@ prune_stale_leases() {
   shopt -s nullglob
   for f in "$LEASE_DIR"/*.lease; do
     if lease_is_stale "$f"; then
+      # (4) every reclaim is recorded — on stderr so it survives `$(prune_stale_leases)` capture,
+      # and appended to a durable log so an interrupted run leaves an audit trail.
+      local why="ttl"
+      lease_reclaimable "$f" && why="holder-process-gone"
+      [[ -n "$(lease_field "$f" WORKTREE)" && ! -d "$(lease_field "$f" WORKTREE)" ]] && why="worktree-deleted"
+      printf 'lease-reclaim holder=%s reason=%s pid=%s created=%s\n' \
+        "$(lease_field "$f" HOLDER)" "$why" "$(lease_field "$f" PID)" "$(lease_field "$f" CREATED)" >&2
+      mkdir -p "${STATE_DIR}" 2>/dev/null || true
+      printf '%s lease-reclaim holder=%s reason=%s pid=%s created=%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(lease_field "$f" HOLDER)" "$why" \
+        "$(lease_field "$f" PID)" "$(lease_field "$f" CREATED)" >> "${STATE_DIR}/reclaim.log" 2>/dev/null || true
+      # (5)(6)(7) removes ONLY the lease file — never the stack, never volumes, never the hook.
       rm -f "$f"
       pruned=$((pruned + 1))
     fi
@@ -233,10 +302,16 @@ cmd_use() {
   ensure_seeded "$workdir"
 
   local f; f="$(lease_path "$holder")"
+  # PID_START and PID_CMD are the anti-PID-reuse fingerprint: a recycled pid will not reproduce
+  # the original process's start timestamp or command line, so "same pid, different process" is
+  # detectable rather than being mistaken for a live holder.
   cat >"$f" <<EOF
 HOLDER=${holder}
 WORKTREE=$(cd "${ALLOY_WORKTREE_PATH:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
 PID=$$
+PID_START=$(proc_start_of $$)
+PID_CMD=$(proc_cmd_of $$)
+STACK_PROJECT=${SANCTIONED_PROJECT}
 PROVIDER=${ALLOY_PROVIDER:-unknown}
 SLOT=${ALLOY_WORKTREE_SLOT:-unknown}
 CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -460,4 +535,8 @@ main() {
   esac
 }
 
-main "$@"
+# Sourced by tests to exercise the lease predicates directly rather than reimplementing them.
+# Any other invocation runs normally.
+if [[ "${ALLOY_STACK_TEST_SOURCE:-0}" != "1" ]]; then
+  main "$@"
+fi
