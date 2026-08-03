@@ -81,23 +81,24 @@ for segment in re.split(r"(?:\|\||&&|[;&|\n])", cmd):
     if idx is None:
         continue
 
+    # --workdir is accepted both before and after the subcommand, so scan the
+    # whole segment for it rather than only the leading flag run.
+    workdir = None
+    rest = tokens[idx + 1:]
+    for n, tok in enumerate(rest):
+        if tok.startswith("--workdir="):
+            workdir = tok.split("=", 1)[1]
+        elif tok == "--workdir" and n + 1 < len(rest):
+            workdir = rest[n + 1]
+
     # Walk past global flags to the real subcommand.
     j = idx + 1
-    workdir = None
     while j < len(tokens):
         tok = tokens[j]
         if tok.startswith("--") and "=" in tok:
-            k, v = tok.split("=", 1)
-            if k == "--workdir":
-                workdir = v
             j += 1
         elif tok.startswith("-"):
-            if tok in VALUE_FLAGS and j + 1 < len(tokens):
-                if tok == "--workdir":
-                    workdir = tokens[j + 1]
-                j += 2
-            else:
-                j += 1
+            j += 2 if (tok in VALUE_FLAGS and j + 1 < len(tokens)) else 1
         else:
             break
     subcommand = tokens[j] if j < len(tokens) else None

@@ -191,6 +191,21 @@ live_lease_count() {
   printf '%s\n' "$n"
 }
 
+# Apply the synthetic tenant if it is missing. Delegates to the sanctioned
+# seeding path (`alloy-certify seed`) rather than reimplementing it.
+ensure_seeded() {
+  local workdir="$1"
+  local certify="${workdir}/alloy-certify"
+  [[ -x "$certify" ]] || { dim "alloy-certify not present — skipping seed check"; return 0; }
+  if ALLOY_STACK_INTERNAL=1 "$certify" seed >/dev/null 2>&1; then
+    ok "synthetic tenant present (org northwind-early-learning)"
+  else
+    warn "seed step did not complete — stack is up but may be schema-only"
+    info "run manually: ${certify} seed"
+  fi
+  return 0
+}
+
 # ---------------------------------------------------------------- commands
 cmd_use() {
   local holder="${1:-$(default_holder)}"
@@ -205,10 +220,17 @@ cmd_use() {
   else
     info "shared stack '${SANCTIONED_PROJECT}' is down — starting it once, for everyone…"
     have supabase || die "supabase CLI not on PATH"
-    supabase start --workdir "$workdir" >/dev/null \
+    ALLOY_STACK_INTERNAL=1 supabase start --workdir "$workdir" >/dev/null \
       || die "supabase start failed in ${workdir}"
     ok "shared stack '${SANCTIONED_PROJECT}' started"
   fi
+
+  # `supabase start` does NOT seed this stack: [db.seed] is disabled because the
+  # canonical representative seed uses psql meta-commands the raw-SQL runner
+  # cannot execute. Without this step the shared stack comes up schema-only,
+  # with no synthetic tenant — which is not what any session is asking for.
+  # `alloy-certify seed` is idempotent (one SELECT when already seeded).
+  ensure_seeded "$workdir"
 
   local f; f="$(lease_path "$holder")"
   cat >"$f" <<EOF
