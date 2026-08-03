@@ -71,10 +71,17 @@ duplicate sends of the same invitation.
   build content → mint → render/enqueue → record event.
 - `sendTourInvitationAction` — the registered action wrapper.
 
-**Note on a dormant path.** `orchestrateTourCommsForBooking` (621 lines, tested) had
-**zero production callers** before this slice — it was built and never wired. Slice D
-does not fix that for booking lifecycle events; that is recorded as debt, not silently
-adopted.
+**CORRECTION (2026-08-03).** An earlier revision of this document claimed
+`orchestrateTourCommsForBooking` had **zero production callers**. That was wrong, and
+the error was a grep artifact: the pattern `orchestrateTourComms*` does not match the
+real caller names, which are `orchestrateTourBookingConfirmed`, `…Rescheduled`,
+`…Canceled`, `…Completed`, `…NoShow`.
+
+It is in fact fully wired into the canonical booking service
+(`tourBookingService.ts` lines 333, 515, 589, 642, 685, 728) — including the create
+path, where confirmation comms run only when the booking is not pending approval, at
+boundary `"outside"` so a notification failure can never roll back a booking the
+operator completed. **No debt exists here; none should be recorded or "fixed".**
 
 ---
 
