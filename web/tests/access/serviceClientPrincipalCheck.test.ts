@@ -44,12 +44,8 @@ const allowlist = JSON.parse(readFileSync(ALLOWLIST_PATH, "utf8")) as {
  * These five routes have NO orthogonal authorization model. They are W-15's work.
  * This list is frozen: it may shrink as routes are fixed, never grow.
  */
-const FROZEN_BASELINE = [
-    "app/api/book-v2/confirm/route.ts",
-    "app/api/book-v2/ensure-customer/route.ts",
-    "app/api/book-v2/opportunity-discount/route.ts",
-    "app/api/book-v2/quote-refine/route.ts",
-    "app/api/book-v2/service-details/route.ts",
+const FROZEN_BASELINE: string[] = [
+    // book-v2 routes were removed from the tree; baseline shrank (allowed) on 2026-08-03.
 ];
 
 const report = runServiceClientPrincipalCheck() as Report;
@@ -86,7 +82,7 @@ describe("W-4 · the check is not vacuous", () => {
 
     it("does NOT credit an unauthenticated public route", () => {
         expect(byRoute.get("app/api/verticals/route.ts")?.resolvesPrincipal).toBe(false);
-        expect(byRoute.get("app/api/book-v2/confirm/route.ts")?.resolvesPrincipal).toBe(false);
+        expect(byRoute.get("app/api/public/booking-config/route.ts")?.resolvesPrincipal).toBe(false);
     });
 
     it("analyses bare re-export routes rather than silently passing them", () => {
