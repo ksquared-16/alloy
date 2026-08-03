@@ -61,3 +61,4 @@ web/test-results/
 
 # Local scoped typecheck helper (not product code)
 web/tsconfig.poscheck.json
+certification-tour/
