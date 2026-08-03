@@ -34,9 +34,19 @@ run_reclaimable() {
   ' 2>/dev/null
 }
 
-STATE="$(mktemp -d)"; LEASES="$STATE/leases"; mkdir -p "$LEASES"
-WT="$(mktemp -d)"           # a worktree that exists
-trap 'rm -rf "$STATE" "$WT"' EXIT
+# Test state lives beside the test, not under $TMPDIR. In a sandboxed shell `mktemp -d`
+# returned rc=0 with a path that did not survive, so every fixture write became a silent
+# no-op — and a lease file that was never created reads exactly like a lease the rules
+# declined to reclaim. The assertions below make that failure mode loud instead.
+TESTTMP="${SCRIPT_DIR}/tests/.tmp-lease-reclaim.$$"
+STATE="$TESTTMP/state"; LEASES="$STATE/leases"
+WT="$TESTTMP/worktree"          # a worktree that exists
+mkdir -p "$LEASES" "$WT"
+# Guard on BASHPID: an EXIT trap also fires when a command-substitution subshell exits,
+# so an unguarded `rm -rf` deleted the fixtures mid-run — the first lease file then failed
+# to write, and "file absent" is indistinguishable from "rules declined to reclaim".
+trap '[[ "$BASHPID" == "$$" ]] && rm -rf "$TESTTMP"' EXIT
+[[ -d "$LEASES" && -d "$WT" ]] || { echo "FATAL: could not create test state under $TESTTMP" >&2; exit 2; }
 
 mklease() { # mklease <name> <pid> [start] [cmd] [worktree]
   local f="$LEASES/$1.lease"
@@ -75,7 +85,7 @@ t "legacy lease with no identity + live pid → preserved" preserve "$(mklease l
 
 # A dead launcher does not prove the work stopped: a detached child still inside the
 # holder's worktree must keep the lease.
-CHILDWT="$(mktemp -d)"
+CHILDWT="$TESTTMP/child-worktree"; mkdir -p "$CHILDWT"
 ( cd "$CHILDWT" && exec -a "certrun-$CHILDWT" sleep 300 ) & CHILD=$!
 sleep 1
 t "dead holder BUT live process in its worktree → preserved" preserve "$(mklease with-child "$DEAD" "Mon Jan  1 00:00:00 2020" "sleep 60" "$CHILDWT")"

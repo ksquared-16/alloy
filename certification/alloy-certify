@@ -39,7 +39,20 @@ die()   { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
 sb() { supabase --workdir "$CERT_DIR" "$@"; }
 
-cert_db_url() { sb status -o env 2>/dev/null | sed -n 's/^DB_URL="\(.*\)"$/\1/p'; }
+# `supabase status` reports an EMPTY DB_URL while the stack's containers are still
+# settling (or briefly absent). An empty URL is not "no stack" to psql — it falls
+# back to the local libpq defaults and happily connects somewhere else, which is
+# how a healthy shared stack produced `relation "public.industries" does not exist`.
+# Resolve with a short retry, and never return a blank URL.
+cert_db_url() {
+    local url i
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        url="$(sb status -o env 2>/dev/null | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+        [ -n "$url" ] && { printf '%s\n' "$url"; return 0; }
+        sleep 2
+    done
+    return 1
+}
 
 cmd_up() {
     if curl -s -o /dev/null "http://127.0.0.1:54421/rest/v1/" 2>/dev/null; then
@@ -53,7 +66,8 @@ cmd_up() {
 }
 
 cmd_seed() {
-    local db; db="$(cert_db_url)"; [ -n "$db" ] || die "cert stack not running"
+    local db; db="$(cert_db_url)" && [ -n "$db" ] \
+        || die "could not resolve the cert stack DB_URL after 10 attempts — is the shared stack up? (alloy-stack status)"
     # Already seeded? (idempotent — the representative seed is upsert-based anyway.)
     if psql "$db" -tAc "select 1 from orgs where slug='${ORG_SLUG}' limit 1" 2>/dev/null | grep -q 1; then
         green "Seeded data available (org ${ORG_SLUG})"
@@ -66,6 +80,13 @@ cmd_seed() {
     psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/operator-credential.sql" >/dev/null \
         || die "operator credential attach failed"
     green "Authenticated operator account ready (${OPERATOR_EMAIL})"
+
+    # Canonical environment storage. Idempotent, and deliberately NOT part of any
+    # certification fixture: a fixture that creates environment state cannot tear itself
+    # down without breaking the next run.
+    psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/environment-buckets.sql" >/dev/null \
+        || die "storage bucket provisioning failed"
+    green "Storage buckets provisioned (org_documents)"
 }
 
 cmd_env() {

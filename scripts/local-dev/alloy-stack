@@ -262,22 +262,49 @@ live_lease_count() {
 
 # Apply the synthetic tenant if it is missing. Delegates to the sanctioned
 # seeding path (`alloy-certify seed`) rather than reimplementing it.
+#
+# Pass --required when a schema-only stack is not an acceptable outcome (rebuilds).
+# A rebuild that ends schema-only must FAIL, not warn: reporting success over a
+# half-built environment is how a certification run gets started against one.
 ensure_seeded() {
-  local workdir="$1"
+  local workdir="$1" required=0
+  [[ "${2:-}" == "--required" ]] && required=1
   local certify="${workdir}/alloy-certify"
   [[ -x "$certify" ]] || { dim "alloy-certify not present — skipping seed check"; return 0; }
-  if ALLOY_STACK_INTERNAL=1 "$certify" seed >/dev/null 2>&1; then
+
+  local out rc
+  out="$(ALLOY_STACK_INTERNAL=1 "$certify" seed 2>&1)"; rc=$?
+  if [[ $rc -eq 0 ]]; then
     ok "synthetic tenant present (org northwind-early-learning)"
-  else
-    warn "seed step did not complete — stack is up but may be schema-only"
-    info "run manually: ${certify} seed"
+    return 0
   fi
+
+  # Surface the actual failure. Swallowing it is what turned a wrong-connection
+  # error into an unexplained "may be schema-only" for a whole session.
+  warn "seed step failed (exit ${rc}):"
+  printf '%s\n' "$out" | tail -6 | sed 's/^/      /' >&2
+  if [[ $required -eq 1 ]]; then
+    die "rebuild did not reach a seeded baseline — stack left up, no lease taken"
+  fi
+  info "run manually: ${certify} seed"
   return 0
 }
 
 # ---------------------------------------------------------------- commands
 cmd_use() {
-  local holder="${1:-$(default_holder)}"
+  # `--holder X` and a bare positional are both accepted. Without the flag form,
+  # `alloy-stack use --holder promo5` silently created a lease literally named
+  # `--holder`, so `release promo5` then found nothing to release.
+  local holder=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --holder) holder="${2:-}"; [[ -n "$holder" ]] || die "--holder requires a value"; shift 2 ;;
+      --holder=*) holder="${1#*=}"; shift ;;
+      -*) die "unknown option: $1" ;;
+      *) holder="$1"; shift ;;
+    esac
+  done
+  [[ -n "$holder" ]] || holder="$(default_holder)"
   docker_ok || die "Docker is not reachable. Run: alloy-docker-doctor --recover"
 
   local workdir
@@ -299,7 +326,11 @@ cmd_use() {
   # cannot execute. Without this step the shared stack comes up schema-only,
   # with no synthetic tenant — which is not what any session is asking for.
   # `alloy-certify seed` is idempotent (one SELECT when already seeded).
-  ensure_seeded "$workdir"
+  if [[ "${ALLOY_STACK_SEED_REQUIRED:-0}" == "1" ]]; then
+    ensure_seeded "$workdir" --required
+  else
+    ensure_seeded "$workdir"
+  fi
 
   local f; f="$(lease_path "$holder")"
   # PID_START and PID_CMD are the anti-PID-reuse fingerprint: a recycled pid will not reproduce
@@ -325,6 +356,8 @@ cmd_release() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --keep-running) keep=1; shift ;;
+      --holder) holder="${2:-}"; [[ -n "$holder" ]] || die "--holder requires a value"; shift 2 ;;
+      --holder=*) holder="${1#*=}"; shift ;;
       -*) die "unknown option: $1" ;;
       *) holder="$1"; shift ;;
     esac
@@ -500,6 +533,92 @@ cmd_doctor() {
   return 1
 }
 
+# Rebuild the shared environment from committed migrations + canonical seed.
+#
+# `reap` cannot do this: it enumerates projects from RUNNING containers, so a stopped
+# stack's volumes are invisible to it and its data survives forever. That is the whole
+# point of a reset — discard accumulated state (fixture residue, certification leftovers)
+# and come back to exactly what the repository says the environment is.
+#
+# Guards: refuses while any lease is held; only ever touches volumes labelled for the
+# SANCTIONED project; requires --confirm; rebuilds through `use`, so the containment hook
+# and the canonical seed path are both honoured.
+cmd_reset() {
+  local confirm=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --confirm|--yes|-y) confirm=1; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  docker_ok || die "Docker unreachable"
+
+  prune_stale_leases >/dev/null
+  local held; held="$(live_lease_count)"
+  if [[ "$held" != "0" ]]; then
+    bad "refusing to reset — ${held} lease(s) held on '${SANCTIONED_PROJECT}'"
+    cmd_status
+    return 1
+  fi
+
+  if [[ "$confirm" -eq 0 ]]; then
+    warn "would REBUILD '${SANCTIONED_PROJECT}' from committed migrations + canonical seed"
+    info "this DISCARDS all data in the shared stack (that is the intent)"
+    info "to proceed:  alloy-stack reset --confirm"
+    return 0
+  fi
+
+  local workdir; workdir="$(resolve_stack_workdir || true)"
+  info "stopping '${SANCTIONED_PROJECT}' (if running)…"
+  stop_stack_by_project "$SANCTIONED_PROJECT" "$workdir"
+
+  # Only volumes belonging to the sanctioned project. Never a bare prune.
+  local removed=0 v
+  while IFS= read -r v; do
+    [[ -n "$v" ]] || continue
+    docker volume rm "$v" >/dev/null 2>&1 && { dim "removed volume $v"; removed=$((removed + 1)); }
+  done < <(docker volume ls -q 2>/dev/null | grep -E "_${SANCTIONED_PROJECT}\$" || true)
+  ok "discarded ${removed} data volume(s) for '${SANCTIONED_PROJECT}'"
+
+  mkdir -p "${STATE_DIR}" 2>/dev/null || true
+  printf '%s stack-reset project=%s volumes_removed=%s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SANCTIONED_PROJECT" "$removed" >> "${STATE_DIR}/reclaim.log" 2>/dev/null || true
+
+  info "rebuilding from committed migrations + canonical seed…"
+  local rh="${ALLOY_STACK_RESET_HOLDER:-stack-reset}"
+  ALLOY_STACK_SEED_REQUIRED=1 cmd_use "$rh"
+  assert_ledger_matches_disk "$workdir"
+  cmd_release "$rh" --keep-running
+  ok "shared stack rebuilt and left running, zero leases held"
+}
+
+# The point of a rebuild is that the environment contains the committed migrations and
+# NOTHING ELSE. A restored backup silently carried a migration from an unmerged sibling
+# branch (20260801120000, interactive-tour-slice-c) into the shared stack; every session
+# then certified against schema that exists on no integration branch.
+assert_ledger_matches_disk() {
+  local workdir="$1"
+  local migdir="${workdir}/supabase/migrations"
+  [[ -d "$migdir" ]] || { dim "no migrations dir — skipping ledger check"; return 0; }
+  have psql || { dim "psql not on PATH — skipping ledger check"; return 0; }
+
+  local url; url="$(ALLOY_STACK_INTERNAL=1 supabase --workdir "$workdir" status -o env 2>/dev/null \
+    | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+  [[ -n "$url" ]] || { warn "could not resolve DB_URL — skipping ledger check"; return 0; }
+
+  local extra
+  extra="$(comm -23 \
+    <(psql "$url" -tAc 'select version from supabase_migrations.schema_migrations order by version' 2>/dev/null | tr -d ' \r' | sort) \
+    <(ls "$migdir"/*.sql 2>/dev/null | sed 's|.*/||; s|_.*||' | sort))"
+
+  if [[ -n "$extra" ]]; then
+    warn "rebuilt stack carries migration(s) not present in this checkout:"
+    printf '%s\n' "$extra" | sed 's/^/      /' >&2
+    die "environment is not a clean rebuild — it retains foreign schema"
+  fi
+  ok "migration ledger matches committed migrations exactly"
+}
+
 usage() {
   cat <<EOF
 alloy-stack ${VERSION} — one shared local Supabase stack, leased by sessions.
@@ -514,6 +633,9 @@ Usage:
         [--force]                       include stacks started <1h ago (live sessions)
         [--volumes]                     also discard their data volumes
   alloy-stack doctor                    explain violations; non-zero exit if unclean
+  alloy-stack reset [--confirm]         REBUILD the shared stack from committed
+                                        migrations + canonical seed. Refuses while any
+                                        lease is held. Discards shared data by design.
 
 Doctrine: sessions SHARE the '${SANCTIONED_PROJECT}' stack. Never run
 'supabase start' from your own directory — that is what produced 35 containers.
@@ -525,6 +647,7 @@ main() {
   [[ $# -gt 0 ]] && shift || true
   case "$cmd" in
     use)      cmd_use "$@" ;;
+    reset)    cmd_reset "$@" ;;
     release)  cmd_release "$@" ;;
     status)   cmd_status "$@" ;;
     reap)     cmd_reap "$@" ;;
