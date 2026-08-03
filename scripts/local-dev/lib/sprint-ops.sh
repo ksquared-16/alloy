@@ -3,6 +3,12 @@
 # Extends Phase 1–3 registries (metadata/, pids/, browser-pids/); no parallel registry.
 # shellcheck shell=bash
 
+# Git durability gates — a sprint is not finished until its work leaves this
+# machine. Sourced here because both alloy-sprint-start and alloy-sprint-finish
+# already source this file.
+# shellcheck source=lib/git-durability.sh
+source "$(dirname "${BASH_SOURCE[0]}")/git-durability.sh"
+
 alloy_sprint_ops_defaults() {
   ALLOY_MAX_ACTIVE_PROVIDERS="${ALLOY_MAX_ACTIVE_PROVIDERS:-3}"
   ALLOY_MAX_RUNNING_SERVERS="${ALLOY_MAX_RUNNING_SERVERS:-3}"
@@ -1108,6 +1114,16 @@ alloy_sprint_finish_one() {
   # last session holding a lease, the shared stack stops here. Data volumes are
   # kept, so the next `alloy-stack use` restarts it with its data intact.
   alloy_stack_release_for_worktree "$name" "$path"
+
+  # Durability gate. Fails closed: archiving a slot whose branch never left this
+  # machine is how 880 local-only commits accumulated across 79 branches while
+  # every sprint reported "finished".
+  local durability_evidence
+  if ! durability_evidence="$(alloy_assert_sprint_finishable "$name" "$path")"; then
+    printf '%s\n' "$durability_evidence" >&2
+    alloy_die "sprint finish blocked: work is not durable (see above)"
+  fi
+  printf '%s\n' "$durability_evidence" | sed 's/^/  /'
 
   alloy_write_continuation_record "$name" "finish" \
     "Human review only — do not push/merge/PR from toolkit finish." >/dev/null
