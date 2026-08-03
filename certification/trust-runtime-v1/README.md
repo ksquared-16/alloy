@@ -44,7 +44,7 @@ migrations and is **not** a full-chain replay.
 | S13 | Reproducibility | PASS | Identical package modulo identity; replay produces a new package, predecessor byte-identical |
 | S14 | Contracts cannot carry reasoning implementation | PASS | 6 `@ts-expect-error` assertions compile clean; **negative control**: weakening the guard produces exactly 6 `TS2578 Unused '@ts-expect-error'` errors, so all six are load-bearing |
 | S15 | Consumer surface | **NOT RUN** | Seam observed in a real browser session; the operator control itself is unreachable in the cert tenant. See §4, Gap 3 |
-| S16 | Non-regression | PASS (partial) | See §3. **The base-vs-branch baseline in §3 was measured against an older staging SHA and has NOT been re-confirmed against `db212fe1c` or later** |
+| S16 | Non-regression | PASS (partial) | See §3 and §6. Attribution for the closeout branch is settled by construction; **Slice 1's own non-regression claim has NOT been re-measured against a current base** |
 
 Additional database assertions beyond the scenario list: refusals persisted as
 packages; a refusal cannot carry a recommendation; contract insert-only with
@@ -192,3 +192,43 @@ configuration, or by anything on this branch.
   and `strategy_kind = deterministic`, reported `execution_mode: "stub"`, and
   contacted no host outside `localhost:3011` / `127.0.0.1:54421`. The certification
   environment carries no `OPENAI_*` or `ANTHROPIC_*` credential at all.
+
+## 6. Re-verification on this worktree's own dependencies — 2026-08-03
+
+Every earlier Trust measurement in a managed worktree resolved modules through the
+tracked `web/node_modules` symlink into Slot 4. These were re-run after
+`rm web/node_modules && npm ci`, so they measure **this** worktree:
+
+| Check | Result |
+|---|---|
+| `npx vitest run tests/trust` | **41 passed / 41**, 2 files, exit 0 |
+| `tsc -p tsconfig.trustcert.json --noEmit` (S14 compile-time proof) | **exit 0** |
+| `tsc -p tsconfig.slice1scope.json --noEmit` | **exit 0, 0 errors**, 11s |
+| `run-fullchain.sh` (re-run after another session reset the stack) | 306/306 migrations, **20/21 + 16/16**, runner exit 0 |
+| `npx vitest run tests/queues` | 5 failed / 206 passed (26 files) |
+
+The full-chain result reproduced on a database that a **different** session had reset
+in between — the Trust migration and its invariants survive an independent replay.
+
+### Non-regression attribution — settled by construction
+
+`git diff --stat db212fe1c..HEAD` for this branch is six files: two certification
+SQL files, the certification runner, this record, the handoff, and one scoped
+tsconfig. **Zero production `.ts`/`.tsx` files are touched.** The 5 `tests/queues`
+failures are therefore inherited from the base and cannot be attributed to this
+branch — no separate base run is needed to establish that.
+
+Failing tests, recorded so a future session can tell drift from novelty:
+
+```
+QueueServicePlacementProjection.test.ts  v2 engine expands to candidate rows with _placement_waitlist_row
+childGrainHonestRowSubject.test.ts       Card 8 ocmrow row gets honest child subject without flag
+childGrainLaneBuilders.test.ts           produces honest child row_subject and active_subject
+queueRoutes.test.ts                      GET queue items applies stage enrichment before work_view_id filters
+queueRoutes.test.ts                      GET queue items with work_view_id returns true filtered total when limit=1
+```
+
+**What this does NOT establish.** Slice 1's own non-regression claim (§3) was
+measured against an older staging SHA. Slice 1 is already merged into this branch's
+base, so re-measuring it requires comparing `e7ff8e605^1` against `e7ff8e605`, which
+has not been done. The §3 table stands unconfirmed.
