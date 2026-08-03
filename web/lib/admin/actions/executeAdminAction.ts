@@ -46,6 +46,7 @@ import {
     stampChildEnrollmentDatesIfBlank,
     todayEnrollmentDateIso,
 } from "@/lib/admin/actions/executeApproveEnrollmentAction";
+import { stampEnrollmentDateOnProcessInstances } from "@/lib/enrollment/stampEnrollmentDateOnProcessInstances";
 import type { OperationalEnrollmentHandoffResult } from "@/lib/childcareOperational/enrollmentAgreementHandoff";
 import { executeOperationalEnrollmentHandoffFromApprovedOpportunity } from "@/lib/childcareOperational/enrollmentAgreementHandoff";
 import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
@@ -1102,6 +1103,19 @@ export async function executeAdminAction(
                         );
                     } catch (e) {
                         console.error("[executeAdminAction] stampChildEnrollmentDatesIfBlank", e);
+                    }
+                    // Process-grain stamp (canonical). Opportunity metadata remains compat projection.
+                    // Source marks this as approve-path bridge until paperwork-completion outcomes own it.
+                    try {
+                        await stampEnrollmentDateOnProcessInstances(supabase, {
+                            orgId: ctx.orgId,
+                            opportunityId: entityId,
+                            enrollmentDate,
+                            source: "compat_approve_enrollment",
+                            actorUserId: ctx.userId,
+                        });
+                    } catch (e) {
+                        console.error("[executeAdminAction] stampEnrollmentDateOnProcessInstances", e);
                     }
                 }
             }

@@ -17,6 +17,7 @@ import {
     setEnrollmentInstanceStateByScope,
     readEnrollmentInstanceState,
     readEnrollmentInstanceStageKey,
+    PROCESS_INSTANCES_TABLE,
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
 import { assertStageConfigured, loadConfiguredStageInventory } from "@/lib/lifecycle/configuredStageInventory";
@@ -28,6 +29,7 @@ import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitCh
 // process_instance_enrollment_materialization.md "Boundary: the one platform↔childcare seam").
 import { materializeEnrollmentForChildScope } from "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance";
 import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
+import { stampEnrollmentDateOnProcessInstances } from "@/lib/enrollment/stampEnrollmentDateOnProcessInstances";
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
@@ -103,6 +105,43 @@ export async function applyStageOutcomeRuleTarget(
         case "no_movement":
         case "mark_stage_work_complete":
             return {};
+
+        case "stamp_enrollment_date": {
+            // Tenant-configured paperwork-completion outcome stamps Enrollment Date on
+            // enrollment process_instance(s). Child subject → one instance; family subject → all
+            // children on the lead. Refuses silent overwrite (mergeEnrollmentDateOntoProcessMetadata).
+            const childId = await resolveChildSubjectId(supabase, orgId, subject);
+            const stampResult = await stampEnrollmentDateOnProcessInstances(supabase, {
+                orgId,
+                opportunityId: subject.opportunity_id,
+                customerMemberId: childId,
+                processInstanceId: subject.process_instance_id ?? null,
+                source: "paperwork_completion_outcome",
+                actorUserId: userId,
+            });
+            if (stampResult.error) return { error: stampResult.error };
+            const wroteRows = stampResult.stamped.filter((r) => r.wrote && r.priorMetadata);
+            if (!wroteRows.length) return {};
+            return {
+                undo: async () => {
+                    for (const row of wroteRows) {
+                        const { error: undoErr } = await supabase
+                            .from(PROCESS_INSTANCES_TABLE)
+                            .update({
+                                metadata: row.priorMetadata,
+                                updated_at: new Date().toISOString(),
+                            })
+                            .eq("id", row.processInstanceId)
+                            .eq("org_id", orgId);
+                        if (undoErr) {
+                            throw new Error(
+                                `restore enrollment date on ${row.processInstanceId}: ${undoErr.message}`,
+                            );
+                        }
+                    }
+                },
+            };
+        }
 
         case "update_family_case_status": {
             const statusKey = target.status_key?.trim();
