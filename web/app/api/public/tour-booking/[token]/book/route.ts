@@ -2,9 +2,11 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
-import { decodePublicTourToken, resolveTourPublicBookingLinkByToken } from "@/lib/tours/public/resolveTourPublicBookingLink";
-import { takeTourPublicRateLimit } from "@/lib/tours/public/tourPublicRateLimit";
-import { tourPublicErr, tourPublicJson, tourPublicRateLimited } from "@/lib/tours/public/tourPublicHttp";
+import { tourPublicErr, tourPublicJson } from "@/lib/tours/public/tourPublicHttp";
+import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
+import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
+import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
+import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
 import { assertBookingLocationMatchesOpportunity, fetchOpportunityForTourAdmin } from "@/lib/tours/admin/opportunityTourContext";
 
 type Body = {
@@ -15,24 +17,33 @@ type Body = {
 };
 
 /** POST /api/public/tour-booking/[token]/book */
-export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        return tourPublicErr("Server misconfiguration", 500);
-    }
-    const { token: raw } = await params;
-    const token = decodePublicTourToken(raw ?? "");
-    const retry = takeTourPublicRateLimit(request, "book", token);
-    if (retry != null) {
-        return tourPublicRateLimited(retry);
-    }
+const REQUIRED_ACTIONS = ["select_tour_slot"] as const;
 
-    const supabase = createServiceRoleClient();
-    const resolved = await resolveTourPublicBookingLinkByToken(supabase, token);
-    if (!resolved.ok) {
-        const codeMap = { NOT_FOUND: 404, INACTIVE: 403, EXPIRED: 403 };
-        return tourPublicErr(resolved.error.message, codeMap[resolved.error.code] ?? 400, { code: resolved.error.code });
+export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const { token: raw } = await params;
+    const guard = await guardTourActionRoute({
+        request,
+        rawToken: raw ?? "",
+        routeName: "book",
+        requiredActions: REQUIRED_ACTIONS,
+    });
+    if (!guard.ok) return guard.response;
+
+    const { auth, supabase } = guard;
+    const link = auth.link;
+    const invitation = auth.invitation;
+
+    // IDEMPOTENT REPLAY. A parent who double-clicks, or retries after a dropped
+    // connection, gets the booking they already have — not a second one, and
+    // not an error implying they did something wrong.
+    if (link.consumed_at && link.booking_id) {
+        const { data: prior } = await supabase
+            .from("tour_bookings")
+            .select("id, status_key, start_at, end_at, timezone")
+            .eq("id", link.booking_id)
+            .maybeSingle();
+        if (prior) return tourPublicJson({ ok: true, booking: prior, idempotent_replay: true });
     }
-    const link = resolved.row;
 
     let body: Body;
     try {
@@ -71,6 +82,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return tourPublicErr("Slot rule does not match link location", 400);
     }
 
+    // LIVE REVALIDATION. The option snapshot in the sent message records what
+    // was OFFERED; it is evidence, never authority. A slot is bookable only if
+    // it is still in the current availability set — which is what makes a stale
+    // email click safe, and what stops an arbitrary submitted slot from booking.
+    const live = await computeAvailableTourSlots(supabase, {
+        orgId: link.org_id,
+        locationId: link.location_id,
+        userId: null,
+        from: new Date(startAt.getTime() - 60_000),
+        to: new Date(endAt.getTime() + 60_000),
+    });
+    const stillAvailable = live.some(
+        (s: { start_at?: string | Date; rule_id?: string }) =>
+            new Date(String(s.start_at)).getTime() === startAt.getTime() &&
+            (!s.rule_id || String(s.rule_id) === ruleId)
+    );
+    if (!stillAvailable) {
+        // Not a dead end: the surface sends the parent back to current options.
+        return tourPublicErr("That time is no longer available. Please choose another.", 409, {
+            code: "SLOT_UNAVAILABLE",
+        });
+    }
+
     const input: CreateTourBookingInput = {
         orgId: link.org_id,
         opportunityId: link.opportunity_id,
@@ -88,6 +122,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     try {
         const booking = await createTourBooking(supabase, input);
+
+        // Atomic claim. Two concurrent requests race here and exactly one wins,
+        // so at most one selection is ever recorded against this action.
+        await consumeTourAction({ supabase, linkId: link.id, bookingId: booking.id });
+
+        await supabase
+            .from("tour_invitations")
+            .update({ status: "booked", updated_at: new Date().toISOString() })
+            .eq("id", invitation.id)
+            .eq("status", "active");
+
+        // A booked invitation makes outstanding select/decline actions meaningless.
+        await invalidateIncompatibleTourActions({
+            supabase,
+            invitationId: invitation.id,
+            keepLinkId: link.id,
+            reason: "booked",
+        });
+
+        for (const event of ["tour_slot_selected", "tour_booked"] as const) {
+            await recordTourEvent(supabase, {
+                event,
+                orgId: link.org_id,
+                invitationId: invitation.id,
+                recipientPersonId: invitation.recipient_person_id,
+                opportunityId: invitation.opportunity_id,
+                threadId: invitation.conversation_thread_id,
+                bookingId: booking.id,
+                detail: { start_at: booking.start_at, timezone: booking.timezone, status_key: booking.status_key },
+            });
+        }
+
         return tourPublicJson(
             {
                 ok: true,
