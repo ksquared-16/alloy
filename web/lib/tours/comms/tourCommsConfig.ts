@@ -24,6 +24,8 @@ export const TOUR_COMMS_SCHEDULED_SEND_METADATA = {
 export const TOUR_COMMS_OUTBOUND_METADATA = {
     source: "source",
     tourBookingId: "tour_booking_id",
+    /** Set instead of `tourBookingId` for `tour_invitation` — an invitation has no booking yet. */
+    tourInvitationId: "tour_invitation_id",
     opportunityId: "opportunity_id",
     eventKey: "event_key",
     channel: "channel",
@@ -45,6 +47,7 @@ export const TOUR_COMMS_CHANNELS: readonly TourCommsChannel[] = ["email", "sms"]
  * Distinct from workflow `event_type` strings on tour_bookings.
  */
 export type TourCommsEventKey =
+    | "tour_invitation"
     | "tour_confirmation"
     | "tour_reminder"
     | "tour_reschedule"
@@ -53,6 +56,8 @@ export type TourCommsEventKey =
     | "tour_pending_internal";
 
 export const TOUR_COMMS_EVENT_KEYS: readonly TourCommsEventKey[] = [
+    // `tour_invitation` precedes a booking; every other key describes one that already exists.
+    "tour_invitation",
     "tour_confirmation",
     "tour_reminder",
     "tour_reschedule",
