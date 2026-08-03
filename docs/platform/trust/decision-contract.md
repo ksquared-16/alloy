@@ -335,6 +335,8 @@ Reasons:
 
 Updated information always produces a new Decision Contract.
 
+A materially modified recommendation also produces a new Decision Contract, whose Decision Package carries **lineage** to the previous package.
+
 ---
 
 ## Runtime Ownership

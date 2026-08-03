@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
-import { redactObjectForAi } from "@/lib/ai/redaction";
+import { redactObjectForAi } from "@/lib/privacy/redactObject";
 import { resolveStructuredAiProviderForPolicy } from "@/lib/ai/resolveStructuredAiProvider";
 import type { AiProviderErrorEnvelope, AiProviderKey, AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
 import type {

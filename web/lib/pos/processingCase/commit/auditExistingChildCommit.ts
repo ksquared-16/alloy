@@ -1,4 +1,4 @@
-import { redactObjectForAi } from "@/lib/ai/redaction";
+import { redactObjectForAi } from "@/lib/privacy/redactObject";
 
 function redactAuditScalar(providerRef: string, value: unknown): unknown {
     if (value === null || value === undefined) return value;

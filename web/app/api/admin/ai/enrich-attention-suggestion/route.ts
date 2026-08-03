@@ -10,6 +10,7 @@ import {
     evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute,
 } from "@/lib/ai/aiEnrichmentRouteGuards";
 import { enrichAttentionSuggestionStubEnvelope } from "@/lib/ai/enrichAttentionSuggestionStub";
+import { enrichAttentionSuggestionViaTrustRuntime } from "@/lib/trust/consumers/attentionSuggestionEnrichmentEnvelope";
 import { parseEnrichAttentionSuggestionRequest } from "@/lib/ai/enrichAttentionSuggestionRouteValidation";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -120,6 +121,69 @@ export async function POST(request: NextRequest) {
             },
             { status: 403 },
         );
+    }
+
+    // Trust Runtime V1, Slice 1. The deterministic path is governed: it becomes a
+    // Decision Contract and returns a Decision Package, with the same envelope
+    // the surface has always rendered. No provider participates.
+    //
+    // The live-provider branch is deliberately untouched — Slice 1 sends nothing
+    // anywhere, and rerouting a provider call is Slice 2's decision to make.
+    if (policyQuick.provider !== "openai") {
+        let governed;
+        try {
+            governed = await enrichAttentionSuggestionViaTrustRuntime({
+                org_id: ctx.orgId,
+                org_metadata,
+                deterministic: det,
+                correlation_id: correlationId,
+                request_id: requestIdFromBody,
+                operator_id: ctx.userId ?? null,
+            });
+        } catch (e) {
+            // A Decision Package that cannot be persisted cannot be audited, and
+            // an unauditable recommendation must not reach an operator. This is a
+            // convenience-tier decision class, so it fails cosmetically: the
+            // operator keeps the deterministic suggestion and loses only the
+            // wording overlay.
+            console.error("[enrich-attention-suggestion] trust runtime unavailable:", e instanceof Error ? e.message : e);
+            return NextResponse.json({
+                ok: true,
+                envelope: {
+                    version: 1,
+                    deterministic_suggestion: det,
+                    enrichment: null,
+                    policy_snapshot: {
+                        enabled: policyQuick.enabled,
+                        provider: policyQuick.provider,
+                        pii_mode: policyQuick.pii_mode,
+                        allowed_features: policyQuick.allowed_features,
+                    },
+                },
+                telemetry_emitted: false,
+                enrichment_telemetry: { provider_key: policyQuick.provider, outcome: "error" },
+                provider_error_code: null,
+                decision: null,
+            });
+        }
+
+        return NextResponse.json({
+            ok: true,
+            envelope: governed.envelope,
+            telemetry_emitted: governed.telemetry_emitted,
+            enrichment_telemetry: {
+                provider_key: governed.telemetry_payload.provider_key,
+                outcome: governed.telemetry_payload.outcome,
+            },
+            provider_error_code: null,
+            decision: {
+                package_id: governed.decision_package.id,
+                contract_id: governed.decision_package.contract_id,
+                outcome: governed.decision_package.outcome,
+                trust_score: governed.decision_package.trust_score,
+                review_requirement: governed.decision_package.review_requirement,
+            },
+        });
     }
 
     const result = await enrichAttentionSuggestionStubEnvelope({

@@ -7,7 +7,7 @@ import { AI_POLICY_METADATA_KEY } from "@/lib/ai/aiPolicy";
 import { enrichAttentionSuggestionStubEnvelope, NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE } from "@/lib/ai/enrichAttentionSuggestionStub";
 import { maybeEmitAiEnrichmentTelemetryEvent, shouldEmitAiEnrichmentTelemetry } from "@/lib/ai/enrichmentTelemetry";
 import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
-import * as RedactionMod from "@/lib/ai/redaction";
+import * as RedactionMod from "@/lib/privacy/redactObject";
 import { createAiProviderForPolicy } from "@/lib/ai/disabledProvider";
 import { aiUsageTelemetryPayloadV1ToJson } from "@/lib/ai/enrichmentContracts";
 

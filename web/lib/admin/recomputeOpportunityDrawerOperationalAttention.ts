@@ -3,7 +3,7 @@ import { computeOperationalAttentionAttachment } from "@/lib/admin/operationalAt
 import { buildLegacyAttentionSuggestionCompat } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
 import { attachOperationalRecommendationBundle } from "@/lib/adminV2/bos/recommendations/adapters/attachOperationalRecommendationBundle";
 import { enrichOperationalRecommendationWithActionPreflight } from "@/lib/adminV2/bos/recommendations/preflight/enrichOperationalRecommendationPreflight";
-import { buildOperationalSummaryDeterministic } from "@/lib/ai/buildOperationalSummary";
+import { buildOperationalSummaryDeterministic } from "@/lib/operationalSummary/buildOperationalSummary";
 
 function readEmbeddedActivitySignal(row: Record<string, unknown>): ActivitySignalResult | null {
     const raw = row._activity_signal;

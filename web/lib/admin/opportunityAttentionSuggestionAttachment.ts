@@ -13,10 +13,8 @@ import {
 } from "@/lib/admin/operationalAttentionEntityAttachment";
 import { loadStageAttentionTasksByOpportunityId } from "@/lib/lifecycle/stageAttentionForOpportunity";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
-import {
-    applyStubOperationalSummaryOverlay,
-    buildOperationalSummaryDeterministic,
-} from "@/lib/ai/buildOperationalSummary";
+import { applyStubOperationalSummaryOverlay } from "@/lib/ai/buildOperationalSummary";
+import { buildOperationalSummaryDeterministic } from "@/lib/operationalSummary/buildOperationalSummary";
 import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
 import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
 import type { OperationalSummaryV1 } from "@/lib/ai/enrichmentContracts";

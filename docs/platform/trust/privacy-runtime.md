@@ -132,6 +132,10 @@ Transform Information
 
 ↓
 
+Retrieve Authorized Knowledge
+
+↓
+
 Construct Reasoning Context
 
 ↓
@@ -140,6 +144,8 @@ Reasoning Runtime
 ```
 
 This lifecycle is deterministic.
+
+Knowledge **metadata** may be resolved earlier for planning and budgeting. Knowledge **content** enters the reasoning context only after privacy preparation, which is why retrieval appears after transformation here.
 
 ---
 
