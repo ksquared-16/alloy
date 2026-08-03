@@ -29,6 +29,10 @@ import {
 } from "@/lib/pos/processingCase/commit/verifyRelationshipCommitAuthorization";
 import { executeCommandInvocation } from "@/lib/platform/commands/runtime/executeCommandInvocation";
 import { resolveRelationshipAnchor, type AnchorCandidate } from "@/lib/pos/processingCase/commit/resolveRelationshipAnchor";
+import {
+    loadResolvedProcessingCaseContext,
+    resolveCommitHousehold,
+} from "@/lib/pos/processingCase/commit/loadResolvedProcessingCaseContext";
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 
 /** Structured commit outcomes surfaced to product consumers. */
@@ -62,6 +66,9 @@ export type RelationshipCommitRecord = {
     committed_at: string;
     reason: string | null;
     code: string | null;
+    /** Which case resolution this commit consumed — the household reviewed is the household written. */
+    resolution_revision?: string | null;
+    resolved_customer_id?: string | null;
 };
 
 export type RelationshipCommitOutcome =
@@ -123,10 +130,21 @@ export async function executeRelationshipProposalCommit(args: {
      */
     anchorCustomerMemberId: string | null;
     selectedCustomerMemberIds?: readonly string[] | null;
-    /** Household children loaded server-side — the only ids an anchor may reference. */
-    householdChildren: readonly AnchorCandidate[];
+    /**
+     * Household children loaded server-side. Optional: when omitted they are taken from the RESOLVED
+     * case context, which is the authority after identity resolution.
+     */
+    householdChildren?: readonly AnchorCandidate[];
+    /** The resolution the operator reviewed. A change since then is stale, not committable. */
+    expectedResolutionRevision?: string | null;
     /** Optional caller-supplied extras. Only `scope` is honoured; assertions are compared and rejected. */
     request?: Partial<RelationshipCommitRequest>;
+    /**
+     * Resolve and AUTHORIZE without writing. Preview runs the identical gate and anchor resolution as
+     * commit, so an operator previewing a proposal sees exactly what the commit would do — a preview
+     * that used a softer path would be worthless as a review surface.
+     */
+    previewOnly?: boolean;
 }): Promise<RelationshipCommitOutcome> {
     const now = new Date().toISOString();
     const base = {
@@ -176,26 +194,45 @@ export async function executeRelationshipProposalCommit(args: {
     }
 
     const { definition, resolved } = auth;
-    const anchorCustomerId = proposalContext!.expectedCustomerId;
-    if (!anchorCustomerId) {
+    // ── household authority: the RESOLVED CASE, via the canonical typed resolver ─────────────────
+    // The submission row stays immutable source evidence; it is consulted only as corroboration.
+    const caseContext = await loadResolvedProcessingCaseContext(args.supabase, {
+        orgId: args.orgId,
+        caseId: args.caseId,
+    });
+    const household = resolveCommitHousehold({
+        context: caseContext,
+        submissionCustomerId: proposalContext!.expectedCustomerId,
+        expectedRevision: args.expectedResolutionRevision ?? null,
+    });
+    if (!household.ok) {
         return {
             ok: false,
-            status: 400,
+            status: household.status,
             record: {
                 ...base,
-                outcome: "failed",
+                outcome: household.code === "resolution_stale" ? "stale" : household.code === "resolution_conflict" ? "conflicted" : "failed",
                 definition_key: definition.definition_key,
-                reason: "Case has no anchor household to attach the relationship to.",
-                code: "missing_anchor_household",
+                reason: household.reason,
+                code: household.code,
+                resolution_revision: caseContext?.resolution_revision ?? null,
             },
         };
     }
+    const anchorCustomerId = household.customer_id;
+    const anchorCandidates: readonly AnchorCandidate[] =
+        args.householdChildren ??
+        household.context.customer_member_ids.map((id) => ({
+            customer_member_id: id,
+            customer_id: anchorCustomerId,
+            org_id: args.orgId,
+        }));
 
     // ── anchor resolution (definition-driven; never inferred, never silently expanded) ──────────
     const anchor = resolveRelationshipAnchor({
         definition,
         orgId: args.orgId,
-        householdChildren: args.householdChildren,
+        householdChildren: anchorCandidates,
         request: {
             customerId: anchorCustomerId,
             scope: resolved.scope,
@@ -223,7 +260,14 @@ export async function executeRelationshipProposalCommit(args: {
 
     // Idempotency identity includes the resolved anchor: the same role for a DIFFERENT child is a
     // distinct commit, not a retry.
-    const key = idempotencyKey(args.proposalId, resolved.commandKey, resolved.roleKey, anchor.scope, anchor.memberIds);
+    const key = idempotencyKey(
+        args.proposalId,
+        resolved.commandKey,
+        resolved.roleKey,
+        anchor.scope,
+        // A different resolution is a different commit, never a retry of the previous one.
+        [...anchor.memberIds, `rev:${household.revision}`],
+    );
     const prior = ledgerFrom(args.metadata)[key];
     if (prior && prior.outcome === "applied") {
         return { ok: true, status: 200, record: { ...prior, outcome: "already_applied" } };
@@ -242,6 +286,27 @@ export async function executeRelationshipProposalCommit(args: {
                 definition_key: definition.definition_key,
                 reason: "Submitted response does not carry enough identity to propose a Person.",
                 code: "insufficient_person_identity",
+            },
+        };
+    }
+
+    if (args.previewOnly) {
+        return {
+            ok: true,
+            status: 200,
+            record: {
+                ...base,
+                outcome: "applied",
+                definition_key: definition.definition_key,
+                person_id: resolved.existingPersonId ?? null,
+                role_key: resolved.roleKey,
+                scope: anchor.scope,
+                command_key: resolved.commandKey,
+                persistence_destination: definition.persists_to,
+                affected_member_ids: anchor.memberIds,
+                idempotency_key: key,
+                resolution_revision: household.revision,
+                resolved_customer_id: anchorCustomerId,
             },
         };
     }
@@ -322,6 +387,8 @@ export async function executeRelationshipProposalCommit(args: {
         committed_at: now,
         reason: null,
         code: null,
+        resolution_revision: household.revision,
+        resolved_customer_id: anchorCustomerId,
     };
 
     // Persist the structured result on the case so retries and audit can read it.

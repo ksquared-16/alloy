@@ -18,6 +18,8 @@ type Body = {
     asserted_role_key?: string;
     asserted_command_key?: string;
     expected_proposal_status?: string;
+    /** The case resolution the operator reviewed; a change since then is stale. */
+    expected_resolution_revision?: string;
     /** Explicit child anchor — validated against the server-loaded household. */
     anchor_customer_member_id?: string;
     /** Explicit selection for selected-children scope — every id is validated. */
@@ -82,22 +84,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             proposalContext = null;
         }
         if (proposalContext?.proposal.execution_kind === "configured_relationship") {
-            // Load the household's children SERVER-SIDE. These are the only ids an anchor may
-            // reference — a participant can never name a child outside the active household.
-            const { data: childRows } = await supabase
-                .from("customer_members")
-                .select("id, customer_id, org_id")
-                .eq("org_id", ctx.orgId)
-                .eq("customer_id", proposalContext.expectedCustomerId ?? "")
-                .eq("relationship", "child")
-                .eq("is_active", true);
-            const householdChildren = (childRows ?? []).map(
-                (r: { id: string; customer_id: string; org_id: string }) => ({
-                    customer_member_id: r.id,
-                    customer_id: r.customer_id,
-                    org_id: r.org_id,
-                }),
-            );
 
             const relOutcome = await executeRelationshipProposalCommit({
                 supabase,
@@ -109,11 +95,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 proposalId,
                 decision,
                 metadata,
+                expectedResolutionRevision:
+                    typeof body.expected_resolution_revision === "string" ? body.expected_resolution_revision : null,
                 // The proposal context carries the household, not a specific child member. With a
                 // null anchor the executor resolves scope across the household's children, which is
                 // correct for household-scoped commits; child-specific anchoring is supplied by the
                 // caller's scope choice. Resolving a precise anchor member is a live-journey concern.
-                householdChildren,
                 // The anchor is an explicit operator/runtime choice. It is validated against the
                 // household above; it is never inferred from "the only child" and never expanded.
                 anchorCustomerMemberId:
