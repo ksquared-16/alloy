@@ -99,7 +99,67 @@ The public route never writes stage, status, work, or queue membership.
 
 ---
 
-## 3. Out of scope
+## 3. Booking authority boundary (Director decision, 2026-08-03)
+
+The canonical `tour_bookings` row is domain truth. Business Process stage movement and
+communications are downstream consequences: observable and retryable, never part of the
+transaction that decides whether the parent booked.
+
+**Before** — all inside, so any could revoke the booking:
+
+```
+authorize · validate slot · insert booking · consume action · invitation update
+· opportunity metadata mirror · CONFIGURED STAGE SIGNAL · lifecycle event
+```
+
+**After** — the transaction owns only what determines success:
+
+```
+inside:   authorize · validate slot · insert booking · consume action
+          · invitation update · opportunity metadata mirror · lifecycle event
+outside:  stage signal · stage/work sufficiency · communications
+          · stage-sync follow-up
+```
+
+**BP authority is not bypassed.** The signal still runs through
+`applyConfiguredStageRulesForDomainSignal`; nothing writes `stage_key`, status, queue
+membership or Current Work directly. When no transition is configured the mirror is
+kept (it is truthful — the tour exists) and the precise domain, signal and reason are
+recorded through the existing canonical activity path as
+`tour_stage_sync_follow_up_required` with `retryable: true` and
+`booking_committed: true`. No new reliability platform was introduced.
+
+A genuine integration **write** failure still rolls back. Only an unapplied stage rule
+is treated as downstream.
+
+**Second defect, found by writing the replay test:** the book route's
+idempotent-replay branch was unreachable. The authorizer denied a consumed credential
+with 409 before the route could return the prior booking, so a parent who
+double-submitted saw an error next to a booking that had succeeded. Consumption is now
+decided at the END of authorization — after recipient, invitation-state and
+org/opportunity/location binding — so replay is strictly **more** checked than a first
+use, and is served only where a route opts in.
+
+No schema change.
+
+## 4. Correction to the durable record
+
+An earlier revision of the Slice D artifact claimed `orchestrateTourCommsForBooking`
+had **zero production callers**. That was **wrong** — a grep artifact, because the real
+callers are named `orchestrateTourBookingConfirmed`, `…Rescheduled`, `…Canceled`,
+`…Completed`, `…NoShow`.
+
+Verified truth:
+
+- the orchestrator already has production callers in `tourBookingService.ts`
+  (lines 333, 515, 589, 642, 685, 728)
+- booking lifecycle communications were **already wired**, including on the create
+  path, where confirmation comms run only when the booking is not pending approval
+- Slice D **extended the same orchestrator** to invitation subjects via
+  `TourCommsSubject`
+- **no second communications runtime was created**
+
+## 5. Out of scope
 
 No-show follow-up, inbound SMS replies, calendar-provider sync, parent portal or
 login, second invitation state machine.
