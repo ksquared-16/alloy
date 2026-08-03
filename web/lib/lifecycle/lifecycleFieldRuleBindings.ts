@@ -29,7 +29,7 @@ export type LifecycleFieldRuleBinding = {
         | "allergies"
         | "medical_notes"
         | "special_instructions";
-    /** inquiry_child / OCM column when value_source is inquiry_child */
+    /** inquiry_child snapshot field when value_source is inquiry_child (OCM column or PI overlay). */
     ocm_field?:
         | "first_name"
         | "last_name"
@@ -37,7 +37,11 @@ export type LifecycleFieldRuleBinding = {
         | "program_category_id"
         | "program_room_cohort_key"
         | "schedule_type"
-        | "start_date";
+        | "start_date"
+        | "requested_days_per_week"
+        | "weekdays"
+        | "tuition_plan_id"
+        | "quote_accepted";
     /** opportunity.values or metadata key when value_source is opportunity* */
     opportunity_field?: string;
     metadata_key?: string;
@@ -189,6 +193,7 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         entity: "child",
         field_key: "requested_days_per_week",
         value_source: "inquiry_child",
+        ocm_field: "requested_days_per_week",
         form_capture_keys: ["requested_days_per_week", "Requested days per week", "Days per week"],
         runtime_enforced: true,
         form_coverage_supported: true,
@@ -198,6 +203,7 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         entity: "child",
         field_key: "weekdays",
         value_source: "inquiry_child",
+        ocm_field: "weekdays",
         form_capture_keys: ["weekdays", "Preferred days", "Preferred weekdays"],
         runtime_enforced: true,
         form_coverage_supported: true,
@@ -207,6 +213,7 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         entity: "child",
         field_key: "tuition_plan_id",
         value_source: "inquiry_child",
+        ocm_field: "tuition_plan_id",
         form_capture_keys: ["tuition_plan_id", "Tuition plan", "Tuition Plan"],
         runtime_enforced: true,
         form_coverage_supported: false,
@@ -216,6 +223,7 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         entity: "child",
         field_key: "quote_accepted",
         value_source: "inquiry_child",
+        ocm_field: "quote_accepted",
         form_capture_keys: ["quote_accepted", "Quote accepted"],
         runtime_enforced: true,
         form_coverage_supported: false,

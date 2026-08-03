@@ -13,6 +13,7 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { getOperationalPlacementForAgreement } from "@/lib/childcareOperational/childPlacementService";
 import { getOperationalScheduleAssignmentForAgreement } from "@/lib/childcareOperational/scheduleAssignmentService";
+import { parseRequestedDaysPerWeekInput } from "@/lib/enrollment/requestedDaysPerWeek";
 
 /** A daily time range persisted with the schedule draft. */
 export type DailyHoursRange = { arrive: string; depart: string };
@@ -29,6 +30,8 @@ export type ChildParticipationPatch = {
     notes?: string | null;
     /** Requested days/week when exact preferred weekdays are still unknown. */
     requested_days_per_week?: number | null;
+    tuition_plan_id?: string | null;
+    quote_accepted?: boolean | null;
     /** Schedule-draft extensions carried on the participation metadata (pre-materialization). */
     end_date?: string | null;
     weekdays?: number[] | null;
@@ -52,15 +55,24 @@ const PARTICIPATION_KEYS: (keyof ChildParticipationPatch)[] = [
     "start_date",
     "notes",
     "requested_days_per_week",
+    "tuition_plan_id",
+    "quote_accepted",
 ];
 
 /** Schedule-draft keys carried on participation metadata (pre-materialization only). */
 const DRAFT_META_KEYS: (keyof ChildParticipationPatch)[] = ["end_date", "weekdays", "scheduleTimes"];
 
-function cleanPatch(patch: ChildParticipationPatch): ChildParticipationPatch {
+function cleanPatch(patch: ChildParticipationPatch): ChildParticipationPatch | { error: string } {
     const out: ChildParticipationPatch = {};
     for (const k of [...PARTICIPATION_KEYS, ...DRAFT_META_KEYS]) {
-        if (k in patch) (out as Record<string, unknown>)[k] = patch[k] ?? null;
+        if (!(k in patch)) continue;
+        if (k === "requested_days_per_week") {
+            const parsed = parseRequestedDaysPerWeekInput(patch.requested_days_per_week);
+            if (!parsed.ok) return { error: parsed.error };
+            out.requested_days_per_week = parsed.value;
+            continue;
+        }
+        (out as Record<string, unknown>)[k] = patch[k] ?? null;
     }
     return out;
 }
@@ -77,7 +89,9 @@ export async function applyChildParticipationEdit(
         todayYmd?: string;
     },
 ): Promise<ChildParticipationEditResult> {
-    const patch = cleanPatch(args.patch);
+    const cleaned = cleanPatch(args.patch);
+    if ("error" in cleaned) return { ok: false, routed: "none", error: cleaned.error };
+    const patch = cleaned;
     if (!Object.keys(patch).length) return { ok: true, routed: "none", updated: [] };
     const nowIso = new Date().toISOString();
 

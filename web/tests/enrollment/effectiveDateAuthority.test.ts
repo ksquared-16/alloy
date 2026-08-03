@@ -119,6 +119,96 @@ describe("effectiveDateAuthority — Start Date from first committed assignment"
             }),
         ).toBe(false);
     });
+
+    it("canceled-before-effective: canceled committed rows never define Start Date", () => {
+        const resolved = resolveOperationalStartDate({
+            committedAssignments: [
+                {
+                    id: "canceled-early",
+                    start_date: "2026-08-01",
+                    status: "canceled",
+                    commitment_kind: "committed",
+                },
+                {
+                    id: "live",
+                    start_date: "2026-09-15",
+                    status: "active",
+                    commitment_kind: "committed",
+                },
+            ],
+        });
+        expect(resolved.startDate).toBe("2026-09-15");
+        expect(resolved.assignmentId).toBe("live");
+        expect(
+            assignmentQualifiesForStartDate({
+                id: "canceled-early",
+                start_date: "2026-08-01",
+                status: "canceled",
+                commitment_kind: "committed",
+            }),
+        ).toBe(false);
+    });
+
+    it("correction via excluded_from_start_date removes a row from Start Date authority", () => {
+        const resolved = resolveOperationalStartDate({
+            committedAssignments: [
+                {
+                    id: "wrong-first",
+                    start_date: "2026-08-01",
+                    status: "active",
+                    commitment_kind: "committed",
+                    excluded_from_start_date: true,
+                },
+                {
+                    id: "true-first",
+                    start_date: "2026-09-01",
+                    status: "active",
+                    commitment_kind: "committed",
+                },
+            ],
+        });
+        expect(resolved).toEqual({
+            startDate: "2026-09-01",
+            source: "committed_assignment",
+            assignmentId: "true-first",
+        });
+    });
+
+    it("multi-child isolation — resolver is per-child candidate list (two independent calls)", () => {
+        const childA = resolveOperationalStartDate({
+            committedAssignments: [
+                {
+                    id: "a1",
+                    start_date: "2026-09-01",
+                    status: "active",
+                    commitment_kind: "committed",
+                },
+            ],
+        });
+        const childB = resolveOperationalStartDate({
+            committedAssignments: [
+                {
+                    id: "b1",
+                    start_date: "2026-10-15",
+                    status: "active",
+                    commitment_kind: "committed",
+                },
+                {
+                    id: "b0",
+                    start_date: "2026-08-01",
+                    status: "canceled",
+                    commitment_kind: "committed",
+                },
+            ],
+        });
+        expect(childA.startDate).toBe("2026-09-01");
+        expect(childA.assignmentId).toBe("a1");
+        expect(childB.startDate).toBe("2026-10-15");
+        expect(childB.assignmentId).toBe("b1");
+        // Independent lists — Child A candidates never leak into Child B resolution.
+        expect(childA.assignmentId).not.toBe(childB.assignmentId);
+        expect(childA.startDate).not.toBe(childB.startDate);
+    });
 });
 
 describe("effectiveDateAuthority — Enrollment Date", () => {

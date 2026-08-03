@@ -5,7 +5,10 @@ import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-rea
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import AssignmentCardSections from "@/components/admin/focusPanel/cards/AssignmentCardSections";
+import AssignmentProposalControls from "@/components/admin/focusPanel/cards/AssignmentProposalControls";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { buildAssignmentCardModelForChild } from "@/lib/enrollment/buildAssignmentCardModelFromTruth";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import {
     focusPanelCardBackLabel,
@@ -447,14 +450,47 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             receded={receded}
         >
             {/*
-              TODO(enrollment-assignment-effective-dates): next slice should project
-              Family request / Proposed / Commercial estimate / Committed / Readiness gaps
-              via `buildAssignmentCardModel` (`web/lib/enrollment/buildAssignmentCardModel.ts`)
-              — UI-only section chrome; do not invent a new card runtime or alter reveal gates.
+              Assignments card sections — Family request / Proposed / Commercial /
+              Committed / Readiness gaps. Observes buildAssignmentCardModel; does not
+              invent a parallel card runtime or alter reveal gates.
             */}
-            <div data-scheduling-card="true">
+            <div data-scheduling-card="true" data-assignments-card="true">
                 {activeChild ? (
-                    <ScheduleWorkSurface
+                    <>
+                        <AssignmentCardSections
+                            model={buildAssignmentCardModelForChild({
+                                truth: context.truth as Record<string, unknown>,
+                                customerMemberId: activeChild.id,
+                                projection: (projById[activeChild.id] as never) ?? null,
+                                requiredRuleIds: Array.isArray(
+                                    (context.truth as Record<string, unknown>)
+                                        ._assignment_requirement_rule_ids,
+                                )
+                                    ? ((context.truth as Record<string, unknown>)
+                                          ._assignment_requirement_rule_ids as string[])
+                                    : [
+                                          "child:requested_days_per_week",
+                                          "child:start_date",
+                                          "child:desired_schedule",
+                                          "child:program_interest",
+                                      ],
+                            })}
+                            childId={activeChild.id}
+                            childName={activeChild.name}
+                            style={{ marginBottom: 12 }}
+                        />
+                        <AssignmentProposalControls
+                            customerMemberId={activeChild.id}
+                            opportunityId={opportunityId}
+                            participationMetadata={
+                                ((context.truth as Record<string, unknown>)
+                                    ._enrollment_participation_by_member as
+                                    | Record<string, Record<string, unknown>>
+                                    | undefined)?.[activeChild.id] ?? null
+                            }
+                            style={{ marginBottom: 12 }}
+                        />
+                        <ScheduleWorkSurface
                         child={activeChild}
                         opportunityId={opportunityId}
                         projection={projById[activeChild.id] ?? null}
@@ -467,6 +503,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                             coordination?.back?.();
                         }}
                     />
+                    </>
                 ) : children.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: T.muted }}>Link children to add assignments.</p>
                 ) : (
@@ -474,12 +511,19 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         {children.map((child) => {
                             const proj = projById[child.id];
                             const chrome = proj ? summaryStatus(proj) : { label: "…", color: T.muted };
+                            const assignmentModel = buildAssignmentCardModelForChild({
+                                truth: context.truth as Record<string, unknown>,
+                                customerMemberId: child.id,
+                                projection: (proj as never) ?? null,
+                            });
                             const detail =
-                                projectCompactScheduleForIdentity(proj as ChildScheduling | null | undefined, {
+                                assignmentModel.summaryLine
+                                || projectCompactScheduleForIdentity(proj as ChildScheduling | null | undefined, {
                                     emptyLabel: "No schedule yet",
-                                }).compactLine ?? "No schedule yet";
+                                }).compactLine
+                                || "No schedule yet";
                             return (
-                                <li key={child.id} data-scheduling-child={child.id}>
+                                <li key={child.id} data-scheduling-child={child.id} data-assignment-child-row={child.id}>
                                     <div style={{ ...rowBtnStyle, padding: 0, gap: 0 }}>
                                         <button
                                             type="button"
@@ -534,13 +578,23 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                                                 <span
                                                     style={{ fontSize: 11.5, color: T.slate, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                                                     data-scheduling-summary={child.id}
+                                                    data-assignment-summary={child.id}
                                                 >
                                                     {detail}
                                                 </span>
                                             </span>
-                                            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
-                                                <span data-scheduling-status={proj?.status} style={{ fontSize: 10.5, fontWeight: 700, color: chrome.color }}>{chrome.label}</span>
-                                                <span style={{ color: "#98a2b3" }}>›</span>
+                                            <span
+                                                style={{
+                                                    fontSize: 11,
+                                                    fontWeight: 650,
+                                                    color: chrome.color,
+                                                    whiteSpace: "nowrap",
+                                                    padding: "2px 8px",
+                                                    borderRadius: 999,
+                                                    background: "rgba(0,0,0,0.04)",
+                                                }}
+                                            >
+                                                {chrome.label}
                                             </span>
                                         </button>
                                     </div>

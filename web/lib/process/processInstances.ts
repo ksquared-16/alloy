@@ -64,6 +64,27 @@ export type EnrollmentParticipationMetadata = {
     weekdays?: number[] | null;
 };
 
+/**
+ * Focus Panel truth bag: customer_member_id → process_instances.metadata.
+ * Lets Assignments card / buildAssignmentCardModelFromTruth read requested_days and quotes
+ * without inventing a parallel fetch.
+ */
+export function buildEnrollmentParticipationByMemberMap(
+    instances: Array<{ subject_id: string; metadata?: Record<string, unknown> | null }>,
+): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const pi of instances) {
+        const subjectId = typeof pi.subject_id === "string" ? pi.subject_id.trim() : "";
+        if (!subjectId) continue;
+        const meta =
+            pi.metadata && typeof pi.metadata === "object" && !Array.isArray(pi.metadata)
+                ? { ...pi.metadata }
+                : {};
+        out[subjectId] = meta;
+    }
+    return out;
+}
+
 /** Build the insert row for an enrollment process instance (one per child per lead). */
 export function buildEnrollmentProcessInstanceInsert(args: {
     orgId: string;

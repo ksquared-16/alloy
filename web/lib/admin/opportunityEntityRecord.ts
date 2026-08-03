@@ -28,7 +28,7 @@ import {
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import { attachPersonChildRelationshipsToEntityRecord } from "@/lib/fields/personChildRelationship/attachPersonChildRelationshipsToEntityRecord";
-import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import { listEnrollmentInstancesForLead, buildEnrollmentParticipationByMemberMap } from "@/lib/process/processInstances";
 import { resolveDurableFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenDurableFactsOverlay";
 import { resolveProcessDraftFactsForChildren } from "@/lib/childcareOperational/inquiryChildrenProcessDraftFactsOverlay";
 import {
@@ -911,6 +911,7 @@ export async function attachOpportunityInquiryChildrenShell(
   );
 
   host._inquiry_children = inquiryChildrenOut;
+  host._enrollment_participation_by_member = buildEnrollmentParticipationByMemberMap(processInstances);
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
   attachOpportunityChildLifecycleSummary(host);
   await contactsP; // ensure the concurrent contact-links fetch has committed before returning
@@ -1277,11 +1278,13 @@ async function respondOpportunityRelationshipMemberOverlay(
   inquiryBlocks = await enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryBlocks);
   inquiryBlocks = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryBlocks);
   // Source of truth for participation state + process stage is process_instances (not OCM).
-  inquiryBlocks = await overlayProcessInstanceParticipation(
-    supabase,
+  const enrollmentInstances = await listEnrollmentInstancesForLead(supabase as never, {
     orgId,
     opportunityId,
+  });
+  inquiryBlocks = applyProcessInstanceParticipation(
     inquiryBlocks,
+    enrollmentInstances,
     ocmStatusLabelByKey,
   );
   // Source of truth for operational facts (program/room/schedule/start) is the durable model once
@@ -1294,6 +1297,8 @@ async function respondOpportunityRelationshipMemberOverlay(
     id: opportunityId,
     org_id: orgId,
     _inquiry_children: inquiryBlocks,
+    _enrollment_participation_by_member:
+      buildEnrollmentParticipationByMemberMap(enrollmentInstances),
     _member_person_graph_pending: false,
     hydrate_graph_timings_ms_overlay: hydrateGraphTimings,
     ocm_status_defs_overlay: {
