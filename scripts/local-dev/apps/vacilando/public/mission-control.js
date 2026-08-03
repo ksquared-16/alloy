@@ -355,6 +355,9 @@ We'll capture the context automatically.</p>
     if ((action.kind === "review_outcome" || action.kind === "review_deliverable") && action.missionId) {
       return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review deliverable")}</button>`;
     }
+    if (action.kind === "recheck_deliverable" && action.missionId && action.reviewId) {
+      return `<button class="btn" type="button" data-drev-recheck="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Have Director re-check")}</button>`;
+    }
     if (action.kind === "ask_director_deliverable" && action.missionId) {
       return `<button class="btn ghost" type="button" data-drev-ask="${esc(action.reviewId || "")}" data-mission="${esc(action.missionId)}">${esc(action.label || "Ask Director")}</button>`;
     }
@@ -704,7 +707,10 @@ We'll capture the context automatically.</p>
       }).join("");
       const actions = [];
       if (o.actions?.approve) {
-        actions.push(`<button class="btn" type="button" data-drev-approve="${esc(o.reviewId)}" data-mission="${esc(id)}">Certify ${esc(o.waveLabel || "deliverable")}</button>`);
+        actions.push(`<button class="btn" type="button" data-drev-approve="${esc(o.reviewId)}" data-mission="${esc(id)}" ${V2.state.kickoffBusy ? "disabled" : ""}>Certify ${esc(o.waveLabel || "deliverable")}</button>`);
+      }
+      if (o.actions?.recheck) {
+        actions.push(`<button class="btn" type="button" data-drev-recheck="${esc(o.reviewId)}" data-mission="${esc(id)}" ${V2.state.kickoffBusy ? "disabled" : ""}>Have Director re-check</button>`);
       }
       if (o.actions?.requestChanges) {
         actions.push(`<button class="btn ghost" type="button" data-drev-changes="${esc(o.reviewId)}" data-mission="${esc(id)}">Request changes</button>`);
@@ -717,24 +723,49 @@ We'll capture the context automatically.</p>
       const changed = (o.whatChanged || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
       const notChanged = (o.whatDidNotChange || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">—</li>";
       const recCardClass = ready ? "drev-rec ok" : "drev-rec blocked";
+      const wave = o.waveLabel || "this deliverable";
+      const stuck = Boolean(o.stuck) && !ready;
+      const step = ready ? 3 : (o.certificationState === "accepted" ? 4 : stuck ? 3 : 2);
+      const blockers = (o.blockersPlain || []).map((x) => `<li>${esc(x)}</li>`).join("");
+      const processStrip = `<article class="mc-card drev-process">
+          <p class="drev-process-kicker">How this works</p>
+          <h4 style="margin-top:0">Where you are in the process</h4>
+          <p class="drev-role">Think of this like signing off a manager’s report — not doing the work yourself.</p>
+          <ol class="drev-steps">
+            <li class="done"><span class="drev-step-n">1</span><div><b>A worker finished ${esc(wave)}</b><div class="muted">Someone did the assignment and attached proof.</div></div></li>
+            <li class="${step >= 2 ? "done" : ""}"><span class="drev-step-n">2</span><div><b>Director checked that proof</b><div class="muted">Director reviewed evidence and wrote a recommendation for you.</div></div></li>
+            <li class="${step === 3 ? "here" : step > 3 ? "done" : ""}"><span class="drev-step-n">3</span><div><b>${ready ? "You’re here — say yes or no" : stuck ? "You’re here — Director is stuck" : "Waiting on Director"}</b><div class="muted">${ready ? "Press Certify if you trust Director’s recommendation. Or request changes / ask a question." : stuck ? "Don’t guess. Press “Have Director re-check” first. Only request changes if you want a worker to redo something specific." : "You’ll get a decision when Director is ready."}</div></div></li>
+            <li class="${step >= 4 ? "done" : ""}"><span class="drev-step-n">4</span><div><b>Mission moves on</b><div class="muted">After you certify, this page should change — Director unlocks the next piece of work.</div></div></li>
+          </ol>
+        </article>`;
+      const stuckBanner = stuck ? `<article class="mc-card drev-stuck">
+          <h4 style="margin-top:0">What’s blocking you</h4>
+          <p>Director has not cleared this deliverable yet, so Certify is unavailable. That is a Director problem to resolve — not something you should reverse-engineer from technical jargon.</p>
+          ${blockers ? `<p class="drev-conf-sub">In plain English</p><ul>${blockers}</ul>` : ""}
+          <div class="mc-actions" style="margin-top:12px">${actions.join("")}</div>
+        </article>` : "";
       return `<section class="mc-sec mc-outcome mc-drev" id="mc-outcome">
         <h3>${esc(o.headline)}</h3>
         <p class="muted">${esc(o.assignment?.title || "")}</p>
-        <p class="muted drev-role">You are approving Director’s certification — not reviewing implementation.</p>
+        ${ready ? `<p class="drev-you-are-here">Right now: Director is asking you to approve ${esc(wave)}’s certification so the mission can continue.</p>` : ""}
+        ${stuck ? `<p class="drev-you-are-here drev-stuck-here">Right now: you’re blocked on Director for ${esc(wave)}. Use “Have Director re-check” — don’t sit in Ask Director loops without context.</p>` : ""}
+
+        ${processStrip}
+        ${stuckBanner}
 
         ${execSentences ? `<article class="mc-card drev-exec">
-          <h4 style="margin-top:0">Executive Summary</h4>
+          <h4 style="margin-top:0">What got done (plain English)</h4>
           ${execSentences}
         </article>` : ""}
 
         <article class="mc-card ${recCardClass}">
-          <h4 style="margin-top:0">Director Recommendation</h4>
+          <h4 style="margin-top:0">Director’s recommendation</h4>
           <p class="drev-rec-headline">${esc(rec.headline || (ready ? "Approve" : "Director cannot yet certify"))}</p>
           ${confPct != null ? `<div class="drev-conf"><span class="drev-conf-label">Confidence</span><span class="drev-conf-pct">${esc(String(confPct))}%</span></div>` : ""}
-          <p class="drev-conf-sub">Summary</p>
+          <p class="drev-conf-sub">What Director is telling you</p>
           <p style="white-space:pre-wrap">${esc(rec.summary || rec.detail || "")}</p>
           ${discList ? `<ul>${discList}</ul>` : ""}
-          <div class="mc-actions" style="margin-top:12px">${actions.join("") || `<span class="muted">Certification disabled until Director can recommend it</span>`}</div>
+          ${stuck ? "" : `<div class="mc-actions" style="margin-top:12px">${actions.join("") || `<span class="muted">Certification disabled until Director can recommend it</span>`}</div>`}
         </article>
 
         <article class="mc-card drev-cert">
@@ -752,7 +783,7 @@ We'll capture the context automatically.</p>
           </details>
         </article>
 
-        <article class="mc-card">
+        ${ready ? `<article class="mc-card">
           <h4 style="margin-top:0">What I'm asking you to approve</h4>
           <p><b>You are approving:</b></p>
           <ul>${approving || "<li class=\"muted\">—</li>"}</ul>
@@ -765,7 +796,11 @@ We'll capture the context automatically.</p>
           <p class="muted">Immediately after approval, Director will:</p>
           <ul>${impact || "<li class=\"muted\">Continue the mission</li>"}</ul>
           <p class="muted">If you request changes: ${esc(o.rejectionConsequence || "")}</p>
-        </article>
+        </article>` : `<article class="mc-card">
+          <h4 style="margin-top:0">Why Certify is unavailable</h4>
+          <p>You’re not being asked to approve anything yet. Director still has open verification gaps${blockers ? ":" : "."}</p>
+          ${blockers ? `<ul>${blockers}</ul>` : ""}
+        </article>`}
 
         <h4>Remaining risk</h4>
         <ul>${risks}</ul>
@@ -795,7 +830,22 @@ We'll capture the context automatically.</p>
     }
 
     const drevSec = outcome?.kind === "deliverable_review" ? renderDeliverableReview(outcome) : null;
-    const outcomeSec = drevSec || (outcome ? `<section class="mc-sec mc-outcome" id="mc-outcome">
+    const certifiedSec = outcome?.kind === "deliverable_certified" ? `<section class="mc-sec mc-outcome mc-drev" id="mc-outcome">
+      <h3>${esc(outcome.headline)}</h3>
+      <p class="muted">${esc(outcome.assignmentTitle || "")}</p>
+      <article class="mc-card drev-rec ok">
+        <h4 style="margin-top:0">Done — your part for ${esc(outcome.waveLabel || "this deliverable")}</h4>
+        <p>${esc(outcome.summary || "")}</p>
+        <ol class="drev-steps" style="margin-top:12px">
+          <li class="done"><span class="drev-step-n">1</span><div><b>Worker finished</b></div></li>
+          <li class="done"><span class="drev-step-n">2</span><div><b>Director checked</b></div></li>
+          <li class="done"><span class="drev-step-n">3</span><div><b>You certified</b></div></li>
+          <li class="here"><span class="drev-step-n">4</span><div><b>Mission continues</b><div class="muted">Director unlocks the next assignment when ready.</div></div></li>
+        </ol>
+      </article>
+      ${missionChoices || ""}
+    </section>` : null;
+    const outcomeSec = drevSec || certifiedSec || (outcome ? `<section class="mc-sec mc-outcome" id="mc-outcome">
       <h3>${esc(outcome.headline)}</h3>
       <p>${esc(outcome.summary || "")}</p>
       ${missionChoices || ""}
@@ -1692,23 +1742,70 @@ We'll capture the context automatically.</p>
   }
 
   async function acceptDeliverable(missionId, reviewId) {
-    V2.state.kickoffBusy = "Recording approval";
+    if (V2.state.kickoffBusy) return;
+    V2.state.kickoffBusy = "Recording your certification";
     bump(); schedulePaint();
     try {
-      await post("/api/v2/deliverable-reviews/accept", {
+      const out = await post("/api/v2/deliverable-reviews/accept", {
         mission_id: missionId,
         review_id: reviewId,
-        response: "Operator approved deliverable from Mission Control",
+        response: "Operator certified deliverable from Mission Control",
       });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Certification failed"), { body: out });
+      }
       V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
       V2.state.kickoffBusy = null;
+      V2.state.lastCertFlash = {
+        missionId,
+        reviewId,
+        at: Date.now(),
+        label: "You certified this deliverable. Director is continuing the mission.",
+      };
       await refreshNeedsBadge();
-      toast("Deliverable approved.");
+      toast("Certified. Director will unlock the next work.", "ok");
       bump(); schedulePaint();
-      V2.fetchOverview(missionId);
+      await V2.fetchDashboard(missionId);
+      bump(); schedulePaint();
     } catch (e) {
       V2.state.kickoffBusy = null;
-      toast(String(e.message || e), "err");
+      toast(String(e?.body?.detail || e.message || e), "err");
+      bump(); schedulePaint();
+    }
+  }
+
+  async function recheckDeliverable(missionId, reviewId) {
+    if (V2.state.kickoffBusy) return;
+    V2.state.kickoffBusy = "Director is re-checking";
+    bump(); schedulePaint();
+    try {
+      const out = await post("/api/v2/deliverable-reviews/recheck", {
+        mission_id: missionId,
+        review_id: reviewId,
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Re-check failed"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      V2.state.kickoffBusy = null;
+      const state = out?.review?.certification_state;
+      toast(
+        state === "ready_for_review"
+          ? "Director re-checked — Certify is available now."
+          : "Director re-checked — still blocked. Read What’s blocking you.",
+        state === "ready_for_review" ? "ok" : "err",
+      );
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      await V2.fetchDashboard(missionId);
+      bump(); schedulePaint();
+    } catch (e) {
+      V2.state.kickoffBusy = null;
+      toast(String(e?.body?.detail || e.message || e), "err");
       bump(); schedulePaint();
     }
   }
@@ -2000,7 +2097,18 @@ We'll capture the context automatically.</p>
     }
     const drevApprove = ev.target.closest("[data-drev-approve]");
     if (drevApprove) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (drevApprove.disabled || V2.state.kickoffBusy) return;
       acceptDeliverable(drevApprove.dataset.mission, drevApprove.dataset.drevApprove);
+      return;
+    }
+    const drevRecheck = ev.target.closest("[data-drev-recheck]");
+    if (drevRecheck) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (drevRecheck.disabled || V2.state.kickoffBusy) return;
+      recheckDeliverable(drevRecheck.dataset.mission, drevRecheck.dataset.drevRecheck);
       return;
     }
     const drevChanges = ev.target.closest("[data-drev-changes]");

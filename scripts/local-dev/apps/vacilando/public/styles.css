@@ -852,7 +852,19 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .drev-rec.ok{border-color:#2f6b45;background:rgba(47,107,69,.06)}
 .drev-rec.blocked{border-color:#c2703f;background:rgba(194,112,63,.08)}
 .drev-rec-headline{font-size:22px;font-weight:700;margin:4px 0 8px;letter-spacing:-0.02em}
-.drev-role{margin:-4px 0 14px}
+.drev-role{margin:10px 0 0;font-size:14px}
+.drev-you-are-here{margin:8px 0 14px;padding:10px 12px;border-radius:10px;background:rgba(47,107,69,.10);border:1px solid rgba(47,107,69,.25);font-size:15px;font-weight:600}
+.drev-you-are-here.drev-stuck-here{background:rgba(194,112,63,.10);border-color:rgba(194,112,63,.35)}
+.drev-stuck{margin:12px 0 14px;border-color:#c2703f;background:rgba(194,112,63,.08)}
+.drev-process{margin:12px 0 14px}
+.drev-process-kicker{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#667)}
+.drev-steps{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:10px}
+.drev-steps li{display:flex;gap:12px;align-items:flex-start;opacity:.55}
+.drev-steps li.done,.drev-steps li.here{opacity:1}
+.drev-steps li.here{background:rgba(47,107,69,.08);border-radius:10px;padding:8px;margin:0 -8px}
+.drev-step-n{flex:0 0 1.6em;height:1.6em;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(0,0,0,.08)}
+.drev-steps li.done .drev-step-n{background:#2f6b45;color:#fff}
+.drev-steps li.here .drev-step-n{background:#1f4d32;color:#fff}
 .drev-exec{margin:12px 0}
 .drev-exec-line{margin:0 0 8px;font-size:15px;line-height:1.45}
 .drev-exec-line:last-child{margin-bottom:0}

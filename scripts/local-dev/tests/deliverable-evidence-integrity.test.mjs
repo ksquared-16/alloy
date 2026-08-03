@@ -11,6 +11,7 @@ import {
   createDeliverableReview,
   acceptDeliverableReview,
   deliverableReviewVm,
+  supersedeOpenReviewsForAssignment,
 } from "../lib/vacilando/deliverable-review.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,6 +46,21 @@ const aid = "asg_d203f547736c16";
 {
   const realFail = parseTestEvidenceSemantics("3 passed, 2 failed — suite FAILED");
   assert.equal(realFail.test_run_status, "failed");
+}
+
+// --- Semantics: red-before proof must not override green-after pass (W-1 root cause) ---
+{
+  const w1 = parseTestEvidenceSemantics(
+    "72 passed across tests/access/, tests/admin/permissionGrid, tests/admin/usersRolesAuth, "
+    + "tests/metrics/metricsResolveRoute, tests/metrics/metricsTrendsRoute. "
+    + "Red-before proof: 18 tests failed with the sources reverted and the tests kept (W-1 9, W-2 7, W-3 2). "
+    + "Typecheck: npm run typecheck via the broker, rc=0, whole workspace.",
+  );
+  assert.equal(w1.test_run_status, "passed", "red-before failure count must not mark suite failed");
+  assert.equal(w1.passed_count, 72);
+  assert.equal(w1.failed_count, null);
+  assert.ok(w1.raw_signals.includes("ignored_red_before_narrative"));
+  assert.ok(w1.assertion_behavior.some((a) => /red-before/i.test(a.detail)));
 }
 
 // --- Reconciliation discrepancies ---
@@ -193,23 +209,34 @@ assert.equal(workerClaimsTestsPassed({ summary: "15 passed, 0 failed" }), true);
   assert.ok(["evidence_not_reconciled", "not_approvable", "director_could_not_certify"].includes(denied.error));
 }
 
-// Restore clean W-4 ready review for the UI
+// W-4 shape still builds correctly (assignment may already be operator-accepted).
 const restored = createDeliverableReview(mid, aid, { force: true, autoRepair: false });
 assert.ok(restored.ok);
 assert.equal(restored.review.certification_state, "ready_for_review");
 assert.equal(restored.review.recommendation, "approve");
 
-const vmFinal = deliverableReviewVm(mid);
+const vmFinal = deliverableReviewVm(mid, restored.review);
 assert.equal(vmFinal.operatorMayApprove, true);
 assert.match(vmFinal.recommendation.headline, /Approve W-4/i);
 
+// Leave W-1 as the open operator briefing when it is ready (do not resurrect W-4).
+const w1 = "asg_d77353d7377647";
+supersedeOpenReviewsForAssignment(mid, aid, { reason: "test_teardown_keep_w1" });
+const w1Ready = createDeliverableReview(mid, w1, { force: true, autoRepair: false });
+assert.ok(w1Ready.ok);
+assert.equal(w1Ready.review.certification_state, "ready_for_review", w1Ready.review.recommendation_detail);
+
 console.log(JSON.stringify({
   ok: true,
-  rootCause: "naive /fail/i matched '0 failed' in passing suite text",
+  rootCause: "naive /fail/i matched '0 failed' in passing suite text; red-before narrative also fooled the parser",
   w4: {
     state: restored.review.certification_state,
     recommendation: restored.review.recommendation_headline,
     testCard: (restored.review.evidence_summary || []).find((e) => /enforcement/i.test(e.title)),
     reconciliation: restored.review.evidence_reconciliation.reconciliation_state,
+  },
+  w1Open: {
+    state: w1Ready.review.certification_state,
+    recommendation: w1Ready.review.recommendation_headline,
   },
 }, null, 2));

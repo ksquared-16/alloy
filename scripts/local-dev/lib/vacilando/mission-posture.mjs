@@ -234,16 +234,20 @@ export function deriveMissionPosture(missionId) {
           ? (openReview.recommendation_detail || `Director cannot yet certify ${wave}.`)
           : `Director verified ${wave}. You are approving Director’s certification — not reviewing implementation.`,
       next: repair
-        ? "Wait for evidence repair — or open the certification briefing"
+        ? "Have Director re-check, or request a worker repair"
         : cannot
-          ? "Request changes or ask Director"
+          ? "Have Director re-check — or request a specific fix"
           : "Read Director’s recommendation, then certify or request changes",
       needsYou: ready || cannot || repair,
-      primaryAction: action("review_deliverable", ready ? "Open certification" : "Open briefing", {
-        href: `missions/${missionId}`,
-        missionId,
-        reviewId: openReview.review_id,
-      }),
+      primaryAction: action(
+        ready ? "review_deliverable" : "recheck_deliverable",
+        ready ? "Open certification" : "Have Director re-check",
+        {
+          href: `missions/${missionId}`,
+          missionId,
+          reviewId: openReview.review_id,
+        },
+      ),
       secondaryAction: action("ask_director_deliverable", "Ask Director", {
         missionId,
         reviewId: openReview.review_id,

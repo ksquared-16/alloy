@@ -20,22 +20,44 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
   const raw = String(text || "");
   const signals = [];
 
-  const passedMatch = raw.match(/\b(\d+)\s+passed\b/i);
-  const failedMatch = raw.match(/\b(\d+)\s+failed\b/i);
+  // Strip red-before / intentional-regression narrative so "18 tests failed with
+  // sources reverted" cannot override a green-after "72 passed" suite result.
+  // Root cause (W-1): worker proof text includes both the passing run and the
+  // deliberate red-before count; naive parsing treated that as suite failure.
+  const redBefore = /\b(red[- ]before(?:\s+proof)?|with(?:\s+the)?\s+sources?\s+reverted|predecessor\s+restored|intentional\s+red)\b/i;
+  const withoutRedBefore = raw
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !redBefore.test(sentence))
+    .join(" ")
+    .trim();
+  const parseBody = withoutRedBefore || raw;
+  if (withoutRedBefore && withoutRedBefore !== raw) {
+    signals.push("ignored_red_before_narrative");
+  }
+
+  const passedMatch = parseBody.match(/\b(\d+)\s+passed\b/i);
+  const failedMatch = parseBody.match(/\b(\d+)\s+failed\b/i);
   const passedCount = passedMatch ? Number(passedMatch[1]) : null;
   const failedCount = failedMatch ? Number(failedMatch[1]) : null;
 
-  const hasOkTrue = /\bok\s*:\s*true\b/i.test(raw);
-  const hasExit0 = /\bexit\s*0\b/i.test(raw) || exitCode === 0;
-  const hasExitNonZero = /\bexit\s*[1-9]\d*\b/i.test(raw)
+  const hasOkTrue = /\bok\s*:\s*true\b/i.test(parseBody);
+  const hasExit0 = /\bexit\s*0\b/i.test(parseBody) || exitCode === 0;
+  const hasExitNonZero = /\bexit\s*[1-9]\d*\b/i.test(parseBody)
     || (typeof exitCode === "number" && exitCode !== 0);
 
   const explicitSuiteFail = (failedCount != null && failedCount > 0)
-    || /\btests?\s+failed\b/i.test(raw)
-    || /\bsuite\s+failed\b/i.test(raw)
-    || (/\bFAILED\b/.test(raw) && !/\b0\s+failed\b/i.test(raw));
+    || /\btests?\s+failed\b/i.test(parseBody)
+    || /\bsuite\s+failed\b/i.test(parseBody)
+    || (/\bFAILED\b/.test(parseBody) && !/\b0\s+failed\b/i.test(parseBody));
 
   const assertion_behavior = [];
+  if (signals.includes("ignored_red_before_narrative")) {
+    assertion_behavior.push({
+      kind: "expected_rejection",
+      status: "passed",
+      detail: "Red-before proof: intentional failures with sources reverted (not the final suite result)",
+    });
+  }
   if (/empty-allow-?list|red-state|vacuous/i.test(raw)) {
     assertion_behavior.push({
       kind: "expected_rejection",
@@ -70,7 +92,7 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
     test_run_status = "failed";
   } else if (hasOkTrue || hasExit0) {
     test_run_status = "passed";
-  } else if (/\bpassed\b/i.test(raw) && !explicitSuiteFail) {
+  } else if (/\bpassed\b/i.test(parseBody) && !explicitSuiteFail) {
     test_run_status = "passed";
   } else if (hasExitNonZero && assertion_behavior.some((a) => a.kind.startsWith("expected_"))) {
     test_run_status = "passed";
@@ -179,9 +201,13 @@ export function reconcileDeliverableEvidence({
 } = {}) {
   const assignmentId = assignment?.assignmentId || assignment?.assignment_id;
   const claimReport = report || assignment?.completionReport || {};
+  // Default to test only when the assignment looks code/test-shaped.
+  // Census/docs waves declare log/document explicitly — do not invent a test requirement.
   const required = assignment?.requiredEvidence?.length
     ? assignment.requiredEvidence
-    : ["test"];
+    : (/\.(test|spec)\.(ts|tsx|js|mjs)\b/i.test(JSON.stringify(assignment?.expectedDeliverables || []))
+      ? ["test"]
+      : ["document", "log"]);
   const discrepancies = [];
   const required_evidence = [];
 

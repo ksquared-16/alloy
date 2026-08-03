@@ -330,20 +330,42 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
     { claim: report.summary ? "Worker claimed scope was respected." : null },
   ));
 
-  // Tests — use structured semantics (never naive /fail/i)
+  // Tests — use structured semantics (never naive /fail/i).
+  // Census / docs assignments often require log+document only — missing tests
+  // must not hard-fail those (Wave 0 dead-end for the operator).
   const testEv = artifacts.filter((e) => e.type === "test" || /^Tests executed$/i.test(e.title || ""));
+  const requiredTypes = (assignment.requiredEvidence || [])
+    .map((x) => String(typeof x === "string" ? x : x?.type || x || "").toLowerCase())
+    .filter(Boolean);
+  const expectedBlob = JSON.stringify(expected || []);
+  const expectsTests = requiredTypes.includes("test")
+    || testEv.length > 0
+    || (Array.isArray(report.tests) && report.tests.length > 0)
+    || /\.(test|spec)\.(ts|tsx|js|mjs)\b/i.test(expectedBlob)
+    || /\b(vitest|npm test|tier-[ab]|red-before)\b/i.test(String(report.summary || ""));
   const testSemantics = testEv.map((e) =>
     parseTestEvidenceSemantics(e.description || e.title || "", { exitCode: e.exitCode }));
   const suiteFailed = testSemantics.some((s) => s.test_run_status === "failed");
   const suitePassed = testSemantics.some((s) => s.test_run_status === "passed") && !suiteFailed;
-  checks.push(checkItem(
-    "tests_passed",
-    "Required tests ran and passed",
-    testEv.length === 0 ? "fail" : (suiteFailed ? "fail" : suitePassed ? "pass" : "fail"),
-    testEv.length === 0
-      ? "No test evidence attached."
-      : (testSemantics[0]?.result_summary || (suitePassed ? "Test evidence reports a passing run." : "Test evidence does not show a clear pass.")),
-  ));
+  if (!expectsTests && testEv.length === 0) {
+    checks.push(checkItem(
+      "tests_passed",
+      "Required tests ran and passed",
+      "pass",
+      requiredTypes.length
+        ? `Automated tests were not required (required evidence: ${requiredTypes.join(", ")}).`
+        : "Automated tests were not required for this assignment.",
+    ));
+  } else {
+    checks.push(checkItem(
+      "tests_passed",
+      "Required tests ran and passed",
+      testEv.length === 0 ? "fail" : (suiteFailed ? "fail" : suitePassed ? "pass" : "fail"),
+      testEv.length === 0
+        ? "No test evidence attached."
+        : (testSemantics[0]?.result_summary || (suitePassed ? "Test evidence reports a passing run." : "Test evidence does not show a clear pass.")),
+    ));
+  }
 
   // Evidence presence
   const meaningful = artifacts.filter((e) => !/^(log|notes|document)\s*[—-]/i.test(e.title || ""));
@@ -736,23 +758,92 @@ export function getReviewForAssignment(missionId, assignmentId, { includeSuperse
   return [...reviews].reverse().find((r) => r.assignment_id === assignmentId) || null;
 }
 
+const OPEN_REVIEW_STATES = [
+  "ready_for_review",
+  "director_verifying",
+  "cannot_verify",
+  "changes_requested",
+  "evidence_discrepancy",
+  "evidence_repair",
+];
+
+/**
+ * Mark every non-terminal review for an assignment as superseded.
+ * Prevents stale duplicate "ready" briefings from surviving force-recreates
+ * and making Certify look like a no-op.
+ */
+export function supersedeOpenReviewsForAssignment(missionId, assignmentId, {
+  exceptReviewId = null,
+  nowMs,
+  reason = "superseded",
+} = {}) {
+  const store = readStore(missionId);
+  let n = 0;
+  for (const r of store.reviews) {
+    if (r.assignment_id !== assignmentId) continue;
+    if (exceptReviewId && r.review_id === exceptReviewId) continue;
+    if (!OPEN_REVIEW_STATES.includes(r.certification_state)) continue;
+    r.certification_state = "superseded";
+    r.superseded_at = iso(nowMs);
+    r.supersede_reason = reason;
+    n += 1;
+  }
+  if (n) writeStore(store);
+  return { ok: true, superseded: n };
+}
+
 export function getOpenDeliverableReview(missionId) {
+  const all = listDeliverableReviews(missionId, { includeSuperseded: true });
+  // Once certified, that assignment stays closed — never resurface duplicate ready rows.
+  const acceptedAssignments = new Set(
+    all.filter((r) => r.certification_state === "accepted").map((r) => r.assignment_id),
+  );
   const open = listDeliverableReviews(missionId).filter((r) =>
-    ["ready_for_review", "director_verifying", "cannot_verify", "changes_requested",
-      "evidence_discrepancy", "evidence_repair"].includes(r.certification_state));
+    OPEN_REVIEW_STATES.includes(r.certification_state)
+    && !acceptedAssignments.has(r.assignment_id));
+  const waveNum = (r) => {
+    const text = String(r.wave_label || r.deliverable_title || "");
+    const m = text.match(/\bW-(\d+)\b/i) || text.match(/\bWave\s+(\d+)\b/i);
+    return m ? Number(m[1]) : null;
+  };
+  const byWaveThenNewest = [...open].sort((a, b) => {
+    const aw = waveNum(a);
+    const bw = waveNum(b);
+    if (aw != null && bw != null && aw !== bw) return aw - bw;
+    if (aw != null && bw == null) return -1;
+    if (aw == null && bw != null) return 1;
+    return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  });
   const byNewest = [...open].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
-  return byNewest.find((r) => r.certification_state === "ready_for_review")
-    || byNewest.find((r) => r.certification_state === "evidence_discrepancy")
+  // Prefer wave deliverables (W-0, W-1…) over mission-package noise, then
+  // actionable approvals over stale cannot_verify.
+  return byWaveThenNewest.find((r) => r.certification_state === "ready_for_review" && r.recommendation === "approve" && waveNum(r) != null)
+    || byNewest.find((r) => r.certification_state === "ready_for_review" && r.recommendation === "approve")
+    || byNewest.find((r) => r.certification_state === "ready_for_review")
+    || byWaveThenNewest.find((r) => r.certification_state === "evidence_discrepancy")
     || byNewest.find((r) => r.certification_state === "evidence_repair")
-    || byNewest.find((r) => r.certification_state === "cannot_verify")
+    || byWaveThenNewest.find((r) => r.certification_state === "cannot_verify")
     || byNewest.find((r) => r.certification_state === "director_verifying")
-    || byNewest[0]
+    || byWaveThenNewest[0]
     || null;
+}
+
+/** Most recently accepted review — used for the post-certify confirmation surface. */
+export function getLatestAcceptedDeliverableReview(missionId) {
+  const accepted = listDeliverableReviews(missionId, { includeSuperseded: true })
+    .filter((r) => r.certification_state === "accepted")
+    .sort((a, b) => String(b.accepted_at || b.created_at || "").localeCompare(String(a.accepted_at || a.created_at || "")));
+  return accepted[0] || null;
 }
 
 /**
  * Create (or refresh) a Director Deliverable Review after worker completion validation.
  */
+function hasAcceptedReviewForAssignment(missionId, assignmentId) {
+  return listDeliverableReviews(missionId, { includeSuperseded: true })
+    .some((r) => r.assignment_id === assignmentId && r.certification_state === "accepted");
+}
+
 export function createDeliverableReview(missionId, assignmentId, {
   actor = "director",
   nowMs,
@@ -765,20 +856,30 @@ export function createDeliverableReview(missionId, assignmentId, {
     return { ok: false, error: "worker_not_completed" };
   }
 
+  // Never auto-reopen a deliverable the operator already certified.
+  // Force is reserved for explicit test/repair recreate.
+  if (!force && hasAcceptedReviewForAssignment(missionId, assignmentId)) {
+    const accepted = listDeliverableReviews(missionId, { includeSuperseded: true })
+      .filter((r) => r.assignment_id === assignmentId && r.certification_state === "accepted")
+      .sort((a, b) => String(b.accepted_at || "").localeCompare(String(a.accepted_at || "")))[0];
+    return { ok: true, review: accepted, reused: true };
+  }
+
   const existing = getReviewForAssignment(missionId, assignmentId);
   if (existing && ["ready_for_review", "accepted", "director_verifying"].includes(existing.certification_state) && !force) {
     return { ok: true, review: existing, reused: true };
   }
 
-  const store = readStore(missionId);
-  if (existing && existing.certification_state !== "superseded") {
-    existing.certification_state = "superseded";
-    existing.superseded_at = iso(nowMs);
-  }
+  // Supersede ALL open duplicates for this assignment (not only the newest).
+  supersedeOpenReviewsForAssignment(missionId, assignmentId, {
+    nowMs,
+    reason: force ? "replaced_by_force_create" : "replaced_by_create",
+  });
 
   const verification = runDirectorVerification(missionId, assignmentId, { nowMs });
   if (!verification.ok) return verification;
 
+  const store = readStore(missionId);
   const review = buildReviewFields(assignment, verification, { nowMs });
   store.reviews.push(review);
   writeStore(store);
@@ -834,6 +935,8 @@ export function ensureDeliverableReviewsForMission(missionId, { nowMs } = {}) {
   const created = [];
   for (const a of listAssignments(missionId)) {
     if (a.status !== "complete" && !a.completionReport) continue;
+    // Certified deliverables must stay closed — recreating made Certify look like a no-op.
+    if (hasAcceptedReviewForAssignment(missionId, a.assignmentId)) continue;
     const existing = getReviewForAssignment(missionId, a.assignmentId);
     if (existing && existing.certification_state !== "superseded") continue;
     const out = createDeliverableReview(missionId, a.assignmentId, { nowMs, force: false });
@@ -843,8 +946,10 @@ export function ensureDeliverableReviewsForMission(missionId, { nowMs } = {}) {
 }
 
 function shortDeliverableName(title) {
-  const m = String(title || "").match(/\b(W-\d+)\b/i);
-  return m ? m[1] : (String(title || "deliverable").slice(0, 40));
+  const text = String(title || "");
+  const m = text.match(/\b(W-\d+)\b/i) || text.match(/\bWave\s+(\d+)\b/i);
+  if (!m) return text.slice(0, 40) || "deliverable";
+  return m[1].startsWith("W") || m[1].startsWith("w") ? m[1].toUpperCase().replace(/^WAVE\s+/, "W-") : `W-${m[1]}`;
 }
 
 function unlockDependents(missionId, completedId, { nowMs } = {}) {
@@ -976,6 +1081,15 @@ export function acceptDeliverableReview(missionId, reviewId, {
   review.acceptance_note = response || null;
   review.history = review.history || [];
   review.history.push({ at: iso(nowMs), actor, action: "accepted", note: response || null });
+  // Close sibling duplicates so the UI cannot immediately re-open an older "ready" briefing.
+  for (const r of store.reviews) {
+    if (r.assignment_id !== review.assignment_id) continue;
+    if (r.review_id === reviewId) continue;
+    if (!OPEN_REVIEW_STATES.includes(r.certification_state)) continue;
+    r.certification_state = "superseded";
+    r.superseded_at = iso(nowMs);
+    r.supersede_reason = "sibling_accepted";
+  }
   writeStore(store);
 
   unlockDependents(missionId, review.assignment_id, { nowMs });
@@ -1081,10 +1195,28 @@ export function askDirectorAboutDeliverable(missionId, reviewId, {
   const verbatim = String(message || "").trim();
   if (!verbatim) return { ok: false, error: "empty_message" };
 
+  const failedChecks = (review.director_verification?.checks || [])
+    .filter((c) => c.status === "fail")
+    .map((c) => `${c.label}: ${c.detail || c.status}`);
+  const blockers = (review.evidence_reconciliation?.blocking_discrepancies || [])
+    .map((d) => d.detail)
+    .filter(Boolean);
+  const contextLines = [
+    `Context for Director (auto-attached — do not ask the operator to restate this):`,
+    `Deliverable: ${review.deliverable_title}`,
+    `Review: ${review.review_id}`,
+    `Certification state: ${review.certification_state}`,
+    `Recommendation: ${review.recommendation}`,
+    failedChecks.length ? `Failed checks:\n- ${failedChecks.join("\n- ")}` : "Failed checks: none recorded",
+    blockers.length ? `Blocking discrepancies:\n- ${blockers.join("\n- ")}` : null,
+    `Operator question: ${verbatim}`,
+    `Respond with a concrete next step the operator can take (Certify, wait for re-check, or request a specific worker repair). Do not ask a vague clarifying question if this context is enough.`,
+  ].filter(Boolean);
+
   const out = submitOperatorDirectorMessage({
     missionId,
     kind: "ask",
-    message: `Re: Deliverable Review ${review.deliverable_title} (${review.review_id}): ${verbatim}`,
+    message: contextLines.join("\n"),
     actor,
     nowMs,
   });
@@ -1101,6 +1233,44 @@ export function askDirectorAboutDeliverable(missionId, reviewId, {
   });
 
   return { ok: out.ok !== false, review, directorMessage: out };
+}
+
+/**
+ * Operator asks Director to re-run verification on a stuck deliverable review.
+ * Replaces dead-end "Request changes / Ask Director" loops when evidence already exists.
+ */
+export function recheckDeliverableReview(missionId, reviewId, {
+  actor = "operator",
+  nowMs,
+} = {}) {
+  const prior = getDeliverableReview(missionId, reviewId);
+  if (!prior) return { ok: false, error: "review_not_found" };
+  const out = createDeliverableReview(missionId, prior.assignment_id, {
+    actor: "director",
+    nowMs,
+    force: true,
+    autoRepair: true,
+  });
+  if (!out.ok) return out;
+
+  appendTimelineEvent(missionId, {
+    type: "deliverable_verified",
+    headline: `Director re-checked ${shortDeliverableName(prior.deliverable_title)}`,
+    summary: out.review.certification_state === "ready_for_review"
+      ? "Director can now recommend certification."
+      : (out.review.recommendation_detail || "Director still cannot recommend certification."),
+    visibility: "summary",
+    assignmentId: prior.assignment_id,
+    actor,
+    detail: {
+      prior_review_id: reviewId,
+      review_id: out.review.review_id,
+      certification_state: out.review.certification_state,
+    },
+    nowMs,
+  });
+
+  return { ok: true, review: out.review, prior };
 }
 
 /** Operator-facing view model — executive certification briefing. */
@@ -1156,6 +1326,13 @@ export function deliverableReviewVm(missionId, review = null) {
     ? r.executive_summary.slice(0, 3)
     : (r.executive_summary ? [String(r.executive_summary)] : []);
 
+  const failedChecks = checks.filter((c) => c.status === "fail");
+  const blockersPlain = [
+    ...blocking.map((d) => d.detail).filter(Boolean),
+    ...failedChecks.map((c) => c.detail || c.label),
+  ].filter(Boolean).slice(0, 5);
+  const stuck = !ready && !verifying && (state === "cannot_verify" || inconsistent || state === "evidence_repair");
+
   return {
     kind: "deliverable_review",
     reviewId: r.review_id,
@@ -1165,6 +1342,8 @@ export function deliverableReviewVm(missionId, review = null) {
     waveLabel: wave,
     headline,
     operatorMayApprove: ready,
+    stuck,
+    blockersPlain,
     executiveSummary: {
       sentences: executiveSummary,
       text: executiveSummary.join(" "),
@@ -1231,6 +1410,7 @@ export function deliverableReviewVm(missionId, review = null) {
     rejectionConsequence: r.rejection_consequence,
     actions: {
       approve: ready,
+      recheck: stuck,
       requestChanges: ["ready_for_review", "cannot_verify", "evidence_discrepancy"].includes(state),
       askDirector: true,
     },

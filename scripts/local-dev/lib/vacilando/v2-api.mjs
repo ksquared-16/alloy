@@ -101,6 +101,7 @@ import {
   acceptDeliverableReview,
   requestDeliverableChanges,
   askDirectorAboutDeliverable,
+  recheckDeliverableReview,
   deliverableReviewVm,
 } from "./deliverable-review.mjs";
 import {
@@ -156,6 +157,14 @@ export async function handleV2Post(path, body) {
     const rid = v.review_id || v.reviewId;
     const out = askDirectorAboutDeliverable(mid, rid, {
       message: v.message || v.response,
+      actor: v.actor || "operator",
+    });
+    return { status: out.ok ? 200 : 400, body: out };
+  }
+  if (path === "/api/v2/deliverable-reviews/recheck") {
+    const mid = v.mission_id || v.missionId;
+    const rid = v.review_id || v.reviewId;
+    const out = recheckDeliverableReview(mid, rid, {
       actor: v.actor || "operator",
     });
     return { status: out.ok ? 200 : 400, body: out };

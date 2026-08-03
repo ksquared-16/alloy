@@ -1,17 +1,22 @@
 /**
  * Deliverable Review — Director certification briefing (W-4).
+ *
+ * Uses an explicit review object for shape assertions so the live mission
+ * can keep W-4 certified without the test re-opening a ready briefing.
  */
 import assert from "node:assert/strict";
 import {
   ensureDeliverableReviewsForMission,
   createDeliverableReview,
   getOpenDeliverableReview,
+  getLatestAcceptedDeliverableReview,
   deliverableReviewVm,
   acceptDeliverableReview,
   runDirectorVerification,
+  listDeliverableReviews,
+  supersedeOpenReviewsForAssignment,
 } from "../lib/vacilando/deliverable-review.mjs";
-import { deriveMissionPosture } from "../lib/vacilando/mission-posture.mjs";
-import { missionOutcomeVm, missionDashboardVm } from "../lib/vacilando/presentation/operator-views.mjs";
+import { missionOutcomeVm } from "../lib/vacilando/presentation/operator-views.mjs";
 
 const mid = "msn_2d054741a54698fa4c";
 const aid = "asg_d203f547736c16";
@@ -42,11 +47,9 @@ assert.ok(verification.ok);
 assert.ok(verification.checks.some((c) => c.id === "tests_passed"));
 assert.ok(verification.checks.every((c) => ["pass", "fail", "warn"].includes(c.status)));
 
-const open = getOpenDeliverableReview(mid);
-assert.ok(open);
-assert.equal(open.assignment_id, aid, "open review is W-4 (newest)");
-
-const vm = deliverableReviewVm(mid);
+// Shape of the operator briefing (pass the review explicitly — assignment may
+// already be accepted in the live store, which correctly hides it from getOpen).
+const vm = deliverableReviewVm(mid, created.review);
 assert.equal(vm.kind, "deliverable_review");
 assert.match(vm.headline, /Director has certified this deliverable|Director recommends certification/i);
 assert.doesNotMatch(vm.headline, /Ready for your approval/i);
@@ -65,39 +68,66 @@ assert.ok(vm.evidence.some((e) => /enforcement|baseline|build integration|commit
 assert.ok(vm.approvalMeaning);
 assert.equal(vm.actions.approve, true);
 
-const posture = deriveMissionPosture(mid);
-assert.equal(posture.id, "deliverable_review");
-assert.match(posture.label, /Director recommends certifying W-4/i);
-assert.doesNotMatch(posture.label, /Deliverable ready for approval/i);
-assert.doesNotMatch(posture.detail || "", /review before you certify/i);
-
-const outcome = missionOutcomeVm(mid);
-assert.equal(outcome.kind, "deliverable_review");
-assert.doesNotMatch(JSON.stringify(outcome), /Worker closed the assignment/i);
-assert.doesNotMatch(JSON.stringify(outcome.executiveSummary || {}), /\.mjs|\.ts|asg_/i);
-
-const dash = missionDashboardVm(mid);
-assert.match(dash.summary.deliverablesLabel, /Director recommends certifying W-4/i);
-assert.equal(dash.outcome?.kind, "deliverable_review");
-
-// Accept path (then restore a ready review for the live W-4 UI)
-const accepted = acceptDeliverableReview(mid, open.review_id, {
+const accepted = acceptDeliverableReview(mid, created.review.review_id, {
   response: "test accept",
 });
 assert.ok(accepted.ok, "accept");
 assert.equal(accepted.review.certification_state, "accepted");
 
-const restored = createDeliverableReview(mid, aid, { force: true, autoRepair: false });
-assert.ok(restored.ok);
-assert.equal(restored.review.certification_state, "ready_for_review");
+// Regression: Certify must not look like a no-op.
+// 1) sibling ready rows are superseded
+// 2) ensure must not recreate a ready briefing for an accepted assignment
+// 3) outcome shows confirmation, not another identical Certify screen
+supersedeOpenReviewsForAssignment(mid, aid, { reason: "test_cleanup" });
+const afterEnsure = ensureDeliverableReviewsForMission(mid);
+assert.equal(
+  afterEnsure.created.filter((r) => r.assignment_id === aid).length,
+  0,
+  "ensure must not recreate W-4 after accept",
+);
+assert.notEqual(
+  getOpenDeliverableReview(mid)?.assignment_id,
+  aid,
+  "accepted assignment must not stay open",
+);
+const latestAccepted = getLatestAcceptedDeliverableReview(mid);
+assert.equal(latestAccepted?.assignment_id, aid);
+
+// After W-4 accept, an earlier open briefing (e.g. W-1) may still need you —
+// that should win over a "You certified W-4" confirmation.
+const outcome = missionOutcomeVm(mid);
+const openAfter = getOpenDeliverableReview(mid);
+if (openAfter) {
+  assert.equal(outcome.kind, "deliverable_review", outcome.kind);
+  assert.notEqual(openAfter.assignment_id, aid);
+} else {
+  assert.equal(outcome.kind, "deliverable_certified", outcome.kind);
+  assert.match(outcome.headline, /You certified W-4/i);
+}
+
+// Force-create after accept may exist for repair tooling, but must not resurface in getOpen.
+const orphan = createDeliverableReview(mid, aid, { force: true, autoRepair: false });
+assert.ok(orphan.ok);
+assert.equal(orphan.review.certification_state, "ready_for_review");
+assert.notEqual(
+  getOpenDeliverableReview(mid)?.assignment_id,
+  aid,
+  "force-created ready after accept must not become the open operator briefing",
+);
+// Leave the store clean for the live UI.
+supersedeOpenReviewsForAssignment(mid, aid, { reason: "test_teardown" });
+ensureDeliverableReviewsForMission(mid);
+
+const readyLeft = listDeliverableReviews(mid)
+  .filter((r) => r.assignment_id === aid && r.certification_state === "ready_for_review");
+assert.equal(readyLeft.length, 0, "no leftover ready W-4 for live UI");
 
 console.log(JSON.stringify({
   ok: true,
-  reviewId: restored.review.review_id,
   headline: vm.headline,
   recommendation: vm.directorRecommendation,
   certificationConfidence: vm.certification.confidence,
   executiveSummary: vm.executiveSummary.sentences,
-  posture: posture.label,
+  afterAcceptOutcome: outcome.headline,
   checks: verification.checks.map((c) => `${c.id}:${c.status}`),
 }, null, 2));

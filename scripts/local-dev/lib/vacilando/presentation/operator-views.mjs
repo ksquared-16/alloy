@@ -53,6 +53,7 @@ import {
   ensureDeliverableReviewsForMission,
   deliverableReviewVm,
   getOpenDeliverableReview,
+  getLatestAcceptedDeliverableReview,
 } from "../deliverable-review.mjs";
 
 
@@ -291,14 +292,41 @@ function optionLabel(decision, optionId) {
 export function missionOutcomeVm(missionId) {
   const posture = deriveMissionPosture(missionId);
   ensureDeliverableReviewsForMission(missionId);
+  const open = getOpenDeliverableReview(missionId);
+  const accepted = getLatestAcceptedDeliverableReview(missionId);
   const reviewVm = deliverableReviewVm(missionId);
+
+  // Anything still open for the operator (approve / repair / cannot verify) wins
+  // over a prior "you certified" confirmation — otherwise the page contradicts itself.
   if (reviewVm) {
     return {
       ...reviewVm,
       postureId: posture.id,
-      // Mission-level choices only after the open deliverable is accepted
       choices: reviewVm.certificationState === "accepted" ? (posture.choices || []) : [],
-      missionChoices: !getOpenDeliverableReview(missionId) ? (posture.choices || []) : [],
+      missionChoices: !open ? (posture.choices || []) : [],
+    };
+  }
+
+  // Only when nothing is open: celebrate the latest certification.
+  if (accepted) {
+    const wave = accepted.wave_label
+      || (String(accepted.deliverable_title || "").match(/\b(W-\d+)\b/i)?.[1])
+      || "deliverable";
+    return {
+      kind: "deliverable_certified",
+      missionId,
+      postureId: posture.id,
+      waveLabel: wave,
+      headline: `You certified ${wave}`,
+      summary: "Director recorded your approval and will continue the mission. You do not need to re-review this deliverable.",
+      assignmentTitle: accepted.deliverable_title,
+      choices: posture.choices || [],
+      missionChoices: posture.choices || [],
+      actions: {
+        primary: posture.primaryAction,
+        secondary: posture.secondaryAction,
+        certify: posture.certifyAction || null,
+      },
     };
   }
   if (!["operator_review", "awaiting_completion", "completed", "deliverable_review"].includes(posture.id)) {
