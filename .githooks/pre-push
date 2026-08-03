@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Alloy pre-push guard.
+#
+# Tracked in the repo and reached via the machine's core.hooksPath=.githooks,
+# so every checkout and every managed worktree inherits it with no install step.
+#
+# Delegates to the durable toolkit copy when present (versioned, outside any
+# worktree), falling back to the in-repo copy so a fresh clone is protected
+# before the toolkit is installed.
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+for candidate in \
+  "$HOME/.local/share/alloy/toolkit/current/hooks/guard-push.sh" \
+  "${REPO_ROOT}/scripts/local-dev/hooks/guard-push.sh"; do
+  if [[ -x "$candidate" ]]; then
+    exec "$candidate" "$@"
+  fi
+done
+
+# No guard found. Fail OPEN with a warning rather than blocking legitimate work
+# on a checkout that has neither copy — the guard is a safety net, not a gate
+# that should strand someone mid-push.
+printf 'warning: alloy push guard not found; pushing unguarded\n' >&2
+exit 0
