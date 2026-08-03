@@ -93,10 +93,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         from: new Date(startAt.getTime() - 60_000),
         to: new Date(endAt.getTime() + 60_000),
     });
+    // `AvailableTourSlot` is camelCase (`startAt`, `ruleId`). An earlier
+    // structural annotation here read snake_case, which yields NaN and silently
+    // rejects EVERY booking — so this stays inferred against the real slot type
+    // rather than a hand-written guess at its shape.
     const stillAvailable = live.some(
-        (s: { start_at?: string | Date; rule_id?: string }) =>
-            new Date(String(s.start_at)).getTime() === startAt.getTime() &&
-            (!s.rule_id || String(s.rule_id) === ruleId)
+        (s) => new Date(s.startAt).getTime() === startAt.getTime() && (!s.ruleId || s.ruleId === ruleId)
     );
     if (!stillAvailable) {
         // Not a dead end: the surface sends the parent back to current options.
