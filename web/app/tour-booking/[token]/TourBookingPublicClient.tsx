@@ -18,6 +18,12 @@ import type { TourParentAction, TourParentView } from "@/lib/tours/public/tourPa
 import { formatParentTourTime } from "@/lib/tours/public/tourParentView";
 
 type ResolveJson = { ok?: boolean; view?: TourParentView };
+
+/**
+ * How many times to show at once. A full availability set runs to dozens of rows,
+ * which reads as work rather than an invitation. The parent can ask for more.
+ */
+const VISIBLE_SLOTS = 8;
 type SlotsJson = { ok?: boolean; slots?: AvailableTourSlot[] };
 
 /** One authored sentence per failure. The server's own wording never reaches here. */
@@ -33,6 +39,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     const [trouble, setTrouble] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [loaded, setLoaded] = useState(false);
+    const [showAll, setShowAll] = useState(false);
 
     const api = useCallback((suffix: string) => `/api/public/tour-booking/${encodeURIComponent(token)}${suffix}`, [token]);
 
@@ -204,7 +211,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
             {view.showsOptions ? (
                 slots.length ? (
                     <ul className="space-y-2">
-                        {slots.map((s) => {
+                        {(showAll ? slots : slots.slice(0, VISIBLE_SLOTS)).map((s) => {
                             const chosen = pick?.startAt === s.startAt && pick?.ruleId === s.ruleId;
                             return (
                                 <li key={`${s.startAt}-${s.ruleId}`}>
@@ -223,6 +230,17 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                 </li>
                             );
                         })}
+                        {!showAll && slots.length > VISIBLE_SLOTS ? (
+                            <li>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAll(true)}
+                                    className="w-full rounded-xl px-4 py-3 text-[15px] font-medium text-alloy-midnight/60"
+                                >
+                                    Show more times
+                                </button>
+                            </li>
+                        ) : null}
                     </ul>
                 ) : (
                     <p className="text-[15px] leading-relaxed text-alloy-midnight/70">
