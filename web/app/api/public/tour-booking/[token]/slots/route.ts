@@ -10,14 +10,20 @@ import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
  *
  * Live availability for the BOUND location. A viewing credential reads it, and
  * so does a reschedule credential — a parent choosing a replacement time needs
- * the same list. Both are viewing authority; neither can book here.
+ * the same list. None of these can book here.
+ *
+ * `select_tour_slot` is included for the same reason resolve accepts it: the
+ * invitation email's per-option links ARE selection tokens, so without this a
+ * parent who taps the primary call-to-action lands on a page that cannot show
+ * them any times. It discloses nothing new — the same offered times were already
+ * listed in the message they are holding.
  *
  * The location and org come from the authorized link, never from the query, so
  * a caller cannot point this at another location or organization.
  *
  * Loading slots does NOT consume the action: viewing is reusable until expiry.
  */
-const REQUIRED_ACTIONS = ["view_tour_slots", "reschedule_tour"] as const;
+const REQUIRED_ACTIONS = ["view_tour_slots", "reschedule_tour", "select_tour_slot"] as const;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
     const { token: raw } = await params;
