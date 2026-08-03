@@ -8,9 +8,12 @@
 > time and one of them is still open.
 
 **Closeout session, 2026-08-03** (branch `agent/claude/1-trust-runtime-v1-cert`,
-base `db212fe1c`): Gap 1 closed with a real finding; Gap 2 not run; Gap 3 partially
-closed with its two operator-surface conditions still unproven. Full narrative and
-follow-ups: [`docs/handoffs/trust-runtime-v1-certification-handoff.md`](../../docs/handoffs/trust-runtime-v1-certification-handoff.md).
+base `db212fe1c`): **Gap 1 closed** with a real finding; **Gap 2
+infrastructure-blocked**, measured and bisected; **Gap 3 partially closed** — its two
+operator-surface conditions are unsatisfiable until the consumer is ported onto the
+Work Unit Focus Panel (follow-up B′), which is a product decision, not a test.
+Full narrative and follow-ups:
+[`docs/handoffs/trust-runtime-v1-certification-handoff.md`](../../docs/handoffs/trust-runtime-v1-certification-handoff.md).
 
 ## 1. How to re-run
 
@@ -43,7 +46,7 @@ migrations and is **not** a full-chain replay.
 | S12 | Structural boundary | PASS | Boundary suite green; **negative control**: a planted `lib/adminV2/actions → lib/trust` import fails it |
 | S13 | Reproducibility | PASS | Identical package modulo identity; replay produces a new package, predecessor byte-identical |
 | S14 | Contracts cannot carry reasoning implementation | PASS | 6 `@ts-expect-error` assertions compile clean; **negative control**: weakening the guard produces exactly 6 `TS2578 Unused '@ts-expect-error'` errors, so all six are load-bearing |
-| S15 | Consumer surface | **NOT RUN** | Seam observed in a real browser session; the operator control itself is unreachable in the cert tenant. See §4, Gap 3 |
+| S15 | Consumer surface | **NOT RUN — unsatisfiable as built** | Seam observed in a real browser session, but the operator control is not on the operator surface: `OperationalAttentionEnhanceDraft` is reachable only from the drawer body, which Presentation Runtime V2 never mounts on `/workspace/work-unit/*`. See §4, Gap 3 |
 | S16 | Non-regression | PASS (partial) | See §3 and §6. Attribution for the closeout branch is settled by construction; **Slice 1's own non-regression claim has NOT been re-measured against a current base** |
 
 Additional database assertions beyond the scenario list: refusals persisted as
