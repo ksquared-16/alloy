@@ -1,0 +1,279 @@
+/**
+ * POS-FP16 — Configuration Discovery: versioned inter-layer contracts.
+ *
+ * Configuration Discovery turns imported DOCUMENT STRUCTURE (what the page physically contains,
+ * owned by the native-layout detector) into a governed CONFIGURATION PROPOSAL (what business
+ * concepts the document expresses, how they map to Alloy's existing data model, and what the
+ * operator should approve). Forms are ONE consumer of the approved concepts — not the owner.
+ *
+ * The pipeline is a chain of EXPLICIT, VERSIONED contracts — never one growing untyped object:
+ *
+ *   Layer 2  DocumentStructureCandidate   (existing detector — physical structure)
+ *   Layer 3  SemanticDocumentModel        (semantic block roles: field / static / signature / …)
+ *   Layer 4  BusinessConceptCandidate[]   (operational meaning: child identity, guardian, upload req…)
+ *   Layer 5  ConfigurationProposal[]      (reuse canonical field / new field / relationship / requirement…)
+ *   Layer 6  form + requirement projection (existing draftFormToFormSchemaV1 / requirement model)
+ *
+ * STABLE IDENTITY DOCTRINE: every candidate/proposal id derives from SOURCE LINEAGE + structural
+ * identity (page · normalized-section · normalized-concept), never from a mutable label or an array
+ * index. This is what lets detector reruns preserve accepted operator decisions.
+ *
+ * REUSE, DON'T DUPLICATE: matching targets are the EXISTING platform vocabularies —
+ * `FormFieldSource` (canonical fields), `PersonChildOperationalRoleKey` (relationships), and the
+ * frozen `RequirementType` (requirements). This module owns no parallel storage.
+ */
+
+import type { FormFieldSource } from "@/lib/forms/schema";
+import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
+import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
+import type { PersonChildOperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
+
+export const DISCOVERY_CONTRACT_VERSION = "fp16.0";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Confidence — operator language first, numeric as supporting detail (never the message).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ConfidenceBand = "high" | "review" | "attention" | "unresolved";
+
+export interface Confidence {
+    band: ConfidenceBand;
+    /** Supporting numeric (0–100). Never the primary operator message. */
+    percent: number;
+    /** Deterministic reasons this confidence was assigned (registry alias, section context, …). */
+    signals: string[];
+}
+
+/** Operator-facing confidence copy — the primary message. */
+export function confidenceLabel(band: ConfidenceBand): string {
+    switch (band) {
+        case "high":
+            return "High confidence";
+        case "review":
+            return "Review recommended";
+        case "attention":
+            return "Needs attention";
+        case "unresolved":
+            return "Unresolved";
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Source lineage — every concept/proposal traces back to where it came from.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SourceRef {
+    /** 1-based source page. */
+    page: number;
+    /** The section title as detected (display). */
+    section_title: string;
+    /** Normalized section identity (lowercased, punctuation-stripped) — stable across reruns. */
+    section_key: string;
+    /** Detected field/question labels contributing to this concept (evidence, display). */
+    labels: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Layer 3 — Semantic document model. The detector already assigns disposition (field / static /
+// acknowledgement / signature / upload / output-copy); this contract types that semantic view
+// with explicit lineage, decoupled from the physical structure object.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SemanticBlockRole =
+    | "informational_field"
+    | "choice_field"
+    | "yes_no_question"
+    | "conditional_explanation"
+    | "static_content"
+    | "acknowledgement"
+    | "upload_instruction"
+    | "signature"
+    | "repeated_person_group"
+    | "generated_output"
+    | "instruction";
+
+export interface SemanticField {
+    /** Stable id: `${section_key}:${normalized_label}`. */
+    id: string;
+    label: string;
+    role: SemanticBlockRole;
+    /** Draft field type (text/date/number/select/boolean/signature/file_ref). */
+    data_type: string;
+    options?: string[];
+    /** Conditional-explanation fields point at the question they depend on. */
+    depends_on?: string;
+}
+
+export interface SemanticSection {
+    section_key: string;
+    title: string;
+    page: number;
+    disposition: SectionDisposition;
+    /** True when this section repeats a person identity (guardian/emergency/pickup). */
+    repeated_person: boolean;
+    /** True when this section is an output/duplicate copy of information collected earlier. */
+    output_copy: boolean;
+    static_text?: string | null;
+    fields: SemanticField[];
+}
+
+export interface SemanticDocumentModel {
+    contract_version: string;
+    sections: SemanticSection[];
+    warnings: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Layer 4 — Business concepts. The operational meaning the document expresses.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ConceptKind =
+    | "scalar_field" // one value bound to an entity (child name, DOB, email, address part)
+    | "choice_field" // single/multi choice (preferred hospital)
+    | "boolean_status" // Y/N question (health-care-plan status, immunized)
+    | "conditional_explanation" // free text conditional on a boolean
+    | "relationship_group" // repeated person (guardian / emergency contact / pickup)
+    | "upload_requirement" // a document must be provided (immunization records)
+    | "acknowledgement" // consent / legal affirmation
+    | "signature" // a signature responsibility
+    | "static_content" // instructional / legal prose to preserve
+    | "output_copy" // generated/output projection of earlier information
+    | "unresolved"; // could not be classified — operator decides
+
+/** Subject/grain a concept attaches to — aligned with the platform entity doctrine. */
+export type ConceptSubject = "child" | "person" | "household" | "enrollment" | "internal" | "unknown";
+
+export interface BusinessConceptCandidate {
+    contract_version: string;
+    /** Stable id from lineage: `${page}:${section_key}:${concept_slug}` — never an array index. */
+    id: string;
+    kind: ConceptKind;
+    /** Operator-facing concept name. */
+    label: string;
+    /**
+     * Normalized semantic concept key (e.g. "child.date_of_birth", "person.email",
+     * "relationship.guardian", "requirement.upload"). Null when unresolved.
+     */
+    concept_key: string | null;
+    subject: ConceptSubject;
+    /** How many of this concept the document collects (a group is `multiple`). */
+    cardinality: "single" | "multiple";
+    /** For relationship concepts: the child- or household-scoped operational role. */
+    relationship_role?: PersonChildOperationalRoleKey;
+    relationship_scope?: "child" | "household";
+    /** For requirement concepts: the frozen requirement type this maps to. */
+    requirement_type?: RequirementType;
+    /** Suggested draft data type for scalar/choice concepts. */
+    suggested_data_type?: string;
+    options?: string[];
+    /** Whether all values populating an output copy are already collected elsewhere. */
+    output_of?: string[]; // concept_keys the output copy reproduces
+    source: SourceRef;
+    confidence: Confidence;
+    /** One-sentence explanation, e.g. "Classified as a child-scoped relationship because …". */
+    explanation: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Layer 5 — Configuration proposals. For each concept, what the operator should approve.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ProposalDisposition =
+    | "reuse_canonical_field" // bind to a platform/system canonical field (FormFieldSource)
+    | "reuse_existing_field" // bind to an org custom field_definitions entry
+    | "create_proposed_field" // no match → propose a NEW durable configurable field (never auto-created)
+    | "form_only_response" // collected on the form but NOT durable record data — no field created
+    | "relationship_binding" // repeated person → operational-role relationship
+    | "upload_requirement"
+    | "acknowledgement"
+    | "signature_requirement"
+    | "static_content"
+    | "output_binding" // generated/output-copy projection of approved concepts
+    | "derived_value"
+    | "unresolved"; // manual classification required
+
+/** A proposed NEW configurable field — never persisted until the operator explicitly approves. */
+export interface ProposedFieldDefinition {
+    operator_label: string;
+    /** Suggested canonical key (snake_case), operator-editable. */
+    suggested_field_key: string;
+    /** Owning entity/grain (customer_member / person / customer / opportunity …). */
+    entity_type: string;
+    /** Canonical field type (text/email/phone/number/date/boolean/select/multiselect). */
+    data_type: string;
+    description: string;
+    option_set?: string[];
+    required_recommendation: boolean;
+    /** Sensitivity classification when applicable (e.g. "health" for medical concepts). */
+    sensitivity?: "standard" | "health" | "financial";
+    /** Documents that introduced this field (for the duplicate-across-imports warning). */
+    introduced_by: string[];
+    /** Similar existing field(s) — a "did you mean" duplicate warning. */
+    similar_to?: string[];
+}
+
+export type ProposalDecisionState = "proposed" | "accepted" | "changed" | "ignored";
+
+export interface ProposalAlternative {
+    disposition: ProposalDisposition;
+    /** For field alternatives: the canonical binding. */
+    field_source?: FormFieldSource;
+    label: string;
+    confidence: Confidence;
+}
+
+export interface ConfigurationProposal {
+    contract_version: string;
+    /** Stable id: same lineage slug as the candidate it serves. */
+    id: string;
+    candidate_id: string;
+    disposition: ProposalDisposition;
+    /** Matched existing canonical/org field binding (reuse_* dispositions). */
+    target_field_source?: FormFieldSource;
+    /** Matched relationship role (relationship_binding). */
+    target_relationship_role?: PersonChildOperationalRoleKey;
+    /** Matched requirement type (upload/acknowledgement/signature). */
+    target_requirement_type?: RequirementType;
+    /** Proposed new field (create_proposed_field only). */
+    proposed_field?: ProposedFieldDefinition;
+    confidence: Confidence;
+    alternatives: ProposalAlternative[];
+    /** Operator decision — persisted separately from detector output. */
+    decision_state: ProposalDecisionState;
+    /** Validation problems that would block application (e.g. new field needs a key). */
+    validation_issues: string[];
+    explanation: string;
+    source: SourceRef;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The persisted discovery result (what a rerun compares against for decision preservation).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DiscoveryCategory =
+    | "existing_fields"
+    | "new_fields"
+    | "form_responses"
+    | "relationships"
+    | "upload_requirements"
+    | "acknowledgements"
+    | "signatures"
+    | "static_content"
+    | "output_copies"
+    | "needs_review";
+
+export interface DiscoverySummaryCount {
+    category: DiscoveryCategory;
+    label: string;
+    count: number;
+}
+
+export interface ConfigurationDiscoveryResult {
+    contract_version: string;
+    generated_at: string;
+    source_document_id: string | null;
+    concepts: BusinessConceptCandidate[];
+    proposals: ConfigurationProposal[];
+    summary: DiscoverySummaryCount[];
+    warnings: string[];
+}
