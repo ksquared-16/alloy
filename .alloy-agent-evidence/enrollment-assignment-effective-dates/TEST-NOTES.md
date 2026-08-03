@@ -1,30 +1,42 @@
-# Enrollment Assignment & Effective Dates — evidence log
+# Enrollment Assignment & Effective Dates — Evidence Index
 
-## Staging base
+## Environment
 
-- SHA: `3195fae4a301e75cac43db934dcb163168e25674`
-- Verified: worktree clean at bootstrap, `0/0` vs `origin/staging`
+| Field | Value |
+|-------|-------|
+| Staging base (active) | `86c34f13ae5b8f10298a359c992efe9ab5fee701` |
+| Branch | `agent/cursor/3-enrollment-assignment-effective-dates` |
+| Slot / port | 3 / 3013 |
+| Seeded record | Kurzman Family `df771481-841f-4329-b7bb-c0a03d9fb621` |
 
-## Unit tests (this sprint)
+## Automated certification
 
-```bash
-cd web && npm run test -- \
-  tests/enrollment/effectiveDateAuthority.test.ts \
-  tests/enrollment/assignmentProposalReadiness.test.ts \
-  tests/adminV2/runtime/householdCardMakePrimary.test.ts
-```
+| Suite | Result |
+|-------|--------|
+| `tests/enrollment/*` + household Make primary | **53 passed** (post-rebase) |
+| `npm run typecheck` | **passed** |
+| Build fix `HouseholdCardVerify` stub | `c5ebbdaee` |
+| Staging-base `focusPanelMutation.saveInquiryChild` event-count | **FAIL (pre-existing)** |
 
-Result: **18 passed**
+## Browser certification — before configuration unblock
 
-## Baseline comparison
+| Artifact | Meaning |
+|----------|---------|
+| `browser/00-before-authenticated-work-unit.png` | Authenticated work-unit shell |
+| `browser/00-before-assignments-linked-omitted.png` | Kurzman Focus Panel without Assignments card |
+| `browser/focus-panel-dump.json` | Visible keys: current_work, children, household (± billing_preview); **no scheduling** |
+| `browser/created-lead.json` | Kurzman opportunity / child ids |
+| `browser/evidence-notes.json` | Machine-readable before-state |
 
-`tests/adminV2/runtime/focusPanelMutation.test.ts` → `saveInquiryChild` expects 1 record-patch event, observes 2.
+**Blocker (accepted):** Firefly published Enrollment Focus Panel Summary parks Assignments (`scheduling`) as **Linked** and omits it from visible layout areas. Published LayoutDoc correctly overrides code defaults.
 
-- Reproduced on **exact staging base** with clean tree (stash) → **pre-existing**, not introduced by this sprint.
-- Likely optimistic + confirm double-dispatch in `saveInquiryChild`.
+## Harness
 
-## Next evidence needed
+- Spec: `web/playwright/tests/enrollment-assignment-effective-dates-evidence.spec.ts`
+- Uses seeded Kurzman + subject deep-link; soft matrix recording for post-unblock certification.
 
-- Authenticated browser QA for Household Make primary + Assignment card sections
-- Typecheck when machine-wide tsc slot free
-- Outcome-execution path for Enrollment Date stamp (integration)
+## After configuration unblock (pending)
+
+- Draft/publish evidence
+- Runtime Assignments visible screenshots
+- Full 20-point operator matrix
