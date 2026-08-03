@@ -200,12 +200,42 @@ lease_has_active_work() {
 #   4. the decision is logged by the caller
 #   5-7. reclaiming NEVER stops the stack, drops volumes, or touches the containment hook —
 #        this function only removes a lease FILE.
+# A sprint outlives the shell that ran `alloy-stack use`. Anchoring a lease to $$ meant the
+# lease was already "holder-process-gone" by the time the next command ran — leases silently
+# evaporated seconds after being taken, so exclusivity held for exactly one invocation.
+# Anchor to something that lives as long as the session does.
+resolve_holder_pid() {
+  local p="${ALLOY_STACK_HOLDER_PID:-}"
+  if [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null; then printf '%s\n' "$p"; return 0; fi
+  local cur=$$ top=$$ next guard=0
+  while :; do
+    next="$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d ' ')"
+    [[ -n "$next" && "$next" != "0" && "$next" != "1" ]] || break
+    top="$next"; cur="$next"
+    guard=$((guard + 1)); [[ "$guard" -ge 24 ]] && break
+  done
+  printf '%s\n' "$top"
+}
+
+lease_age_seconds() {
+  local created; created="$(lease_field "$1" CREATED)"
+  [[ -n "$created" ]] || { printf '%s\n' -1; return 0; }
+  local then_s
+  then_s="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$created" +%s 2>/dev/null)" \
+    || then_s="$(date -u -d "$created" +%s 2>/dev/null)" || { printf '%s\n' -1; return 0; }
+  printf '%s\n' "$(( $(date -u +%s) - then_s ))"
+}
+
 lease_reclaimable() {
-  local f="$1" holder wt
+  local f="$1" holder wt age
   holder="$(lease_field "$f" HOLDER)"
   wt="$(lease_field "$f" WORKTREE)"
   # (2) fail safe on missing/corrupt metadata — never destructively reclaim what we cannot identify
   [[ -n "$holder" && -n "$wt" ]] || return 1
+  # (0) a young lease is never a crash. Reclaiming one steals the stack from a session that
+  #     is still setting up, which is how an "exclusive" window silently stopped being exclusive.
+  age="$(lease_age_seconds "$f")"
+  [[ "$age" -ge 0 && "$age" -lt "${LEASE_MIN_RECLAIM_AGE:-900}" ]] && return 1
   # (1) the holder process must be gone or replaced
   lease_holder_process_alive "$f" && return 1
   # (3) and nothing must still be running in that worktree
@@ -383,12 +413,13 @@ cmd_use() {
   # PID_START and PID_CMD are the anti-PID-reuse fingerprint: a recycled pid will not reproduce
   # the original process's start timestamp or command line, so "same pid, different process" is
   # detectable rather than being mistaken for a live holder.
+  local anchor; anchor="$(resolve_holder_pid)"
   cat >"$f" <<EOF
 HOLDER=${holder}
 WORKTREE=$(cd "${ALLOY_WORKTREE_PATH:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
-PID=$$
-PID_START=$(proc_start_of $$)
-PID_CMD=$(proc_cmd_of $$)
+PID=${anchor}
+PID_START=$(proc_start_of "$anchor")
+PID_CMD=$(proc_cmd_of "$anchor")
 STACK_PROJECT=${SANCTIONED_PROJECT}
 PROVIDER=${ALLOY_PROVIDER:-unknown}
 SLOT=${ALLOY_WORKTREE_SLOT:-unknown}

@@ -92,6 +92,33 @@ t "dead holder BUT live process in its worktree → preserved" preserve "$(mklea
 kill "$CHILD" 2>/dev/null; wait "$CHILD" 2>/dev/null
 rm -rf "$CHILDWT"
 
+# A lease is taken by a short-lived `alloy-stack use` invocation, so its launching shell is
+# routinely gone seconds later. Treating that as a crash made leases evaporate on creation.
+echo "young leases are never crashes"
+YOUNG="$LEASES/young.lease"
+{ printf 'HOLDER=young\nWORKTREE=%s\nPID=%s\n' "$WT" "$DEAD"
+  printf 'PID_START=Mon Jan  1 00:00:00 2020\nPID_CMD=sleep 60\n'
+  printf 'STACK_PROJECT=alloy-cert\nCREATED=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$YOUNG"
+t "dead PID but lease seconds old → preserved" preserve "$YOUNG"
+
+OLD="$LEASES/old.lease"
+{ printf 'HOLDER=old\nWORKTREE=%s\nPID=%s\n' "$WT" "$DEAD"
+  printf 'PID_START=Mon Jan  1 00:00:00 2020\nPID_CMD=sleep 60\n'
+  printf 'STACK_PROJECT=alloy-cert\nCREATED=2020-01-01T00:00:00Z\n'
+} > "$OLD"
+t "dead PID and lease long past grace → reclaimed" reclaim "$OLD"
+
+echo "the lease anchors to a process that outlives the command"
+ANCHOR="$(ALLOY_STACK_STATE_DIR="$STATE" bash -c '
+  ALLOY_STACK_TEST_SOURCE=1; source "'"$STACK"'" >/dev/null 2>&1 || true
+  resolve_holder_pid' 2>/dev/null)"
+if [[ -n "$ANCHOR" && "$ANCHOR" != "$$" ]] && kill -0 "$ANCHOR" 2>/dev/null; then
+  PASS=$((PASS+1)); printf '  ✓ anchor pid %s is a live ancestor, not the transient shell\n' "$ANCHOR"
+else
+  FAIL=$((FAIL+1)); printf '  ✗ anchor pid resolved to %s (shell was %s)\n' "${ANCHOR:-empty}" "$$"
+fi
+
 echo "safety: reclaim never touches infrastructure"
 before_c="$(docker ps -aq 2>/dev/null | wc -l | tr -d ' ')"
 before_v="$(docker volume ls -q 2>/dev/null | wc -l | tr -d ' ')"
