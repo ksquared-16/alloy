@@ -24,12 +24,14 @@ import { assignmentPromoteProposedAction } from "@/lib/adminV2/actions/definitio
 import { assignmentArchiveAction } from "@/lib/adminV2/actions/definitions/assignmentArchiveAction";
 import { assignmentDeleteProposedAction } from "@/lib/adminV2/actions/definitions/assignmentDeleteProposedAction";
 import { assignmentChangeRoomAction } from "@/lib/adminV2/actions/definitions/assignmentChangeRoomAction";
+import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/sendTourInvitationAction";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     updateStatusAction,
     createLeadAction,
     confirmTourAction,
+    sendTourInvitationAction,
     scheduleCreateAction,
     assignmentSetPrimaryAction,
     assignmentCreateAction,
