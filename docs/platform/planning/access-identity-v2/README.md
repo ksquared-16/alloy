@@ -13,7 +13,7 @@ the real Access & Identity V2 mission through Mission Brief after Runtime V1 clo
 | Document | Role |
 |---|---|
 | `authority-path-inventory.md` | Accepted authority path inventory |
-| `01-existing-state-inventory.md` | Existing-state inventory |
+| `01-existing-state-inventory.md` | Existing-state inventory (Part I) · **Security threat & enforcement matrix (Part II)** |
 | `02-canonical-access-identity-model.md` | Canonical access & identity model |
 | `03-implementation-qa-sequence.md` | Implementation / QA sequence |
 
