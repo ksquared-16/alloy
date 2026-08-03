@@ -52,11 +52,49 @@ describe("D4 — Settlement reserves geometry, never constructs", () => {
         expect(ctx).not.toMatch(/fetch|useOpportunityDrawerVmPayload|displayVm|record/);
     });
 
+    // The prohibited thing is a SECOND subject owner: the reverted bridge
+    // `useEffect(() => openDrawer(committedSubject))` stormed 4418 duplicate requests of 4421, and a
+    // polling loop is the same defect wearing a timer.
+    //
+    // This assertion used to add `not.toMatch(/setTimeout|setInterval|debounce/)` as a proxy for that.
+    // The proxy went stale: the module now schedules reveal-gated idle PREFETCH — `setTimeout(run, 500)`
+    // re-checks `isWorkUnitPrimaryRevealActive()` before speculative sibling warms, and the 250/400ms
+    // timers are `requestIdleCallback` fallbacks. Those timers are amplification PROTECTION; deleting
+    // them to satisfy the old text would reintroduce the storm the file was written to prevent. So the
+    // proxy is replaced with the actual prohibition, and a negative control proves it still bites.
+    const drawerSyncViolations = (src: string): string[] => {
+        const c = code(src);
+        const found: string[] = [];
+        // A drawer follower in any form — the module owns the committed subject, it never opens a drawer.
+        if (/\bopenDrawer\s*\(/.test(c)) found.push("openDrawer call — a second subject owner");
+        // Recurring interval-based synchronisation is a polling loop by construction.
+        if (/\bsetInterval\s*\(/.test(c)) found.push("setInterval — polling synchronisation");
+        return found;
+    };
+
     it("11. no drawer-synchronisation effect exists — two owners synchronising is a loop", () => {
-        const runtime = code(read("lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts"));
-        // The reverted bridge: useEffect(() => openDrawer(committedSubject)) stormed 4418 requests.
+        const src = read("lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts");
+        const runtime = code(src);
+        // The reverted bridge, still explicitly barred.
         expect(runtime).not.toMatch(/useEffect\([^)]*openDrawer/);
-        expect(runtime).not.toMatch(/setTimeout|setInterval|debounce/);
+        expect(drawerSyncViolations(src)).toEqual([]);
+    });
+
+    it("11b. NEGATIVE CONTROL — the check detects a reintroduced follower or polling loop", () => {
+        // A green run above must not be vacuous: plant each forbidden shape and prove it is caught.
+        expect(
+            drawerSyncViolations(`useEffect(() => { openDrawer(committedSubject); }, [committedSubject]);`),
+        ).toContain("openDrawer call — a second subject owner");
+        expect(drawerSyncViolations(`const h = setInterval(() => syncDrawer(), 1000);`)).toContain(
+            "setInterval — polling synchronisation",
+        );
+        // …and the legitimate reveal-gated idle prefetch this module actually uses is NOT flagged,
+        // so the repaired assertion cannot be satisfied by regressing amplification protection.
+        expect(
+            drawerSyncViolations(`const t = window.setTimeout(run, 250); requestIdleCallback(run, { timeout: 2000 });`),
+        ).toEqual([]);
+        // Comment-only mentions stay invisible — the file DISCUSSES the reverted bridge in prose.
+        expect(drawerSyncViolations(`// useEffect(() => openDrawer(committed)) produced 4418 requests`)).toEqual([]);
     });
 
     it("10. the canonical Focus Panel remains the only one — no second panel tree", () => {

@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildQueueRowDisplayPatchFromPersonSave } from "@/lib/admin/opportunityQueueRowDisplayPatch";
 import {
@@ -8,8 +6,6 @@ import {
     shouldRefetchWorkUnitQueueRowsForEvent,
     shouldRefreshQueueSummariesForEvent,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
-
-const webRoot = join(__dirname, "..", "..");
 
 describe("opportunityQueueRefreshEvent", () => {
     const personPatch = buildQueueRowDisplayPatchFromPersonSave({
@@ -131,13 +127,81 @@ describe("opportunityQueueRefreshEvent", () => {
         ).toBe(true);
     });
 
-    it("work-unit page patches rows before conditional cache delete", () => {
-        const page = readFileSync(
-            join(webRoot, "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"),
-            "utf8"
-        );
-        expect(page).toContain("shouldPatchWorkUnitQueueRowsForEvent");
-        expect(page).toContain("patchWorkUnitQueueItemsResult");
-        expect(page).toMatch(/if \(refreshRows\)[\s\S]{0,120}deleteQueueRowCacheKeysForWorkUnit/);
+    // ── PATCH PRECEDENCE ────────────────────────────────────────────────────────────────
+    // This replaced a source inspection of
+    // `app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx`, which asserted the
+    // page called `shouldPatchWorkUnitQueueRowsForEvent`, then `patchWorkUnitQueueItemsResult`, then
+    // `deleteQueueRowCacheKeysForWorkUnit` only under `if (refreshRows)`.
+    //
+    // That page was deleted wholesale in 2cdd4a398 ("PRV2: delete legacy presentation tree"), so the
+    // assertion read a file that no longer exists and failed on staging for reasons unrelated to any
+    // sprint. `patchWorkUnitQueueItemsResult` exists nowhere in the runtime any more, and
+    // `deleteQueueRowCacheKeysForWorkUnit` has no runtime call site at all.
+    //
+    // The INTENT survives, and canonically: a display-only patch handles the visible row in place, and
+    // therefore suppresses both the lane refetch and the summary refresh. That is the same ordering
+    // guarantee — patch wins over invalidation — expressed as behaviour instead of page source text.
+    // Asserting it here binds the invariant to the decision helpers that actually own it, rather than
+    // to whichever component happens to consume them.
+    describe("patch precedence — a display-only patch suppresses refetch and summary refresh", () => {
+        const patchEligible = {
+            detail: { id: "opp-1", action_key: "person_contact_save", queue_row_patch: personPatch },
+            visibleOpportunityIds: ["opp-1"],
+        };
+
+        it("a patch-eligible event is handled through the patch path", () => {
+            expect(shouldPatchWorkUnitQueueRowsForEvent(patchEligible)).toBe(true);
+        });
+
+        it("when patch handling applies, row refetch is false", () => {
+            expect(shouldRefetchWorkUnitQueueRowsForEvent(patchEligible)).toBe(false);
+        });
+
+        it("when patch handling applies, summary refresh is false", () => {
+            expect(shouldRefreshQueueSummariesForEvent(patchEligible)).toBe(false);
+        });
+
+        it("a non-patch event on a visible row still requests refetch", () => {
+            const nonPatch = {
+                detail: { id: "opp-1", action_key: "stage_work_outcome" },
+                visibleOpportunityIds: ["opp-1"],
+            };
+            expect(shouldPatchWorkUnitQueueRowsForEvent(nonPatch)).toBe(false);
+            expect(shouldRefetchWorkUnitQueueRowsForEvent(nonPatch)).toBe(true);
+        });
+
+        it("a patch-eligible action carrying NO patch fields still requests refetch", () => {
+            const emptyPatch = {
+                detail: { id: "opp-1", action_key: "person_contact_save", queue_row_patch: {} },
+                visibleOpportunityIds: ["opp-1"],
+            };
+            expect(shouldPatchWorkUnitQueueRowsForEvent(emptyPatch)).toBe(false);
+            expect(shouldRefetchWorkUnitQueueRowsForEvent(emptyPatch)).toBe(true);
+        });
+
+        // NEGATIVE CONTROL. The assertions above only prove the invariant holds today; they do not
+        // prove they would NOTICE it breaking. `violatesPatchPrecedence` is the predicate those
+        // assertions rest on, exercised here against a regressed combination so a green run cannot be
+        // vacuous: if patch-eligible events ever start requesting refetch or cache invalidation again,
+        // this is the shape that catches it.
+        const violatesPatchPrecedence = (v: {
+            patch: boolean;
+            refetch: boolean;
+            summaries: boolean;
+        }): boolean => v.patch && (v.refetch || v.summaries);
+
+        it("negative control — the predicate detects a reintroduced refetch on a patch-eligible event", () => {
+            expect(violatesPatchPrecedence({ patch: true, refetch: true, summaries: false })).toBe(true);
+            expect(violatesPatchPrecedence({ patch: true, refetch: false, summaries: true })).toBe(true);
+            expect(violatesPatchPrecedence({ patch: true, refetch: false, summaries: false })).toBe(false);
+            // …and the live helpers are on the non-violating side of that predicate.
+            expect(
+                violatesPatchPrecedence({
+                    patch: shouldPatchWorkUnitQueueRowsForEvent(patchEligible),
+                    refetch: shouldRefetchWorkUnitQueueRowsForEvent(patchEligible),
+                    summaries: shouldRefreshQueueSummariesForEvent(patchEligible),
+                })
+            ).toBe(false);
+        });
     });
 });
