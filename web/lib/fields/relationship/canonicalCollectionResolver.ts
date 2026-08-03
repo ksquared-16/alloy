@@ -175,9 +175,10 @@ async function resolveParentsGuardiansCollection(
 }
 
 /**
- * Canonical operational role key → the forms role filter the candidate adapter understands.
- * `authorized_pickup` has no forms-role filter yet, so its read-resolution is reported as pending
- * (application uses the relationship WRITE service, which supports the role directly).
+ * LEGACY forms-role filter map: roles whose read-resolution goes through the legacy candidate adapter
+ * (customer_persons / opportunity links) for byte-identical existing behavior. Roles NOT in this map
+ * (authorized_pickup, and any future configured role) resolve GENERICALLY from the canonical
+ * `person_child_relationship_roles` store — see resolveViaCanonicalPersonChildRoles.
  */
 const OPERATIONAL_TO_FORMS_ROLE: Record<string, "parents" | "emergency" | "billing"> = {
     parents: "parents",
@@ -186,6 +187,72 @@ const OPERATIONAL_TO_FORMS_ROLE: Record<string, "parents" | "emergency" | "billi
     emergency_contact: "emergency",
     billing_contact: "billing",
 };
+
+/**
+ * Read a relationship-role collection directly from the CANONICAL operational store
+ * (`person_child_relationships` + `person_child_relationship_roles`) by operational role key.
+ * Generic for ANY configured role (authorized_pickup, physician, …) — no per-role code, no legacy
+ * forms-role filter. Household-scoped (customer_id), person items, deterministic ordering.
+ */
+async function resolveViaCanonicalPersonChildRoles(
+    supabase: SupabaseClient,
+    context: CanonicalCollectionResolveContext,
+    provider: NonNullable<ReturnType<typeof findCanonicalCollectionProvider>>,
+    operationalRoleKey: string,
+): Promise<CanonicalCollectionResolution> {
+    const customerId = trim(context.customerId);
+    if (!customerId) return baseResolution("invalid_context", { reason: `${provider.label} requires household (customer_id) context.` });
+    if (!operationalRoleKey) return baseResolution("empty");
+
+    const { data: rels, error: relErr } = await supabase
+        .from("person_child_relationships")
+        .select("id, person_id, status")
+        .eq("org_id", context.orgId)
+        .eq("customer_id", customerId);
+    if (relErr) return baseResolution("unavailable", { reason: `Unable to load ${provider.label}.` });
+    const activeRels = (rels ?? []).filter((r) => (r as { status?: string }).status !== "inactive");
+    if (activeRels.length === 0) return baseResolution("empty");
+
+    const relIds = activeRels.map((r) => trim((r as { id?: string }).id)).filter((x): x is string => !!x);
+    const { data: roleRows, error: roleErr } = await supabase
+        .from("person_child_relationship_roles")
+        .select("relationship_id, role_key, is_active")
+        .eq("org_id", context.orgId)
+        .in("relationship_id", relIds)
+        .eq("role_key", operationalRoleKey)
+        .eq("is_active", true);
+    if (roleErr) return baseResolution("unavailable", { reason: `Unable to load ${provider.label} roles.` });
+
+    const matchedRelIds = new Set((roleRows ?? []).map((r) => trim((r as { relationship_id?: string }).relationship_id)).filter(Boolean));
+    const personIds = [
+        ...new Set(
+            activeRels
+                .filter((r) => matchedRelIds.has(trim((r as { id?: string }).id)))
+                .map((r) => trim((r as { person_id?: string }).person_id))
+                .filter((x): x is string => !!x),
+        ),
+    ];
+    if (personIds.length === 0) return baseResolution("empty");
+
+    const { data: personRows, error } = await supabase
+        .from("persons")
+        .select(PERSON_CANONICAL_IDENTITY_SELECT)
+        .eq("org_id", context.orgId)
+        .in("id", personIds);
+    if (error) return baseResolution("unavailable", { reason: `Unable to load ${provider.label}.` });
+
+    const items: CanonicalCollectionItem[] = [];
+    const seen = new Set<string>();
+    for (const row of personRows ?? []) {
+        const rec = row as Record<string, unknown>;
+        const id = trim(rec.id);
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        items.push({ item_id: id, item_entity_type: "person", record: rec });
+    }
+    if (items.length === 0) return baseResolution("empty");
+    return baseResolution("resolved", { items: sortByDisplayName(items, "display_name") });
+}
 
 /**
  * Generic relationship-role collection resolution (emergency contacts, and any future registered
@@ -203,9 +270,10 @@ async function resolveRelationshipRoleCollectionGeneric(
     }
     const formsRole = OPERATIONAL_TO_FORMS_ROLE[provider.relationshipRoleKey ?? ""];
     if (!formsRole) {
-        return baseResolution("unsupported", {
-            reason: `${provider.label} read-resolution is pending; application uses the canonical relationship write service (role "${provider.relationshipRoleKey}").`,
-        });
+        // No legacy forms-role filter (authorized_pickup and any future configured role) → resolve
+        // GENERICALLY from the canonical operational store `person_child_relationship_roles` by role
+        // key. The provider's relationshipRoleKey IS the operational role key for these definitions.
+        return resolveViaCanonicalPersonChildRoles(supabase, context, provider, provider.relationshipRoleKey ?? "");
     }
     const dataBag = await loadRelationshipResolutionDataBag(
         supabase,

@@ -13,7 +13,18 @@ export type PersonChildRelationshipEntityType = typeof PERSON_CHILD_RELATIONSHIP
 
 export type PersonChildRelationshipStatus = "active" | "inactive";
 
-/** Stable operational role keys — not kinship types. */
+/**
+ * PLATFORM-FIXED operational role keys — not kinship types, and NOT the whole vocabulary.
+ *
+ * These roles carry code meaning beyond configuration (billing/financial subsystems, communication
+ * recipients, the guardian write path), so they stay enumerated here. CONFIGURED roles are declared by
+ * relationship definitions and are not listed here — this module is deliberately low-level and must
+ * not import the definition registry (that would be an import cycle, since definitions type their
+ * role against this module).
+ *
+ * For the full runtime vocabulary (platform-fixed + configured) use `operationalRoleVocabulary()` in
+ * `personChildRelationshipOperationalRoles.ts`.
+ */
 export const PERSON_CHILD_OPERATIONAL_ROLE_KEYS = [
     "parent",
     "guardian",
@@ -26,8 +37,19 @@ export const PERSON_CHILD_OPERATIONAL_ROLE_KEYS = [
 
 export type PersonChildOperationalRoleKey = (typeof PERSON_CHILD_OPERATIONAL_ROLE_KEYS)[number];
 
+/**
+ * An operational role key that MAY be configured rather than platform-fixed.
+ *
+ * Open by design: a relationship definition can declare a role the platform has never heard of
+ * (physician, attorney, case worker). The `(string & {})` arm keeps editor autocomplete for the
+ * platform-fixed keys while accepting any configured key — this is what makes "adding Physician is one
+ * definition row" possible at the type level. Validate at runtime with `isOperationalRoleKey()`.
+ */
+export type OperationalRoleKey = PersonChildOperationalRoleKey | (string & {});
+
 const OPERATIONAL_ROLE_SET = new Set<string>(PERSON_CHILD_OPERATIONAL_ROLE_KEYS);
 
+/** Platform-fixed roles ONLY. For configured roles use `isOperationalRoleKey()`. */
 export function isPersonChildOperationalRoleKey(value: string): value is PersonChildOperationalRoleKey {
     return OPERATIONAL_ROLE_SET.has(value.trim().toLowerCase());
 }
@@ -87,7 +109,11 @@ export type PersonChildRelationshipContext = {
 
 export type PersonChildRelationshipResolveStatus =
     | "resolved"
+    /** Valid items were returned, but one or more rows were skipped — see `warnings`. */
+    | "resolved_with_warnings"
     | "empty"
+    /** A systemic failure (query/schema), NOT a single bad row. */
+    | "failed"
     | "inactive"
     | "missing_person"
     | "invalid_context"
@@ -95,8 +121,20 @@ export type PersonChildRelationshipResolveStatus =
     | "legacy_only"
     | "unsupported";
 
+/** Why one relationship row could not be normalized. Never silently swallowed. */
+export type PersonChildRelationshipWarning = {
+    relationship_id: string;
+    person_id: string | null;
+    reason: string;
+    /** Whether re-running could succeed once the underlying data is fixed. */
+    recoverable: boolean;
+    source: "person_child_relationships" | "customer_member_contacts";
+};
+
 export type PersonChildRelationshipCollectionResult = {
     status: PersonChildRelationshipResolveStatus;
     items: readonly PersonChildRelationshipInstance[];
     reason?: string;
+    /** Present when individual rows were skipped; callers can distinguish partial from empty. */
+    warnings?: readonly PersonChildRelationshipWarning[];
 };

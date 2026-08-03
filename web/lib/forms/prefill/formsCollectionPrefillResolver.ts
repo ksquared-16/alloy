@@ -18,6 +18,7 @@ import {
 } from "@/lib/fields/relationship/canonicalCollectionResolver";
 import { isResolvedCollection } from "@/lib/fields/relationship/canonicalCollectionResolution";
 import { resolveRelationshipLeafFromPersonRow } from "@/lib/fields/relationship/resolveRelationshipLeafValue";
+import { FORMS_LEGACY_ROLE_BY_COLLECTION_PROVIDER_REF } from "@/lib/fields/formsLegacyContactRoleCompatibility";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayloadGroupRow } from "@/lib/forms/validateSubmission";
 import { normalizeFormDateInput } from "@/lib/forms/prefill/resolveFormPrefillValues";
@@ -87,8 +88,11 @@ function nestedScalarPrefillValue(
     }
 
     if (iterationEntity === "person") {
+        // Role comes from the bound collection, never a hardcoded "parents": emergency contacts and
+        // authorized pickups are person-grain collections too, and would otherwise prefill through
+        // the guardian manifest. Unmapped collections resolve generically, which is correct.
         const raw = resolveRelationshipLeafFromPersonRow(itemRecord, {
-            role: "parents",
+            role: FORMS_LEGACY_ROLE_BY_COLLECTION_PROVIDER_REF[binding.collection_provider_ref],
             leafKey: source.field_key?.includes("email") ? "email" : source.field_key?.includes("phone") ? "phone" : "name",
             leafProviderRefKey: source.relationship?.leaf_provider_ref_key,
         });

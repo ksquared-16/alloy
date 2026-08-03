@@ -17,6 +17,10 @@ import {
     type OptionSetItemRow,
 } from "./personChildRelationshipValidation";
 import { resolvePersonChildRelationshipsForCustomerMember } from "./personChildRelationshipResolver";
+import {
+    projectLegacyCustomerMemberContactsToRelationshipInstances,
+    type LegacyCustomerMemberContactRow,
+} from "./personChildRelationshipLegacyReadAdapter";
 import { loadPersonChildRelationshipOptionSetItems } from "./personChildRelationshipRepository";
 
 export type CreatePersonChildRelationshipInput = {
@@ -51,11 +55,21 @@ async function loadPersonsMap(
 ): Promise<Map<string, Record<string, unknown>>> {
     const map = new Map<string, Record<string, unknown>>();
     if (personIds.length === 0) return map;
-    const { data } = await supabase
+    // `persons` has NO display_name column. Selecting it made PostgREST reject the whole query
+    // (42703), and because the error was discarded the map came back EMPTY — which made the
+    // resolver report missing_person and drop every relationship for every child in every org.
+    // Consumers derive display from full_name / first+last; there is no parallel naming rule here.
+    const { data, error } = await supabase
         .from("persons")
-        .select("id, display_name, full_name, first_name, last_name, email, phone")
+        .select("id, full_name, first_name, last_name, email, phone")
         .eq("org_id", orgId)
         .in("id", personIds);
+    if (error) {
+        // Fail loudly. A schema/select fault must never masquerade as "this child has no family".
+        throw new Error(
+            `[personChildRelationship] person hydration failed (table=persons op=select code=${error.code ?? "?"} requested=${personIds.length}): ${error.message}`,
+        );
+    }
     for (const row of data ?? []) {
         const rec = row as Record<string, unknown>;
         map.set(String(rec.id), rec);
@@ -99,6 +113,127 @@ export async function getPersonChildRelationshipById(
     return toInstance(supabase, orgId, rec, roles, persons);
 }
 
+
+/**
+ * Load the legacy child-scoped contact rows for these members and normalize them into canonical
+ * relationship instances.
+ *
+ * This is the READ half of the compatibility boundary: writers may persist to different
+ * destinations (guardian -> customer_member_contacts, emergency/pickup ->
+ * person_child_relationships), and this hides that from every consumer. Without it a caller would
+ * have to query both tables and branch on physical storage, which the architecture forbids.
+ *
+ * Persistence is unchanged — this adds no dual write and migrates nothing.
+ * @see docs/platform/core/data/relationship-model.md
+ */
+async function loadLegacyRelationshipInstances(args: {
+    supabase: SupabaseClient;
+    orgId: string;
+    customerMemberIds: readonly string[];
+    customerIdByMember: ReadonlyMap<string, string>;
+    personsById: ReadonlyMap<string, Record<string, unknown>>;
+}): Promise<PersonChildRelationshipInstance[]> {
+    const memberIds = args.customerMemberIds.filter((id) => id.trim());
+    if (memberIds.length === 0) return [];
+
+    // customer_member_contacts carries contact_id; the canonical person id comes through contacts.
+    const { data: cmcRows, error } = await args.supabase
+        .from("customer_member_contacts")
+        .select("id, org_id, customer_id, customer_member_id, contact_id, role_key, is_active")
+        .eq("org_id", args.orgId)
+        .in("customer_member_id", memberIds);
+    if (error || !cmcRows || cmcRows.length === 0) return [];
+
+    const contactIds = [...new Set((cmcRows as Array<{ contact_id?: string }>).map((r) => r.contact_id).filter(Boolean))] as string[];
+    if (contactIds.length === 0) return [];
+    const { data: contactRows } = await args.supabase
+        .from("contacts")
+        .select("id, person_id")
+        .eq("org_id", args.orgId)
+        .in("id", contactIds);
+    const personByContact = new Map<string, string>();
+    for (const c of (contactRows ?? []) as Array<{ id: string; person_id?: string | null }>) {
+        if (c.person_id) personByContact.set(c.id, c.person_id);
+    }
+
+    const rows: LegacyCustomerMemberContactRow[] = (cmcRows as Array<Record<string, unknown>>).map((r) => ({
+        id: String(r.id),
+        org_id: String(r.org_id),
+        customer_id: String(r.customer_id ?? ""),
+        customer_member_id: String(r.customer_member_id),
+        contact_id: String(r.contact_id ?? ""),
+        role_key: String(r.role_key ?? ""),
+        is_active: r.is_active !== false,
+        person_id: personByContact.get(String(r.contact_id ?? "")) ?? null,
+    }));
+
+    // Persons referenced only by the legacy side still need their identity hydrated.
+    const legacyPersonIds = [...new Set(rows.map((r) => r.person_id).filter(Boolean))] as string[];
+    const missing = legacyPersonIds.filter((id) => !args.personsById.has(id));
+    const hydrated = new Map(args.personsById);
+    if (missing.length > 0) {
+        const extra = await loadPersonsMap(args.supabase, args.orgId, missing);
+        for (const [k, v] of extra) hydrated.set(k, v);
+    }
+
+    const out: PersonChildRelationshipInstance[] = [];
+    for (const memberId of memberIds) {
+        const result = projectLegacyCustomerMemberContactsToRelationshipInstances({
+            orgId: args.orgId,
+            customerId: args.customerIdByMember.get(memberId) ?? "",
+            customerMemberId: memberId,
+            rows: rows.filter((r) => r.customer_member_id === memberId),
+            personsById: hydrated,
+        });
+        out.push(...result.items);
+    }
+    return out;
+}
+
+/**
+ * Merge canonical and legacy-normalized instances into ONE result per (member, person).
+ *
+ * The same semantic relationship appearing in both stores is deduplicated rather than listed twice,
+ * and its roles are unioned — so a Person who is a guardian (legacy) and an authorized pickup
+ * (canonical) is one normalized person carrying both roles, not two people.
+ */
+function mergeRelationshipInstances(
+    canonical: readonly PersonChildRelationshipInstance[],
+    legacy: readonly PersonChildRelationshipInstance[],
+): PersonChildRelationshipInstance[] {
+    const byKey = new Map<string, PersonChildRelationshipInstance>();
+    const keyFor = (i: PersonChildRelationshipInstance) => `${i.customer_member_id}::${i.person_id}`;
+
+    for (const item of canonical) byKey.set(keyFor(item), item);
+
+    for (const item of legacy) {
+        const key = keyFor(item);
+        const existing = byKey.get(key);
+        if (!existing) {
+            byKey.set(key, item);
+            continue;
+        }
+        const roles = [...new Set([...(existing.operational_roles ?? []), ...(item.operational_roles ?? [])])];
+        byKey.set(key, {
+            ...existing,
+            operational_roles: roles,
+            // Provenance for developer diagnostics only — never a product-level distinction.
+            metadata: {
+                ...(existing.metadata ?? {}),
+                merged_sources: ["person_child_relationships", "customer_member_contacts"],
+            },
+        });
+    }
+
+    // Deterministic: by member, then person, then id.
+    return [...byKey.values()].sort(
+        (a, b) =>
+            a.customer_member_id.localeCompare(b.customer_member_id) ||
+            String(a.person_id).localeCompare(String(b.person_id)) ||
+            String(a.id).localeCompare(String(b.id)),
+    );
+}
+
 export async function listPersonChildRelationships(args: {
     supabase: SupabaseClient;
     orgId: string;
@@ -128,7 +263,17 @@ export async function listPersonChildRelationships(args: {
             personsById: persons,
             requiredOperationalRole: args.requiredOperationalRole ?? null,
         });
-        return [...result.items];
+        const legacy = await loadLegacyRelationshipInstances({
+            supabase: args.supabase,
+            orgId: args.orgId,
+            customerMemberIds: [args.customerMemberId],
+            customerIdByMember: new Map([[args.customerMemberId, args.customerId ?? records[0]?.customer_id ?? ""]]),
+            personsById: persons,
+        });
+        const merged = mergeRelationshipInstances(result.items, legacy);
+        return args.requiredOperationalRole
+            ? merged.filter((i) => (i.operational_roles ?? []).includes(args.requiredOperationalRole!))
+            : merged;
     }
     const byMember = new Map<string, PersonChildRelationshipRecord[]>();
     for (const rec of records) {
@@ -149,7 +294,19 @@ export async function listPersonChildRelationships(args: {
         });
         all.push(...result.items);
     }
-    return all;
+    const customerIdByMember = new Map<string, string>();
+    for (const rec of records) customerIdByMember.set(rec.customer_member_id, rec.customer_id);
+    const legacy = await loadLegacyRelationshipInstances({
+        supabase: args.supabase,
+        orgId: args.orgId,
+        customerMemberIds: [...customerIdByMember.keys()],
+        customerIdByMember,
+        personsById: persons,
+    });
+    const merged = mergeRelationshipInstances(all, legacy);
+    return args.requiredOperationalRole
+        ? merged.filter((i) => (i.operational_roles ?? []).includes(args.requiredOperationalRole!))
+        : merged;
 }
 
 export async function createPersonChildRelationship(

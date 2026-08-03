@@ -23,7 +23,8 @@
 
 import type { StoredFormDraftPreview, DraftFormField } from "@/lib/pos/processingCase/formDraft/types";
 import { canonicalCollectionProviderForRole } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
-import { relationshipDefinitionForRole } from "@/lib/fields/collection/relationshipCollectionDefinitions";
+import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
+import { projectRelationshipCollection, applyProjectionToDraft } from "./projectRelationshipCollections";
 import type { ConfigurationDiscoveryResult, ConfigurationProposal, ProposalDecisionState } from "./contracts";
 import { proposalIdentity, semanticConceptIdentity } from "./reconciliation";
 
@@ -51,6 +52,10 @@ export interface AppliedProposalResult {
     relationship_apply?: { command_key: string; role_key: string; default_scope: string };
     /** For new fields: the prepared definition awaiting Field System creation. */
     prepared_field?: { entity_type: string; field_key: string; data_type: string };
+    /** For relationships: the collection group the concept was projected into. */
+    collection_group_id?: string;
+    /** For relationships: flat questions replaced by the group (retained on the draft as evidence). */
+    suppressed_field_ids?: string[];
 }
 
 export interface ApplicationResult {
@@ -195,13 +200,30 @@ export function applyDiscovery(input: ApplyInput): ApplyOutput {
                     record("failed", `No configured relationship definition/provider for role ${role}.`);
                     break;
                 }
+                // PROJECT the concept into a real collection-bound group. Recording the resolution is
+                // not enough: without this the generated form ships flat questions, carries no
+                // collection binding, and the canonical write path is unreachable from a form.
+                const projection = projectRelationshipCollection({
+                    draft,
+                    proposal: p,
+                    concept,
+                    proposalIdentity: identity,
+                });
+                if (!projection) {
+                    record("failed", `Could not project ${label} into a collection group.`);
+                    break;
+                }
+                // Idempotent: stable group id, so a retry replaces rather than duplicates.
+                applyProjectionToDraft(draft, projection);
                 ledger.add(identity);
                 record(
                     "applied",
-                    `Projected ${label} through the ${provider.label} collection provider (role ${role}); at submission it applies via "${def.apply_command_key}".`,
+                    `Projected ${label} into the ${provider.label} collection (role ${role}, ${projection.group.nested_fields.length} nested field(s), ${projection.suppressedFieldIds.length} source question(s) replaced); at submission it applies via "${def.apply_command_key}".`,
                     {
                         provider_ref: provider.refKey,
                         relationship_apply: { command_key: def.apply_command_key, role_key: def.operational_role_key, default_scope: def.scopes[0] ?? "this_child" },
+                        collection_group_id: projection.group.id,
+                        suppressed_field_ids: projection.suppressedFieldIds,
                     },
                 );
                 break;

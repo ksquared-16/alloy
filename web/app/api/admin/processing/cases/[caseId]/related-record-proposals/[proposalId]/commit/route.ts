@@ -5,10 +5,24 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import type { RelatedRecordProposalDecision } from "@/lib/intake/proposals/decisions";
 import { normalizeProposalDecision } from "@/lib/intake/proposals/decisions";
 import { executeExistingChildProposalCommit } from "@/lib/pos/processingCase/commit/executeExistingChildProposalCommit";
+import { executeRelationshipProposalCommit } from "@/lib/pos/processingCase/commit/executeRelationshipProposalCommit";
+import { loadRelatedRecordProposalForCase } from "@/lib/pos/processingCase/commit/loadRelatedRecordProposalForCase";
 
 export const dynamic = "force-dynamic";
 
-type Body = { decision?: RelatedRecordProposalDecision };
+type Body = {
+    decision?: RelatedRecordProposalDecision;
+    /** Allowed: an operator scope override, validated against the definition's supported scopes. */
+    scope?: string;
+    /** Optional assertions — compared against the server's answer and REJECTED on conflict. */
+    asserted_role_key?: string;
+    asserted_command_key?: string;
+    expected_proposal_status?: string;
+    /** Explicit child anchor — validated against the server-loaded household. */
+    anchor_customer_member_id?: string;
+    /** Explicit selection for selected-children scope — every id is validated. */
+    selected_customer_member_ids?: unknown[];
+};
 
 function parseDecision(body: Body, proposalId: string): RelatedRecordProposalDecision | NextResponse {
     const decision = body.decision;
@@ -47,6 +61,83 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!caseRow) return jsonError("Not found", 404);
 
         const metadata = ((caseRow as { metadata?: Record<string, unknown> | null }).metadata ?? {}) as Record<string, unknown>;
+
+        // ── execution split (server-derived; the DEFINITION decides) ─────────────────────────────
+        //   native_structural       → the existing native structural commit path, unchanged
+        //   configured_relationship → guarded relationship path: approved proposal → authorization
+        //                             gate → definition → command runtime → relationshipExecutionAdapter
+        // @see docs/platform/core/data/relationship-model.md
+        // Classification must never be able to break the native path: if the proposal cannot be
+        // loaded or classified, fall through to the existing native commit, which performs its own
+        // authorization. Only a POSITIVE `configured_relationship` classification diverts.
+        let proposalContext: Awaited<ReturnType<typeof loadRelatedRecordProposalForCase>> = null;
+        try {
+            proposalContext = await loadRelatedRecordProposalForCase({
+                supabase,
+                orgId: ctx.orgId,
+                caseId,
+                proposalId,
+            });
+        } catch {
+            proposalContext = null;
+        }
+        if (proposalContext?.proposal.execution_kind === "configured_relationship") {
+            // Load the household's children SERVER-SIDE. These are the only ids an anchor may
+            // reference — a participant can never name a child outside the active household.
+            const { data: childRows } = await supabase
+                .from("customer_members")
+                .select("id, customer_id, org_id")
+                .eq("org_id", ctx.orgId)
+                .eq("customer_id", proposalContext.expectedCustomerId ?? "")
+                .eq("relationship", "child")
+                .eq("is_active", true);
+            const householdChildren = (childRows ?? []).map(
+                (r: { id: string; customer_id: string; org_id: string }) => ({
+                    customer_member_id: r.id,
+                    customer_id: r.customer_id,
+                    org_id: r.org_id,
+                }),
+            );
+
+            const relOutcome = await executeRelationshipProposalCommit({
+                supabase,
+                orgId: ctx.orgId,
+                userId: ctx.userId ?? null,
+                actorRole: ctx.role,
+                accessScope: (ctx as { accessScope?: unknown }).accessScope,
+                caseId,
+                proposalId,
+                decision,
+                metadata,
+                // The proposal context carries the household, not a specific child member. With a
+                // null anchor the executor resolves scope across the household's children, which is
+                // correct for household-scoped commits; child-specific anchoring is supplied by the
+                // caller's scope choice. Resolving a precise anchor member is a live-journey concern.
+                householdChildren,
+                // The anchor is an explicit operator/runtime choice. It is validated against the
+                // household above; it is never inferred from "the only child" and never expanded.
+                anchorCustomerMemberId:
+                    typeof body.anchor_customer_member_id === "string" ? body.anchor_customer_member_id : null,
+                selectedCustomerMemberIds: Array.isArray(body.selected_customer_member_ids)
+                    ? body.selected_customer_member_ids.filter((x): x is string => typeof x === "string")
+                    : null,
+                // Only `scope` is honoured; role/command assertions are compared and rejected by the gate.
+                request: {
+                    proposalId,
+                    ...(typeof body.scope === "string" ? { scope: body.scope } : {}),
+                    ...(typeof body.asserted_role_key === "string" ? { assertedRoleKey: body.asserted_role_key } : {}),
+                    ...(typeof body.asserted_command_key === "string" ? { assertedCommandKey: body.asserted_command_key } : {}),
+                    ...(typeof body.expected_proposal_status === "string"
+                        ? { expectedProposalStatus: body.expected_proposal_status }
+                        : {}),
+                },
+            });
+            const payload = { caseId, proposalId, ...relOutcome.record };
+            return relOutcome.ok
+                ? jsonData(payload)
+                : NextResponse.json({ error: relOutcome.record.reason, ...payload }, { status: relOutcome.status });
+        }
+
         const outcome = await executeExistingChildProposalCommit({
 supabase,
             orgId: ctx.orgId,

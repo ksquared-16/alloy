@@ -4,7 +4,11 @@
 
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { groupFieldHasCollectionBinding } from "@/lib/fields/formsCollectionRepeatBinding";
-import { findCanonicalCollectionProvider } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
+import {
+    findCanonicalCollectionProvider,
+    classifyCollectionProvider,
+} from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
+import { relationshipDefinitionForRef } from "@/lib/fields/relationship/relationshipDefinitions";
 import {
     collectionBindingAuthoringEnabledForProvider,
 } from "@/lib/fields/formsRelationshipOperationalSupport";
@@ -19,6 +23,7 @@ import type {
     RelatedRecordCollectionProposal,
     RelatedRecordProposalOrigin,
     RelatedRecordProposalStatus,
+    RelatedRecordRelationshipIntent,
 } from "@/lib/intake/proposals/types";
 import {
     stableRelatedRecordProposalId,
@@ -136,6 +141,31 @@ function buildInstanceProposal(args: {
         instance_key: row.instance_key,
     });
 
+    // ── server-derived execution intent ────────────────────────────────────────────────────────
+    // The payload carries only provider_ref. Role, command, scope and write destination are resolved
+    // HERE from the canonical Relationship Definition, so nothing the client submits can assert them.
+    const executionKind = classifyCollectionProvider(row.provider_ref);
+    const relationshipDef = relationshipDefinitionForRef(row.provider_ref);
+    const relationshipIntent: RelatedRecordRelationshipIntent | undefined = relationshipDef
+        ? {
+              definition_key: relationshipDef.definition_key,
+              operational_role_key: relationshipDef.operational_role_key,
+              apply_command_key: relationshipDef.apply_command_key,
+              relationship_scope: relationshipDef.relationship_scope,
+              default_scope: relationshipDef.scopes[0] ?? "this_child",
+              supported_scopes: relationshipDef.scopes,
+              identity_action: row.origin === "existing" ? "link_existing_person" : "create_proposed_person",
+              ...(row.item_id ? { existing_person_id: row.item_id } : {}),
+              proposed_person_facts: nestedFields
+                  .filter((n) => n.field_source && Object.prototype.hasOwnProperty.call(row.values, n.id))
+                  .map((n) => ({
+                      entity_type: n.field_source!.entity_type,
+                      field_key: n.field_source!.field_key,
+                      value: row.values[n.id],
+                  })),
+          }
+        : undefined;
+
     return {
         proposal_id: proposalId,
         collection_provider_ref: row.provider_ref,
@@ -144,6 +174,8 @@ function buildInstanceProposal(args: {
         origin: mapFormOrigin(row.origin),
         existing_record_id: row.item_id ?? undefined,
         field_proposals: fieldProposals,
+        execution_kind: executionKind,
+        ...(relationshipIntent ? { relationship_intent: relationshipIntent } : {}),
         source_lineage: {
             source_kind: SOURCE_KIND,
             source_record_id: ctx.formSubmissionId,

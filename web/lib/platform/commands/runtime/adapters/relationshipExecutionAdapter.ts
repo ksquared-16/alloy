@@ -28,6 +28,7 @@ import type {
     RelationshipActionSourceSurface,
 } from "@/lib/admin/relationship/relationshipActionContract";
 import { relationshipActionRegistryEntry } from "@/lib/admin/relationship/relationshipActionRegistry";
+import { relationshipDefinitionCommandKeys } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { PlatformCapabilityDefinition } from "@/lib/platform/commands/capabilityTypes";
 import type {
     CommandExecutionSubject,
@@ -63,11 +64,15 @@ export type RelationshipExecutionOutput = {
     actionKey: RelationshipActionKey;
 };
 
-/** Fixed-role relationship commands that may create or link a person. */
+/**
+ * Fixed-role relationship commands that may create or link a person.
+ *
+ * DERIVED: every definition-backed command (its role is fixed by the definition, so a client-supplied
+ * role_key is ignored — the anti-spoof rule) plus `add_billing_contact`, which is fixed-role but has
+ * no definition row. A new relationship definition joins this set with no edit here.
+ */
 const FIXED_ROLE_CREATE_OR_LINK_KEYS = new Set<string>([
-    "add_parent_guardian",
-    "add_emergency_contact",
-    "add_authorized_pickup",
+    ...relationshipDefinitionCommandKeys(),
     "add_billing_contact",
 ]);
 
