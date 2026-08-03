@@ -174,7 +174,12 @@ export const DEFAULT_WORKSPACE_PROCESS_SURFACE_CONFIG: WorkspaceProcessSurfaceCo
     todaysWork: {
         visible: true,
         maxRows: 0,
-        sort: "attention",
+        // The operator ORDERED their Work Views. Respecting that is the default; attention-first is a
+        // choice they make, not one made for them. This was `"attention"`, and because the parser
+        // coerced an ABSENT sort to the same value, every surface published before this field existed
+        // was attention-sorted having never chosen it — which reads as the tile ignoring configured
+        // order rather than as a setting. An EXPLICIT `"attention"` is untouched by this change.
+        sort: "configured",
         showCounts: true,
     },
 };
@@ -269,8 +274,14 @@ export function normalizeWorkspaceProcessSurfaceConfig(value: unknown): Workspac
         };
     }
     const t = tw as Record<string, unknown>;
+    // EVERY recognized mode is preserved, including an explicit `"attention"` — a surface that chose
+    // attention-first keeps it. Only an absent or unrecognized value falls to the default, and that
+    // default is now the operator's configured order. Previously this branch could not tell "chose
+    // attention" from "said nothing", and answered both with attention.
     const sort: TodaysWorkSort =
-        t.sort === "count" || t.sort === "configured" ? t.sort : "attention";
+        t.sort === "count" || t.sort === "configured" || t.sort === "attention"
+            ? t.sort
+            : d.todaysWork.sort;
     const maxRows =
         typeof t.maxRows === "number" && Number.isFinite(t.maxRows) && t.maxRows >= 0
             ? Math.floor(t.maxRows)

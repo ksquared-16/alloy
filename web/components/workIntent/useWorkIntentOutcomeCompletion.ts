@@ -11,9 +11,12 @@ import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRunt
 import { fetchFreshOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/fetchFreshOpportunityDrawerViewModel";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { putDrawerViewModelCacheEntry } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { pinFocusRecordOutOfView } from "@/lib/presentation/runtime/focusRecordOutOfViewPin";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 
 export function useWorkIntentOutcomeCompletion(opportunityId: string) {
     const drawerCtx = useAdminDrawerOptional();
+    const { orgId } = useWorkspaceOrg();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +61,13 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
                     throw new Error(result.error ?? "Failed to complete work");
                 }
 
+                // Keep Focus Panel on this record after membership refresh (no auto-nav to destination view).
+                pinFocusRecordOutOfView({
+                    orgId,
+                    workUnitId: drawerCtx?.drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+                    recordId: opportunityId,
+                });
+
                 dispatchOpportunityDrawerOperationalTasksRefresh(opportunityId);
                 if (result.queue_refresh_opportunity_id) {
                     dispatchOpportunityQueueUpdated(result.queue_refresh_opportunity_id, "stage_work_outcome");
@@ -69,7 +79,7 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
                 setBusy(false);
             }
         },
-        [opportunityId, reloadOpportunityDisplayVm],
+        [opportunityId, reloadOpportunityDisplayVm, orgId, drawerCtx],
     );
 
     return { completeOutcome, busy, error, clearError: () => setError(null) };

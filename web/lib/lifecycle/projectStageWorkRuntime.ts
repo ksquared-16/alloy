@@ -12,6 +12,12 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import {
+    childParticipationIdentityFromWire,
+    namesAChild,
+    type ChildParticipationIdentity,
+} from "@/lib/lifecycle/childParticipationIdentity";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
@@ -156,11 +162,43 @@ export function taskMatchesStageWorkTemplate(
 function buildExecutionSubject(
     opportunityId: string,
     journeySegment: "family" | "child",
+    childIdentity: ChildParticipationIdentity | null,
 ): StageOutcomeExecutionSubject {
-    return {
+    const subject: StageOutcomeExecutionSubject = {
         journey_segment: journeySegment,
         opportunity_id: opportunityId,
     };
+    if (journeySegment !== "child" || !childIdentity) return subject;
+
+    if (childIdentity.subjectId) subject.customer_member_id = childIdentity.subjectId;
+    if (childIdentity.legacyOcmId) subject.opportunity_customer_member_id = childIdentity.legacyOcmId;
+    if (childIdentity.participationId) subject.process_instance_id = childIdentity.participationId;
+    return subject;
+}
+
+/**
+ * The child this projection is about — EXPLICIT OR ABSENT.
+ *
+ * This used to fall back to scraping: if the caller named no child, it walked the family's open tasks
+ * and took the first one carrying any child id. That is wrong in the ordinary case, not the exotic
+ * one. `attachStageWorkRuntimeToQueueRows` groups tasks BY OPPORTUNITY and passes no explicit
+ * identity, so on a family with siblings the scrape picked an arbitrary child and stamped it as the
+ * execution subject for every work item in the projection — including items matched to a task
+ * belonging to a DIFFERENT sibling. The operator then recorded an outcome against a child they never
+ * chose, and every downstream guard passed, because the guards ask "is a child named?" and one was.
+ *
+ * Which sibling a family-grain surface means is a question that surface cannot answer. The configured
+ * mechanism for answering it is the stage's `subject_resolution_strategy` (single_anchor /
+ * ask_operator / …), which the scrape bypassed entirely. So the honest projection carries no child,
+ * says so via `subject_unresolved`, and the outcome path refuses — which it already does.
+ */
+function explicitChildIdentityForProjection(explicit: {
+    customer_member_id?: string | null;
+    opportunity_customer_member_id?: string | null;
+    process_instance_id?: string | null;
+}): ChildParticipationIdentity | null {
+    const identity = childParticipationIdentityFromWire(explicit);
+    return namesAChild(identity) ? identity : null;
 }
 
 function outcomesForTemplate(
@@ -318,6 +356,10 @@ export type ProjectStageWorkRuntimeSyncInput = {
     stageLabel?: string | null;
     openRows?: TaskDbRow[];
     completedRows?: TaskDbRow[];
+    /** Child-grain Current Work — required for child journey outcomes; never inferred as family. */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 };
 
 /** Synchronous projection from preloaded tasks — used by drawer and batch queue enrichment. */
@@ -348,7 +390,18 @@ export function projectStageWorkRuntimeSync(
     const departmentId = trimOrNull(params.departmentId);
     if (!departmentId) return null;
 
-    const journeySegment = plan.journey_segment ?? "family";
+    // The stage's declared grain and the plan's journey segment are two vocabularies for the same
+    // thing, declared independently and — until now — never reconciled. A stage configured
+    // `grain: "child"` whose plan still said `family` projected family stage work, carrying a family
+    // subject; the tenant had changed the grain and not republished the plan.
+    const segment = resolveJourneySegment({
+        planSegment: plan.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    // A configuration that contradicts itself produces no projection. There is no correct surface to
+    // render for it, and picking one of the two declarations would be the silent default again.
+    if (!segment.ok) return null;
+    const journeySegment = segment.segment;
     const sortedTemplates = sortTemplatesForProjection(
         plan.work_templates,
         primaryIntent?.template_key ?? null,
@@ -356,6 +409,14 @@ export function projectStageWorkRuntimeSync(
 
     const openList = params.openRows ?? [];
     const completedList = params.completedRows ?? [];
+    const childIdentity =
+        journeySegment === "child"
+            ? explicitChildIdentityForProjection({
+                  customer_member_id: params.customerMemberId,
+                  opportunity_customer_member_id: params.opportunityCustomerMemberId,
+                  process_instance_id: params.processInstanceId,
+              })
+            : null;
 
     const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
         const openRow =
@@ -391,7 +452,13 @@ export function projectStageWorkRuntimeSync(
         execution: {
             department_id: departmentId,
             requires_outcome_picker: requiresOutcomePicker,
-            subject: buildExecutionSubject(params.opportunityId, journeySegment),
+            subject: buildExecutionSubject(params.opportunityId, journeySegment, childIdentity),
+            // A child-grain plan whose caller named no child. The subject is truthful — a family case
+            // and a grain — but it is not executable, and saying so beats letting a surface offer an
+            // action that can only fail at the guard.
+            ...(journeySegment === "child" && !childIdentity
+                ? { subject_unresolved: "child_identity_required" as const }
+                : {}),
         },
     };
 }
@@ -404,6 +471,9 @@ export async function projectStageWorkRuntime(params: {
     departmentMetadata: unknown;
     builderStageKey: string | null;
     stageLabel?: string | null;
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 }): Promise<StageWorkRuntimeProjection | null> {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
@@ -455,6 +525,9 @@ export async function projectStageWorkRuntime(params: {
         stageLabel: params.stageLabel,
         openRows: (openRows ?? []) as TaskDbRow[],
         completedRows: (completedRows ?? []) as TaskDbRow[],
+        customerMemberId: params.customerMemberId,
+        opportunityCustomerMemberId: params.opportunityCustomerMemberId,
+        processInstanceId: params.processInstanceId,
     });
 }
 

@@ -96,8 +96,8 @@ function recordingSupabase(metadata: Record<string, unknown>) {
     return { supabase, writes, reads };
 }
 
-describe("Phase 3 evidence — the configured trigger fires and matches nothing", () => {
-    it("the ONLY tour_booking rule in the shipped configuration is `canceled`", () => {
+describe("Phase 3 evidence — tour_booking scheduled is configured on Lead", () => {
+    it("Lead owns domain_tour_booking_scheduled_to_tour; tour_scheduled still owns canceled", () => {
         const found: Array<{ stageKey: string; ruleKey: string; signal: string }> = [];
         for (const { stageKey, plan } of defaultPlans()) {
             for (const rule of plan.outcome_rules ?? []) {
@@ -108,45 +108,32 @@ describe("Phase 3 evidence — the configured trigger fires and matches nothing"
             }
         }
 
-        expect(found).toEqual([
-            {
-                stageKey: "tour_scheduled",
-                ruleKey: "domain_tour_booking_canceled_attention",
-                signal: "canceled",
-            },
-        ]);
-        // Stated as its own assertion because this is the answer to the question:
-        expect(found.some((entry) => entry.signal === "scheduled")).toBe(false);
+        expect(found).toEqual(
+            expect.arrayContaining([
+                {
+                    stageKey: "lead",
+                    ruleKey: "domain_tour_booking_scheduled_to_tour",
+                    signal: "scheduled",
+                },
+                {
+                    stageKey: "tour_scheduled",
+                    ruleKey: "domain_tour_booking_canceled_attention",
+                    signal: "canceled",
+                },
+            ]),
+        );
+        expect(found.some((entry) => entry.signal === "scheduled")).toBe(true);
     });
 
-    it("no stage, in any plan, matches {tour_booking, scheduled}", () => {
-        for (const { plan } of defaultPlans()) {
-            expect(domainSignalRulesForSignal(plan, "tour_booking", "scheduled")).toEqual([]);
-        }
+    it("Lead plan matches {tour_booking, scheduled} → lead_to_tour", () => {
+        const lead = defaultStageOperatingPlanForEnrollmentStage("lead")!;
+        const matched = domainSignalRulesForSignal(lead, "tour_booking", "scheduled");
+        expect(matched).toHaveLength(1);
+        expect(matched[0]?.rule_key).toBe("domain_tour_booking_scheduled_to_tour");
+        expect(matched[0]?.targets.some((t) => t.kind === "move_to_stage")).toBe(true);
     });
 
-    it("EXECUTING the signal a confirmed booking emits applies zero rules and writes nothing", async () => {
-        const { supabase, writes, reads } = recordingSupabase(departmentMetadataFor(defaultPlans()));
-
-        const result = await applyConfiguredStageRulesForDomainSignal({
-            supabase: supabase as never,
-            orgId,
-            opportunityId,
-            domain: "tour_booking",
-            signal: "scheduled",
-        });
-
-        expect(result.applied_rule_keys).toEqual([]);
-        expect(result.failed_rule_keys).toEqual([]);
-        expect(result.errors).toEqual([]);
-        expect(result.status_updated).toBe(false);
-        // No rule matched, so the lead does not move — and nothing was written trying.
-        expect(writes).toEqual([]);
-        // The trigger DID reach the matcher: configuration was loaded, then the trace stopped.
-        expect(reads).toContain("departments");
-    });
-
-    it("the SAME machinery does advance on `canceled` — the gap is configuration, not code", async () => {
+    it("the SAME machinery still advances on `canceled`", async () => {
         const { supabase, writes } = recordingSupabase(departmentMetadataFor(defaultPlans()));
 
         const result = await applyConfiguredStageRulesForDomainSignal({

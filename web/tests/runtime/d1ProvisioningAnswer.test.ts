@@ -10,7 +10,7 @@
  * (500 bounded rows: 150 `lead` + 350 `closed`). Live composition timing (p50/p75/p95 vs the ratified
  * ≤400 ms p75) is measured separately against the running local environment.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
@@ -18,6 +18,7 @@ import {
     resolveLensRowGrain,
     PROVISIONING_ROW_PAGE_CAP,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { __clearConfigReadCacheForTests } from "@/lib/runtime/provisioning/configReadCache";
 import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import {
     lifecycleBuilderFromDepartmentMetadata,
@@ -84,6 +85,14 @@ const request = (over: Partial<Parameters<typeof composeWorkUnitProvisioningAnsw
 });
 
 describe("D1 — bounded Provisioning Answer", () => {
+    // The composer memoises CONFIG reads in a module-level, tenant-keyed cache. It is process-wide, so
+    // without this every test after the first inherited the FIRST test's configuration: a stub that
+    // deliberately supplies no Business Process was answered from the cached configured department, and
+    // the reads a test counted had already been paid by an earlier one. Four proofs — slug mapping, the
+    // touched-table set, the no-Business-Process refusal, and read-exactly-once — were passing or
+    // failing on cache residue rather than on the behaviour they name.
+    beforeEach(() => __clearConfigReadCacheForTests());
+
     it("1. New Leads returns exactly the Stage Membership cohort (bounded to one page)", async () => {
         const a = await composeWorkUnitProvisioningAnswer(request());
         expect(a.terminal).toBe("operational");
@@ -115,11 +124,23 @@ describe("D1 — bounded Provisioning Answer", () => {
     it("2. rows come from the Work View projection — QueueService/lane tables are never touched", async () => {
         const supabase = stubSupabase();
         await composeWorkUnitProvisioningAnswer(request({ supabase }));
-        // Records + Configuration only. `entity_layouts` is U-P7 published presentation
-        // configuration, resolved INSIDE the answer — that is the round-trip being removed, not one
-        // being added. What must never appear is a lane/QueueService read.
+        // Records + Configuration + the U-O2 enrichment of the bounded page. `entity_layouts` is U-P7
+        // published presentation configuration, resolved INSIDE the answer — that is the round-trip
+        // being removed, not one being added. What must never appear is a lane/QueueService read.
+        //
+        // `operational_tasks` and `opportunity_customer_members` are the family-grain page enrichment
+        // (child chips + task counts). They were always read; the assertion simply never saw them,
+        // because the config-read cache let this test's earlier siblings pay for the run. NOTE for
+        // Phase 6: that OCM read is the family path's own answer to "what children exist", while the
+        // child grain reads `process_instances` — two sources, one question, recorded in the duplicate
+        // inventory rather than changed here.
         expect([...new Set(supabase.touched)].sort()).toEqual([
-            "departments", "entity_layouts", "opportunities", "work_units",
+            "departments",
+            "entity_layouts",
+            "operational_tasks",
+            "opportunities",
+            "opportunity_customer_members",
+            "work_units",
         ]);
         for (const laneTable of ["queue_definitions", "queues", "queue_lanes"]) {
             expect(supabase.touched).not.toContain(laneTable);

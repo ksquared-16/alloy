@@ -12,6 +12,7 @@ import {
 } from "@/lib/lifecycle/workViewConditionFieldRegistry";
 import { workViewFilterFieldOptions } from "@/lib/lifecycle/workViewCanonicalOperands";
 import { canonicalWorkViewSortFieldKey } from "@/lib/lifecycle/workViewSortOperands";
+import { parseStageGrain, type StageGrain } from "@/lib/lifecycle/stageGrainV1";
 
 export const WORK_VIEWS_V1_METADATA_KEY = "work_views_v1" as const;
 
@@ -50,6 +51,20 @@ export type WorkViewConfigV1Stored = {
     sorts_v1?: WorkViewSortV1[];
     visible_in_runtime?: boolean;
     display_order?: number;
+    /**
+     * DECLARED Row Grain — what one row of this lens IS.
+     *
+     * Row Grain is normally derived from the stages a lens filters on, and for a stage-scoped lens
+     * that derivation is authoritative. But a lens can be deliberately STAGE-INDEPENDENT ("every
+     * child with an active enrollment participation, wherever they are"), and such a lens has no
+     * stage predicate to derive from: the deriver reads "no stage predicate" as "spans every active
+     * stage" and, in a process with both family and child stages, refuses it as grain-ambiguous.
+     * Declaring the grain is how a stage-independent lens says what it is.
+     *
+     * This does NOT relax G-1. A declaration that contradicts the lens's own stage predicate is a
+     * lie, not an override, and `resolveLensRowGrain` refuses it.
+     */
+    row_grain_v1?: StageGrain;
     queue_layout_id?: string;
     focus_panel_layout_id?: string;
     /** Compatibility-only — maps to synced queue lane for runtime preview until migration. */
@@ -165,6 +180,10 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (typeof raw.display_order === "number" && Number.isFinite(raw.display_order)) {
         stored.display_order = Math.max(1, Math.floor(raw.display_order));
     }
+    // Declared Row Grain — only a VALID grain persists. An unrecognized value is dropped rather than
+    // carried forward as a grain nothing can resolve.
+    const declaredGrain = parseStageGrain(raw.row_grain_v1);
+    if (declaredGrain) stored.row_grain_v1 = declaredGrain;
     if (typeof raw.queue_layout_id === "string" && raw.queue_layout_id.trim()) {
         stored.queue_layout_id = raw.queue_layout_id.trim();
     }

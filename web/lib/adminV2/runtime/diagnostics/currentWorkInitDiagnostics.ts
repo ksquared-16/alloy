@@ -34,7 +34,7 @@ export type CurrentWorkInitEvent = {
     cacheKey?: string | null;
     /** Where first-paint data came from: "seed" | "live" | "prefetch" | "cache". */
     preloadSource?: string;
-    cache?: "hit" | "miss" | "seed" | "live" | "deferred" | "event-reload";
+    cache?: "hit" | "miss" | "seed" | "live" | "deferred" | "event-reload" | "record-patch";
     note?: string;
 };
 

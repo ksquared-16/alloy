@@ -28,8 +28,15 @@ import {
 import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { opportunityDrawerViewModelHardCutoverFailureMessage } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
-import { putDrawerViewModelCacheEntry } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
-import { prefetchDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
+import {
+    invalidateDrawerViewModelCacheForEntity,
+    putDrawerViewModelCacheEntry,
+} from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { dispatchDrawerLayoutRuntimeBodyInvalidate } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
+import {
+    invalidateDrawerLayoutRuntimeBodyCacheForEntity,
+    prefetchDrawerLayoutRuntimeBody,
+} from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import {
     applyStageWorkSliceToVm,
@@ -46,7 +53,6 @@ import {
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import {
     ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH,
-    isTourSurfaceActionKey,
     mergeOpportunityDrawerDisplayRecordPatch,
     parseOpportunityDrawerRecordPatchDetail,
 } from "@/lib/admin/opportunityDrawerTargetedRefresh";
@@ -58,6 +64,7 @@ import {
     beginWorkUnitPrimaryReveal,
     endWorkUnitPrimaryReveal,
 } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
+import { planRecordWorkRefresh } from "@/lib/presentation/runtime/recordWorkRefreshPlan";
 
 export type RecordWorkRuntimeState = {
     displayVm: OpportunityDrawerViewModel | null;
@@ -66,7 +73,7 @@ export type RecordWorkRuntimeState = {
     /** True while the prior subject's resolved VM is held during a subject swap (no skeleton flash). */
     holdPriorPayload: boolean;
     patchDisplayRecord: (patchFn: (prev: Record<string, unknown>) => Record<string, unknown>) => void;
-    reloadDisplayVm: () => Promise<void>;
+    reloadDisplayVm: (opts?: { forceFresh?: boolean }) => Promise<void>;
 };
 
 function formatLoadError(result: Extract<LoadOpportunityDrawerViaViewModelResult, { ok: false }>): string {
@@ -81,9 +88,13 @@ function formatLoadError(result: Extract<LoadOpportunityDrawerViaViewModelResult
  * in-flight / prefetch resource exactly as the deferred effect did — extracted so the subject load
  * can merge it BEFORE the first paint, giving a single complete reveal instead of a VM-then-stage-work
  * resize (Kelly: cards must appear all at once, fully sized). Returns null on error (caller marks it).
+ *
+ * When `force` is set (work-lifecycle reload), bypass warm so post-mutation stage-work is authoritative.
+ * Cold path keeps seed reuse: a valid provisioning `focusPanelStageWork` seed wins and avoids `/stage-work`.
  */
-async function resolveStageWorkSliceForVm(
+export async function resolveStageWorkSliceForVm(
     vm: OpportunityDrawerViewModel,
+    opts?: { force?: boolean },
 ): Promise<OpportunityStageWorkSlice | null> {
     const params = {
         opportunityId: vm.entity.id,
@@ -95,21 +106,27 @@ async function resolveStageWorkSliceForVm(
     if (!opportunityStageWorkCacheKey(params)) {
         return { stage_work_runtime: null, published_stage_inputs: null, work_intent_runtime: null };
     }
-    const warm = getOpportunityStageWorkWarm(params);
-    if (warm) return warm;
+    if (!opts?.force) {
+        const warm = getOpportunityStageWorkWarm(params);
+        if (warm) return warm;
+    }
     try {
-        return await (getOpportunityStageWorkInflight(params) ?? prefetchOpportunityStageWork(params));
+        return await (
+            getOpportunityStageWorkInflight(params)
+            ?? prefetchOpportunityStageWork(params, { force: opts?.force === true })
+        );
     } catch {
         return null;
     }
 }
 
 /** Merge stage-work into a VM before apply so the applied VM is COMPLETE (never `pending`). */
-async function completeVmWithStageWork(
+export async function completeVmWithStageWork(
     vm: OpportunityDrawerViewModel,
+    opts?: { force?: boolean },
 ): Promise<OpportunityDrawerViewModel> {
-    if (vm.workspace.stage_work?.status !== "pending") return vm;
-    const slice = await resolveStageWorkSliceForVm(vm);
+    if (!opts?.force && vm.workspace.stage_work?.status !== "pending") return vm;
+    const slice = await resolveStageWorkSliceForVm(vm, opts);
     return slice ? applyStageWorkSliceToVm(vm, slice) : markStageWorkErrorOnVm(vm);
 }
 
@@ -142,6 +159,8 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
     // Stable per-mount id for the fetch owner (Phase A duplicate-init diagnostics).
     const runtimeIdRef = useRef<string>("");
     if (!runtimeIdRef.current) runtimeIdRef.current = nextCurrentWorkInstanceId("recordRuntime");
+    const displayVmRef = useRef<OpportunityDrawerViewModel | null>(null);
+    displayVmRef.current = displayVm;
 
     const validSubject = subjectId && subjectId !== "new" ? subjectId : null;
 
@@ -239,6 +258,7 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             // panel's FIRST and only paint is complete — all cards, final size, no "Loading current
             // work…" → resize. The prior subject stays held throughout (never cleared), so a row → row
             // swap reveals the new subject atomically instead of flashing a half-built card.
+            // Seed reuse (CP-2): warm from provisioning focusPanelStageWork wins — no second /stage-work.
             const completeVm = await completeVmWithStageWork(result.preload.viewModel);
             if (gen !== fetchGenRef.current) return; // superseded during the stage-work resolve
             logCurrentWorkInit("recordRuntime.fetch.apply", {
@@ -267,21 +287,46 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
         [validSubject],
     );
 
-    const reloadDisplayVm = useCallback(async () => {
+    const invalidateVmCachesForSubject = useCallback((opportunityId: string) => {
+        const vm = displayVmRef.current;
+        const departmentId = vm?.workspace.department_id ?? null;
+        const workUnitId = vm?.workspace.work_unit_id ?? null;
+        invalidateDrawerViewModelCacheForEntity("opportunities", opportunityId, {
+            departmentId,
+            workUnitId,
+        });
+        invalidateDrawerLayoutRuntimeBodyCacheForEntity(
+            "/api/admin/layout-runtime/opportunity-drawer-body",
+            opportunityId,
+        );
+        dispatchDrawerLayoutRuntimeBodyInvalidate({
+            entityType: "opportunities",
+            entityId: opportunityId,
+        });
+    }, []);
+
+    const reloadDisplayVm = useCallback(async (opts?: { forceFresh?: boolean }) => {
         if (!validSubject) return;
         // Stale-response protection: capture the subject generation (guards a subject swap during the
         // reload) and a monotonic reload generation (orders concurrent reloads of the same subject). A
         // response that is no longer the latest for its subject is dropped, never applied.
         const subjectGen = fetchGenRef.current;
         const reloadGen = ++reloadGenRef.current;
+        const forceFresh = opts?.forceFresh === true;
+        if (forceFresh) {
+            invalidateVmCachesForSubject(validSubject);
+            invalidateOpportunityStageWorkCache({ opportunityId: validSubject });
+        }
         const result = await loadOpportunityDrawerViaViewModel(validSubject, null);
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
-        const completeVm = await completeVmWithStageWork(result.preload.viewModel);
+        const completeVm = await completeVmWithStageWork(result.preload.viewModel, {
+            force: forceFresh,
+        });
         if (subjectGen !== fetchGenRef.current || reloadGen !== reloadGenRef.current) return;
         // Same atomic contract as the initial load — reload reveals a complete VM, not a resize.
-        applyVm(completeVm, "reload");
-    }, [validSubject, applyVm]);
+        applyVm(completeVm, forceFresh ? "reload_fresh" : "reload");
+    }, [validSubject, applyVm, invalidateVmCachesForSubject]);
 
     // ── Targeted refresh: record-patch + queue-updated events (same contracts as the drawer path). ──
     useEffect(() => {
@@ -297,38 +342,57 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             const detail = parseOpportunityQueueUpdatedDetail(ev);
             const id = (detail?.id ?? "").trim();
             if (!id || id !== oid) return;
-            invalidateOpportunityStageWorkCache({ opportunityId: oid });
             const actionKey = (detail?.action_key ?? "").trim();
-            if (!isTourSurfaceActionKey(actionKey)) {
-                // RECOMPOSITION (What's Next): a committed command/outcome for this subject
-                // (e.g. "stage_work_outcome") just invalidated the stage-work cache. Re-project the VM
-                // so the settled item, the next obligation, and readiness recompose in place — no
-                // reload. Previously this returned here, leaving Current Work stale until a remount.
+            const plan = planRecordWorkRefresh(actionKey);
+
+            if (plan.invalidateVmCache) {
+                invalidateVmCachesForSubject(oid);
+            }
+            if (plan.invalidateStageWork) {
+                invalidateOpportunityStageWorkCache({ opportunityId: oid });
+            }
+
+            if (plan.kind === "field_readiness") {
+                // Record patch already updated authoritative field truth; What's Next recomposes
+                // Still needed from that truth. Do not reload a cached VM over it.
+                logCurrentWorkInit("recordRuntime.event.field_readiness", {
+                    subjectId: oid,
+                    runtimeId: runtimeIdRef.current,
+                    cache: "record-patch",
+                    note: `queue-updated (${actionKey || "no-action"}) → recompose from patched record (no stage-work fetch)`,
+                });
+                return;
+            }
+
+            if (plan.refreshHeaderActions) {
+                setDisplayVm((vm) => {
+                    if (!vm || String(vm.entity.id) !== oid) return vm;
+                    void fetchOpportunityDrawerHeaderActionsFromRecord(
+                        oid,
+                        null,
+                        (vm.above_fold.record ?? {}) as Record<string, unknown>,
+                        workspaceDataFetchInit(),
+                    ).then((resolved) => {
+                        setDisplayVm((cur) =>
+                            cur && String(cur.entity.id) === oid
+                                ? patchOpportunityDrawerVmDisplayRecord(cur, cur.above_fold.record ?? {}, resolved)
+                                : cur,
+                        );
+                    });
+                    return vm;
+                });
+                return;
+            }
+
+            if (plan.reloadDisplayVm) {
                 logCurrentWorkInit("recordRuntime.event.reload", {
                     subjectId: oid,
                     runtimeId: runtimeIdRef.current,
                     cache: "event-reload",
-                    note: `queue-updated (${actionKey || "no-action"}) → reproject VM`,
+                    note: `queue-updated (${actionKey || "no-action"}) → force-fresh VM + stage-work`,
                 });
-                void reloadDisplayVm();
-                return;
+                void reloadDisplayVm({ forceFresh: plan.forceStageWork });
             }
-            setDisplayVm((vm) => {
-                if (!vm || String(vm.entity.id) !== oid) return vm;
-                void fetchOpportunityDrawerHeaderActionsFromRecord(
-                    oid,
-                    null,
-                    (vm.above_fold.record ?? {}) as Record<string, unknown>,
-                    workspaceDataFetchInit(),
-                ).then((resolved) => {
-                    setDisplayVm((cur) =>
-                        cur && String(cur.entity.id) === oid
-                            ? patchOpportunityDrawerVmDisplayRecord(cur, cur.above_fold.record ?? {}, resolved)
-                            : cur,
-                    );
-                });
-                return vm;
-            });
         };
 
         window.addEventListener(ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH, onRecordPatch as EventListener);
@@ -337,9 +401,11 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             window.removeEventListener(ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH, onRecordPatch as EventListener);
             window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated as EventListener);
         };
-    }, [validSubject, patchDisplayRecord, reloadDisplayVm]);
+    }, [validSubject, patchDisplayRecord, reloadDisplayVm, invalidateVmCachesForSubject]);
 
     // ── Deferred stage work (Tier 2) — resolve Current Work after first paint, scoped to the subject. ──
+    // Only when the applied VM still marks stage_work pending (seed miss / incomplete cold path).
+    // A valid CP-2 seed makes cold apply non-pending — this effect must not issue a second fetch.
     const stageWorkStatus = displayVm?.workspace.stage_work?.status;
     const stageWorkOppId = displayVm?.entity.id ?? null;
     const stageWorkStageKey = displayVm?.workspace.lifecycle_rail?.current_stage_key ?? null;

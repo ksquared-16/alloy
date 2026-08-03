@@ -14,6 +14,7 @@ import {
     activeLifecycleProcess,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 
 export type ExternalContactChannel =
     | "phone"
@@ -75,7 +76,16 @@ export async function reportExternalContact(
     const process = builder ? activeLifecycleProcess(builder) : null;
     const stageRecord = process?.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
     const plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
-    const journeySegment = plan?.journey_segment ?? "family";
+    // `plan` can genuinely be null here, and the old `?? "family"` then reported an external contact
+    // on a CHILD-grain stage as a family. The stage's own grain answers that, and where both are
+    // declared they must agree. This caller carries no child identity, so on a child stage the
+    // outcome guard refuses — the honest answer for a caller that cannot name a child.
+    const segment = resolveJourneySegment({
+        planSegment: plan?.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    if (!segment.ok) return { ok: false, error: segment.reason };
+    const journeySegment = segment.segment;
 
     const completion = await completeStageWorkWithOutcome({
         supabase: input.supabase,

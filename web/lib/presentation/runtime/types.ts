@@ -229,6 +229,15 @@ export type WorkUnitSurfaceModel = {
         loading: boolean;
         error: string | null;
         /**
+         * WHAT KIND of failure `error` describes, when it came from a provisioning terminal.
+         *
+         * Added because no renderer read the provisioning `code`, so an invalid tenant CONFIGURATION and
+         * a missing RECORD rendered identically — an operator could not tell "someone has to fix this
+         * Work View" from "nothing is here". Optional by design: a transport/client error string carries
+         * no provisioning code, and honestly has no kind.
+         */
+        errorKind?: "authorization" | "configuration" | "subject" | "records";
+        /**
          * Published Queue Row surface config mapped onto the COMPACT row anatomy's fixed
          * slots (visibility + label overrides). Server owns row order/membership/filtering;
          * this only tunes per-slot placement of the compact card. Generic-context fallback

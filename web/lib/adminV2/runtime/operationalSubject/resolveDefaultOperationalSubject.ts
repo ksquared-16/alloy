@@ -13,7 +13,13 @@ export const DEFAULT_OPERATIONAL_SUBJECT_STRATEGIES = [
 
 export type DefaultOperationalSubjectStrategy = (typeof DEFAULT_OPERATIONAL_SUBJECT_STRATEGIES)[number];
 
-export type OperationalSubjectEntityType = "opportunity" | "job" | "schedule";
+/**
+ * `child` is a CHILD PARTICIPATION row (`process_instances`), added when the child grain got its own
+ * Runtime surface. This resolver is grain-agnostic — it orders rows and picks one, and never reads
+ * this field — so widening the union changes no selection behaviour. It only stops a child row from
+ * having to call itself an opportunity in order to be selectable at all.
+ */
+export type OperationalSubjectEntityType = "opportunity" | "job" | "schedule" | "child";
 
 export type OperationalSubjectQueueRow = {
     /** Queue list row id (may differ from entity id for grain/candidate rows). */

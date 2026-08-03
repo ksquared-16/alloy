@@ -12,6 +12,8 @@ import {
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { childParticipationIdentityFromWire } from "@/lib/lifecycle/childParticipationIdentity";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 
 export type StageWorkOutcomeContext = {
     requires_outcome_picker: boolean;
@@ -128,21 +130,27 @@ export async function resolveStageWorkOutcomeContext(params: {
     }).plan;
     if (!plan?.outcomes.length) return null;
 
-    const journeySegment = plan.journey_segment ?? "family";
+    // Reconciled across the plan and the stage, not read from the plan alone — a stage configured
+    // child-grain whose plan still says family must not hand back a family subject to execute.
+    const segment = resolveJourneySegment({
+        planSegment: plan.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    if (!segment.ok) return null;
+    const journeySegment = segment.segment;
     const subject: StageOutcomeExecutionSubject = {
         journey_segment: journeySegment,
         opportunity_id: task.entity_id,
     };
 
     if (journeySegment === "child") {
-        // Prefer threaded process-instance identity so outcome execution never needs an OCM read.
-        const customerMemberId = trimOrNull(task.metadata?.customer_member_id);
-        if (customerMemberId) subject.customer_member_id = customerMemberId;
-        const processInstanceId = trimOrNull(task.metadata?.process_instance_id);
-        if (processInstanceId) subject.process_instance_id = processInstanceId;
+        // THIS task's own metadata — not a scrape across the family. The task IS the work being
+        // acted on, so the child it names is the child the operator chose.
+        const identity = childParticipationIdentityFromWire(task.metadata ?? {});
+        if (identity.subjectId) subject.customer_member_id = identity.subjectId;
+        if (identity.participationId) subject.process_instance_id = identity.participationId;
         // Legacy OCM id kept for the executor's temporary fallback when the above are absent.
-        const ocmId = trimOrNull(task.metadata?.opportunity_customer_member_id);
-        if (ocmId) subject.opportunity_customer_member_id = ocmId;
+        if (identity.legacyOcmId) subject.opportunity_customer_member_id = identity.legacyOcmId;
     }
 
     return {

@@ -11,7 +11,7 @@ import {
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
-import { spawnDestinationStageEntryWork } from "@/lib/lifecycle/spawnDestinationStageEntryWork";
+import { reconcileBusinessProcessWorkAcrossStageMove } from "@/lib/lifecycle/reconcileBusinessProcessWorkAcrossStageMove";
 import {
     moveEnrollmentInstanceStageByScope,
     setEnrollmentInstanceStateByScope,
@@ -483,10 +483,9 @@ export async function applyStageOutcomeRuleTarget(
                 }
             }
 
-            // Stage membership changes first; then create destination stage-entry work.
-            // Declared OUTSIDE the boundary: a failed entry spawn must not roll back a stage
-            // move the operator completed — but it is REPORTED, never swallowed. An empty catch
-            // here is exactly how a stage could move with no destination work and nobody knew.
+            // Stage membership changes first; then reconcile work across the move.
+            // Declared OUTSIDE the boundary: a failed reconciliation must not roll back a stage
+            // move the operator completed — but it is REPORTED, never swallowed.
             let spawnDegraded: string | undefined;
             try {
                 const { data: deptRow } = await supabase
@@ -501,18 +500,23 @@ export async function applyStageOutcomeRuleTarget(
                     && !Array.isArray(deptRow.metadata)
                         ? (deptRow.metadata as Record<string, unknown>)
                         : {};
-                await spawnDestinationStageEntryWork({
+                const reconciled = await reconcileBusinessProcessWorkAcrossStageMove({
                     supabase,
                     orgId,
                     userId,
                     opportunityId: subject.opportunity_id,
                     departmentId,
+                    sourceStageKey: stageKey,
                     destinationStageKey: targetStageKey,
                     departmentMetadata,
+                    initiatingWorkId: subject.work_id ?? null,
                 });
+                if (reconciled.degraded) {
+                    spawnDegraded = reconciled.degraded;
+                }
             } catch (e) {
                 // Test doubles or transient reads must not undo a successful stage move.
-                spawnDegraded = `destination stage-entry work not created for "${targetStageKey}": ${
+                spawnDegraded = `stage work reconciliation failed for "${targetStageKey}": ${
                     e instanceof Error ? e.message : String(e)
                 }`;
             }

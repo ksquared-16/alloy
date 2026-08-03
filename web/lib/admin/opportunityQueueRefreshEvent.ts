@@ -33,6 +33,8 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     "family_contacts_registry",
     "registry_action",
     "delete_lead",
+    // Stage-changing Current Work outcomes move membership + counts; Focus Panel stays open.
+    "stage_work_outcome",
 ]);
 
 /**

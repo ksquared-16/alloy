@@ -15,7 +15,12 @@
  * configured card defaults to `reserved` in the grid.
  */
 
-import { NULL_BILLING_SIGNAL, type OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import {
+    NULL_BILLING_SIGNAL,
+    type OperationalContext,
+    type OperationalGrain,
+} from "@/lib/adminV2/runtime/operationalContext/types";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { COMMIT_CRITICAL_CARD_SPECS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalCards";
 import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -51,14 +56,31 @@ export type FocusPanelWorkModeFromAnswerInput = {
      * identity-owning cards reserve (the drawer VM fills them). See {@link SubjectIdentityTruth}.
      */
     subjectIdentityTruth: SubjectIdentityTruth | null;
+    /**
+     * R2 — the SUBJECT GRAIN as resolved ONCE by the provisioning answer. Never re-derived here.
+     *
+     * This replaces two literals below (`grain: "case"`, `subject.type: "opportunity"`) that were simply
+     * wrong for any lens whose stages declare `child` — while the answer had already computed the right
+     * value a few modules away and published it as `rowGrain`.
+     *
+     * Optional so the enriched/drawer-VM producer and existing fixtures keep compiling. Absent means the
+     * historical family shape — and that is a COMPATIBILITY default, not a grain fallback: a child answer
+     * always supplies this field, so no child surface can reach the family default by omission.
+     */
+    subjectGrain?: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
 };
 
 /** A real, authoritative-fields-only OperationalContext from the committed answer. No placeholder data. */
 export function buildCommitCriticalOperationalContext(input: FocusPanelWorkModeFromAnswerInput): OperationalContext {
     const nextActionLabel = input.primaryAction?.label ?? null;
     return {
-        grain: "case",
-        subject: { type: "opportunity", id: input.subjectId, label: input.title },
+        // R2: read the answer's resolved grain; never decide one here.
+        grain: input.subjectGrain?.grain ?? "case",
+        subject: {
+            type: input.subjectGrain?.subjectType ?? "opportunity",
+            id: input.subjectId,
+            label: input.title,
+        },
         businessProcess: {
             key: input.situation?.stageKey ?? null,
             label: input.situation?.stageLabel ?? input.statusLabel ?? null,
@@ -139,7 +161,9 @@ export function focusPanelWorkModeModelFromProvisioningAnswer(
         // Commit-critical: cards outside the ready set are genuinely still settling.
         phase: "commit",
         mode: input.mode,
-        subject: { id: input.subjectId, type: "opportunity", label: input.title },
+        // R2: same resolved grain as the context above — the model and its context must never disagree
+        // about what the subject IS.
+        subject: { id: input.subjectId, type: input.subjectGrain?.subjectType ?? "opportunity", label: input.title },
         context,
         cardModels,
         cardReadiness,

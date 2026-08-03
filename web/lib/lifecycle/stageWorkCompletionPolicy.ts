@@ -123,6 +123,11 @@ export const PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS: Readonly<
             result: "sent",
             satisfies_outcome_key: "left_message",
         },
+        {
+            capability: "schedule_tour",
+            result: "confirmed",
+            satisfies_outcome_key: "tour_scheduled",
+        },
     ],
 };
 

@@ -36,6 +36,7 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
+import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
 import {
@@ -106,6 +107,8 @@ export default function CurrentWorkCard({
     const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
     const [activePanelAction, setActivePanelAction] = useState<CurrentWorkActionVM | null>(null);
     const [activityPreviewOpen, setActivityPreviewOpen] = useState(false);
+    /** Work Items → Focus Panel deep-link: highlight the shared work identity when present. */
+    const [focusedWorkItemId, setFocusedWorkItemId] = useState<string | null>(null);
     const openWorkspaceTriggerRef = useRef<HTMLButtonElement>(null);
 
     // Canonical local-time doctrine: activity timestamps render in the operator's resolved timezone.
@@ -179,6 +182,8 @@ export default function CurrentWorkCard({
         const onFocusCurrentWork = (event: Event) => {
             const detail = (event as CustomEvent<{ opportunity_id?: string; task_id?: string | null }>).detail;
             if (detail?.opportunity_id !== opportunityId) return;
+            const taskId = typeof detail.task_id === "string" ? detail.task_id.trim() : "";
+            if (taskId) setFocusedWorkItemId(taskId);
             openWorkspace({ kind: "drill_in" });
         };
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
@@ -488,6 +493,8 @@ export default function CurrentWorkCard({
         : isWorkspace ? focusedBody
         :   <SummaryBody
                 surface={surface}
+                opportunityId={opportunityId}
+                focusedWorkItemId={focusedWorkItemId}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 onWarm={warmAction}
@@ -506,6 +513,7 @@ export default function CurrentWorkCard({
             data-work-card-perspective={stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : isWorkspace ? "focused" : "summary"}
             data-capability-active={capabilityActive ? "true" : undefined}
             data-current-work-surface="true"
+            data-focused-work-id={focusedWorkItemId ?? undefined}
         >
             {capabilityActive ?
                 <button
@@ -546,11 +554,15 @@ export { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWor
 
 function SummaryBody({
     surface,
+    opportunityId,
+    focusedWorkItemId,
     onChecklistItem,
     onAction,
     onWarm,
 }: {
     surface: CurrentWorkSurfaceVM;
+    opportunityId: string;
+    focusedWorkItemId: string | null;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
@@ -559,11 +571,15 @@ function SummaryBody({
     // buttons — a dominant command (or outcome when outcome-led), two helpful actions, and Record
     // outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+    const workId = surface.primaryWorkItem?.work_id?.trim() || "";
+    const workItemsLinkActive =
+        Boolean(workId) && (!focusedWorkItemId || focusedWorkItemId === workId);
 
     return (
         <div
             className="alloy-os-currentwork__summary"
             data-work-summary="true"
+            data-focused-work-id={focusedWorkItemId ?? undefined}
             role="group"
             aria-label="What's Next summary"
         >
@@ -611,6 +627,20 @@ function SummaryBody({
                     visually subordinate, and shows a concise "Still needed" readiness summary. Detailed
                     completeness is owned by the Required Information card and is not reproduced here. */}
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                {workId ?
+                    <div
+                        className="mt-2 flex flex-wrap items-center gap-2"
+                        data-current-work-work-items-link="true"
+                        data-work-items-link-active={workItemsLinkActive ? "true" : undefined}
+                    >
+                        <span className="text-[10px] text-alloy-midnight/50">Also in Work Items</span>
+                        <ViewInWorkItemsLink
+                            taskId={workId}
+                            opportunityId={opportunityId}
+                            source="business_process"
+                        />
+                    </div>
+                :   null}
             </div>
         </div>
     );

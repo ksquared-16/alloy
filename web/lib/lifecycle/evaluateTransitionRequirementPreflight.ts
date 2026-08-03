@@ -25,6 +25,9 @@ export async function evaluateTransitionRequirementPreflight(params: {
     previousStatusKey: string | null;
     nextStatusKey: string;
     nextStageLabel?: string | null;
+    /** When set, evaluate only this child's inquiry row (child-grain transitions). */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
 }): Promise<TransitionRequirementPreflight> {
     const empty: TransitionRequirementPreflight = {
         missingRequirements: [],
@@ -65,6 +68,26 @@ export async function evaluateTransitionRequirementPreflight(params: {
         ...ctx.related,
         department_metadata: params.departmentMetadata,
     };
+
+    const customerMemberId = params.customerMemberId?.trim() || null;
+    const ocmId = params.opportunityCustomerMemberId?.trim() || null;
+    if (customerMemberId || ocmId) {
+        const children = Array.isArray(ctx.related?.inquiry_children)
+            ? (ctx.related!.inquiry_children as Array<Record<string, unknown>>)
+            : [];
+        const scoped = children.filter((child) => {
+            const childMember = typeof child.customer_member_id === "string" ? child.customer_member_id.trim() : "";
+            const childOcm = typeof child.id === "string" ? child.id.trim() : "";
+            if (customerMemberId && childMember === customerMemberId) return true;
+            if (ocmId && childOcm === ocmId) return true;
+            return false;
+        });
+        // Child-grain transitions must not fall back to sibling/family defaults.
+        ctx.related = {
+            ...ctx.related,
+            inquiry_children: scoped,
+        };
+    }
 
     const evaluation = evaluateRequirementsForTransition({
         ctx,

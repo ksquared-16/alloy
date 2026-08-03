@@ -65,8 +65,44 @@ describe("normalizeWorkspaceProcessSurfaceConfig", () => {
         expect(n.todaysWork).toEqual({ visible: false, maxRows: 2, sort: "count", showCounts: false });
         // bad sort / negative maxRows fall back
         const b = normalizeWorkspaceProcessSurfaceConfig({ todaysWork: { sort: "nope", maxRows: -3 } });
-        expect(b.todaysWork.sort).toBe("attention");
+        expect(b.todaysWork.sort).toBe("configured");
         expect(b.todaysWork.maxRows).toBe(0);
+    });
+
+    /**
+     * The default answers "the operator said nothing", and it used to answer it with `attention` —
+     * the same value it gave a surface that had explicitly CHOSEN attention-first. Those are
+     * different facts, and collapsing them meant every surface published before the field existed was
+     * attention-sorted without anyone asking for it, which reads as the tile ignoring the configured
+     * Work View order rather than as a setting.
+     */
+    describe("todaysWork.sort — declared order wins unless attention was chosen", () => {
+        it("an ABSENT sort is the operator's configured order", () => {
+            expect(normalizeWorkspaceProcessSurfaceConfig({ todaysWork: {} }).todaysWork.sort).toBe("configured");
+            expect(normalizeWorkspaceProcessSurfaceConfig({}).todaysWork.sort).toBe("configured");
+            expect(normalizeWorkspaceProcessSurfaceConfig(null).todaysWork.sort).toBe("configured");
+        });
+
+        it("an EXPLICIT attention-first surface keeps attention-first — this change does not touch it", () => {
+            const kept = normalizeWorkspaceProcessSurfaceConfig({
+                todaysWork: { visible: true, maxRows: 4, sort: "attention", showCounts: true },
+            });
+            expect(kept.todaysWork.sort).toBe("attention");
+            // and the rest of that surface's choices survive alongside it
+            expect(kept.todaysWork).toEqual({ visible: true, maxRows: 4, sort: "attention", showCounts: true });
+        });
+
+        it("every recognized mode round-trips", () => {
+            for (const sort of ["attention", "count", "configured"] as const) {
+                expect(normalizeWorkspaceProcessSurfaceConfig({ todaysWork: { sort } }).todaysWork.sort).toBe(sort);
+            }
+        });
+
+        it("an unrecognized mode is not silently read as attention", () => {
+            expect(
+                normalizeWorkspaceProcessSurfaceConfig({ todaysWork: { sort: "needs_attention" } }).todaysWork.sort,
+            ).toBe("configured");
+        });
     });
 
     it("carries the per-process Primary Signal map (ignoring non-string entries)", () => {
@@ -204,6 +240,15 @@ describe("applyTodaysWorkConfig", () => {
     it("maxRows truncates (0 = all)", () => {
         expect(applyTodaysWorkConfig(views, cfg({ sort: "configured", maxRows: 2 })).map((v) => v.id)).toEqual(["a", "b"]);
         expect(applyTodaysWorkConfig(views, cfg({ sort: "configured", maxRows: 0 }))).toHaveLength(3);
+    });
+
+    it("truncation happens AFTER the sort, never before it", () => {
+        // Order matters and the sequence is deliberate: resolve every eligible view → sort → slice.
+        // Slicing first would sort an arbitrary pre-sort subset, so the tile would show the top of the
+        // wrong set. Under attention-first with a row limit, a low-attention view dropping off the
+        // tile is the operator's stated intent, not a defect.
+        const out = applyTodaysWorkConfig(views, cfg({ sort: "attention", maxRows: 1 }));
+        expect(out.map((v) => v.id)).toEqual(["b"]); // the highest-attention view, not the first-configured
     });
 
     it("never fabricates rows or counts — only orders/slices what it's given", () => {

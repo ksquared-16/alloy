@@ -28,6 +28,10 @@ describe("opportunityQueueRefreshEvent", () => {
         expect(isQueueMembershipMutationActionKey("create_lead")).toBe(true);
     });
 
+    it("treats stage_work_outcome as a queue-membership mutation", () => {
+        expect(isQueueMembershipMutationActionKey("stage_work_outcome")).toBe(true);
+    });
+
     it("refetches lane rows AND summaries for a newly created lead not yet in the visible list", () => {
         const detail = { id: "opp-new", action_key: "create_lead" };
         const visibleOpportunityIds = ["opp-1", "opp-2"]; // new lead is off-screen

@@ -299,12 +299,31 @@ export function QueueRegion({
 
             <div ref={queueScrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-2.5" data-queue-panel-body>
                 {renderState === "error" ? (
-                    <p
+                    /* A refusal names WHAT KIND of problem it is. Before this, a tenant configuration
+                       problem and a missing record were the same anonymous red sentence, so an operator
+                       could not tell "someone has to fix this Work View" from "nothing is here". The
+                       lead line is the classification; the answer's own message stays verbatim beneath it,
+                       because it is the only thing that says WHICH Work View and WHY. */
+                    <div
                         role="alert"
+                        data-queue-error-kind={queue.errorKind ?? "unclassified"}
                         className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember"
                     >
-                        {queue.error}
-                    </p>
+                        {queue.errorKind === "configuration" ? (
+                            <p className="font-medium">This Work View can’t be shown until its configuration is fixed.</p>
+                        ) : queue.errorKind === "subject" ? (
+                            <p className="font-medium">That record isn’t in this Work View.</p>
+                        ) : queue.errorKind === "records" ? (
+                            <p className="font-medium">These records couldn’t be loaded.</p>
+                        ) : queue.errorKind === "authorization" ? (
+                            <p className="font-medium">You don’t have access to this Work View.</p>
+                        ) : null}
+                        <p className={queue.errorKind ? "mt-1 text-alloy-ember/80" : undefined}>{queue.error}</p>
+                        {/* No "try another Work View" hint here on purpose: the exit is the pill strip,
+                            which the surface model now carries through a refusal. Passing the lens set
+                            into the queue region just to word a hint would couple this component to
+                            navigation it does not own. */}
+                    </div>
                 ) : renderState === "cold-loading" ? (
                     <ul
                         role="list"

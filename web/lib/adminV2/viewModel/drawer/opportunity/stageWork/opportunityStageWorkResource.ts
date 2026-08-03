@@ -11,6 +11,10 @@
  */
 
 import type { OpportunityStageWorkSlice } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
+import {
+    childParticipationIdentityFromWire,
+    childParticipationIdentityKey,
+} from "@/lib/lifecycle/childParticipationIdentity";
 
 const CACHE_TTL_MS = 90_000;
 
@@ -22,6 +26,10 @@ export type OpportunityStageWorkParams = {
     /** Builder stage_key (= `workspace.lifecycle_rail.current_stage_key`). */
     stageKey: string | null;
     stageLabel?: string | null;
+    /** Child-grain subject — included in cache key so siblings do not share execution subject. */
+    customerMemberId?: string | null;
+    opportunityCustomerMemberId?: string | null;
+    processInstanceId?: string | null;
 };
 
 type CacheEntry = { slice: OpportunityStageWorkSlice; fetchedAt: number };
@@ -34,14 +42,37 @@ function notify(): void {
     listeners.forEach((l) => l());
 }
 
-/** Stable per-record key: org + opportunity + department + stage. Null when no stage to resolve. */
+/**
+ * Stable per-record key: org + opportunity + department + stage + the child participation identity.
+ *
+ * The child component is the CANONICAL identity key — positional, one slot per id. It used to be
+ * `customerMemberId || ocmId || processInstanceId`, which collapsed three different claims into one
+ * opaque string and broke the cache's only real promise. Two ways:
+ *
+ *  - `{customerMemberId: "cm-1"}` and `{customerMemberId: "cm-1", processInstanceId: "pi-9"}` produced
+ *    the SAME key while sending DIFFERENT query strings, so one request's slice was served to the
+ *    other — a stage-work answer about a participation the caller never asked about.
+ *  - `{ocmId: "x"}` and `{processInstanceId: "x"}` also produced the same key, and that is reachable
+ *    in real data: a `process_instances.id` was carried under the OCM name through the migration
+ *    (`docs/runtime/GRAIN-AUTHORITY-MAP.md` §4).
+ *
+ * The key must be injective on exactly what the fetch varies by, or it is not a cache — it is a
+ * substitution.
+ */
 export function opportunityStageWorkCacheKey(params: OpportunityStageWorkParams): string | null {
     const opp = params.opportunityId?.trim();
     const stage = params.stageKey?.trim();
     if (!opp || !stage) return null;
     const org = params.orgScope?.trim() || "_";
     const dept = params.departmentId?.trim() || "_";
-    return `${org}:opp:${opp}:dept:${dept}:stage:${stage}`;
+    const child = childParticipationIdentityKey(
+        childParticipationIdentityFromWire({
+            customer_member_id: params.customerMemberId,
+            opportunity_customer_member_id: params.opportunityCustomerMemberId,
+            process_instance_id: params.processInstanceId,
+        }),
+    );
+    return `${org}:opp:${opp}:dept:${dept}:stage:${stage}:child:${child}`;
 }
 
 function buildFetchQuery(params: OpportunityStageWorkParams): string | null {
@@ -51,6 +82,11 @@ function buildFetchQuery(params: OpportunityStageWorkParams): string | null {
     qs.set("stage_key", stage);
     if (params.departmentId?.trim()) qs.set("department_id", params.departmentId.trim());
     if (params.stageLabel?.trim()) qs.set("stage_label", params.stageLabel.trim());
+    if (params.customerMemberId?.trim()) qs.set("customer_member_id", params.customerMemberId.trim());
+    if (params.opportunityCustomerMemberId?.trim()) {
+        qs.set("opportunity_customer_member_id", params.opportunityCustomerMemberId.trim());
+    }
+    if (params.processInstanceId?.trim()) qs.set("process_instance_id", params.processInstanceId.trim());
     return qs.toString();
 }
 

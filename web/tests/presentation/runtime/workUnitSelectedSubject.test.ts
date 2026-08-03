@@ -38,6 +38,16 @@ describe("resolveWorkUnitSelectedSubject — precedence", () => {
         expect(resolve({ retainedRecordId: "rec-2" })).toEqual({ selectedRecordId: "rec-2", source: "retained" });
     });
 
+    it("out-of-view pin after stage move keeps Focus Panel subject without auto-nav", () => {
+        expect(
+            resolve({
+                retainedRecordId: "rec-gone",
+                outOfViewPinnedRecordId: "rec-gone",
+                rowRecordIds: ["rec-1", "rec-2"],
+            }),
+        ).toEqual({ selectedRecordId: "rec-gone", source: "retained_out_of_view" });
+    });
+
     it("explicit deep-linked record in the route → url (wins over retained + first row)", () => {
         expect(resolve({ routeRecordId: "rec-3", retainedRecordId: "rec-2" })).toEqual({
             selectedRecordId: "rec-3",

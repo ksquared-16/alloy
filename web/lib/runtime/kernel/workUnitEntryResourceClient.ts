@@ -51,6 +51,8 @@ export function workUnitEntryResourceClient(): EntryResource {
                 message: `provisioning answer unavailable (HTTP ${result.status})`,
                 orgId: ref.tenant,
                 workUnit: null,
+                // Honestly null: the request never returned an answer, so there is no lens set to offer.
+                navigationFrame: null,
                 timings: {
                     authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
                     records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 0,

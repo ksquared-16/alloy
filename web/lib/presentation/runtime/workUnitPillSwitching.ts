@@ -97,12 +97,19 @@ export function resolveAutoOpenRecordId(
 }
 
 /** How the Work Unit surface arrived at its selected subject — ordered by canonical precedence. */
-export type WorkUnitSelectedSubjectSource = "url" | "retained" | "strategy" | "first_row" | "empty";
+export type WorkUnitSelectedSubjectSource =
+    | "url"
+    | "retained"
+    | "retained_out_of_view"
+    | "strategy"
+    | "first_row"
+    | "empty";
 
 /**
  * The subject a populated Work View resolves to, resolved SYNCHRONOUSLY so the surface never commits
  * a coherent reveal with rows present but nothing selected. `selectedRecordId` is non-null whenever
  * `rowRecordIds` is non-empty (compatibility fallback = first row), so `rows.length > 0 && selectedRecordId === null` is an impossible committed state.
+ * Exception: `retained_out_of_view` may select a record outside the current row set after a stage move.
  */
 export type WorkUnitSelectedSubject = {
     selectedRecordId: string | null;
@@ -117,8 +124,10 @@ export type WorkUnitSelectedSubject = {
  *
  *   1. explicit record id in the route (deep link) — unless the operator just force-switched pills
  *      in-page, in which case the stale URL no longer pins the subject;
- *   2. retained valid record for this org + Work Unit + Work View (return-navigation restore) — only
- *      when it is still present in the current rows;
+ *   2. retained valid record for this org + Work Unit + Work View (return-navigation restore) — when
+ *      still present in the current rows;
+ *   2b. short-lived out-of-view pin after a stage move — keep Focus Panel on the same record without
+ *      auto-navigating to the destination Work View;
  *   3. configured Default Operational Subject Strategy — NOT YET IMPLEMENTED; when it ships it slots
  *      here (source `"strategy"`), ahead of the first-row fallback;
  *   4. first visible row — the current compatibility fallback for the default operational subject;
@@ -130,6 +139,8 @@ export function resolveWorkUnitSelectedSubject(args: {
     routeRecordId: string | null;
     rowRecordIds: readonly string[];
     retainedRecordId: string | null;
+    /** Short-lived pin after stage movement — may be outside current rows. */
+    outOfViewPinnedRecordId?: string | null;
     /** Operator just switched pills in-page — a deep-link URL no longer pins selection. */
     forceAutoOpen: boolean;
     /** Rows have settled at least once — distinguishes authoritative empty from pending. */
@@ -143,6 +154,11 @@ export function resolveWorkUnitSelectedSubject(args: {
     const retained = args.retainedRecordId?.trim() || null;
     if (retained && args.rowRecordIds.includes(retained)) {
         return { selectedRecordId: retained, source: "retained" };
+    }
+
+    const pinned = args.outOfViewPinnedRecordId?.trim() || null;
+    if (pinned) {
+        return { selectedRecordId: pinned, source: "retained_out_of_view" };
     }
 
     // 3. Default Operational Subject Strategy — reserved; not yet implemented (first_row is the

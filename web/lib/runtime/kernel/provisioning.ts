@@ -260,8 +260,13 @@ export class ProvisioningRuntime {
                     message: `preparation did not terminate within ${this.deadlineMs} ms`,
                     orgId: f.ref.tenant,
                     workUnit: null,
+                    // Honestly null: preparation never terminated, so no lens set was ever resolved.
+                    // Stated rather than omitted, because the `as ProvisioningAnswer` cast below means
+                    // TypeScript will NOT catch a missing field here — `presentation_ms` was in fact
+                    // already missing from these timings, and is added back on the same grounds.
+                    navigationFrame: null,
                     timings: {
-                        authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0,
+                        authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
                         records_ms: 0, projection_ms: 0, composition_ms: 0,
                         total_ms: this.clock() - f.startedAt,
                     },
@@ -277,8 +282,10 @@ export class ProvisioningRuntime {
                 message: err instanceof Error ? err.message : String(err),
                 orgId: f.ref.tenant,
                 workUnit: null,
+                // Honestly null — the composition threw; nothing about the lens set is known here.
+                navigationFrame: null,
                 timings: {
-                    authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0,
+                    authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
                     records_ms: 0, projection_ms: 0, composition_ms: 0,
                     total_ms: this.clock() - f.startedAt,
                 },

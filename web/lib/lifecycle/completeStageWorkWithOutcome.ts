@@ -37,6 +37,12 @@ import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWor
 import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 import { recordStageWorkContactOutcomeTrace } from "@/lib/lifecycle/recordStageWorkContactOutcomeTrace";
+import { preflightStageChangingOutcomeReadiness } from "@/lib/lifecycle/preflightStageChangingOutcomeReadiness";
+import {
+    childParticipationIdentityFromWire,
+    namesAChild,
+} from "@/lib/lifecycle/childParticipationIdentity";
+import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
 
 /**
  * Execution provenance for a discharged Current Work requirement. Distinguishes an
@@ -121,7 +127,24 @@ export async function completeStageWorkWithOutcome(
         },
         idempotencyKey: input.idempotencyKey ?? null,
         onTrace: input.onTrace,
-        validate: () => (resolved.ok ? { ok: true } : { ok: false, message: resolved.message }),
+        validate: async () => {
+            if (!resolved.ok) return { ok: false, message: resolved.message };
+            const readiness = await preflightStageChangingOutcomeReadiness({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                plan: resolved.plan,
+                outcomeKey,
+                subject: input.subject,
+                departmentMetadata: resolved.departmentMetadata,
+            });
+            if (readiness.blocked) {
+                return {
+                    ok: false,
+                    message: readiness.message ?? "Cannot move stage — requirements are incomplete.",
+                };
+            }
+            return { ok: true };
+        },
         steps: () => {
             if (!resolved.ok) return [];
             const { plan, outcome, closeDecision, departmentMetadata } = resolved;
@@ -368,6 +391,33 @@ async function resolveOutcomeExecutionPlan(
 
     const outcome = plan.outcomes.find((o) => o.outcome_key === outcomeKey);
     if (!outcome) return { ok: false, message: "Unknown outcome for stage" };
+
+    // WHICH GRAIN THIS OUTCOME RUNS AT — reconciled across the two places it is declared, not read
+    // from the plan alone. The guard below reads the segment, so a stage configured `grain: "child"`
+    // whose plan still said `family` never reached it: no child subject was demanded and the outcome
+    // executed against the family case. The guard existed and was correct; it simply never fired.
+    const segment = resolveJourneySegment({
+        planSegment: plan.journey_segment,
+        stageGrain: stageRecord?.grain,
+    });
+    if (!segment.ok) return { ok: false, message: segment.reason };
+
+    // Child-grain plans must carry a child subject — never silently execute as family/case.
+    if (segment.segment === "child") {
+        const hasChild = namesAChild(childParticipationIdentityFromWire(input.subject));
+        if (!hasChild) {
+            return {
+                ok: false,
+                message: "Child enrollment subject required for this stage outcome",
+            };
+        }
+        if (input.subject.journey_segment !== "child") {
+            return {
+                ok: false,
+                message: "Child-grain outcome cannot run with family/case subject grain",
+            };
+        }
+    }
 
     return {
         ok: true,
