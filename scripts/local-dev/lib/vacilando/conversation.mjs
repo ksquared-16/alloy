@@ -31,11 +31,25 @@ function conversationTitle(m, cap) {
 }
 
 // The operator-facing verb for each engineering state (one word, the next move).
+// at_risk (failed/interrupted, e.g. provider 529) is NOT "Continue" — that verb
+// is reserved for real operator interrupts (question / blocker). Transient engine
+// failures should not look like "Director needs you" in the inbox or notifications.
 const STATE_ACTION = {
   preparing: "Open", ready: "Start", executing: "Open", waiting: "Open",
   needs_operator: "Continue", blocked: "Continue", verifying: "Open",
-  review: "Review", accepted: "Open", closed: "Open", at_risk: "Continue",
+  review: "Review", accepted: "Open", closed: "Open", at_risk: "Open",
 };
+
+/** True when the operator must act — used for desktop notify + Dock badge. */
+export function conversationNeedsAttention(state) {
+  if (!state) return false;
+  const a = state.action;
+  const k = state.key;
+  if (a === "Answer" || a === "Accept" || a === "Review") return true;
+  // Continue only for a real interrupt — never at_risk (failed/overloaded/etc.).
+  if (a === "Continue" && (k === "needs_operator" || k === "blocked")) return true;
+  return false;
+}
 
 /**
  * What engineering state this work is in — the SINGLE state vocabulary shared by
@@ -133,18 +147,38 @@ export function assembleConversation(mission_id) {
   };
 }
 
-/** The conversation inbox — every real conversation, freshest first. */
+/** The conversation inbox — every real conversation, freshest first.
+ *  When a capability has an objective (multi-phase), collapse to ONE row keyed by
+ *  the live phase mission so the inbox never shows three "Access & Roles" entries
+ *  (plan + stalled attempt + live) with a stale "Reviewing" on an old one. */
 export function listConversations() {
-  return readMissions(null, 500)
+  const rows = readMissions(null, 500)
     .filter((m) => m.capability_id)
     .map((m) => {
       const pkg = m.package_id ? getPackage(m.package_id) : null;
       const cap = m.capability_id ? getCapability(m.capability_id) : null;
+      const state = conversationState(m, pkg);
       return {
         conversation_id: m.mission_id, title: conversationTitle(m, cap),
-        intent: m.intent || m.objective || "", state: conversationState(m, pkg),
-        updated_at: m.updated_at,
+        intent: m.intent || m.objective || "", state,
+        updated_at: m.updated_at, capability_id: m.capability_id,
+        mission_status: m.status, phase_id: m.phase_id || null,
+        objective_capability_id: m.objective_capability_id || null,
+        needs_attention: conversationNeedsAttention(state),
       };
     })
     .sort((a, b) => time(b.updated_at) - time(a.updated_at));
+
+  const ACTIVE = new Set(["starting", "running", "provisioning", "waiting_for_acceptance", "waiting_for_operator", "stopping"]);
+  const byCap = new Map();
+  for (const r of rows) {
+    const key = r.capability_id;
+    const prev = byCap.get(key);
+    if (!prev) { byCap.set(key, r); continue; }
+    const prevActive = ACTIVE.has(prev.mission_status);
+    const curActive = ACTIVE.has(r.mission_status);
+    if (curActive && !prevActive) byCap.set(key, r);
+    else if (curActive === prevActive && time(r.updated_at) > time(prev.updated_at)) byCap.set(key, r);
+  }
+  return [...byCap.values()].sort((a, b) => time(b.updated_at) - time(a.updated_at));
 }

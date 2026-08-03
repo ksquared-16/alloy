@@ -1,0 +1,464 @@
+{
+  "schema_version": "vacilando.runtime_v1_closeout_mission_inventory.v1",
+  "closed_at": "2026-07-30T22:49:19.848Z",
+  "classification": [
+    {
+      "missionId": "msn_e9133cdade883793d2",
+      "title": "Access & Identity V2 — Operational Closeout",
+      "status": "interrupted",
+      "hasBrief": true,
+      "archived": true,
+      "classification": "accepted_certification_record",
+      "archiveClass": "accepted_certification_record",
+      "reason": "Runtime / Claude Provider certification mission"
+    },
+    {
+      "missionId": "msn_dc854bba07cc2046b2",
+      "title": "Access & Identity V2",
+      "status": "interrupted",
+      "hasBrief": true,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production"
+    },
+    {
+      "missionId": "msn_7782d3e37dfeebd871",
+      "title": "Access & Identity V2",
+      "status": "interrupted",
+      "hasBrief": true,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production"
+    },
+    {
+      "missionId": "msn_98c60def0cde1973a4",
+      "title": "Access & Identity V2",
+      "status": "ready",
+      "hasBrief": true,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production"
+    },
+    {
+      "missionId": "msn_16416d64214a132536",
+      "title": "Untitled mission",
+      "status": "ready",
+      "hasBrief": true,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "demo_seed",
+      "reason": "Demo / kickoff / untitled validation mission"
+    },
+    {
+      "missionId": "msn_a03d369f4fb98f6d8b",
+      "title": "Access & Identity V2",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production"
+    },
+    {
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "title": "Access & Identity V2",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production"
+    },
+    {
+      "missionId": "msn_d34d658b3d39c91781",
+      "title": "Access & Identity V2 — Director certification mission",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "accepted_certification_record",
+      "archiveClass": "accepted_certification_record",
+      "reason": "Runtime / Claude Provider certification mission"
+    },
+    {
+      "missionId": "msn_3c79c2df9872c3f6e5",
+      "title": "Kickoff Preview Mission",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "demo_seed",
+      "reason": "Demo / kickoff / untitled validation mission"
+    },
+    {
+      "missionId": "msn_ecdb02e437bd467813",
+      "title": "Access & Identity V2 Demo",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "runtime_validation",
+      "archiveClass": "demo_seed",
+      "reason": "Demo / kickoff / untitled validation mission"
+    },
+    {
+      "missionId": "msn_7f84fe94574ae5c3b1",
+      "title": "Access & Roles V2 — implement: Phase 1 — Access audit trail",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "superseded_draft",
+      "archiveClass": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout"
+    },
+    {
+      "missionId": "msn_e30d12dfd9e2b40988",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "status": "completed",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "superseded_draft",
+      "archiveClass": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout"
+    },
+    {
+      "missionId": "msn_32393c0ab91b47b403",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "status": "interrupted",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "superseded_draft",
+      "archiveClass": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout"
+    },
+    {
+      "missionId": "msn_e849352f2fa17597b7",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "status": "failed",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "superseded_draft",
+      "archiveClass": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout"
+    },
+    {
+      "missionId": "msn_4affb8ff4d49ae3298",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "status": "stopped",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "superseded_draft",
+      "archiveClass": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout"
+    },
+    {
+      "missionId": "msn_15ffa404c7db98de01",
+      "title": "Access & Roles V2 — Implementation Proposal",
+      "status": "completed",
+      "hasBrief": false,
+      "archived": true,
+      "classification": "superseded_draft",
+      "archiveClass": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout"
+    }
+  ],
+  "newly_archived_this_pass": [],
+  "skipped": [
+    {
+      "missionId": "msn_16416d64214a132536",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_7782d3e37dfeebd871",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_98c60def0cde1973a4",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_dc854bba07cc2046b2",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_e9133cdade883793d2",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_a03d369f4fb98f6d8b",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_d34d658b3d39c91781",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_3c79c2df9872c3f6e5",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_ecdb02e437bd467813",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_7f84fe94574ae5c3b1",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_e30d12dfd9e2b40988",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_32393c0ab91b47b403",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_e849352f2fa17597b7",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_4affb8ff4d49ae3298",
+      "reason": "already_archived"
+    },
+    {
+      "missionId": "msn_15ffa404c7db98de01",
+      "reason": "already_archived"
+    }
+  ],
+  "inventory_hash": "bf7c5570a2e68fca",
+  "active_after": [],
+  "archived_count": 16,
+  "active_count": 0,
+  "improvements_preserved": 11,
+  "archived_index": [
+    {
+      "missionId": "msn_15ffa404c7db98de01",
+      "title": "Access & Roles V2 — Implementation Proposal",
+      "archiveClass": "superseded_draft",
+      "classification": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.991Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "completed",
+      "prior_kickoff_status": null,
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_4affb8ff4d49ae3298",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "archiveClass": "superseded_draft",
+      "classification": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.951Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": null,
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_e849352f2fa17597b7",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "archiveClass": "superseded_draft",
+      "classification": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.905Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "failed",
+      "prior_kickoff_status": null,
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_32393c0ab91b47b403",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "archiveClass": "superseded_draft",
+      "classification": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.856Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "interrupted",
+      "prior_kickoff_status": null,
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_e30d12dfd9e2b40988",
+      "title": "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+      "archiveClass": "superseded_draft",
+      "classification": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.824Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "completed",
+      "prior_kickoff_status": null,
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_7f84fe94574ae5c3b1",
+      "title": "Access & Roles V2 — implement: Phase 1 — Access audit trail",
+      "archiveClass": "superseded_draft",
+      "classification": "superseded_draft",
+      "reason": "Earlier Access & Roles workstream — superseded for Runtime V1 closeout",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.756Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": null,
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_ecdb02e437bd467813",
+      "title": "Access & Identity V2 Demo",
+      "archiveClass": "demo_seed",
+      "classification": "runtime_validation",
+      "reason": "Demo / kickoff / untitled validation mission",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.707Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": "purged",
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_3c79c2df9872c3f6e5",
+      "title": "Kickoff Preview Mission",
+      "archiveClass": "demo_seed",
+      "classification": "runtime_validation",
+      "reason": "Demo / kickoff / untitled validation mission",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.662Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": "purged",
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_d34d658b3d39c91781",
+      "title": "Access & Identity V2 — Director certification mission",
+      "archiveClass": "accepted_certification_record",
+      "classification": "accepted_certification_record",
+      "reason": "Runtime / Claude Provider certification mission",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.629Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": "purged",
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "title": "Access & Identity V2",
+      "archiveClass": "runtime_validation",
+      "classification": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.592Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": "purged",
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_a03d369f4fb98f6d8b",
+      "title": "Access & Identity V2",
+      "archiveClass": "runtime_validation",
+      "classification": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.558Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "stopped",
+      "prior_kickoff_status": "purged",
+      "contentHash": null
+    },
+    {
+      "missionId": "msn_e9133cdade883793d2",
+      "title": "Access & Identity V2 — Operational Closeout",
+      "archiveClass": "accepted_certification_record",
+      "classification": "accepted_certification_record",
+      "reason": "Runtime / Claude Provider certification mission",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.509Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "interrupted",
+      "prior_kickoff_status": "executing",
+      "contentHash": "a48a454dc1a5a25a537a345999d982dc"
+    },
+    {
+      "missionId": "msn_dc854bba07cc2046b2",
+      "title": "Access & Identity V2",
+      "archiveClass": "runtime_validation",
+      "classification": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.453Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "interrupted",
+      "prior_kickoff_status": "executing",
+      "contentHash": "071e9f20adea6aad83d37f69efd8fc69"
+    },
+    {
+      "missionId": "msn_98c60def0cde1973a4",
+      "title": "Access & Identity V2",
+      "archiveClass": "runtime_validation",
+      "classification": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.280Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "ready",
+      "prior_kickoff_status": "executing",
+      "contentHash": "d74bbc21f20a5bbada7b4fefa727692c"
+    },
+    {
+      "missionId": "msn_7782d3e37dfeebd871",
+      "title": "Access & Identity V2",
+      "archiveClass": "runtime_validation",
+      "classification": "runtime_validation",
+      "reason": "Access & Identity proof / seeded validation — not active production",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.212Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "interrupted",
+      "prior_kickoff_status": "executing",
+      "contentHash": "071e9f20adea6aad83d37f69efd8fc69"
+    },
+    {
+      "missionId": "msn_16416d64214a132536",
+      "title": "Untitled mission",
+      "archiveClass": "demo_seed",
+      "classification": "runtime_validation",
+      "reason": "Demo / kickoff / untitled validation mission",
+      "status": "archived",
+      "readOnly": true,
+      "archived_at": "2026-07-30T22:47:28.031Z",
+      "archived_by": "closeout-operator",
+      "prior_status": "ready",
+      "prior_kickoff_status": "executing",
+      "contentHash": "7e27ac757806f2c726649e5769847fb3"
+    }
+  ]
+}

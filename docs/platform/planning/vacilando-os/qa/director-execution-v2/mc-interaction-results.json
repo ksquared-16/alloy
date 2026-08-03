@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "interactive_ms": 757,
+  "soak_ms": 300000,
+  "requests_during_soak": 186,
+  "reqCounts": {
+    "total": 235,
+    "byPath": {
+      "/": 3,
+      "/styles.css": 3,
+      "/mission-control.js": 3,
+      "/app.js": 3,
+      "/api/state": 79,
+      "/api/resources": 76,
+      "/api/v2/missions": 7,
+      "/api/director/conversations": 23,
+      "/api/events": 3,
+      "/api/v2/mission": 1,
+      "/api/v2/mission/timeline": 1,
+      "/api/v2/workers": 3,
+      "/api/v2/decisions": 2,
+      "/api/v2/evidence": 2,
+      "/api/providers": 2,
+      "/api/commands": 24
+    }
+  },
+  "at": "2026-07-30T14:46:28.599Z"
+}

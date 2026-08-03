@@ -30,11 +30,10 @@
   <aside class="rail">
     <div class="brand"><div class="word">Vacilando<b>OS</b></div><div class="sub">Engineering Operating System</div></div>
     <nav class="nav" id="nav">
-      <a data-route="director"><svg class="ico"><use href="#i-home"/></svg>Director</a>
-      <a data-route="command"><svg class="ico"><use href="#i-home"/></svg>Command Center<span class="badge" id="nb-needs">0</span></a>
-      <a data-route="history"><svg class="ico"><use href="#i-activity"/></svg>Work History</a>
-      <a data-route="policies"><svg class="ico"><use href="#i-approvals"/></svg>Policies</a>
-      <a data-route="trust"><svg class="ico"><use href="#i-approvals"/></svg>Runtime Trust</a>
+      <a data-route="missions"><svg class="ico"><use href="#i-sprints"/></svg>Missions</a>
+      <a data-route="needs-you"><svg class="ico"><use href="#i-approvals"/></svg>Needs You<span class="badge" id="nb-needs">0</span></a>
+      <a data-route="workers"><svg class="ico"><use href="#i-workers"/></svg>Workers</a>
+      <a data-route="improvements"><svg class="ico"><use href="#i-activity"/></svg>Improvements</a>
       <a data-route="settings"><svg class="ico"><use href="#i-repo"/></svg>Settings</a>
     </nav>
     <div class="railcap" id="railcap"></div>
@@ -53,9 +52,10 @@
 
   <main class="main">
     <div class="topbar">
-      <div class="crumb" id="crumb">Command Center</div>
+      <div class="crumb" id="crumb">Missions</div>
       <div class="spacer"></div>
       <div class="search">Search…</div>
+      <button class="btn ghost" type="button" id="improve-vacilando-btn" title="Capture friction without leaving this mission">Improve Vacilando</button>
       <button class="refreshbtn" id="refresh-btn" title="Recompute the projection from authoritative sources">↻ Refresh</button>
       <span class="livepill" id="livepill"><span class="d"></span><span id="live-label">…</span></span>
       <span class="gen" id="gen"></span>
@@ -64,6 +64,7 @@
   </main>
 </div>
 
+<script src="mission-control.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

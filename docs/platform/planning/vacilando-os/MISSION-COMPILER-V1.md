@@ -1,7 +1,7 @@
 # Mission Compiler V1 — architecture (blueprint for the upstream half of Vacilando)
 
-> Status: architecture for approval. **Design only — do not implement.** Worker
-> Runtime implementation remains on hold. Builds on
+> Status: **Mission Compiler V1 implemented** for Brief → Compiled Mission (2026-07-30).
+> Legacy capability→package compile remains in `mission-package-compiler.mjs`. Builds on
 > `MISSION-RUNTIMES-ARCHITECTURE-V1.md` (approved) and
 > `WORKER-RUNTIME-V1-MISSION-PACKAGE.md` (the execution contract).
 

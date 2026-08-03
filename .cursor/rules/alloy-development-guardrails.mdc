@@ -50,8 +50,9 @@ Use audit -> design -> build for substantial work.
 
 Prefer focused checks first:
 
-- `cd web && npm run typecheck` — **required before merge** on any `web/` TypeScript change (production/build graph; same config `next build` uses). Catches errors Vitest may miss.
-- `cd web && npm run typecheck:tests` — **required when changing tests, scripts, Playwright, or shared types consumed by tests** (full graph including `tests/`). See `docs/platform/governance/typescript-performance.md`.
+- `cd web && npm run typecheck` — **required before merge** on any `web/` TypeScript change (production/build graph; same config `next build` uses). Routes through the host-wide validation broker (`vac-run` / `alloy-validate`) — do not run raw `tsc`.
+- `cd web && npm run typecheck:tests` — **required when changing tests, scripts, Playwright, or shared types consumed by tests** (full graph including `tests/`). Also brokered. See `docs/platform/governance/typescript-performance.md`.
+- `vac status` — show active validation lease + FIFO queue across worktrees.
 - `cd web && npm run verify:module-imports` — **required before staging deploy** when adding `@/lib/**` imports; catches new files not committed (Vercel `Module not found`).
 - `cd web && npm run lint`
 - `cd web && npm run test -- <relevant test path>` when changing covered behavior
@@ -68,7 +69,7 @@ Before expensive validation on a shared machine:
 
 Rules:
 
-- **Serialize** `npm run typecheck` and `npm run typecheck:tests` machine-wide (one at a time).
+- **Serialize** heavy validation machine-wide via the broker (`npm run typecheck|typecheck:tests|build|test` / `vac run …`) — one lease at a time. Do not launch raw concurrent `tsc` / `next build`.
 - Keep **≤5** Cursor windows open (**≤3** during typecheck-heavy work).
 - Run `worktree:list` to confirm the agent is editing the intended worktree path.
 - Do not run full-tree `rg`/`find` across `web/` — scope to the feature path.

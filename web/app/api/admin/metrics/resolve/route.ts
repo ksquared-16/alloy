@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
+import { requireAnalyticsReadAccess } from "@/lib/admin/canReadAnalytics";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { assertMetricSiteAccess } from "@/lib/metrics/resolveMetricSiteAccess";
 import {
@@ -79,10 +78,9 @@ function parseDimensions(searchParams: URLSearchParams): MetricDimensions {
  * - status_key, lifecycle_stage: optional dimensions (enrollment metrics)
  */
 export async function GET(request: NextRequest) {
-    const access = await getAdminAccessContextCached();
-    if (!access.ok) {
-        return adminContextFailureResponse(access);
-    }
+    const auth = await requireAnalyticsReadAccess();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     const { searchParams } = new URL(request.url);
     const keysParam = searchParams.get("keys");

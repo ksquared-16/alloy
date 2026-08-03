@@ -1,0 +1,535 @@
+{
+  "review": {
+    "schema_version": "vacilando.deliverable_review.v1",
+    "review_id": "drev_2beca0370b0a",
+    "mission_id": "msn_2d054741a54698fa4c",
+    "assignment_id": "asg_d203f547736c16",
+    "deliverable_title": "Wave 1 — Service-client principal check (W-4)",
+    "assignment_objective": "Prevent privileged API routes from bypassing principal-resolution review by adding a build-time enforcement check.",
+    "reason_for_work": "Service-role routes can skip principal resolution unless they are reviewed. Without a hard gate, new privileged routes can ship unreviewed.",
+    "expected_outcome": "A build-time AST check fails the build on unreviewed service-client routes or stale allowlist entries, and records today’s exception baseline.",
+    "outcome_summary": null,
+    "behavior_changed": [
+      "Build-time AST check walks API routes for service-role Supabase clients",
+      "Unreviewed routes fail the check",
+      "Stale allowlist entries fail the check",
+      "Guard runs during prebuild (before production builds)",
+      "Current exception baseline is recorded as evidence"
+    ],
+    "behavior_not_changed": [
+      "No route handler behavior changed",
+      "No schema or migration changes",
+      "No operator UI changes",
+      "Existing exceptions were not remediated (deferred to W-15)"
+    ],
+    "protects_or_enables": "Stops new privileged API routes from bypassing principal-resolution review, and keeps the exception list honest so residue cannot accumulate unnoticed.",
+    "acceptance_criteria_results": [
+      {
+        "id": "AC_W1B",
+        "status": "met"
+      }
+    ],
+    "director_verification": {
+      "checks": [
+        {
+          "id": "deliverables_exist",
+          "label": "Expected deliverables exist",
+          "status": "pass",
+          "detail": "Verified on disk: docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+          "source": "automatic",
+          "claim": null
+        },
+        {
+          "id": "scope_respected",
+          "label": "Assignment scope respected",
+          "status": "pass",
+          "detail": "No schema, migration, or UI route changes detected in the reported file set.",
+          "source": "automatic",
+          "claim": "Worker claimed scope was respected."
+        },
+        {
+          "id": "tests_passed",
+          "label": "Required tests ran and passed",
+          "status": "pass",
+          "detail": "15 tests passed · 0 failed · 2 negative fixtures correctly rejected",
+          "source": "automatic",
+          "claim": null
+        },
+        {
+          "id": "evidence_present",
+          "label": "Required evidence exists",
+          "status": "pass",
+          "detail": "10 meaningful evidence item(s); 13 total attached.",
+          "source": "automatic",
+          "claim": null
+        },
+        {
+          "id": "acceptance_criteria",
+          "label": "Acceptance criteria covered",
+          "status": "pass",
+          "detail": "Criteria in scope: AC_W1B. Evidence references them.",
+          "source": "automatic",
+          "claim": null
+        },
+        {
+          "id": "claims_match_git",
+          "label": "Claims match git / filesystem state",
+          "status": "pass",
+          "detail": "Commit 23b4c671 exists in the worktree.",
+          "source": "automatic",
+          "claim": "Commit 23b4c671"
+        },
+        {
+          "id": "evidence_reconciled",
+          "label": "Worker claims agree with structured evidence",
+          "status": "pass",
+          "detail": "Claims and evidence are consistent.",
+          "source": "automatic",
+          "claim": null
+        }
+      ],
+      "passed": 7,
+      "total": 7,
+      "verified_facts": [
+        {
+          "id": "risks_documented",
+          "label": "Remaining risks are documented",
+          "detail": "Existing allowlisted exceptions remain until W-15 remediation; Approval does not certify that every current exception is permanently acceptable"
+        },
+        {
+          "id": "scope_boundaries_clear",
+          "label": "Scope boundaries are clear",
+          "detail": "No route handler behavior changed; No schema or migration changes"
+        },
+        {
+          "id": "evidence_complete",
+          "label": "Evidence set is complete for this assignment",
+          "detail": "Required evidence is present and consistent."
+        }
+      ],
+      "your_judgment": [
+        {
+          "id": "accept_exception_baseline",
+          "label": "Accept the current exception baseline as temporary debt until W-15",
+          "detail": "Existing allowlisted exceptions remain until W-15 remediation",
+          "kind": "judgment"
+        },
+        {
+          "id": "residual_risk_ok",
+          "label": "Decide whether the residual risk is acceptable",
+          "detail": "Existing allowlisted exceptions remain until W-15 remediation; Approval does not certify that every current exception is permanently acceptable",
+          "kind": "judgment"
+        },
+        {
+          "id": "behavior_matches_intent",
+          "label": "Decide whether the delivered behavior matches product intent",
+          "detail": "Prevent privileged API routes from bypassing principal-resolution review by adding a build-time enforcement check.",
+          "kind": "judgment"
+        }
+      ],
+      "worker_claims": {
+        "summary": "Implemented W-4: a tier A build-time check that every web/app/api route holding a service-role Supabase client resolves a principal or sits on a reviewed, reasoned exception list. The check is an AST walk over TypeScript's own parser, credited binding-by-binding to one structurally-defined terminal primitive (.auth.getUser/getClaims/getSession), deliberately unlike auditAuthorityPaths.mjs which over-reported ~30x via file-level regex. Wrappers are discovered by the walk, not hand-listed. Wired into prebuild; exits 1 on any unlisted route or stale list entry. Recorded the measured exception baseline as evidence and wrote the execution record into the plan of record. No route handler, schema, migration or UI was changed; remediation is W-15 by scope.",
+        "files": [
+          "web/scripts/checkServiceClientPrincipal.mjs",
+          "web/scripts/serviceClientPrincipal.allowlist.json",
+          "web/tests/access/serviceClientPrincipalCheck.test.ts",
+          "web/package.json",
+          "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json",
+          "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md"
+        ],
+        "residualRisks": [],
+        "followUpItems": []
+      },
+      "can_recommend_approval": true
+    },
+    "evidence_reconciliation": {
+      "assignment_id": "asg_d203f547736c16",
+      "required_evidence": [
+        {
+          "requirement": "log",
+          "status": "present",
+          "evidenceIds": [
+            "ev_fd37366c64555424"
+          ]
+        },
+        {
+          "requirement": "document",
+          "status": "present",
+          "evidenceIds": [
+            "ev_922678266192deb6",
+            "ev_099c420084804e91",
+            "ev_1650c8be1cc68cfb",
+            "ev_2a6e9c03320b532f",
+            "ev_7934f5e5a588c06c"
+          ]
+        }
+      ],
+      "worker_claims": [
+        {
+          "claim": "tests_passed",
+          "worker": true,
+          "evidence": true
+        }
+      ],
+      "discrepancies": [],
+      "blocking_discrepancies": [],
+      "reconciliation_state": "consistent",
+      "test_semantics": [
+        {
+          "evidenceId": "ev_469dd8a95606f691",
+          "test_run_status": "passed",
+          "assertion_behavior": [
+            {
+              "kind": "expected_rejection",
+              "status": "passed",
+              "detail": "Negative fixture: empty allow-list / red-state rejection behaved correctly"
+            },
+            {
+              "kind": "expected_rejection",
+              "status": "passed",
+              "detail": "Negative fixture: stale allowlist entry correctly rejected"
+            }
+          ],
+          "passed_count": 15,
+          "failed_count": 0,
+          "result_summary": "15 tests passed · 0 failed · 2 negative fixtures correctly rejected",
+          "raw_signals": [
+            "negative_fixture_empty_allowlist",
+            "negative_fixture_stale_entry"
+          ],
+          "createdAt": "2026-07-31T19:35:38.455Z",
+          "title": "Tests executed"
+        }
+      ],
+      "reconciled_at": "2026-07-31T21:43:34.384Z"
+    },
+    "evidence_summary": [
+      {
+        "evidenceId": "ev_08cc2273d9bd3804",
+        "title": "Build integration",
+        "proves": "The guard runs before production builds (prebuild).",
+        "result": "passed",
+        "test_run_status": null,
+        "assertion_behavior": [],
+        "result_summary": "Recorded and verified",
+        "acceptanceCriteriaCovered": [
+          "AC_W1B"
+        ],
+        "source": "diff",
+        "timestamp": "2026-07-31T19:35:38.448Z",
+        "commit": "23b4c671d",
+        "type": "diff",
+        "fileUri": null
+      },
+      {
+        "evidenceId": "ev_a933db6d754f4d88",
+        "title": "Baseline exception inventory",
+        "proves": "The current reviewed exception set is recorded for later remediation (W-15).",
+        "result": "passed",
+        "test_run_status": null,
+        "assertion_behavior": [],
+        "result_summary": "Recorded and verified",
+        "acceptanceCriteriaCovered": [
+          "AC_W1B"
+        ],
+        "source": "commit",
+        "timestamp": "2026-07-31T19:35:38.449Z",
+        "commit": "23b4c671d",
+        "type": "commit",
+        "fileUri": null
+      },
+      {
+        "evidenceId": "ev_469dd8a95606f691",
+        "title": "Automated enforcement tests",
+        "proves": "Unreviewed service-role routes and stale exception entries fail validation.",
+        "result": "passed",
+        "test_run_status": "passed",
+        "assertion_behavior": [
+          {
+            "kind": "expected_rejection",
+            "status": "passed",
+            "detail": "Negative fixture: empty allow-list / red-state rejection behaved correctly"
+          },
+          {
+            "kind": "expected_rejection",
+            "status": "passed",
+            "detail": "Negative fixture: stale allowlist entry correctly rejected"
+          }
+        ],
+        "result_summary": "15 tests passed · 0 failed · 2 negative fixtures correctly rejected",
+        "acceptanceCriteriaCovered": [
+          "AC_W1B"
+        ],
+        "source": "test",
+        "timestamp": "2026-07-31T19:35:38.455Z",
+        "commit": "23b4c671d",
+        "type": "test",
+        "fileUri": null
+      }
+    ],
+    "residual_risks": [
+      "Existing allowlisted exceptions remain until W-15 remediation",
+      "Approval does not certify that every current exception is permanently acceptable"
+    ],
+    "deferred_work": [
+      "W-15 — remediate the recorded exception baseline"
+    ],
+    "recommendation": "approve",
+    "recommendation_headline": "Approve W-4",
+    "recommendation_detail": "The build-time principal-resolution guard is active, its negative scenarios passed, and the current exception baseline is recorded for W-15 remediation. Approval accepts the enforcement guard only — it does not permanently approve the existing exceptions.",
+    "approval_meaning": {
+      "assignment_accepted": true,
+      "criteria_satisfied": [
+        "AC_W1B — build-time principal check + baseline inventory"
+      ],
+      "dependent_work_eligible": "Next Wave 1 / dependent assignments that were waiting on W-4",
+      "does_not_imply": [
+        "All current allowlisted exceptions are permanently accepted",
+        "Route behavior, schema, or UI was changed",
+        "Exception remediation (W-15) is complete"
+      ]
+    },
+    "rejection_consequence": "W-4 stays open for revision. Dependent work that requires this guard remains blocked until a replacement pass is accepted.",
+    "certification_state": "ready_for_review",
+    "created_at": "2026-07-31T21:43:34.387Z",
+    "verified_at": "2026-07-31T21:43:34.387Z",
+    "verified_by": "director",
+    "history": []
+  },
+  "view": {
+    "kind": "deliverable_review",
+    "reviewId": "drev_2beca0370b0a",
+    "missionId": "msn_2d054741a54698fa4c",
+    "assignmentId": "asg_d203f547736c16",
+    "certificationState": "ready_for_review",
+    "headline": "Ready for your approval",
+    "operatorMayApprove": true,
+    "recommendation": {
+      "action": "approve",
+      "headline": "Approve W-4",
+      "detail": "The build-time principal-resolution guard is active, its negative scenarios passed, and the current exception baseline is recorded for W-15 remediation. Approval accepts the enforcement guard only — it does not permanently approve the existing exceptions.",
+      "discrepancies": []
+    },
+    "assignment": {
+      "title": "Wave 1 — Service-client principal check (W-4)",
+      "objective": "Prevent privileged API routes from bypassing principal-resolution review by adding a build-time enforcement check."
+    },
+    "why": "Service-role routes can skip principal resolution unless they are reviewed. Without a hard gate, new privileged routes can ship unreviewed.",
+    "expected": "A build-time AST check fails the build on unreviewed service-client routes or stale allowlist entries, and records today’s exception baseline.",
+    "whatChanged": [
+      "Build-time AST check walks API routes for service-role Supabase clients",
+      "Unreviewed routes fail the check",
+      "Stale allowlist entries fail the check",
+      "Guard runs during prebuild (before production builds)",
+      "Current exception baseline is recorded as evidence"
+    ],
+    "protectsOrEnables": "Stops new privileged API routes from bypassing principal-resolution review, and keeps the exception list honest so residue cannot accumulate unnoticed.",
+    "whatDidNotChange": [
+      "No route handler behavior changed",
+      "No schema or migration changes",
+      "No operator UI changes",
+      "Existing exceptions were not remediated (deferred to W-15)"
+    ],
+    "verification": {
+      "checks": [
+        {
+          "id": "deliverables_exist",
+          "label": "Expected deliverables exist",
+          "status": "pass",
+          "detail": "Verified on disk: docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+          "source": "automatic"
+        },
+        {
+          "id": "scope_respected",
+          "label": "Assignment scope respected",
+          "status": "pass",
+          "detail": "No schema, migration, or UI route changes detected in the reported file set.",
+          "source": "automatic"
+        },
+        {
+          "id": "tests_passed",
+          "label": "Required tests ran and passed",
+          "status": "pass",
+          "detail": "15 tests passed · 0 failed · 2 negative fixtures correctly rejected",
+          "source": "automatic"
+        },
+        {
+          "id": "evidence_present",
+          "label": "Required evidence exists",
+          "status": "pass",
+          "detail": "10 meaningful evidence item(s); 13 total attached.",
+          "source": "automatic"
+        },
+        {
+          "id": "acceptance_criteria",
+          "label": "Acceptance criteria covered",
+          "status": "pass",
+          "detail": "Criteria in scope: AC_W1B. Evidence references them.",
+          "source": "automatic"
+        },
+        {
+          "id": "claims_match_git",
+          "label": "Claims match git / filesystem state",
+          "status": "pass",
+          "detail": "Commit 23b4c671 exists in the worktree.",
+          "source": "automatic"
+        },
+        {
+          "id": "evidence_reconciled",
+          "label": "Worker claims agree with structured evidence",
+          "status": "pass",
+          "detail": "Claims and evidence are consistent.",
+          "source": "automatic"
+        }
+      ],
+      "passed": 7,
+      "total": 7,
+      "summary": "7 of 7 checks passed",
+      "incomplete": false,
+      "detail": null,
+      "verifiedFacts": [
+        {
+          "id": "risks_documented",
+          "label": "Remaining risks are documented",
+          "detail": "Existing allowlisted exceptions remain until W-15 remediation; Approval does not certify that every current exception is permanently acceptable"
+        },
+        {
+          "id": "scope_boundaries_clear",
+          "label": "Scope boundaries are clear",
+          "detail": "No route handler behavior changed; No schema or migration changes"
+        },
+        {
+          "id": "evidence_complete",
+          "label": "Evidence set is complete for this assignment",
+          "detail": "Required evidence is present and consistent."
+        }
+      ],
+      "yourJudgment": [
+        {
+          "id": "accept_exception_baseline",
+          "label": "Accept the current exception baseline as temporary debt until W-15",
+          "detail": "Existing allowlisted exceptions remain until W-15 remediation",
+          "kind": "judgment"
+        },
+        {
+          "id": "residual_risk_ok",
+          "label": "Decide whether the residual risk is acceptable",
+          "detail": "Existing allowlisted exceptions remain until W-15 remediation; Approval does not certify that every current exception is permanently acceptable",
+          "kind": "judgment"
+        },
+        {
+          "id": "behavior_matches_intent",
+          "label": "Decide whether the delivered behavior matches product intent",
+          "detail": "Prevent privileged API routes from bypassing principal-resolution review by adding a build-time enforcement check.",
+          "kind": "judgment"
+        }
+      ]
+    },
+    "reconciliation": {
+      "state": "consistent",
+      "blocking": []
+    },
+    "evidence": [
+      {
+        "evidenceId": "ev_08cc2273d9bd3804",
+        "title": "Build integration",
+        "proves": "The guard runs before production builds (prebuild).",
+        "result": "passed",
+        "test_run_status": null,
+        "assertion_behavior": [],
+        "result_summary": "Recorded and verified",
+        "acceptanceCriteriaCovered": [
+          "AC_W1B"
+        ],
+        "source": "diff",
+        "timestamp": "2026-07-31T19:35:38.448Z",
+        "commit": "23b4c671d",
+        "type": "diff",
+        "fileUri": null
+      },
+      {
+        "evidenceId": "ev_a933db6d754f4d88",
+        "title": "Baseline exception inventory",
+        "proves": "The current reviewed exception set is recorded for later remediation (W-15).",
+        "result": "passed",
+        "test_run_status": null,
+        "assertion_behavior": [],
+        "result_summary": "Recorded and verified",
+        "acceptanceCriteriaCovered": [
+          "AC_W1B"
+        ],
+        "source": "commit",
+        "timestamp": "2026-07-31T19:35:38.449Z",
+        "commit": "23b4c671d",
+        "type": "commit",
+        "fileUri": null
+      },
+      {
+        "evidenceId": "ev_469dd8a95606f691",
+        "title": "Automated enforcement tests",
+        "proves": "Unreviewed service-role routes and stale exception entries fail validation.",
+        "result": "passed",
+        "test_run_status": "passed",
+        "assertion_behavior": [
+          {
+            "kind": "expected_rejection",
+            "status": "passed",
+            "detail": "Negative fixture: empty allow-list / red-state rejection behaved correctly"
+          },
+          {
+            "kind": "expected_rejection",
+            "status": "passed",
+            "detail": "Negative fixture: stale allowlist entry correctly rejected"
+          }
+        ],
+        "result_summary": "15 tests passed · 0 failed · 2 negative fixtures correctly rejected",
+        "acceptanceCriteriaCovered": [
+          "AC_W1B"
+        ],
+        "source": "test",
+        "timestamp": "2026-07-31T19:35:38.455Z",
+        "commit": "23b4c671d",
+        "type": "test",
+        "fileUri": null
+      }
+    ],
+    "residualRisks": [
+      "Existing allowlisted exceptions remain until W-15 remediation",
+      "Approval does not certify that every current exception is permanently acceptable"
+    ],
+    "deferredWork": [
+      "W-15 — remediate the recorded exception baseline"
+    ],
+    "approvalMeaning": {
+      "assignment_accepted": true,
+      "criteria_satisfied": [
+        "AC_W1B — build-time principal check + baseline inventory"
+      ],
+      "dependent_work_eligible": "Next Wave 1 / dependent assignments that were waiting on W-4",
+      "does_not_imply": [
+        "All current allowlisted exceptions are permanently accepted",
+        "Route behavior, schema, or UI was changed",
+        "Exception remediation (W-15) is complete"
+      ]
+    },
+    "rejectionConsequence": "W-4 stays open for revision. Dependent work that requires this guard remains blocked until a replacement pass is accepted.",
+    "actions": {
+      "approve": true,
+      "requestChanges": true,
+      "askDirector": true
+    },
+    "technical": {
+      "workerClaimSummary": "Implemented W-4: a tier A build-time check that every web/app/api route holding a service-role Supabase client resolves a principal or sits on a reviewed, reasoned exception list. The check is an AST walk over TypeScript's own parser, credited binding-by-binding to one structurally-defined terminal primitive (.auth.getUser/getClaims/getSession), deliberately unlike auditAuthorityPaths.mjs which over-reported ~30x via file-level regex. Wrappers are discovered by the walk, not hand-listed. Wired into prebuild; exits 1 on any unlisted route or stale list entry. Recorded the measured exception baseline as evidence and wrote the execution record into the plan of record. No route handler, schema, migration or UI was changed; remediation is W-15 by scope.",
+      "files": [
+        "web/scripts/checkServiceClientPrincipal.mjs",
+        "web/scripts/serviceClientPrincipal.allowlist.json",
+        "web/tests/access/serviceClientPrincipalCheck.test.ts",
+        "web/package.json",
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json",
+        "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md"
+      ],
+      "verifiedAt": "2026-07-31T21:43:34.387Z",
+      "verifiedBy": "director"
+    }
+  }
+}

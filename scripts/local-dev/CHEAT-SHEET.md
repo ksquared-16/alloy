@@ -9,6 +9,10 @@ source ~/bin/alloy-dev/shell-aliases.sh   # awt / devup / astatus / ahealth
 # Read-only orientation
 alloy-audit
 alloy-health
+alloy-engineering-doctor          # Engineering Health (disk/Docker/caches/worktrees)
+alloy-engineering-doctor --json
+alloy-worktree-prune-merged       # dry-run: list worktrees fully merged to staging
+alloy-worktree-prune-merged --yes # remove those worktrees (never --force)
 alloy-ai-health
 alloy-agent-status
 alloy-clean report
@@ -91,6 +95,10 @@ alloy-worker-pause --all
 alloy-worker-resume --all
 alloy-worker-doctor --all                     # read-only
 alloy-worker-doctor 3 --recover               # clear stale PIDs only
+alloy-docker-doctor                           # Docker host health (shared)
+alloy-docker-doctor --recover                 # quit + relaunch Docker Desktop
+alloy-docker-doctor --recover --force         # force-kill when wedged
+alloy-db-reset --recover-docker               # local supabase db reset + 502 retries
 alloy-sprint-finish 3                         # free slot; never delete/push/merge/PR
 
 # Phase 1 primitives (still available)

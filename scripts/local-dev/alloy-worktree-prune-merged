@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Remove managed worktrees whose HEAD is fully contained in origin/staging.
+# Never --force. Never touches dirty / unmerged / protected / live-server trees.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  alloy-worktree-prune-merged              # dry-run report
+  alloy-worktree-prune-merged --yes        # remove candidates
+
+Safety (all required):
+  - HEAD is an ancestor of origin/staging (fully merged)
+  - working tree clean
+  - not the current directory's worktree
+  - no live alloy-dev server PID for that worktree
+  - git worktree remove (never --force)
+  - git branch -d (never -D); branch may remain if git disagrees
+
+Does not delete unmerged sprint work, dirty trees, or ~/Alloy.
+EOF
+}
+
+main() {
+  local yes=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --yes) yes=1; shift ;;
+      *) alloy_die "unknown option: $1" ;;
+    esac
+  done
+
+  alloy_load_config
+  alloy_ensure_runtime_dirs
+  alloy_require_cmd git
+  alloy_verify_canonical_repo
+  alloy_repo_fetch "$ALLOY_REPO"
+  local base
+  base="$(alloy_base_ref)"
+
+  local root="${ALLOY_WORKTREE_ROOT}"
+  [[ -d "$root" ]] || alloy_die "worktree root missing: $root"
+
+  local pwd_real
+  pwd_real="$(cd "$(pwd -P)" && pwd -P)"
+
+  echo "Alloy worktree prune-merged"
+  echo "base: $base"
+  echo "root: $root"
+  echo
+
+  local -a candidates=()
+  local -a candidate_paths=()
+  local -a candidate_branches=()
+  local name path branch ahead dirty pid_path pid
+
+  while IFS= read -r path; do
+    [[ -n "$path" && -d "$path" ]] || continue
+    name="$(basename "$path")"
+    # Protect cwd
+    local path_real
+    path_real="$(cd "$path" && pwd -P)"
+    if [[ "$pwd_real" == "$path_real"* ]]; then
+      echo "  keep  $name (current checkout)"
+      continue
+    fi
+    if [[ ! -e "$path/.git" ]]; then
+      echo "  keep  $name (not a git worktree)"
+      continue
+    fi
+    if ! git -C "$path" merge-base --is-ancestor HEAD "$base" 2>/dev/null; then
+      echo "  keep  $name (unmerged into $base)"
+      continue
+    fi
+    dirty="$(git -C "$path" status --porcelain 2>/dev/null || true)"
+    if [[ -n "$dirty" ]]; then
+      echo "  keep  $name (dirty)"
+      continue
+    fi
+    pid_path="$(alloy_pid_path "$name" 2>/dev/null || true)"
+    if [[ -n "${pid_path:-}" && -f "$pid_path" ]]; then
+      pid="$(alloy_read_pid_file "$pid_path" 2>/dev/null || true)"
+      if [[ -n "${pid:-}" ]] && alloy_pid_alive "$pid" 2>/dev/null; then
+        if alloy_pid_belongs_to_worktree "$pid" "$path" 2>/dev/null; then
+          echo "  keep  $name (server running pid=$pid)"
+          continue
+        fi
+      fi
+    fi
+    branch="$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+    ahead="$(git -C "$path" rev-list --count "${base}..HEAD" 2>/dev/null || echo "?")"
+    local sz
+    sz="$(alloy_dir_size "$path" 2>/dev/null || echo "?")"
+    echo "  would remove  $name  ($sz)  branch=$branch  ahead=$ahead"
+    candidates+=("$name")
+    candidate_paths+=("$path")
+    candidate_branches+=("$branch")
+  done < <(find "$root" -mindepth 1 -maxdepth 1 -type d | sort)
+
+  echo
+  echo "candidates: ${#candidates[@]}"
+  if [[ "${#candidates[@]}" -eq 0 ]]; then
+    echo "Nothing to prune."
+    exit 0
+  fi
+  if [[ "$yes" -eq 0 ]]; then
+    echo "Dry-run only. Re-run with --yes to remove."
+    exit 0
+  fi
+
+  local i=0
+  local removed=0
+  for i in "${!candidates[@]}"; do
+    name="${candidates[$i]}"
+    path="${candidate_paths[$i]}"
+    branch="${candidate_branches[$i]}"
+    echo "Removing $name…"
+    if ! alloy_git "$ALLOY_REPO" worktree remove "$path"; then
+      alloy_git "$ALLOY_REPO" worktree unlock "$path" 2>/dev/null || true
+      if ! alloy_git "$ALLOY_REPO" worktree remove "$path"; then
+        echo "  FAIL: worktree remove $path" >&2
+        continue
+      fi
+    fi
+    if [[ "$branch" != "HEAD" && "$branch" != "(detached)" ]]; then
+      alloy_git "$ALLOY_REPO" branch -d "$branch" 2>/dev/null || \
+        echo "  note: left branch $branch (git branch -d declined)"
+    fi
+    rm -f "$(alloy_metadata_path "$name" 2>/dev/null || true)" \
+          "$(alloy_pid_path "$name" 2>/dev/null || true)" \
+          "$(alloy_log_path "$name" 2>/dev/null || true)" 2>/dev/null || true
+    removed=$((removed + 1))
+    echo "  OK"
+  done
+  alloy_git "$ALLOY_REPO" worktree prune 2>/dev/null || true
+  echo "Removed $removed worktree(s)."
+}
+
+main "$@"

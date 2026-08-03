@@ -22,6 +22,7 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { CLAUDE_IMPLEMENT_ALLOWED_TOOLS, brokerPathPrefix } from "./heavy-validation-guard.mjs";
 
 const CLAUDE = "claude";
 const CURSOR = "cursor-agent";
@@ -131,17 +132,25 @@ export async function requestStatus({ provider, cwd, resume } = {}) {
  * Returns a HANDLE synchronously — { pid, kill(sig), done } — so the mission
  * executor can register the live child (for Stop) before the turn resolves.
  */
-function missionArgs(provider, resume) {
-  // `-p --output-format stream-json` requires --verbose in print mode. A headless
-  // worker cannot answer interactive permission prompts, so it runs in
-  // `acceptEdits` mode — file edits/writes are auto-approved (the worker must be
-  // able to produce its declared deliverables) but Bash and other tools are NOT
-  // auto-granted. Mission scope is bounded by the package prompt + governance
-  // (no push/merge/promote); the operator gates start/stop.
+function missionArgs(provider, resume, { allowBash = false } = {}) {
+  // A headless worker cannot answer interactive permission prompts. Default is
+  // `acceptEdits` (file edits auto-approved; Bash is NOT). Implement phases must
+  // run tests + browser QA, so they also pre-allow a tight Bash allowlist.
+  // Heavy validation MUST go through vac / vac-run / alloy-* — never raw
+  // `npx tsc` / `npm exec tsc` / `node …/tsc` (those patterns are omitted on
+  // purpose; see heavy-validation-guard.mjs).
   if (provider === "claude") {
-    return ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits", ...(resume ? ["--resume", resume] : [])];
+    // `claude -p --output-format stream-json` requires --verbose in print mode.
+    const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"];
+    if (allowBash) {
+      args.push("--allowedTools", ...CLAUDE_IMPLEMENT_ALLOWED_TOOLS);
+    }
+    if (resume) args.push("--resume", resume);
+    return args;
   }
-  return ["-p", "--output-format", "stream-json", "--verbose", "--trust", ...(resume ? ["--resume", resume] : [])];
+  // cursor-agent streams stream-json WITHOUT --verbose (it rejects that flag and
+  // exits code 1 — "unknown option '--verbose'"). It uses --trust for headless auto-approve.
+  return ["-p", "--output-format", "stream-json", "--trust", ...(resume ? ["--resume", resume] : [])];
 }
 
 /** Extract a compact, side-effect-free activity descriptor from a stream frame. */
@@ -171,16 +180,24 @@ const MISSION_DEFAULT_INACTIVITY_MS = 5 * 60 * 1000; // 5 min with no provider o
  * Start a streaming mission turn. Resolves { ok, text, session_id, usage,
  * is_error, timed_out, timeout_kind, duration_ms, frames } when the turn ends.
  */
-export function startMissionTurn({ provider, message, cwd = null, resume = null, maxTurnMs = MISSION_DEFAULT_MAX_MS, inactivityMs = MISSION_DEFAULT_INACTIVITY_MS, onActivity } = {}) {
+export function startMissionTurn({ provider, message, cwd = null, resume = null, maxTurnMs = MISSION_DEFAULT_MAX_MS, inactivityMs = MISSION_DEFAULT_INACTIVITY_MS, onActivity, allowBash = false } = {}) {
   const p = PROVIDERS[provider];
   if (!p) return { pid: null, kill() {}, done: Promise.resolve({ ok: false, provider, error: `unknown provider: ${provider}`, supported: false }) };
   if (!message || typeof message !== "string") return { pid: null, kill() {}, done: Promise.resolve({ ok: false, provider, error: "message required" }) };
 
-  const args = missionArgs(provider, resume);
+  const args = missionArgs(provider, resume, { allowBash });
   const t0 = Date.now();
+  const env = {
+    ...process.env,
+    PATH: `${brokerPathPrefix()}:${process.env.PATH || ""}`,
+  };
   let child;
   try {
-    child = spawn(p.bin, args, { stdio: ["pipe", "pipe", "pipe"], cwd: cwd && existsSync(cwd) ? cwd : undefined });
+    child = spawn(p.bin, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: cwd && existsSync(cwd) ? cwd : undefined,
+      env,
+    });
   } catch (e) {
     return { pid: null, kill() {}, done: Promise.resolve({ ok: false, provider, error: `spawn failed: ${e.code || e.message}` }) };
   }

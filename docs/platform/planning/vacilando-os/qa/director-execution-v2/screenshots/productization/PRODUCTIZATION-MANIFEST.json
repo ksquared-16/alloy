@@ -1,0 +1,282 @@
+{
+  "generated_at": "2026-07-30T17:37:28.147Z",
+  "base": "http://127.0.0.1:3021",
+  "missionId": "msn_b1c2aa7b4e0cc69da4",
+  "decisionId": "dec_481a8355930811",
+  "workerId": "claude-6b",
+  "needsYouCount": 4,
+  "screenshots": [
+    {
+      "filename": "01-missions-home.png",
+      "route": "/#/missions",
+      "url": "http://127.0.0.1:3021/#/missions",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1814,
+      "demonstrates": "Missions home with operator cards",
+      "probe": {
+        "hash": "#/missions",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Missions\n\nDirector-managed work across your org.\n\nNew mission\nAccess & Identity V2\nDecision required\nPhase 2 of 3 · Canonical Authority Model\n1 of 3 deliverables accepted\nAnswer decision: How should invitation expiry work?\n1 worker need attention · 1 paused · 2 open decisions\nDirector will open a revised decision that incorporates your direction. · 2h ago\nOpen decision\nAccess & Identity V2 — Direc",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "02-mission-dashboard.png",
+      "route": "/#/missions/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/missions/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1665,
+      "demonstrates": "Mission Dashboard — Director, Needs Me, confidence, work-first",
+      "probe": {
+        "hash": "#/missions/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nDecision required · Confidence 54% · Next: Waiting on your decision\n\nOpen decision\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\nAccess & Identity V2\nDecision required\nOpen decision\nPHASE\nCanonical Authority Model\nDELIVERABLES\n1 / 3 accepted\nWORKERS\n1 active\nCONFIDENCE\n54%\nNEXT CHECKPOINT\nWaiting on your decision\nClaude: 1 waiting\nDirector\n\nI need a product call from you befo",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "03-decision-desktop.png",
+      "route": "/#/decisions/dec_481a8355930811",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_481a8355930811",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1693,
+      "demonstrates": "Decision Detail desktop",
+      "probe": {
+        "hash": "#/decisions/dec_481a8355930811",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Revised: Confirm invite expiry direction\n\nAccess & Identity V2 · Needs your call · just now\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nPrior decision dec_04a1cbe1ce2857 closed by operator direction.\n\n2. Why does it matter?\n\nLocks auth model\n\n3. What does Director recommend?\n\nFollow your direction — Honor the operator's explicit direction unless they reverse it.\n\n4. What is t",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "04-decision-mobile.png",
+      "route": "/#/decisions/dec_481a8355930811",
+      "url": "http://127.0.0.1:3021/#/decisions/dec_481a8355930811",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "load_ms": 1709,
+      "demonstrates": "Decision Detail mobile",
+      "probe": {
+        "hash": "#/decisions/dec_481a8355930811",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Revised: Confirm invite expiry direction\n\nAccess & Identity V2 · Needs your call · just now\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\n1. What happened?\n\nPrior decision dec_04a1cbe1ce2857 closed by operator direction.\n\n2. Why does it matter?\n\nLocks auth model\n\n3. What does Director recommend?\n\nFollow your direction — Honor the operator's explicit direction unless they reverse it.\n\n4. What is t",
+        "nav": [
+          "Missions",
+          "Needs You4",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "05-timeline.png",
+      "route": "/#/timeline/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/timeline/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1821,
+      "demonstrates": "Operator-language timeline",
+      "probe": {
+        "hash": "#/timeline/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nThe story of this mission in plain language.\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\njust now · Director\nDirector responded\n\nDirector will open a revised decision that incorporates your direction.\n\nDetails\njust now · Director\nDecision requested\n\nDecision required — Revised: Confirm invite expiry direction\n\nDetails\njust now · You\nDecision answered\n\nDecision answered — C",
+        "nav": [
+          "Missions",
+          "Needs You4",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "06-workers.png",
+      "route": "/#/workers",
+      "url": "http://127.0.0.1:3021/#/workers",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1659,
+      "demonstrates": "Workers grouped by mission",
+      "probe": {
+        "hash": "#/workers",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Workers\n\nWork first. Model and slot are secondary.\n\nAccess & Identity V2 Demo\nCatalog integrity\nUnresponsive — Director is intervening\nimplementing\nDirector: Director is preparing a safe recovery\nPaused for a decision\nClaude · Slot 6\nView details\nAccess & Identity V2\nCanonical Authority Model\nStalled — no recent progress\nDrafted model outline; blocked on invite-expiry product call\nDirector: Direct",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "07-worker-detail.png",
+      "route": "/#/workers/claude-6b",
+      "url": "http://127.0.0.1:3021/#/workers/claude-6b",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1668,
+      "demonstrates": "Worker Detail with technical details collapsed",
+      "probe": {
+        "hash": "#/workers/claude-6b",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Canonical Authority Model\n\nAccess & Identity V2 · Stalled — no recent progress\n\n← Workers\nAssignment\n\nCanonical Authority Model\n\nDocument the canonical authority model from inventory\n\nProvider / model: Claude\n\nRuntime: 2h 20m\n\nCurrent session: No active command reported\n\nNext step: Waiting for a worker to start\n\nDirector: Director recovery: checkpoint and pause\n\nDirector is handling recovery — no ",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "08-evidence.png",
+      "route": "/#/evidence/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/evidence/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1643,
+      "demonstrates": "Evidence gallery — proves/AC, not paths first",
+      "probe": {
+        "hash": "#/evidence/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nWhat the work proves — not filesystem paths.\n\nDashboard\nTimeline\nWorkers\nDecisions\nEvidence\nAcceptance coverage\nCovered — Inventory is file/line grounded against the live codebase\nCovered — Contradictions and gaps are enumerated\nOutstanding — Canonical authority model is documented\nOutstanding — Sequenced delivery plan is present\nCovered — Browser QA screenshots attached for ",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "09-kickoff-intake.png",
+      "route": "/#/kickoff",
+      "url": "http://127.0.0.1:3021/#/kickoff",
+      "missionId": null,
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1662,
+      "demonstrates": "Mission Brief — Paste Sprint / Import Markdown",
+      "probe": {
+        "hash": "#/kickoff",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Mission Brief\n\nPaste or import a brief to start.\n\nStart a mission\n\nPaste a sprint brief or import Markdown. Director will parse the structure for your review.\n\nPaste Sprint  Review with Director\nImport Markdown\n\nSame as paste — drop the full brief text, including objectives and phases.\n\nJSON Mission Briefs remain supported for automation. Operators should not need them.\n\nAdvanced: paste JSON Missi",
+        "nav": [
+          "Missions",
+          "Needs You4",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "10-kickoff-readiness.png",
+      "route": "/#/kickoff/msn_b1c2aa7b4e0cc69da4",
+      "url": "http://127.0.0.1:3021/#/kickoff/msn_b1c2aa7b4e0cc69da4",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1626,
+      "demonstrates": "Kickoff readiness/approval",
+      "probe": {
+        "hash": "#/kickoff/msn_b1c2aa7b4e0cc69da4",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Access & Identity V2\n\nReadiness and approval\n\nReadiness\n\nDirector-resolved operational gaps and mission ambiguities:\n\nNo operational gaps — ready to start.\n\nInitial assignment plan: 3 deliverable assignment(s)\n\nExecution follows the Mission Brief phases. Director will not invent a new plan.\n\nStart mission",
+        "nav": [
+          "Missions",
+          "Needs You2",
+          "Workers",
+          "Settings"
+        ]
+      }
+    },
+    {
+      "filename": "11-needs-you.png",
+      "route": "/#/needs-you",
+      "url": "http://127.0.0.1:3021/#/needs-you",
+      "missionId": "msn_b1c2aa7b4e0cc69da4",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "load_ms": 1651,
+      "demonstrates": "Needs You global rollup",
+      "probe": {
+        "hash": "#/needs-you",
+        "mc": true,
+        "hasJsonBlob": false,
+        "textSample": "Needs You\n\nDecisions, recoveries, and approvals waiting on you.\n\nRevised: Confirm invite expiry direction\nNeeds your call\nAccess & Identity V2\n\nYou rejected the prior recommendation and directed: “Reject — prefer 30-day expiry for site managers and document the security rationale.”\n\nDirector: Follow your direction\n\nReview and decide\nHow should invitation expiry work?\nHigh impact\nAccess & Identity ",
+        "nav": [
+          "Missions",
+          "Needs You4",
+          "Workers",
+          "Settings"
+        ]
+      }
+    }
+  ],
+  "thirty_second_qa": {
+    "what_is_happening": "I need a product call from you before this work can continue.",
+    "director_in_control": "Canonical Authority Model: Director handling (checkpoint and pause) — no action needed from you",
+    "do_i_need_to_do_anything": "Revised: Confirm invite expiry direction · How should invitation expiry work?",
+    "what_work_is_active": "Authority Path Inventory (Accepted); Canonical Authority Model (Ready); Delivery Sequence (Waiting)",
+    "how_confident": "54% — Developing",
+    "what_happens_next": "Answer decision: How should invitation expiry work?"
+  }
+}

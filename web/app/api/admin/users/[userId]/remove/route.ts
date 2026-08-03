@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
 
 /** POST: remove user from org (delete user_roles row). Requires org admin or `settings.users_roles`. Does not delete auth.users. */
 export async function POST(
@@ -9,11 +10,16 @@ export async function POST(
 ) {
   const auth = await requireUsersRolesManageAuth();
   if (!auth.ok) return auth.response;
-  const { orgId } = auth.access;
+  const { orgId, userId: callerUserId } = auth.access;
 
   const { userId } = await context.params;
   if (!userId) {
     return NextResponse.json({ error: "userId required" }, { status: 400 });
+  }
+
+  // Self-elevation ban — deleting your own membership is an authority change (and a self-lockout).
+  if (isSelfAuthorityMutation({ callerUserId, targetUserId: userId })) {
+    return selfAuthorityMutationResponse();
   }
 
   const supabase = createAdminClient();

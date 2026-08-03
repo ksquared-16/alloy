@@ -1,0 +1,62 @@
+{
+  "schema_version": "vacilando.productization_seed.v1",
+  "missionId": "msn_b1c2aa7b4e0cc69da4",
+  "product_complete": false,
+  "certification_ready": false,
+  "assignments": [
+    {
+      "id": "asg_becd9454d78c4b",
+      "title": "Authority Path Inventory",
+      "status": "complete"
+    },
+    {
+      "id": "asg_cd997c90bbdbc5",
+      "title": "Canonical Authority Model",
+      "status": "paused"
+    },
+    {
+      "id": "asg_357a80f23b27e7",
+      "title": "Delivery Sequence",
+      "status": "waiting"
+    }
+  ],
+  "decisionId": "dec_1d8042cdbe05bc",
+  "timeline_count": 22,
+  "overview_header": {
+    "missionId": "msn_b1c2aa7b4e0cc69da4",
+    "title": "Access & Identity V2",
+    "statusLabel": "Decision required",
+    "phaseLabel": "Phase 2 of 3 · Canonical Authority Model",
+    "deliverablesLabel": "1 of 3 deliverables accepted",
+    "directorState": "Answer decision: How should invitation expiry work?",
+    "openDecisionCount": 1,
+    "primaryAction": {
+      "kind": "open_decision",
+      "label": "Open decision",
+      "href": "decisions/dec_1d8042cdbe05bc",
+      "decisionId": "dec_1d8042cdbe05bc"
+    }
+  },
+  "needs_you_count": 6,
+  "director_answers": {
+    "where_are_we": "Decision Required · Canonical Authority Model (1/3 deliverables)",
+    "what_changed": "Delivery Sequence waiting on Canonical Authority Model",
+    "are_we_blocked": true,
+    "blocked_detail": "Decision required: How should invitation expiry work?",
+    "is_user_input_required": true,
+    "what_happens_next": "Answer decision: How should invitation expiry work?"
+  },
+  "missions_on_home": [
+    "msn_b1c2aa7b4e0cc69da4",
+    "msn_d34d658b3d39c91781",
+    "msn_3c79c2df9872c3f6e5",
+    "msn_ecdb02e437bd467813"
+  ],
+  "live_missions": [
+    "msn_b1c2aa7b4e0cc69da4",
+    "msn_d34d658b3d39c91781",
+    "msn_3c79c2df9872c3f6e5",
+    "msn_ecdb02e437bd467813"
+  ],
+  "generated_at": "2026-07-30T15:22:30.903Z"
+}

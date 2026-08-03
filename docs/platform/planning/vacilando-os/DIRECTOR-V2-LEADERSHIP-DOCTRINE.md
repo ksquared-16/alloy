@@ -3,6 +3,8 @@
 **A foundational product document. Not an implementation plan.**
 No code, no architecture, no prompts, no providers. This is the doctrine meant to guide Director's product evolution over the next two years. It optimizes for timeless product thinking over immediate build.
 
+**Execution authority (kickoff & mission state):** For how Director operationalizes a user-owned Mission Brief — without inventing the product plan — see **[DIRECTOR-EXECUTION-SYSTEM-V2.md](./DIRECTOR-EXECUTION-SYSTEM-V2.md)**. That Execution System supersedes “Director invents the plan” for mission kickoff. This leadership doctrine still governs counsel tone, intervention economics, and presence in the room.
+
 ---
 
 ## 0. The reframe

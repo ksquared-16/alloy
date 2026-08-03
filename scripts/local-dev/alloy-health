@@ -81,6 +81,11 @@ main() {
           printf '%8s  %s\n' "$(alloy_dir_size "$d")" "$d"
         done || true
   done
+
+  section "Engineering Health"
+  echo "For scored disk/Docker/cache/worktree recommendations:"
+  echo "  alloy-engineering-doctor"
+  echo "  alloy-engineering-doctor --json"
 }
 
 main "$@"
