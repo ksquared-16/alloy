@@ -1,5 +1,24 @@
 # 02 — Canonical access & identity model (Person ↔ user ↔ role ↔ scope)
 
+> **This file carries three Mission 2 phases.**
+>
+> **Part I — §1–§13 · *Person ↔ user ↔ role ↔ scope*** (assignment `asg_7a47782c7dc1c9`). States the four
+> nouns and three edges normatively, re-anchors the accepted invariant register to today's code (§7), and
+> records divergences `M2-1 … M2-9` (§8).
+>
+> **Part III — §24–§32 · *Decisions requiring approval*** (assignment `asg_90a921a3b7f414`). Consolidates
+> every open decision in the corpus — from all six documents that raise one — into a single register that can
+> be cited by number, groups them into the sittings that must decide them together, and orders them by what
+> they block. It **adds no new decision** and re-derives no recommendation; it makes the existing ones
+> approvable. **Parts I and II are not modified by Part III.**
+>
+> **Part II — §14–§22 · *Effective-access resolution model*** (assignment `asg_5a0d3ccf5dea42`). Specifies the
+> **function** that turns a request into an access decision — the stages, their order, how the two branches
+> compose, and what must happen when an input changes or a read fails. Part I said *what the nouns are*; Part II
+> says *how a decision is computed from them*. It adds `M2-10 … M2-15`, invariants `I-28 … I-31`, and decisions
+> `D11`/`D12`. **Part I is not modified by Part II** except for §7, where the invariant register gains four rows
+> and `I-25` moves from *carried, unverified* to *verified and violated*.
+
 > **Mission 2 refresh.** The accepted model is reused as input, not re-derived. This pass states the
 > **Person ↔ user ↔ role ↔ scope** model normatively (§1–§6), then re-anchors the accepted invariants
 > to the code as it stands today (§7) and records what this re-anchoring newly found (§8).
@@ -453,11 +472,20 @@ The accepted model's I-1 … I-25 are unchanged in wording and keep their number
 | I-22 | One resolver; previews render from enforcing code | **worse** | three resolvers, §8 M2-5 |
 | I-23 | Every gate evaluates G-A…G-D, fails closed | **open** | `05…§1`; G-C and G-D independently unmet at scale |
 | I-24 | `(route → capability)` declared and enumerable | **open** | no declaration mechanism exists |
-| I-25 | Authority caches keyed and invalidated | **[carried]** — not re-verified this pass | accepted §10.4 |
+| I-25 | Authority caches keyed and invalidated | **worse** — re-verified in Part II and violated | `adminShellContextCache.ts:12,48,64`; **zero** production invalidation callers (§18, M2-10) |
 | **I-26** | **Role deactivation revokes** | **open (new)** | `resolveAdminAccessCore.ts:89-94` vs `role/route.ts:33` |
 | **I-27** | **Capability and scope branches are independent both ways** | **open (new)** | `accessScope.ts:60-64` |
+| **I-28** | **One normalization, applied at the boundary** | **open (new, Part II)** | three disciplines across the stack, §18 M2-11 |
+| **I-29** | **Revocation is effective on the next request** | **open (new, Part II)** | `role/route.ts:44-47` and `remove/route.ts:26-30` invalidate nothing (M2-10) |
+| **I-30** | **Every resolver read error denies** | **open (new, Part II)** | `resolveAdminAccessCore.ts:145-161` discards the profile error and widens to `all` (M2-12) |
+| **I-31** | **Authority writes are atomic** | **open (new, Part II)** | `role/route.ts:44-47` delete-then-insert, no transaction (M2-14) |
 
-**Score:** 3 met (I-5, I-6, I-12) · 2 partial (I-11, I-3) · 17 open · 5 worse · 4 carried unverified.
+**Score (31 invariants):** 3 met (I-5, I-6, I-12) · 2 partial (I-3, I-11) · 18 open · 6 worse · 2 carried
+unverified (I-4, I-21).
+
+> *Tally note.* Part I's line read "17 open · 5 worse · 4 carried", which summed to 31 against 27 rows. The
+> figures above are recounted directly from the table as it now stands; no Part I **status cell** was changed
+> except `I-25`, which Part II re-verified.
 
 The one genuinely new *positive* is I-12 — and it is the only invariant closed by a migration rather than by
 reclassification.
@@ -658,3 +686,963 @@ rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
 - **Repository-wide searches:** `admin.users.*` / `admin.roles.*` (no matches), `settings.users_roles`
   (consumers), role literals in `web/lib`.
 - **Verified at** `bdcf55908` in `wt6-vacilando-os-product-def`.
+
+---
+---
+
+# Part II — Effective-access resolution model
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Effective-access resolution model* · assignment `asg_5a0d3ccf5dea42`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-vacilando-os-product-def` @ `7df17b9b3`
+**Date** 2026-08-03
+**Status** Proposed — specification only. No code, schema, or migration is changed by this phase.
+**Method** static, file-grounded. Every claim marked **[verified]** was read at the cited `path:line` in this
+pass; claims inherited from Part I or the accepted corpus are marked **[carried]**.
+
+**Inputs reused, not re-derived:** Part I §§1–13 (nouns, edges, invariant register), Part I's `M2-1 … M2-9`,
+[`01-existing-state-inventory.md`](./01-existing-state-inventory.md) (Mission 2 pass), and
+`docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md` §1 for the
+surface and capability counts. The accepted model's gate obligations **G-A** (authentication) · **G-B**
+(tenancy) · **G-C** (capability) · **G-D** (scope) are **[carried]** verbatim from the frozen copy at
+`02…:458-461` and are **not** restated or renumbered here.
+
+---
+
+## 14. Headline — the gate obligations were specified; the function they call was not
+
+The accepted model specified what every **gate** owes: evaluate G-A…G-D in order and fail closed (I-23). Part I
+specified what the **nouns** are and how the capability and scope branches hang off a membership (§0, M2-1).
+Neither specified the thing in between: **the function that takes a request and produces the facts a gate
+evaluates.** That function is what this phase names *effective-access resolution*, and it is where the
+platform's authority behaviour actually lives.
+
+Its normative signature is a total function of four inputs:
+
+```
+resolveEffectiveAccess(principal, org, operation, resource) → allow | deny(reason)
+```
+
+**No function in the codebase has that signature.** What exists resolves **two** of the four inputs — principal
+and org — into a *bundle* of facts, and hands the remaining two to each of 559 route files to handle by
+convention:
+
+```
+   REQUEST
+      │
+      ▼
+   R1 authenticate ──────────────▶ principal            (G-A)
+      │
+   R2 normalize        ← undefined today (M2-11)
+      │
+   R3 select org ──────────────▶ (principal, org)       (G-B)
+      │
+      ├── R4a resolve capability set ────┐              (G-C)   ┐
+      │                                  │                      ├── the bundle
+      └── R4b resolve scope dims ────────┤              (G-D)   ┘   the platform builds
+                                         │
+   R5 compose ───────────────────────────┴──▶ decision   ← per-route, by convention (§17.5)
+   R6 cache                                              ← 120 s, never invalidated (M2-10)
+```
+
+Three claims follow, and they carry §§17–18:
+
+1. **Resolution stops at R4.** The bundle is a *projection of the principal*, not a decision about an
+   operation on a resource. `AdminAccessContextSuccess` carries `roleKeys`, `permissionKeys`, and four scope
+   fields (`getAdminAccessContext.ts:18-28`) **[verified]** — and no `operation`, no `resource`. R5 is
+   therefore not a stage of the model; it is 559 independent implementations of one. The measured consequence
+   is already recorded: **1 of 132 admin page routes gates on anything finer than "has a role"** (`05…§1`)
+   **[carried]**.
+2. **R2 does not exist, and its absence is observable.** Three different normalization disciplines are applied
+   to the same `roleKeys` array at different layers, and the enforcing resolver and the operator-facing preview
+   resolver disagree (§18, M2-11).
+3. **R6 is a correctness stage, not a performance stage, and it is implemented as though it were the latter.**
+   A 120-second in-process cache serves every consumer — including mutation gates — and nothing in production
+   ever invalidates it (§18, M2-10). Part I could only carry I-25 as unverified; it is now verified, and open.
+
+---
+
+## 15. The normative resolution model
+
+Normative. `MUST` / `MUST NOT` / `SHOULD` / `MAY` per RFC 2119, as in Part I.
+
+### 15.1 The six stages
+
+| Stage | Obligation | Feeds |
+|---|---|---|
+| **R1 — Authenticate** | Establish a principal of a declared class from the request, or deny `401`. The principal identity **MUST** come from the credential, never from the request body or a path parameter. | G-A |
+| **R2 — Normalize** | Reduce every identifier that will be compared — role key, org id, principal id, permission key — to canonical form, **once**, at the point it enters the resolver. | all |
+| **R3 — Select org** | Determine the org the request targets **from the request**. A principal with no membership in that org is denied `403`; a principal with memberships elsewhere is not "reduced", it is absent. | G-B |
+| **R4a — Resolve capability** | Compute the capability set as the union of grants of the principal's **present and active** role definitions in that org. | G-C |
+| **R4b — Resolve scope** | Compute the scope dimensions from the `(principal, org)` access profile, independently of R4a. | G-D |
+| **R5 — Compose** | Combine into one decision by **intersection** (§15.3). | the gate |
+| **R6 — Cache** | Any memoization **MUST** preserve the properties in §15.2. | all |
+
+R4a and R4b are **siblings** (Part I §0, M2-1): neither is an input to the other, and neither may read the
+other's output (I-27).
+
+### 15.2 The five properties a resolution model owes
+
+These are what make the stages a *model* rather than a sequence of queries. Each is testable.
+
+| # | Property | Statement |
+|---|---|---|
+| **P1** | **Total** | Every `(principal, org, operation, resource)` has a defined answer. "No rule matched" is not a state; it resolves to `deny`. |
+| **P2** | **Deterministic** | The same inputs against the same stored state produce the same decision, independent of which entry point asked, which process served it, and what else the request did first. |
+| **P3** | **Fail-closed** | Any error, absence, or ambiguity at any stage resolves to `deny`. No stage may substitute a default that is *wider* than what it failed to read (**I-30**). |
+| **P4** | **Monotone under revocation** | Removing a membership, a grant, a role definition, or a scope entry **MUST NOT** widen any decision. Adding one **MUST NOT** narrow any decision. |
+| **P5** | **Freshness-bounded** | A revocation is effective on the next request (**I-29**). A cache TTL bounds how stale a *read* may be; it is not an implementation of revocation. |
+
+P2 is the property that the existence of parallel entry points threatens (§18, M2-13). P4 and P5 are what the
+authority cache breaks today (M2-10). P3 is what the scope read breaks today (M2-12).
+
+### 15.3 The composition rule
+
+> **A decision is the intersection of five independent predicates, evaluated in order, each failing closed:**
+>
+> ```
+> allow  ⟺  authenticated(P)
+>        ∧  member(P, O)
+>        ∧  admitted(P, O)              -- a granted capability, not a role set (I-16)
+>        ∧  capable(P, O, operation)    -- R4a
+>        ∧  in_scope(P, O, resource)    -- R4b
+> ```
+>
+> There is no precedence between the conjuncts and no ordering that lets a later term rescue an earlier one.
+> A role **MUST NOT** appear as a term. Where a role appears today, it is standing in for a capability that
+> was never defined (Part I §6.3, I-16) or bypassing a scope that was (I-27).
+
+Two corollaries that the as-built code violates in opposite directions:
+
+- **No conjunct may be omitted because another passed.** A gate that establishes `member(P,O)` and stops has
+  not evaluated `capable` or `in_scope`; it has assumed them. This is I-23, and it is the shape of 131 of 132
+  admin page routes (`05…§1`) **[carried]**.
+- **No conjunct may be *widened* by another.** `portalAdminBypassesDepartmentScope` lets the admission term
+  rewrite the scope term (`accessScope.ts:45,51-53,60-64`) **[verified]** — I-27, and it is baked into the
+  shared route gate at `adminRouteGate.ts:64` **[verified]**.
+
+### 15.4 Normalization (R2), stated
+
+> **I-28 (new).** Normalization is part of the resolution model, not of its callers. Exactly one function
+> **MUST** define the canonical form of a role key, and it **MUST** be applied where the value enters the
+> resolver — not at each comparison site. Any two layers that compare the same value **MUST** compare it in
+> the same form. Values that do not survive normalization to a catalog entry **MUST** be dropped from the
+> resolved set, not carried through as opaque strings.
+
+This is not pedantry: §18 M2-11 shows the enforcing resolver and the operator-facing preview resolver already
+disagree about the same membership row, and the disagreement is entirely a normalization difference.
+
+### 15.5 Cache and revocation (R6), stated
+
+> **I-29 (new).** Revocation is effective on the next request. A write to `user_roles`, `role_definitions`,
+> `role_permission_grants`, `user_access_profiles`, `user_department_access`, or `user_site_access` **MUST**
+> invalidate every cached authority derived from it *before the write is acknowledged*, for **every** process
+> that may serve the next request. A TTL **MAY** bound staleness for performance; it **MUST NOT** be the
+> mechanism by which a revocation takes effect.
+>
+> Corollary — **a cache whose invalidation cannot span the processes that read it is not a valid authority
+> cache**, however short its TTL.
+
+> **I-30 (new).** Every resolver read error denies. A failed or unreadable read at any stage **MUST** produce a
+> denial. A stage **MUST NOT** substitute a default that grants more than the value it failed to read; in
+> particular an unreadable scope row **MUST NOT** resolve to `all`. This strengthens I-19 (*absent scope
+> denies*) to cover the case where absence and failure are indistinguishable — which, today, they are.
+
+> **I-31 (new).** Authority writes are atomic. A change to a principal's authority **MUST** leave that
+> principal in either its prior complete state or its intended complete state. No path may produce an
+> intermediate state with fewer memberships, grants, or scope rows than both.
+
+---
+
+## 16. As-built — one resolver, one-and-a-half copies, five entry points
+
+Every gate in `web/app/api` reaches resolution through one of five exported entry points. All five ultimately
+answer the same two questions (which org, which roles) — but they do not share a resolver, a cache, or a
+projection.
+
+| Entry point | Resolver | Reads grants? | Reads scope? | Uses the 120 s cache? | Route files |
+|---|---|---:|---:|---:|---:|
+| `getAdminContextCached` (`getAdminContext.ts:68`) | core | yes | yes | **yes** | **429** |
+| `requireAdminOrOps` (`adminAuth.ts:113`) / `requireAdmin` (`:98`) | **portal (light)** / core | **no** / yes | **no** / yes | **no** / yes | **147** |
+| `getAdminAccessContextCached` (`getAdminAccessContext.ts:102`) | core | yes | yes | **yes** | **88** |
+| `loadAdminRouteGate` (`adminRouteGate.ts:40`) | core | yes | yes | **yes** | **30** |
+| `requireAdminOrgContextLight` (`getAdminOrgContextLight.ts:93`) | **portal (light)** | **no** | **no** | **no** | **20** |
+
+Counts are files under `web/app/api/**/route.ts` at `7df17b9b3` **[verified]**, against the 559-file
+denominator from `01…§4` **[carried]**. They overlap — a route may use two — so they do not sum to a coverage
+figure; §22 bounds them.
+
+A sixth resolution site exists outside the entry points: `getAdminOrgIdForUser` calls `resolveAdminAccessCore`
+directly with its own client (`entityLabelsServer.ts:18-25`) **[verified]**, bypassing both the per-request
+memo and the cross-request cache. And a seventh path, `resolveAdminAccessDimensionsForOrgMember`
+(`resolveAdminAccessCore.ts:209`), serves the operator's own preview of someone else's access at
+`users/[userId]/access-scope/route.ts:48,180` **[verified]** — this is the accepted C11 / Part I M2-5 surface,
+and §18 M2-11 shows it now disagrees with the enforcing path on a case neither document had identified.
+
+**The repository's own canonical description of this is wrong** (M2-15). `web/README_ADMIN_AUTH.md:21` calls
+`resolveAdminAccessCore` the *"Single resolver"*, and `:61` states that `requireAdminOrOps()` fails *"if
+`getAdminAuth` fails"* — but `adminAuth.ts:113-118` routes it through `getAdminOrgContextLightCached`, a
+different resolver that reads neither grants nor scope **[verified]**.
+
+---
+
+## 17. Stage-by-stage conformance
+
+### 17.1 R1 — Authenticate
+
+**Conforms.** `resolveAuthSessionOnce` resolves the principal from the session once per request, preferring
+JWT claims and falling back to `auth.getUser()`, returning `userId: null` on any error
+(`cachedAuthSession.ts:17-48`) **[verified]**; `null` becomes `401` at `getAdminAccessContext.ts:44-46`
+**[verified]**. `middleware.ts:117,127-131` independently requires a session for operator paths **[verified]**.
+The principal is never taken from the body — `selfAuthorityMutation.ts:15-19` says so explicitly and the role
+route compares the context id, not a payload field (`role/route.ts:21`) **[verified]**.
+
+**One hygiene note:** `isSelfAuthorityMutation` returns `false` — *permit* — when either id is blank
+(`selfAuthorityMutation.ts:23`) **[verified]**. A deny-predicate defaulting to permit is the wrong direction
+under P3. It is not reachable today, because the caller id comes from a resolved context that cannot be empty;
+it is recorded as a shape to fix, not a live defect.
+
+### 17.2 R2 — Normalize
+
+**Absent.** See §18, M2-11. Three disciplines coexist:
+
+| Discipline | Sites |
+|---|---|
+| **raw**, exact match | membership selection and `roleKeys` construction (`resolveAdminAccessCore.ts:30,35`); `portalEligible` (`:142`); the grant lookup (`:93`); `canManageUsersAndRoles.ts:16` |
+| **trim** | legacy fallback (`:48,56,64`); preview resolver (`:230`); scope bypass (`accessScope.ts:52`); `hasPortalAdminMutateAccess` (`adminPortalRolePick.ts:12`) |
+| **trim + lowercase** | `hasPortalRecordManageAccess` (`adminPortalRolePick.ts:18-19`) |
+
+All **[verified]**. Note that two of these sit inside the *same function*: `resolveAdminAccessCore` trims on the
+legacy branch and does not trim on the membership branch.
+
+### 17.3 R3 — Select org
+
+**Violates the model.** The org is not taken from the request; it is *inferred* from the principal's
+memberships by a lexicographic rule — prefer orgs where the principal holds `admin`/`ops`, then
+`[...new Set(pool.map(r => r.org_id))].sort()[0]` (`resolveAdminAccessCore.ts:30-32`) **[verified]**. This is
+I-7, **open**, unchanged from Part I.
+
+Its consequence for *this* model is specific: because the org is derived rather than supplied, **G-B is not
+evaluable**. There is no org for the gate to check membership *against* — the org is defined as one the
+principal is a member of, so `member(P, O)` is true by construction. A multi-org principal's requests are
+silently answered in whichever org sorts first, and no gate can detect the mismatch because no gate was told
+what org the request meant.
+
+### 17.4 R4a / R4b — Resolve
+
+Both stages run in `resolveAdminAccessCore` (`:107-203`) **[verified]**. The shape is right — they are
+independent reads off the same `(user, org)` pair, exactly as Part I §0 specifies. Three defects, all recorded:
+
+- R4a does not join `role_definitions`, so `is_active` is ignored on resolve (Part I §4.4, **M2-3**, I-26)
+  **[carried]**.
+- R4b's output is then rewritten by a role at the gate (`adminRouteGate.ts:64` → `accessScope.ts:60-64`)
+  (Part I §5.4, I-27) **[verified]**.
+- Both stages' **error handling is inconsistent within the single function** — §18, M2-12.
+
+### 17.5 R5 — Compose
+
+**Not implemented as a stage.** No shared function evaluates §15.3. Each route composes what it chooses from
+the bundle, and the codebase contains exactly **two** named capability predicates, each wrapped by one helper
+that pairs it with authentication and returns the scope dimensions unused:
+
+| Predicate (wrapper) | Conjuncts evaluated | Note |
+|---|---|---|
+| `canReadAnalytics` (`canReadAnalytics.ts:31-37`) — via `requireAnalyticsReadAccess` (`:48-66`) | authenticated ∧ (admitted ∨ capable) | `portalEligible` short-circuits the capability — marked temporary, W-13 (`:29-30`) |
+| `canManageUsersAndRoles` (`canManageUsersAndRoles.ts:15-18`) — via `requireUsersRolesManageAuth` (`:25-40`) | authenticated ∧ (role-literal ∨ capable) | `roleKeys.includes("admin")` short-circuits the capability at `:16` |
+
+Both **[verified]**. Both predicates are **disjunctions with a role on the left**, which is the negation of
+§15.3's rule that a role is not a term. `canManageUsersAndRoles.ts:16` matters for **D9** (Part I §10): even if
+`requireUsersRolesManageAuth` were repointed at `admin.users.write` as D9 recommends, the `admin` role literal
+on line 16 would still short-circuit it, so D9's fix is a two-line change, not a one-line change.
+
+`in_scope(P, O, resource)` has no composer at all. `accessScope.ts` supplies the mechanical predicates —
+`departmentIdAllowed` (`:38-43`), `locationAllowedUnderSiteScope` (`:118-132`), `resolveRecordScopeConstraints`
+(`:179`) **[verified]** — and each route decides whether to call them. That is G-D delegated to convention,
+which is why `05…§1`'s count of finely-gated surfaces is 1.
+
+### 17.6 R6 — Cache
+
+Three caching layers sit on the resolution path. Only the second is an authority cache, and it is the one that
+breaks P4 and P5.
+
+| Layer | Scope | TTL | Verdict |
+|---|---|---|---|
+| React `cache()` request memo (`getAdminAccessContext.ts:40`, `adminAuth.ts:63`, `getAdminContext.ts:61`, `getAdminOrgContextLight.ts:30`, `cachedAuthSession.ts:17`) | one HTTP request | request | **Sound.** A transparent dedup; cannot outlive the decision it serves. |
+| `adminShellContextCache` (`adminShellContextCache.ts`) | **cross-request, per process** | **120 s** (`:12`) | **Unsound** — §18, M2-10 |
+| Entity-label / status-definition caches (`entityLabelsServer.ts:28`, `statusDefinitionsResolve.ts`) | cross-request | 90 s | Out of scope — org-config data, not authority. |
+
+---
+
+## 18. New divergences recorded by this pass
+
+Continuing Part I's `M2-n` series so the accepted `C`/`G` register stays stable.
+
+| # | Finding | Violates | Nature | Evidence |
+|---|---|---|---|---|
+| **M2-10** | The cross-request authority cache is **never invalidated in production** — a 120 s window in which a revoked principal still resolves as authorized | I-25, I-29, P4, P5 | **fail-open on revocation** | `adminShellContextCache.ts:12,48,64,83`; `role/route.ts:44-47`; `remove/route.ts:26-30` |
+| **M2-11** | Role-key normalization differs between the enforcing resolver and the operator preview, so the preview can show capabilities the runtime denies | I-8, I-22, I-28, P2 | preview ≠ runtime | `resolveAdminAccessCore.ts:30,35` vs `:230` |
+| **M2-12** | One resolver, four different error dispositions; the scope read **discards its error entirely** and widens to `all` | I-19, I-30, P3 | fail-open on read failure | `resolveAdminAccessCore.ts:111-119,95-98,145-161,170-172` |
+| **M2-13** | `requireAdminOrOps` resolves through the **light** resolver, which reads no grants and no scope and does not use the cache — so two gates in one request can disagree about the same principal | I-22, P2 | two answers, one request | `adminAuth.ts:113-118`; `getAdminOrgContextLight.ts:45`; `resolveAdminPortalOrgCore.ts:61-99` |
+| **M2-14** | Role reassignment is `delete` then `insert` with no transaction; a failed insert leaves the principal with **zero** memberships | I-31 | non-atomic authority write | `role/route.ts:44-50` |
+| **M2-15** | `README_ADMIN_AUTH.md` — the repository's canonical description of this model — asserts a single resolver and misdescribes `requireAdminOrOps`; it cites an **archived** doc as canonical product semantics | — | documentation divergence | `README_ADMIN_AUTH.md:3,21,61` vs `adminAuth.ts:113-118` |
+
+### M2-10, in detail — the 120-second revocation window
+
+`loadAdminAccessBundleOnce` consults a module-level `Map` **before** it touches the database:
+
+```ts
+const shellHit = readAdminShellContextCache(userId);
+if (shellHit) return shellHit;                            // getAdminAccessContext.ts:48-51
+...
+if (portalEligible) writeAdminShellContextCache(bundle);  // :72-74
+```
+
+**[verified]**. Three properties of this arrangement compound:
+
+1. **The read is unconditional; the write is not.** Every consumer of `loadAdminAccessBundleCached` reads the
+   cache — including `requireUsersRolesManageAuth` (`canManageUsersAndRoles.ts:26`) and therefore every
+   Settings/RBAC **mutation** route. Only `portalEligible` bundles are written (`:72`). **The cache exists
+   exclusively for the principals with the most authority, and serves the routes that change authority.** The
+   module's own header says the opposite — *"Mutations must not rely on this cache for authorization"*
+   (`adminShellContextCache.ts:5-6`) **[verified]**. Nothing enforces that sentence; the entry point that would
+   have to is the shared one.
+2. **`invalidateAdminShellContextCache` has zero production callers.** It is defined at
+   `adminShellContextCache.ts:83` and referenced only by its own module and
+   `web/tests/adminV2/adminShellContextCache.test.ts:5,75` — a repository-wide search finds no other
+   occurrence **[verified]**. The docstring names the two events that should call it — *"logout / org switch"*
+   (`:82`) — and neither does. Nor does any authority write: `PATCH /api/admin/users/[userId]/role`
+   (`:44-47`), `POST /api/admin/users/[userId]/remove` (`:26-30`), and the access-scope route all write and
+   return without touching it **[verified]**.
+3. **Even if they did, it would not be sufficient.** `cache` is a module-level `Map`
+   (`adminShellContextCache.ts:20`) **[verified]** — per process. An invalidation call in the process that
+   served the write cannot reach the entry in any other process that served a read. This is why I-29 is stated
+   with a cross-process clause: the fix is not "add an invalidate call," it is "this is the wrong mechanism for
+   an authority cache."
+
+**The failure, concretely.** An operator removes a compromised `admin` from the org. The `DELETE` succeeds and
+the API returns `{ ok: true }` (`remove/route.ts:32-34`). The removed principal's next request hits
+`readAdminShellContextCache`, gets the bundle resolved before the deletion, and passes every gate built on
+`loadAdminAccessBundleCached` — the 429 + 88 + 30 route files in §16 — for **up to 120 seconds**, in each
+process holding a warm entry. Nothing in the product surfaces this delay, and the operator has been told the
+removal succeeded.
+
+The same window applies to demotion (`role/route.ts`) and to scope narrowing (`access-scope/route.ts`). It does
+**not** apply to `requireAdminOrOps` / `requireAdminOrgContextLight` routes, which resolve fresh — which is
+M2-13's disagreement, arriving here as the *safe* side of an inconsistency.
+
+> This is the single sharpest finding in either part of this document. Part I could only carry I-25 as
+> unverified (§7). It is now verified, and it is the only recorded defect that lets a principal act **after** an
+> operator has revoked their authority and been told it worked.
+
+### M2-11, in detail — the preview and the runtime normalize differently
+
+`user_roles.role` is unconstrained `text` (Part I §4.2, M2-2) **[carried]**. The two resolvers read it
+differently:
+
+| | Enforcing (`resolveAdminAccessCore`) | Preview (`resolveAdminAccessDimensionsForOrgMember`) |
+|---|---|---|
+| `roleKeys` built as | `.map(r => r.role)` — **raw** (`:35`) | `.map(r => String(r.role).trim())` — **trimmed** (`:230`) |
+| `portalEligible` | `PORTAL_ROLES.has(r)` on raw (`:142`) | on trimmed (`:233`) |
+| grant lookup | `.in("role_key", raw)` (`:93`) | `.in("role_key", trimmed)` (`:234`) |
+
+**[verified]**. For a membership row holding `"admin "`, the enforcing path yields `portalEligible: false` and
+an **empty** capability set (the grant lookup matches nothing), while the preview path yields
+`portalEligible: true` and the **full** `admin` grant set. Settings → Users & Roles shows a working portal
+administrator; every runtime gate returns 401/403.
+
+**Bounded honestly:** the product's own assignment path trims the submitted role (`role/route.ts:26`)
+**[verified]**, so this state is not reachable through the UI. It is reachable through the writers that M2-2
+shows are unconstrained — seeds, imports, direct SQL — which is precisely the population that `user_roles`'
+missing foreign key leaves unguarded. The finding is that **the model has no defined normal form**, which
+M2-11 makes observable; it is not a claim that padded rows exist in any live org. None was inspected.
+
+### M2-12, in detail — four error dispositions in one function
+
+`resolveAdminAccessCore` handles a failed read four different ways:
+
+| Read | On error | Effect | Direction |
+|---|---|---|---|
+| `user_roles` (`:111-119`) | `return null` | `403` | **closed** ✓ |
+| `role_permission_grants` (`:89-98`) | log, return `[]` | capability set empty — but `portalEligible` is computed at `:142` **before** and is unaffected | **open** for the 131-of-132 surfaces that gate on admission alone |
+| `user_access_profiles` (`:145-150`) | **error not destructured at all** | indistinguishable from "no row" ⇒ `departmentScope`/`siteScope` = `all` (`:152-161`) | **open — widest possible** |
+| `user_department_access` / `user_site_access` (`:165-191`) | log, allow-list `[]` | narrowest possible | **closed** ✓ |
+
+**[verified]**. The third row is the defect: the scope read is the only one whose error is *silently dropped*,
+and it is the one whose failure default is maximal. I-19 already required that *absent* scope deny; this pass
+finds that a transient read failure is indistinguishable from absence and resolves the same way — so the fix
+must cover both, which is why I-30 is stated in terms of failure, not absence.
+
+The second row is subtler and worth stating: because `portalEligible` is derived from `roleKeys` and not from
+grants, **a total outage of the grant table does not reduce a portal admin's access at all** on any route that
+gates on admission — it only silently strips capability-gated features. Part I §6.3's I-17 (portal eligibility
+is never sufficient) is what makes that safe; until I-17 holds, the grant table is not on the critical path for
+almost any decision.
+
+---
+
+## 19. Conformance checks
+
+Mechanical, and each fails today. These extend Part I §9; the accepted §12 table stands **[carried]**.
+
+| Invariant | Check | Kind |
+|---|---|---|
+| **I-28** | One exported `normalizeRoleKey`; assert no other module trims, lowercases, or raw-compares a role key. Property test: the enforcing and preview resolvers return identical `roleKeys` and `permissionKeys` for the same fixture rows, including whitespace and case variants | static + property |
+| **I-29** | Integration: resolve a fixture principal (warming the cache), revoke the membership, resolve again in the **same process** and in a **second** process — assert both deny. Assert every authority-write route is in a list of routes that invalidate | integration |
+| **I-30** | Fault injection: force each of the five resolver reads to error in turn; assert every case denies. Static: assert no Supabase call in the resolution path destructures `data` without `error` | integration + static |
+| **I-31** | Integration: fail the `insert` in `PATCH /users/[userId]/role`; assert the principal's memberships are unchanged | integration |
+| **P2** | For a fixture principal, assert every entry point in §16 returns the same `orgId` and `roleKeys` — including when one is served from cache and another is not | integration |
+| **P4** | Property: for any removal of a membership / grant / scope row, no `(P,O,X,R)` decision flips deny → allow | property |
+| **§15.3** | Static: assert no capability composer contains a role literal on either side of a disjunction (`canManageUsersAndRoles.ts:16` fails this today) | static |
+| **M2-15** | `README_ADMIN_AUTH.md` asserts a resolver and entry-point set; assert it matches the exports actually present | static |
+
+The I-29 check is the one that would have caught M2-10: it asks not *"is the cache correct"* but *"does
+revocation take effect"* — and it must run in two processes, or it passes for the wrong reason.
+
+---
+
+## 20. Decisions
+
+Part I's **D1 – D4** and **D9 – D10** carry forward unchanged. Two are added; neither is worker-resolvable.
+
+**D11 — What is the maximum acceptable revocation latency, and does an authority cache survive the answer?**
+Today the answer is *up to 120 seconds, unbounded in the number of processes, with no operator signal*
+(M2-10). If the product's answer is **zero** — a revocation is effective on the next request — then
+`adminShellContextCache` cannot be kept in its current form, because a per-process `Map` cannot be invalidated
+across processes; it would have to become a shared store keyed on the authority inputs, or be dropped from the
+resolution path and replaced with the per-request memo alone.
+*Recommendation:* **zero, and drop the cache from the authority path.** The per-request React `cache()` memo
+already collapses repeated resolution within a request, which is where the measured cost was
+(`getAdminAccessContext.ts:76-83` warns only above 400 ms). Keeping a 120-second cross-request window buys
+latency on reads that are already memoized, and pays for it with the one behaviour an access system may not
+have: an operator being told a revocation succeeded when it has not yet taken effect. If the cache is kept for
+measured reasons, then the minimum is: shared store, keyed on every authority input, invalidated
+synchronously by every authority write, and **never** read by a mutation gate.
+
+**D12 — Is the light resolver a permitted optimization or a second source of truth?**
+`resolveAdminPortalOrgCore` duplicates ~40 lines of the legacy fallback verbatim and serves
+`requireAdminOrOps` — 147 route files (§16) — with an answer computed from different code and cached
+differently (M2-13). It is *currently* consistent on org and roles because it shares
+`chooseOrgAndRoleKeysFromMembershipRows`; it is inconsistent on freshness today, and nothing prevents the
+duplicated fallback from drifting.
+*Recommendation:* **optimization, not a resolver.** Keep one resolution function and let entry points differ
+only in what they **project** from it — never in what they **compute**. Concretely: have the light path call
+the same core and skip the grant/scope *reads*, rather than re-implementing the selection and fallback logic.
+This subsumes I-22 and Part I's M2-5 into a single structural rule and removes the P2 violation as a
+side-effect.
+
+---
+
+## 21. Reproduce
+
+```bash
+# §16 — entry-point census (files under web/app/api/**/route.ts)
+rg -l 'getAdminContextCached'                       -g 'route.ts' web/app/api | wc -l   # 429
+rg -l 'requireAdminOrOps|requireAdmin\('            -g 'route.ts' web/app/api | wc -l   # 147
+rg -l 'getAdminAccessContextCached'                 -g 'route.ts' web/app/api | wc -l   #  88
+rg -l 'loadAdminRouteGate'                          -g 'route.ts' web/app/api | wc -l   #  30
+rg -l 'getAdminOrgContextLightCached|requireAdminOrgContextLight' -g 'route.ts' web/app/api | wc -l  # 20
+
+# §16 — resolution sites outside the entry points
+rg -n 'resolveAdminAccessCore\(|resolveAdminPortalOrgCore\(|resolveAdminAccessDimensionsForOrgMember\(' web/lib web/app
+
+# §18 M2-10 — the cache is read unconditionally, written only for portal-eligible, invalidated nowhere
+rg -n 'readAdminShellContextCache|writeAdminShellContextCache' web/lib/admin/getAdminAccessContext.ts
+rg -n 'invalidateAdminShellContextCache' web/            # definition + test only
+rg -n 'ADMIN_SHELL_CONTEXT_CACHE_TTL_MS|new Map' web/lib/adminV2/adminShellContextCache.ts
+rg -n 'user_roles|invalidate' web/app/api/admin/users/\[userId\]/role/route.ts \
+                              web/app/api/admin/users/\[userId\]/remove/route.ts
+
+# §17.2 / §18 M2-11 — three normalization disciplines; enforcing vs preview
+rg -n '\.trim\(\)|PORTAL_ROLES\.has|roleKeys\.includes' \
+  web/lib/admin/resolveAdminAccessCore.ts web/lib/admin/accessScope.ts \
+  web/lib/admin/adminPortalRolePick.ts web/lib/admin/canManageUsersAndRoles.ts
+
+# §18 M2-12 — four error dispositions; the profile read drops its error
+rg -n 'error|const \{ data' web/lib/admin/resolveAdminAccessCore.ts
+
+# §18 M2-13 / M2-15 — requireAdminOrOps resolves through the light path; the README says otherwise
+rg -n 'requireAdminOrOps' -A 6 web/lib/adminAuth.ts
+rg -n 'Single resolver|getAdminAuth. fails' web/README_ADMIN_AUTH.md
+
+# §18 M2-14 — delete then insert, no transaction
+rg -n 'delete\(\)|insert\(' web/app/api/admin/users/\[userId\]/role/route.ts
+```
+
+---
+
+## 22. Limits
+
+1. **Static and file-grounded.** No request issued, no browser used, no live database queried, no test suite,
+   typecheck, or build run. The only file written by this phase is this document.
+2. **The 120-second window is derived from code, not observed.** `ADMIN_SHELL_CONTEXT_CACHE_TTL_MS = 120_000`
+   (`adminShellContextCache.ts:12`) and the read/write sites were read; **no request was issued to demonstrate
+   a revoked principal being served.** The mechanism is verified; the exploit is reasoned, not reproduced.
+   Whether any deployed environment runs multiple server processes — which governs how many warm entries a
+   single invalidation would have to reach — was not established.
+3. **The entry-point counts are file counts, not gate counts.** A file may call an entry point in several
+   handlers, or call two entry points; the sets overlap and do not sum to coverage. They bound how much of the
+   route surface depends on each path — nothing finer.
+4. **M2-11 is a model finding, not a live-data claim.** No org's `user_roles` rows were read. The divergence is
+   in the two resolvers' code; whether any row today triggers it is unknown and was not investigated.
+5. **R5 was surveyed through named composers only.** Routes that inline a capability check without one of the
+   three helpers in §17.5 were not enumerated — the same grep-is-a-floor rule Part I applies to M2-7. `web/app`
+   was not swept for inline scope predicates.
+6. **Part I's carried claims remain carried.** Part II re-verified I-25 and the resolution path; it did **not**
+   re-verify I-4 or I-21, which stay inherited.
+7. **Not a threat model, not an RLS policy review, no product UI claim.** RLS is out of scope here for the same
+   reason as Part I: 534 of 559 routes bypass it (`01…§3.6`) **[carried]**, so it is not on the resolution path
+   this document specifies.
+8. **Read-only.** No source, schema, migration, or UI was modified. The frozen QA copies are untouched.
+
+---
+
+## 23. Provenance — Part II
+
+- **Inputs (reused, not re-derived):** Part I §§0–13 of this file; `01-existing-state-inventory.md` (Mission 2
+  pass, 2026-08-03); `05-command-enforcement-census.md` §1 (surface/capability counts); the frozen
+  `02-canonical-access-identity-model.md` (mission `msn_e9133cdade883793d2`) for **G-A…G-D** and I-1…I-25.
+- **Application code read this pass, in full:** `getAdminAccessContext.ts`, `getAdminContext.ts`,
+  `getAdminOrgContextLight.ts`, `resolveAdminPortalOrgCore.ts`, `adminShellContextCache.ts`,
+  `cachedAuthSession.ts`, `adminAuth.ts`, `adminRouteGate.ts`, `adminPortalRolePick.ts`,
+  `canReadAnalytics.ts`, `canManageUsersAndRoles.ts`, `selfAuthorityMutation.ts`, `middleware.ts`,
+  `web/app/api/admin/users/[userId]/role/route.ts`, `web/app/api/admin/users/[userId]/remove/route.ts`,
+  `README_ADMIN_AUTH.md`.
+- **Read in part:** `resolveAdminAccessCore.ts` (both resolvers, in full — re-read this pass),
+  `accessScope.ts:1-180`, `entityLabelsServer.ts:1-32`.
+- **Repository-wide searches:** `invalidateAdminShellContextCache` (2 non-definition occurrences, both in one
+  test), the five entry-point identifiers scoped to `web/app/api/**/route.ts`, direct callers of the three
+  resolver functions.
+- **Verified at** `7df17b9b3` in `wt6-vacilando-os-product-def`.
+
+---
+---
+
+# Part III — Decisions requiring approval
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Decisions requiring approval* · assignment `asg_90a921a3b7f414`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-vacilando-os-product-def` @ `852f93ff8`
+**Date** 2026-08-03
+**Status** Proposed — specification only. No code, schema, migration, or UI is changed by this phase, and **no
+decision is answered by it.**
+**Method** static, corpus-grounded. This part **reuses the accepted and delivered corpus as input and
+re-derives nothing.** Every decision below was raised, argued and given a recommendation by another document;
+what is new here is the *register* — one ID per question, one place, with the couplings and the ordering made
+explicit. Claims marked **[verified]** were read at the cited `path:line` in this pass.
+
+---
+
+## 24. Headline — the corpus has twenty-one open decisions and no way to name them
+
+Nine required outputs have raised **21 open decisions across six documents**. None is worker-resolvable; all
+are recorded rather than assumed, per the mission's document-authority rule. Two further decisions have been
+**closed** — one by the corpus, one by implementation (§29).
+
+The problem this part exists to solve is not that the decisions are unrecorded. It is that they are recorded
+**five times over, in five different documents, under numbers that collide** — `01…§30` states it plainly:
+*"the decision register cannot currently be cited"* (`01…:1172`) **[verified]**. `D11` today denotes three
+different questions; `D12` and `D13` denote two each. A Director asked to *"approve D11"* cannot act on the
+sentence.
+
+Three things follow, and the third is the one that makes this worth doing now rather than later:
+
+1. **Consolidation is not renumbering.** `01…§30` escalates one renumbering pass as **Director-owned**, and
+   §32 of that document repeats that where the canonical artifacts live is not a worker decision
+   (`01…:1211-1213`, `:1253-1254`) **[verified]**. This part therefore *proposes* a canonical numbering
+   (§26) and **applies it to no source document**. Until it is ratified, the superscript form (`D11`ᴬ) that
+   `01…§30` introduced remains the safe citation.
+2. **The numbering can be made almost free.** Under the rule in §26, **every decision whose number does not
+   collide keeps its number**, and for each collision the reading downstream text most often means keeps its
+   number too. Three questions change number; nothing else moves.
+3. **Nothing downstream has bound to a colliding number yet — and that will not last.** This pass searched
+   the two artifacts that bind to decision IDs: `07-director-acceptance-rubric.md` cites exactly one decision,
+   `D4`, three times (`:117`, `:127`, `:182`), and `03-implementation-qa-sequence.md` cites only `D1`–`D4`
+   (10 × `D3`, 9 × `D4`, 8 × `D2`, 4 × `D1`; **zero** occurrences of `D5`–`D14` or `D-IA n`) **[verified]**.
+   Every one of those is an uncollided number. **GAP-14's decision half has not yet corrupted a single
+   acceptance criterion or regression lock.** It becomes expensive the moment the authentication wave — which
+   owns four of the colliding readings and currently has no workstream at all (`01…:1162-1163`) — acquires a
+   rubric row. This is a window, and it is open today.
+
+> The corpus's recurring failure mode, named at `01…§8` and demonstrated against the corpus itself at
+> `01…§18`: *check that a plan's premises still hold at execution time.* A decision register whose IDs are
+> ambiguous is that failure mode in its cheapest-to-fix form.
+
+---
+
+## 25. The canonical register
+
+Twenty-one open decisions. `AD-n` is the proposed canonical ID (§26); **Legacy** is how the corpus cites the
+question today, and remains valid. **Blocks** uses the gap numbering of `01…§26`. Every **Recommendation** is
+**[carried]** verbatim in substance from the owning document — this part endorses none and originates none.
+
+| `AD` | Legacy | Question | Owner (defined at) | Blocks | Recommendation **[carried]** |
+|---|---|---|---|---|---|
+| **AD-1** | `D1` | Does a person ever become a principal? | frozen `02…:646` | GAP-13 | "Not yet" — adopt §3's five rules now |
+| **AD-2** | `D2` | What are `regional_lead` / `school_director` for? | frozen `02…:652` | GAP-4 (`W-13` value) | Grant them `portal.access`; admission is configuration |
+| **AD-3** | `D3` | What is the delegation ceiling? | frozen `02…:657` | GAP-8 (`W-18`) | Subset rule + self-elevation ban |
+| **AD-4** | `D4` | Is RLS an authority layer? | frozen `02…:662` | GAP-6 (`W-19` sizing) | **(b)** not an authority layer, with (a) as a stated goal |
+| **AD-5** | `D5` | Does account state live per-org or per-account? | `04…:735`, re-anchored `:446` | GAP-1, GAP-2 | Per-`(user, org)`; `locked` per-credential, short-circuits every org |
+| **AD-6** | `D6` | Does deactivating an **account** revoke the credential? | `04…:741`, re-anchored `:447` | **GAP-1** | **Yes**, and explicitly — never as a side effect of deleting a role row |
+| **AD-7** | `D7` | MFA scope for the first wave | `04…:746` | GAP-2 | Operators first, policy-by-role; do not couple to parent/guardian |
+| **AD-8** | `D8` | Is SSO/SAML in V2 at all? | `04…:750` | GAP-2 | Specify the policy shape; do not build it |
+| **AD-9** | `D9`ᴬ | Is `ops` a user-and-role administrator? | §10 of this file | **GAP-8** | **Not intended** — gate on `admin.users.write` / `admin.roles.write` |
+| **AD-10** | `D10`ᴬ | Does deactivating a **role** revoke it? | §10 of this file | **GAP-1** | **Revoke** — the toggle is a security decision, not a documentation one |
+| **AD-11** | `D11`ᴬ | Maximum acceptable revocation latency — and does an authority cache survive the answer? | §20 of this file | **GAP-1** | **Zero**; drop the cross-request cache from the authority path |
+| **AD-12** | `D12`ᴬ | Is the light resolver an optimization or a second source of truth? | §20 of this file | GAP-7 | **Optimization** — entry points may differ in what they *project*, never in what they *compute* |
+| **AD-13** | `D13`ᴬ | Is the unauthenticated public surface inside the tenancy model, or beside it? | `01…:759` | GAP-11 | **Inside** — derive org from the request; delete the env coupling |
+| **AD-14** | `D14` | Is abuse control a security control in this platform? | `01…:769` | GAP-2 | **Yes** for credential and unauthenticated surfaces; out of scope elsewhere, in writing |
+| **AD-15** | `D11`ᴮ | Is the admin password-reset trigger bounded to the caller's org? | `04…:459` | GAP-11 | **Bound it** — resolve to a membership in `access.orgId`, 404 otherwise |
+| **AD-16** | `D12`ᴮ | What step-up does a password change require? | `04…:466` | **GAP-1** | Recovery-type session for reset; current password in-session; **split the two** |
+| **AD-17** | `D13`ᴮ | Which identity-verification mode is the platform's asserted contract? | `04…:472` | GAP-2 | **Local JWKS verification**, asserted by a test that fails if the posture changes |
+| **AD-18** | `D-IA1` | Does the Users chapter show account status or membership status? | `06…:571` | GAP-12 | Membership status primary; credential state a distinct secondary marker |
+| **AD-19** | `D-IA2` | Does the directory show a person, or an account? | `06…:579` | GAP-13 | Account primary; linked person an explicit **nullable** attribute — never matched by email |
+| **AD-20** | `D-IA3` | Is a reusable access policy in V2, and what is it? | `06…:588` | GAP-12 | Specify now, build after the resolver |
+| **AD-21** | `D-IA4` | Is time-boxed access in the first wave? | `06…:595` | GAP-12 | Specify now, build after the resolver — it is a scope attribute, not a new concept |
+
+**Reconciliation with `01…§30`.** That table carries **17 rows for these same 21 questions** — it merges
+`D6 ≡ D10` into one row (`01…:1184`) and collapses `D-IA1…D-IA4` into one (`:1195`) **[verified]**. Both
+compressions are deliberate and correct in their context; this register expands them because a decision that
+must be *decided* with another is still a decision that must be *recorded* separately (§27, sitting 1).
+
+---
+
+## 26. The collision map, and the renumbering rule
+
+### 26.1 What collides, exactly
+
+**[verified this pass]** against every defining site:
+
+| Number | Reading ᴬ | Reading ᴮ | Third reading | Live meanings |
+|---|---|---|---|---|
+| `D1`–`D8` | — | — | — | **1** each — no collision |
+| `D9` | Is `ops` a user-and-role administrator? (§10) | *none* — see §30, `X-6` | *conflict resolution* (`06…:861`) — **closed** | **1** |
+| `D10` | Does role deactivation revoke? (§10) | — | *where Access lives in nav* (`06…:868`) — **closed** | **1** |
+| `D11` | Revocation latency (§20) | Reset trigger org-bounding (`04…:459`) | *time-boxed access* (`06…:873`) — superseded by `D-IA4` | **2** |
+| `D12` | Light resolver (§20) | Password step-up (`04…:466`) | — | **2** |
+| `D13` | Public-surface tenancy (`01…:759`) | Verification mode (`04…:472`) | — | **2** |
+| `D14` | Abuse control (`01…:769`) | — | — | **1** |
+| `D-IA1`–`D-IA4` | `06…:571-599` | — | — | **1** each — namespaced deliberately (`06…:550-558`) |
+
+Six numbers carry more than one definition in the corpus; **three of them carry more than one *live*
+definition** (`D11`, `D12`, `D13`). That is the whole of the decision collision — smaller than the raw
+citation count suggests, and correspondingly cheap to close.
+
+### 26.2 The rule
+
+The proposed numbering is not an arbitrary reassignment. It is generated by three clauses, in order:
+
+1. **A number that does not collide keeps its value.** `D1`–`D8` and `D14` are unchanged.
+2. **For a collision, the ᴬ reading keeps the number.** `D9`ᴬ → `AD-9`, `D10`ᴬ → `AD-10`, `D11`ᴬ → `AD-11`,
+   `D12`ᴬ → `AD-12`, `D13`ᴬ → `AD-13`. The ᴬ readings are the ones the model documents and the gap analysis
+   most often mean, so this minimizes silent misreadings of text already written.
+3. **Displaced readings are reassigned above the existing range**, in source order: `D11`ᴮ → `AD-15`,
+   `D12`ᴮ → `AD-16`, `D13`ᴮ → `AD-17`, then `D-IA1…D-IA4` → `AD-18…AD-21`.
+
+**Net churn: three questions change number** (`D11`ᴮ, `D12`ᴮ, `D13`ᴮ — all owned by `04`, all in the
+authentication wave that has no workstream yet), plus the `D-IA` block folds into the main series. Eighteen of
+twenty-one keep the number they are cited by today, and — per §24 — **no existing citation in `03` or `07`
+points at a number that moves** **[verified]**.
+
+### 26.3 The superscript convention does not survive contact with `D13`
+
+`01…§26` states the convention as *"ᴬ = the `02…` reading, ᴮ = the `04…` reading"* (`01…:1027-1028`)
+**[verified]**. It does not hold for `D13`: `02` defines no `D13`, and `01…§30` assigns `D13`ᴬ to its **own**
+§19 reading and `D13`ᴮ to `04`'s (`01…:1192-1193`) **[verified]**. The convention is therefore a per-row
+assignment recorded in one table, not a rule a reader can apply — which means the current safe citation form
+requires having read `01…§30`. Recorded as `X-8` (§30). It is an argument for ratifying §26.2 rather than
+living on superscripts.
+
+---
+
+## 27. The decisions, by sitting
+
+Six sittings. The grouping is not thematic tidiness: within each sitting the decisions **share an enforcement
+point, a mechanism, or a migration**, so deciding them apart produces either a second flag that means nothing
+or a second migration. `04…§7` makes this argument for sitting 1 and it generalizes (`04…:451-455`)
+**[verified]**.
+
+### Sitting 1 — Revocation *(AD-6, AD-10, AD-11, AD-16)*
+
+**One question at four layers: what does it mean to take authority away?** Today the answer is *nothing, three
+times over* — an inactive account whose credential still works (`04…§2.3`), an inactive role that still
+resolves (M2-3, §4.4), and a removal that a warm cache keeps serving for up to 120 seconds (M2-10, §18).
+
+| `AD` | Options | Cost of deferral |
+|---|---|---|
+| **AD-6** | (a) deactivation disables the credential explicitly · (b) deactivation is membership-only and the credential persists | `04…:447` — "yes" is **a build, not a toggle**: no revocation call exists at all |
+| **AD-10** | (a) `is_active = false` revokes on next resolve · (b) it means *unassignable*, and the UI must say so at the toggle | Every day it is open, an operator's security action is a documentation action |
+| **AD-11** | (a) zero latency; drop the cross-request cache · (b) keep it as a shared store, keyed on every authority input, invalidated synchronously, never read by a mutation gate | **Live fail-open.** This is "the single sharpest finding in either part of this document" (§18) |
+| **AD-16** | (a) recovery-type session for reset **and** current password in-session, split · (b) status quo | Until decided, "session possession is account ownership" (`04…:469-470`) |
+
+**Why these are one sitting.** `04…§7` states it for two of them — *"D6 and D10 are one question… they should be
+decided in one sitting, and **I-26 and I-30 implemented against one enforcement point**, or the platform will
+acquire a second inactive-means-nothing flag"* (`04…:451-455`) **[verified]**. AD-11 belongs with them because
+a revocation that resolves correctly and is then served from a stale cache has not happened, and AD-16 because
+a password change an attacker can perform is a revocation the operator cannot rely on. All four land in the
+coherent wave `01…§29` describes with a single exit test: **revoke, then assert denial on the next request in
+a second process** (`01…:1160-1161`) **[verified]**.
+
+**One input is missing, and it changes the price, not the answer.** `U-7` — *does the platform run more than
+one server process?* — *"decides whether `D11`ᴬ has a cheap answer or an architectural one"* (`01…:1309`)
+**[verified]**. It does not decide **whether** revocation must be immediate. Do not let AD-11 wait on `U-7`;
+let the *implementation* wait on it.
+
+### Sitting 2 — Delegation *(AD-3, AD-9)*
+
+| `AD` | Options | Cost of deferral |
+|---|---|---|
+| **AD-3** | (a) a principal may grant only a subset of what it holds · (b) a named ceiling role · (c) no ceiling | Blocks `W-18`; needed before wave 5 (`03…:1047`) |
+| **AD-9** | (a) `ops` ≠ `admin` — move the gate to `admin.users.write` / `admin.roles.write` · (b) `ops` **is** an administrator, and the product should say so | In any default-seeded org, `ops` can promote itself to `admin` today (§4.5) |
+
+**Decided together, shipped apart.** Both are about how far delegated authority reaches, and the same seed
+evidence answers both. But `01…§30` is explicit that AD-9's *fix* is **independent of AD-3 and should not
+wait** (`01…:1187`) **[verified]**, and §10 makes the same point: it is "a small change that makes an existing
+seed decision effective." AD-3 is the sharper *design* question; AD-9 is the one with a live consequence.
+
+### Sitting 3 — Authentication *(AD-5, AD-7, AD-8, AD-14, AD-17, AD-18)*
+
+This sitting unblocks **GAP-2, the gap with no workstream at all** — *"the whole of `04…§6`, which has no
+workstream because `03` was sequenced before `04` existed"* (`01…:1162-1163`) **[verified]**.
+
+| `AD` | Options | Cost of deferral |
+|---|---|---|
+| **AD-5** | (a) state per-`(user, org)`, `locked` per-credential · (b) all state per-account | Gates AD-18 and the whole lifecycle model |
+| **AD-7** | (a) operators first, policy-by-role · (b) operators and parents together | Coupling to parent/guardian pulls in SMS OTP, itself new |
+| **AD-8** | (a) specify the policy shape, build nothing · (b) build SSO in V2 · (c) preclude it | "the one method here that materially changes tenancy and provisioning" (`04…:752`) |
+| **AD-14** | (a) a security control for credential + unauthenticated surfaces, out of scope elsewhere **in writing** · (b) not a platform concern | Alloy can mail a reset link to an arbitrary address with no rate limit and no membership check (`01…:774-776`) |
+| **AD-17** | (a) assert local JWKS verification · (b) assert remote `getUser()` validation | `U-4`: the current mode is an inherited default of unversioned hosted configuration; **every session-security statement in `07` depends on it** (`01…:1306`) |
+| **AD-18** | (a) membership status primary, credential state secondary · (b) one merged badge | `06…:577` — "the IA half of D5", cannot be deferred behind it |
+
+**AD-18 travels with AD-5, not with the IA work.** `06…§8` is explicit: the IA consequence *"is immediate and
+cannot be deferred behind"* the account-state question, *"and should be decided in the same sitting"*
+(`06…:571-577`) **[verified]**.
+
+### Sitting 4 — Tenancy *(AD-13, AD-15)*
+
+| `AD` | Options | Cost of deferral |
+|---|---|---|
+| **AD-13** | (a) inside the tenancy model — derive org from host/token/path, delete `ALLOY_PUBLIC_ORG_ID` · (b) single-tenant by design, stated and made visible to operators | *"small **now**, and becomes a migration once a second tenant has a public surface"* (`01…:766-767`) |
+| **AD-15** | (a) bound the target to a membership in the caller's org · (b) unbounded by design | *"small, independent of D5–D8, and should not wait for the lifecycle work"* (`04…:463-464`) |
+
+Both are instances of GAP-11 — *"tenancy has three holes; two are unplanned"* (`01…:1022`), of which `W-22`
+covers only `I-7` **[verified]**. AD-15 is also the tenancy half of AD-14's mail primitive: it is the
+membership bound, where AD-14 supplies the volume bound. **Neither alone closes the asymmetry `01…§19`
+describes.**
+
+### Sitting 5 — Vocabulary and resolver shape *(AD-2, AD-4, AD-12)*
+
+| `AD` | Options | Cost of deferral |
+|---|---|---|
+| **AD-2** | (a) admit them via `portal.access` · (b) retire them from the seed | **Cost compounding** — now seeded per org on insert (§4.3); answering after wave 4 costs a second grant migration (`03…:1053-1056`) |
+| **AD-4** | (a) RLS is an authority layer and must agree with the API · (b) it is not, with (a) as a stated goal | **The one decision a delivered artifact binds to** — `07…:117` makes `AE-3` satisfiable two ways, and one of them *is* this decision |
+| **AD-12** | (a) one resolution function; entry points project, never compute · (b) two resolvers, kept consistent by discipline | Nothing prevents the duplicated fallback from drifting (M2-13) |
+
+**AD-4 is more durable than it was recorded.** §8's M2-6 shows the never-seeded `owner`/`manager` vocabulary
+has leaked out of RLS into live application gates, so *"remediating C10 in SQL alone would now leave the leak
+behind"* (§8). And `U-3` records that **no policy-by-policy RLS review has ever been done** — *"GAP-6 and `D4`
+are being decided from secondary evidence"* (`01…:1305`) **[verified]**. AD-4 is the one decision in this
+register whose recommendation rests on evidence the corpus itself flags as insufficient.
+
+### Sitting 6 — Person, policy, and the shape of scope *(AD-1, AD-19, AD-20, AD-21)*
+
+Four *specify-now, build-later* decisions. None blocks current work; each becomes a migration if answered after
+the resolver lands.
+
+| `AD` | Options | Cost of deferral |
+|---|---|---|
+| **AD-1** | (a) not yet — adopt the five rules now · (b) design E1 in V2 | *"genuinely not blocking"* — §3's rules hold either way (`03…:1050-1051`) |
+| **AD-19** | (a) account primary, person an explicit nullable attribute · (b) person primary | A directory that resolves a person by email is *"the prohibited join at its most tempting"* (`06…:585-586`) |
+| **AD-20** | (a) specify now, build after the resolver · (b) out of V2 | Without it, *"every user edit is hand-authored scope"* (`06…:593`) |
+| **AD-21** | (a) specify now, build after the resolver · (b) out of V2 | Needs expiry in the resolver **and** a sweep; the Expired state has no home until `IA-R2` exists |
+
+**AD-1 and AD-19 are the same question at two altitudes** and should be decided together: AD-1 asks whether
+the person↔principal edge may ever exist, AD-19 asks what the directory may display *while it does not*.
+`06…§8` deliberately declines to presume AD-1 (`06…:582-584`) **[verified]** — that restraint is only durable
+if both are answered in one sitting.
+
+---
+
+## 28. Approval order — and what each sitting releases
+
+Ordered by *live consequence*, then by *cost compounding*. This is a recommendation about sequence only; it
+answers nothing.
+
+| # | Sitting | Releases | Why here |
+|---|---|---|---|
+| **1** | **Revocation** (AD-6, AD-10, AD-11, AD-16) | **GAP-1**, and 3 of the 8 truthfulness mechanisms in `01…§31` (rows 1, 6, 7) | The only recorded defect that lets a principal act **after** an operator was told revocation worked (§18). It is a live fail-open, not a design gap |
+| **2** | **Delegation** (AD-3, AD-9) | GAP-8; AD-9 ships without AD-3 | `ops` self-promotion is available in any default-seeded org today |
+| **3** | **Authentication** (AD-5, AD-7, AD-8, AD-14, AD-17, AD-18) | **GAP-2** — the gap with *no workstream* | Six decisions gate an entire unplanned wave; until they are answered `03` cannot even size it |
+| **4** | **Tenancy** (AD-13, AD-15) | GAP-11's two unplanned holes | Both are small today and one becomes a migration on the second tenant |
+| **5** | **Vocabulary & resolver** (AD-2, AD-4, AD-12) | GAP-4, GAP-6, GAP-7 | AD-2 compounds per org seeded; AD-4 should be preceded by the `U-3` review |
+| **6** | **Person, policy, scope shape** (AD-1, AD-19, AD-20, AD-21) | GAP-12, GAP-13 | Specify-now/build-later by their own recommendations; nothing waits on them |
+
+**Two read-only inputs would improve three of these sittings and are not decisions.** `01…§33` already
+proposes a second read-only census scoped to `U-2`, `U-3`, `U-5`, `U-7` — *"the cheapest thing that would move
+several gaps from reasoned to established"* (`01…:1312-1315`) **[verified]**. Against this register: `U-7`
+prices sitting 1, `U-3` grounds AD-4 in sitting 5, and `U-4` is the evidence AD-17 in sitting 3 is asserting a
+contract about. **None of the three blocks a decision; all three improve one.**
+
+**A caution on sequence.** `03…§12`'s framing — *"None blocks the model; each blocks specific work"*
+(`03…:1041`) **[verified]** — was written about AD-1…AD-4 and remains true of them. It is **not** true of
+sitting 1: AD-11 does not block work, it describes a defect that is live in the product now. Sitting 1 is
+first for that reason and not because more is blocked behind it.
+
+---
+
+## 29. What is *not* a decision
+
+Recorded so that "still open" is a conclusion and not an omission.
+
+**Closed by the corpus — no product decision remains.**
+`06…§12 D9` (*what is a conflict, and how does it resolve*) is **closed** by `02…§15.3`, which settles it
+normatively: capability unions, scope intersects, no conjunct may widen another. *"The accepted recommendation
+and the model agree"* (`06…:562-564`) **[verified]**.
+
+**Closed by implementation — differently from the recommendation, and better.**
+`06…§12 D10` (*where Access lives in navigation*) is closed: Access is an Organization domain at
+`/organization/access`. The residue is `IA-8`, a duplicate route — *"a cleanup rather than a decision"*
+(`06…:565-567`) **[verified]**.
+
+**Superseded, not closed.** `06…§12 D11` (*time-boxed access*) is carried forward unchanged as `D-IA4` =
+**AD-21** (`06…:595-596`). It is still open; only its ID moved.
+
+**Director housekeeping, not product decisions.** `X-1`…`X-5` and this part's `X-6`…`X-8` are corpus-integrity
+findings. They require a Director *act* — a renumbering pass, a folder rule, a commit — not a product
+judgment. They are listed with the decisions in `01…§30` because they gate the same artifacts, but approving a
+decision does not close one and closing one does not answer a decision. **`X-5` is the exception worth naming
+twice: Part II of this file is required output #5, is cited by three other documents, and is uncommitted
+working-tree state** (`01…:1281-1287`) **[verified]** — Part III inherits that exposure, since it is appended
+to the same uncommitted file.
+
+**Worker-resolvable: none.** Every owning document says so in its own words, and this part repeats it rather
+than quietly narrowing any of the 21 to an assumption.
+
+---
+
+## 30. New findings recorded by this pass
+
+Continuing the corpus-integrity `X-n` series (`01…§18`, `§32`). No product finding is added by this part —
+Part III raises no `M2-n`, because consolidating decisions cannot discover a defect in code.
+
+| # | Finding | Nature | Evidence |
+|---|---|---|---|
+| **X-6** | **`D-IA0` overstates the `D9` collision.** It reports `D9` as denoting *"who may mint a credential"* in `04…§3.5`. That section does not define a decision — its heading reads *"who may mint a credential **is decision D9**"* and its body cites `02…:564-573` (**D9**) as the authority. It is a citation of the `02` reading, not a second one | citation misread; the corpus's own collision report is one entry too pessimistic | `04…:296-301` vs `06…:551-552` |
+| **X-7** | **No downstream artifact binds to a colliding decision number.** `07…` cites only `D4` (`:117`, `:127`, `:182`); `03…` cites only `D1`–`D4`, with zero occurrences of `D5`–`D14` or `D-IA n` | the escalated renumbering is still free — a window, not yet a debt | `rg` counts, §32 |
+| **X-8** | **The ᴬ/ᴮ convention is a per-row assignment, not a rule.** `01…§26` states *"ᴬ = the `02…` reading"*, but `01…§30` assigns `D13`ᴬ to `01`'s own §19. A reader who has not read that table cannot apply the convention | the disambiguation mechanism itself needs a lookup | `01…:1027-1028` vs `:1192-1193` |
+
+**`X-6` is a correction, not a rebuttal.** `06…§8`'s conclusion — that the decision numbers have collided and
+that one register with one authority is needed before D-numbers are cited in a rubric — is **entirely
+correct**, and `D-IA0` is why this part exists. What §26.1 establishes is that the collision is *three live
+numbers*, not six, which makes the fix smaller than the corpus currently believes. Recorded because `01…§30`
+propagates the same reading in its consolidated table.
+
+Note that `X-6` and `X-7` are the same shape as `X-1`…`X-5`: **each phase was individually careful; nothing
+reconciled them** (`01…:1289-1291`). A register whose own defect report is off by one is the argument for
+having exactly one register.
+
+---
+
+## 31. Conformance — keeping the register true
+
+Mechanical, cheap, and each fails today. These extend `§9` and `§19`; they check the *corpus*, not the code,
+and so belong with `01…§18`'s escalation rather than with a wave.
+
+| Check | Asserts | Kind |
+|---|---|---|
+| **CR-1** | Every `D`/`AD` identifier defined in the corpus is defined **exactly once**. Collect defining sites by regex over `^\*\*(D\|AD)[-A-Z0-9]+ —`; assert no duplicate key | static |
+| **CR-2** | Every `D`/`AD` identifier *cited* in `03`, `07` and the `IA-R` requirement set resolves to exactly one defining site | static |
+| **CR-3** | The register in §25 and the table in `01…§30` name the same set of open questions — reconciling the `D6 ≡ D10` and `D-IA` compressions declared there | static |
+| **CR-4** | No decision is marked *closed* without a cited closing artifact (`06…:562-567` is the pattern to match) | static |
+| **CR-5** | Every open decision names at least one gap it blocks, and every blocked gap in `01…§26` names at least one decision | static |
+
+**CR-2 is the one that would have prevented GAP-14's decision half**, and it is the one that must run *before*
+the first rubric row is written against `AD-15`…`AD-17` — because after that, it stops being a check and starts
+being a migration.
+
+---
+
+## 32. Reproduce
+
+```bash
+cd /Users/Kelly/Code/alloy-worktrees/wt6-vacilando-os-product-def   # @ 852f93ff8
+P=docs/platform/planning/access-identity-v2
+Q=docs/platform/planning/vacilando-os/qa/access-identity-v2
+
+# §25 / §26.1 — every defining site of a decision, corpus-wide
+rg -n '^\*\*D(-IA)?[0-9]+ —' $P $Q
+rg -n '^## .*Decision' $P $Q
+
+# §26.1 — D9's second reading is a citation, not a definition (X-6)
+sed -n '296,301p' $Q/04-authentication-model.md          # "is decision D9", citing 02…:564-573
+sed -n '550,558p' $Q/06-product-ia-and-flows.md          # D-IA0's claim
+
+# §24 / §30 X-7 — what downstream actually binds to
+rg -o 'D(-IA)?[0-9]+' $Q/07-director-acceptance-rubric.md | sort | uniq -c    # D4 ×3, nothing else
+rg -o 'D(-IA)?[0-9]+' $Q/03-implementation-qa-sequence.md | sort | uniq -c    # D1..D4 only
+
+# §26.3 X-8 — the convention states one rule and applies another
+sed -n '1027,1028p' $P/01-existing-state-inventory.md    # "ᴬ = the 02… reading"
+sed -n '1192,1193p' $P/01-existing-state-inventory.md    # D13ᴬ = 01's own §19
+
+# §27 — the couplings, at their sources
+sed -n '451,455p' $Q/04-authentication-model.md          # D6 and D10 are one question
+sed -n '571,577p' $Q/06-product-ia-and-flows.md          # D-IA1 is the IA half of D5
+sed -n '1039,1059p' $Q/03-implementation-qa-sequence.md  # the D1–D4 decision gates
+
+# §29 — the two closures
+sed -n '560,567p' $Q/06-product-ia-and-flows.md
+
+# §28 — the read-only inputs that price three sittings
+sed -n '1301,1315p' $P/01-existing-state-inventory.md    # U-1…U-8
+```
+
+---
+
+## 33. Limits
+
+1. **Static and corpus-grounded.** No request issued, no browser used, no live database queried, no test
+   suite, typecheck, or build run. The only file written by this phase is this document.
+2. **No decision is answered, and no recommendation is originated.** Every recommendation in §25 and §27 is
+   **[carried]** from its owning document. Where this part appears to argue — sittings, ordering, cost of
+   deferral — it is arranging existing arguments, and each is cited to the source that made it. A reader who
+   disagrees with a recommendation should take it up with the owning document, not with §25.
+3. **The `AD-n` numbering is proposed, not applied.** No source document was renumbered, and no source
+   document was edited by this phase. Until a Director ratifies §26.2, `AD-n` exists only in this section and
+   the legacy IDs remain canonical. Citing `AD-n` elsewhere before ratification would create the seventh
+   register this part exists to prevent.
+4. **Completeness is bounded by two searches**, not by a reading of all eight documents end to end: a heading
+   sweep for decision sections and a regex over defining sites (§32). A decision stated in prose without a
+   bolded `**Dn —**` opener or a "Decisions" heading would not have been found. `00`, `05` and the
+   `authority-path-inventory` yielded no decision section under either search, and were not read in full this
+   pass.
+5. **`04`, `06`, `07` and the current `03` were read at their QA-folder paths.** Per `X-2` they are absent
+   from the product-source folder this document lives in (`01…:1256-1266`), so every `04…`/`06…`/`07…`
+   citation here is to `docs/platform/planning/vacilando-os/qa/access-identity-v2/`. Part III therefore adds
+   to the 91 dangling shorthand citations `X-2` counts. That is unavoidable while `X-2` is open, and it is
+   recorded rather than worked around.
+6. **`03`'s decision gates are cited from the QA copy**, which `X-3` establishes is the fresher one by 455
+   lines (`01…:1268-1274`). The stale copy in this folder carries the same §12 gates but not the wave
+   execution records that make "needed by wave 4" meaningful.
+7. **Line citations are as of `852f93ff8` plus the uncommitted working tree.** Part II of this file is
+   uncommitted (`X-5`) and Part III is appended to it, so both are one `git checkout` from deletion, and every
+   `§10`/`§20` cross-reference here resolves only in the working tree.
+8. **Read-only.** No source, schema, migration, or UI was modified. The frozen QA copies are untouched.
+
+---
+
+## 34. Provenance — Part III
+
+- **Inputs (reused, not re-derived):** Parts I and II of this file (§10, §20 — decisions `D9`ᴬ…`D12`ᴬ);
+  the frozen `02-canonical-access-identity-model.md` §14 (mission `msn_e9133cdade883793d2`) for `D1`–`D4`;
+  `04-authentication-model.md` §4 and §7 (`D5`–`D8`, `D11`ᴮ–`D13`ᴮ, and the `D6 ≡ D10` coupling);
+  `06-product-ia-and-flows.md` §8 and its preserved §5 (`D-IA0`–`D-IA4`, and the two closures);
+  `01-existing-state-inventory.md` §19 (`D13`ᴬ, `D14`), §26 (GAP register), §30 (decision coverage), §32
+  (`X-2`–`X-5`), §33 (`U-1`–`U-8`); `03-implementation-qa-sequence.md` §12 (decision gates);
+  `07-director-acceptance-rubric.md` (binding census).
+- **Read this pass, in full:** every "Decisions" section named above; `07-director-acceptance-rubric.md`
+  decision-citation sites (`:117`, `:127`, `:182`).
+- **Corpus-wide searches:** decision defining sites (`^\*\*D(-IA)?[0-9]+ —`) across both folders; decision-ID
+  citations in `03` and `07` (counted, §32); `D9` occurrences in `04` (4 hits, all citations of `02`).
+- **Originated by this part:** the `AD-1…AD-21` register (§25), the renumbering rule (§26.2), the six sittings
+  (§27), the approval order (§28), findings `X-6`–`X-8` (§30), and checks `CR-1`–`CR-5` (§31). Nothing else.
+- **Verified at** `852f93ff8` in `wt6-vacilando-os-product-def`.
