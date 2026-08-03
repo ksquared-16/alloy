@@ -267,12 +267,63 @@ The Work Unit surface does not render that body. It renders
    /enhance/.
 
 **Consequence for certification.** Trust Runtime V1 Slice 1's single operator-facing
-consumer lives on a record surface that Presentation Runtime V2 has retired for
-work-unit routes. Slice 1's governed decision is real and its seam is proven, but on
-the surface operators actually use, **the enrichment has no control to invoke it and
-no place to display it.** S15 is not blocked by tenant data or by this branch — it is
-unsatisfiable until the consumer is ported to the Focus Panel. See the revised
-follow-up B.
+consumer lived on a record surface that Presentation Runtime V2 has retired for
+work-unit routes. Slice 1's governed decision was real and its seam proven, but on
+the surface operators actually use, the enrichment had no control to invoke it and no
+place to display it.
+
+### Resolved — the consumer is now ported (Kelly's decision, 2026-08-03)
+
+`OperationalAttentionEnhanceDraft` is now mounted from `OpportunityFocusPanelBody`,
+the body the inline Focus Panel renders. Done as completion of the already-approved
+Slice 1 integration seam, not as a new slice:
+
+- the component is reused **verbatim** — same copy, same visual treatment, same
+  `data-drawer-slot` hooks the drawer QA already asserts; only its mount point moved;
+- it reads the same compat projection the drawer read
+  (`_attention_suggestion` on the above-fold record), so no new data path;
+- it self-suppresses when there is no draft body, so subjects without a deterministic
+  draft render exactly as before;
+- commit-critical renders carry no record, so nothing shows until the VM settles —
+  the pending → enriched transition stays a prop change, never a remount;
+- the retired drawer runtime is neither restored nor depended on; attention, BOS,
+  queues and Focus Panel composition are untouched.
+
+**Observed at `/workspace/work-unit/new-leads`:** the slot
+`[data-focus-panel-slot="trust_enhance_draft"]` is present and receives a real
+`AttentionSuggestionV1` (read from React props: `primary_reason_code`,
+`reason_codes`, `next_action`). Before the port the same surface had **zero**
+`[data-drawer-slot]` and no slot at all.
+
+### Still unproven end-to-end — and the reason is a third, separate defect
+
+The control renders its button only when `suggestion.suggested_content.body` exists.
+In this tenant it never does:
+
+| | |
+|---|---|
+| Attention rules configured on the tenant's stages | `work_overdue`, `missing_requirements`, `stage_age_exceeded` |
+| Reason codes those project to | `stage_work_overdue`, `stage_missing_required_fields`, `stage_age_exceeded`, `stage_attempts_incomplete` |
+| Of those, mapped in `REASON_TO_TEMPLATE_KEY` | **none — 0 of 4** |
+| Reason codes that DO have a draft template | 16, all non-stage (`follow_up_date_passed`, `stale_new_inquiry`, `tour_date_passed`, …) |
+
+The observed lead reports `primary_reason_code: "stage_age_exceeded"` with
+`suggested_content: null`, so the control correctly renders nothing.
+`stage_age_exceeded` also outranks every mapped code in
+`PLATFORM_PRIMARY_REASON_PRIORITY_ORDER`, so whenever a stage rule fires it wins
+primary and suppresses any mapped reason underneath it.
+
+**This is pre-existing and independent of the port.** The drawer never showed the
+control in this tenant either. The deterministic draft affordance is unreachable for
+Firefly's configured stages on *any* surface, because the reason codes those stages
+emit have no draft template. See follow-up C.
+
+Only two Work Views render in this tenant at all: **New Leads** works; **Follow Up**
+and **All Work** refuse with the grain error, and **Tours** refuses with *"stage
+'tour' offers no reachable primary action"*. So the mapped-reason lanes are also
+unreachable by navigation. The earlier withdrawal of follow-up B stands as to the
+S15 diagnosis — but the grain error is real for those two lenses, just not the
+S15 blocker.
 
 ---
 
@@ -346,19 +397,34 @@ correctly at `/workspace/work-unit/<slug>`; the grain error appears only when
 entering through `/adminV2/workspace`, which is not the operator route. No tenant
 repair is required. Replaced by B′.
 
-### B′. Port the Trust Runtime enrichment consumer onto the Work Unit Focus Panel
+### B′. *(DONE 2026-08-03)* Port the enrichment consumer onto the Work Unit Focus Panel
 
-- `OperationalAttentionEnhanceDraft` is reachable **only** from
-  `OpportunityDrawerOverviewBody`; `OpportunityFocusPanelBody` has no path to it
-  across 1166 modules.
-- `AdminEntityDrawer` deliberately returns `null` for opportunity routes on work-unit
-  surfaces (Presentation Runtime V2), so the drawer body never mounts where operators
-  work.
-- **Scenario S15 and QA conditions 1 and 2 are unsatisfiable until this is done** —
-  no amount of tenant configuration or test data changes it.
-- This is a Presentation Runtime wiring decision, **not** a Slice 1 revision and
-  **not** Slice 2. Whether the enrichment affordance belongs on the Focus Panel at
-  all is a product call for Kelly, not an engineering default.
+Authorized by Kelly and implemented — see §4. The control now mounts from
+`OpportunityFocusPanelBody` and is observed on `/workspace/work-unit/new-leads`.
+
+### C. Stage-plan reason codes have no deterministic draft template
+
+- The tenant's configured attention rules emit only `stage_work_overdue`,
+  `stage_missing_required_fields`, `stage_age_exceeded`, `stage_attempts_incomplete`.
+- **0 of those 4 appear in `REASON_TO_TEMPLATE_KEY`**, so
+  `suggestedContentForReason` returns null and no deterministic draft is ever built.
+- `stage_age_exceeded` also outranks every mapped code in
+  `PLATFORM_PRIMARY_REASON_PRIORITY_ORDER`, so a firing stage rule suppresses any
+  mapped reason beneath it.
+- **Consequence:** the deterministic draft affordance — and therefore the entire
+  Trust Runtime V1 operator-facing path — is unreachable for Firefly's configured
+  stages on *any* surface. This is pre-existing, predates the port, and is why S15
+  still cannot be closed end-to-end.
+- Fix is either a template mapping for the stage reason codes or an explicit product
+  decision that stage-driven attention carries no draft. **Not** a Trust change.
+
+### D. Two Work Views and the Tours lane do not render in the cert tenant
+
+- `Follow Up` and `All Work` refuse with the mixed family/child grain error;
+  `Tours` refuses with *"stage 'tour' offers no reachable primary action"*.
+- Only `New Leads` renders, which is also the lane whose reason codes have no draft
+  template — so the mapped-reason lanes are unreachable by navigation as well.
+- Tenant configuration, unrelated to Trust.
 
 ---
 
