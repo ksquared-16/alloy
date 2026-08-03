@@ -100,12 +100,23 @@ installed_by=alloy-toolkit
 command_count=${count}
 EOF
 
-  # Flip 'current' atomically, then repoint the PATH entry.
+  # Flip 'current'. NOTE: do NOT stage via a temp link and `mv` it over —
+  # `mv` FOLLOWS an existing symlink-to-directory and drops the temp link
+  # INSIDE the old version instead of replacing the pointer. That failed
+  # silently: the install reported success, verify reported durable, and the
+  # toolkit stayed on the previous commit. `ln -sfn` replaces the link itself.
   mkdir -p "$ROOT"
-  ln -sfn "$dest" "${ROOT}/.current.tmp"
-  mv -f "${ROOT}/.current.tmp" "${ROOT}/current"
+  rm -f "${ROOT}/.current.tmp"
+  ln -sfn "$dest" "${ROOT}/current"
   mkdir -p "$(dirname "$LINK")"
   ln -sfn "${ROOT}/current" "$LINK"
+
+  # Assert the flip actually took, so a silent no-op can never be reported as
+  # a successful install again.
+  local resolved
+  resolved="$(readlink -f "$LINK" 2>/dev/null || echo "")"
+  [[ "$resolved" == "$(readlink -f "$dest")" ]] \
+    || die "install did not take effect: ${LINK} resolves to ${resolved:-nothing}, expected ${dest}"
 
   ok "installed ${short} from ${ref} (${count} commands)"
   info "toolkit: ${dest}"
