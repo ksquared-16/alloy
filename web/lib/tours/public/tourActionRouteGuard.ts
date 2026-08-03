@@ -13,7 +13,7 @@ import type { NextRequest } from "next/server";
 
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { decodePublicTourToken } from "@/lib/tours/public/resolveTourPublicBookingLink";
-import { takeTourPublicRateLimit } from "@/lib/tours/public/tourPublicRateLimit";
+import { takeTourPublicRateLimit, type TourPublicRateLimitKind } from "@/lib/tours/public/tourPublicRateLimit";
 import { tourPublicErr, tourPublicRateLimited } from "@/lib/tours/public/tourPublicHttp";
 import {
     authorizeTourAction,
@@ -53,7 +53,8 @@ export type TourRouteGuardResult =
 export async function guardTourActionRoute(args: {
     request: NextRequest;
     rawToken: string;
-    routeName: string;
+    /** Must be a rate-limit kind: a route with no budget is a 500, not an open route. */
+    routeName: TourPublicRateLimitKind;
     requiredActions: readonly TourActionKind[];
 }): Promise<TourRouteGuardResult> {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

@@ -66,9 +66,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         from: new Date(startAt.getTime() - 60_000),
         to: new Date(endAt.getTime() + 60_000),
     });
-    const available = live.some(
-        (s: { start_at?: string | Date }) => new Date(String(s.start_at)).getTime() === startAt.getTime()
-    );
+    // Inferred against the real `AvailableTourSlot` (camelCase `startAt`), not a
+    // hand-written shape — see the same note in the `book` route.
+    const available = live.some((s) => new Date(s.startAt).getTime() === startAt.getTime());
     if (!available) {
         // Action NOT consumed: the family may pick another time.
         return tourPublicErr("That time is no longer available. Please choose another.", 409, { code: "SLOT_UNAVAILABLE" });
