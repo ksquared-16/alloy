@@ -215,10 +215,24 @@ describe("lifecycle", () => {
         expect((r as { code?: string }).code).toBe("consumed");
     });
 
-    it("refuses a declined or superseded invitation", async () => {
-        for (const status of ["declined", "expired", "revoked", "superseded", "draft"]) {
+    it("refuses a non-actionable invitation", async () => {
+        // `draft` was never delivered; `expired`/`revoked`/`superseded` are
+        // withdrawn. None may act.
+        for (const status of ["expired", "revoked", "superseded", "draft"]) {
             const r = await auth({ invitation: invitation({ status }) });
             expect(r.ok, status).toBe(false);
+        }
+    });
+
+    it("STILL authorizes terminal booked/declined so replays reach the route", async () => {
+        // Corrected in Slice C after a behavioural test showed that refusing
+        // terminal states here turned every idempotent replay into "this link is
+        // no longer valid" instead of "you already booked / already declined".
+        // The authorizer answers "is this forged?"; what a terminal state means
+        // is the route's decision.
+        for (const status of ["booked", "declined"]) {
+            const r = await auth({ invitation: invitation({ status }) });
+            expect(r.ok, status).toBe(true);
         }
     });
 });

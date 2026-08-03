@@ -187,10 +187,15 @@ export async function authorizeTourAction(args: {
     if (invitation.revoked_at) return deny("revoked");
     if (isPast(invitation.expires_at)) return deny("expired");
 
-    // Which invitation states still permit action. `booked` remains permitted so
-    // a repeat click can return the existing booking instead of a dead end —
-    // the route decides what to show; the authorizer only says "not forged".
-    const usable = ["active", "booked"];
+    // Which invitation states still permit action.
+    //
+    // `booked` and `declined` are TERMINAL but still authorize, so a repeat
+    // click reaches the route and gets "you already booked / already declined"
+    // rather than "this link is no longer valid". A behavioural test caught
+    // this: refusing terminal states here turned every idempotent replay into a
+    // dead end. The authorizer only answers "is this forged?" — what a terminal
+    // state means is the route's decision.
+    const usable = ["active", "booked", "declined"];
     if (!usable.includes(invitation.status)) return deny("revoked");
 
     // THE RECIPIENT BINDING. The token proves possession; this proves the
