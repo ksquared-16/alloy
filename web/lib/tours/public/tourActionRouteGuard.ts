@@ -56,6 +56,11 @@ export async function guardTourActionRoute(args: {
     /** Must be a rate-limit kind: a route with no budget is a 500, not an open route. */
     routeName: TourPublicRateLimitKind;
     requiredActions: readonly TourActionKind[];
+    /**
+     * Opt in to serving an already-spent credential as a replay. The route MUST then
+     * check `auth.replay` and return the existing result rather than mutating again.
+     */
+    allowConsumedReplay?: boolean;
 }): Promise<TourRouteGuardResult> {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         return { ok: false, response: tourPublicErr("Server misconfiguration", 500) };
@@ -75,7 +80,12 @@ export async function guardTourActionRoute(args: {
     // which single kinds it serves.
     let lastFailure: Extract<TourActionAuthorization, { ok: false }> | null = null;
     for (const requiredAction of args.requiredActions) {
-        const auth = await authorizeTourAction({ supabase, plaintextToken: token, requiredAction });
+        const auth = await authorizeTourAction({
+            supabase,
+            plaintextToken: token,
+            requiredAction,
+            allowConsumedReplay: args.allowConsumedReplay,
+        });
         if (auth.ok) return { ok: true, auth, supabase };
         // A non-action failure (expired, revoked, recipient mismatch) is the
         // real reason and should win over "wrong_action" from a sibling attempt.
