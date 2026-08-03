@@ -90,6 +90,17 @@ export default function CurrentWorkFocusedSurface({
     const outcomes = surface.showOutcomeCompletion ? surface.completionOutcomes : [];
     const outcomeEffect = (key: string): string[] =>
         surface.resolutions.find((r) => r.kind === "outcome" && r.key === key)?.effect ?? [];
+
+    /**
+     * Why outcomes cannot be recorded — the sentence the runtime already computed.
+     *
+     * `outcomeCompletionBlockReason` has always been on the surface and was never rendered: when
+     * `showOutcomeCompletion` is false the outcome list silently became `[]` and the card showed a
+     * bare "Blocked" chip with no tooltip, no reason and nothing to click. Rendering it is the
+     * whole fix — no new logic, no new state.
+     */
+    const outcomeBlockReason =
+        !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
     const activity = activityItems.slice(0, 3);
 
     const processing = completionPhase === "processing";
@@ -160,6 +171,11 @@ export default function CurrentWorkFocusedSurface({
                         ← Back to actions
                     </button>
                     <p className="alloy-os-currentwork__focused-section-title">What happened?</p>
+                    {outcomeBlockReason ?
+                        <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
+                            {outcomeBlockReason}
+                        </p>
+                    :   null}
                     <ul className="alloy-os-currentwork__outcome-list" role="radiogroup" aria-label="Outcome">
                         {outcomes.map((outcome) => {
                             const selected = pendingOutcomeKey === outcome.outcome_key;
@@ -242,6 +258,14 @@ export default function CurrentWorkFocusedSurface({
                                 </button>
                             :   null}
                         </div>
+                    :   null}
+
+                    {/* The dead end, explained — here, where the operator is looking for the
+                        button that isn't there, rather than as a bare "Blocked" chip. */}
+                    {outcomeBlockReason ?
+                        <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
+                            {outcomeBlockReason}
+                        </p>
                     :   null}
 
                     <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />

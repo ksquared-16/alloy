@@ -560,6 +560,14 @@ function SummaryBody({
     // outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
 
+    /**
+     * Why this work cannot be resolved. The summary is where the "Blocked" chip appears, so it is
+     * where the reason belongs — a status word with no explanation is the dead end this sprint
+     * exists to remove. Computed by the runtime, previously discarded here.
+     */
+    const outcomeBlockReason =
+        !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
+
     return (
         <div
             className="alloy-os-currentwork__summary"
@@ -567,6 +575,11 @@ function SummaryBody({
             role="group"
             aria-label="What's Next summary"
         >
+            {outcomeBlockReason ?
+                <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
+                    {outcomeBlockReason}
+                </p>
+            :   null}
             <div className="alloy-os-currentwork__summary-controls">
                 {dominant ?
                     <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
