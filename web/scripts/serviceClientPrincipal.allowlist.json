@@ -62,16 +62,6 @@
       "reason": "Same binding check at :114 before the submit path executes."
     },
     {
-      "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
-      "model": "capability-token",
-      "reason": "`resolveTourPublicBookingLinkByToken` (:21) selects by token; documented as minimal disclosure. Also rate-limited per token (:15)."
-    },
-    {
-      "route": "app/api/public/tour-booking/[token]/slots/route.ts",
-      "model": "capability-token",
-      "reason": "Token-resolved link scopes the availability read (:22); rate-limited per token (:16)."
-    },
-    {
       "route": "app/api/public/tour-booking/[token]/book/route.ts",
       "model": "capability-token",
       "reason": "Token-resolved link scopes the booking write (:30); rate-limited per token (:24)."
@@ -115,6 +105,30 @@
     {
       "route": "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
       "reason": "Per-tenant subaccount variant of the same handler and the same model."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
+      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (:20) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link↔invitation recipient binding, and the action kind. `requiredActions` is the route constant `[view_tour_slots, view_tour_details]` (:16) — never request-supplied — so a decline- or cancel-only token cannot read context. Read-only; discloses labels and status, never a person, opportunity, process or household id."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/slots/route.ts",
+      "reason": "Same guard-held client and same capability model. Route constant `[view_tour_slots, reschedule_tour]` (:20); the authorized link scopes the availability read, and the guard rate-limits per token under the `slots` budget."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/decline/route.ts",
+      "reason": "Same guard-held client and same capability model. Route constant `[decline_tour]` (:14). Single-use: `consumeTourAction` closes the credential with a conditional `UPDATE ... WHERE consumed_at IS NULL`. Writes only the invitation's own decline state."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/confirm/route.ts",
+      "reason": "Same guard-held client and same capability model. Route constant `[confirm_tour]` (:19). The booking id comes from the credential via `loadBoundBooking`, never from the request body, so no caller-supplied selector reaches the write."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/reschedule/route.ts",
+      "reason": "Same guard-held client and same capability model. Route constant `[reschedule_tour]` (:21). Booking id is credential-bound via `loadBoundBooking`; the requested slot is revalidated against `computeAvailableTourSlots` before `rescheduleTourBooking` runs."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/cancel/route.ts",
+      "reason": "Same guard-held client and same capability model. Route constant `[cancel_tour]` (:16). Booking id is credential-bound via `loadBoundBooking`, and the cancel is single-use through `consumeTourAction`."
     }
   ],
   "reviewed_note": "Dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink)."
