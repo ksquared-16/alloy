@@ -24,8 +24,11 @@ export type ChildParticipationPatch = {
     program_room_cohort_key?: string | null;
     location_id?: string | null;
     schedule_type?: string | null;
+    /** Requested Start (family preferred) — not operational Start Date. */
     start_date?: string | null;
     notes?: string | null;
+    /** Requested days/week when exact preferred weekdays are still unknown. */
+    requested_days_per_week?: number | null;
     /** Schedule-draft extensions carried on the participation metadata (pre-materialization). */
     end_date?: string | null;
     weekdays?: number[] | null;
@@ -48,6 +51,7 @@ const PARTICIPATION_KEYS: (keyof ChildParticipationPatch)[] = [
     "schedule_type",
     "start_date",
     "notes",
+    "requested_days_per_week",
 ];
 
 /** Schedule-draft keys carried on participation metadata (pre-materialization only). */

@@ -1,9 +1,13 @@
 /**
- * Enrollment schedule doctrine — proposal (OCM) vs committed operational schedule.
+ * Enrollment schedule doctrine — family request vs proposed assignment vs committed schedule.
  *
- * Schedules may be captured early in enrollment (before tour). OCM `schedule_type`
- * is enrollment schedule intent/proposal. `schedule_assignments` are committed operational
- * schedule after approve handoff converts the latest valid proposal.
+ * - Participation / OCM `schedule_type` (+ draft weekdays) = enrollment schedule **intent**
+ *   (family request / early proposal before an operational assignment row exists).
+ * - `schedule_assignments.commitment_kind = proposed` = operator **proposed** assignment.
+ * - `schedule_assignments.commitment_kind = committed` = operational **committed** schedule.
+ *
+ * Requested Start lives on participation `start_date`. Operational Start Date resolves from
+ * the first committed assignment (`lib/enrollment/effectiveDateAuthority.ts`).
  */
 
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";

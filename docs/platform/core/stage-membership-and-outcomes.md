@@ -123,10 +123,25 @@ that cannot be cleared from the current surface.
 
 ## Fields
 
-A field exists once, on its canonical entity. The process determines what it means:
-`start_date` on an enrollment participation is the requested start during inquiry and the
-committed start once `approve_enrollment` copies it to the agreement. Duplicating a field to
-express process context (`desired_*`, `requested_*`, `*_interest`) is prohibited.
+A field exists once, on its canonical entity. Process context does **not** justify
+duplicating the same fact under `desired_*` / `requested_*` aliases when one owner
+already holds it.
+
+**Enrollment assignment date authority** (Enrollment Assignment & Effective Dates):
+
+| Concept | Authority | Notes |
+|---|---|---|
+| **Requested Start** | `process_instances.metadata.start_date` (participation) | Family preferred timing. Never rewritten by commitment. |
+| **Enrollment Date** | Process-instance `metadata.enrollment_date` stamped by configured paperwork-completion outcome | Not an arbitrary typed date; opportunity metadata is compat projection only. |
+| **Start Date** | Earliest qualifying committed `schedule_assignments.start_date` for the child | Fallback: enrollment agreement `start_date` when no OA row exists. Later supersedes do not rewrite the original Start Date. |
+
+Requested care (`requested_days_per_week`, preferred `weekdays`) remains proposal intent.
+Proposed vs committed schedule assignments use `commitment_kind` on `schedule_assignments`
+(see `docs/platform/planning/assignment-proposed-commitment-authority.md`).
+Quote/estimate snapshots on the assignment proposal are commercial proposals — never ledger charges.
+
+Configuration controls labels, visibility, requiredness, and timing. Code owns calculation,
+org scope, permissions, audit, and the requested / proposed / committed distinctions.
 
 ## Anti-patterns (audit findings this doctrine forbids)
 

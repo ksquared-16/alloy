@@ -48,12 +48,20 @@ export type ProcessInstanceRow = {
 
 /** Enrollment participation payload carried in metadata (canonical fields; no OCM dependency). */
 export type EnrollmentParticipationMetadata = {
+    /** Family preferred start timing (Requested Start) — never rewritten by commitment. */
     start_date?: string | null;
     schedule_type?: string | null;
     program_category_id?: string | null;
     location_id?: string | null;
     program_room_cohort_key?: string | null;
     notes?: string | null;
+    /**
+     * Requested care intensity before exact weekdays are known.
+     * Distinct from preferred weekdays (`weekdays`) and from committed schedule_assignments.
+     */
+    requested_days_per_week?: number | null;
+    /** Preferred weekdays (0=Sun…6=Sat) — intent only until a proposed/committed assignment exists. */
+    weekdays?: number[] | null;
 };
 
 /** Build the insert row for an enrollment process instance (one per child per lead). */
