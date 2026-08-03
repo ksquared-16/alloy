@@ -30,7 +30,8 @@ export const LAYOUT_EDITOR_DRAWER_ACTION_KEYS = [
 export type LayoutEditorDrawerActionKey = (typeof LAYOUT_EDITOR_DRAWER_ACTION_KEYS)[number];
 
 function labelForDrawerActionKey(key: LayoutEditorDrawerActionKey): string {
-    const fromRegistry = relationshipActionRegistryEntry(key as (typeof RELATIONSHIP_ACTION_KEYS)[number]);
+    // No cast: the registry lookup takes `string` because the registry is definition-derived.
+    const fromRegistry = relationshipActionRegistryEntry(key);
     if (fromRegistry) return fromRegistry.label;
     const staticLabels: Record<string, string> = {
         open_child_drawer: "Open child drawer",

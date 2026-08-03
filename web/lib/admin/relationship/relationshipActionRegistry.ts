@@ -212,10 +212,27 @@ export const RELATIONSHIP_ACTION_REGISTRY: RelationshipActionRegistryEntry[] = [
     ...NATIVE_RELATIONSHIP_ACTION_ENTRIES,
 ];
 
-const REGISTRY_BY_KEY = new Map(RELATIONSHIP_ACTION_REGISTRY.map((entry) => [entry.actionKey, entry]));
+const REGISTRY_BY_KEY = new Map<string, RelationshipActionRegistryEntry>(
+    RELATIONSHIP_ACTION_REGISTRY.map((entry) => [entry.actionKey, entry]),
+);
 
+/**
+ * Lookup key is `string`, not the closed `RelationshipActionKey` union.
+ *
+ * The registry this queries is DERIVED — `deriveRelationshipCommandEntries()` maps
+ * `RELATIONSHIP_DEFINITIONS`, so a newly configured relationship contributes its command without any
+ * code change. A closed parameter union contradicted that: it is the same exact-key allowlist the
+ * runtime gate already removed for exactly this reason ("meant a newly configured relationship could
+ * never execute" — see `commandRuntimeExecutionGate`). The rest of the chain is already open:
+ * `RelationshipDefinition.apply_command_key` is `string`, `RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS`
+ * is `readonly string[]`, and `isRelationshipRuntimeFacadeSupported` takes `string`.
+ *
+ * The signature was also the last one forcing callers to cast: `layoutEditorActionButton` carried
+ * `key as (typeof RELATIONSHIP_ACTION_KEYS)[number]` purely to satisfy it. Widening removes that cast
+ * rather than adding one, and the `| null` return already handles an unknown key.
+ */
 export function relationshipActionRegistryEntry(
-    actionKey: RelationshipActionKey,
+    actionKey: string,
 ): RelationshipActionRegistryEntry | null {
     return REGISTRY_BY_KEY.get(actionKey) ?? null;
 }

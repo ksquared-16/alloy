@@ -393,3 +393,43 @@ tokens (compatibility; Option A).
 | Program cascade | location → program → room |
 
 Implementation: `web/lib/layout/runtime/*Relationship*`, action registry.
+
+## Decision — `add_physician` and the command-key union (2026-08-03)
+
+Recorded during slot 4 promotion 3, before any code change, because four branch-owned typecheck
+errors turned on it.
+
+**Question.** `relationshipDefinitionSmellTest` uses `add_physician` against APIs typed with a closed
+command union. Is the union intentionally correct and the test stale, or is `add_physician` a
+canonical command whose production registration is incomplete?
+
+**Answer: neither, exactly — and the union is the stale part.**
+
+`add_physician` is **not** a canonical command and must not be registered. `RELATIONSHIP_DEFINITIONS`
+ships three rows — `parents_guardians`, `emergency_contacts`, `authorized_pickups`. The smell test
+*mocks the canonical registry* to inject a hypothetical `physicians` definition and then asserts every
+consumer derives from it. That is the point of the test: adding a configured relationship must be one
+definition row and nothing else. Registering a physician command to satisfy it would invert the test
+into an assertion about shipped data.
+
+The **closed parameter union on `relationshipActionRegistryEntry` was stale**, and the evidence is in
+production, not in the test:
+
+- `RELATIONSHIP_ACTION_REGISTRY` = `[...deriveRelationshipCommandEntries(), ...natives]` — the map the
+  function queries is already derived from definitions at runtime.
+- `RelationshipDefinition.apply_command_key` is `string` — open by design.
+- `RELATIONSHIP_RUNTIME_FACADE_COMMAND_KEYS` is `readonly string[]`, derived, and its comment records
+  that the previous exact-key allowlist "meant a newly configured relationship could never execute".
+- `isRelationshipRuntimeFacadeSupported(commandKey: string)` — already open.
+- `layoutEditorActionButton` carried `key as (typeof RELATIONSHIP_ACTION_KEYS)[number]` **in
+  production** purely to get past the signature.
+
+A closed union guarding a derived registry is the same per-role allowlist the runtime gate had already
+removed, surviving at the type level. Widening the parameter to `string` **completes a refactor
+production had already made** and deletes a production cast rather than adding one; the `| null`
+return already handles an unknown key. This is not widening a contract to satisfy a test — the runtime
+contract was already open, and only the signature lagged.
+
+**Not changed:** `PERSON_CHILD_OPERATIONAL_ROLE_KEYS` remains a closed platform constant. That is a
+separate, still-open conformance gap, and the derivation fixture continues to borrow an existing role
+key rather than pretend otherwise.

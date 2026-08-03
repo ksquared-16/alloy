@@ -88,6 +88,19 @@ describe("POS-FP17 — relationship collection provider derivation", () => {
             operational_role_key: "communication_recipient", target_entity_type: "person", direction: "anchor_to_target",
             cardinality: "many", collectable: true, scopes: ["this_child"], nested_field_keys: ["full_name", "phone"],
             create_link_policy: "create_or_link", apply_command_key: "link_existing_person", responsibility_default: "either_guardian", native: false,
+            // Completed against the widened RelationshipDefinition contract. These are required
+            // fields, not decoration: the projection identity (iteration_alias), the Discovery
+            // detection projection, and the execution projection all now live on the definition, so
+            // a fixture that omits them is not a definition row a tenant could actually author.
+            iteration_alias: "physician",
+            detection_patterns: ["physician"],
+            detection_priority: 40,
+            detection_word_suffix: true,
+            relationship_scope: "child",
+            executor_kind: "child_scoped_contact",
+            write_targets: ["person_child_relationships"],
+            persists_to: "person_child_relationships",
+            role_key_candidates: ["physician"],
         };
         const provider = relationshipCollectionProjection(physician);
         expect(provider.providerKind).toBe("relationship_role");
