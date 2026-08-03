@@ -43,7 +43,18 @@ const TOUR_BOOKING_DOMAIN = "tour_booking" as const;
  * Result of the integration. `undo` is the inverse of the durable write, for the Platform
  * Transaction Contract's compensation pass; absent when nothing durable was written.
  */
-export type TourBookingOpportunityIntegrationResult = { undo?: () => Promise<void> };
+export type TourBookingOpportunityIntegrationResult = {
+    undo?: () => Promise<void>;
+    /**
+     * Set when the durable mirror applied but the CONFIGURED stage signal did not —
+     * typically because the tenant has no transition authored for this signal.
+     *
+     * This is a downstream consequence, not a booking failure. The caller records it
+     * as operator-visible follow-up and keeps the booking. A genuine write failure
+     * still throws; only an unapplied stage rule lands here.
+     */
+    stageSyncFailure?: { domain: string; signal: string; message: string };
+};
 
 function resolveTourIntegrationActorUserId(
     booking: Pick<TourBookingRow, "requested_by_user_id">,
@@ -186,10 +197,14 @@ async function mirrorTourMetadataAndSignal(input: {
         metadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
     });
     if (sigErr) {
-        // The mirror is already written; undo it before reporting, so the caller never sees a
-        // failure sitting next to a half-applied integration.
-        await undo();
-        throw new Error(`tour_booking: ${signal} signal failed — ${sigErr.message}`);
+        // DIRECTOR BOUNDARY: the booking is domain truth; stage movement is a downstream
+        // consequence. An unapplied stage rule (typically none configured for this signal
+        // on this tenant) must not revoke a tour the parent successfully booked.
+        //
+        // The mirror is KEPT rather than undone — it is truthful, the tour really exists —
+        // and the caller turns this into operator-visible, retryable follow-up. Reporting
+        // it beats silently pretending the process synchronized.
+        return { undo, stageSyncFailure: { domain: TOUR_BOOKING_DOMAIN, signal, message: sigErr.message } };
     }
 
     return { undo };

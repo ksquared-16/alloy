@@ -26,6 +26,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         rawToken: raw ?? "",
         routeName: "book",
         requiredActions: REQUIRED_ACTIONS,
+        // A spent credential must reach the replay branch below rather than being
+        // refused. Without this the parent who double-submits gets an error next to
+        // a booking that actually succeeded.
+        allowConsumedReplay: true,
     });
     if (!guard.ok) return guard.response;
 
@@ -36,13 +40,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // IDEMPOTENT REPLAY. A parent who double-clicks, or retries after a dropped
     // connection, gets the booking they already have — not a second one, and
     // not an error implying they did something wrong.
-    if (link.consumed_at && link.booking_id) {
+    if (auth.replay || (link.consumed_at && link.booking_id)) {
         const { data: prior } = await supabase
             .from("tour_bookings")
             .select("id, status_key, start_at, end_at, timezone")
             .eq("id", link.booking_id)
             .maybeSingle();
         if (prior) return tourPublicJson({ ok: true, booking: prior, idempotent_replay: true });
+        // Spent, but nothing to replay. Refuse rather than fall through and book
+        // twice off one credential.
+        if (auth.replay) return tourPublicErr("This link has already been used.", 409, { code: "consumed" });
     }
 
     let body: Body;
