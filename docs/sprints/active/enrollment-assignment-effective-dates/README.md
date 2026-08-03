@@ -44,5 +44,7 @@ alloy-sprint-finish 3
 | `6db5bf7c6` | Enrollment Date outcome stamp |
 | `0161ecb35` | Assignments card presentation model |
 | `f9afc6dd3` | Restore stamp files after parallel-commit conflict |
+| `7f41c691f` | Sprint README local-commit log |
+| `5be5d8762` | Quote API + proposal controls + participation overlay |
 
-**HEAD:** `f9afc6dd3` · clean · `6` ahead of `origin/staging` @ `3195fae4a`
+**HEAD:** feature `5be5d8762` (+ docs log commit) · local only · ahead of `origin/staging` @ `3195fae4a`
