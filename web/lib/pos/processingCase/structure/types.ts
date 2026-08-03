@@ -30,12 +30,28 @@ export interface DocumentStructureField {
     required?: boolean;
     confidence: StructureConfidence;
     evidence?: string;
+    /** 1-based source page (native-layout detector only). */
+    page?: number;
+    /** Choice options recognized from the document (select fields; native-layout only). */
+    options?: string[];
 }
 
 export interface DocumentStructureSection {
     title: string;
     confidence: StructureConfidence;
     fields: DocumentStructureField[];
+    /**
+     * Geometric disposition recommended by the native-layout detector (signature block, static/legal
+     * prose, output copy). When present it is the operator-facing recommendation, overriding the
+     * label-text heuristic in `recommendSectionDisposition`. Omitted by the flat-text detector.
+     */
+    disposition?: import("../formDraft/sectionDisposition").SectionDisposition;
+    /** Instructional / consent / signature prose to preserve as a text block (not a field). */
+    static_text?: string | null;
+    /** 1-based source page. */
+    page?: number;
+    /** True when this section is an output/duplicate copy of information collected earlier (e.g. "Classroom Copy"). */
+    duplicate?: boolean;
 }
 
 /** A line the detector considered a possible field but rejected, with a machine reason. */

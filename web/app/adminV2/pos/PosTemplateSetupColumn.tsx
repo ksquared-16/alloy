@@ -101,6 +101,33 @@ function seedReviewQuestions(draft: StoredFormDraftPreview | null): ReviewQuesti
     return out;
 }
 
+/** Client-side detect cap — slightly above the server's 60s bound, so a hung request surfaces an
+ *  error + retry instead of an endless "Reading your document" spinner (the 7-minute complaint). */
+const DETECT_CLIENT_TIMEOUT_MS = 70_000;
+
+/** POST the detect endpoint with a hard client timeout; maps timeout/abort to operator language. */
+async function postDetect(caseId: string): Promise<StoredFormDraftPreview | null> {
+    let res: Response;
+    try {
+        res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
+            method: "POST",
+            credentials: "same-origin",
+            signal: AbortSignal.timeout(DETECT_CLIENT_TIMEOUT_MS),
+        });
+    } catch (e) {
+        if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")) {
+            throw new Error("Reading this document took too long and was stopped. You can try again.");
+        }
+        throw e;
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+        data?: { form_draft_preview?: StoredFormDraftPreview };
+        error?: string;
+    };
+    if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
+    return body.data?.form_draft_preview ?? null;
+}
+
 export default function PosTemplateSetupColumn({
     state,
     onOpenForm,
@@ -155,10 +182,20 @@ export default function PosTemplateSetupColumn({
             }
             byTitle.get(title)!.push(q.displayLabel || q.evidenceLabel || "");
         }
+        // The native-layout detector classifies a section geometrically (signature block, consent/legal
+        // prose, output copy) and carries that on the draft section. When present it is a high-confidence
+        // recommendation and wins over the label-text heuristic; otherwise we fall back to that heuristic.
+        const draftDisposition = new Map<string, SectionDisposition>();
+        for (const s of draft?.sections ?? []) {
+            if (s.disposition) draftDisposition.set(s.title, s.disposition);
+        }
         const out: Record<string, { disposition: SectionDisposition; recommended: SectionDisposition; confidence: "high" | "medium" | "low" }> = {};
         for (const title of order) {
             const labels = byTitle.get(title)!;
-            const rec = recommendSectionDisposition({ title, fieldLabels: labels, sectionText: labels.join("\n") });
+            const detected = draftDisposition.get(title);
+            const rec = detected
+                ? { disposition: detected, confidence: "high" as const }
+                : recommendSectionDisposition({ title, fieldLabels: labels, sectionText: labels.join("\n") });
             out[title] = {
                 recommended: rec.disposition,
                 confidence: rec.confidence,
@@ -166,7 +203,7 @@ export default function PosTemplateSetupColumn({
             };
         }
         return out;
-    }, [reviewQuestions, dispositionOverrides]);
+    }, [reviewQuestions, dispositionOverrides, draft]);
     const autoDetectAttemptedRef = useRef<string | null>(null);
 
     const clearSelection = () => {
@@ -311,17 +348,8 @@ export default function PosTemplateSetupColumn({
             setBusy(true);
             setErr(null);
             try {
-                const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
-                    method: "POST",
-                    credentials: "same-origin",
-                });
-                const body = (await res.json().catch(() => ({}))) as {
-                    data?: { form_draft_preview?: StoredFormDraftPreview };
-                    error?: string;
-                };
+                const next = await postDetect(caseId);
                 if (cancelled) return;
-                if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
-                const next = body.data?.form_draft_preview ?? null;
                 setDraft(next);
                 const seeded = seedReviewQuestions(next);
                 setReviewQuestions(seeded);
@@ -526,10 +554,8 @@ export default function PosTemplateSetupColumn({
 
     // ---- endpoints ----
     async function detectDoc(): Promise<StoredFormDraftPreview | null> {
-        const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, { method: "POST", credentials: "same-origin" });
-        const body = (await res.json().catch(() => ({}))) as { data?: { form_draft_preview?: StoredFormDraftPreview }; error?: string };
-        if (!res.ok) throw new Error(body.error || `Couldn't read this document (${res.status})`);
-        return body.data?.form_draft_preview ?? null;
+        if (!caseId) return null;
+        return postDetect(caseId);
     }
 
     const handleDetect = async () => {
@@ -642,7 +668,7 @@ export default function PosTemplateSetupColumn({
         if (shouldAutoDetect) {
             return (
                 <ProcessingNativeFormCreatingState
-                    phaseIndex={0}
+                    mode="detecting"
                     error={err}
                     onRetry={err ? () => void handleDetect() : undefined}
                 />
@@ -716,6 +742,7 @@ export default function PosTemplateSetupColumn({
 
             {creating ? (
                 <ProcessingNativeFormCreatingState
+                    mode="creating"
                     phaseIndex={creatingPhase}
                     error={err}
                     onRetry={err ? () => void handleCreate() : undefined}
@@ -1061,6 +1088,21 @@ export default function PosTemplateSetupColumn({
                             </div>
                         )}
                     </div>
+                    {busy ? (
+                        <div
+                            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 px-4 text-center backdrop-blur-[1px]"
+                            data-testid="processing-redetect-overlay"
+                            aria-live="polite"
+                            aria-busy
+                        >
+                            <span
+                                className="h-6 w-6 animate-spin rounded-full border-2 border-alloy-bend-pine/25 border-t-alloy-bend-pine"
+                                aria-hidden
+                            />
+                            <p className="text-[12px] font-semibold text-alloy-midnight">Re-detecting questions…</p>
+                            <p className="text-[11px] text-alloy-midnight/55">Reading the document again to refresh the detected fields.</p>
+                        </div>
+                    ) : null}
                 </WorkspaceZonePanel>
             </div>
 
