@@ -117,8 +117,9 @@ Parent-facing invitation UI beyond the existing `/tour-booking/<token>` page,
 reminders, and inbound SMS reply handling (`1` to confirm). Slice D ends when the
 message is sent, recorded, and visible.
 
-## 6. Blocked
+## 6. Slice C — closed
 
-Isolated DB re-certification for the Slice C migration still requires an exclusive
-sanctioned stack lease. The migration is byte-identical across the rebase
-(blob `8502a62d1`), so the prior certification stands until then.
+The isolated DB re-certification ran on 2026-08-03 under an exclusive lease:
+307 migrations replayed clean, migration idempotent across two re-applies, 11/11
+assertions passed against real FK-backed fixtures. Evidence and the now-committed
+script live in `certification/interactive-tour/`.
