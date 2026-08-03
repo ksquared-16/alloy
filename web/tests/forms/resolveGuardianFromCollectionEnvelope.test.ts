@@ -204,8 +204,14 @@ describe("intake precedence — structured envelope vs flat values", () => {
         });
         expect(res.ok).toBe(true);
         if (!res.ok) return;
-        expect(res.intake.guardian.email).toBe("flat@x.invalid");
-        expect(res.intake.guardian.first_name).toBe("Flat");
+        // Narrow `guardian` explicitly: it is optional on the intake shape, so reading through it
+        // without asserting presence was only ever true by accident. Asserting it makes the test
+        // say what it means — a flat payload MUST still produce a guardian.
+        const guardian = res.intake.guardian;
+        expect(guardian).toBeDefined();
+        if (!guardian) return;
+        expect(guardian.email).toBe("flat@x.invalid");
+        expect(guardian.first_name).toBe("Flat");
     });
 
     it("12. the structured envelope TAKES PRECEDENCE over equivalent flat values", () => {
@@ -220,7 +226,10 @@ describe("intake precedence — structured envelope vs flat values", () => {
         });
         expect(res.ok).toBe(true);
         if (!res.ok) return;
-        expect(res.intake.guardian.email).toBe("structured@x.invalid");
+        const guardian = res.intake.guardian;
+        expect(guardian).toBeDefined();
+        if (!guardian) return;
+        expect(guardian.email).toBe("structured@x.invalid");
         expect((res.intake as Record<string, unknown>).guardian_source).toBe("collection_envelope");
     });
 
