@@ -146,6 +146,18 @@ cmd_verify() {
 # A pristine tenant. Publications and revisions are IMMUTABLE by design, so a certification run
 # that creates them cannot be undone in place — the only honest reset is a fresh database.
 cmd_reset() {
+    # This rebuilds the database of the SHARED stack. Publications and revisions are
+    # immutable by design, so certification genuinely cannot rerun without it — but the
+    # data belongs to every session on the stack, not just this one. Refuse unless we
+    # hold the stack alone. There is deliberately no bypass flag.
+    local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
+    if [ -x "$stack" ]; then
+        "$stack" exclusive "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" >/dev/null 2>&1 \
+            || die "cert reset needs the shared stack to itself — run: alloy-stack use --exclusive ${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")} (see: alloy-stack status)"
+        green "Shared stack held exclusively — a tenant rebuild is safe"
+    else
+        die "alloy-stack not found at ${stack} — refusing an ungated destructive reset"
+    fi
     info "Resetting the cert tenant (full migration history + representative seed)…"
     # Route through the toolkit wrapper, not a raw `supabase db reset`: it gates on Docker health
     # and retries the transient 502s that used to cost a turn each. Falls back only if absent.

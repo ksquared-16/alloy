@@ -251,6 +251,41 @@ prune_stale_leases() {
   printf '%s\n' "$pruned"
 }
 
+# Names of every live lease other than the given holder, one per line.
+other_lease_holders() {
+  local self="$1" f h
+  prune_stale_leases >/dev/null
+  shopt -s nullglob
+  for f in "$LEASE_DIR"/*.lease; do
+    h="$(basename "$f" .lease)"
+    [[ "$h" == "$self" ]] || printf '%s\n' "$h"
+  done
+  shopt -u nullglob
+}
+
+# True only when <holder> holds the stack alone.
+#
+# Certification needs a PRISTINE, pre-publication tenant, and publications are immutable
+# by design — so the only honest way to rerun it is to rebuild the database. On a SHARED
+# stack that is other sessions' data too. Exclusivity is what makes "reset the tenant"
+# a safe operation instead of a silent theft.
+is_exclusive_holder() {
+  local self="$1"
+  [[ -f "$(lease_path "$self")" ]] || return 1
+  [[ -z "$(other_lease_holders "$self")" ]]
+}
+
+# Fail loudly, naming who is in the way. Never reclaims and never waits.
+require_exclusive() {
+  local self="$1" others
+  [[ -f "$(lease_path "$self")" ]] || die "'${self}' does not hold a lease — take one first: alloy-stack use ${self}"
+  others="$(other_lease_holders "$self")"
+  [[ -z "$others" ]] && return 0
+  warn "the shared stack is in use by other sessions:"
+  printf '%s\n' "$others" | sed 's/^/      /' >&2
+  die "refusing a destructive tenant rebuild while others hold the stack"
+}
+
 live_lease_count() {
   prune_stale_leases >/dev/null
   shopt -s nullglob
@@ -295,17 +330,29 @@ cmd_use() {
   # `--holder X` and a bare positional are both accepted. Without the flag form,
   # `alloy-stack use --holder promo5` silently created a lease literally named
   # `--holder`, so `release promo5` then found nothing to release.
-  local holder=""
+  local holder="" exclusive=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --holder) holder="${2:-}"; [[ -n "$holder" ]] || die "--holder requires a value"; shift 2 ;;
       --holder=*) holder="${1#*=}"; shift ;;
+      --exclusive) exclusive=1; shift ;;
       -*) die "unknown option: $1" ;;
       *) holder="$1"; shift ;;
     esac
   done
   [[ -n "$holder" ]] || holder="$(default_holder)"
   docker_ok || die "Docker is not reachable. Run: alloy-docker-doctor --recover"
+
+  # Check BEFORE starting anything: an exclusive request that cannot be honoured must
+  # change nothing at all.
+  if [[ "$exclusive" -eq 1 ]]; then
+    local others; others="$(other_lease_holders "$holder")"
+    if [[ -n "$others" ]]; then
+      warn "exclusive lease refused — the shared stack is held by:"
+      printf '%s\n' "$others" | sed 's/^/      /' >&2
+      die "wait for them to release, or run without --exclusive (no tenant rebuild)"
+    fi
+  fi
 
   local workdir
   workdir="$(resolve_stack_workdir)" \
@@ -633,6 +680,9 @@ Usage:
         [--force]                       include stacks started <1h ago (live sessions)
         [--volumes]                     also discard their data volumes
   alloy-stack doctor                    explain violations; non-zero exit if unclean
+  alloy-stack use --exclusive [holder]  take a lease ONLY if nobody else holds one.
+                                        Required before any pristine tenant rebuild.
+  alloy-stack exclusive [holder]        exit 0 iff <holder> holds the stack alone
   alloy-stack reset [--confirm]         REBUILD the shared stack from committed
                                         migrations + canonical seed. Refuses while any
                                         lease is held. Discards shared data by design.
@@ -648,6 +698,10 @@ main() {
   case "$cmd" in
     use)      cmd_use "$@" ;;
     reset)    cmd_reset "$@" ;;
+    # Exit 0 only when the named holder has the stack to itself. Lets a certification
+    # harness gate a destructive tenant rebuild without reimplementing lease rules.
+    exclusive) require_exclusive "${1:-$(default_holder)}"
+               ok "'${1:-$(default_holder)}' holds the shared stack exclusively" ;;
     release)  cmd_release "$@" ;;
     status)   cmd_status "$@" ;;
     reap)     cmd_reap "$@" ;;
