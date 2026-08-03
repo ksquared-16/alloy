@@ -160,9 +160,7 @@ export type StageOutcomeRuleTargetKind =
     | "reopen_work"
     | "mark_stage_work_complete"
     | "move_to_stage"
-    | "no_movement"
-    /** Stamp Enrollment Date onto enrollment process_instance metadata (paperwork completion). */
-    | "stamp_enrollment_date";
+    | "no_movement";
 
 export type StageOutcomeRuleTargetV1 = {
     kind: StageOutcomeRuleTargetKind;
@@ -272,7 +270,6 @@ const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
     "mark_stage_work_complete",
     "move_to_stage",
     "no_movement",
-    "stamp_enrollment_date",
 ]);
 const ATTENTION_KINDS = new Set<StageAttentionRuleKind>([
     "work_overdue",

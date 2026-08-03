@@ -395,7 +395,6 @@ const OUTCOME_TARGET_LABELS: Record<string, string> = {
     mark_stage_work_complete: "Complete stage work",
     move_to_stage: "Move to stage",
     no_movement: "Stay in stage",
-    stamp_enrollment_date: "Stamp Enrollment Date",
 };
 
 function PossibleOutcomesSection({

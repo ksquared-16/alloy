@@ -19,7 +19,6 @@ export const STAGE_OUTCOME_RULE_TARGET_LABELS: Record<string, string> = {
     mark_stage_work_complete: "Mark stage work complete",
     move_to_stage: "Move to next stage",
     no_movement: "No automatic movement",
-    stamp_enrollment_date: "Stamp Enrollment Date",
 };
 
 export function stageOutcomeRuleSummary(

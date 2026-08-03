@@ -446,6 +446,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             data-universal-card-key={model.key}
             receded={receded}
         >
+            {/*
+              TODO(enrollment-assignment-effective-dates): next slice should project
+              Family request / Proposed / Commercial estimate / Committed / Readiness gaps
+              via `buildAssignmentCardModel` (`web/lib/enrollment/buildAssignmentCardModel.ts`)
+              — UI-only section chrome; do not invent a new card runtime or alter reveal gates.
+            */}
             <div data-scheduling-card="true">
                 {activeChild ? (
                     <ScheduleWorkSurface
