@@ -1,9 +1,11 @@
 # 01 — Existing-state inventory
 
-> **This file has two parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is the
-> **security threat & enforcement matrix** — required output #7, delivered by a later Mission 2 phase and
-> appended here per its assignment scope. Part II reuses Part I rather than restating it; read Part I first,
-> or jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform).
+> **This file has three parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
+> the **security threat & enforcement matrix** — required output #7. **Part III (§§24–36)** is the
+> **gap analysis** — required output #8. Parts II and III were delivered by later Mission 2 phases and appended
+> here per their assignment scopes; each reuses what precedes it rather than restating it. Read Part I first, or
+> jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform) or
+> [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan).
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. This pass re-anchors the
 > inventory to the current worktree and records what has **changed since acceptance** — because remediation
@@ -888,4 +890,524 @@ git show HEAD:docs/platform/planning/access-identity-v2/02-canonical-access-iden
   consumers; webhook signature terms.
 - **Corpus searches:** invariant-number occupancy in `02…` and `04…`, at `HEAD` and in the working tree (§18).
 - **Verified at** `a4b6e424f` in `wt6-vacilando-os-product-def`.
+- **No source, schema, migration, or UI changed by this phase.**
+
+---
+---
+
+# Part III — Gap analysis
+
+> **Required output #8.** `00-mission-intake-and-coverage.md:114` recorded it as **Covered** by pointing at
+> two sections of two other documents (`01…` §4 and `02…` §13). That was a fair reading of a three-document
+> corpus. It is no longer one: the corpus is now seven documents and roughly seventy findings in six
+> identifier spaces, and **no artifact reconciles them**. This phase delivers output #8 as its own artifact.
+>
+> **This part reuses the corpus as input and does not re-derive it.** Every constituent finding is cited to
+> its owning document and marked **[carried]**. What is new is the *reconciliation*: one register, one
+> coverage judgement against the brief's own asks, and the delta between what the corpus knows and what the
+> delivery plan contains. Claims marked **[verified this pass]** were established mechanically in this
+> worktree at `cd24874cb` by the commands in §34.
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Gap analysis* · assignment `asg_04bcdd312f0dec`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-vacilando-os-product-def` @ `cd24874cb`
+**Date** 2026-08-03
+**Method** documentary and static. No request issued, no browser, no database, no test suite. **No new
+product defect is asserted here** — every defect below is owned by an earlier document (§35).
+
+---
+
+## 24. Headline — the gap is no longer in the product alone; it is between the corpus and its plan
+
+A gap analysis written at acceptance would have compared *the product* to *the model*. That comparison is
+now done four times over, in four documents. The comparison nobody has made is the one this deliverable
+found first, and it is mechanical:
+
+> **`03-implementation-qa-sequence.md` — the corpus's only delivery plan — names 17 finding IDs: `C1`…`C11`
+> and `G1`…`G6`. It names *none* of the 53 finding IDs created since it was sequenced**
+> (`M2-1…M2-15`, `A2-1…A2-7`, `IA-1…IA-10`, `T-1…T-18`, `C12`, `C13`, `X-1`) — zero matches, not few
+> **[verified this pass]**.
+
+That is not a criticism of `03`. It was sequenced on 2026-07-31 from Part I of `01…` and Part I of `02…`,
+and its own §13.1 is careful to state that *"all 21 rows of phase 2's divergence register are assigned
+above."* It was complete against the corpus that existed. Four documents have landed since, and **the plan
+has not moved.**
+
+Consolidating the corpus into **fourteen gaps** (§26) makes the consequence measurable:
+
+| Plan coverage | Gaps | Which |
+|---|---:|---|
+| **Covered by a workstream** — partly shipped (`W-1`…`W-4`; `W-9`'s outcome via Phase 0), the rest sequenced | 3 | GAP-4, GAP-5, GAP-9 |
+| **Partially covered** — the workstream predates the finding and would not close it as scoped | 5 | GAP-3, GAP-6, GAP-7, GAP-8, GAP-11 |
+| **No workstream at all** | **5** | **GAP-1, GAP-2, GAP-10, GAP-12, GAP-14** |
+| Needs none, by design | 1 | GAP-13 |
+| | **14** | |
+
+The five uncovered gaps are not the residue. They are:
+
+1. **GAP-1 — revocation.** Both of Part II's **S1** threats live here. The platform cannot disable a
+   credential at all, and a removed principal keeps full authority for up to 120 seconds *after the
+   operator is told the removal succeeded*.
+2. **GAP-2 — authentication.** The brief's single largest ask. `00…:133` called it *"the single largest
+   hole"* at intake; `04…` then modelled it in full. **`03` predates `04` entirely, so not one line of the
+   authentication build is sequenced.**
+3. **GAP-12 — the product misinforms the operator.** Eight distinct mechanisms across five documents
+   (§31). No document counts them, because each owns only its own one or two.
+4. **GAP-10 — atomicity and audit.** Authority writes are non-transactional, and whether an authority
+   change is durably recorded has **never been assessed by any document in this corpus**.
+5. **GAP-14 — the corpus's own integrity.** Its invariant numbers have collided, its decision numbers have
+   collided, four of its seven documents are absent from the folder its README calls canonical, and the
+   delivery plan in that folder is 455 lines staler than the one in the evidence folder (§32).
+
+**The one-sentence finding:** *the corpus has converged on what Access & Identity V2 must be, and its plan
+still describes the subset of that understanding which existed on 31 July.* Closing this gap is a Director
+act — re-sequencing `03` — not a worker act, which is why §26 binds gaps to proposed workstreams but does
+not write them.
+
+---
+
+## 25. Method — what counts as a gap
+
+A **gap** here is a difference between an **asked-for property** and the **as-built state**, where the ask
+is traceable to the operator's brief, to the canonical model in `02…`, or to an invariant the corpus has
+already adopted. Three consequences:
+
+- **A defect is not automatically a gap.** `C12` (Phase 0 and Wave 1 closed `C5` incompatibly) is a real
+  finding that closed a real defect; it appears here only through its residue, `C13`.
+- **A gap can exist with no defect underneath it.** GAP-2 is almost entirely absence: nine of the brief's
+  eleven authentication capabilities are not implemented badly, they are not implemented.
+- **A gap survives its findings.** GAP-1 would remain open if every one of its eight constituent findings
+  were fixed individually, because the missing thing is a *capability* — revocation — not a set of bugs.
+
+**Seven classes**, used in §26's `Class` column:
+
+| Class | Meaning | Archetype |
+|---|---|---|
+| **absence** | The capability does not exist in the codebase | No credential-disable call anywhere (`A2-1`) |
+| **enforcement** | The control exists and is not applied on the authority path | 534 of 559 routes bypass RLS (`G6`) |
+| **coherence** | Two mechanisms exist and disagree | Three resolvers (`M2-5`, `M2-13`) |
+| **truthfulness** | The product asserts to an operator something untrue | Revocation reports success before it is effective (`IA-6`) |
+| **plan** | A known finding has no workstream | §29 |
+| **register** | Corpus integrity — IDs, locations, staleness | `X-1`, §32 |
+| **knowledge** | The repository cannot answer the question | Verification mode (`A2-5`) |
+
+**Severity** reuses Part II's structural scale (§11) where a gap has a threat entry, and is left `—` where
+it does not. **No severity here is a demonstrated vulnerability**, and nothing in this part re-rates
+anything: ratings are carried from §14.
+
+**What this part deliberately does not do.** It does not re-sequence `03`, invent workstream numbers, or
+resolve a decision. `03` owns sequencing and the mission's document-authority rule reserves synthesis to
+the Director; §26's `Proposed` column is a recommendation to that owner, marked as such.
+
+---
+
+## 26. The consolidated gap register
+
+Fourteen gaps. Every constituent finding in the corpus maps to exactly one, and the mapping is stated so
+that "nothing was dropped" is checkable rather than asserted. `W-n` in **bold** is an existing workstream
+from `03…§§4–9`; *italic* text in that column is this deliverable's proposal, not a plan entry.
+
+| # | Gap | Constituent findings **[carried]** | Class | Sev | Workstream | Blocked on |
+|---|---|---|---|:--:|---|---|
+| **GAP-1** | **Revocation is not a capability this platform has.** A credential cannot be disabled; a removed principal is served for up to 120 s; deactivating a role revokes nothing; a session can re-key its own credential | `T-1`, `T-2`, `M2-3`, `M2-10`, `A2-1`, `A2-2`, `A2-4`, `IA-6` | absence · enforcement · truthfulness | **S1** | **none** — *proposed: a revocation wave* | `D6`≡`D10`, `D11`ᴬ, `D12`ᴮ |
+| **GAP-2** | **Authentication is one method, unversioned, with no policy object.** 9 of the brief's 11 named capabilities absent or test-only; no rate limit, lockout, or step-up; no `config.toml` in version control | `04…§6.1`, `A2-5`, `T-17`, `T-18`, `IA-R10` | absence · knowledge | S3 / **S?** | **none** — `03` predates `04` | `D7`, `D8`, `D13`ᴮ, `D14` |
+| **GAP-3** | **Scope fails open at every layer that touches it.** No profile row on create; an absent profile means `all`; a *failed read* also means `all`; and the UI renders both as "All locations" | `G4`, `T-5`, `M2-12`, `IA-3`, `IA-5` | enforcement · truthfulness | **S2** | **W-5**, **W-6**, **W-7** — *do not cover the read-error leg (`M2-12`) or the render leg (`IA-3`)* | — |
+| **GAP-4** | **Admission is a role check, and no surface gates on a capability.** 131 of 132 admin pages admit on "has a non-empty role" | `C6`, `T-7`, `A2-6`, `05…§1`, `05…§3.3` | enforcement | **S2** | **W-13**, **W-14**, **W-15** | `D2` |
+| **GAP-5** | **The capability vocabulary is largely decorative.** 32 seeded keys, 18 grantable, 11 of those consulted by nothing; the grid is an independent list, not a projection | `C4`, `C13`, `T-6`, `M2-9`, `05…§2`, `06…§5.5` | coherence · truthfulness | **S2** | **W-10**, **W-11**, **W-12** (**W-9**'s outcome shipped as Phase 0 — `03` does not record it) | — |
+| **GAP-6** | **Four role vocabularies, one leaked from RLS into live application gates.** `user_roles.role` is unconstrained `text`; ≥13 sites decide authority on a role literal; `owner`/`manager` are checked in code and seeded by nothing | `C2`, `C10`, `M2-2`, `M2-6`, `M2-7`, `M2-8`, `T-11` | coherence | S3 | **W-16**, **W-19**, **W-11** — *`W-16` constrains the column; nothing removes the 13+ literals or the `owner`/`manager` leak* | `D4` |
+| **GAP-7** | **There is no single resolver, and no defined normal form for a role key.** Three resolvers plus a light path; the preview normalizes differently from the runtime | `C11`, `M2-5`, `M2-11`, `M2-13`, `IA-4` | coherence · truthfulness | S3 | **W-21** — *closes preview-vs-runtime only; silent on the third and light resolvers and on normalization* | `D12`ᴬ |
+| **GAP-8** | **Delegation has no ceiling, and `ops` ≈ `admin` in every default-seeded org.** The two keys the seed withholds are read nowhere; the key that gates user and role management is granted to `ops` | `G3` (open half), `T-3`, `T-4`, `M2-4`, `A2-7` | enforcement | **S2** | **W-18** — *`D9`'s two-line repoint has no workstream and `02…§10` says it must not wait for `D3`* | `D3`, `D9`ᴬ |
+| **GAP-9** | **Enforcement is a convention, not a layer.** No default-deny; ≥11 gate families; no declaration mechanism; 534 of 559 route files hold a service-role client | `C1`, `G6`, `T-8`, `T-10`, `05…§6.2` | enforcement | **S2** | **W-14**, **W-15** (**W-4** shipped) | — |
+| **GAP-10** | **Authority writes are neither atomic nor audited.** Role reassignment is `delete`-then-`insert` untransacted; whether an authority change is durably recorded is **unassessed by every document in this corpus** | `M2-14`, `T-13`, `01…§22.5`, `06…§3.3` | absence | S3 · audit unrated | **none** — *proposed: atomicity with `W-17`; audit needs discovery before a workstream* | — |
+| **GAP-11** | **Tenancy has three holes; two are unplanned.** Org selection is a lexicographic `sort()[0]`; one credential command takes an unbounded target; the public surface takes its org from a deploy-wide env var | `I-7`, `A2-3`, `T-12`, `T-16` | enforcement | S3 / S4 | **W-22** covers `I-7` only — *the other two have none* | `D11`ᴮ, `D13`ᴬ |
+| **GAP-12** | **The product tells the operator things that are not true.** Eight distinct mechanisms, five owning documents, no single owner — §31 | `T-1`, `T-6`, `M2-11`, `M2-15`, `IA-1`, `IA-3`, `IA-4`, `IA-6` | truthfulness | **S1/S2** | **none** — *no `IA-R` requirement appears in `03`* | — |
+| **GAP-13** | **The person ↔ user edge is undecided, not missing.** Its absence is the correct design; what is absent is the decision | `§1`, `I-5`, `D-IA2` | decision | — | **none needed** — `03…§13.1` states this deliberately | `D1` |
+| **GAP-14** | **The corpus cannot be cited by number, and is not in one place.** Invariant numbers collided; decision numbers collided; 5 of 8 numbered documents are absent from the canonical folder; the plan there is 455 lines stale | `X-1`, `D-IA0`, **`X-2`–`X-5` (new, §32)** | register | — | **none** — Director-owned | — |
+
+ᴬ/ᴮ superscripts disambiguate the colliding decision numbers, on the same convention §16 used for invariants:
+ᴬ = the `02…` reading, ᴮ = the `04…` reading. See §30.
+
+**Completeness of the mapping.** Every numbered finding in the corpus appears above exactly once, with two
+stated exceptions: `C12` (a closed defect, present only through its residue `C13`, §2.3) and `T-14`/`T-15`
+(controls that **hold**, recorded in §14 as passes rather than gaps). `C1`–`C11`, `G1`–`G6`, `C13`,
+`M2-1`–`M2-15`, `A2-1`–`A2-7`, `IA-1`–`IA-10`, `T-1`–`T-13`, `T-16`–`T-18` and `X-1` are all bound.
+`M2-1` is a specification clarification rather than a defect and is carried inside GAP-7's model context.
+
+---
+
+## 27. Required-output coverage, refreshed
+
+`00…§3` assessed the brief's twelve outputs against a three-document corpus and concluded *"11 covered, 1
+partial."* Re-assessed against the corpus as it stands, with the **Mission 2 artifact** column recording
+what this mission actually produced:
+
+| # | Required output | `00…` verdict | Mission 2 artifact | Now |
+|---|---|---|---|---|
+| 1 | Existing-state inventory | Covered | `01…` Part I (refreshed) | **Covered** |
+| 2 | Surface & capability access catalog | Covered | `05…` §§1–5 (extended from a command census) | **Covered** |
+| 3 | Person ↔ user ↔ role ↔ scope model | Covered | `02…` Part I (refreshed) | **Covered** |
+| 4 | Authentication model | Covered | `04…` (refreshed) | **Covered as a model; unsequenced as work** — GAP-2 |
+| 5 | Effective-access resolution model | Covered | `02…` Part II (**uncommitted** — `X-5`) | **Covered** |
+| 6 | Product IA & principal flows | Covered | `06…` (refreshed) | **Covered** |
+| 7 | Security threat & enforcement matrix | **Partial** — non-goal | `01…` Part II | **Covered** — re-scoped in by the operator |
+| 8 | **Gap analysis** | Covered *(by pointer)* | **`01…` Part III — this part** | **Covered as an artifact** |
+| 9 | Decisions requiring approval | Covered | `02…§10`/`§20`, `04…§7`, `06…§8`, `01…§19` | **Covered, but not citable by number** — `X-1`, `D-IA0`, §30 |
+| 10 | Sequenced implementation plan | Covered | **none** | **Stale** — covers ~a third of the register (§29) |
+| 11 | Director acceptance rubric | Covered | none | **Covered, at risk** — binds to colliding IDs (§30) |
+| 12 | QA & evidence plan | Covered | none | **Stale with #10** — 4 of 15 regression locks live |
+
+**11 covered · 1 stale · 2 at risk from the register defects.** The shape of the remaining work has
+inverted since intake: at intake three outputs were *absent*; now every output exists and the binding
+problem is that **#10 and #12 no longer describe the corpus that #1–#9 produced.**
+
+`00…§3`'s own caveat is worth restating here because it now bites: *"§3 states presence, not sufficiency."*
+Output #8 was marked Covered on the strength of two section pointers. That was defensible, and it is the
+reason a reconciled register did not exist until this phase — **a coverage table that counts documents
+cannot see a gap that lives between them.**
+
+---
+
+## 28. Coverage against the brief's own target capabilities
+
+Outputs are one axis; the brief also names concrete product capabilities. Nothing in the corpus scores the
+product against them in one place. Each row is **[carried]** from the document that established it.
+
+### 28.1 The eleven authentication capabilities (`00…:128-131`)
+
+| Capability | State at `cd24874cb` | Source |
+|---|---|---|
+| Email + password | **implemented** | `04…§6.1` |
+| Passwordless email link | **test fixtures only** | `04…§6.1` |
+| Email OTP | **test fixtures only** | `04…§6.1` |
+| SMS OTP | absent — `signInWithOtp` = 0 occurrences | `04…§6.1` |
+| Google | absent — `signInWithOAuth` = 0 occurrences | `04…§6.1` |
+| Microsoft | absent | `04…§6.1` |
+| Apple | absent | `04…§6.1` |
+| Enterprise SSO / SAML | absent | `04…§6.1` |
+| MFA policy by role/risk | absent — `mfa.` = 0 occurrences | `04…§6.1` |
+| Session + trusted-device policy | provider defaults, **unversioned** | `04…§6.1`, `A2-5` |
+| Forced reset / recovery | reset exists; **no force** | `04…§6.1` |
+
+**1 implemented · 2 test-only · 1 partial · 1 default-only · 6 absent.** Plus the brief's stated
+baseline — *"visible/hide-password control on every password field"*, which it calls *"a straightforward
+required baseline"* — at **three password inputs and zero reveal toggles** (`04…§6.2`). `IA-R10` and
+`04…§6.2` both call it the cheapest item in the corpus; it is in no wave.
+
+### 28.2 The seven-section Access & Identity workspace (`00…:134-136`)
+
+The accepted IA was specified against a product with one screen and two tabs. The workspace has since been
+**built**, so this row set is a genuine re-score rather than a restatement — all **[carried]** from `06…§2`.
+
+| Brief section | Built as | State |
+|---|---|---|
+| Overview | `/organization/access` landing | **shell** — exists with `summaryCards: []`; a chooser, not an overview (`IA-9`) |
+| Users | Users chapter, member rail + 5 tabs | **built**, with `IA-1`, `IA-2`, `IA-3`, `IA-4` against it |
+| Roles | Roles chapter, catalog rail + 5 tabs | **built**; 4 of 9 permission rows inert in both columns (`06…§5.5`) |
+| Access Policies | Access Scopes chapter | **absent as a concept** — a launch point to Locations/Departments; no policy object exists (`D-IA3`) |
+| Authentication | Security chapter card | **Planned** |
+| Invitations | Invite rail + modal | **partial** — load-bearing steps marked Planned (`IA-5`); creates no access profile (`G4`) |
+| Audit Log | Security card + two History tabs | **Planned** — three views, all Planned |
+
+**2 built · 1 shell · 1 partial · 3 absent-or-planned.** The built two are the two the corpus has the most
+findings against, which is not a coincidence: they are the only sections real enough to be wrong.
+
+### 28.3 The states the brief requires be "visually clear"
+
+**[carried]** from `06…§6`, unchanged: **Empty — not representable** (renders identically to org-wide);
+**Inherited — no such concept**; **Restricted — partly**; **Conflicting — N/A**, resolved normatively by
+`02…§15.3`; **Expired — no expiry attribute anywhere** (`D-IA4`). `06…` adds **Planned**, which is the one
+state the product represents well.
+
+**One of six required states is representable today.** `Empty` is the sharpest: `06…§6` upgrades it from a
+design gap to a *verified impossibility* — the members route cannot emit the distinction, so no rendering
+can show it. That is GAP-3's render leg, and it is why GAP-3 is not closed by `W-5`…`W-7` alone.
+
+---
+
+## 29. Plan coverage — the mechanical finding
+
+§24's headline, with its working shown.
+
+**What `03` names.** A search over `03-implementation-qa-sequence.md` for every finding-ID pattern in the
+corpus returns `C1`…`C11` and `G1`…`G6`, and **nothing else** — no `M2-n`, no `A2-n`, no `IA-n`, no
+`IA-R n`, no `T-n`, no `S-n`, no `D-IA n` **[verified this pass]**. Its 15 regression locks (`RL-1`…`RL-15`)
+bind to the same 17 IDs plus invariant numbers.
+
+**What has been created since.** Fifty-three new finding IDs across four documents:
+
+| Register | IDs | Owner | Named in `03` |
+|---|---:|---|:--:|
+| `C12`, `C13` | 2 | `01…` Part I | **no** |
+| `M2-1`…`M2-15` | 15 | `02…` Parts I & II | **no** |
+| `A2-1`…`A2-7` | 7 | `04…` | **no** |
+| `IA-1`…`IA-10` | 10 | `06…` | **no** |
+| `T-1`…`T-18` | 18 | `01…` Part II | **no** |
+| `X-1` | 1 | `01…` Part II | **no** |
+
+Plus three requirement registers that did not exist when `03` was written: `IA-R1`…`IA-R10` (`06…§7`),
+`S-1`…`S-7` (`01…§17`), and `I-26`…`I-34` (`02…` and `04…`, colliding — §30).
+
+**Honest deflation of the number.** `T-1`…`T-13` and `T-18` are threat *re-framings* of findings owned
+elsewhere, so 53 IDs is not 53 independent defects — Part II says so itself (§22.2). Netting those out
+leaves roughly **34 distinct new findings**. The coverage conclusion does not move: 34 and 53 are both
+"none of them."
+
+**Two missing workstream families, not a long tail.** The uncovered findings are not scattered; they
+cluster into exactly the two subject areas `03` could not have known about:
+
+- **Revocation and credential lifecycle** (GAP-1, GAP-10) — `T-1`, `T-2`, `M2-3`, `M2-10`, `M2-14`,
+  `A2-1`, `A2-2`, `A2-4`, `IA-6`, bound to `I-26`, `I-29`ᴬ, `I-29`ᴮ, `I-30`ᴮ, `I-31`ᴬ and `IA-R5`. This is
+  a coherent wave with a single exit test — *revoke, then assert denial on the next request in a second
+  process* — which `02…§19` and `06…` (IA-R5) independently arrived at.
+- **The authentication build** (GAP-2) — the whole of `04…§6`, which has no workstream because `03`
+  was sequenced before `04` existed.
+
+**What this does not mean.** `03`'s existing waves are not invalidated. Waves 0 and 1 shipped and are
+recorded as such; waves 2–5 address GAP-3 through GAP-9 and remain the right work. The finding is one of
+*extent*: **`03` is a correct plan for two-thirds of the register and is currently the only document a
+reader would consult to know what happens next.**
+
+---
+
+## 30. Decision coverage — and why the decision register cannot currently be cited
+
+Every gap in §26 that is blocked is blocked on a decision, and **no decision in this corpus is
+worker-resolvable**. Consolidated:
+
+| Decision | Question | Blocks | Recorded status |
+|---|---|---|---|
+| `D1` | Does a person ever become a principal? | GAP-13 only | open — genuinely non-blocking (`03…§12`) |
+| `D2` | What are `regional_lead` / `school_director` for? | GAP-4 (`W-13` value) | open, **cost compounding** — now seeded per org |
+| `D3` | What is the delegation ceiling? | GAP-8 (`W-18`) | open, sharpest |
+| `D4` | Is RLS an authority layer? | GAP-6 (`W-19` sizing) | open, **more durable** — vocabulary has leaked outward |
+| `D5` | Per-org or per-account state? | GAP-1, GAP-2 | open |
+| `D6` ≡ `D10` | Does deactivation revoke? | **GAP-1** | open — *and `04…§7` shows these are one question* |
+| `D7` | MFA scope for the first wave? | GAP-2 | open |
+| `D8` | Is SSO/SAML in V2? | GAP-2 | open |
+| `D9`ᴬ | Is `ops` a user-and-role administrator? | **GAP-8** | open — fix is independent of `D3` and should not wait |
+| `D11`ᴬ | Maximum acceptable revocation latency? | **GAP-1** | open |
+| `D11`ᴮ | Is the admin reset trigger org-bounded? | GAP-11 | open |
+| `D12`ᴬ | Is the light resolver an optimization or a resolver? | GAP-7 | open |
+| `D12`ᴮ | What step-up does a password change require? | **GAP-1** | open |
+| `D13`ᴬ | Is the public surface inside the tenancy model? | GAP-11 | open |
+| `D13`ᴮ | Which identity-verification mode is the contract? | GAP-2 | open |
+| `D14` | Is abuse control a security control? | GAP-2 | open |
+| `D-IA1`…`D-IA4` | Status semantics · person-vs-account · policy object · time-boxing | GAP-2, GAP-12, GAP-13 | open |
+
+**The collision is not cosmetic, and it is compounding.** `06…§8` recorded it as `D-IA0`: at `7df17b9b3`,
+`D9`, `D11` and `D12` each denoted two different questions, and `06` declined to make it worse by
+namespacing its own decisions `D-IA n`. **`D13` has since collided too** — `04…§7` defines it as the
+identity-verification mode, and `01…§19` (Part II, `cd24874cb`) defines it as public-surface tenancy
+**[verified this pass]**. Part II's own §19 opens *"D1–D4 and D9–D12 carry forward unchanged"* — a sentence
+that is ambiguous for three of the numbers it cites.
+
+**Two independent records of one defect.** `X-1` (§18) recorded the *invariant* collision; `D-IA0` recorded
+the *decision* collision. Neither cites the other, and they were written one commit apart. That is itself
+an instance of the failure both describe, and it is why GAP-14 is a gap rather than a housekeeping note:
+**`07-director-acceptance-rubric.md` binds acceptance criteria to these IDs, and `03…§13` binds regression
+locks to them.** A lock written against `I-29` today is ambiguous between *revocation latency* and
+*password step-up* — two different tests, in two different waves, one of which does not exist.
+
+**Recommendation, escalated not performed:** one renumbering pass, Director-owned, before any acceptance
+criterion or regression lock is written against an `I-` or `D-` number. Per the mission's
+document-authority rule and `01…§18`, renumbering across four documents is not a worker act.
+
+---
+
+## 31. The truthfulness class — GAP-12, stated once
+
+The corpus contains eight distinct mechanisms by which an access-control product **reports something to an
+operator that is not true**. Each is owned by a different document, none of which counts them, because each
+sees one or two. Assembled:
+
+| # | The product says… | …but | Owner |
+|---|---|---|---|
+| 1 | "This principal has been removed" | They keep full authority for up to 120 s, in every process holding a warm entry | `M2-10` / `T-1` |
+| 2 | "This capability is set to *None*" | 11 of 18 grantable keys are consulted by nothing; no grant constrains any surface | `T-6` / `05…§2.1` |
+| 3 | "This user's effective access is *X*" | The preview normalizes role keys differently from the runtime and can show capabilities every gate denies | `M2-11` |
+| 4 | "Effective access" (the panel) | Is a placeholder, and the one preview that exists disagrees with runtime | `IA-4` |
+| 5 | "Status: Active · Method: Password" | Rendered as literals, not read from data | `IA-1` |
+| 6 | "All locations · All departments" | Indistinguishable from *no access profile was ever created* — the fail-open in GAP-3, rendered as a reassurance | `IA-3` |
+| 7 | "Member removed" (toast) | Returned inside the window in which it has not taken effect | `IA-6` |
+| 8 | `README_ADMIN_AUTH.md`: "single resolver" | There are three, and it misdescribes `requireAdminOrOps`; it cites an archived doc as canonical | `M2-15` |
+
+Six of the eight are operator-facing; two (3 and 8) mislead the engineer who would fix the other six.
+
+**Why this is a gap and not a UX concern.** Part II §13 already names it as asset **A6** — *"operator trust
+in the product's own statements"* — and §20 draws the conclusion this register makes countable: *"an
+access-control product in which 'remove this person' does not remove them fails at its stated purpose,
+independently of any attacker."* Mechanisms 1, 6 and 7 are the same underlying defect surfacing at three
+layers (cache, resolver, UI), which is precisely why fixing one layer will not close GAP-12.
+
+**The requirements already exist; the plan does not contain them.** `IA-R1`, `IA-R3`, `IA-R4`, `IA-R5` and
+`IA-R6` are written, testable, and each traceable to one of the rows above. `06…§7` calls `IA-R1`, `IA-R3`
+and `IA-R6` *"the cheapest items in this document and the highest-value."* **None of the ten `IA-R`
+requirements appears in `03`** **[verified this pass]** — so the cheapest high-value work in the corpus is
+also the least likely to be scheduled.
+
+---
+
+## 32. Corpus-integrity gaps — X-2 … X-5
+
+**Recorded as corpus-integrity defects, not product defects**, continuing the `X-n` series `01…§18` opened.
+All four are **[verified this pass]** and none is worker-resolvable, because each concerns where the
+Director's canonical artifacts live.
+
+> **X-2 — the corpus is split across two folders with no rule, and the canonical folder holds 3 of its 8
+> numbered documents.** `PRODUCT-SOURCE.md` states the rule: accepted deliverables are *copied* from the QA folder to
+> `docs/platform/planning/access-identity-v2/`, and the QA path *"remains runtime certification evidence."*
+> Mission 2's five delivered phases did not follow one direction: `01` and `02` were written to the
+> **product-source** folder, while `04`, `05` and `06` were written **into the evidence folder** and never
+> copied. The product-source folder therefore contains `01`, `02`, `03`, `authority-path-inventory` and a
+> README — and **not** `00`, `04`, `05`, `06` or `07`. Consequence: `01` and `02` make **91** shorthand
+> citations to `04…`, `05…`, `06…` and `07…` that have no resolvable target in the folder they live in
+> (85 in `01…`, 6 in `02…`). Every true markdown link resolves; it is the shorthand that dangles — and the
+> count is **rising**, since this part contributed 50 of the 91. The corpus is accumulating references to
+> documents that are not where it says they are.
+
+> **X-3 — the delivery plan in the canonical folder is 455 lines staler than the one in the evidence
+> folder.** `access-identity-v2/03-…md` is **799** lines, last written at Runtime V1 closeout (`0e0804ba4`);
+> `qa/access-identity-v2/03-…md` is **1254** lines and carries the Wave 0, Wave 1 and W-4 execution records
+> (`f15f64377`, `c242da387`, `23b4c671d`). The canonical copy contains no occurrence of *"DONE 2026"* and
+> its wave map does not record that waves 0 and 1 shipped. **A reader following the README to the canonical
+> location gets a delivery plan that does not know four of its workstreams have already landed** — on top of
+> §29's finding that neither copy knows about the last four documents.
+
+> **X-4 — `04`'s own finding register is internally inconsistent three ways.** `04…:55` announces *"Five new
+> findings"*; the table beneath it lists **six** (`A2-1`…`A2-6`); and `§3.5` defines a **seventh**, `A2-7`,
+> which the table omits. `01…§23` cites *"A2-1 … A2-7"*, correctly reading the body rather than the table.
+> Minor in isolation, and recorded for the same reason as `X-1`: `07` and `03` bind to these IDs.
+
+> **X-5 — a document three others cite exists only as an uncommitted working-tree change.** Part II of
+> `02-canonical-access-identity-model.md` — the **effective-access resolution model**, required output #5,
+> 551 lines — is not committed. At `HEAD` (`cd24874cb`) the file contains **zero** occurrences of
+> *"Part II"*. It is the sole owner of `M2-10`…`M2-15`, `I-28`…`I-31`ᴬ, `D11`ᴬ, `D12`ᴬ and the normative
+> `§15.3` composition rule, and `01…` Part II, `06…` and this part all cite it. `01…§18` noted its
+> working-tree status in passing; it is recorded here as a defect because **the corpus's most-cited
+> unpublished document is one `git checkout` from deletion**, and output #5 is currently uncommitted work.
+
+Together these are GAP-14. The pattern beneath all five `X` findings is the one `§8` named as this corpus's
+recurring failure mode and `§18` then demonstrated against the corpus itself: *check that a plan's premises
+still hold at execution time.* Each phase was individually careful; nothing reconciled them.
+
+---
+
+## 33. What the corpus still cannot answer
+
+Distinct from §35's limits, which bound *this part*. These are questions **no document in the corpus has
+established**, assembled so that "unknown" is a stated conclusion rather than an assumption. Each is a
+must-verify, not a defect.
+
+| # | Unanswered | Why it matters | Nearest owner |
+|---|---|---|---|
+| **U-1** | **Is any of this true of a deployed environment?** Every document is static; no live database, no request, no browser. Migration state is repo state | Sizing and severity both assume the repo describes production | `01…§7.3`, `03…§4` (`W-0` ran read-only) |
+| **U-2** | **Is authority audited at all?** Never assessed as a security control by any document | GAP-10; an incident cannot be reconstructed without it | `01…§22.5`, `06…§3.3` |
+| **U-3** | **What do the RLS policies actually say?** No policy-by-policy review has been done; `B4`'s rating is inherited from `C10` | GAP-6 and `D4` are being decided from secondary evidence | `01…§22.6`, `02…§22.7` |
+| **U-4** | **What is the request-identity verification mode?** Depends on unversioned hosted configuration this repository does not contain | Rated `S?`; every session-security statement in `07` depends on it | `A2-5` / `T-18` / `D13`ᴮ |
+| **U-5** | **How many routes are genuinely ungated?** `05…§9` declines to state a number; counts are file-level, not handler-level | `W-15` is the largest item in the plan and is currently unsized | `05…§9`, `T-10` |
+| **U-6** | **Do the `action-links` handlers match the token discipline `T-14` verified?** Enumerated, not read | `I-4` is closed for the forms family only | `01…§22.3-22.4` |
+| **U-7** | **Does the platform run more than one server process?** Governs how many warm cache entries one invalidation must reach | Decides whether `D11`ᴬ has a cheap answer or an architectural one | `02…§22.2` |
+| **U-8** | **Is `I-21` (scope symmetric on reads and writes) actually met?** Carried unverified since acceptance through every pass | One of two invariants never re-derived | `02…§7`, `03…§13.1` |
+
+**U-1 and U-7 gate the most.** `03…§1.2` already made this argument for its own wave 0 — *"evidence about
+live data gates four changes, so it comes first"* — and `W-0` executed read-only on 2026-07-31. A second
+read-only census, scoped to U-2, U-3, U-5 and U-7, is the cheapest thing that would move several gaps from
+*reasoned* to *established*. It is proposed, not scheduled.
+
+---
+
+## 34. Reproduce
+
+```bash
+cd /Users/Kelly/Code/alloy-worktrees/wt6-vacilando-os-product-def   # @ cd24874cb
+P=docs/platform/planning/access-identity-v2
+Q=docs/platform/planning/vacilando-os/qa/access-identity-v2
+
+# §24 / §29 — the delivery plan names no post-acceptance finding ID (expect: no output)
+rg -o 'M2-[0-9]+|A2-[0-9]+|IA-[0-9]+|T-[0-9]+|S-[0-9]+|D-IA[0-9]' $Q/03-implementation-qa-sequence.md
+
+# §29 — what it does name (expect: C1..C11, G1..G6)
+rg -o 'C1?[0-9]\b|G[1-6]\b' $Q/03-implementation-qa-sequence.md | sort -u
+
+# §32 X-2 — which folder each Mission 2 phase wrote to
+git show --stat --name-only --format='%h %s' bdcf55908 c667da4e2 7df17b9b3 a4b6e424f cd24874cb
+ls $P                       # 01, 02, 03, README, authority-path-inventory — no 00/04/05/06/07
+rg -o '`0[4567]…' $P/01-existing-state-inventory.md | wc -l          # 85
+rg -o '`0[4567]…' $P/02-canonical-access-identity-model.md | wc -l   #  6
+
+# §32 X-3 — the canonical delivery plan is the stale one
+wc -l $P/03-implementation-qa-sequence.md $Q/03-implementation-qa-sequence.md   # 799 vs 1254
+rg -c 'DONE 2026' $P/03-implementation-qa-sequence.md                           # 0
+git log --oneline -1 -- $P/03-implementation-qa-sequence.md                     # 0e0804ba4 (Runtime V1 closeout)
+git log --oneline -3 -- $Q/03-implementation-qa-sequence.md                     # wave-1 / W-4 execution records
+
+# §32 X-4 — "Five new findings", six rows, seven defined
+rg -n 'new findings' $Q/04-authentication-model.md
+rg -n 'A2-[0-9]' $Q/04-authentication-model.md | head -20
+
+# §32 X-5 — output #5 is uncommitted
+git status --short $P/02-canonical-access-identity-model.md
+git diff --stat $P/02-canonical-access-identity-model.md                        # 551 insertions
+git show HEAD:$P/02-canonical-access-identity-model.md | rg -c 'Part II'        # 0
+
+# §30 — the D13 collision
+rg -n '^\*\*D13' $Q/04-authentication-model.md $P/01-existing-state-inventory.md
+```
+
+---
+
+## 35. Limits — read before citing
+
+1. **Nothing here is a new product defect.** Every finding in §26 is owned, evidenced and rated by an
+   earlier document and is marked **[carried]**. This part asserts a *reconciliation*; if a constituent
+   finding is wrong, this part inherits the error. The only original findings are `X-2`…`X-5` (§32), which
+   are documentary and were verified mechanically (§34).
+2. **No source, schema, migration, or UI was read in this pass.** Unlike Parts I and II, this part opened no
+   application file. Every `path:line` citation is transitive, through the document that established it.
+   **Do not treat a line number reached through this part as freshly confirmed** — several have already
+   drifted once (`04…` records four such drifts).
+3. **The gap consolidation is a judgement.** Fourteen is not a measured number. A different reader could
+   split GAP-1 into credential-lifecycle and cache-invalidation, or merge GAP-9 into GAP-4. The mapping is
+   stated finding-by-finding in §26 precisely so that a regrouping can be argued against the same evidence
+   rather than starting over.
+4. **"No workstream" means the plan does not name the finding.** It does not mean no planned work would
+   incidentally touch it — `W-15`'s sweep would plausibly encounter several. The claim is about what is
+   *scheduled and exit-tested*, which is the only sense in which a plan covers anything.
+5. **The 53 / 34 ID counts are register arithmetic, not defect counts.** §29 states the deflation
+   explicitly: threat entries mostly re-frame findings owned elsewhere. Neither number should be quoted as
+   "defects found."
+6. **Severities are carried verbatim from `01…§14` and re-rate nothing.** Gaps with no threat entry are left
+   unrated rather than assigned a rating by analogy.
+7. **Output coverage (§27) states presence, not sufficiency** — the same caveat `00…§6` attached to its own
+   table, and the reason this artifact was needed. The Director may still judge a covered output inadequate.
+8. **§28 is scored from the corpus, not from the running product.** No browser was opened. The "built"
+   verdicts are `06…`'s, which were themselves established statically.
+9. **The proposals in §26's workstream column and §29 are recommendations to the Director**, not plan
+   entries. No workstream number was invented, no wave re-sequenced, and no decision resolved — per the
+   mission's document-authority rule and `01…§18`'s precedent on renumbering.
+10. **Read-only.** No source, schema, migration, or UI was modified. The only file written by this phase is
+    this document, plus the README row recording Part III; the frozen QA copies are untouched.
+
+---
+
+## 36. Provenance — Part III
+
+- **Inputs (reused, not re-derived):** Parts I and II of this file; `02-canonical-access-identity-model.md`
+  Parts I and II (the latter uncommitted — `X-5`); `03-implementation-qa-sequence.md` (**both** copies —
+  `X-3`); `04-authentication-model.md`; `05-command-enforcement-census.md`;
+  `06-product-ia-and-flows.md`; `07-director-acceptance-rubric.md`;
+  `00-mission-intake-and-coverage.md` §3 row 8 and §8 — the scope authority for this deliverable;
+  `PRODUCT-SOURCE.md` (the copy rule `X-2` tests against).
+- **Read in full this pass:** `00-mission-intake-and-coverage.md`; `PRODUCT-SOURCE.md`;
+  `access-identity-v2/README.md`; §§7–10 and §§17.6–23 of `02…`; §§6–7 of `04…`; §§3, 12–13 of `03…`.
+- **Read in part:** `04…§3.5` (`A2-7`), `§5.3`; `05…§1`, `§3.3`; `06…§§0–2`, `§6`, `§8`; `07…` section
+  structure only.
+- **Mechanical verifications (§34):** finding-ID occupancy in `03…`; Mission 2 commit path attribution;
+  product-source folder contents and the 41 dangling shorthand citations; the two `03` copies' line counts,
+  histories and `DONE 2026` occupancy; `A2-n` occupancy in `04…`; `02…`'s uncommitted diffstat and
+  `Part II` occupancy at `HEAD`; the `D13` collision.
+- **Not consulted:** any application source, schema, migration, or UI file (§35.2); the Director's live
+  mission state; `wave0-authority-census.json` and `wave1-execution-evidence.json` beyond what Parts I and
+  II already cite.
+- **Verified at** `cd24874cb` in `wt6-vacilando-os-product-def`.
 - **No source, schema, migration, or UI changed by this phase.**
