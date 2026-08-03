@@ -15,6 +15,7 @@
 #   certification/alloy-certify env       # write web/.env.certification.local from the stack
 #   certification/alloy-certify serve     # start the app on :3011 against the cert stack
 #   certification/alloy-certify verify    # playwright: capture session + run cert specs → evidence
+#   certification/alloy-certify journey   # the full proving journey: every spec file from a pristine tenant
 #   certification/alloy-certify status    # print the readiness banner
 #   certification/alloy-certify down      # stop the app + stack cleanly
 #   certification/alloy-certify all       # up → env → serve → verify → status   (default)
@@ -143,6 +144,79 @@ cmd_verify() {
     green "Runtime verification ready — evidence in certification/evidence/"
 }
 
+# The proving journey: EVERY spec file starts from a pristine tenant.
+#
+# Two specs assert a pre-publication tenant — business-process-publication S1 and
+# execution-graph G1, both `expect(publicationCount()).toBe(0)` — and both of their files
+# publish. Playwright runs files alphabetically, so whichever runs first passes and the other
+# reads the first one's publications. The suite could never be green in a single pass; that is
+# a property of the specs, not of the platform.
+#
+# Rather than weaken either assertion — they exist to prove exactly that pre-publication
+# property — give every file the pristine tenant it was written against. Nothing about what the
+# specs prove changes; they simply stop inheriting each other's state.
+cmd_journey() {
+    local files=() f name rc=0
+    local -a passed=() failed=()
+    while IFS= read -r f; do files+=("$f"); done < <(ls "$CERT_DIR"/playwright/*.cert.spec.ts | sort)
+    [ "${#files[@]}" -gt 0 ] || die "no certification specs found"
+    mkdir -p "$CERT_DIR/.run/journey"
+
+    info "Proving journey: ${#files[@]} spec files, each from a pristine tenant"
+    for f in "${files[@]}"; do
+        name="$(basename "$f")"
+        printf '\n── %s\n' "$name"
+        cmd_app_stop >/dev/null 2>&1
+
+        # cmd_reset dies (exits) on failure, so it MUST run in a subshell here — otherwise one
+        # transient failure kills the whole journey instead of one file. `supabase db reset`
+        # restarts containers and then polls storage, which answers 502 for a few seconds while
+        # it comes back; under memory pressure that window is wider. Retry before giving up.
+        local attempt=0 reset_ok=0
+        while [ "$attempt" -lt 3 ]; do
+            attempt=$((attempt + 1))
+            if ( cmd_reset ) > "$CERT_DIR/.run/journey/${name}.reset.log" 2>&1; then reset_ok=1; break; fi
+            info "pristine reset attempt ${attempt}/3 failed — retrying (transient 502s while storage restarts)"
+            sleep 15
+        done
+        if [ "$reset_ok" -ne 1 ]; then
+            printf '\033[31m✗ %s — pristine reset failed after %s attempts\033[0m\n' "$name" "$attempt" >&2
+            tail -5 "$CERT_DIR/.run/journey/${name}.reset.log" | sed 's/^/      /' >&2
+            failed+=("$name"); rc=1; continue
+        fi
+
+        # Same reasoning: a serve timeout must fail this file, not abort the journey — and its
+        # reason must reach a log rather than /dev/null.
+        if ! ( cmd_serve ) > "$CERT_DIR/.run/journey/${name}.serve.log" 2>&1; then
+            printf '\033[31m✗ %s — app did not come up\033[0m\n' "$name" >&2
+            tail -4 "$CERT_DIR/.run/journey/${name}.serve.log" | sed 's/^/      /' >&2
+            failed+=("$name"); rc=1; continue
+        fi
+        if ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
+                CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
+                "$WEB_DIR/node_modules/.bin/playwright" test -c "$CERT_DIR/playwright.config.ts" \
+                    ${CERT_WORKERS:+--workers="$CERT_WORKERS"} "playwright/${name}" \
+                    > "$CERT_DIR/.run/journey/${name}.log" 2>&1 ); then
+            green "$name  $(grep -oE '[0-9]+ passed' "$CERT_DIR/.run/journey/${name}.log" | tail -1)"
+            passed+=("$name")
+        else
+            printf '\033[31m✗ %s\033[0m\n' "$name" >&2
+            grep -E "^\s+[0-9]+ (passed|failed)|^  [0-9]+\) " "$CERT_DIR/.run/journey/${name}.log" \
+                | head -6 | sed 's/^/      /' >&2
+            failed+=("$name"); rc=1
+        fi
+    done
+
+    printf '\n══ proving journey ══\n'
+    printf '  files passed : %s/%s\n' "${#passed[@]}" "${#files[@]}"
+    if [ "${#failed[@]}" -gt 0 ]; then
+        printf '  files FAILED : %s\n' "${failed[*]}"
+    fi
+    printf '  specs passed : %s\n' "$(cat "$CERT_DIR"/.run/journey/*.log 2>/dev/null | grep -oE '[0-9]+ passed' | awk '{s+=$1} END {print s+0}')"
+    printf '  specs failed : %s\n' "$(cat "$CERT_DIR"/.run/journey/*.log 2>/dev/null | grep -oE '[0-9]+ failed' | awk '{s+=$1} END {print s+0}')"
+    return "$rc"
+}
+
 # A pristine tenant. Publications and revisions are IMMUTABLE by design, so a certification run
 # that creates them cannot be undone in place — the only honest reset is a fresh database.
 cmd_reset() {
@@ -227,6 +301,7 @@ case "${1:-all}" in
     verify) cmd_verify ;;
     status) cmd_status ;;
     app-stop) cmd_app_stop ;;
+    journey) cmd_journey ;;
     down) cmd_down ;;
     all) cmd_up; cmd_env; cmd_verify; cmd_status ;;
     *) die "unknown command: $1 (up|env|serve|verify|status|down|all)" ;;
