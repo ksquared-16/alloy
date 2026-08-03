@@ -1,0 +1,441 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-stack — the ONE sanctioned way to use a local Supabase stack.
+#
+# Problem this solves: every session that ran `supabase start` from its own
+# directory got its own 8-11 container stack, and nothing ever stopped them.
+# Three sessions became 35 containers. The stacks outlived the sessions, the
+# worktrees, and in one case the entire temp directory they were started from.
+#
+# Doctrine: ONE shared stack per machine. Sessions take a LEASE on it; they do
+# not get their own. The last lease released stops the stack. Stale leases from
+# crashed sessions expire on their own, so nothing leaks.
+#
+#   alloy-stack use          # take a lease (starts the shared stack if down)
+#   alloy-stack release      # drop this lease (stops the stack if last one out)
+#   alloy-stack status       # what is running, who holds leases
+#   alloy-stack reap         # stop unsanctioned + idle stacks
+#   alloy-stack doctor       # explain any violations, exit non-zero if unclean
+#
+# Deliberately SELF-CONTAINED: it does not source the alloy-dev toolkit libs.
+# The toolkit is currently served out of a single worktree and has drifted from
+# staging; this command has to keep working regardless of which version is live,
+# and has to survive that worktree being deleted.
+# =============================================================================
+set -euo pipefail
+
+VERSION="1.0.0"
+
+# ---------------------------------------------------------------- configuration
+STATE_DIR="${ALLOY_STACK_STATE_DIR:-$HOME/.local/state/alloy/stack}"
+LEASE_DIR="${STATE_DIR}/leases"
+CONF_FILE="${ALLOY_STACK_CONF:-$HOME/.config/alloy/stack.conf}"
+
+# The one stack every session shares. Overridable, but a single value by design.
+SANCTIONED_PROJECT="${ALLOY_STACK_PROJECT:-alloy-cert}"
+# Relative path, from a repo root, to the sanctioned stack's supabase workdir.
+SANCTIONED_SUBDIR="${ALLOY_STACK_SUBDIR:-certification}"
+# A lease with no heartbeat for this long is considered abandoned.
+LEASE_TTL_HOURS="${ALLOY_STACK_LEASE_TTL_HOURS:-12}"
+
+# shellcheck source=/dev/null
+[[ -f "$CONF_FILE" ]] && source "$CONF_FILE"
+
+mkdir -p "$LEASE_DIR"
+
+# ---------------------------------------------------------------- presentation
+_c_red=$'\033[31m'; _c_grn=$'\033[32m'; _c_yel=$'\033[33m'; _c_dim=$'\033[2m'; _c_off=$'\033[0m'
+[[ -t 1 ]] || { _c_red=""; _c_grn=""; _c_yel=""; _c_dim=""; _c_off=""; }
+ok()   { printf '%s✓%s %s\n' "$_c_grn" "$_c_off" "$1"; }
+warn() { printf '%s!%s %s\n' "$_c_yel" "$_c_off" "$1"; }
+bad()  { printf '%s✗%s %s\n' "$_c_red" "$_c_off" "$1" >&2; }
+info() { printf '  %s\n' "$1"; }
+dim()  { printf '%s  %s%s\n' "$_c_dim" "$1" "$_c_off"; }
+die()  { bad "$1"; exit 1; }
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+docker_ok() {
+  have docker || return 1
+  docker info >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------- stack discovery
+# Print one TSV row per local Supabase compose project:
+#   project<TAB>container_count<TAB>workdir<TAB>oldest_status
+supabase_projects() {
+  docker_ok || return 0
+  docker ps -a \
+    --filter "label=com.supabase.cli.project" \
+    --format '{{.Label "com.supabase.cli.project"}}' 2>/dev/null \
+    | sort -u \
+    | while IFS= read -r proj; do
+        [[ -n "$proj" ]] || continue
+        local count workdir status
+        count="$(docker ps -aq --filter "label=com.supabase.cli.project=${proj}" | wc -l | tr -d ' ')"
+        workdir="$(docker ps -aq --filter "label=com.supabase.cli.project=${proj}" \
+                   | head -1 \
+                   | xargs -I{} docker inspect {} \
+                       --format '{{index .Config.Labels "com.supabase.cli.workdir"}}' 2>/dev/null || true)"
+        status="$(docker ps -a --filter "label=com.supabase.cli.project=${proj}" \
+                  --format '{{.Status}}' | head -1)"
+        printf '%s\t%s\t%s\t%s\n' "$proj" "$count" "${workdir:-unknown}" "${status:-unknown}"
+      done
+}
+
+stack_is_running() {
+  docker_ok || return 1
+  [[ -n "$(docker ps -q --filter "label=com.supabase.cli.project=${SANCTIONED_PROJECT}" 2>/dev/null)" ]]
+}
+
+# ---------------------------------------------------------------- lease handling
+# A holder identifies a session. Default: the managed worktree name, which is
+# stable across the session's life and disappears when the worktree does.
+default_holder() {
+  local d="${ALLOY_WORKTREE_PATH:-$PWD}"
+  local root
+  root="$(cd "$d" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$d")"
+  basename "$root"
+}
+
+lease_path() { printf '%s/%s.lease\n' "$LEASE_DIR" "$1"; }
+
+# Read project_id out of a supabase config.toml.
+config_project_id() {
+  sed -n 's/^[[:space:]]*project_id[[:space:]]*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' "$1" 2>/dev/null | head -1
+}
+
+# Resolve the repo directory that owns the SANCTIONED stack.
+#
+# SAFETY: the returned workdir must actually declare SANCTIONED_PROJECT. Without
+# this check a caller operating on some other project still resolved to
+# certification/ and `supabase stop` tore down the wrong stack — which is
+# exactly how the shared stack got destroyed once. Never hand a workdir to
+# `supabase stop` unless its config.toml names the project we mean to stop.
+resolve_stack_workdir() {
+  local hint="${1:-$PWD}" root cand cfg
+  local -a candidates=()
+  root="$(cd "$hint" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -n "$root" ]] && candidates+=("$root")
+  candidates+=("${ALLOY_REPO:-$HOME/Alloy}")
+  # The stack is shared, so any checkout's committed config describes it.
+  for cand in "$HOME"/Code/alloy-worktrees/*; do candidates+=("$cand"); done
+
+  for cand in "${candidates[@]}"; do
+    cfg="${cand}/${SANCTIONED_SUBDIR}/supabase/config.toml"
+    [[ -f "$cfg" ]] || continue
+    [[ "$(config_project_id "$cfg")" == "$SANCTIONED_PROJECT" ]] || continue
+    printf '%s/%s\n' "$cand" "$SANCTIONED_SUBDIR"
+    return 0
+  done
+  return 1
+}
+
+# Stop a stack by project name. Label-scoped, so it can only ever affect the
+# containers of the project named — never a neighbour's.
+stop_stack_by_project() {
+  local proj="$1" workdir="${2:-}"
+  if [[ -n "$workdir" && -d "$workdir" ]] && have supabase \
+     && [[ "$(config_project_id "${workdir}/supabase/config.toml")" == "$proj" ]]; then
+    supabase stop --workdir "$workdir" >/dev/null 2>&1 || true
+  fi
+  local ids
+  ids="$(docker ps -aq --filter "label=com.supabase.cli.project=${proj}" 2>/dev/null || true)"
+  [[ -n "$ids" ]] && docker rm -f $ids >/dev/null 2>&1 || true
+  return 0
+}
+
+# Seconds since the youngest container in a project started (proxy for "a
+# session is actively using this right now").
+stack_age_seconds() {
+  local proj="$1" newest now
+  newest="$(docker ps -a --filter "label=com.supabase.cli.project=${proj}" \
+            --format '{{.CreatedAt}}' 2>/dev/null | head -1)"
+  [[ -n "$newest" ]] || { printf '999999\n'; return 0; }
+  now="$(date +%s)"
+  local t; t="$(date -j -f '%Y-%m-%d %H:%M:%S' "${newest:0:19}" +%s 2>/dev/null \
+                || date -d "${newest:0:19}" +%s 2>/dev/null || echo 0)"
+  [[ "$t" -gt 0 ]] && printf '%s\n' "$(( now - t ))" || printf '999999\n'
+}
+
+lease_is_stale() {
+  local f="$1" wt age_h now mt
+  # shellcheck source=/dev/null
+  wt="$(sed -n 's/^WORKTREE=//p' "$f" | head -1)"
+  [[ -n "$wt" && ! -d "$wt" ]] && return 0   # worktree deleted → definitively gone
+  now="$(date +%s)"
+  mt="$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo "$now")"
+  age_h=$(( (now - mt) / 3600 ))
+  (( age_h >= LEASE_TTL_HOURS ))
+}
+
+prune_stale_leases() {
+  local pruned=0 f
+  shopt -s nullglob
+  for f in "$LEASE_DIR"/*.lease; do
+    if lease_is_stale "$f"; then
+      rm -f "$f"
+      pruned=$((pruned + 1))
+    fi
+  done
+  shopt -u nullglob
+  printf '%s\n' "$pruned"
+}
+
+live_lease_count() {
+  prune_stale_leases >/dev/null
+  shopt -s nullglob
+  local f n=0
+  for f in "$LEASE_DIR"/*.lease; do n=$((n + 1)); done
+  shopt -u nullglob
+  printf '%s\n' "$n"
+}
+
+# ---------------------------------------------------------------- commands
+cmd_use() {
+  local holder="${1:-$(default_holder)}"
+  docker_ok || die "Docker is not reachable. Run: alloy-docker-doctor --recover"
+
+  local workdir
+  workdir="$(resolve_stack_workdir)" \
+    || die "cannot locate ${SANCTIONED_SUBDIR}/supabase/config.toml — run from an Alloy worktree"
+
+  if stack_is_running; then
+    ok "shared stack '${SANCTIONED_PROJECT}' already running — joining it (no new containers)"
+  else
+    info "shared stack '${SANCTIONED_PROJECT}' is down — starting it once, for everyone…"
+    have supabase || die "supabase CLI not on PATH"
+    supabase start --workdir "$workdir" >/dev/null \
+      || die "supabase start failed in ${workdir}"
+    ok "shared stack '${SANCTIONED_PROJECT}' started"
+  fi
+
+  local f; f="$(lease_path "$holder")"
+  cat >"$f" <<EOF
+HOLDER=${holder}
+WORKTREE=$(cd "${ALLOY_WORKTREE_PATH:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
+PID=$$
+PROVIDER=${ALLOY_PROVIDER:-unknown}
+SLOT=${ALLOY_WORKTREE_SLOT:-unknown}
+CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+  ok "lease held by '${holder}' ($(live_lease_count) active on this stack)"
+  info "release it when the sprint ends:  alloy-stack release"
+}
+
+cmd_release() {
+  local holder="" keep=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --keep-running) keep=1; shift ;;
+      -*) die "unknown option: $1" ;;
+      *) holder="$1"; shift ;;
+    esac
+  done
+  [[ -n "$holder" ]] || holder="$(default_holder)"
+
+  local f; f="$(lease_path "$holder")"
+  if [[ -f "$f" ]]; then
+    rm -f "$f"
+    ok "lease released by '${holder}'"
+  else
+    dim "no lease was held by '${holder}' (nothing to release)"
+  fi
+
+  local n; n="$(live_lease_count)"
+  if (( n > 0 )); then
+    ok "shared stack stays up — ${n} other session(s) still hold leases"
+    return 0
+  fi
+
+  if [[ "$keep" -eq 1 ]]; then
+    dim "last lease released, but --keep-running was passed; leaving the stack up"
+    return 0
+  fi
+
+  if ! stack_is_running; then
+    dim "shared stack already down"
+    return 0
+  fi
+
+  info "last lease released — stopping the shared stack"
+  local workdir=""
+  workdir="$(resolve_stack_workdir || true)"
+  # Volumes are deliberately KEPT (no --no-backup): stopping a stack must never
+  # destroy a seeded database. Use `alloy-stack reap --volumes` to discard data.
+  stop_stack_by_project "$SANCTIONED_PROJECT" "$workdir"
+  ok "shared stack stopped — 0 containers left behind (data volumes kept)"
+}
+
+cmd_status() {
+  printf 'Alloy local stack status\n'
+  printf -- '------------------------\n'
+  if ! docker_ok; then
+    bad "Docker unreachable — run: alloy-docker-doctor --recover"
+    return 1
+  fi
+
+  local total; total="$(docker ps -aq | wc -l | tr -d ' ')"
+  printf 'sanctioned shared stack: %s\n' "$SANCTIONED_PROJECT"
+  printf 'total containers on machine: %s\n\n' "$total"
+
+  printf '%-24s %5s  %-12s %s\n' "STACK" "CTRS" "CLASS" "STATUS"
+  local any=0
+  while IFS=$'\t' read -r proj count workdir status; do
+    [[ -n "$proj" ]] || continue
+    any=1
+    local class
+    if [[ "$proj" == "$SANCTIONED_PROJECT" ]]; then class="shared"; else class="UNSANCTIONED"; fi
+    printf '%-24s %5s  %-12s %s\n' "$proj" "$count" "$class" "$status"
+    [[ "$class" == "UNSANCTIONED" && "$workdir" != "unknown" ]] && dim "from: $workdir"
+  done < <(supabase_projects)
+  [[ "$any" -eq 1 ]] || printf '%s\n' "(no local Supabase stacks running)"
+
+  printf '\nLeases on %s:\n' "$SANCTIONED_PROJECT"
+  prune_stale_leases >/dev/null
+  shopt -s nullglob
+  local f any_lease=0
+  for f in "$LEASE_DIR"/*.lease; do
+    any_lease=1
+    local h c w
+    h="$(sed -n 's/^HOLDER=//p' "$f" | head -1)"
+    c="$(sed -n 's/^CREATED=//p' "$f" | head -1)"
+    w="$(sed -n 's/^WORKTREE=//p' "$f" | head -1)"
+    printf '  %-38s since %s\n' "$h" "$c"
+    [[ -d "$w" ]] || printf '    %s(worktree missing — will expire)%s\n' "$_c_yel" "$_c_off"
+  done
+  shopt -u nullglob
+  [[ "$any_lease" -eq 1 ]] || printf '  (none — stack is idle and may be reaped)\n'
+}
+
+# Reaping is destructive and has already cost one live session its stack, so it
+# PREVIEWS by default. Nothing is removed without --confirm, and a stack young
+# enough to belong to an in-flight session is skipped unless --force.
+cmd_reap() {
+  local confirm=0 with_volumes=0 include_idle=0 force=0
+  local young_secs="${ALLOY_STACK_YOUNG_SECS:-3600}"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --confirm|--yes|-y) confirm=1; shift ;;
+      --dry-run|-n) confirm=0; shift ;;
+      --volumes) with_volumes=1; shift ;;
+      --include-idle) include_idle=1; shift ;;
+      --force|-f) force=1; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+
+  docker_ok || die "Docker unreachable"
+  local pruned; pruned="$(prune_stale_leases)"
+  (( pruned > 0 )) && dim "expired ${pruned} stale lease(s)"
+
+  local reaped=0 freed=0 skipped=0
+  while IFS=$'\t' read -r proj count workdir status; do
+    [[ -n "$proj" ]] || continue
+
+    local reason=""
+    if [[ "$proj" != "$SANCTIONED_PROJECT" ]]; then
+      reason="unsanctioned stack (only '${SANCTIONED_PROJECT}' is shared)"
+    elif [[ "$include_idle" -eq 1 && "$(live_lease_count)" == "0" ]]; then
+      reason="sanctioned stack with no live leases"
+    else
+      continue
+    fi
+
+    # Protect stacks that just started — that is a session working right now.
+    local age; age="$(stack_age_seconds "$proj")"
+    if (( age < young_secs )) && [[ "$force" -eq 0 ]]; then
+      warn "SKIP ${proj} (${count} containers) — started $((age / 60))m ago, likely a live session"
+      dim "override with --force once you know that session is done"
+      skipped=$((skipped + 1))
+      continue
+    fi
+
+    if [[ "$confirm" -eq 0 ]]; then
+      warn "would reap ${proj} (${count} containers) — ${reason}"
+      reaped=$((reaped + 1)); freed=$((freed + count))
+      continue
+    fi
+
+    info "reaping ${proj} (${count} containers) — ${reason}"
+    stop_stack_by_project "$proj" "$workdir"
+    if [[ "$with_volumes" -eq 1 ]]; then
+      docker volume ls -q 2>/dev/null | grep -E "_${proj}\$" | while IFS= read -r v; do
+        docker volume rm "$v" >/dev/null 2>&1 && dim "removed volume $v" || true
+      done
+    fi
+    reaped=$((reaped + 1)); freed=$((freed + count))
+  done < <(supabase_projects)
+
+  if (( reaped == 0 && skipped == 0 )); then
+    ok "nothing to reap — only the shared stack is running"
+  elif [[ "$confirm" -eq 0 ]] && (( reaped > 0 )); then
+    printf '\n'
+    warn "${reaped} stack(s) / ${freed} containers would be freed — PREVIEW ONLY"
+    info "to actually stop them:  alloy-stack reap --confirm"
+  elif (( reaped > 0 )); then
+    ok "reaped ${reaped} stack(s), freed ${freed} containers (data volumes kept)"
+  fi
+  (( skipped > 0 )) && info "${skipped} stack(s) skipped as in-use"
+  return 0
+}
+
+cmd_doctor() {
+  local rc=0
+  cmd_status || rc=1
+  printf '\nVerdict\n-------\n'
+  local violations=0
+  while IFS=$'\t' read -r proj count workdir status; do
+    [[ -n "$proj" ]] || continue
+    if [[ "$proj" != "$SANCTIONED_PROJECT" ]]; then
+      bad "${proj}: unsanctioned stack, ${count} containers — sessions must share '${SANCTIONED_PROJECT}'"
+      [[ "$workdir" != "unknown" ]] && dim "started from: $workdir"
+      violations=$((violations + 1))
+    fi
+  done < <(supabase_projects)
+
+  if (( violations == 0 )); then
+    ok "contained — one shared stack, no replication"
+    return "$rc"
+  fi
+  printf '\nFix:  alloy-stack reap        (stop the unsanctioned stacks)\n'
+  printf 'Then: alloy-stack use         (join the shared stack instead)\n'
+  return 1
+}
+
+usage() {
+  cat <<EOF
+alloy-stack ${VERSION} — one shared local Supabase stack, leased by sessions.
+
+Usage:
+  alloy-stack use [holder]              take a lease; starts the shared stack if down
+  alloy-stack release [holder]          drop the lease; stops the stack if last one out
+  alloy-stack status                    running stacks + who holds leases
+  alloy-stack reap                      PREVIEW unsanctioned stacks (removes nothing)
+  alloy-stack reap --confirm            actually stop them; keeps data volumes
+        [--include-idle]                also stop the shared stack when unleased
+        [--force]                       include stacks started <1h ago (live sessions)
+        [--volumes]                     also discard their data volumes
+  alloy-stack doctor                    explain violations; non-zero exit if unclean
+
+Doctrine: sessions SHARE the '${SANCTIONED_PROJECT}' stack. Never run
+'supabase start' from your own directory — that is what produced 35 containers.
+EOF
+}
+
+main() {
+  local cmd="${1:-status}"
+  [[ $# -gt 0 ]] && shift || true
+  case "$cmd" in
+    use)      cmd_use "$@" ;;
+    release)  cmd_release "$@" ;;
+    status)   cmd_status "$@" ;;
+    reap)     cmd_reap "$@" ;;
+    doctor)   cmd_doctor "$@" ;;
+    -h|--help|help) usage ;;
+    --version) printf '%s\n' "$VERSION" ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
+main "$@"

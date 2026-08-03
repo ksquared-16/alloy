@@ -47,10 +47,22 @@ case "$cmd" in
     check_ports || true
     ;;
   start)
-    check_ports
-    echo "Starting isolated cert stack (project_id=$PROJECT_ID)..."
-    supabase start
-    supabase status
+    cat >&2 <<'SUPERSEDED'
+⛔ SUPERSEDED: this would start a SECOND Supabase stack (8-11 more containers).
+
+That pattern put Docker at 35 containers across 4 stacks, and this stack's data
+volume outlived everyone using it. Sessions now share one stack:
+
+  alloy-stack use        # join the shared 'alloy-cert' stack
+  alloy-stack status     # who else is using it
+  alloy-stack release    # at sprint end
+
+The shared stack already replays every migration and carries the synthetic
+tenant, which is what this script was reaching for.
+
+See docs/platform/governance/local-docker-containment.md
+SUPERSEDED
+    exit 1
     ;;
   reset)
     echo "Resetting isolated cert database (full migration replay)..."

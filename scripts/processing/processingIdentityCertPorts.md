@@ -1,5 +1,25 @@
 # Processing Identity — isolated local certification stack
 
+> ## ⛔ SUPERSEDED — do not follow this playbook
+>
+> This document told you to allocate a fresh 553xx port range and stand up a **separate** Supabase stack. Together
+> with the same pattern elsewhere it drove Docker to **35 containers across 4 stacks**, and its stack
+> (`alloy-processing-identity-cert`) left a data volume behind on the machine long after anyone was using it.
+>
+> **Use the one shared stack instead:**
+>
+> ```bash
+> alloy-stack use      # join the shared 'alloy-cert' stack
+> alloy-stack status   # who else is using it
+> alloy-stack release  # at sprint end
+> ```
+>
+> The shared stack already replays every migration and carries the synthetic tenant, which is what this playbook
+> was reaching for. `supabase start` outside it is blocked by a `PreToolUse` hook.
+>
+> Kept for historical reference only — see
+> [`docs/platform/governance/local-docker-containment.md`](../../docs/platform/governance/local-docker-containment.md).
+
 Use a **separate** Supabase stack so certification never touches the default `54321/54322` instance.
 
 ## Port map (all verified free before start)

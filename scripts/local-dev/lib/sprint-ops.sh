@@ -1049,6 +1049,35 @@ alloy_sprint_dirty_classification() {
   printf 'next-env-only'
 }
 
+# Locate the alloy-stack command. It is installed to a stable path outside any
+# worktree precisely so sprint teardown keeps working after the worktree that
+# once hosted the toolkit is deleted.
+alloy_stack_cmd() {
+  local cand
+  for cand in \
+    "$(command -v alloy-stack 2>/dev/null || true)" \
+    "$HOME/.local/share/alloy/bin/alloy-stack" \
+    "${ALLOY_LOCAL_DEV_ROOT:-}/alloy-stack"; do
+    [[ -n "$cand" && -x "$cand" ]] && { printf '%s\n' "$cand"; return 0; }
+  done
+  return 1
+}
+
+# Drop this worktree's lease on the shared stack, then show what is still
+# unaccounted for. Never fails a sprint finish — teardown is best-effort.
+alloy_stack_release_for_worktree() {
+  local name="$1" path="${2:-}"
+  local cmd
+  if ! cmd="$(alloy_stack_cmd)"; then
+    alloy_warn "alloy-stack not installed — skipping shared-stack release"
+    return 0
+  fi
+  ALLOY_WORKTREE_PATH="$path" "$cmd" release "$name" 2>&1 | sed 's/^/  /' || true
+  # Preview only: never destroy another session's stack during a finish.
+  "$cmd" reap 2>&1 | sed 's/^/  /' || true
+  return 0
+}
+
 alloy_sprint_finish_one() {
   local target="$1"
   local ack_dirty="${2:-0}"
@@ -1072,6 +1101,13 @@ alloy_sprint_finish_one() {
     "${ALLOY_LOCAL_DEV_ROOT}/alloy-dev-stop" "$name" || true
   env ALLOY_CONFIG_FILE="${ALLOY_CONFIG_FILE}" \
     "${ALLOY_LOCAL_DEV_ROOT}/alloy-agent-browser-stop" "$slot" 2>/dev/null || true
+
+  # Release this sprint's claim on the shared local Supabase stack. Finishing a
+  # sprint used to stop the dev server and the browser but leave Docker running
+  # forever — that is how 3 sessions accumulated 35 containers. If this was the
+  # last session holding a lease, the shared stack stops here. Data volumes are
+  # kept, so the next `alloy-stack use` restarts it with its data intact.
+  alloy_stack_release_for_worktree "$name" "$path"
 
   alloy_write_continuation_record "$name" "finish" \
     "Human review only — do not push/merge/PR from toolkit finish." >/dev/null
