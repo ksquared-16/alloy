@@ -8,6 +8,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AvailableTourSlot } from "@/lib/tours/availability/types";
+
 const confirmMock = vi.fn();
 const rescheduleMock = vi.fn();
 const cancelMock = vi.fn();
@@ -42,7 +44,24 @@ const INV = "44444444-0000-4000-8000-00000000000e";
 const BOOKING = "55555555-0000-4000-8000-00000000000f";
 const START = "2026-08-10T16:00:00.000Z";
 
-let availableSlots: Array<{ start_at: string; rule_id?: string }> = [];
+// Typed against the REAL slot type. An earlier version of this fixture used
+// snake_case, which agreed with a snake_case bug in the routes' live
+// revalidation and let 70 cases pass over a path that rejected every booking.
+// A structurally-typed fake can only certify the shape it invents.
+let availableSlots: AvailableTourSlot[] = [];
+
+function slot(over: Partial<AvailableTourSlot> = {}): AvailableTourSlot {
+    return {
+        startAt: START,
+        endAt: "2026-08-10T16:30:00.000Z",
+        timezone: "America/New_York",
+        remainingCapacity: 3,
+        ruleId: "rule-1",
+        locationId: LOC,
+        userId: null,
+        ...over,
+    };
+}
 
 process.env.SUPABASE_SERVICE_ROLE_KEY ||= "test-service-role-key";
 
@@ -146,7 +165,7 @@ beforeEach(() => {
     confirmMock.mockResolvedValue(booking({ status_key: "confirmed" }));
     cancelMock.mockResolvedValue(booking({ status_key: "canceled" }));
     rescheduleMock.mockResolvedValue(booking({ id: "booking-2", status_key: "rescheduled" }));
-    availableSlots = [{ start_at: START, rule_id: "rule-1" }];
+    availableSlots = [slot()];
     state = { link: link(), invitation: invitation(), booking: booking(), updates: [] };
 });
 
