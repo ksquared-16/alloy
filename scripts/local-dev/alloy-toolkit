@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-toolkit — install the local-dev toolkit from canonical repository code
+# into a durable, versioned location.
+#
+# The problem this fixes: /Users/Kelly/bin/alloy-dev symlinked into
+# wt6-bp-config-integrity/scripts/local-dev, and two commands inside it
+# symlinked into wt6-vacilando-os-product-def. The machine-wide toolkit was
+# therefore owned by two ACTIVE sprint worktrees. Deleting either slot would
+# have broken every alloy-* command on the machine, and the toolkit that ran
+# was whatever those branches happened to contain — not canonical code.
+#
+# Layout:
+#   ~/.local/share/alloy/toolkit/<sha>/     one immutable tree per source commit
+#   ~/.local/share/alloy/toolkit/current -> <sha>     the active version
+#   ~/bin/alloy-dev                      -> .../toolkit/current
+#
+# Nothing resolves through a worktree, so any slot can be deleted safely.
+#
+#   alloy-toolkit install [ref]   install/update from a git ref (default: origin/staging)
+#   alloy-toolkit status          what is installed, from which commit
+#   alloy-toolkit list            installed versions
+#   alloy-toolkit verify          assert nothing resolves through a worktree
+#   alloy-toolkit rollback <sha>  flip 'current' back to a previous version
+#
+# Idempotent: installing a ref that resolves to the already-current commit is a
+# no-op. Self-contained — it must run before the toolkit it installs exists.
+# =============================================================================
+set -euo pipefail
+
+CANONICAL="${ALLOY_REPO:-$HOME/Alloy}"
+SUBDIR="scripts/local-dev"
+ROOT="${ALLOY_TOOLKIT_ROOT:-$HOME/.local/share/alloy/toolkit}"
+LINK="${ALLOY_TOOLKIT_LINK:-$HOME/bin/alloy-dev}"
+WORKTREE_ROOT="${ALLOY_WORKTREE_ROOT:-$HOME/Code/alloy-worktrees}"
+
+_g=$'\033[32m'; _y=$'\033[33m'; _r=$'\033[31m'; _d=$'\033[2m'; _o=$'\033[0m'
+[[ -t 1 ]] || { _g=""; _y=""; _r=""; _d=""; _o=""; }
+ok()   { printf '%s✓%s %s\n' "$_g" "$_o" "$1"; }
+warn() { printf '%s!%s %s\n' "$_y" "$_o" "$1"; }
+info() { printf '  %s\n' "$1"; }
+dim()  { printf '%s  %s%s\n' "$_d" "$1" "$_o"; }
+die()  { printf '%s✗%s %s\n' "$_r" "$_o" "$1" >&2; exit 1; }
+
+resolve_commit() {
+  local ref="$1"
+  git -C "$CANONICAL" rev-parse --verify "${ref}^{commit}" 2>/dev/null \
+    || die "cannot resolve ref '${ref}' in ${CANONICAL}"
+}
+
+current_sha() {
+  [[ -L "${ROOT}/current" ]] || return 1
+  basename "$(readlink "${ROOT}/current")"
+}
+
+cmd_install() {
+  local ref="${1:-origin/staging}"
+  [[ -d "${CANONICAL}/.git" ]] || die "canonical repo not found at ${CANONICAL}"
+
+  # Fetch so 'origin/...' refs are current, but never mutate the working tree.
+  git -C "$CANONICAL" fetch -q origin 2>/dev/null || warn "fetch failed — using cached refs"
+
+  local sha short dest
+  sha="$(resolve_commit "$ref")"
+  short="${sha:0:12}"
+  dest="${ROOT}/${short}"
+
+  if [[ "$(current_sha 2>/dev/null || echo none)" == "$short" && -d "$dest" ]]; then
+    ok "already current at ${short} (${ref}) — nothing to do"
+    return 0
+  fi
+
+  if [[ -d "$dest" ]]; then
+    dim "version ${short} already extracted — reusing"
+  else
+    info "extracting ${SUBDIR} from ${ref} (${short})…"
+    mkdir -p "$dest"
+    # git archive reads straight from the object store: no dependence on the
+    # canonical WORKING TREE, which is currently 165 commits behind origin.
+    git -C "$CANONICAL" archive "$sha" "$SUBDIR" \
+      | tar -x -C "$dest" --strip-components=2 \
+      || die "extract failed for ${sha}"
+  fi
+
+  # Executability does not always survive extraction; restore it for commands.
+  find "$dest" -maxdepth 1 -type f \( -name 'alloy-*' -o -name 'vac' -o -name 'vac-run' -o -name '*.sh' \) \
+    -exec chmod +x {} + 2>/dev/null || true
+  find "$dest" -type f -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+
+  local count
+  count="$(find "$dest" -maxdepth 1 -type f -name 'alloy-*' | wc -l | tr -d ' ')"
+  cat >"${dest}/INSTALL-MANIFEST" <<EOF
+source_repo=${CANONICAL}
+source_ref=${ref}
+source_commit=${sha}
+source_commit_short=${short}
+source_subdir=${SUBDIR}
+installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+installed_by=alloy-toolkit
+command_count=${count}
+EOF
+
+  # Flip 'current' atomically, then repoint the PATH entry.
+  mkdir -p "$ROOT"
+  ln -sfn "$dest" "${ROOT}/.current.tmp"
+  mv -f "${ROOT}/.current.tmp" "${ROOT}/current"
+  mkdir -p "$(dirname "$LINK")"
+  ln -sfn "${ROOT}/current" "$LINK"
+
+  ok "installed ${short} from ${ref} (${count} commands)"
+  info "toolkit: ${dest}"
+  info "link:    ${LINK} -> ${ROOT}/current -> ${short}"
+  cmd_verify
+}
+
+cmd_status() {
+  local cur
+  if ! cur="$(current_sha 2>/dev/null)"; then
+    warn "no versioned toolkit installed"
+    [[ -L "$LINK" ]] && info "${LINK} -> $(readlink "$LINK")"
+    return 1
+  fi
+  printf 'Alloy toolkit\n-------------\n'
+  printf 'link:    %s -> %s\n' "$LINK" "$(readlink "$LINK" 2>/dev/null || echo '(missing)')"
+  printf 'current: %s\n' "$cur"
+  if [[ -f "${ROOT}/current/INSTALL-MANIFEST" ]]; then
+    while IFS='=' read -r k v; do printf '%-14s %s\n' "$k:" "$v"; done <"${ROOT}/current/INSTALL-MANIFEST"
+  fi
+}
+
+cmd_list() {
+  local cur; cur="$(current_sha 2>/dev/null || echo none)"
+  local d
+  for d in "$ROOT"/*/; do
+    [[ -d "$d" ]] || continue
+    local b; b="$(basename "$d")"
+    local ref=""; [[ -f "${d}INSTALL-MANIFEST" ]] && ref="$(sed -n 's/^source_ref=//p' "${d}INSTALL-MANIFEST")"
+    local when=""; [[ -f "${d}INSTALL-MANIFEST" ]] && when="$(sed -n 's/^installed_at=//p' "${d}INSTALL-MANIFEST")"
+    if [[ "$b" == "$cur" ]]; then
+      printf '  %s* %-14s %-24s %s%s\n' "$_g" "$b" "$ref" "$when" "$_o"
+    else
+      printf '    %-14s %-24s %s\n' "$b" "$ref" "$when"
+    fi
+  done
+}
+
+# The core invariant: no command a session runs may resolve through an active
+# worker worktree.
+cmd_verify() {
+  local rc=0
+
+  local target; target="$(readlink -f "$LINK" 2>/dev/null || echo "")"
+  if [[ -z "$target" ]]; then
+    warn "${LINK} does not resolve"; rc=1
+  elif [[ "$target" == "$WORKTREE_ROOT"/* ]]; then
+    warn "${LINK} resolves INTO A WORKTREE: ${target}"; rc=1
+  else
+    ok "toolkit link resolves outside any worktree"
+    dim "$LINK -> $target"
+  fi
+
+  local escapes=0 f t
+  for f in "$LINK"/*; do
+    [[ -L "$f" ]] || continue
+    t="$(readlink -f "$f" 2>/dev/null || echo "")"
+    if [[ "$t" == "$WORKTREE_ROOT"/* || "$t" == *"/.claude/worktrees/"* ]]; then
+      warn "command escapes into a worktree: $(basename "$f") -> $t"
+      escapes=$((escapes + 1)); rc=1
+    fi
+  done
+  (( escapes == 0 )) && ok "no command symlink escapes into a worktree"
+
+  local broken=0
+  for f in "$LINK"/alloy-*; do
+    [[ -e "$f" ]] || { warn "broken entry: $f"; broken=$((broken+1)); rc=1; continue; }
+    [[ -x "$f" ]] || { warn "not executable: $(basename "$f")"; broken=$((broken+1)); rc=1; }
+  done
+  (( broken == 0 )) && ok "all alloy-* commands present and executable"
+
+  return "$rc"
+}
+
+cmd_rollback() {
+  local sha="${1:-}"
+  [[ -n "$sha" ]] || die "usage: alloy-toolkit rollback <sha>"
+  [[ -d "${ROOT}/${sha}" ]] || die "no installed version '${sha}' (see: alloy-toolkit list)"
+  ln -sfn "${ROOT}/${sha}" "${ROOT}/.current.tmp"
+  mv -f "${ROOT}/.current.tmp" "${ROOT}/current"
+  ok "rolled back to ${sha}"
+  cmd_verify
+}
+
+usage() {
+  sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+main() {
+  local cmd="${1:-status}"
+  [[ $# -gt 0 ]] && shift || true
+  case "$cmd" in
+    install|update) cmd_install "$@" ;;
+    status)         cmd_status ;;
+    list)           cmd_list ;;
+    verify)         cmd_verify ;;
+    rollback)       cmd_rollback "$@" ;;
+    -h|--help|help) usage ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
+main "$@"
