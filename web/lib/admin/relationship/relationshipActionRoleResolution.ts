@@ -15,7 +15,7 @@ import type { RelationshipActionKey, RelationshipRoleKey } from "@/lib/admin/rel
  * Candidates for the NATIVE commands that have no relationship definition.
  * Definition-backed commands resolve from their own `role_resolution` / `role_key_candidates`.
  */
-const NATIVE_ROLE_CANDIDATES_BY_ACTION: Partial<Record<RelationshipActionKey, readonly string[]>> = {
+const NATIVE_ROLE_CANDIDATES_BY_ACTION: Record<string, readonly string[] | undefined> = {
     add_billing_contact: ["billing_contact", "payer", "billing", "billing_responsible"],
     link_existing_person: [],
 };
@@ -27,8 +27,15 @@ export async function loadRelationshipActionRoleKeys(
     return loadActiveMemberContactRoleKeys(supabase, orgId);
 }
 
+/**
+ * `actionKey` is `string` for the same reason as `relationshipActionRegistryEntry` — see the decision
+ * in docs/platform/core/data/relationship-model.md. The first thing this function does is
+ * `relationshipDefinitionForCommandKey(input.actionKey)`, so a newly configured relationship resolves
+ * its role from the model with no code change; the native switch below is only the fallback for
+ * commands that have no definition row. A closed union here contradicted that derivation.
+ */
 export function resolveRelationshipRoleKeyForAction(input: {
-    actionKey: RelationshipActionKey;
+    actionKey: string;
     activeRoleKeys: Set<string>;
     requestedRoleKey?: RelationshipRoleKey | null;
     isPrimaryGuardian?: boolean;

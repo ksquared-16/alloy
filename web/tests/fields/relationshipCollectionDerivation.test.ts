@@ -98,7 +98,10 @@ describe("POS-FP17 — relationship collection provider derivation", () => {
             detection_word_suffix: true,
             relationship_scope: "child",
             executor_kind: "child_scoped_contact",
-            write_targets: ["person_child_relationships"],
+            // write_targets and persists_to are different vocabularies: write_targets names the
+            // tables the command may link, persists_to names where child-scoped role rows land.
+            // These mirror the shipped authorized_pickups definition, the closest analogue.
+            write_targets: ["contacts"],
             persists_to: "person_child_relationships",
             role_key_candidates: ["physician"],
         };
