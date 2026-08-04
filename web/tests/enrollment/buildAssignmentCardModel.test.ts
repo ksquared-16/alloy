@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-    ASSIGNMENT_CARD_SECTION_TITLES,
     assignmentCardFieldValue,
-    assignmentCardSection,
     buildAssignmentCardModel,
 } from "@/lib/enrollment/buildAssignmentCardModel";
 import { EFFECTIVE_DATE_LABELS } from "@/lib/enrollment/effectiveDateAuthority";
@@ -23,7 +21,54 @@ const quote: AssignmentQuoteSnapshot = {
 };
 
 describe("buildAssignmentCardModel", () => {
-    it("keeps Requested Start and Start Date as distinct fields with operator labels", () => {
+    it("exposes a coherent offer model (not a five-section presentation stack)", () => {
+        const model = buildAssignmentCardModel({
+            processInstanceMetadata: {
+                start_date: "2026-09-01",
+                requested_days_per_week: 3,
+                weekdays: [1, 3, 5],
+            },
+            scheduleTypeLabel: "School day",
+            siteLabel: "South Campus",
+            proposedAssignments: [
+                {
+                    id: "p1",
+                    start_date: "2026-09-10",
+                    status: "planned",
+                    commitment_kind: "proposed",
+                    weekdays: [1, 3, 5],
+                    scheduleTypeLabel: "School day",
+                    roomName: "Maple",
+                    programLabel: "Preschool",
+                    siteLabel: "South Campus",
+                },
+            ],
+            quoteSnapshot: quote,
+        });
+
+        expect(model.state).toBe("proposed");
+        expect(model.stateLabel).toBe("Proposed assignment");
+        expect(model.fields.map((f) => f.key)).toEqual([
+            "site",
+            "program",
+            "room",
+            "schedule",
+            "start_date",
+            "tuition_plan",
+            "estimated_tuition",
+            "quote",
+        ]);
+        // Family-request facts stay available for Children/comparison — not offer fields.
+        expect(model.fields.some((f) => f.key === "requested_days_per_week")).toBe(false);
+        expect(model.fields.some((f) => f.key === "preferred_weekdays")).toBe(false);
+        expect(model.requestedStart).toBe("2026-09-01");
+        expect(model.fields.find((f) => f.key === "site")?.value).toBe("South Campus");
+        expect(model.fields.find((f) => f.key === "tuition_plan")?.value).toBe("Full-time tuition");
+        expect(model.fields.find((f) => f.key === "estimated_tuition")?.value).toBe("$1,450.00");
+        expect(model.fields.find((f) => f.key === "quote")?.value).toMatch(/Generated/);
+    });
+
+    it("keeps Requested Start distinct from operational Start Date", () => {
         const model = buildAssignmentCardModel({
             processInstanceMetadata: {
                 start_date: "2026-09-01",
@@ -46,59 +91,23 @@ describe("buildAssignmentCardModel", () => {
         expect(model.requestedStart).toBe("2026-09-01");
         expect(model.startDate).toBe("2026-09-15");
         expect(model.startDateSource).toBe("committed_assignment");
-
-        const family = assignmentCardSection(model, "family_request");
-        expect(family?.title).toBe(ASSIGNMENT_CARD_SECTION_TITLES.family_request);
+        expect(model.state).toBe("committed");
+        expect(model.stateLabel).toMatch(/Committed/);
+        expect(model.fields.find((f) => f.key === "start_date")?.value).toBe("Sep 15, 2026");
         expect(assignmentCardFieldValue(model, "family_request", "requested_start")).toBe(
             "Sep 1, 2026",
         );
-        expect(
-            family?.fields.find((f) => f.key === "requested_start")?.label,
-        ).toBe(EFFECTIVE_DATE_LABELS.requestedStart);
-
         expect(assignmentCardFieldValue(model, "committed_assignment", "start_date")).toBe(
             "Sep 15, 2026",
         );
-        expect(
-            assignmentCardSection(model, "committed_assignment")?.fields.find(
-                (f) => f.key === "start_date",
-            )?.label,
-        ).toBe(EFFECTIVE_DATE_LABELS.startDate);
-
-        // Must not collapse: family request never shows the committed start as Requested Start.
         expect(assignmentCardFieldValue(model, "family_request", "requested_start")).not.toBe(
             assignmentCardFieldValue(model, "committed_assignment", "start_date"),
         );
     });
 
-    it("places requested days and preferred weekdays under Family request", () => {
-        const model = buildAssignmentCardModel({
-            processInstanceMetadata: {
-                start_date: "2026-09-01",
-                requested_days_per_week: 3,
-                weekdays: [1, 3, 5],
-            },
-        });
-
-        const family = assignmentCardSection(model, "family_request");
-        expect(family?.empty).toBe(false);
-        expect(assignmentCardFieldValue(model, "family_request", "requested_days_per_week")).toBe(
-            "3",
-        );
-        expect(
-            family?.fields.find((f) => f.key === "requested_days_per_week")?.label,
-        ).toBe(EFFECTIVE_DATE_LABELS.requestedDaysPerWeek);
-        expect(assignmentCardFieldValue(model, "family_request", "preferred_weekdays")).toBe(
-            "Mon, Wed, Fri",
-        );
-        expect(
-            family?.fields.find((f) => f.key === "preferred_weekdays")?.label,
-        ).toBe(EFFECTIVE_DATE_LABELS.preferredDays);
-    });
-
-    it("sections proposed, commercial estimate, committed, and readiness gaps calmly", () => {
+    it("shows compact readiness summary and field-level required/missing state", () => {
         const readiness = evaluateAssignmentProposalReadiness({
-            requiredFactors: ["room", "quote_accepted"],
+            requiredFactors: ["room", "quote_generated"],
             facts: {
                 processInstanceMetadata: {
                     start_date: "2026-09-01",
@@ -106,7 +115,7 @@ describe("buildAssignmentCardModel", () => {
                     weekdays: [1, 2, 3, 4, 5],
                 },
                 hasProposedSchedule: true,
-                hasQuoteSnapshot: true,
+                hasQuoteSnapshot: false,
                 quoteAccepted: false,
                 roomLocationId: null,
             },
@@ -127,55 +136,22 @@ describe("buildAssignmentCardModel", () => {
                     commitment_kind: "proposed",
                     weekdays: [1, 2, 3, 4, 5],
                     scheduleTypeLabel: "School day",
-                    roomName: "Maple",
+                    roomName: null,
                     programLabel: "Preschool",
-                    arriveTime: "08:00",
-                    departTime: "15:30",
                 },
             ],
             committedAssignments: [],
-            quoteSnapshot: quote,
+            quoteSnapshot: null,
             readiness,
         });
 
-        expect(model.sections.map((s) => s.key)).toEqual([
-            "family_request",
-            "proposed_assignment",
-            "commercial_estimate",
-            "committed_assignment",
-            "readiness_gaps",
-        ]);
-
-        expect(assignmentCardFieldValue(model, "proposed_assignment", "proposed_schedule")).toBe(
-            "School day",
-        );
-        expect(
-            assignmentCardFieldValue(model, "proposed_assignment", "proposed_assignment_start"),
-        ).toBe("Sep 10, 2026");
-        expect(assignmentCardFieldValue(model, "proposed_assignment", "proposed_room")).toBe(
-            "Maple",
-        );
-
-        expect(assignmentCardFieldValue(model, "commercial_estimate", "quote_offering")).toBe(
-            "Full-time tuition",
-        );
-        expect(assignmentCardFieldValue(model, "commercial_estimate", "quote_amount")).toBe(
-            "$1,450.00",
-        );
-        expect(assignmentCardFieldValue(model, "commercial_estimate", "quote_status")).toBe(
-            "Generated",
-        );
-
-        // No committed OA and no agreement fallback → Start Date empty; section empty-ish on schedule fields.
-        expect(model.startDate).toBeNull();
-        expect(assignmentCardFieldValue(model, "committed_assignment", "start_date")).toBeNull();
-
-        const gaps = assignmentCardSection(model, "readiness_gaps");
-        expect(gaps?.empty).toBe(false);
-        expect(gaps?.gaps.map((g) => g.factor).sort()).toEqual(["quote_accepted", "room"]);
         expect(model.readinessReady).toBe(false);
         expect(model.readinessGapCount).toBe(2);
-        expect(model.summaryLine).toBe("2 readiness gaps");
+        expect(model.readinessSummary).toBe("2 items required");
+        expect(model.summaryLine).toBe("2 items required");
+        expect(model.fields.find((f) => f.key === "room")?.missing).toBe(true);
+        expect(model.fields.find((f) => f.key === "quote")?.missing).toBe(true);
+        expect(model.fields.find((f) => f.key === "program")?.present).toBe(true);
     });
 
     it("uses agreement fallback for Start Date when no committed OA exists", () => {
@@ -186,20 +162,20 @@ describe("buildAssignmentCardModel", () => {
         });
         expect(model.startDate).toBe("2026-09-20");
         expect(model.startDateSource).toBe("agreement_fallback");
+        expect(model.state).toBe("committed");
         expect(assignmentCardFieldValue(model, "committed_assignment", "start_date")).toBe(
             "Sep 20, 2026",
         );
         expect(model.summaryLine).toContain(EFFECTIVE_DATE_LABELS.startDate);
     });
 
-    it("marks empty sections when facts are absent", () => {
+    it("marks calm empty offer when no assignment facts exist", () => {
         const model = buildAssignmentCardModel({});
-        expect(assignmentCardSection(model, "family_request")?.empty).toBe(true);
-        expect(assignmentCardSection(model, "proposed_assignment")?.empty).toBe(true);
-        expect(assignmentCardSection(model, "commercial_estimate")?.empty).toBe(true);
-        expect(assignmentCardSection(model, "committed_assignment")?.empty).toBe(true);
-        expect(assignmentCardSection(model, "readiness_gaps")?.empty).toBe(true);
+        expect(model.state).toBe("none");
+        expect(model.stateLabel).toBe("No assignment yet");
         expect(model.summaryLine).toBe("No assignment yet");
+        expect(model.readinessReady).toBe(true);
+        expect(model.fields.every((f) => !f.present)).toBe(true);
     });
 
     it("reads active quote snapshot from participation metadata when not passed explicitly", () => {
@@ -209,9 +185,9 @@ describe("buildAssignmentCardModel", () => {
                 assignment_quote_snapshots: [quote],
             },
         });
-        expect(assignmentCardFieldValue(model, "commercial_estimate", "quote_offering")).toBe(
-            "Full-time tuition",
-        );
-        expect(model.summaryLine).toBe("Commercial estimate ready");
+        expect(model.fields.find((f) => f.key === "tuition_plan")?.value).toBe("Full-time tuition");
+        expect(model.fields.find((f) => f.key === "estimated_tuition")?.value).toBe("$1,450.00");
+        expect(model.state).toBe("proposed");
+        expect(model.quoteGeneratedAt).toBe(quote.generated_at);
     });
 });

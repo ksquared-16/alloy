@@ -305,24 +305,29 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         await openFirstChildAssignments(page);
         await snap(page, "03-assignments-child-open");
 
-        // 1–2: Assignments five sections
+        // 1–2: Assignment offer (coherent card — not five-section stack)
         const sectionsRoot = page.locator("[data-assignment-card-sections='true']");
-        const sectionKeys = [
+        const offerRoot = page.locator("[data-assignment-offer='true']");
+        const legacySectionKeys = [
             "family_request",
             "proposed_assignment",
             "commercial_estimate",
             "committed_assignment",
             "readiness_gaps",
         ] as const;
-        let sectionsOk = false;
-        if ((await sectionsRoot.count()) > 0) {
-            sectionsOk = true;
-            for (const key of sectionKeys) {
-                const loc = page.locator(`[data-assignment-section='${key}']`).first();
-                if ((await loc.count()) === 0) sectionsOk = false;
+        let offerOk = false;
+        let fiveSectionGone = true;
+        if ((await sectionsRoot.count()) > 0 || (await offerRoot.count()) > 0) {
+            offerOk =
+                (await offerRoot.count()) > 0
+                && (await page.locator("[data-assignment-offer-fields='true'], [data-assignment-empty='true']").count()) > 0;
+            for (const key of legacySectionKeys) {
+                if ((await page.locator(`[data-assignment-section='${key}']`).count()) > 0) {
+                    fiveSectionGone = false;
+                }
             }
-            await sectionsRoot.first().screenshot({
-                path: path.join(EVIDENCE_DIR, "04-assignment-five-sections.png"),
+            await (offerRoot.count() > 0 ? offerRoot : sectionsRoot).first().screenshot({
+                path: path.join(EVIDENCE_DIR, "04-assignment-offer.png"),
             });
         }
         mark(
@@ -333,9 +338,11 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         );
         mark(
             2,
-            "Assignments card five sections",
-            sectionsOk ? "pass" : "fail",
-            sectionsOk ? "family_request/proposed/commercial/committed/readiness visible" : "sections chrome missing",
+            "Assignments card coherent offer (no five-section stack)",
+            offerOk && fiveSectionGone ? "pass" : offerOk ? "partial" : "fail",
+            offerOk && fiveSectionGone
+                ? "offer model visible; family_request/five panels absent"
+                : `offerOk=${offerOk} fiveSectionGone=${fiveSectionGone}`,
         );
 
         // 3–4: requested days save + reload persist
@@ -412,20 +419,27 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
             mark(5, "Preferred weekdays can remain unknown independently", "blocked", "no child id resolved");
         }
 
-        // 6: readiness gaps in operator language
+        // 6: compact readiness summary in operator language (no standalone gaps panel)
         await openFocusPanel(page, lead.opportunityId, lead.familyName);
         await openFirstChildAssignments(page);
-        const gaps = page.locator("[data-assignment-section='readiness_gaps']");
-        const gapText = ((await gaps.first().innerText().catch(() => "")) || "").trim();
+        const readinessSummary = page.locator("[data-assignment-readiness-summary='true']");
+        const gapPanel = page.locator("[data-assignment-section='readiness_gaps']");
+        const summaryText = ((await readinessSummary.first().innerText().catch(() => "")) || "").trim();
         const operatorLanguage =
-            gapText.length > 0
-            && !/child:requested_days_per_week|program_room_cohort_key|_[a-z]+_id/i.test(gapText);
-        await snap(page, "07-readiness-gaps");
+            summaryText.length > 0
+            && !/child:requested_days_per_week|program_room_cohort_key|_[a-z]+_id/i.test(summaryText);
+        await snap(page, "07-readiness-summary");
         mark(
             6,
-            "Configured Assignment readiness gaps in operator language",
-            (await gaps.count()) > 0 && operatorLanguage ? "pass" : (await gaps.count()) > 0 ? "partial" : "fail",
-            gapText.slice(0, 240) || "no readiness section text",
+            "Configured Assignment readiness shown as compact summary",
+            (await readinessSummary.count()) > 0
+                && (await gapPanel.count()) === 0
+                && operatorLanguage
+                ? "pass"
+                : (await readinessSummary.count()) > 0
+                  ? "partial"
+                  : "fail",
+            summaryText.slice(0, 240) || "no readiness summary text",
         );
 
         // 7–8: attempt Enrollment outcome while requirements missing — server must block
@@ -530,11 +544,11 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         await openFirstChildAssignments(page);
         await page.waitForTimeout(1500);
         await snap(page, "10-quote-after-reload");
-        const commercialText = await page.locator("[data-assignment-section='commercial_estimate']").first().innerText().catch(() => "");
+        const commercialText = await page.locator("[data-assignment-offer='true']").first().innerText().catch(() => "");
         const quotePersisted =
-            /quote|\$|tuition|plan/i.test(commercialText)
+            /quote|\$|tuition|plan|Generated/i.test(commercialText)
             || Boolean(quoteJson.snapshot)
-            || (await page.locator("[data-assignment-quote-label='true']").count()) > 0;
+            || (await page.locator("[data-assignment-field='quote'], [data-assignment-quote-label='true']").count()) > 0;
 
         // Ledger consequence probe — opportunity billing/ledger endpoints if present
         const ledgerProbes: Array<{ url: string; status: number; snippet: string }> = [];
@@ -644,21 +658,25 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
 
             await page.reload({ waitUntil: "domcontentloaded", timeout: 120_000 });
             await openFirstChildAssignments(page);
-            await snap(page, "11-start-date-sections");
-            const familyRequestText = await page.locator("[data-assignment-section='family_request']").first().innerText().catch(() => "");
-            const committedText = await page.locator("[data-assignment-section='committed_assignment']").first().innerText().catch(() => "");
+            await snap(page, "11-start-date-offer");
+            const offerText = await page.locator("[data-assignment-offer='true']").first().innerText().catch(() => "");
+            const stateLabel = await page.locator("[data-assignment-state-label='true']").first().innerText().catch(() => "");
+            const startField = await page.locator("[data-assignment-field='start_date']").first().innerText().catch(() => "");
 
             mark(
                 14,
                 "Requested Start and Start Date can differ",
                 reqStartPatch.ok() ? "pass" : "partial",
-                `requestedStart patch ${reqStartPatch.status()}; family_request=${familyRequestText.slice(0, 120)}`,
+                `requestedStart patch ${reqStartPatch.status()}; offer=${offerText.slice(0, 120)}`,
             );
             mark(
                 15,
                 "Start Date resolves from committed assignment authority after reload",
-                /2026-09-15|Sep|Committed|Start/i.test(committedText) || createAssign.ok() ? "pass" : "partial",
-                `committed section=${committedText.slice(0, 160)} create=${createAssign.status()}`,
+                /2026-09-15|Sep|Committed|Start/i.test(`${stateLabel} ${startField} ${offerText}`)
+                    || createAssign.ok()
+                    ? "pass"
+                    : "partial",
+                `state=${stateLabel.slice(0, 80)} startField=${startField.slice(0, 80)} create=${createAssign.status()}`,
             );
 
             // Later room/program change should not rewrite original Start Date — patch program only
@@ -671,12 +689,12 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
             });
             await page.reload({ waitUntil: "domcontentloaded", timeout: 120_000 });
             await openFirstChildAssignments(page);
-            const committedAfter = await page.locator("[data-assignment-section='committed_assignment']").first().innerText().catch(() => "");
+            const startAfter = await page.locator("[data-assignment-field='start_date']").first().innerText().catch(() => "");
             mark(
                 16,
                 "Later room/program/schedule change keeps original Start Date stable",
                 laterChange.ok() ? "pass" : "partial",
-                `notes patch ${laterChange.status()}; committedAfter=${committedAfter.slice(0, 160)} (authority unit-certified; browser observes section stability)`,
+                `notes patch ${laterChange.status()}; startAfter=${startAfter.slice(0, 160)} (authority unit-certified; browser observes offer stability)`,
             );
         } else {
             mark(14, "Requested Start and Start Date can differ", "blocked", "no child id");
