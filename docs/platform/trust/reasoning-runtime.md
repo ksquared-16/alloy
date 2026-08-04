@@ -422,6 +422,7 @@ There is **no separate Validation Runtime**. Validation is an engine of the [`Tr
 - [`Privacy Runtime`](./privacy-runtime.md)
 - [`Operational Learning`](./operational-learning.md)
 - [`Trust Governance`](./trust-governance.md)
+- [`Reasoning Deployment Strategy`](./reasoning-deployment-strategy.md)
 
 ---
 

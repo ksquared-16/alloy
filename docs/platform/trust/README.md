@@ -40,6 +40,7 @@ Track each Trust Platform document as it lands. Update this table when a documen
 | Information Classification | [`information-classification.md`](./information-classification.md) | published (canonical) | 2026-08-01 |
 | Privacy Runtime | [`privacy-runtime.md`](./privacy-runtime.md) | published (canonical) | 2026-08-01 |
 | Reasoning Runtime | [`reasoning-runtime.md`](./reasoning-runtime.md) | published (canonical) | 2026-08-01 |
+| Reasoning Deployment Strategy | [`reasoning-deployment-strategy.md`](./reasoning-deployment-strategy.md) | published (canonical) | 2026-08-04 |
 | Operational Learning | [`operational-learning.md`](./operational-learning.md) | published (canonical) | 2026-08-01 |
 | Trust Governance | [`trust-governance.md`](./trust-governance.md) | published (canonical) | 2026-08-01 |
 | Trust Economics | [`trust-economics.md`](./trust-economics.md) | published (canonical) | 2026-08-01 |
@@ -71,6 +72,7 @@ docs/platform/trust/
   information-classification.md
   privacy-runtime.md
   reasoning-runtime.md
+  reasoning-deployment-strategy.md
   operational-learning.md
   trust-governance.md
   trust-economics.md

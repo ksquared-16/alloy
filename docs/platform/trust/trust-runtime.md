@@ -527,6 +527,7 @@ The runtime architecture remains stable.
 - [`Knowledge Platform`](./knowledge-platform.md)
 - [`Privacy Runtime`](./privacy-runtime.md)
 - [`Reasoning Runtime`](./reasoning-runtime.md)
+- [`Reasoning Deployment Strategy`](./reasoning-deployment-strategy.md)
 
 ---
 
