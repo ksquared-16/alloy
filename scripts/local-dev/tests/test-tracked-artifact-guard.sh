@@ -38,6 +38,15 @@ tracked_artifact_violations() {
   printf '%s\n' "$list" | grep -E '(^|/)node_modules(/|$)' \
     | sed 's/^/tracked-dependency-path: /'
 
+  # Python's equivalents. backend/.venv was tracked as 2719 files with one machine's
+  # interpreter paths baked in, alongside 1185 __pycache__ artifacts. .gitignore already
+  # named .venv/ — the files predated the rule, and Git ignores only what it is not
+  # already tracking, so the rule was never going to retire them on its own.
+  printf '%s\n' "$list" | grep -E '(^|/)\.venv(/|$)' \
+    | sed 's/^/tracked-dependency-path: /'
+  printf '%s\n' "$list" | grep -E '(^|/)__pycache__(/|$)|\.py[cod]$' \
+    | sed 's/^/tracked-build-artifact: /'
+
   # 3. symlinks resolving into a managed worktree
   local mode path target
   while read -r mode _ _ path; do
@@ -89,7 +98,33 @@ git -C "$R" add -f web/borrowed.ts >/dev/null 2>&1
 V="$(tracked_artifact_violations "$R")"
 [[ -n "$V" ]] && ok "absolute symlink into another worktree → caught" || bad "cross-worktree symlink → MISSED"
 
+R="$(mkfix venv-tracked)"
+mkdir -p "$R/backend/.venv/bin"; echo x > "$R/backend/.venv/bin/activate"
+git -C "$R" add -f backend/.venv >/dev/null 2>&1
+V="$(tracked_artifact_violations "$R")"
+[[ -n "$V" ]] && ok "tracked backend/.venv → caught" || bad "tracked .venv → MISSED"
+
+R="$(mkfix pycache-tracked)"
+mkdir -p "$R/backend/__pycache__"; echo x > "$R/backend/__pycache__/main.cpython-310.pyc"
+git -C "$R" add -f backend/__pycache__ >/dev/null 2>&1
+V="$(tracked_artifact_violations "$R")"
+[[ -n "$V" ]] && ok "tracked __pycache__/*.pyc → caught" || bad "tracked __pycache__ → MISSED"
+
 echo "POSITIVE CONTROLS — must PASS the guard"
+
+R="$(mkfix venv-untracked)"
+mkdir -p "$R/backend/.venv/bin"; echo x > "$R/backend/.venv/bin/activate"
+printf '.venv/\n**/.venv/\n__pycache__/\n' > "$R/.gitignore"
+git -C "$R" add .gitignore >/dev/null 2>&1; git -C "$R" commit -qm ignore
+V="$(tracked_artifact_violations "$R")"
+[[ -z "$V" ]] && ok "ordinary UNTRACKED local .venv → allowed" || bad "untracked .venv wrongly flagged"
+
+R="$(mkfix python-source)"
+mkdir -p "$R/backend/app"; echo "x = 1" > "$R/backend/app/main.py"
+git -C "$R" add -A >/dev/null 2>&1; git -C "$R" commit -qm py
+V="$(tracked_artifact_violations "$R")"
+[[ -z "$V" ]] && ok "ordinary Python SOURCE (.py) → allowed" || bad "python source wrongly flagged"
+
 
 R="$(mkfix untracked-nm)"
 mkdir -p "$R/web/node_modules/left-pad"; echo x > "$R/web/node_modules/left-pad/index.js"
