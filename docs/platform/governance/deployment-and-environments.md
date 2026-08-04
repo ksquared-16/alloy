@@ -27,6 +27,19 @@ supersedes: []
 - **Database:** Supabase Postgres + RLS + Edge functions (where used)
 - **Workers:** Python backend for message dequeue, inbound SMS (see API contracts)
 
+### Vercel auto-deploy policy
+
+Auto-deploys are **staging / main only**. Feature, hotfix, and agent branches must not
+create a Preview deployment on every push.
+
+- Ignored build step: `web/scripts/vercel-ignored-build.sh` (via `web/vercel.json`)
+- Agent cadence: local commits throughout the day; **push at checkpoint** (finished
+  sprint / end of day / Kelly-authorized), then PR → `staging` for the real deploy
+
+If Preview spam returns, confirm the Vercel project Root Directory is `web` and the
+Ignored Build Step uses the repo script (or the equivalent branch allowlist in the
+Vercel project settings).
+
 ---
 
 ## Environment variables (categories)
