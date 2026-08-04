@@ -28,17 +28,30 @@ export type ValidationReport = {
     readonly passed: boolean;
 };
 
+/** What one call-out reports. */
+export type ValidatorOutcome = { passed: boolean; detail: string };
+
+/**
+ * What a call-out's `invoke` may return.
+ *
+ * Most authoritative validators in Alloy read the database, so a
+ * synchronous-only signature could only ever admit pure in-memory checks. The
+ * union widens to permit real domain validators without changing the meaning
+ * of a call-out: it still invokes and reports, and it still owns no rule.
+ */
+export type ValidatorExecution = ValidatorOutcome | Promise<ValidatorOutcome>;
+
 /**
  * A validation policy is an ordered list of call-outs into authoritative
  * validators. The callback body must do nothing but invoke and report.
  */
-type ValidationPolicyV1 = {
+export type ValidationPolicyV1 = {
     readonly key: string;
     readonly version: string;
     readonly callOuts: readonly {
         readonly owner: string;
         readonly validator_key: string;
-        readonly invoke: (recommendation: Record<string, unknown>) => { passed: boolean; detail: string };
+        readonly invoke: (recommendation: Record<string, unknown>) => ValidatorExecution;
     }[];
 };
 
@@ -75,13 +88,46 @@ export type ValidationOrchestrationResult =
     | { readonly ok: false; readonly refusal_code: "VALIDATION_POLICY_UNKNOWN"; readonly detail: string };
 
 /**
- * Runs every call-out for the policy. Validation is deterministic and never
- * depends on reasoning: it sees the proposal only, never the strategy.
+ * The orchestration core: runs every call-out of ONE policy, in declared order.
+ *
+ * Call-outs run **sequentially**, exactly as the previous synchronous `map`
+ * did. Sequential execution is the behaviour-preserving choice: a validator can
+ * never observe another call-out mid-flight, and the report's ordering is the
+ * policy's ordering rather than a completion race.
+ *
+ * A call-out that throws — or whose promise rejects — propagates, unchanged
+ * from the synchronous contract. The orchestrator reports validation *results*;
+ * it does not convert a broken validator into a passing or failing one.
  */
-export function orchestrateValidation(input: {
+export async function runValidationPolicy(
+    policy: ValidationPolicyV1,
+    recommendation: Record<string, unknown>,
+): Promise<ValidationReport> {
+    const results: ValidatorResult[] = [];
+    for (const c of policy.callOuts) {
+        const r = await c.invoke(recommendation);
+        results.push({ owner: c.owner, validator_key: c.validator_key, passed: r.passed, detail: r.detail });
+    }
+
+    return {
+        policy_key: policy.key,
+        policy_version: policy.version,
+        results,
+        passed: results.every((r) => r.passed),
+    };
+}
+
+/**
+ * Resolves the policy and runs it. Validation is deterministic and never
+ * depends on reasoning: it sees the proposal only, never the strategy.
+ *
+ * Synchronous and asynchronous call-outs share this one path — there is no
+ * second orchestration route, and none may be introduced.
+ */
+export async function orchestrateValidation(input: {
     policy_key: string;
     recommendation: Record<string, unknown>;
-}): ValidationOrchestrationResult {
+}): Promise<ValidationOrchestrationResult> {
     const policy = VALIDATION_POLICIES.get(input.policy_key);
     if (!policy) {
         return {
@@ -91,18 +137,5 @@ export function orchestrateValidation(input: {
         };
     }
 
-    const results: ValidatorResult[] = policy.callOuts.map((c) => {
-        const r = c.invoke(input.recommendation);
-        return { owner: c.owner, validator_key: c.validator_key, passed: r.passed, detail: r.detail };
-    });
-
-    return {
-        ok: true,
-        report: {
-            policy_key: policy.key,
-            policy_version: policy.version,
-            results,
-            passed: results.every((r) => r.passed),
-        },
-    };
+    return { ok: true, report: await runValidationPolicy(policy, input.recommendation) };
 }

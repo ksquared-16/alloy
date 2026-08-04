@@ -231,8 +231,11 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     });
 
     // ---- 6. execute reasoning ----------------------------------------------
+    // Awaited, so a synchronous and an asynchronous strategy travel the same
+    // path. `await` on a non-promise is a no-op beyond one microtask, so an
+    // existing deterministic strategy behaves exactly as before.
     trace.push("execute_reasoning");
-    const reasoning = selection.strategy.reason({ context, nowIso });
+    const reasoning = await selection.strategy.reason({ context, nowIso });
     if (!reasoning.ok) {
         return finish(
             { outcome: "failed_reasoning", explanation: reasoning.detail },
@@ -249,7 +252,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
 
     // ---- 7. deterministic validation ---------------------------------------
     trace.push("deterministic_validation");
-    const validation = orchestrateValidation({
+    const validation = await orchestrateValidation({
         policy_key: decisionClass.validation_policy_key,
         recommendation: reasoning.proposal.recommendation,
     });
