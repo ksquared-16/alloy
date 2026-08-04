@@ -99,7 +99,7 @@ describe("queue row compact publish validation", () => {
 
     it("diagnoseIneffectiveQueueRowFields names the exact field and variant", () => {
         const base = layoutWithFields(["children"]);
-        const layout = {
+        const layout: QueueRecordLayoutConfigV3 = {
             ...base,
             variants: [
                 {
