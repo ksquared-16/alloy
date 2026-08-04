@@ -19,12 +19,14 @@ function DevSupabaseAuthPanel() {
     >
       <div className="mb-1 font-sans font-semibold text-alloy-forge">Dev: Supabase connectivity</div>
       <div>NEXT_PUBLIC_SUPABASE_URL defined: {d.urlDefined ? "yes" : "no"}</div>
-      <div>Hostname: {d.hostname ?? "(none — check URL)"}</div>
+      <div>Origin: {d.origin ?? "(none — check URL)"}</div>
       <div>URL parses: {d.urlParseError ? `no (${d.urlParseError})` : d.urlDefined ? "yes" : "n/a"}</div>
       <div>NEXT_PUBLIC_SUPABASE_ANON_KEY defined: {d.anonKeyDefined ? "yes" : "no"}</div>
       <div className="mt-1 break-all">
-        Password sign-in expects:{" "}
-        {d.hostname ? `POST https://${d.hostname}${d.expectedAuthTokenPath}` : "(set URL to see)"}
+        {/* The whole URL, straight from the parsed origin. Never rebuilt from
+            scheme + hostname: that is what invented an https URL with no port
+            and sent a certification run chasing a defect that did not exist. */}
+        Password sign-in expects: {d.authTokenUrl ? `POST ${d.authTokenUrl}` : "(set URL to see)"}
       </div>
     </div>
   );
@@ -42,14 +44,15 @@ function LoginForm() {
   useEffect(() => {
     if (!isDev) return;
     const d = getPublicSupabaseAuthDebug();
-    console.info("[login] Supabase public auth env (hostname only)", {
+    console.info("[login] Supabase public auth env (origin only, no key material)", {
       NEXT_PUBLIC_SUPABASE_URL_defined: d.urlDefined,
-      supabase_hostname: d.hostname ?? "(unset or unparsable)",
+      supabase_origin: d.origin ?? "(unset or unparsable)",
       NEXT_PUBLIC_SUPABASE_ANON_KEY_defined: d.anonKeyDefined,
       url_parse_error: d.urlParseError,
       scheme: d.scheme,
+      port: d.port ?? "(scheme default)",
       password_sign_in_path: d.expectedAuthTokenPath,
-      expected_fetch_host: d.hostname ? `POST https://${d.hostname}${d.expectedAuthTokenPath}` : null,
+      expected_fetch_url: d.authTokenUrl ? `POST ${d.authTokenUrl}` : null,
     });
   }, [isDev]);
 
