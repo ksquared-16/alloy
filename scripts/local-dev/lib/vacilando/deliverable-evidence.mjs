@@ -37,13 +37,35 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
 
   const passedMatch = parseBody.match(/\b(\d+)\s+passed\b/i);
   const failedMatch = parseBody.match(/\b(\d+)\s+failed\b/i);
-  const passedCount = passedMatch ? Number(passedMatch[1]) : null;
-  const failedCount = failedMatch ? Number(failedMatch[1]) : null;
+  let passedCount = passedMatch ? Number(passedMatch[1]) : null;
+  let failedCount = failedMatch ? Number(failedMatch[1]) : null;
+
+  // "70/70 green" / "15/15 passed" — common worker shorthand without the word "passed".
+  // Root cause (Mission 2 W-4): evidence said "70/70 green …" and was labeled incomplete.
+  const slashAll = parseBody.match(/\b(\d+)\s*\/\s*(\d+)\s+(?:green|passed|pass|ok)\b/i);
+  if (slashAll) {
+    const a = Number(slashAll[1]);
+    const b = Number(slashAll[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && a === b && a > 0) {
+      if (passedCount == null) passedCount = a;
+      if (failedCount == null) failedCount = 0;
+      signals.push("slash_all_green");
+    } else if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
+      if (passedCount == null) passedCount = a;
+      if (failedCount == null) failedCount = b - a;
+      signals.push("slash_partial");
+    }
+  } else if (/\b(?:all|fully)\s+(?:tests?\s+)?(?:green|passed)\b/i.test(parseBody)
+    || /\bstay(?:s|ed)?\s+green\b/i.test(parseBody)) {
+    signals.push("narrative_all_green");
+  }
 
   const hasOkTrue = /\bok\s*:\s*true\b/i.test(parseBody);
   const hasExit0 = /\bexit\s*0\b/i.test(parseBody) || exitCode === 0;
   const hasExitNonZero = /\bexit\s*[1-9]\d*\b/i.test(parseBody)
     || (typeof exitCode === "number" && exitCode !== 0);
+  const narrativeGreen = signals.includes("narrative_all_green")
+    || signals.includes("slash_all_green");
 
   const explicitSuiteFail = (failedCount != null && failedCount > 0)
     || /\btests?\s+failed\b/i.test(parseBody)
@@ -86,11 +108,11 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
   let test_run_status = "not_run";
   if (passedCount != null || failedCount != null) {
     if ((failedCount || 0) > 0 || explicitSuiteFail) test_run_status = "failed";
-    else if ((passedCount || 0) > 0 || hasOkTrue || hasExit0) test_run_status = "passed";
+    else if ((passedCount || 0) > 0 || hasOkTrue || hasExit0 || narrativeGreen) test_run_status = "passed";
     else test_run_status = "incomplete";
   } else if (explicitSuiteFail) {
     test_run_status = "failed";
-  } else if (hasOkTrue || hasExit0) {
+  } else if (hasOkTrue || hasExit0 || narrativeGreen) {
     test_run_status = "passed";
   } else if (/\bpassed\b/i.test(parseBody) && !explicitSuiteFail) {
     test_run_status = "passed";
