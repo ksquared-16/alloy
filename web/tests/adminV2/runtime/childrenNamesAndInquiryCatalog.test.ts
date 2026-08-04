@@ -55,17 +55,18 @@ function layout(keys: string[]) {
             {
                 id: "col",
                 label: "Children",
-                width: "auto" as const,
+                width: "small" as const,
+                scope: { type: "main_record" } as const,
                 builderSlot: "groupCount" as const,
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),
                         type: "field_group" as const,
-                        title: null,
                         fields: keys.map((fieldKey) => ({
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,
                             label: fieldKey,
+                                display: "text" as const,
                         })),
                     },
                 ],

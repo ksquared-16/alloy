@@ -27,16 +27,17 @@ function layoutWithDefaultAndStageVariant(args: {
             {
                 id: "col-default",
                 label: "Primary",
-                width: "auto",
+                width: "small",
+                scope: { type: "main_record" } as const,
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),
                         type: "field_group",
-                        title: null,
                         fields: args.defaultKeys.map((fieldKey) => ({
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,
                             label: fieldKey,
+                            display: "text" as const,
                         })),
                     },
                 ],
@@ -52,18 +53,19 @@ function layoutWithDefaultAndStageVariant(args: {
                     {
                         id: "col-status",
                         label: "",
-                        width: "auto",
+                        width: "small",
+                        scope: { type: "main_record" } as const,
                         builderSlot: "status",
                         blocks: [
                             {
                                 id: nextQueueRecordBlockId("fg"),
                                 type: "field_group",
-                                title: null,
                                 fields: [
                                     {
                                         id: nextQueueRecordBlockId("f"),
                                         fieldKey: "opportunity.status_label",
                                         label: args.variantStatusLabel,
+                                        display: "text",
                                     },
                                 ],
                             },

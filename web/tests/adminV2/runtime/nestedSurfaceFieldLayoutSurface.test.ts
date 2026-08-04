@@ -16,7 +16,7 @@ describe("NestedSurfaceFieldLayoutSurface builder UX", () => {
         expect(layoutSurface).toContain("fp-field-instance__name");
         expect(layoutSurface).toContain("{catalogLabel}");
         expect(layoutSurface).toContain("fp-layout-field__control--secondary");
-        expect(layoutSurface).not.toMatch(/>\s*Rename\s*<\/button>\s*\)\s*:\s*null\}\s*<select/s);
+        expect(layoutSurface).not.toMatch(/>\s*Rename\s*<\/button>\s*\)\s*:\s*null\}\s*<select/);
     });
 
     it("uses builder rows in compose mode instead of runtime preview values", () => {

@@ -118,7 +118,7 @@ describe("P4.S1 preparation integration", () => {
             baseRequest({
                 commandKey: "delete_lead",
                 origin: "bos",
-                subject: { type: "opportunity", id: "opp-1" },
+                providedSubject: { entityType: "opportunity", entityId: "opp-1" },
             })
         );
         expect(result.snapshot.destructivePreparation).not.toBeNull();
@@ -132,7 +132,7 @@ describe("P4.S1 preparation integration", () => {
                 baseRequest({
                     commandKey: "cancel_tour",
                     origin,
-                    subject: { type: "opportunity", id: "opp-1" },
+                    providedSubject: { entityType: "opportunity", entityId: "opp-1" },
                 })
             );
             expect(result.snapshot.confirmationPolicy).toBe("strong_confirm");
@@ -321,7 +321,7 @@ describe("P4.S1 execution guard", () => {
                     mode: "execute",
                     invocation: baseRequest({
                         commandKey: key,
-                        subject: { type: "opportunity", id: "opp-1" },
+                        providedSubject: { entityType: "opportunity", entityId: "opp-1" },
                     }),
                     executionSubject: { entityType: "opportunity", entityId: "opp-1" },
                 },

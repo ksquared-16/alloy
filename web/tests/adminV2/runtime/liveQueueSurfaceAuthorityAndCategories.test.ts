@@ -23,14 +23,15 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                 id: "col-1",
                 label: "Primary",
                 width: "large",
-                builderSlot: "primary",
+                scope: { type: "main_record" },
+                builderSlot: "identity",
                 blocks: [
                     {
                         type: "field_group",
                         id: "fg-1",
                         label: "Fields",
                         layout: "stack",
-                        fields: keys.map((fieldKey) => ({ fieldKey, label: fieldKey })),
+                        fields: keys.map((fieldKey) => ({ id: fieldKey, fieldKey, label: fieldKey, display: "text" as const })),
                     },
                 ],
             },
@@ -38,7 +39,8 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                 id: "col-2",
                 label: "Secondary",
                 width: "small",
-                builderSlot: "secondary",
+                scope: { type: "main_record" },
+                builderSlot: "groupCount",
                 blocks: [
                     {
                         type: "field_group",
@@ -46,8 +48,8 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                         label: "Children",
                         layout: "stack",
                         fields: [
-                            { fieldKey: "children.names", label: "Children names" },
-                            { fieldKey: "children.count", label: "Children count" },
+                            { id: "children.names", fieldKey: "children.names", label: "Children names", display: "text" },
+                            { id: "children.count", fieldKey: "children.count", label: "Children count", display: "text" },
                         ],
                     },
                 ],
@@ -65,6 +67,7 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                         id: "vcol",
                         label: "Status only",
                         width: "medium",
+                        scope: { type: "main_record" },
                         builderSlot: "status",
                         blocks: [
                             {
@@ -72,7 +75,7 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                                 id: "vfg",
                                 label: "Status",
                                 layout: "stack",
-                                fields: [{ fieldKey: "queue_row.stage_label", label: "Stage" }],
+                                fields: [{ id: "queue_row.stage_label", fieldKey: "queue_row.stage_label", label: "Stage", display: "text" }],
                             },
                         ],
                     },

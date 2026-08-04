@@ -103,15 +103,16 @@ describe("resolveQueueRowCompactSlots", () => {
                 {
                     id: "col-children",
                     label: "",
-                    width: "auto",
+                    width: "small",
+                    scope: { type: "main_record" } as const,
                     builderSlot: "groupCount",
                     blocks: [
                         {
                             type: "field_group",
                             id: "grp-children",
                             fields: [
-                                { id: "f-names", fieldKey: "children.names", label: "Children names" },
-                                { id: "f-count", fieldKey: "children.count", label: "Children count" },
+                                { id: "f-names", fieldKey: "children.names", label: "Children names", display: "text" },
+                                { id: "f-count", fieldKey: "children.count", label: "Children count", display: "text" },
                             ],
                         },
                     ],
@@ -145,7 +146,8 @@ describe("resolveQueueRowCompactSlots", () => {
                 {
                     id: "col-contact",
                     label: "",
-                    width: "auto",
+                    width: "small",
+                    scope: { type: "main_record" } as const,
                     builderSlot: "identity",
                     blocks: [
                         {
@@ -156,6 +158,7 @@ describe("resolveQueueRowCompactSlots", () => {
                                     id: "f-phone",
                                     fieldKey: "person.phone",
                                     label: "Phone",
+                                    display: "text",
                                 },
                             ],
                         },
@@ -164,7 +167,8 @@ describe("resolveQueueRowCompactSlots", () => {
                 {
                     id: "col-work",
                     label: "",
-                    width: "auto",
+                    width: "small",
+                    scope: { type: "main_record" } as const,
                     builderSlot: "work",
                     blocks: [
                         {
@@ -175,6 +179,7 @@ describe("resolveQueueRowCompactSlots", () => {
                                     id: "f-work",
                                     fieldKey: "opportunity.next_step",
                                     label: "Next step",
+                                    display: "text",
                                 },
                             ],
                         },

@@ -10,16 +10,19 @@ import { mapQueueRowSurfaceToCompactConfig } from "@/lib/presentation/runtime/qu
 import { attachPartialQueueRowContext } from "@/lib/workUnits/buildPartialQueueRowContext";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { QUEUE_ROW_CONTEXT_CONTRACT_VERSION } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 function secondaryConfig(): QueueRecordLayoutConfigV3 {
     return {
         version: 3,
-        surfaceId: "queue_row_enrollment",
+        variant: "operational-row",
+        fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
         columns: [
             {
                 id: "secondary",
                 label: "Secondary",
-                width: "md",
+                width: "medium",
+                scope: { type: "main_record" },
                 builderSlot: "groupCount",
                 rowIndex: 2,
                 blocks: [
@@ -44,21 +47,38 @@ function secondaryConfig(): QueueRecordLayoutConfigV3 {
                 ],
             },
         ],
-    } as QueueRecordLayoutConfigV3;
+    };
 }
 
 describe("live Secondary absence root cause", () => {
     it("returns null Secondary when related_subjects_summary is empty (values absent before render)", () => {
         const mapped = mapQueueRowSurfaceToCompactConfig(secondaryConfig());
-        const emptyCtx = {
-            contract_version: "1.1-partial",
+        const emptyCtx: QueueRowContext = {
+            contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
             row_subject: {
-                subject_type: "opportunity",
+                subject_type: "case",
                 subject_id: "opp-wenc",
                 display_name: "Wenc Family",
             },
             related_subjects_summary: [],
-        } as unknown as QueueRowContext;
+            case_context: {
+                case_id: "opp-wenc",
+                display_name: "Wenc Family",
+                case_type_label: "Enrollment",
+                case_status_key: "open",
+                case_status_label: "Open",
+            },
+            row_stage: "inquiry",
+            lifecycle_key: "enrollment",
+            row_status_key: "open",
+            row_status_label: "Open",
+            primary_contact: null,
+            attention_summary: null,
+            work_summary: null,
+            current_work_summary: null,
+            next_best_action: null,
+            drawer_open: { entity_type: "opportunities", entity_id: "opp-wenc" },
+        };
 
         const band = resolveCompactSecondaryBand(emptyCtx, mapped.slots.groupCount, {
             publishedAuthority: true,

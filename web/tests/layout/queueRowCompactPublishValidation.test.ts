@@ -20,17 +20,18 @@ function layoutWithFields(fieldKeys: string[]): QueueRecordLayoutConfigV3 {
             {
                 id: "col-1",
                 label: "Primary",
-                width: "auto",
-                builderSlot: "primary",
+                width: "small",
+                scope: { type: "main_record" } as const,
+                builderSlot: "identity",
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),
                         type: "field_group",
-                        title: null,
                         fields: fieldKeys.map((fieldKey) => ({
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,
                             label: fieldKey,
+                            display: "text" as const,
                         })),
                     },
                 ],
@@ -98,7 +99,7 @@ describe("queue row compact publish validation", () => {
 
     it("diagnoseIneffectiveQueueRowFields names the exact field and variant", () => {
         const base = layoutWithFields(["children"]);
-        const layout = {
+        const layout: QueueRecordLayoutConfigV3 = {
             ...base,
             variants: [
                 {
@@ -109,18 +110,19 @@ describe("queue row compact publish validation", () => {
                         {
                             id: "col-v",
                             label: "Primary",
-                            width: "auto" as const,
-                            builderSlot: "primary" as const,
+                            width: "small" as const,
+                            scope: { type: "main_record" } as const,
+                            builderSlot: "identity" as const,
                             blocks: [
                                 {
                                     id: nextQueueRecordBlockId("fg"),
                                     type: "field_group" as const,
-                                    title: null,
                                     fields: [
                                         {
                                             id: nextQueueRecordBlockId("f"),
                                             fieldKey: "opportunity.location",
                                             label: "Campus",
+                                            display: "text",
                                         },
                                     ],
                                 },

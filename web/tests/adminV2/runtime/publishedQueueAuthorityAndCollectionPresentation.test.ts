@@ -11,18 +11,22 @@ import {
 } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import { previewRowModelFromConfig } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
-import type { QueueRecordLayoutConfigV3, QueueRecordColumnConfig } from "@/lib/layout/queueRecordLayoutV3";
+import type {
+    QueueRecordLayoutConfigV3,
+    QueueRecordColumnConfig,
+    QueueRecordFieldConfig,
+} from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
 
-function col(
-    builderSlot: string,
-    fields: Array<{ fieldKey: string; label: string; collectionPresentation?: CollectionFieldPresentationConfig }>,
-): QueueRecordColumnConfig {
+// The canonical field contract, not a local subset of it. A narrower local shape is how the
+// fixture drifted from QueueRecordFieldConfig in the first place.
+function col(builderSlot: string, fields: QueueRecordFieldConfig[]): QueueRecordColumnConfig {
     return {
         id: `col-${builderSlot}-${fields.map((f) => f.fieldKey).join("-")}`,
         label: builderSlot,
         width: "large",
+        scope: { type: "main_record" },
         builderSlot: builderSlot as QueueRecordColumnConfig["builderSlot"],
         blocks: [
             {
@@ -30,11 +34,7 @@ function col(
                 id: `fg-${builderSlot}`,
                 label: builderSlot,
                 layout: "stack",
-                fields: fields.map((f) => ({
-                    fieldKey: f.fieldKey,
-                    label: f.label,
-                    ...(f.collectionPresentation ? { collectionPresentation: f.collectionPresentation } : {}),
-                })),
+                fields,
             },
         ],
     };
@@ -104,16 +104,16 @@ function familyContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
 describe("published queue slot authority — no fallback substitution", () => {
     it("removing Stage does not cause Lead Status / Open to appear", () => {
         const published = layout([
-            col("identity", [{ fieldKey: "customer.display_name", label: "Household name" }]),
+            col("identity", [{ id: "customer.display_name", fieldKey: "customer.display_name", label: "Household name", display: "text" }]),
             col("attention", [
-                { fieldKey: "person.primary_contact_name", label: "Primary contact" },
-                { fieldKey: "person.email", label: "Email" },
+                { id: "person.primary_contact_name", fieldKey: "person.primary_contact_name", label: "Primary contact", display: "text" },
+                { id: "person.email", fieldKey: "person.email", label: "Email", display: "text" },
             ]),
             // Email placed on status (Right) — routed to contact; status must stay empty (not Open).
-            col("status", [{ fieldKey: "person.email", label: "Email" }]),
+            col("status", [{ id: "person.email", fieldKey: "person.email", label: "Email", display: "text" }]),
             col("groupCount", [
-                { fieldKey: "children.names", label: "Children names" },
-                { fieldKey: "children.count", label: "Children count" },
+                { id: "children.names", fieldKey: "children.names", label: "Children names", display: "text" },
+                { id: "children.count", fieldKey: "children.count", label: "Children count", display: "text" },
             ]),
         ]);
         const mapped = mapQueueRowSurfaceToCompactConfig(published);
@@ -134,10 +134,10 @@ describe("published queue slot authority — no fallback substitution", () => {
     it("removing Phone removes Phone from the contact slot", () => {
         const withPhone = mapQueueRowSurfaceToCompactConfig(
             layout([
-                col("identity", [{ fieldKey: "customer.display_name", label: "Household" }]),
+                col("identity", [{ id: "customer.display_name", fieldKey: "customer.display_name", label: "Household", display: "text" }]),
                 col("attention", [
-                    { fieldKey: "person.primary_contact_name", label: "Primary contact" },
-                    { fieldKey: "person.phone", label: "Phone" },
+                    { id: "person.primary_contact_name", fieldKey: "person.primary_contact_name", label: "Primary contact", display: "text" },
+                    { id: "person.phone", fieldKey: "person.phone", label: "Phone", display: "text" },
                 ]),
             ]),
         );
@@ -145,8 +145,8 @@ describe("published queue slot authority — no fallback substitution", () => {
 
         const withoutPhone = mapQueueRowSurfaceToCompactConfig(
             layout([
-                col("identity", [{ fieldKey: "customer.display_name", label: "Household" }]),
-                col("attention", [{ fieldKey: "person.primary_contact_name", label: "Primary contact" }]),
+                col("identity", [{ id: "customer.display_name", fieldKey: "customer.display_name", label: "Household", display: "text" }]),
+                col("attention", [{ id: "person.primary_contact_name", fieldKey: "person.primary_contact_name", label: "Primary contact", display: "text" }]),
             ]),
         );
         expect(withoutPhone.slots.contact.fieldKeys).toEqual(["person.primary_contact_name"]);
@@ -159,7 +159,7 @@ describe("published queue slot authority — no fallback substitution", () => {
 
     it("sparse published configs stay sparse — no default field re-entry", () => {
         const sparse = mapQueueRowSurfaceToCompactConfig(
-            layout([col("identity", [{ fieldKey: "customer.display_name", label: "Household" }])]),
+            layout([col("identity", [{ id: "customer.display_name", fieldKey: "customer.display_name", label: "Household", display: "text" }])]),
         );
         expect(sparse.slots.contact.visible).toBe(false);
         expect(sparse.slots.status.visible).toBe(false);
@@ -188,14 +188,16 @@ describe("collection presentation — preview and live share one path", () => {
 
     it("names + age + pipe reach CondensedQueueRow compact slots", () => {
         const published = layout([
-            col("identity", [{ fieldKey: "customer.display_name", label: "Household" }]),
+            col("identity", [{ id: "customer.display_name", fieldKey: "customer.display_name", label: "Household", display: "text" }]),
             col("groupCount", [
                 {
+                    id: "children.names",
                     fieldKey: "children.names",
                     label: "Children names",
+                    display: "text",
                     collectionPresentation: namesWithAge,
                 },
-                { fieldKey: "children.count", label: "Children count" },
+                { id: "children.count", fieldKey: "children.count", label: "Children count", display: "text" },
             ]),
         ]);
         const mapped = mapQueueRowSurfaceToCompactConfig(published);
@@ -226,8 +228,10 @@ describe("collection presentation — preview and live share one path", () => {
         const published = layout([
             col("groupCount", [
                 {
+                    id: "children.names",
                     fieldKey: "children.names",
                     label: "Children names",
+                    display: "text",
                     collectionPresentation: namesWithAge,
                 },
             ]),
@@ -263,7 +267,7 @@ describe("collection presentation — preview and live share one path", () => {
 
     it("count-only and summary modes stay distinct", () => {
         const countOnly = mapQueueRowSurfaceToCompactConfig(
-            layout([col("groupCount", [{ fieldKey: "children.count", label: "Children count" }])]),
+            layout([col("groupCount", [{ id: "children.count", fieldKey: "children.count", label: "Children count", display: "text" }])]),
         );
         expect(
             resolveCompactSlotDisplay("groupCount", familyContext(), countOnly.slots.groupCount, null, {
@@ -275,8 +279,10 @@ describe("collection presentation — preview and live share one path", () => {
             layout([
                 col("groupCount", [
                     {
+                        id: "children.summary",
                         fieldKey: "children.summary",
                         label: "Children summary",
+                        display: "text",
                         collectionPresentation: {
                             displayMode: "summary",
                             includedFields: ["first_name", "last_name"],

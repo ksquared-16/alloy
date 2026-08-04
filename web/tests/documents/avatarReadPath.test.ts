@@ -78,7 +78,7 @@ describe("6E — approved external images survive", () => {
 
 describe("6E — resolver injection restores avatars", () => {
     it("injects an actor-scoped URL that the adapter then returns", () => {
-        const rows = [{ id: PERSON_A, metadata: { photo_url: SIGNED } }];
+        const rows: Record<string, unknown>[] = [{ id: PERSON_A, metadata: { photo_url: SIGNED } }];
         const resolved = new Map([[PERSON_A, { photoUrl: RESOLVED }]]);
 
         const [injected] = applyResolvedPhotoUrls(rows, resolved);
@@ -89,7 +89,7 @@ describe("6E — resolver injection restores avatars", () => {
     });
 
     it("leaves a row untouched when the actor was not authorized", () => {
-        const rows = [{ id: PERSON_A, metadata: { photo_url: SIGNED } }];
+        const rows: Record<string, unknown>[] = [{ id: PERSON_A, metadata: { photo_url: SIGNED } }];
         const resolved = new Map([[PERSON_A, { photoUrl: null }]]);
 
         const [injected] = applyResolvedPhotoUrls(rows, resolved);
@@ -100,7 +100,7 @@ describe("6E — resolver injection restores avatars", () => {
     });
 
     it("resolves per person, so one authorization does not cover another", () => {
-        const rows = [
+        const rows: Record<string, unknown>[] = [
             { id: PERSON_A, metadata: {} },
             { id: PERSON_B, metadata: {} },
         ];
@@ -116,7 +116,7 @@ describe("6E — resolver injection restores avatars", () => {
     });
 
     it("does not mutate the input rows", () => {
-        const rows = [{ id: PERSON_A, metadata: {} }];
+        const rows: Record<string, unknown>[] = [{ id: PERSON_A, metadata: {} }];
         applyResolvedPhotoUrls(rows, new Map([[PERSON_A, { photoUrl: RESOLVED }]]));
         expect((rows[0] as Record<string, unknown>)[RESOLVED_PHOTO_URL_KEY]).toBeUndefined();
     });
@@ -124,7 +124,7 @@ describe("6E — resolver injection restores avatars", () => {
     it("is a per-request projection — nothing is persisted", () => {
         // applyResolvedPhotoUrls returns new objects and performs no writes.
         // Refreshing simply means calling it again on the next request.
-        const rows = [{ id: PERSON_A, metadata: {} }];
+        const rows: Record<string, unknown>[] = [{ id: PERSON_A, metadata: {} }];
         const first = applyResolvedPhotoUrls(rows, new Map([[PERSON_A, { photoUrl: "u1" }]]));
         const second = applyResolvedPhotoUrls(rows, new Map([[PERSON_A, { photoUrl: "u2" }]]));
         expect(first[0][RESOLVED_PHOTO_URL_KEY]).toBe("u1");
@@ -132,7 +132,7 @@ describe("6E — resolver injection restores avatars", () => {
     });
 
     it("tolerates a row with no person id", () => {
-        const rows = [{ metadata: {} } as Record<string, unknown>];
+        const rows: Record<string, unknown>[] = [{ metadata: {} } as Record<string, unknown>];
         expect(() => applyResolvedPhotoUrls(rows, new Map())).not.toThrow();
     });
 });
