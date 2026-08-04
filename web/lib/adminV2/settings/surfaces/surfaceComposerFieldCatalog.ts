@@ -218,7 +218,6 @@ function enrollmentDetailCatalogEntriesForNamespaces(
             label: entry.pickerLabel,
             field_type: entry.fieldType,
             section_key: "enrollment",
-            description: entry.description,
             entity_type: "inquiry_child",
             storage_line: entry.storagePath,
             editable: true,
