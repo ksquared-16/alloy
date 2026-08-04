@@ -356,7 +356,8 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
                     fiveSectionGone = false;
                 }
             }
-            await (offerRoot.count() > 0 ? offerRoot : sectionsRoot).first().screenshot({
+            const offerPresent = (await offerRoot.count()) > 0;
+            await (offerPresent ? offerRoot : sectionsRoot).first().screenshot({
                 path: path.join(EVIDENCE_DIR, "04-assignment-offer.png"),
             });
         }

@@ -134,6 +134,8 @@ describe("child focus edit field policy + save payload", () => {
             program_room_cohort_key: "room-a",
             schedule_type: "full_time",
             start_date: "2026-08-01",
+            requested_days_per_week: "",
+            weekdays: "",
             dob: "2020-01-01",
         };
         const draft = {
@@ -187,6 +189,8 @@ describe("child focus edit field policy + save payload", () => {
             program_room_cohort_key: "room-a",
             schedule_type: "full_time",
             start_date: "2026-08-01",
+            requested_days_per_week: "",
+            weekdays: "",
             dob: "2020-01-01",
         };
         const draft = {

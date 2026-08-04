@@ -94,12 +94,14 @@ export type ChildrenEvidenceChild = {
     /**
      * Family Requested Start when distinct from OCM display — same grain as startDate
      * when participation metadata owns the preferred date.
+     * Optional on the evidence type so fixtures and partial projections remain valid
+     * when request fields are not configured on Children.
      */
-    requestedStart: string | null;
+    requestedStart?: string | null;
     /** Requested days/week label (e.g. "3 days per week"); null when unset. */
-    requestedDaysPerWeek: string | null;
+    requestedDaysPerWeek?: string | null;
     /** Preferred weekdays label (e.g. "Mon, Wed, Fri"); null when unset. */
-    preferredWeekdays: string | null;
+    preferredWeekdays?: string | null;
     status: string | null;
     statusTone: ChildStatusTone;
     /** Missing operational essentials (program / schedule / start) for this child. */
