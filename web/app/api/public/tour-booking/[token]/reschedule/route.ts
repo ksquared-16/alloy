@@ -111,7 +111,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         return tourPublicJson({
             ok: true,
-            booking: { id: replacement.id, status_key: replacement.status_key, start_at: replacement.start_at, end_at: replacement.end_at, timezone: replacement.timezone },
+            booking: publicTourBookingView(replacement),
             previous_booking_id: booking.id,
         });
     } catch {
