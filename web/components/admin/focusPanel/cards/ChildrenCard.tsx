@@ -1599,6 +1599,8 @@ function FocusedChild({
                                 program_room_cohort_key: "",
                                 schedule_type: "",
                                 start_date: child.startDate ?? "",
+                                requested_days_per_week: "",
+                                weekdays: "",
                                 dob: "",
                             },
                             identityBaseline: { first_name: "", last_name: "", dob: "" },
