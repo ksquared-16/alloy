@@ -67,3 +67,7 @@ cd web && PLAYWRIGHT_BASE_URL=http://127.0.0.1:3016 ALLOY_AUTH_SLOT=slot3 \
 ## Do not merge automatically
 
 PR-ready for code/docs after browser certification passes. Kelly authorizes open/merge. Do not `alloy-sprint-finish 6` until cert matrix is green.
+
+## Host-resource blocker (resume gate)
+
+Latest attempt stopped cleanly: 3016 down, slot-6 permits released. Concurrent wt4 Next + low free RAM prevented a durable Playwright matrix. Evidence note: `.alloy-agent-evidence/enrollment-assignment-effective-dates/browser/HOST-RESOURCE-BLOCKER.md`. Resume when slot 6 can own Next alone.
