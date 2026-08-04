@@ -20,6 +20,11 @@ const MESSAGE_EVENT_TYPES = new Set([
     "message_queued",
     "message_delivered",
     "message_failed",
+    // Policy outcomes carry a channel too — and the channel IS the finding when
+    // one channel is refused and another goes out, which is exactly the case the
+    // Tour certification hit: email queued, SMS blocked.
+    "message_blocked",
+    "message_deferred",
 ]);
 
 function readPayloadRecord(payload: unknown): Record<string, unknown> {
