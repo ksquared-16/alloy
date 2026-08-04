@@ -16,7 +16,10 @@ import { ensureAdminPlaywrightSession } from "../helpers/adminSessionAuth";
 
 const HANDBOOK = process.env.QA_HANDBOOK_PDF ?? "";
 const EVIDENCE = path.join(process.cwd(), "..", "certification", "evidence", "qa");
-const ON_CERT_STACK = (process.env.PLAYWRIGHT_BASE_URL ?? "").includes("3018");
+// Opt in explicitly. This used to sniff for the literal port "3018", which pinned the QA to one
+// machine's port allocation: the managed stack hands out whatever port the slot owns, so on every
+// other port these tests silently SKIPPED and reported green without running.
+const ON_CERT_STACK = process.env.QA_CERT_STACK === "1";
 
 function shot(name: string) {
     fs.mkdirSync(EVIDENCE, { recursive: true });
