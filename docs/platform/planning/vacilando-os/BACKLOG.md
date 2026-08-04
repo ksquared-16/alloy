@@ -69,6 +69,14 @@ certification, or evidence storage.
 
 DX-1 (Overview L1 shell) + DX-3 (decision cards).
 
+**Status update (2026-08-04):** DX-1 + DX-3 landed on staging via PR #331
+(`796ed8cce` / merge `160e75d92`). Next implementation slice: **DX-2 Explained confidence**.
+
+### Known residuals after DX-1 + DX-3 (tracked separately)
+
+- [`MC-MISSION-LIST-PRIMARY-CTA`](#mc-mission-list-primary-cta) — mission list cards still use “Review outcome”
+- [`MC-MANAGED-WORKER-DOCK`](#mc-managed-worker-dock) — Mission Control Workers vs managed toolkit slots
+
 ### Out of scope for this item
 
 - Redesigning Vacilando, Missions, or the execution engine
@@ -119,3 +127,38 @@ and Finish** controls without changing mission-worker semantics.
 - DX-1…DX-8 Executive Overview work
 - Changing mission posture, certification, or confidence
 - Deleting Legacy Board (may remain as advanced/legacy escape hatch)
+
+---
+
+## MC-MISSION-LIST-PRIMARY-CTA
+
+**Priority:** P2 (list/inbox consistency with DX-1 Overview)  
+**Opened:** 2026-08-04  
+**Source:** DX-1 + DX-3 staging merge (`160e75d92` / PR #331) residual  
+**Related:** `missionListCardVm`, `mission-posture.mjs` (`review_outcome`), Mission Control missions home
+
+### Problem
+
+Mission **list** cards can still show posture primary CTA **“Review outcome”** even
+after DX-1/DX-3 made Overview use explicit decision language (Continue discovery,
+Begin implementation, Park, Close). Operators scanning Needs You / Missions home
+still see the vague verb.
+
+### Intent
+
+Align mission list / Needs You card primary actions with the same recommendation-first
+labels used on Executive Overview L1, without changing posture action kinds or
+backend behavior.
+
+### Acceptance criteria
+
+1. When posture choices exist, list-card primary is not sole “Review outcome”.
+2. Labels match Overview decision-card language where a recommended choice exists.
+3. Click still routes/opens the mission correctly; same action kinds.
+4. Focused presentation test covers list-card primary vs Overview primary.
+
+### Out of scope for this item
+
+- DX-2 explained confidence
+- MC-MANAGED-WORKER-DOCK
+- Changing `deriveMissionPosture` action kinds
