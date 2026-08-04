@@ -32,3 +32,9 @@ It refuses generic process killing (`no_owned_process`, `port_mismatch`).
 The 2026-07-30 `:3021` freeze/slow-bind case was caused by sync `diskSignal` before
 listen — see `STARTUP-BIND-FIX.md`. Control-plane events for that class of failure
 are recorded on the Access & Identity cert mission timeline.
+
+## Auth exposure (backlog)
+
+Loopback-only mode may remain unauthenticated. Non-loopback bind / tunnel /
+shared-host / remote exposure must fail closed unless API auth is configured —
+see [`BACKLOG.md`](BACKLOG.md) **CP-AUTH-NON-LOOPBACK**.

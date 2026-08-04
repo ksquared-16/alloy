@@ -30,3 +30,9 @@ Screenshots:
 - `w4-mission-dashboard-cert-label.png`
 
 See also: `CERTIFICATION-EXPERIENCE.md`
+
+## Feedback loop — closed (`fbe918247`)
+
+Certify-with-note · Share context · Request changes · Re-check · visible Conversation.
+Full proof matrix: [`FEEDBACK-LOOP-CERTIFICATION.md`](FEEDBACK-LOOP-CERTIFICATION.md).
+
