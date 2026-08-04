@@ -387,7 +387,13 @@ export function isCanonicalDrawerHostPath(pathname: string | null | undefined): 
 
 /**
  * Root `ConditionalSiteLayout` must not wrap these paths in marketing header/footer.
- * Includes browser-visible `/workspace` and `/settings` plus transitional admin aliases.
+ * Includes browser-visible `/workspace` and `/settings` plus transitional admin aliases,
+ * and the no-login family surfaces.
+ *
+ * `/tour-booking` is a CUSTOMER surface reached from a message we sent. Wrapping it in
+ * the marketing nav and footer put a "Services" wordmark, a hamburger menu and a
+ * product footer around a parent trying to pick a visit time — an invitation to leave
+ * mid-task, on a page whose whole job is one calm decision.
  */
 export function isPublicMarketingChromeSuppressedPath(pathname: string | null | undefined): boolean {
     if (!pathname) return false;
@@ -400,6 +406,7 @@ export function isPublicMarketingChromeSuppressedPath(pathname: string | null | 
     ) {
         return true;
     }
+    if (p === "/tour-booking" || p.startsWith("/tour-booking/")) return true;
     return isCanonicalWorkspacePath(p) || isCanonicalSettingsPath(p);
 }
 

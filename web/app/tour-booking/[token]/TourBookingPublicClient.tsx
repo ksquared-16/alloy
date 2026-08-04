@@ -12,10 +12,18 @@
  * idempotent; this page simply re-reads its state afterwards.
  */
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import type { TourParentAction, TourParentView } from "@/lib/tours/public/tourParentView";
-import { formatParentTourTime } from "@/lib/tours/public/tourParentView";
+import {
+    buildTourCalendarWeeks,
+    formatParentDayLabel,
+    formatParentMonthLabel,
+    formatParentTimeOnly,
+    formatParentTourTime,
+    tourSlotDayKey,
+} from "@/lib/tours/public/tourParentView";
 
 type ResolveJson = { ok?: boolean; view?: TourParentView };
 
@@ -39,7 +47,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     const [trouble, setTrouble] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [loaded, setLoaded] = useState(false);
-    const [showAll, setShowAll] = useState(false);
+    const [day, setDay] = useState<string | null>(null);
 
     const api = useCallback((suffix: string) => `/api/public/tour-booking/${encodeURIComponent(token)}${suffix}`, [token]);
 
@@ -187,7 +195,14 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     const needsPick = view.actions.some((a) => a.intent === "book");
 
     return (
-        <main className="mx-auto max-w-md space-y-6 p-5 pb-16 pt-10">
+        <main className="mx-auto max-w-md space-y-6 p-5 pb-16 pt-6">
+            {/* Brandmark only — the wordmark carries "SERVICES", which is our
+                internal org naming and means nothing to a parent booking a visit. */}
+            <div className="flex items-center gap-2 pb-1">
+                <Image src="/brand/alloy-brandmark-gradient.svg" alt="Alloy" width={28} height={28} className="h-7 w-7" priority />
+                <span className="text-[15px] font-semibold tracking-tight text-alloy-midnight">Alloy</span>
+            </div>
+
             <header className="space-y-1.5">
                 <h1 className="text-2xl font-semibold leading-tight text-alloy-midnight">{view.headline}</h1>
                 {view.childLine ? <p className="text-[15px] text-alloy-midnight/70">{view.childLine}</p> : null}
@@ -210,38 +225,97 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
 
             {view.showsOptions ? (
                 slots.length ? (
-                    <ul className="space-y-2">
-                        {(showAll ? slots : slots.slice(0, VISIBLE_SLOTS)).map((s) => {
-                            const chosen = pick?.startAt === s.startAt && pick?.ruleId === s.ruleId;
-                            return (
-                                <li key={`${s.startAt}-${s.ruleId}`}>
-                                    <button
-                                        type="button"
-                                        aria-pressed={chosen}
-                                        onClick={() => setPick(chosen ? null : s)}
-                                        className={`w-full rounded-xl border px-4 py-3.5 text-left text-[15px] transition ${
-                                            chosen
-                                                ? "border-alloy-midnight bg-alloy-midnight text-white"
-                                                : "border-alloy-stone/25 text-alloy-midnight hover:border-alloy-midnight/40"
-                                        }`}
-                                    >
-                                        {formatParentTourTime(s.startAt, s.timezone) ?? ""}
-                                    </button>
-                                </li>
-                            );
-                        })}
-                        {!showAll && slots.length > VISIBLE_SLOTS ? (
-                            <li>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAll(true)}
-                                    className="w-full rounded-xl px-4 py-3 text-[15px] font-medium text-alloy-midnight/60"
-                                >
-                                    Show more times
-                                </button>
-                            </li>
-                        ) : null}
-                    </ul>
+                    (() => {
+                        // Group by the CENTRE's calendar day, not the device's.
+                        const byDay = new Map<string, AvailableTourSlot[]>();
+                        for (const s of slots) {
+                            const k = tourSlotDayKey(s.startAt, s.timezone);
+                            if (!k) continue;
+                            const list = byDay.get(k) ?? [];
+                            list.push(s);
+                            byDay.set(k, list);
+                        }
+                        const available = [...byDay.keys()].sort();
+                        if (!available.length) return null;
+                        const activeDay = day && byDay.has(day) ? day : available[0];
+                        const weeks = buildTourCalendarWeeks(activeDay);
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="rounded-2xl border border-alloy-midnight/10 bg-white p-3 shadow-sm">
+                                    <p className="pb-2 text-center text-[14px] font-semibold text-alloy-midnight">
+                                        {formatParentMonthLabel(activeDay)}
+                                    </p>
+                                    <div className="grid grid-cols-7 gap-1 pb-1" aria-hidden>
+                                        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                                            <div key={`${d}-${i}`} className="text-center text-[11px] font-medium text-alloy-midnight/40">
+                                                {d}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="space-y-1">
+                                        {weeks.map((week, wi) => (
+                                            <div key={wi} className="grid grid-cols-7 gap-1">
+                                                {week.map((key, di) => {
+                                                    if (!key) return <div key={di} />;
+                                                    const has = byDay.has(key);
+                                                    const isActive = key === activeDay;
+                                                    const dayNum = Number(key.slice(8));
+                                                    return (
+                                                        <button
+                                                            key={key}
+                                                            type="button"
+                                                            disabled={!has}
+                                                            aria-pressed={isActive}
+                                                            aria-label={formatParentDayLabel(key)}
+                                                            onClick={() => {
+                                                                setDay(key);
+                                                                setPick(null);
+                                                            }}
+                                                            // 44px tap target — thumb-sized on a phone.
+                                                            className={`flex h-11 w-full items-center justify-center rounded-xl text-[15px] transition ${
+                                                                isActive
+                                                                    ? "bg-alloy-bend-pine font-semibold text-white"
+                                                                    : has
+                                                                      ? "font-medium text-alloy-midnight hover:bg-alloy-bend-pine/[0.10]"
+                                                                      : "text-alloy-midnight/25"
+                                                            }`}
+                                                        >
+                                                            {dayNum}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <p className="text-[15px] font-medium text-alloy-midnight">{formatParentDayLabel(activeDay)}</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(byDay.get(activeDay) ?? []).map((s) => {
+                                            const chosen = pick?.startAt === s.startAt && pick?.ruleId === s.ruleId;
+                                            return (
+                                                <button
+                                                    key={`${s.startAt}-${s.ruleId}`}
+                                                    type="button"
+                                                    aria-pressed={chosen}
+                                                    onClick={() => setPick(chosen ? null : s)}
+                                                    className={`rounded-xl border px-3 py-3.5 text-center text-[15px] font-medium transition ${
+                                                        chosen
+                                                            ? "border-alloy-bend-pine bg-alloy-bend-pine text-white shadow-sm"
+                                                            : "border-alloy-midnight/15 bg-white text-alloy-midnight hover:border-alloy-bend-pine"
+                                                    }`}
+                                                >
+                                                    {formatParentTimeOnly(s.startAt, s.timezone)}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()
                 ) : (
                     <p className="text-[15px] leading-relaxed text-alloy-midnight/70">
                         We don&rsquo;t have times available right now. Reply to our message and we&rsquo;ll find one for you.
@@ -254,9 +328,9 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                     const disabled = busy || (needsPick && a.intent === "book" && !pick);
                     const cls =
                         a.tone === "primary"
-                            ? "bg-alloy-midnight text-white"
+                            ? "bg-alloy-bend-pine text-white"
                             : a.tone === "secondary"
-                              ? "border border-alloy-midnight/30 text-alloy-midnight"
+                              ? "border border-alloy-bend-pine/40 text-[#007d68]"
                               : "text-alloy-midnight/60";
                     return (
                         <button

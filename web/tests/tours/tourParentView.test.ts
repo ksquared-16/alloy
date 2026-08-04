@@ -9,7 +9,15 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildTourParentView, formatParentTourTime } from "@/lib/tours/public/tourParentView";
+import {
+    buildTourCalendarWeeks,
+    buildTourParentView,
+    formatParentDayLabel,
+    formatParentMonthLabel,
+    formatParentTimeOnly,
+    formatParentTourTime,
+    tourSlotDayKey,
+} from "@/lib/tours/public/tourParentView";
 
 const base = {
     opportunityLabel: "Rowan Reyes",
@@ -174,5 +182,40 @@ describe("presentation details a parent would notice", () => {
         const v = buildTourParentView({ ...base, locationLabel: "   ", invitationStatus: "active" });
         expect(v.locationLine).toBe("our center");
         expect(v.bodyLine).toContain("our center");
+    });
+});
+
+describe("calendar grouping is expressed in the tour's timezone", () => {
+    it("groups a slot by the CENTRE's calendar day, not the viewer's", () => {
+        // 02:00Z on Aug 6 is still Aug 5 in Los Angeles. A parent picking a visit must
+        // see the centre's day, or they book a date that does not exist for them.
+        expect(tourSlotDayKey("2026-08-06T02:00:00Z", "America/Los_Angeles")).toBe("2026-08-05");
+        expect(tourSlotDayKey("2026-08-06T02:00:00Z", "America/New_York")).toBe("2026-08-05");
+        expect(tourSlotDayKey("2026-08-06T02:00:00Z", "UTC")).toBe("2026-08-06");
+    });
+
+    it("returns null for an unusable timestamp rather than a wrong day", () => {
+        expect(tourSlotDayKey("not-a-date", "UTC")).toBeNull();
+    });
+
+    it("renders the time alone in the tour's timezone", () => {
+        expect(formatParentTimeOnly("2026-08-05T16:00:00Z", "America/Los_Angeles")).toBe("9:00 AM");
+        expect(formatParentTimeOnly("2026-08-05T16:00:00Z", "America/New_York")).toBe("12:00 PM");
+    });
+
+    it("labels a day and a month for the calendar header", () => {
+        expect(formatParentDayLabel("2026-08-05")).toBe("Wednesday, August 5");
+        expect(formatParentMonthLabel("2026-08-05")).toBe("August 2026");
+    });
+
+    it("builds whole Sunday-start weeks with padding", () => {
+        const weeks = buildTourCalendarWeeks("2026-08-05");
+        expect(weeks.every((w) => w.length === 7)).toBe(true);
+        // August 2026 starts on a Saturday: six blanks then the 1st.
+        expect(weeks[0].slice(0, 6).every((c) => c === "")).toBe(true);
+        expect(weeks[0][6]).toBe("2026-08-01");
+        const all = weeks.flat().filter(Boolean);
+        expect(all).toHaveLength(31);
+        expect(all[30]).toBe("2026-08-31");
     });
 });
