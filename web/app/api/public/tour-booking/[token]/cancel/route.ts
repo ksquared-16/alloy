@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             bookingId: booking.id,
             detail: { status_key: cancelled.status_key },
         });
-        return tourPublicJson({ ok: true, booking: { id: cancelled.id, status_key: cancelled.status_key } });
+        return tourPublicJson({ ok: true, booking: publicTourBookingView(cancelled) });
     } catch {
         return tourPublicErr("We could not cancel your tour. Please contact the site.", 400, { code: "CANCEL_FAILED" });
     }

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
-import { tourPublicErr, tourPublicJson } from "@/lib/tours/public/tourPublicHttp";
+import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
@@ -47,7 +47,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .select("id, status_key, start_at, end_at, timezone")
             .eq("id", link.booking_id)
             .maybeSingle();
-        if (prior) return tourPublicJson({ ok: true, booking: prior, idempotent_replay: true });
+        // Projected, not returned raw: the replay branch is the one a double-submit
+        // actually hits, so leaking here leaks to every retrying parent.
+        if (prior) {
+            return tourPublicJson({
+                ok: true,
+                booking: publicTourBookingView(prior as { id: string; status_key: string; start_at?: string | null; end_at?: string | null; timezone?: string | null }),
+                idempotent_replay: true,
+            });
+        }
         // Spent, but nothing to replay. Refuse rather than fall through and book
         // twice off one credential.
         if (auth.replay) return tourPublicErr("This link has already been used.", 409, { code: "consumed" });
@@ -183,13 +191,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return tourPublicJson(
             {
                 ok: true,
-                booking: {
-                    id: booking.id,
-                    status_key: booking.status_key,
-                    start_at: booking.start_at,
-                    end_at: booking.end_at,
-                    timezone: booking.timezone,
-                },
+                booking: publicTourBookingView(booking),
             },
             { status: 201 }
         );
