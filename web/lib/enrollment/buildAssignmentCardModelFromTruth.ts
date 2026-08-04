@@ -1,14 +1,11 @@
 /**
  * Build an Assignments card model from Focus Panel truth + scheduling projection
  * for one child (customer_member grain). Pure assembly — no fetch.
- *
- * Emits one card entry per proposed/committed OA (and optional interests).
  */
 
 import {
     buildAssignmentCardModel,
     type AssignmentCardAssignmentSummary,
-    type AssignmentCardInterest,
     type AssignmentCardModel,
     type BuildAssignmentCardModelArgs,
 } from "@/lib/enrollment/buildAssignmentCardModel";
@@ -16,17 +13,13 @@ import {
     evaluateAssignmentProposalReadiness,
     assignmentFactorFromLifecycleRuleId,
     type AssignmentReadinessFactorKey,
-    type AssignmentReadinessResult,
 } from "@/lib/enrollment/assignmentProposalReadiness";
 import { activeAssignmentQuoteSnapshot } from "@/lib/enrollment/assignmentQuoteSnapshot";
 
 type ProjAssignment = {
     id: string;
-    /** Projection uses effectiveFrom; some adapters use startDate. */
     startDate?: string | null;
-    effectiveFrom?: string | null;
     endDate?: string | null;
-    effectiveTo?: string | null;
     status?: string | null;
     commitmentKind?: string | null;
     weekdays?: number[] | null;
@@ -36,16 +29,11 @@ type ProjAssignment = {
     arriveTime?: string | null;
     departTime?: string | null;
     subjectType?: string | null;
-    isPrimary?: boolean | null;
-    assignmentType?: {
-        key?: string | null;
-        label?: string | null;
-    } | null;
 };
 
 type ChildProjection = {
-    current?: { assignments?: ProjAssignment[]; scheduleTypeLabel?: string | null } | null;
-    proposed?: { assignments?: ProjAssignment[]; scheduleTypeLabel?: string | null } | null;
+    current?: { assignments?: ProjAssignment[] } | null;
+    proposed?: { assignments?: ProjAssignment[] } | null;
     draft?: {
         startDate?: string | null;
         scheduleTypeLabel?: string | null;
@@ -54,12 +42,10 @@ type ChildProjection = {
 } | null;
 
 function asSummary(a: ProjAssignment, kind: "proposed" | "committed"): AssignmentCardAssignmentSummary {
-    const start = String(a.startDate ?? a.effectiveFrom ?? "").slice(0, 10);
-    const endRaw = a.endDate ?? a.effectiveTo ?? null;
     return {
         id: a.id,
-        start_date: start,
-        end_date: endRaw ? String(endRaw).slice(0, 10) : null,
+        start_date: String(a.startDate ?? "").slice(0, 10),
+        end_date: a.endDate ? String(a.endDate).slice(0, 10) : null,
         status: String(a.status ?? (kind === "proposed" ? "planned" : "active")),
         commitment_kind: a.commitmentKind ?? kind,
         weekdays: Array.isArray(a.weekdays) ? a.weekdays : null,
@@ -69,11 +55,6 @@ function asSummary(a: ProjAssignment, kind: "proposed" | "committed"): Assignmen
         arriveTime: a.arriveTime ?? null,
         departTime: a.departTime ?? null,
         patternLabel: a.patternLabel ?? null,
-        assignmentTypeLabel: a.assignmentType?.label ?? null,
-        assignmentTypeKey: a.assignmentType?.key ?? null,
-        isPrimary: a.isPrimary ?? null,
-        // Non-primary concurrent services do not establish Enrollment Start by default.
-        establishesEnrollment: a.isPrimary === false ? false : true,
     };
 }
 
@@ -85,6 +66,7 @@ function metaFromTruth(truth: Record<string, unknown>, customerMemberId: string)
             return row as Record<string, unknown>;
         }
     }
+    // Fallback: child row may carry participation keys after overlay.
     const children = Array.isArray(truth._inquiry_children) ? (truth._inquiry_children as Record<string, unknown>[]) : [];
     const child = children.find((c) => String(c.customer_member_id ?? "") === customerMemberId);
     if (!child) return {};
@@ -101,7 +83,6 @@ function metaFromTruth(truth: Record<string, unknown>, customerMemberId: string)
         "quote_accepted",
         "enrollment_date",
         "assignment_quote_snapshots",
-        "assignment_interests",
     ]) {
         if (child[key] !== undefined) meta[key] = child[key];
         const nested = child.participation_metadata;
@@ -111,32 +92,6 @@ function metaFromTruth(truth: Record<string, unknown>, customerMemberId: string)
         }
     }
     return meta;
-}
-
-function interestsFromMeta(meta: Record<string, unknown>): AssignmentCardInterest[] {
-    const raw = meta.assignment_interests;
-    if (!Array.isArray(raw)) return [];
-    const out: AssignmentCardInterest[] = [];
-    for (const row of raw) {
-        if (!row || typeof row !== "object") continue;
-        const r = row as Record<string, unknown>;
-        const id = typeof r.id === "string" && r.id.trim() ? r.id.trim() : null;
-        const label =
-            (typeof r.label === "string" && r.label.trim() ? r.label.trim() : null)
-            ?? (typeof r.offering_label === "string" && r.offering_label.trim()
-                ? r.offering_label.trim()
-                : null);
-        if (!id || !label) continue;
-        out.push({
-            id,
-            label,
-            assignmentTypeKey:
-                typeof r.assignment_type_key === "string" ? r.assignment_type_key : null,
-            assignmentTypeLabel:
-                typeof r.assignment_type_label === "string" ? r.assignment_type_label : null,
-        });
-    }
-    return out;
 }
 
 export function requiredAssignmentFactorsFromRuleIds(
@@ -152,31 +107,6 @@ export function requiredAssignmentFactorsFromRuleIds(
         out.push(factor);
     }
     return out;
-}
-
-function readinessForRow(args: {
-    row: AssignmentCardAssignmentSummary;
-    meta: Record<string, unknown>;
-    factors: AssignmentReadinessFactorKey[];
-}): AssignmentReadinessResult {
-    if (args.factors.length === 0) return { ready: true, gaps: [] };
-    const quote = activeAssignmentQuoteSnapshot(args.meta, args.row.id);
-    return evaluateAssignmentProposalReadiness({
-        requiredFactors: args.factors,
-        facts: {
-            processInstanceMetadata: args.meta,
-            locationId: (args.meta.location_id as string | null) ?? null,
-            programCategoryId: (args.meta.program_category_id as string | null) ?? null,
-            roomLocationId: args.row.roomName ? "present" : ((args.meta.program_room_cohort_key as string | null) ?? null),
-            scheduleType: args.row.scheduleTypeLabel ?? (args.meta.schedule_type as string | null) ?? null,
-            hasProposedSchedule: true,
-            proposedAssignmentStart: args.row.start_date || null,
-            tuitionPlanId: args.row.tuitionPlanId ?? (args.meta.tuition_plan_id as string | null) ?? null,
-            hasQuoteSnapshot: Boolean(quote),
-            quoteAccepted: Boolean(args.meta.quote_accepted),
-            enrollmentPaperworkComplete: Boolean(args.meta.enrollment_date),
-        },
-    });
 }
 
 export function buildAssignmentCardModelForChild(args: {
@@ -200,7 +130,7 @@ export function buildAssignmentCardModelForChild(args: {
         .map((a) => asSummary(a, "committed"));
 
     // Draft schedule intent (pre-OA) is proposed truth — not committed.
-    if (proposed.length === 0 && committed.length === 0 && proj?.draft?.scheduleTypeLabel) {
+    if (proposed.length === 0 && proj?.draft?.scheduleTypeLabel) {
         proposed.push({
             id: `draft:${args.customerMemberId}`,
             start_date: String(proj.draft.startDate ?? meta.start_date ?? "").slice(0, 10) || "1970-01-01",
@@ -208,17 +138,29 @@ export function buildAssignmentCardModelForChild(args: {
             commitment_kind: "proposed",
             weekdays: proj.draft.weekdays ?? null,
             scheduleTypeLabel: proj.draft.scheduleTypeLabel,
-            assignmentTypeLabel: "Proposed schedule",
-            establishesEnrollment: true,
-            isPrimary: true,
         });
     }
 
     const factors = requiredAssignmentFactorsFromRuleIds(args.requiredRuleIds);
-    const readinessByAssignmentId: Record<string, AssignmentReadinessResult> = {};
-    for (const row of [...proposed, ...committed]) {
-        readinessByAssignmentId[row.id] = readinessForRow({ row, meta, factors });
-    }
+    const readiness =
+        factors.length > 0
+            ? evaluateAssignmentProposalReadiness({
+                  requiredFactors: factors,
+                  facts: {
+                      processInstanceMetadata: meta,
+                      locationId: (meta.location_id as string | null) ?? null,
+                      programCategoryId: (meta.program_category_id as string | null) ?? null,
+                      roomLocationId: (meta.program_room_cohort_key as string | null) ?? null,
+                      scheduleType: (meta.schedule_type as string | null) ?? null,
+                      hasProposedSchedule: proposed.length > 0,
+                      proposedAssignmentStart: proposed[0]?.start_date ?? null,
+                      tuitionPlanId: (meta.tuition_plan_id as string | null) ?? null,
+                      hasQuoteSnapshot: Boolean(activeAssignmentQuoteSnapshot(meta)),
+                      quoteAccepted: Boolean(meta.quote_accepted),
+                      enrollmentPaperworkComplete: Boolean(meta.enrollment_date),
+                  },
+              })
+            : { ready: true, gaps: [] };
 
     return buildAssignmentCardModel({
         processInstanceMetadata: meta,
@@ -231,8 +173,7 @@ export function buildAssignmentCardModelForChild(args: {
         scheduleTypeLabel: (meta.schedule_type as string | null) ?? proj?.draft?.scheduleTypeLabel ?? null,
         proposedAssignments: proposed,
         committedAssignments: committed,
-        interests: interestsFromMeta(meta),
-        readinessByAssignmentId,
+        readiness,
         ...args.override,
     });
 }

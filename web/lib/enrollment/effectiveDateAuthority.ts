@@ -34,13 +34,6 @@ export type AssignmentDateCandidate = {
     commitment_kind?: AssignmentCommitmentKind | string | null;
     /** When true, row was formally corrected out of Start Date eligibility. */
     excluded_from_start_date?: boolean;
-    /**
-     * When false, committed row must not define child Enrollment Start Date
-     * (enrichment / add-on). When absent, fall back to is_primary, then legacy
-     * “any committed qualifies” for single-assignment era rows.
-     */
-    establishes_enrollment?: boolean | null;
-    is_primary?: boolean | null;
 };
 
 export type EnrollmentDateStamp = {
@@ -70,27 +63,16 @@ function ymdOrNull(v: unknown): string | null {
  * operational assignment that may define Start Date.
  *
  * Canceled and non-committed (proposed) rows do not qualify.
- * Non-enrollment-establishing services (enrichment / add-ons) do not qualify.
  * Superseded history rows still retain their original start_date for derivation
  * of the *first* committed start — supersede closes a prior row but does not
  * erase that it was once the first commitment. We therefore include superseded
  * committed rows when scanning for the earliest start, unless explicitly
  * excluded via correction metadata.
  */
-export function assignmentEstablishesEnrollment(row: AssignmentDateCandidate): boolean {
-    if (row.establishes_enrollment === false) return false;
-    if (row.establishes_enrollment === true) return true;
-    if (row.is_primary === true) return true;
-    if (row.is_primary === false) return false;
-    // Legacy single-assignment era: unset flags still qualify.
-    return true;
-}
-
 export function assignmentQualifiesForStartDate(row: AssignmentDateCandidate): boolean {
     const kind = (row.commitment_kind ?? "committed").toString().trim().toLowerCase();
     if (kind !== "committed") return false;
     if (row.excluded_from_start_date) return false;
-    if (!assignmentEstablishesEnrollment(row)) return false;
     const status = (row.status ?? "").toString().trim().toLowerCase();
     if (status === "canceled") return false;
     const start = ymdOrNull(row.start_date);

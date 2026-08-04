@@ -41,10 +41,6 @@ export async function POST(request: NextRequest) {
         typeof body.offering_id === "string" && body.offering_id.trim()
             ? body.offering_id.trim()
             : null;
-    const scheduleAssignmentId =
-        typeof body.schedule_assignment_id === "string" && body.schedule_assignment_id.trim()
-            ? body.schedule_assignment_id.trim()
-            : null;
 
     if (!customerMemberId) {
         return NextResponse.json({ error: "Missing customer_member_id" }, { status: 400 });
@@ -137,12 +133,10 @@ export async function POST(request: NextRequest) {
         effectiveDate: effectiveDateRaw,
         actorUserId: ctx.userId,
         snapshotId: crypto.randomUUID(),
-        scheduleAssignmentId,
         pricingInputsExtra: {
             customer_member_id: customerMemberId,
             opportunity_id: opportunityId,
             program_category_id: programCategoryId,
-            schedule_assignment_id: scheduleAssignmentId,
         },
     });
 

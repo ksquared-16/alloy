@@ -475,54 +475,23 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                             childName={activeChild.name}
                             style={{ marginBottom: 12 }}
                         />
-                        {(() => {
-                            const commercialTarget =
-                                activeOfferModel.entries.find(
-                                    (e) => e.state === "proposed" && !e.interestOnly,
-                                )
-                                ?? activeOfferModel.entries.find((e) => e.state === "proposed")
-                                ?? null;
-                            const establishingProposed = activeOfferModel.entries.filter(
-                                (e) =>
-                                    e.state === "proposed"
-                                    && e.establishesEnrollment
-                                    && !e.interestOnly,
-                            );
-                            const establishingBlocked = establishingProposed.filter(
-                                (e) => !e.readinessReady,
-                            );
-                            // Incomplete non-establishing add-ons do not block core commit.
-                            const canCommitEstablishing =
-                                establishingProposed.length === 0
-                                    ? activeOfferModel.readinessReady
-                                    : establishingBlocked.length === 0;
-                            return (
-                                <AssignmentProposalControls
-                                    customerMemberId={activeChild.id}
-                                    opportunityId={opportunityId}
-                                    scheduleAssignmentId={
-                                        commercialTarget && !commercialTarget.id.startsWith("draft:")
-                                            ? commercialTarget.id
-                                            : null
-                                    }
-                                    participationMetadata={
-                                        ((context.truth as Record<string, unknown>)
-                                            ._enrollment_participation_by_member as
-                                            | Record<string, Record<string, unknown>>
-                                            | undefined)?.[activeChild.id] ?? null
-                                    }
-                                    canCommit={canCommitEstablishing}
-                                    commitBlockedReason={
-                                        canCommitEstablishing
-                                            ? null
-                                            : establishingBlocked.length > 0
-                                              ? `Cannot commit ${establishingBlocked[0]!.title} yet — ${establishingBlocked[0]!.readinessSummary.toLowerCase()}.`
-                                              : `Cannot commit yet — ${activeOfferModel.readinessSummary.toLowerCase()}.`
-                                    }
-                                    style={{ marginBottom: 12 }}
-                                />
-                            );
-                        })()}
+                        <AssignmentProposalControls
+                            customerMemberId={activeChild.id}
+                            opportunityId={opportunityId}
+                            participationMetadata={
+                                ((context.truth as Record<string, unknown>)
+                                    ._enrollment_participation_by_member as
+                                    | Record<string, Record<string, unknown>>
+                                    | undefined)?.[activeChild.id] ?? null
+                            }
+                            canCommit={activeOfferModel.readinessReady}
+                            commitBlockedReason={
+                                activeOfferModel.readinessReady
+                                    ? null
+                                    : `Cannot commit yet — ${activeOfferModel.readinessSummary.toLowerCase()}.`
+                            }
+                            style={{ marginBottom: 12 }}
+                        />
                         <ScheduleWorkSurface
                         child={activeChild}
                         opportunityId={opportunityId}
