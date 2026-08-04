@@ -240,6 +240,61 @@ export default function LifecycleBuilderPrimary({
     }, []);
 
     /**
+     * Stable identity, deliberately.
+     *
+     * This was an inline arrow in the JSX below. It is a dependency of the
+     * `processContextActions` memo inside LifecycleActivationBoard, which publishes its result
+     * into `ProcessesConfigurationPage` state. A handler reborn on every render made that memo
+     * recompute on every render, which re-fired the publish effect, which set state in an
+     * ancestor, which re-rendered this component — an unbounded loop that pinned the main thread
+     * and left `/organization/processes` stuck on "Loading process…", unscrollable, and
+     * unresponsive to navigation.
+     *
+     * Anything passed into that memo must keep a stable identity across renders.
+     */
+    const handleRepairVisibility = useCallback(() => {
+        if (selectedCatalogEntry) void repairEntry(selectedCatalogEntry);
+    }, [selectedCatalogEntry, repairEntry]);
+
+    /**
+     * Same hazard, second instance. The board publishes its rename trigger through an effect keyed
+     * on this prop's identity, so an inline arrow here meant: effect runs → state set → this
+     * component re-renders → new arrow → effect runs again, forever. `() => trigger` is still
+     * required, because passing a bare function to a state setter is read as an updater.
+     */
+    const handleRenameTriggerReady = useCallback((trigger: () => void) => {
+        setRenameTrigger(() => trigger);
+    }, []);
+
+    /**
+     * Everything below exists for one reason: LifecycleActivationBoard folds these props into
+     * `processContextActions`, a memo whose result it publishes into an ancestor's state. Any prop
+     * rebuilt on each render makes that memo recompute, which republishes, which re-renders this
+     * component, which rebuilds the prop. `identity` was the worst of them — a fresh object every
+     * single render.
+     *
+     * Treat props handed to that board as part of a memo dependency list, because they are.
+     */
+    const boardIdentity = useMemo(
+        () => (selectedCatalogEntry ? buildIdentityFromCatalogEntry(selectedCatalogEntry) : null),
+        [selectedCatalogEntry],
+    );
+
+    const handleCatalogRefresh = useCallback(() => {
+        void loadCatalog();
+    }, [loadCatalog]);
+
+    const handleRequestDelete = useCallback(() => {
+        if (selectedCatalogEntry?.can_delete) onDeleteClick(selectedCatalogEntry);
+    }, [selectedCatalogEntry, onDeleteClick]);
+
+    const handleDeleted = useCallback(() => {
+        setIdentity(null);
+        setCreatingNew(false);
+        void loadCatalog();
+    }, [loadCatalog]);
+
+    /**
      * Collapsed once a process is open. Manual toggling wins for the rest of the session —
      * the effect below only reacts to a *change* in whether anything is selected, so a director
      * who reopens the rail keeps it open while they browse stages.
@@ -287,7 +342,12 @@ export default function LifecycleBuilderPrimary({
                 its own dropdowns — so it collapses to a strip and the width goes to the work.
                 One click restores it, and the collapse is remembered for the session. */}
             <div
-                className={`grid min-h-0 flex-1 items-start gap-4 ${
+                // `grid-rows-[minmax(0,1fr)]` is load-bearing. Grid rows size to content by
+                // default, so the row grew to the full height of the stage editor and every
+                // descendant inherited that unbounded height — including the workspace, whose
+                // `overflow-y: auto` then had nothing to overflow. The Stages surface simply
+                // could not be scrolled. Bounding the row to the grid's own height restores it.
+                className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] items-start gap-4 ${
                     railCollapsed
                         ? "xl:grid-cols-[2.75rem_minmax(0,1fr)]"
                         : "xl:grid-cols-[22rem_minmax(0,1fr)]"
@@ -309,7 +369,13 @@ export default function LifecycleBuilderPrimary({
                     }}
                 />
 
-                <main className="min-w-0" data-testid="business-process-selected-main">
+                {/* `self-stretch` + `min-h-0`: the grid keeps `items-start` so the collection rail
+                    stays top-aligned, but the selected process must fill the bounded row and be
+                    allowed to shrink, or its children cannot establish a scroll viewport. */}
+                <main
+                    className="flex min-h-0 min-w-0 flex-col self-stretch"
+                    data-testid="business-process-selected-main"
+                >
                     {creatingNew || selectedCatalogEntry ? (
                         creatingNew ? (
                             <div className="flex min-h-0 flex-1 flex-col">
@@ -419,27 +485,19 @@ export default function LifecycleBuilderPrimary({
                                         initialSection={activeSection}
                                         activeProcessSection={activeSection}
                                         onProcessSectionChange={setActiveSection}
-                                        onRenameTriggerReady={(trigger) => setRenameTrigger(() => trigger)}
-                                        identity={buildIdentityFromCatalogEntry(selectedCatalogEntry)}
+                                        onRenameTriggerReady={handleRenameTriggerReady}
+                                        identity={boardIdentity}
                                         catalog={catalog}
                                         creatingNew={false}
                                         onIdentityChange={setIdentity}
-                                        onCatalogRefresh={() => void loadCatalog()}
+                                        onCatalogRefresh={handleCatalogRefresh}
                                         onWorkspaceBust={bumpWorkspace}
                                         onUseRuntimeDepartment={useRuntimeDepartment}
-                                        onDeleted={() => {
-                                            setIdentity(null);
-                                            setCreatingNew(false);
-                                            void loadCatalog();
-                                        }}
-                                        onRequestDelete={() => {
-                                            if (selectedCatalogEntry.can_delete) onDeleteClick(selectedCatalogEntry);
-                                        }}
+                                        onDeleted={handleDeleted}
+                                        onRequestDelete={handleRequestDelete}
                                         canDeleteLifecycle={selectedCatalogEntry.can_delete}
                                         onRepairVisibility={
-                                            selectedCatalogEntry.can_repair
-                                                ? () => void repairEntry(selectedCatalogEntry)
-                                                : undefined
+                                            selectedCatalogEntry.can_repair ? handleRepairVisibility : undefined
                                         }
                                         repairingVisibility={repairingId === selectedCatalogEntry.id}
                                         catalogSummary={{
