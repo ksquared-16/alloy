@@ -50,6 +50,16 @@ describe("Configuration Runtime QA fix", () => {
         expect(sidebar).not.toMatch(/onSettings\s*\?\s*null\s*:\s*\{homeLink\}/);
     });
 
+    it("Configuration Mode rail stays mounted on /organization/* product paths", () => {
+        const sidebar = read("app/adminV2/components/Sidebar.tsx");
+        expect(sidebar).toContain("path.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)");
+        expect(sidebar).toContain("SidebarConfigurationModeNav");
+        const providers = read("app/adminV2/settings/AdminV2SettingsClientProviders.tsx");
+        expect(providers).toContain('path === "/organization/processes"');
+        const lastSurface = read("lib/adminV2/configurationModeLastSurface.ts");
+        expect(lastSurface).toContain('path.startsWith("/organization/")');
+    });
+
     it("configuration surfaces avoid blue/slate selected-state classes", () => {
         for (const rel of CONFIG_SURFACE_PATHS) {
             const src = read(rel);
