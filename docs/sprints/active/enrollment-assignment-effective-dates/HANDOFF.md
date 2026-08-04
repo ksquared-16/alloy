@@ -11,9 +11,9 @@
 | Root class | managed-worktree |
 | Worktree | `/Users/Kelly/Code/alloy-worktrees/wt3-enrollment-assignment-effective-dates` |
 | Branch | `agent/cursor/3-enrollment-assignment-effective-dates` |
-| Staging base (exact) | `86c34f13ae5b8f10298a359c992efe9ab5fee701` |
-| Final HEAD | `4ad9e32fac6cb0c8ab5b5a2b6ba4472a07e9564c` |
-| Remote durability | Branch pushed to `origin`; local HEAD must equal remote HEAD at finish |
+| Staging base (exact) | `4888371af23f274753932b0f50bfdb131cfcbc2c` |
+| Final HEAD | `dcb791d830344a51b508f0f5f5a7da5ff36cd1f3` (rebased onto staging before PR) |
+| Remote durability | Rebased onto current `origin/staging`; force-with-lease push before PR |
 | Server | toolkit-owned on 3013 when running; stop with finish |
 | Auth | `qa-slot3-performance@example.com` storage present/valid |
 | Seeded family | Kurzman `df771481-841f-4329-b7bb-c0a03d9fb621` |
@@ -88,11 +88,11 @@ Deferral / observation: Focus Panel Household **summary** shows only the current
 
 ## Promotion guidance
 
-1. **Do not merge to staging** until Kelly authorizes.
-2. Branch is pushed for remote durability; re-run `alloy-sprint-finish 3` after local=remote HEAD and clean tree.
-3. If `origin/staging` moved past `86c34f13a`, use managed sync before PR.
-4. PR into `staging` only when Kelly asks.
+1. Rebased onto `origin/staging` @ `4888371af` before PR (prior certified tip was `2fcf696a2`).
+2. Post-rebase: 53 focused tests passed; production typecheck passed (`vac run typecheck`).
+3. Open PR into `staging`; **do not merge** until Kelly authorizes after CI.
+4. Firefly Enrollment FP Summary **v129** remains tenant configuration evidence only — not a product-code migration.
 
 ## Exact next action
 
-**Kelly:** review evidence + matrix on slot 3, then authorize PR/merge to staging when ready.
+**Kelly:** review PR CI, then authorize merge to staging when ready.
