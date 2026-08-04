@@ -6,6 +6,8 @@
  */
 
 import { config as loadEnv } from "dotenv";
+import { createHash } from "crypto";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
@@ -17,6 +19,13 @@ import {
     demoMetadataOrFilter,
     parseDemoCleanupScopeFromEnv,
 } from "./lib/demoRuntimeCleanupScope";
+import { PROCESSING_CLEANUP_TABLE_ORDER } from "./lib/certificationBaselineSelection";
+import {
+    buildCertificationPlan,
+    computePlanIdentity,
+    validateStorageManifest,
+    type StorageManifest,
+} from "./lib/certificationPlanIdentity";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import { printCommunicationsOrphanReport } from "./lib/communicationsOrphanResetExecute";
 import { buildDemoCleanupCounts, buildEnrollmentResetSelection, resolveDemoIds } from "./lib/demoRuntimeCleanupPlan";
@@ -36,11 +45,32 @@ function printEnrollmentResetReport(selection: {
     selected: EnrollmentResetOpportunityRow[];
     excludedGoldenPath: EnrollmentResetOpportunityRow[];
     enrollmentWorkUnitIds: string[];
+    includeClosedOpportunities: boolean;
 }): void {
     console.log("--- enrollment_runtime_reset opportunity selection ---\n");
+    console.log(
+        selection.includeClosedOpportunities
+            ? "selection_scope: EXPANDED — every opportunity in this org, OPEN AND CLOSED (--include-closed-opportunities)"
+            : "selection_scope: DEFAULT — open only (lead status keys + enrollment work units)"
+    );
     console.log(`enrollment_work_unit_ids: ${selection.enrollmentWorkUnitIds.length ? selection.enrollmentWorkUnitIds.join(", ") : "(none)"}`);
     console.log(`selected_opportunities: ${selection.selected.length}`);
     console.log(`excluded_golden_path_opportunities: ${selection.excludedGoldenPath.length}\n`);
+
+    // Status/stage breakdown — with the expanded scope the single total hides which lanes are
+    // being taken, and that breakdown is the thing worth checking before authorising a delete.
+    const byStatus = new Map<string, number>();
+    for (const row of selection.selected) {
+        const key = row.status_key ?? "(null)";
+        byStatus.set(key, (byStatus.get(key) ?? 0) + 1);
+    }
+    if (byStatus.size) {
+        console.log("selected_opportunities_by_status:");
+        for (const [status, n] of [...byStatus.entries()].sort((a, b) => b[1] - a[1])) {
+            console.log(`  ${status}: ${n}`);
+        }
+        console.log("");
+    }
 
     if (selection.selected.length) {
         console.log("Selected (would delete):");
@@ -84,6 +114,12 @@ async function main(): Promise<void> {
     console.log(`cleanup_mode: ${scope.cleanupMode}`);
     if (scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE) {
         console.log("mode: enrollment_runtime_reset — deletes lead/enrollment queue runtime (not demo-metadata default)");
+        console.log(
+            `include_closed_opportunities: ${scope.includeClosedOpportunities ? "TRUE — EXPANDED SCOPE (open + closed)" : "false (open only)"}`
+        );
+        console.log(
+            `certification_baseline: ${scope.certificationBaseline ? "TRUE — WIDEST SCOPE (+ unlinked identities + Processing)" : "false"}`
+        );
     }
     if (scope.cleanupMode === COMMUNICATIONS_ORPHAN_RESET_MODE) {
         console.log("mode: communications_orphan_reset — deletes unlinked communication threads/messages only");
@@ -110,7 +146,9 @@ async function main(): Promise<void> {
     }
 
     if (scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE) {
-        const selection = await buildEnrollmentResetSelection(supabase, scope.orgId);
+        const selection = await buildEnrollmentResetSelection(supabase, scope.orgId, {
+            includeClosedOpportunities: scope.includeClosedOpportunities,
+        });
         printEnrollmentResetReport(selection);
     }
 
@@ -128,7 +166,80 @@ async function main(): Promise<void> {
         );
     }
 
+    if (scope.certificationBaseline && ids.certificationSummary) {
+        const s = ids.certificationSummary;
+        console.log("--- certification baseline: identity classification ---\n");
+        console.log(`target_customers (operational households removed): ${s.targetCustomers}`);
+        console.log(`target_persons   (operational people removed):     ${s.targetPersons}`);
+        console.log(`protected_customers: ${s.protectedCustomers.length}`);
+        for (const p of s.protectedCustomers.slice(0, 25)) console.log(`  - ${p.id}: ${p.reason}`);
+        console.log(`protected_persons:   ${s.protectedPersons.length}`);
+        for (const p of s.protectedPersons.slice(0, 25)) console.log(`  - ${p.id}: ${p.reason}`);
+        console.log(`\nprocessing_cases selected: ${ids.processingCaseIds?.length ?? 0}`);
+        console.log(`processing_cases preserved: ${ids.preservedProcessingCases?.length ?? 0}`);
+        for (const p of (ids.preservedProcessingCases ?? []).slice(0, 15)) console.log(`  - ${p.id}: ${p.reason}`);
+        console.log("");
+    }
+
+    if (scope.certificationBaseline) {
+        /**
+         * STORAGE RECOVERY MANIFEST.
+         *
+         * Storage selection normally derives from selected document ROWS. After the halted run
+         * those rows are gone, so derivation yields zero while 73 objects remain — residue one
+         * layer down, invisible to the count that matters. The manifest carries the previously
+         * authorized set forward.
+         *
+         * It is a frozen list, never a prefix scan: an object not in the manifest is not deleted,
+         * however tempting the shared org prefix makes it.
+         */
+        const manifestPath = resolve(process.cwd(), "../certification/bp-config-integrity/evidence/firefly-storage-recovery-manifest.json");
+        if (existsSync(manifestPath)) {
+            const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as StorageManifest;
+            const v = validateStorageManifest(manifest, scope.orgId);
+            console.log("--- storage recovery manifest ---\n");
+            if (!v.ok) {
+                console.log(`  REFUSED — ${v.problems.join("; ")}`);
+                console.log("  (manifest is for another org or has been tampered with; storage stays untouched)\n");
+            } else {
+                const derived = ids.residue?.storageObjects.map((o) => o.path) ?? [];
+                const union = [...new Set([...derived, ...manifest.objects])].sort();
+                console.log(`  manifest: ${manifest.objects.length} objects, sha256 ${manifest.manifest_sha256.slice(0, 16)}…`);
+                console.log(`  derived from surviving document rows: ${derived.length}`);
+                console.log(`  TOTAL storage objects to remove: ${union.length}`);
+                console.log(`  purpose=${manifest.purpose} status=${manifest.status}\n`);
+            }
+        }
+    }
+
+    if (scope.certificationBaseline && ids.residue) {
+        const r = ids.residue;
+        console.log("--- A4 + subject fixes: residue classification ---\n");
+        for (const [k, v] of Object.entries(r.report).sort()) console.log(`  ${k}: ${v}`);
+        console.log(`\nstorage_objects to remove: ${r.storageObjects.length}`);
+        console.log(`workflow_events PRESERVED as configuration history: ${r.preservedWorkflowEvents.length}`);
+        const byReason = new Map<string, number>();
+        for (const p of r.preservedWorkflowEvents) byReason.set(p.reason, (byReason.get(p.reason) ?? 0) + 1);
+        for (const [reason, n] of byReason) console.log(`  ${n} × ${reason}`);
+        console.log(`other preserved rows: ${r.preserved.length}`);
+        const pr = new Map<string, number>();
+        for (const p of r.preserved) pr.set(p.reason, (pr.get(p.reason) ?? 0) + 1);
+        for (const [reason, n] of pr) console.log(`  ${n} × ${reason}`);
+        console.log("");
+    }
+
     const counts = await buildDemoCleanupCounts(supabase, scope, ids, orDemo);
+
+    if (scope.certificationBaseline) {
+        console.log("--- Processing graph (anchor A3) ---\n");
+        let ptotal = 0;
+        for (const table of PROCESSING_CLEANUP_TABLE_ORDER) {
+            const v = counts[table] ?? 0;
+            ptotal += v;
+            console.log(`${table}: ${v}`);
+        }
+        console.log(`Processing subtotal: ${ptotal}\n`);
+    }
 
     console.log("--- Table-by-table counts (rows that would be deleted) ---\n");
     let total = 0;
@@ -142,6 +253,66 @@ async function main(): Promise<void> {
         }
     }
     console.log(`\nTOTAL (sum of table counts, may double-count FK-expanded rows): ${total}`);
+
+    /**
+     * THE BINDING PLAN IDENTITY.
+     *
+     * This is what an authorization is FOR. Execute recomputes it and refuses on any difference, so
+     * approving a report approves exactly this graph — not "a reset of this tenant, whenever".
+     */
+    if (scope.certificationBaseline) {
+        const manifestPath = resolve(
+            process.cwd(),
+            "../certification/bp-config-integrity/evidence/firefly-storage-recovery-manifest.json"
+        );
+        const manifest: StorageManifest | null = existsSync(manifestPath)
+            ? (JSON.parse(readFileSync(manifestPath, "utf8")) as StorageManifest)
+            : null;
+        const storagePaths = manifest && validateStorageManifest(manifest, scope.orgId).ok ? manifest.objects : [];
+
+        const { data: deptRows } = await supabase.from("departments").select("metadata").eq("org_id", scope.orgId);
+        const lifecycle = (deptRows ?? [])
+            .map((d) => (d as { metadata?: Record<string, unknown> }).metadata?.lifecycle_builder_v1)
+            .filter(Boolean);
+        const configurationFingerprint = createHash("sha256").update(JSON.stringify(lifecycle)).digest("hex");
+
+        const plan = buildCertificationPlan({
+            orgId: scope.orgId,
+            databaseIds: {
+                opportunities: ids.opportunityIds,
+                customers: ids.customerIds,
+                persons: ids.personIds,
+                customer_members: ids.customerMemberIds,
+                communication_threads: ids.threadIds,
+                documents: ids.documentIds,
+                form_submissions: ids.formSubmissionIds,
+                form_packet_sessions: ids.residue?.formPacketSessionIds ?? [],
+                contacts: ids.residue?.contactIds ?? [],
+                operational_tasks: ids.residue?.operationalTaskIds ?? [],
+                processing_cases: ids.processingCaseIds ?? [],
+                processing_commit_plans: ids.processingPlanIds ?? [],
+            },
+            workflowEventIds: ids.residue?.workflowEventIds ?? [],
+            protectedWorkflowEventIds: (ids.residue?.preservedWorkflowEvents ?? []).map((p) => p.id),
+            storagePaths,
+            configurationFingerprint,
+        });
+        const identity = computePlanIdentity(plan);
+
+        console.log("\n=== AUTHORIZATION PLAN ===\n");
+        console.log(`Authorization plan identity: ${identity}`);
+        console.log(`  org:                    ${scope.orgId}`);
+        console.log(`  mode:                   ${plan.mode}`);
+        console.log(`  resolver version:       ${plan.resolverVersion}`);
+        console.log(`  configuration:          sha256 ${configurationFingerprint.slice(0, 16)}…`);
+        console.log(`  database ids:           ${Object.values(plan.databaseIds).reduce((a, b) => a + b.length, 0)}`);
+        console.log(`  workflow events:        ${plan.workflowEventIds.length}`);
+        console.log(`  protected events:       ${plan.protectedWorkflowEventIds.length}`);
+        console.log(`  storage objects:        ${plan.storagePaths.length}`);
+        console.log(`\nTo execute this exact plan:`);
+        console.log(`  ... -- --execute --certification-baseline --authorized-plan-id=${identity}\n`);
+    }
+
     console.log("\nDry-run complete. No rows deleted.\n");
 }
 

@@ -34,6 +34,19 @@ import {
     type DemoCleanupScope,
     type ResolvedDemoIds,
 } from "./lib/demoRuntimeCleanupScope";
+import { PROCESSING_LINK_COLUMN } from "./lib/certificationBaselineSelection";
+import { createHash } from "crypto";
+import { existsSync, readFileSync } from "fs";
+import {
+    buildCertificationPlan,
+    computePlanIdentity,
+    validateStorageManifest,
+    type StorageManifest,
+} from "./lib/certificationPlanIdentity";
+import {
+    executeCertificationReset,
+    supabaseStorageClient,
+} from "./lib/certificationResetOrchestrator";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import {
     executeCommunicationsOrphanDeletes,
@@ -51,6 +64,16 @@ loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
 type SupabaseAdmin = ReturnType<typeof createAdminClient>;
+
+/** Post-commit emptiness check. Storage may only begin once every one of these reads zero. */
+const CERTIFICATION_VERIFY_EMPTY = [
+    "opportunities", "customers", "persons", "customer_persons", "customer_members", "contacts",
+    "operational_tasks", "process_instances", "tour_bookings", "communication_threads",
+    "communication_messages", "form_submissions", "form_packet_sessions", "documents",
+    "processing_cases", "processing_case_sources", "processing_facts", "processing_resolutions",
+    "processing_commit_plans", "processing_plan_operations", "processing_commit_attempts",
+    "processing_approvals", "processing_exceptions",
+] as const;
 
 function errMessage(err: unknown): string {
     if (err && typeof err === "object" && "message" in err && typeof (err as { message: string }).message === "string") {
@@ -150,6 +173,14 @@ async function executeDeletes(
 ): Promise<Record<string, number>> {
     const { orgId } = scope;
     const idsOnly = scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE;
+
+    // Belt and braces: certification never reaches here, and if a future edit routes it here it
+    // must fail loudly rather than silently resurrect the sequential path that caused the incident.
+    if (scope.certificationBaseline) {
+        throw new Error(
+            "Sequential deletion is not permitted in certification mode — use the atomic reset authority."
+        );
+    }
     const opp = ids.opportunityIds;
     const cust = ids.customerIds;
     const persons = ids.personIds;
@@ -312,6 +343,37 @@ async function executeDeletes(
         }
     }
 
+    /**
+     * PROCESSING GRAPH (certification baseline, anchor A3).
+     *
+     * Deleted BEFORE opportunities, because a case can name one as `primary_opportunity_id`.
+     * The ids come from the same `resolveDemoIds` the dry run used — dry-run and execute resolve
+     * one graph, so what was reported is exactly what is removed.
+     */
+    if (scope.certificationBaseline && ids.processingCaseIds?.length) {
+        const caseIds = ids.processingCaseIds;
+        deleted.processing_plan_operations = await deleteByIn(
+            supabase,
+            "processing_plan_operations",
+            "plan_id",
+            ids.processingPlanIds ?? [],
+            orgId
+        );
+        for (const table of [
+            "processing_commit_attempts",
+            "processing_approvals",
+            "processing_exceptions",
+            "processing_resolutions",
+            "processing_facts",
+            "processing_case_sources",
+            "processing_commit_plans",
+        ] as const) {
+            // The link column is NOT uniform — processing_case_sources uses processing_case_id.
+            deleted[table] = await deleteByIn(supabase, table, PROCESSING_LINK_COLUMN[table], caseIds, orgId);
+        }
+        deleted.processing_cases = await deleteByIn(supabase, "processing_cases", "id", caseIds, orgId);
+    }
+
     deleted.process_instances = await deleteProcessInstancesForCleanup(supabase, orgId, opp, members, idsOnly);
     deleted.opportunities = await deleteByIn(supabase, "opportunities", "id", opp, orgId);
 
@@ -348,6 +410,59 @@ async function executeDeletes(
     } else {
         deleted.customers = await deleteByOr(supabase, "customers", orgId, orDemo);
         deleted.persons = await deleteByOr(supabase, "persons", orgId, orDemo);
+    }
+
+    /**
+     * A4 + subject fixes (§4ter). After identities are gone, before the configuration tail.
+     *
+     * Storage objects are removed alongside the document rows: leaving 53 orphaned PDFs in
+     * `org_documents` would be residue of exactly the kind this contract exists to eliminate, just
+     * one layer down where nothing counts it. Failures are collected and reported, never swallowed.
+     */
+    if (scope.certificationBaseline && ids.residue) {
+        const r = ids.residue;
+        deleted.contacts = (deleted.contacts ?? 0) + (await deleteByIn(supabase, "contacts", "id", r.contactIds, orgId));
+        deleted.operational_tasks =
+            (deleted.operational_tasks ?? 0) +
+            (await deleteByIn(supabase, "operational_tasks", "id", r.operationalTaskIds, orgId));
+        deleted.form_packet_session_items = await deleteByIn(
+            supabase,
+            "form_packet_session_items",
+            "session_id",
+            r.formPacketSessionIds,
+            orgId
+        );
+        deleted.form_packet_sessions = await deleteByIn(
+            supabase,
+            "form_packet_sessions",
+            "id",
+            r.formPacketSessionIds,
+            orgId
+        );
+        deleted.workflow_events =
+            (deleted.workflow_events ?? 0) +
+            (await deleteByIn(supabase, "workflow_events", "id", r.workflowEventIds, orgId));
+
+        let storageRemoved = 0;
+        const storageFailures: string[] = [];
+        const byBucket = new Map<string, string[]>();
+        for (const o of r.storageObjects) byBucket.set(o.bucket, [...(byBucket.get(o.bucket) ?? []), o.path]);
+        for (const [bucket, paths] of byBucket) {
+            for (const part of chunk(paths, 100)) {
+                const { data, error } = await supabase.storage.from(bucket).remove(part);
+                if (error) storageFailures.push(`${bucket}: ${error.message}`);
+                else storageRemoved += (data ?? []).length;
+            }
+        }
+        deleted.storage_objects = storageRemoved;
+        if (storageFailures.length) {
+            console.error(`\nSTORAGE CLEANUP FAILURES (${storageFailures.length}):`);
+            for (const f of storageFailures.slice(0, 10)) console.error(`  - ${f}`);
+            throw new Error(
+                `Storage cleanup failed for ${storageFailures.length} batch(es). Database rows were deleted but ` +
+                    `objects remain — reconcile before treating this tenant as a clean baseline.`
+            );
+        }
     }
 
     deleted[PROTECTED_LOCATIONS_TABLE_KEY] = 0;
@@ -435,6 +550,117 @@ async function main(): Promise<void> {
         } else {
             console.log(`${table}: ${n}`);
         }
+    }
+
+    /**
+     * CERTIFICATION MODE TAKES THE ATOMIC PATH — AND ONLY THAT PATH.
+     *
+     * The sequential deleter below committed documents, communications and bookings, then hit an
+     * append-only guard on a root table and left the tenant half-deleted. It is unreachable in
+     * certification mode now, by an early return rather than a flag, so there is no switch to get
+     * wrong. Non-certification cleanup modes keep their existing behaviour deliberately: they never
+     * touch the immutable Processing ledger and their failure mode is not this one.
+     */
+    if (scope.certificationBaseline) {
+        const authorized = process.env.DEMO_CLEANUP_AUTHORIZED_PLAN_ID?.trim() ?? "";
+        if (!authorized) {
+            throw new Error(
+                "Refusing certification execute — no authorized plan identity. Run the dry run and pass " +
+                    "--authorized-plan-id=<hash>."
+            );
+        }
+
+        // Recompute the identity from the FRESHLY RESOLVED plan. If the tenant moved since the
+        // dry run, this differs and the run aborts before the RPC — a changed tenant needs a new
+        // authorization, and there is deliberately no override.
+        const manifestPath = resolve(
+            process.cwd(),
+            "../certification/bp-config-integrity/evidence/firefly-storage-recovery-manifest.json"
+        );
+        const manifest = existsSync(manifestPath)
+            ? (JSON.parse(readFileSync(manifestPath, "utf8")) as StorageManifest)
+            : null;
+        if (!manifest) throw new Error("Refusing certification execute — storage recovery manifest is missing.");
+        const storagePaths = validateStorageManifest(manifest, scope.orgId).ok ? manifest.objects : [];
+
+        const { data: deptRows } = await supabase.from("departments").select("metadata").eq("org_id", scope.orgId);
+        const lifecycle = (deptRows ?? [])
+            .map((d) => (d as { metadata?: Record<string, unknown> }).metadata?.lifecycle_builder_v1)
+            .filter(Boolean);
+        const configurationFingerprint = createHash("sha256").update(JSON.stringify(lifecycle)).digest("hex");
+
+        const currentPlanId = computePlanIdentity(
+            buildCertificationPlan({
+                orgId: scope.orgId,
+                databaseIds: {
+                    opportunities: ids.opportunityIds,
+                    customers: ids.customerIds,
+                    persons: ids.personIds,
+                    customer_members: ids.customerMemberIds,
+                    communication_threads: ids.threadIds,
+                    documents: ids.documentIds,
+                    form_submissions: ids.formSubmissionIds,
+                    form_packet_sessions: ids.residue?.formPacketSessionIds ?? [],
+                    contacts: ids.residue?.contactIds ?? [],
+                    operational_tasks: ids.residue?.operationalTaskIds ?? [],
+                    processing_cases: ids.processingCaseIds ?? [],
+                    processing_commit_plans: ids.processingPlanIds ?? [],
+                },
+                workflowEventIds: ids.residue?.workflowEventIds ?? [],
+                protectedWorkflowEventIds: (ids.residue?.preservedWorkflowEvents ?? []).map((p) => p.id),
+                storagePaths,
+                configurationFingerprint,
+            })
+        );
+
+        const outcome = await executeCertificationReset({
+            supabase,
+            scope,
+            ids,
+            authorizedPlanId: authorized,
+            currentPlanId,
+            manifest,
+            storageClient: supabaseStorageClient(supabase),
+            verifyDatabase: async (client, orgId) => {
+                const problems: string[] = [];
+                for (const table of CERTIFICATION_VERIFY_EMPTY) {
+                    const { count, error } = await client
+                        .from(table)
+                        .select("*", { count: "exact", head: true })
+                        .eq("org_id", orgId);
+                    if (error) problems.push(`${table}: ${error.message}`);
+                    else if ((count ?? 0) > 0) problems.push(`${table} still has ${count} rows`);
+                }
+                return problems;
+            },
+            log: (m) => console.log(m),
+        });
+
+        console.log("\n--- ACTUAL committed deletion counts (from the transaction) ---\n");
+        for (const [table, n] of Object.entries(outcome.database.deleted).sort()) {
+            if (n > 0) console.log(`${table}: ${n}`);
+        }
+        console.log(`\nTOTAL rows actually deleted: ${outcome.database.totalDeleted}`);
+        console.log(`database verified: ${outcome.database.verified}`);
+        for (const p of outcome.database.verificationProblems) console.log(`  - ${p}`);
+
+        if (outcome.storage) {
+            console.log("\n--- storage cleanup ---\n");
+            console.log(`planned:        ${outcome.storage.plannedCount}`);
+            console.log(`attempted:      ${outcome.storage.attempted.length}`);
+            console.log(`deleted:        ${outcome.storage.deleted.length}`);
+            console.log(`already absent: ${outcome.storage.alreadyMissing.length}`);
+            console.log(`FAILED:         ${outcome.storage.failed.length}`);
+            for (const f of outcome.storage.unexpectedRemaining) console.log(`  remaining: ${f}`);
+        } else {
+            console.log("\nstorage cleanup did NOT run (database verification failed).");
+        }
+
+        console.log(`\nbaselineEstablished: ${outcome.baselineEstablished}\n`);
+        if (!outcome.baselineEstablished) {
+            process.exitCode = 1;
+        }
+        return;
     }
 
     const deleted = await executeDeletes(supabase, scope, ids, orDemo);

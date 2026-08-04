@@ -13,6 +13,8 @@ import {
 } from "./demoRuntimeCleanupScope";
 import { buildEnrollmentResetSelection } from "./enrollmentRuntimeResetSelection";
 import { resolveEnrollmentResetSharedReferences } from "./enrollmentRuntimeResetSharedGuard";
+import { countProcessingGraph, resolveCertificationBaseline } from "./certificationBaselineResolver";
+import { resolveCertificationResidue } from "./certificationResidueResolver";
 
 export { buildEnrollmentResetSelection } from "./enrollmentRuntimeResetSelection";
 export type { EnrollmentResetSelection, EnrollmentResetOpportunityRow } from "./enrollmentRuntimeResetSelection";
@@ -254,8 +256,13 @@ export async function resolveDemoIds(
 ): Promise<ResolvedDemoIds> {
     const idsOnly = scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE;
 
-    const opportunityIds = idsOnly
-        ? (await buildEnrollmentResetSelection(supabase, scope.orgId)).opportunityIds
+    const enrollmentSelection = idsOnly
+        ? await buildEnrollmentResetSelection(supabase, scope.orgId, {
+              includeClosedOpportunities: scope.includeClosedOpportunities,
+          })
+        : null;
+    const opportunityIds = enrollmentSelection
+        ? enrollmentSelection.opportunityIds
         : await selectIds(supabase, "opportunities", scope.orgId, orDemo);
 
     const customerIds = new Set<string>(
@@ -335,6 +342,46 @@ export async function resolveDemoIds(
         sharedCustomerIds = partition.sharedCustomerIds;
     }
 
+    /**
+     * CERTIFICATION BASELINE (anchors A2 + A3).
+     *
+     * Folded in HERE, after the opportunity graph has resolved and the shared-reference guard has
+     * run, and before the dependent sweeps below. That ordering matters: the additional identities
+     * must be visible to the jobs/threads/documents traversal, or the certification reset would
+     * delete households while stranding their documents and communications.
+     */
+    let certification: Awaited<ReturnType<typeof resolveCertificationBaseline>> | null = null;
+    if (idsOnly && scope.certificationBaseline) {
+        certification = await resolveCertificationBaseline(supabase, scope.orgId, {
+            targetOpportunityIds: opportunityIds,
+            protectedOpportunityIds: (enrollmentSelection?.excludedGoldenPath ?? []).map((r) => r.id),
+            alreadyResolvedCustomerIds: deletableCustomerIds,
+            alreadyResolvedPersonIds: deletablePersonIds,
+        });
+
+        if (certification.ambiguous.length) {
+            const lines = certification.ambiguous
+                .slice(0, 20)
+                .map((v) => `  - ${v.id}: ${v.reason}`)
+                .join("\n");
+            throw new Error(
+                `Certification baseline refuses to proceed: ${certification.ambiguous.length} identity/identities ` +
+                    `could not be classified as target or protected.\n${lines}\n` +
+                    `Ambiguity means this contract met a shape it does not model. That is a human decision, ` +
+                    `not a default — see docs/handoffs/firefly-certification-deletion-contract.md §4.4.`,
+            );
+        }
+
+        deletableCustomerIds = [...new Set([...deletableCustomerIds, ...certification.additionalCustomerIds])];
+        deletablePersonIds = [...new Set([...deletablePersonIds, ...certification.additionalPersonIds])];
+        deletableMemberIds = [...new Set([...deletableMemberIds, ...certification.additionalCustomerMemberIds])];
+        // An identity promoted to target is no longer "preserved because shared".
+        const targetCust = new Set(deletableCustomerIds);
+        const targetPers = new Set(deletablePersonIds);
+        sharedCustomerIds = sharedCustomerIds.filter((id) => !targetCust.has(id));
+        sharedPersonIds = sharedPersonIds.filter((id) => !targetPers.has(id));
+    }
+
     const jobIds = new Set<string>();
     for (const part of chunk(opportunityIds, 200)) {
         const { data, error } = await supabase.from("jobs").select("id").eq("org_id", scope.orgId).in("opportunity_id", part);
@@ -406,6 +453,30 @@ export async function resolveDemoIds(
         }
     }
 
+    /**
+     * A4 + subject fixes (§4ter). Runs last, because every rule is expressed against the identities
+     * and Processing cases already resolved above — and it can still abort the whole run.
+     */
+    let residue: Awaited<ReturnType<typeof resolveCertificationResidue>> | null = null;
+    if (idsOnly && scope.certificationBaseline && certification) {
+        residue = await resolveCertificationResidue(supabase, scope.orgId, {
+            opportunityIds,
+            personIds: deletablePersonIds,
+            customerIds: deletableCustomerIds,
+            customerMemberIds: deletableMemberIds,
+            processingCaseIds: certification.processingCaseIds,
+        });
+        if (residue.ambiguous.length) {
+            const lines = residue.ambiguous.slice(0, 20).map((v) => `  - ${v.id}: ${v.reason}`).join("\n");
+            throw new Error(
+                `Certification baseline refuses to proceed: ${residue.ambiguous.length} operational row(s) ` +
+                    `could not be classified.\n${lines}\n` +
+                    `An unclassified row is a missing traversal, not a deletion candidate — see ` +
+                    `docs/handoffs/firefly-certification-deletion-contract.md §4ter.`,
+            );
+        }
+    }
+
     return {
         opportunityIds,
         customerIds: deletableCustomerIds,
@@ -413,11 +484,47 @@ export async function resolveDemoIds(
         customerMemberIds: deletableMemberIds,
         jobIds: [...jobIds],
         scheduleIds: [...scheduleIds],
-        threadIds: [...threadIds],
-        formSubmissionIds: [...formSubmissionIds],
-        documentIds: [...documentIds],
+        formSubmissionIds: [...formSubmissionIds, ...(residue?.formSubmissionIds ?? [])].filter(
+            (v, i, a) => a.indexOf(v) === i,
+        ),
+        documentIds: [...documentIds, ...(residue?.documentIds ?? [])].filter((v, i, a) => a.indexOf(v) === i),
+        threadIds: [...threadIds, ...(residue?.threadIds ?? [])].filter((v, i, a) => a.indexOf(v) === i),
         sharedPersonIds,
         sharedCustomerIds,
+        ...(residue
+            ? {
+                  residue: {
+                      contactIds: residue.contactIds,
+                      operationalTaskIds: residue.operationalTaskIds,
+                      formPacketSessionIds: residue.formPacketSessionIds,
+                      workflowEventIds: residue.workflowEventIds,
+                      storageObjects: residue.storageObjects,
+                      preserved: residue.preserved.map((p) => ({ id: p.id, reason: p.reason })),
+                      preservedWorkflowEvents: residue.preservedWorkflowEvents.map((p) => ({
+                          id: p.id,
+                          reason: p.reason,
+                      })),
+                      report: residue.report,
+                  },
+              }
+            : {}),
+        ...(certification
+            ? {
+                  processingCaseIds: certification.processingCaseIds,
+                  processingPlanIds: certification.processingPlanIds,
+                  preservedProcessingCases: certification.preservedProcessingCases,
+                  certificationSummary: {
+                      targetCustomers: certification.classification.targetCustomerIds.length,
+                      targetPersons: certification.classification.targetPersonIds.length,
+                      protectedCustomers: certification.classification.customers
+                          .filter((v) => v.class === "protected")
+                          .map((v) => ({ id: v.id, reason: v.reason })),
+                      protectedPersons: certification.classification.persons
+                          .filter((v) => v.class === "protected")
+                          .map((v) => ({ id: v.id, reason: v.reason })),
+                  },
+              }
+            : {}),
     };
 }
 
@@ -592,6 +699,26 @@ export async function buildDemoCleanupCounts(
     counts.customers = cust.length;
     counts.persons = persons.length + (idsOnly ? 0 : await countRows(supabase, "persons", orgId, orDemo));
     counts[PROTECTED_LOCATIONS_TABLE_KEY] = await countRows(supabase, "locations", orgId, orDemo);
+    // A4 + subject fixes — counts come straight from the resolved id sets, so the report and the
+    // delete cannot disagree.
+    if (scope.certificationBaseline && ids.residue) {
+        counts.contacts = ids.residue.contactIds.length;
+        counts.operational_tasks = Math.max(counts.operational_tasks ?? 0, ids.residue.operationalTaskIds.length);
+        counts.form_packet_sessions = ids.residue.formPacketSessionIds.length;
+        counts.workflow_events = ids.residue.workflowEventIds.length;
+        counts.documents = ids.documentIds.length;
+        counts.form_submissions = ids.formSubmissionIds.length;
+        counts.communication_threads = ids.threadIds.length;
+    }
+
+    // Processing graph (anchor A3) — its own root, not a dependent of the opportunity graph.
+    if (scope.certificationBaseline && ids.processingCaseIds?.length) {
+        Object.assign(
+            counts,
+            await countProcessingGraph(supabase, orgId, ids.processingCaseIds, ids.processingPlanIds ?? []),
+        );
+    }
+
     // Configuration is preserved in enrollment_runtime_reset — never count work_units / departments
     // for deletion in that mode (they are only removed by the default demo-metadata cleanup).
     counts.work_units = idsOnly ? 0 : await countRows(supabase, "work_units", orgId, orDemo);
