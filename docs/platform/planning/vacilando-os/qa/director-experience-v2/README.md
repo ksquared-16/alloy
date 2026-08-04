@@ -28,6 +28,8 @@ DX-0 doctrine lock → DX-1 Overview L1 → DX-2 confidence → DX-3 decisions �
 
 **Suggested first build mission:** DX-1 + DX-3.
 
+**DX-1 + DX-3 evidence:** [`DX1-DX3-EVIDENCE.md`](DX1-DX3-EVIDENCE.md)
+
 ## Thirty-second success gate
 
 A first-time Director answers: what happened · succeed? · confidence · why · evidence · decision · next — without opening Depth.
