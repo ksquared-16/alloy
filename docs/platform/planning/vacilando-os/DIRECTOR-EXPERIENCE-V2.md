@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: product-spec
+status: proposed
 last_reviewed: 2026-08-04
 audience: product · design · implementation missions
 constraint: presentation layer only — do not redesign mission architecture, workers, Director runtime, evidence model, certification engine, confidence engine, or technical logging

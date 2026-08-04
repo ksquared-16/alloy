@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: product-spec
+status: proposed
 last_reviewed: 2026-08-04
 ---
 
