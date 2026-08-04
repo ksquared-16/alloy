@@ -495,7 +495,10 @@ We'll capture the context automatically.</p>
       return `<button class="btn ghost" type="button" data-drev-ask="${esc(action.reviewId || "")}" data-mission="${esc(action.missionId)}">${esc(action.label || "Ask Director")}</button>`;
     }
     if (action.kind === "advance_implementation" && action.missionId) {
-      return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Advance to implementation")}</button>`;
+      return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Begin implementation")}</button>`;
+    }
+    if (action.kind === "park_outcome" && action.missionId) {
+      return `<button class="btn ghost" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park mission")}</button>`;
     }
     if (action.kind === "dispatch_ready" && action.missionId) {
       return `<button class="btn" data-mc-dispatch="${esc(action.missionId)}">${esc(action.label || "Start work")}</button>`;
@@ -764,6 +767,18 @@ We'll capture the context automatically.</p>
     const timeline = dash.timeline || [];
     const providers = dash.providers || [];
     const usage = dash.resourcesUsage || {};
+    const exec = dash.executive || {};
+    const outcomeHero = exec.outcome || {};
+    const execOverview = exec.overview || {};
+    const decisionPack = exec.decisions || {};
+    const evidenceStrip = exec.evidence || {};
+    const confGlance = exec.confidence || {};
+
+    const heroPrimary = exec.primaryAction || s.primaryAction;
+    // Never promote vague "Review outcome" as the only hero CTA when a real decision exists.
+    const heroPrimarySafe = heroPrimary?.kind === "review_outcome" && decisionPack.hasRecommendation
+      ? (decisionPack.primaryAction || heroPrimary)
+      : heroPrimary;
 
     const summaryStrip = `<section class="mc-dash-summary">
       <div class="mc-dash-title-row">
@@ -772,41 +787,100 @@ We'll capture the context automatically.</p>
           <div class="mc-pill ${esc(s.status || "")}">${esc(s.statusLabel)}</div>
         </div>
         <div class="mc-hero-actions">
-          <button class="btn ghost" type="button" data-ci-open>Improve Vacilando</button>
-          ${actionBtn(s.primaryAction)}
-          ${actionBtn(s.secondaryAction)}
-          ${actionBtn(s.certifyAction)}
-          ${dash.posture?.busy || (dash.currentWork || []).some((w) => w.status === "running")
-            ? `<button class="btn ghost" type="button" data-mc-resume-stalled="${esc(id)}">Relaunch worker</button>`
-            : ""}
+          ${actionBtn(heroPrimarySafe)}
+          ${s.certifyAction ? actionBtn(s.certifyAction) : ""}
         </div>
       </div>
-      <div class="mc-stat-grid">
+      <div class="mc-stat-grid mc-stat-grid-compact">
         <div class="mc-stat"><div class="mc-stat-k">Phase</div><div class="mc-stat-v">${esc(s.phase)}</div></div>
         <div class="mc-stat"><div class="mc-stat-k">Deliverables</div><div class="mc-stat-v">${esc(s.deliverablesLabel)}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Workers</div><div class="mc-stat-v">${esc(s.workerCountLabel || (s.activeWorkers + " active"))}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Confidence</div><div class="mc-stat-v">${esc(s.confidencePercent)}%</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Next checkpoint</div><div class="mc-stat-v">${esc(s.nextCheckpoint)}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Next</div><div class="mc-stat-v">${esc(execOverview.doNext || s.nextCheckpoint)}</div></div>
       </div>
-      ${providers.length ? `<div class="mc-provider-line">${providers.map((p) => `<span>${esc(p.label)}</span>`).join("")}</div>` : ""}
+    </section>`;
+
+    const outcomeHeroSec = outcomeHero.label ? `<section class="mc-sec mc-outcome-hero tone-${esc(outcomeHero.tone || "neutral")}" id="mc-outcome-hero">
+      <p class="mc-outcome-kicker">Mission Outcome</p>
+      <h3 class="mc-outcome-label">${esc(outcomeHero.label)}</h3>
+      <p>${esc(outcomeHero.sentence || "")}</p>
+      ${outcomeHero.meta ? `<p class="muted">${esc(outcomeHero.meta)}</p>` : ""}
+    </section>` : "";
+
+    const execSummarySec = execOverview.blocks?.length ? `<section class="mc-sec mc-exec-summary" id="mc-exec-summary">
+      <h3>Executive summary</h3>
+      <dl class="mc-exec-dl">
+        ${execOverview.blocks.map((b) => `<div class="mc-exec-row"><dt>${esc(b.label)}</dt><dd>${esc(b.text)}</dd></div>`).join("")}
+      </dl>
+    </section>` : "";
+
+    function decisionCardHtml(card, { primary = false } = {}) {
+      if (!card) return "";
+      const kindAttr = card.kind === "certify_completion" ? "data-mc-certify"
+        : card.kind === "reopen_work" ? "data-mc-reopen-work"
+          : card.kind === "park_outcome" ? "data-mc-park-outcome"
+            : card.kind === "advance_implementation" ? "data-mc-advance"
+              : null;
+      if (!kindAttr) return "";
+      const btnClass = primary ? "btn" : "btn ghost";
+      return `<article class="mc-card mc-decision-card${primary ? " recommended" : ""}">
+        <div class="mc-card-h">
+          <b>${esc(card.title)}</b>
+          ${primary ? `<span class="mc-pill ok">Recommended</span>` : ""}
+        </div>
+        <p>${esc(card.consequence || "")}</p>
+        <ul class="mc-decision-meta">
+          <li><span class="muted">Why choose this</span> ${esc(card.whyChoose || "")}</li>
+          <li><span class="muted">What happens next</span> ${esc(card.whatHappensNext || "")}</li>
+          <li><span class="muted">Work</span> ${esc(card.workLaunchesLabel || "")}</li>
+          ${card.expectedOutput ? `<li><span class="muted">Expected output</span> ${esc(card.expectedOutput)}</li>` : ""}
+        </ul>
+        <button class="${btnClass}" type="button" ${kindAttr}="${esc(card.missionId || id)}">${esc(card.buttonLabel || card.title)}</button>
+      </article>`;
+    }
+
+    const decisionSec = (decisionPack.cards || []).length ? `<section class="mc-sec mc-decisions" id="mc-decisions">
+      <h3>Your decision</h3>
+      ${decisionPack.recommended
+        ? `<div class="mc-decision-primary">${decisionCardHtml(decisionPack.recommended, { primary: true })}</div>`
+        : `<p class="muted">Choose deliberately — reviewing alone does not change anything.</p>`}
+      ${(decisionPack.alternatives || []).length
+        ? `<details class="mc-decision-alts" ${decisionPack.recommended ? "" : "open"}>
+            <summary>${decisionPack.recommended ? "Other options" : "Available options"}</summary>
+            ${decisionPack.alternatives.map((c) => decisionCardHtml(c)).join("")}
+          </details>`
+        : ""}
+    </section>` : "";
+
+    const confGlanceSec = confGlance.label ? `<section class="mc-sec mc-conf-glance" id="mc-conf-glance">
+      <h3>${esc(confGlance.label)}</h3>
+      <p class="mc-conf-glance-line">
+        <strong>${esc(confGlance.bandLabel || "—")}</strong>
+        ${confGlance.percent != null ? `<span class="muted">(${esc(String(confGlance.percent))}%)</span>` : ""}
+        ${confGlance.recommendation ? ` · <span>${esc(confGlance.recommendation)}</span>` : ""}
+      </p>
+      ${(confGlance.why || []).length ? `<ul>${confGlance.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+      ${confGlance.secondaryNote ? `<p class="muted">${esc(confGlance.secondaryNote)}</p>` : ""}
+      <p class="muted">Full calculation is under Technical depth.</p>
+    </section>` : "";
+
+    const evidenceStripSec = `<section class="mc-sec mc-evidence-strip" id="mc-evidence-strip">
+      <div class="mc-card-h"><h3 style="margin:0">Evidence</h3>
+        <button class="btn ghost sm" type="button" data-nav="evidence/${esc(id)}">Open gallery</button>
+      </div>
+      ${evidenceStrip.empty
+        ? `<p class="muted">No evidence artifacts yet.</p>`
+        : `<ul class="mc-evidence-preview">${(evidenceStrip.artifacts || []).map((a) =>
+            `<li><b>${esc(a.title)}</b><span class="muted"> — ${esc(a.proves || a.type)}</span></li>`).join("")}</ul>`}
+      <div class="mc-depth-links">
+        <button class="btn ghost sm" type="button" data-nav="timeline/${esc(id)}">Story / timeline</button>
+        <button class="btn ghost sm" type="button" data-nav="decisions/${esc(id)}">Decisions archive</button>
+        <a class="btn ghost sm" href="#mc-depth">Technical depth</a>
+      </div>
     </section>`;
 
     const outcome = dash.outcome;
     const showOutcome = Boolean(outcome) && (V2.state.showOutcome !== false);
-    const missionChoices = (outcome?.missionChoices || outcome?.choices || (!outcome?.kind || outcome.kind === "mission_outcome_legacy" ? s.choices : []) || []).map((c) => {
-      const kindAttr = c.kind === "certify_completion" ? "data-mc-certify"
-        : c.kind === "reopen_work" ? "data-mc-reopen-work"
-          : c.kind === "park_outcome" ? "data-mc-park-outcome"
-            : c.kind === "advance_implementation" ? "data-mc-advance"
-              : null;
-      if (!kindAttr) return "";
-      const primary = c.id === "advance" ? "btn" : "btn ghost";
-      return `<article class="mc-card" style="margin:8px 0">
-        <div class="mc-card-h"><b>${esc(c.label)}</b></div>
-        <p class="muted">${esc(c.explanation)}</p>
-        <button class="${primary}" ${kindAttr}="${esc(c.missionId || id)}">${esc(c.label)}</button>
-      </article>`;
-    }).join("");
+    // Mission-level choice cards now live in decisionSec; keep empty here to avoid duplicates.
+    const missionChoices = "";
 
     function renderDeliverableConversation(thread) {
       const rows = Array.isArray(thread) ? thread : [];
@@ -1110,7 +1184,7 @@ We'll capture the context automatically.</p>
         : `<div class="rempty">No work items yet</div>`}
     </section>`;
 
-    const usageSec = `<details class="mc-sec mc-usage" open>
+    const usageSec = `<details class="mc-sec mc-usage">
       <summary><h3 style="display:inline">Resources &amp; Usage</h3></summary>
       <p class="muted">${esc(usage.note || "Provider-reported usage only.")}</p>
       ${(usage.byProvider || []).map((u) => `<div class="mc-usage-row">
@@ -1148,7 +1222,7 @@ We'll capture the context automatically.</p>
     </section>`;
 
     const confSec = `<section class="mc-sec mc-confidence">
-      <h3>Mission Confidence</h3>
+      <h3>Mission Confidence (calculation)</h3>
       <div class="mc-conf-big">${esc(conf.percent)}%</div>
       <p class="muted">${esc(conf.bandLabel || "")}</p>
       <div class="mc-conf-bar"><div class="mc-conf-fill" style="width:${Number(conf.percent) || 0}%"></div></div>
@@ -1160,12 +1234,41 @@ We'll capture the context automatically.</p>
       </details>
     </section>`;
 
+    const relaunchBtn = (dash.posture?.busy || (dash.currentWork || []).some((w) => w.status === "running"))
+      ? `<button class="btn ghost" type="button" data-mc-resume-stalled="${esc(id)}">Relaunch worker</button>`
+      : "";
+
+    const depthSec = `<details class="mc-sec mc-depth" id="mc-depth">
+      <summary><h3 style="display:inline">Technical depth</h3>
+        <span class="muted"> — local app, workers, usage, work inventory, confidence math</span>
+      </summary>
+      <div class="mc-depth-body">
+        <div class="mc-depth-toolbar">
+          <button class="btn ghost sm" type="button" data-ci-open>Improve Vacilando</button>
+          ${relaunchBtn}
+          ${providers.length ? `<div class="mc-provider-line">${providers.map((p) => `<span>${esc(p.label)}</span>`).join("")}</div>` : ""}
+        </div>
+        ${localServerSec}
+        ${directorSec}
+        ${needsSec}
+        <div class="mc-grid">${workSec}${recentSec}</div>
+        ${usageSec}
+        ${confSec}
+        ${tlSec}
+      </div>
+    </details>`;
+
+    // When deliverable certification is open, L1 still leads; DREV remains the cert briefing.
+    // Suppress a second mission-level decision strip duplicate inside DREV (missionChoices cleared).
+    const l1 = outcomeHeroSec + execSummarySec + decisionSec + confGlanceSec + evidenceStripSec;
+    const certOrOutcome = showOutcome ? outcomeSec : "";
+
     return shell(s.title || "Mission Dashboard", {
       missionId: id,
       active: "dashboard",
-      lead: `${esc(s.statusLabel)} · Confidence ${esc(s.confidencePercent)}% · Next: ${esc(s.nextCheckpoint)}`,
-      actions: `${actionBtn(s.primaryAction)}${actionBtn(s.secondaryAction)}${actionBtn(s.certifyAction)}`,
-    }) + summaryStrip + localServerSec + (showOutcome ? outcomeSec : "") + directorSec + needsSec + `<div class="mc-grid">${workSec}${recentSec}</div>` + usageSec + confSec + tlSec + `</div>`;
+      lead: `${esc(outcomeHero.label || s.statusLabel)} · Next: ${esc(execOverview.doNext || s.nextCheckpoint)}`,
+      actions: `${actionBtn(heroPrimarySafe)}`,
+    }) + summaryStrip + l1 + certOrOutcome + depthSec + `</div>`;
   };
 
   V2.viewNeedsYou = function () {

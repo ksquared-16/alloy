@@ -55,6 +55,7 @@ import {
   getOpenDeliverableReview,
   getLatestAcceptedDeliverableReview,
 } from "../deliverable-review.mjs";
+import { composeExecutiveL1 } from "./executive-overview.mjs";
 
 
 const STATUS_COPY = {
@@ -1306,6 +1307,19 @@ export function missionDashboardVm(missionId) {
             ? `${Math.max(lifecycleActive.length, 1)} active`
             : "0 active";
 
+  const executive = composeExecutiveL1(missionId, {
+    posture,
+    progress,
+    directorSummary: summary,
+    missionConfidence: confidence,
+  });
+
+  // Prefer explicit recommended decision over vague "Review outcome" on L1 chrome.
+  const summaryPrimary = executive.primaryAction
+    || (posture.primaryAction?.kind === "review_outcome" && posture.secondaryAction
+      ? posture.secondaryAction
+      : posture.primaryAction);
+
   return {
     kind: "mission_dashboard",
     missionId,
@@ -1326,7 +1340,7 @@ export function missionDashboardVm(missionId) {
       confidencePercent: confidence.percent,
       confidenceBand: confidence.bandLabel,
       nextCheckpoint: posture.next,
-      primaryAction: posture.primaryAction,
+      primaryAction: summaryPrimary,
       secondaryAction: posture.secondaryAction,
       certifyAction: posture.certifyAction || null,
       choices: posture.choices || [],
@@ -1368,6 +1382,7 @@ export function missionDashboardVm(missionId) {
       why: confidenceWhy(confFactors),
       factors: confFactors,
     },
+    executive,
     // Compatibility for older clients still reading overview shape
     header: {
       missionId,
@@ -1377,7 +1392,7 @@ export function missionDashboardVm(missionId) {
       deliverablesLabel: card.deliverablesLabel,
       directorState: card.directorState,
       openDecisionCount: openDecisions.length,
-      primaryAction: card.primaryAction,
+      primaryAction: summaryPrimary || card.primaryAction,
     },
     directorSummary: summary,
     topDecision: openDecisions[0] || null,
