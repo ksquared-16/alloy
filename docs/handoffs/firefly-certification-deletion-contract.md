@@ -327,6 +327,84 @@ run before deletion.
 
 ---
 
+## 4quater. EXECUTION ATTEMPT 2026-08-04 — HALTED. Tenant is partially reset.
+
+Authorized and executed against `ikaxilmwmrmbagoidedu` / `93667019-…`. Every pre-flight gate
+passed: branch on staging `e6ff28cf8`, all six slots' servers stopped, zero compute permits held,
+no stacks or leases, no test/migration processes, tenant **stable over 45s across 25 tables**, and
+the pre-execute dry run **byte-identical** to the authorization-ready report with 0 unexplained
+survivors.
+
+The run then failed mid-deletion:
+
+```text
+[processing_plan_operations delete plan_id]
+processing_plan_operations rows are immutable; build a new plan version instead
+```
+
+### Root cause — an architectural contradiction, not a bug in the reset
+
+`supabase/migrations/20260717125500_processing_identity_d1_plan_operations_guard.sql` installs
+`trg_processing_plan_operations_immutable`, a `BEFORE UPDATE OR DELETE ... FOR EACH ROW` trigger
+that raises **unconditionally**. `processing_plan_operations` is an append-only ledger by design;
+no client can delete a row through the sanctioned path.
+
+The certification contract requires Processing dependents to reach zero (§4.6). The database
+guarantees they never can. **Both are deliberate and they are incompatible.** This is not something
+the reset utility can decide.
+
+### Exact state after the halt
+
+Deleted (verified by direct count, tenant stable):
+
+| table | before | after |
+|---|---:|---:|
+| documents | 73 | **0** |
+| communication_threads | 6 | **0** |
+| communication_messages | 7 | **0** |
+| form_submissions | 3 | **0** |
+| form_packet_sessions | 1 | **0** |
+| tour_bookings | 2 | **0** |
+| opportunity_persons | 6 | **0** |
+| operational_tasks | 7 | **1** |
+| workflow_events | 443 | **419** |
+
+Untouched — the deletion order never reached them:
+
+opportunities 8 · customers 59 · persons 53 · customer_persons 41 · customer_members 20 ·
+contacts 5 · process_instances 13 · and every `processing_*` table at its original count
+(cases 63, sources 60, facts 52, resolutions 32, plans 5, plan_operations 38, attempts 5,
+approvals 5).
+
+**Configuration is fully intact.** Config table counts identical before and after;
+`lifecycle_builder_v1` sha256 `4609859e…dd8dd4` unchanged; publications 9; the one
+`business_process_drafts` row present beforehand survives.
+
+### Known residue created by the halt
+
+**73 orphaned storage objects** under `org_documents/93667019-…`. The document ROWS were deleted in
+the main sweep; storage cleanup lives in the A4 block, which sits after the failure point and never
+ran. They are deliberately **left in place** as evidence rather than cleaned up — the failure
+protocol is to preserve, and those objects are now the only record of what those documents were.
+
+### The decision this needs
+
+Three options, and the choice is a platform decision, not a utility change:
+
+1. **Preserve Processing plan operations** — accept that a case's plan ledger outlives the case, and
+   carve an explicit exception into §4.6 with a stated reason. Cheapest; leaves a permanent
+   operational remnant that the "all operational state" invariant would have to acknowledge.
+2. **Give the guard a sanctioned reset exemption** — e.g. honour a session-scoped GUC the way the
+   lifecycle guard token works, so only the certified reset may delete. Preserves the ledger
+   guarantee for application code and makes the baseline reachable.
+3. **Delete the parent and let the ledger cascade** — only viable if the FK is `ON DELETE CASCADE`
+   and the trigger does not fire for cascades. Needs verification before it is a real option.
+
+Until one is chosen, the certification baseline is **not establishable** and the tenant should be
+treated as mid-reset, not as a baseline.
+
+---
+
 ## 5. Interface
 
 ```text
