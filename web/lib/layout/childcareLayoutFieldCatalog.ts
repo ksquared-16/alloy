@@ -316,7 +316,7 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageColumn: "schedule_type",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.start_date", "Requested Start", "date", 130, {
+    childField("inquiry_child.start_date", "Desired start date", "date", 130, {
         entityType: "inquiry_child",
         fieldKey: "start_date",
         storageTable: "opportunity_customer_members",

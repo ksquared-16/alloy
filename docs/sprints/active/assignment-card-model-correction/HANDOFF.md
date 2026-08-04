@@ -47,3 +47,16 @@ Host blocker note: `.../HOST-RESOURCE-BLOCKER.md`
 ## Promotion
 
 Synced onto `origin/staging` via `alloy-worktree-sync`. Open PR into staging; do not auto-merge.
+
+## Merge disposition
+
+| Field | Value |
+|-------|-------|
+| PR | [#333](https://github.com/ksquared-16/alloy/pull/333) |
+| Merged at | 2026-08-04T20:44:25Z |
+| Merge commit | `790d507ef302f8182098f45d93c3e7d4490db5eb` |
+| `origin/staging` | `790d507ef` |
+| Pre-merge head | `f75ebca4d` (CI typecheck fixes after approved `0643f71be`) |
+| Certified synced base | `160e75d92` |
+| Product model | coherent single-offer retained on staging |
+
