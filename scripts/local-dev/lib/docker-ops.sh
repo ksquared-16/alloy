@@ -210,6 +210,21 @@ alloy_supabase_assert_local_reset_safe() {
 # Run local supabase db reset with Docker gate + transient 502 retries.
 # Args: [workdir] [--recover-docker] [--force-docker] [--retries N] [--debug]
 alloy_supabase_db_reset() {
+  # DEFENCE IN DEPTH. `alloy-db-reset` guards its entry point, but this function is
+  # reachable by anything that sources this library, and guarding only the CLI would
+  # leave that door open. The guard is idempotent, so passing through both is fine.
+  if [[ -z "${ALLOY_CERT_GUARD_APPLIED:-}" ]]; then
+    local _cog="${BASH_SOURCE[0]%/*}/cert-ownership.sh"
+    if [[ -f "$_cog" ]]; then
+      # shellcheck source=cert-ownership.sh
+      source "$_cog"
+      alloy_cert_guard destroy-db "database reset" || return 1
+    else
+      printf '\033[31m✗ certification ownership guard missing; refusing database reset\033[0m\n' >&2
+      return 1
+    fi
+  fi
+
   local workdir="" recover_docker=0 force_docker=0 retries="${ALLOY_DB_RESET_RETRIES:-3}" debug=0
   local -a passthrough=()
 
