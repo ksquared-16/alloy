@@ -4,7 +4,7 @@
 **Date:** 2026-08-03
 **PR:** https://github.com/ksquared-16/alloy/pull/300
 **Branch:** `feat/interactive-tour-invitation` (pushed) · base `b7a63e289` · 7 commits ahead of `origin/staging`
-**Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt2-interactive-tour-invitation` (slot 2, port 3012)
+**Worktree:** managed slot worktree (superseded — the work now lives in the slot-4 worktree `wt4-interactive-tour-delivery` on branch `agent/claude/4-interactive-tour-delivery`)
 
 Do **not** start Slice D, delivery, parent UI, reminders, or timeline UI. Slice C is
 pending review, and one certification item is deliberately unfinished (see §5).
