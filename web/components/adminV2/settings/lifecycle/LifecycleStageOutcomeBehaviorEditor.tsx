@@ -13,20 +13,17 @@ import {
 } from "@/lib/lifecycle/stageFollowUpWorkDuePolicy";
 import {
     defaultFollowUpDuePolicy,
-    outcomeAutomationSummaryForOutcome,
     readComposableOutcomeBehaviorDraft,
     upsertComposableOutcomeBehavior,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
 
 type Props = {
     outcomeKey: string;
-    outcomeLabel: string;
-    /** The stage this outcome belongs to — named in the "no transitions" explanation. */
+    /** The stage this outcome belongs to — named in the disabled-control explanation. */
     stageLabel: string;
     rules: StageOutcomeRuleV1[];
     workTemplates: StageWorkTemplateV1[];
     transitionOptions: StageOutcomeTransitionOption[];
-    completesWork: boolean;
     onRulesChange: (rules: StageOutcomeRuleV1[]) => void;
 };
 
@@ -114,23 +111,16 @@ function ScheduleTimingControls({
 
 export default function LifecycleStageOutcomeBehaviorEditor({
     outcomeKey,
-    outcomeLabel,
     stageLabel,
     rules,
     workTemplates,
     transitionOptions,
-    completesWork,
     onRulesChange,
 }: Props) {
     const draft = readComposableOutcomeBehaviorDraft(outcomeKey, rules);
     const availableTransitions = transitionOptions.filter((transition) => transition.available !== false);
     const apply = (next: typeof draft) =>
         onRulesChange(upsertComposableOutcomeBehavior(rules, outcomeKey, next));
-    const summary = outcomeAutomationSummaryForOutcome(outcomeKey, outcomeLabel, rules, {
-        workTemplateLabelByKey: Object.fromEntries(workTemplates.map((work) => [work.template_key, work.label])),
-        transitionLabelByRef: Object.fromEntries(transitionOptions.map((transition) => [transition.transition_ref, transition.label])),
-        completesWork,
-    });
 
     return (
         <div className="mt-2 space-y-3 rounded-md border border-alloy-forge/10 bg-white p-2" data-testid={`stage-outcome-behavior-${outcomeKey}`}>
@@ -184,16 +174,18 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     </select>
                 :   null}
                 {/*
-                  * A greyed control with no explanation is the defect, not the empty list. Say what
-                  * is missing and what to do about it, in the operator's own vocabulary.
+                  * A greyed control with no explanation is still the defect, so this stays — but it
+                  * says why THIS control is disabled and nothing more. It used to restate the whole
+                  * stage-level fact ("No outgoing transitions are configured for Lead…"), which
+                  * printed the identical sentence once per outcome. That belongs to the stage and is
+                  * reported once there, by `stage_transition_missing`.
                   */}
                 {availableTransitions.length ? null : (
                     <p
                         className="mt-1 text-[0.6875rem] leading-snug text-alloy-midnight/50"
                         data-testid={`stage-outcome-no-transitions-${outcomeKey}`}
                     >
-                        No outgoing transitions are configured for {stageLabel}. Create a transition
-                        before choosing this outcome behaviour.
+                        Add a way out of {stageLabel} to use this.
                     </p>
                 )}
             </fieldset>
@@ -320,9 +312,6 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                 ))}
             </section>
 
-            <p className="text-[0.6875rem] text-alloy-midnight/50">
-                <span className="font-medium">Summary · </span>{summary}
-            </p>
         </div>
     );
 }

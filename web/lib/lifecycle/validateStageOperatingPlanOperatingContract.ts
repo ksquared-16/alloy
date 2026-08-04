@@ -20,6 +20,8 @@ export type StageOperatingContractIssueCode =
     | "primary_action_missing"
     | "primary_action_invalid"
     | "outcome_transition_missing"
+    /** Stage-scoped: this stage has no outgoing transition at all. Reported once, never per outcome. */
+    | "stage_transition_missing"
     | "outcome_transition_invalid"
     | "outcome_close_status_missing"
     | "outcome_close_status_invalid"
@@ -114,13 +116,12 @@ function validateOutcomeBehavior(
     if (kind === "move_to_stage") {
         const controlId = `${controlBase}-transition`;
         if (!transitionOptions.length) {
-            issues.push({
-                code: "outcome_transition_missing",
-                severity: "error",
-                message: "No outgoing transitions are configured for this stage.",
-                controlId,
-                outcome_key: outcomeKey,
-            });
+            // Deliberately silent. "This stage has no outgoing transition" is one fact about the
+            // stage, not five facts about five outcomes; emitting it per outcome printed the same
+            // sentence once for every outcome that wanted to move, which read as five unrelated
+            // problems. The stage-scoped `stage_transition_missing` below says it once. Genuinely
+            // outcome-scoped transition problems — unselected, or pointing at a non-edge — still
+            // report here, because those differ per outcome.
         } else {
             const ref = draft.transition_ref?.trim() ?? "";
             if (!ref) {
@@ -294,6 +295,9 @@ export function validateStageOperatingPlanOperatingContract(
             .filter((k): k is string => Boolean(k)),
     );
 
+    // One stage cannot leave itself in five different ways, so it must not say so five times.
+    let anyOutcomeWantsMovement = false;
+
     for (const outcomeKey of outcomeKeysFromRules) {
         try {
             const draft = readOutcomeAutomationDraft(outcomeKey, plan.outcome_rules, {
@@ -302,6 +306,7 @@ export function validateStageOperatingPlanOperatingContract(
                 entityType,
             });
             if (draft.kind === "none") continue;
+            if (draft.kind === "move_to_stage") anyOutcomeWantsMovement = true;
             issues.push(
                 ...validateOutcomeBehavior(
                     plan,
@@ -316,6 +321,17 @@ export function validateStageOperatingPlanOperatingContract(
         } catch {
             // Partial editing must never throw.
         }
+    }
+
+    if (anyOutcomeWantsMovement && !transitionOptions.length) {
+        issues.push({
+            code: "stage_transition_missing",
+            severity: "error",
+            // "this stage", never `plan.stage_key` — the key is `lead`, and printing it puts a raw
+            // configuration identifier in front of a director. The editor already names the stage.
+            message: "No outgoing transitions are configured for this stage.",
+            controlId: "stage-outgoing-transitions",
+        });
     }
 
     for (const rule of plan.outcome_rules) {
