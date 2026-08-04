@@ -27,6 +27,7 @@ import {
     mergePersonContactIntoFocusPanelTruth,
     type FocusPanelMutation,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { applyLeadPrimaryContactToOpportunityRecord } from "@/lib/admin/person/applyLeadPrimaryContactToOpportunityRecord";
 import { seedHouseholdContactValuesForPerson } from "@/lib/adminV2/runtime/focusPanel/household/householdContactEditState";
 import type { FocusPanelPublishedLayout } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import type { FocusPanelCardKey, FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -273,6 +274,10 @@ function OverviewComposition({ context }: { context: OperationalContext }) {
             openAddEmergencyContact: () => {},
             openAddEmergencyContactForChild: () => {},
             openAddAuthorizedPickup: () => {},
+            makeHouseholdPrimaryContact: async ({ customerId, personId }) => {
+                setLiveTruth((prev) => applyLeadPrimaryContactToOpportunityRecord(prev, customerId, personId));
+                return { ok: true };
+            },
             savePersonChildRelationship: async () => ({ ok: true }),
             removeEmergencyContactRole: async () => ({ ok: true }),
             tour: {

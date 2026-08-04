@@ -20,7 +20,12 @@ export type InquiryChildOcmPatch = {
     schedule_type?: string | null;
     outcome_status_key?: string | null;
     notes?: string | null;
-    [key: string]: string | null | undefined;
+    /** Requested days/week — number; empty clears via null. */
+    requested_days_per_week?: number | null;
+    tuition_plan_id?: string | null;
+    quote_accepted?: boolean | null;
+    weekdays?: number[] | null;
+    [key: string]: string | number | boolean | number[] | null | undefined;
 };
 
 export type InquiryChildIdentityWriteTarget = "person" | "customer_member";

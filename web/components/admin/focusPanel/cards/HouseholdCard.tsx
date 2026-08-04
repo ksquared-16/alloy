@@ -77,6 +77,8 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import LeadHouseholdPrimaryContactConfirmModal from "@/components/layout/lead/LeadHouseholdPrimaryContactConfirmModal";
+import { householdShowsPrimaryContactControl } from "@/lib/admin/person/personDrawerHouseholdPrimaryContactDisplay";
 
 type HouseholdComposerPreview = {
     perspective: "expanded" | "focused";
@@ -300,6 +302,35 @@ export default function HouseholdCard({
               setEditingPersonId(personId);
           }
         : undefined;
+
+    const customerId = useMemo(() => {
+        const truth = context.truth;
+        const fromTruth = typeof truth.customer_id === "string" ? truth.customer_id.trim() : "";
+        if (fromTruth) return fromTruth;
+        const householdCtx = truth._household_context;
+        if (Array.isArray(householdCtx) && householdCtx[0] && typeof householdCtx[0] === "object") {
+            const cid = (householdCtx[0] as { customer_id?: string }).customer_id;
+            return typeof cid === "string" ? cid.trim() : "";
+        }
+        return "";
+    }, [context.truth]);
+
+    const guardianCount =
+        (evidence.primaryContact ? 1 : 0) + Math.max(0, evidence.otherParentGuardianCount);
+
+    const [pendingPrimary, setPendingPrimary] = useState<{
+        personId: string;
+        displayName: string;
+    } | null>(null);
+    const [primarySaving, setPrimarySaving] = useState(false);
+
+    const onRequestMakePrimary =
+        canEdit && mutation && customerId
+            ? (personId: string, displayName: string) => {
+                  if (!isEditableHouseholdPersonId(personId)) return;
+                  setPendingPrimary({ personId, displayName });
+              }
+            : undefined;
 
     // Cross-card handoff: when another card points here (e.g. Readiness "primary
     // contact"), open the requested evidence group as a Perspective Change. No fetch.
@@ -723,6 +754,9 @@ export default function HouseholdCard({
                 composing={showComposeCanvas}
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
+                onRequestMakePrimary={onRequestMakePrimary}
+                guardianCount={guardianCount}
+                primarySavingPersonId={primarySaving ? pendingPrimary?.personId ?? null : null}
             />
         );
     } else {
@@ -749,6 +783,9 @@ export default function HouseholdCard({
                 onAddAuthorizedPickup={
                     canEdit && mutation ? () => mutation.openAddAuthorizedPickup() : undefined
                 }
+                onRequestMakePrimary={onRequestMakePrimary}
+                guardianCount={guardianCount}
+                primarySavingPersonId={primarySaving ? pendingPrimary?.personId ?? null : null}
             />
         );
     }
@@ -778,6 +815,30 @@ export default function HouseholdCard({
             >
                 {body}
             </UniversalCard>
+            <LeadHouseholdPrimaryContactConfirmModal
+                isOpen={Boolean(pendingPrimary)}
+                personName={pendingPrimary?.displayName ?? ""}
+                currentPrimaryName={evidence.primaryContact?.name ?? null}
+                scopeLabels={["This household", "Linked opportunities"]}
+                isLoading={primarySaving}
+                onClose={() => {
+                    if (primarySaving) return;
+                    setPendingPrimary(null);
+                }}
+                onConfirm={async () => {
+                    if (!pendingPrimary || !mutation || !customerId) return;
+                    setPrimarySaving(true);
+                    try {
+                        const result = await mutation.makeHouseholdPrimaryContact({
+                            customerId,
+                            personId: pendingPrimary.personId,
+                        });
+                        if (result.ok) setPendingPrimary(null);
+                    } finally {
+                        setPrimarySaving(false);
+                    }
+                }}
+            />
         </div>
     );
 }
@@ -819,6 +880,9 @@ function CollapsedBody({
     onAddEmergencyContact,
     onAddAuthorizedPickup,
     onEditContact,
+    onRequestMakePrimary,
+    guardianCount = 0,
+    primarySavingPersonId = null,
 }: {
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
     masked: boolean;
@@ -832,6 +896,9 @@ function CollapsedBody({
     onAddEmergencyContact?: () => void;
     onAddAuthorizedPickup?: () => void;
     onEditContact?: (personId: string) => void;
+    onRequestMakePrimary?: (personId: string, displayName: string) => void;
+    guardianCount?: number;
+    primarySavingPersonId?: string | null;
 }) {
     const identityVm = useMemo(
         () =>
@@ -949,20 +1016,47 @@ function CollapsedBody({
                     className="alloy-os-household__summary-region identity-summary-columns__cell"
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
-                    {secondaryRecords.map((record) => (
-                        <IdentityRecordSummary
-                            key={record.id}
-                            record={record}
-                            depth="summary"
-                            onActivate={
-                                !composing && onSelectIdentity
-                                    ? (id) => onSelectIdentity(id, "other_parent_guardian")
-                                    : undefined
-                            }
-                            onEditContact={!masked && !composing ? onEditContact : undefined}
-                            dataAttr={record.id}
-                        />
-                    ))}
+                    {secondaryRecords.map((record) => {
+                        const showMakePrimary =
+                            !masked
+                            && !composing
+                            && onRequestMakePrimary
+                            && householdShowsPrimaryContactControl({
+                                guardianCount,
+                                isPrimary: false,
+                                canMutate: Boolean(canEdit),
+                            });
+                        return (
+                            <div key={record.id} className="min-w-0" data-household-secondary-contact={record.id}>
+                                <IdentityRecordSummary
+                                    record={record}
+                                    depth="summary"
+                                    onActivate={
+                                        !composing && onSelectIdentity
+                                            ? (id) => onSelectIdentity(id, "other_parent_guardian")
+                                            : undefined
+                                    }
+                                    onEditContact={!masked && !composing ? onEditContact : undefined}
+                                    dataAttr={record.id}
+                                />
+                                {showMakePrimary ? (
+                                    <button
+                                        type="button"
+                                        className="mt-1 text-left text-[11px] font-medium text-alloy-blue hover:underline disabled:opacity-50"
+                                        data-household-make-primary-contact="true"
+                                        data-person-id={record.id}
+                                        disabled={primarySavingPersonId === record.id}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onRequestMakePrimary(record.id, record.title);
+                                        }}
+                                    >
+                                        {primarySavingPersonId === record.id ? "Saving…" : "Make primary"}
+                                    </button>
+                                ) : null}
+                            </div>
+                        );
+                    })}
 
                 </ComposableRegionShell>
             ) : composing ? (
@@ -1052,6 +1146,9 @@ function ExpandedBody({
     composePurpose = null,
     nestedConfig,
     composePickerOnly = false,
+    onRequestMakePrimary,
+    guardianCount = 0,
+    primarySavingPersonId = null,
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
@@ -1067,6 +1164,9 @@ function ExpandedBody({
     composePurpose?: IdentityConfigurationPurpose | null;
     nestedConfig: NestedSurfaceConfig | null;
     composePickerOnly?: boolean;
+    onRequestMakePrimary?: (personId: string, displayName: string) => void;
+    guardianCount?: number;
+    primarySavingPersonId?: string | null;
 }) {
     const groupsRef = useRef<HTMLDivElement>(null);
 
@@ -1124,6 +1224,9 @@ function ExpandedBody({
                         composing={composing}
                         composePurpose={composePurpose}
                         composePickerOnly={composePickerOnly}
+                        onRequestMakePrimary={onRequestMakePrimary}
+                        guardianCount={guardianCount}
+                        primarySavingPersonId={primarySavingPersonId}
                     />
                 </ComposableRegionShell>
             ))}
@@ -1186,6 +1289,9 @@ function GroupRows({
     composing = false,
     composePurpose = null,
     composePickerOnly = false,
+    onRequestMakePrimary,
+    guardianCount = 0,
+    primarySavingPersonId = null,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
@@ -1201,6 +1307,9 @@ function GroupRows({
     composing?: boolean;
     composePurpose?: IdentityConfigurationPurpose | null;
     composePickerOnly?: boolean;
+    onRequestMakePrimary?: (personId: string, displayName: string) => void;
+    guardianCount?: number;
+    primarySavingPersonId?: string | null;
 }) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
@@ -1263,18 +1372,44 @@ function GroupRows({
                     />
                 </>
             ) : group.contacts.length > 0 ? (
-                <IdentityCollectionContext
-                    records={visible}
-                    selectable={Boolean(onSelectIdentity && !composing)}
-                    onSelectIdentity={
-                        onSelectIdentity && !composing
-                            ? (personId) => onSelectIdentity(personId, group.key)
-                            : undefined
-                    }
-                    onEditContact={onEditContact && !composing && !masked ? onEditContact : undefined}
-                    onSaveField={onSaveField && !composing && !masked ? onSaveField : undefined}
-                    onSaveFields={onSaveFields && !composing && !masked ? onSaveFields : undefined}
-                />
+                <>
+                    <IdentityCollectionContext
+                        records={visible}
+                        selectable={Boolean(onSelectIdentity && !composing)}
+                        onSelectIdentity={
+                            onSelectIdentity && !composing
+                                ? (personId) => onSelectIdentity(personId, group.key)
+                                : undefined
+                        }
+                        onEditContact={onEditContact && !composing && !masked ? onEditContact : undefined}
+                        onSaveField={onSaveField && !composing && !masked ? onSaveField : undefined}
+                        onSaveFields={onSaveFields && !composing && !masked ? onSaveFields : undefined}
+                    />
+                    {group.key === "other_parent_guardian"
+                        && onRequestMakePrimary
+                        && !masked
+                        && !composing
+                        ? visible.map((record) =>
+                              householdShowsPrimaryContactControl({
+                                  guardianCount,
+                                  isPrimary: /^primary$/i.test(record.badge ?? ""),
+                                  canMutate: Boolean(onEditContact) || Boolean(onSaveField),
+                              }) ? (
+                                  <button
+                                      key={`make-primary-${record.id}`}
+                                      type="button"
+                                      className="mt-1 text-left text-[11px] font-medium text-alloy-blue hover:underline disabled:opacity-50"
+                                      data-household-make-primary-contact="true"
+                                      data-person-id={record.id}
+                                      disabled={primarySavingPersonId === record.id}
+                                      onClick={() => onRequestMakePrimary(record.id, record.title)}
+                                  >
+                                      {primarySavingPersonId === record.id ? "Saving…" : "Make primary"}
+                                  </button>
+                              ) : null,
+                          )
+                        : null}
+                </>
             ) : (
                 visible.map((record) => (
                     <IdentityRecordSummary

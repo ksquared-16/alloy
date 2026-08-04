@@ -37,6 +37,8 @@ import type { InquiryChildRow } from "@/components/admin/entity/OpportunityInqui
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import { patchHouseholdPrimaryContact } from "@/lib/admin/person/patchHouseholdPrimaryContact";
+import { applyLeadPrimaryContactToOpportunityRecord } from "@/lib/admin/person/applyLeadPrimaryContactToOpportunityRecord";
 import {
     dispatchOpportunityTourUpdated,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
@@ -130,6 +132,14 @@ export type FocusPanelMutation = {
     }) => void;
     /** Open the add-authorized-pickup relationship modal (household scope). */
     openAddAuthorizedPickup: () => void;
+    /**
+     * Designate a linked household person as the exclusive primary contact.
+     * Uses canonical PATCH + `household.primary_contact_changed` (same writer as person drawer).
+     */
+    makeHouseholdPrimaryContact: (args: {
+        customerId: string;
+        personId: string;
+    }) => Promise<FocusPanelSaveResult>;
     /** Patch canonical relationship fields (not Person-owned fields). */
     savePersonChildRelationship: (
         relationshipId: string,
@@ -671,6 +681,29 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     confirmationRequired: true,
                 },
             });
+        },
+        makeHouseholdPrimaryContact: async ({ customerId, personId }) => {
+            const cid = customerId.trim();
+            const pid = personId.trim();
+            if (!cid || !pid) return { ok: false, status: 400, error: "Customer and person required" };
+            try {
+                await patchHouseholdPrimaryContact(cid, pid);
+                const baseline = getTruth?.() ?? truth;
+                const merged = applyLeadPrimaryContactToOpportunityRecord(baseline, cid, pid);
+                dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record: merged,
+                });
+                return { ok: true };
+            } catch (e) {
+                return {
+                    ok: false,
+                    status: 500,
+                    error: e instanceof Error ? e.message : "Make primary failed",
+                };
+            }
         },
         savePersonChildRelationship: async (relationshipId, customerMemberId, patch) => {
             const res = await patchPersonChildRelationshipFromFocusPanel({

@@ -1,0 +1,5 @@
+{
+  "automatedSuite": "tests/enrollment/assignmentServerPreflightVariants.test.ts",
+  "preflightOk": false,
+  "preflightSummary": "Missing: Child · Room, Child · Proposed schedule, Child · Requested Start, Reason for skipping requirements."
+}

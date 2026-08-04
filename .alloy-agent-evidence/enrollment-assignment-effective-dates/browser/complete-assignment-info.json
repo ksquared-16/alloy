@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "ok": true,
+    "routed": "process_instance",
+    "process_instance_id": "802472d3-8f47-44fa-924e-c5da4456d56b",
+    "updated": [
+      "start_date",
+      "requested_days_per_week",
+      "weekdays"
+    ]
+  }
+}
