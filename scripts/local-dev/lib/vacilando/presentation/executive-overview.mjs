@@ -20,8 +20,9 @@ import {
   explainedConfidenceVm,
   confidenceGlanceVm,
 } from "./explained-confidence.mjs";
+import { missionJourneyVm, missionJourneyStripVm } from "./mission-journey.mjs";
 
-export { explainedConfidenceVm, confidenceGlanceVm };
+export { explainedConfidenceVm, confidenceGlanceVm, missionJourneyVm, missionJourneyStripVm };
 
 /** @typedef {{ id: string, kind: string, label: string, explanation?: string, missionId?: string }} PostureChoice */
 
@@ -474,6 +475,7 @@ export function composeExecutiveL1(missionId, {
   // Prefer nested explained panel as the L1 authority
   const explained = confidence.explained
     || explainedConfidenceVm(missionId, { reviewVm, missionConfidence, decisions });
+  const journey = missionJourneyStripVm(missionId);
 
   // Prefer recommended decision action over vague "Review outcome"
   let primaryAction = decisions.primaryAction;
@@ -509,6 +511,7 @@ export function composeExecutiveL1(missionId, {
     decisions,
     evidence,
     confidence: explained,
+    journey,
     primaryAction,
     depthHint: "Technical depth holds local app, workers, usage, work inventory, and confidence calculation.",
   };

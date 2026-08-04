@@ -1,0 +1,54 @@
+{
+  "liveMissionId": "msn_f74ed02c126c88d7ff",
+  "controlPlane": "http://127.0.0.1:3022",
+  "checks": {
+    "currentPhaseVisible": true,
+    "youAreHere": "You are here — Director decision",
+    "completedPhases": [
+      "Mission",
+      "Mission 2 Identity & Access Platform Objective Transform the complete…",
+      "Certification"
+    ],
+    "decisionWaiting": "Need more discovery work",
+    "gatesVisible": true,
+    "engineeringHistorySecondary": true,
+    "stripOnL1": true
+  },
+  "stages": [
+    {
+      "title": "Mission",
+      "status": "complete",
+      "outcome": "Execution approved — work may proceed",
+      "waiting": null,
+      "produced": "Start mission"
+    },
+    {
+      "title": "Mission 2 Identity & Access Platform Objective Transform the complete…",
+      "status": "complete",
+      "outcome": "1 of 1 assignments accepted",
+      "waiting": null,
+      "produced": "authorize_mission_census"
+    },
+    {
+      "title": "Certification",
+      "status": "complete",
+      "outcome": "You certified W-4",
+      "waiting": null,
+      "produced": "Certify W-4"
+    },
+    {
+      "title": "Director decision",
+      "status": "current",
+      "outcome": "A worker finished. Read the outcome, then choose one next step — reviewing alone does not change anything.",
+      "waiting": "Need more discovery work",
+      "produced": null
+    },
+    {
+      "title": "Advance to implementation",
+      "status": "upcoming",
+      "outcome": "Implementation opened on this mission",
+      "waiting": null,
+      "produced": "Begin implementation"
+    }
+  ]
+}
