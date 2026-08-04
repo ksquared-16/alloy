@@ -55,14 +55,13 @@ cert_db_url() {
     return 1
 }
 
+# Take the SHARED stack through the lease model, never a raw `supabase start`. A bare start
+# here is what produced a stack per session; it also leaves no lease, so the next session's
+# teardown sees no holders and stops the stack underneath this run.
 cmd_up() {
-    if curl -s -o /dev/null "http://127.0.0.1:54421/rest/v1/" 2>/dev/null; then
-        green "Local operator tenant already running (project alloy-cert :54421)"
-    else
-        info "Starting isolated cert stack (project alloy-cert)…"
-        sb start >/dev/null
-        green "Local operator tenant started"
-    fi
+    local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
+    [ -x "$stack" ] || die "alloy-stack not found at ${stack} — refusing to start a stack outside the lease model"
+    "$stack" use "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || die "could not take a lease on the shared stack"
     cmd_seed
 }
 
