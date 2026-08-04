@@ -224,6 +224,50 @@ dispatches a real message. It is a developer footgun, not a code path.
 
 ---
 
+### D-13 · `render_blocked` sends persist nothing — ownership undecided
+
+**Priority** P2 · **Owner** UNDECIDED — see below · **Blocks production?** No ·
+**Blocks the blocked-send PR?** No
+
+**Where rendering fails.** `web/lib/communications/render/renderOutboundMessage.ts`
+returns `{ ok: false, block }` with one of nine codes: `TEMPLATE_UNRESOLVED`,
+`CONTEXT_MISSING`, `TOKEN_UNSUPPORTED`, `TOKEN_UNRESOLVED`, `EMPTY_OUTPUT`,
+`CHANNEL_VIOLATION`, `UNSAFE_MARKUP`, `PREVIEW_STALE`, `LINEAGE_INCONSISTENT`.
+`enqueueCanonicalOutboundMessage` turns that into
+`skippedReason: render_blocked:<CODE>` and returns.
+
+**Is there a validated message artifact?** **No** — and that is the whole
+difference from an eligibility block. An eligibility refusal happens *after* a
+successful render, so there is a validated body, a `rendered_snapshot` and a
+fingerprint to persist, and an operator can see exactly what would have gone out.
+A render refusal has none of that. Persisting the raw body would put unresolved
+`{{tokens}}` into a table whose every other row is render-validated, with a null
+`rendered_snapshot`.
+
+**Current observable behavior.** A `console.warn` on the server. No message row,
+no workflow event, no operator surface — identical to the eligibility hole before
+it was closed.
+
+**Candidate canonical owner.** Template Platform (WS12), not Conversation
+Runtime. A render block is an **authoring** defect — a template referencing a
+token the record cannot supply — not a fact about a recipient. Filing it on a
+family's timeline tells an operator something they cannot act on; a template
+health surface tells the person who can. The counter-argument is real: from the
+family's record, "we tried to reach you and could not" is true regardless of
+cause, and splitting refusals across two surfaces means an operator must look in
+two places to answer "did this family hear from us".
+
+**Does it affect Interactive Tour?** **No.** All six parent-facing Tour templates
+— invitation, confirmation, reminder, reschedule, cancel, no-show follow-up —
+clear `renderOutboundMessage` on both email and SMS. Proven in
+`web/tests/tours/tourCommsTemplates.test.ts`, which drives each template through
+the real renderer rather than asserting on template text.
+
+**Do not make it symmetric with eligibility blocking without an approved
+ownership decision.**
+
+---
+
 ## Deliberately deferred — recorded so it is not rediscovered as a surprise
 
 | Item | Why deferred | Phase |
@@ -243,8 +287,21 @@ dispatches a real message. It is a developer footgun, not a code path.
 | Priority | Count | Blocking production |
 | --- | --- | --- |
 | P1 | 4 | 2 (D-2 with real opt-outs, D-4 at >1 worker) |
-| P2 | 5 | 1 (D-8, only if the legacy vertical is revived) |
+| P2 | 6 | 1 (D-8, only if the legacy vertical is revived) |
 | P3 | 3 | 0 |
 
 **Nothing blocks Phase 1 from starting.** D-1 through D-4 are Phase 1 and Phase 2
 *content*, not prerequisites.
+
+**D-13 needs a decision, not a fix.** It is the only open item whose remedy
+depends on an ownership call rather than engineering effort.
+
+---
+
+## Closed since this register was written
+
+| Item | Closed by |
+| --- | --- |
+| Enqueue-time eligibility refusals persisted nothing | durable `status='blocked'` row + `message_blocked` event — see [`../BLOCKED-SEND-VISIBILITY.md`](../BLOCKED-SEND-VISIBILITY.md) §2–3 |
+| `message_blocked` / `message_deferred` reached operators as raw event keys | channel-aware labels, channel enrichment, reason-as-detail — §4 |
+| Dispatcher filed policy events under `entity_id = org_id`, unreachable by every record | subject resolved at the canonical producer from the thread — §5 |

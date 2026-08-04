@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTourCommsMergeFields, formatTourCommsDateTimeLabels } from "@/lib/tours/comms/tourCommsTemplateContext";
+import { renderOutboundMessage } from "@/lib/communications/render/renderOutboundMessage";
 import {
     applyTourCommsPlaceholders,
     getDefaultTourCommsTemplateSet,
@@ -202,4 +203,48 @@ describe("buildTourCommsMergeFields", () => {
         const m = buildTourCommsMergeFields({ parentName: "Taylor Jones" });
         expect(m.parent_name).toBe("Taylor");
     });
+});
+
+/**
+ * Does any Tour template hit the canonical renderer's `render_blocked` path?
+ *
+ * The orchestrator pre-renders a Tour body and hands it to
+ * `enqueueCanonicalOutboundMessage` as FREE TEXT — no renderContext, no template
+ * lineage — so `renderOutboundMessage` re-validates it before the eligibility
+ * gate ever runs. A block there returns `render_blocked:<CODE>` and, unlike an
+ * eligibility block, still persists nothing.
+ *
+ * This answers whether that open hole touches Interactive Tour today.
+ */
+describe("Tour templates clear the canonical renderer", () => {
+    const parentFacingKeys = [
+        "tour_invitation",
+        "tour_confirmation",
+        "tour_reminder",
+        "tour_reschedule",
+        "tour_cancel",
+        "tour_no_show_followup",
+    ] as const;
+
+    for (const eventKey of parentFacingKeys) {
+        for (const channel of ["email", "sms"] as const) {
+            it(`${eventKey} / ${channel} renders without blocking`, () => {
+                const tpl = renderTourCommsTemplate({ eventKey, channel, context: baseContext });
+                if (!tpl) return; // key not offered on this channel
+
+                const result = renderOutboundMessage({
+                    subject: tpl.channel === "email" ? tpl.subject : null,
+                    body: tpl.channel === "email" ? tpl.bodyText : tpl.body,
+                    bodyIsHtml: false,
+                    context: { values: {}, channel, template: null },
+                    expectedFingerprint: null,
+                });
+
+                if (!result.ok) {
+                    throw new Error(`${eventKey}/${channel} blocked: ${result.block.code} — ${result.block.message}`);
+                }
+                expect(result.output.text).not.toContain("{{");
+            });
+        }
+    }
 });
