@@ -11,14 +11,17 @@ import {
 } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import { resolveCompactSlotDisplay } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import { previewRowModelFromConfig } from "@/lib/adminV2/settings/surfaces/queueRowBuilderPreview";
-import type { QueueRecordLayoutConfigV3, QueueRecordColumnConfig } from "@/lib/layout/queueRecordLayoutV3";
+import type {
+    QueueRecordLayoutConfigV3,
+    QueueRecordColumnConfig,
+    QueueRecordFieldConfig,
+} from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { CollectionFieldPresentationConfig } from "@/lib/presentation/collectionFieldPresentation";
 
-function col(
-    builderSlot: string,
-    fields: Array<{ fieldKey: string; label: string; collectionPresentation?: CollectionFieldPresentationConfig }>,
-): QueueRecordColumnConfig {
+// The canonical field contract, not a local subset of it. A narrower local shape is how the
+// fixture drifted from QueueRecordFieldConfig in the first place.
+function col(builderSlot: string, fields: QueueRecordFieldConfig[]): QueueRecordColumnConfig {
     return {
         id: `col-${builderSlot}-${fields.map((f) => f.fieldKey).join("-")}`,
         label: builderSlot,
@@ -30,11 +33,7 @@ function col(
                 id: `fg-${builderSlot}`,
                 label: builderSlot,
                 layout: "stack",
-                fields: fields.map((f) => ({
-                    fieldKey: f.fieldKey,
-                    label: f.label,
-                    ...(f.collectionPresentation ? { collectionPresentation: f.collectionPresentation } : {}),
-                })),
+                fields,
             },
         ],
     };
