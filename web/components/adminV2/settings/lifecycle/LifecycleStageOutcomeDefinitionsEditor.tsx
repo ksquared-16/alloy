@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
 import LifecycleStageOutcomeBehaviorEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeBehaviorEditor";
 import { newOutcomeDraft, type StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import { outcomeAutomationSummaryForOutcome } from "@/lib/lifecycle/stageOutcomeAutomation";
 import {
     setWorkTemplateOutcomeRefs,
     workTemplateOutcomeRefs,
@@ -25,6 +28,24 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
     onChange,
     workTemplateKey,
 }: Props) {
+    /**
+     * Which outcomes have their mechanics open. Empty by default: the stage editor's job on
+     * arrival is to say what this stage does, and five simultaneously-expanded outcome editors
+     * said it in configuration controls instead. The generated summary carries the meaning; the
+     * controls are one click away and unchanged when they appear.
+     *
+     * Disclosure is view state only — it is never read back into the draft, so expanding an
+     * outcome cannot alter what gets saved.
+     */
+    const [expandedOutcomeKeys, setExpandedOutcomeKeys] = useState<ReadonlySet<string>>(new Set());
+    const toggleOutcome = (outcomeKey: string) =>
+        setExpandedOutcomeKeys((current) => {
+            const next = new Set(current);
+            if (next.has(outcomeKey)) next.delete(outcomeKey);
+            else next.add(outcomeKey);
+            return next;
+        });
+
     const workIndex =
         workTemplateKey ? draft.work_templates.findIndex((work) => work.template_key === workTemplateKey) : -1;
     const work = workIndex >= 0 ? draft.work_templates[workIndex]! : null;
@@ -93,8 +114,64 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                     const referencingTemplates = draft.work_templates.filter((row) =>
                         workTemplateOutcomeRefs(row).includes(outcome.outcome_key),
                     );
+                    const completesWork = Boolean(outcome.completes_work ?? outcome.successful);
+                    const expanded = expandedOutcomeKeys.has(outcome.outcome_key);
+                    const summary = outcomeAutomationSummaryForOutcome(
+                        outcome.outcome_key,
+                        outcome.label,
+                        draft.outcome_rules,
+                        {
+                            workTemplateLabelByKey: Object.fromEntries(
+                                draft.work_templates.map((work) => [work.template_key, work.label]),
+                            ),
+                            transitionLabelByRef: Object.fromEntries(
+                                transitionOptions.map((transition) => [
+                                    transition.transition_ref,
+                                    transition.label,
+                                ]),
+                            ),
+                            completesWork,
+                        },
+                    );
                     return (
                         <article key={outcome.outcome_key} className="rounded-md border border-alloy-forge/10 p-2">
+                            {/* Business meaning first: what this outcome does, in one sentence. */}
+                            <button
+                                type="button"
+                                className="flex w-full items-start gap-2 text-left"
+                                aria-expanded={expanded}
+                                aria-controls={`outcome-mechanics-${outcome.outcome_key}`}
+                                data-testid={`outcome-disclosure-${outcome.outcome_key}`}
+                                onClick={() => toggleOutcome(outcome.outcome_key)}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className={`mt-0.5 text-[0.625rem] text-alloy-midnight/40 transition-transform ${
+                                        expanded ? "rotate-90" : ""
+                                    }`}
+                                >
+                                    ▶
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block text-xs font-medium text-alloy-midnight">
+                                        {outcome.label || "Untitled outcome"}
+                                    </span>
+                                    <span
+                                        className="block text-[0.6875rem] leading-snug text-alloy-midnight/55"
+                                        data-testid={`outcome-summary-${outcome.outcome_key}`}
+                                    >
+                                        {summary}
+                                    </span>
+                                </span>
+                                <span className="shrink-0 text-[0.6875rem] font-medium text-alloy-pine">
+                                    {expanded ? "Hide" : "Edit"}
+                                </span>
+                            </button>
+                            <div
+                                id={`outcome-mechanics-${outcome.outcome_key}`}
+                                hidden={!expanded}
+                                className="mt-2"
+                            >
                             <div className="flex flex-wrap items-center gap-2">
                                 <input
                                     className="min-w-0 flex-1 rounded-md border border-alloy-forge/15 px-2 py-1 text-xs"
@@ -195,14 +272,13 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                             :   null}
                             <LifecycleStageOutcomeBehaviorEditor
                                 outcomeKey={outcome.outcome_key}
-                                outcomeLabel={outcome.label}
                                 stageLabel={stageLabel ?? "this stage"}
                                 rules={draft.outcome_rules}
                                 workTemplates={draft.work_templates}
                                 transitionOptions={transitionOptions}
-                                completesWork={Boolean(outcome.completes_work ?? outcome.successful)}
                                 onRulesChange={(outcome_rules) => onChange({ ...draft, outcome_rules })}
                             />
+                            </div>
                         </article>
                     );
                 })}

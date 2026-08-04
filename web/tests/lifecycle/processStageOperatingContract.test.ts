@@ -289,7 +289,40 @@ describe("Process Stage operating contract — transitions (11–15)", () => {
             plan: tourConductTourProofPlan(),
             transitionOptions: [],
         });
-        expect(missing.some((i) => i.code === "outcome_transition_missing")).toBe(true);
+        // "This stage has no outgoing transition" is one fact about the stage. It used to be
+        // reported once per outcome that wanted to move, which rendered the identical sentence
+        // five times on the Lead stage and read as five separate problems.
+        const stageScoped = missing.filter((i) => i.code === "stage_transition_missing");
+        expect(stageScoped).toHaveLength(1);
+        expect(stageScoped[0]!.outcome_key).toBeUndefined();
+        expect(missing.some((i) => i.code === "outcome_transition_missing")).toBe(false);
+    });
+
+    it("11–14b. The stage-level transition gap is reported once regardless of outcome count", () => {
+        const plan = tourConductTourProofPlan();
+        const movingOutcomes = plan.outcome_rules.filter((r) =>
+            r.targets.some((t) => t.kind === "move_to_stage"),
+        ).length;
+        expect(movingOutcomes, "fixture must have outcomes that move").toBeGreaterThan(0);
+
+        const issues = validateStageOperatingPlanOperatingContract({ plan, transitionOptions: [] });
+        expect(issues.filter((i) => i.code === "stage_transition_missing")).toHaveLength(1);
+    });
+
+    it("11–14c. Outcome-scoped transition problems still report per outcome", () => {
+        // Dedup must not swallow the problems that genuinely differ between outcomes.
+        const plan = tourConductTourProofPlan();
+        const rule = plan.outcome_rules.find((r) => r.when_outcome_key === "tour_completed")!;
+        rule.targets.find((t) => t.kind === "move_to_stage")!.transition_ref = "not_an_edge";
+
+        const issues = validateStageOperatingPlanOperatingContract({
+            plan,
+            transitionOptions: TOUR_TRANSITIONS,
+        });
+        const invalid = issues.filter((i) => i.code === "outcome_transition_invalid");
+        expect(invalid.length).toBeGreaterThan(0);
+        expect(invalid.every((i) => Boolean(i.outcome_key))).toBe(true);
+        expect(issues.some((i) => i.code === "stage_transition_missing")).toBe(false);
     });
 
     it("12. Destination stage alone is rejected when first-class transitions exist", () => {
