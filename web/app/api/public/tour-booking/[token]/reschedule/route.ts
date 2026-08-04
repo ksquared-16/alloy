@@ -5,6 +5,9 @@ import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tour
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
 import { mintActionsFor, POST_BOOKING_ACTION_KINDS } from "@/lib/tours/invitation/mintTourInvitation";
+import { buildTourParentActionModel } from "@/lib/tours/invitation/tourParentActionModel";
+import { orchestrateTourBookingRescheduled, runTourCommsOrchestratorBestEffort } from "@/lib/tours/comms/tourCommsOrchestrator";
+import { resolvePublicBaseUrl } from "@/lib/tours/public/resolvePublicBaseUrl";
 import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
 import { loadBoundBooking } from "@/lib/tours/public/loadBoundBooking";
 
@@ -77,6 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
         const replacement = await rescheduleTourBooking(supabase, auth.link.org_id, booking.id, {
             startAt, endAt, timezone: body.timezone ?? booking.timezone, locationId: auth.link.location_id,
+            deferLifecycleComms: true,
         });
 
         await consumeTourAction({ supabase, linkId: auth.link.id, bookingId: replacement.id });
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // The replacement booking needs its own scoped action set; actions bound
         // to the superseded booking are now stale.
-        await mintActionsFor({
+        const minted = await mintActionsFor({
             supabase,
             orgId: auth.link.org_id,
             invitationId: auth.invitation.id,
@@ -97,6 +101,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             kinds: POST_BOOKING_ACTION_KINDS,
             bookingId: replacement.id,
         });
+
+        // ONE reschedule notification, after the replacement's credentials exist, via
+        // the same orchestrator. Best-effort: delivery must never revoke the move.
+        await runTourCommsOrchestratorBestEffort("public_reschedule", () =>
+            orchestrateTourBookingRescheduled(supabase, {
+                orgId: auth.link.org_id,
+                booking: replacement,
+                actionModel: buildTourParentActionModel({
+                    actions: minted.ok ? minted.actions : [],
+                    baseUrl: resolvePublicBaseUrl(request),
+                    bookingStatusKey: replacement.status_key,
+                }),
+            })
+        );
 
         await recordTourEvent(supabase, {
             event: "tour_rescheduled",

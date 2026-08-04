@@ -82,6 +82,12 @@ export type TourCommsOrchestrateInput = {
     lifecycleAction?: string | null;
     reminderAction?: "schedule" | "replace" | "cancel" | "none";
     scheduleGeneration?: number;
+    /**
+     * Parent-safe action URLs for THIS booking's current state, minted by the caller
+     * after the booking committed. Only URLs cross this boundary — never an action
+     * kind, id, or status.
+     */
+    actionModel?: { rescheduleUrl?: string | null; cancelUrl?: string | null; confirmUrl?: string | null } | null;
     deps?: TourCommsOrchestratorDeps;
 };
 
@@ -476,7 +482,19 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
     const scheduleGeneration = input.scheduleGeneration ?? resolveTourCommsScheduleGeneration(input.booking);
     const generationToken = String(input.immediateGenerationToken ?? scheduleGeneration).trim() || String(scheduleGeneration);
 
-    const templateContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, input.booking);
+    const baseContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, input.booking);
+    // Caller-supplied action URLs win: they were minted for the state the booking is
+    // actually in now. Without them the templates render their optional action lines
+    // empty and the lines are stripped, which is how a confirmation ended up offering
+    // the parent nothing to do.
+    const templateContext = input.actionModel
+        ? {
+              ...baseContext,
+              rescheduleUrl: input.actionModel.rescheduleUrl ?? baseContext.rescheduleUrl ?? null,
+              cancelUrl: input.actionModel.cancelUrl ?? baseContext.cancelUrl ?? null,
+              ctaUrl: input.actionModel.confirmUrl ?? baseContext.ctaUrl ?? null,
+          }
+        : baseContext;
     const reminderSnapshots = renderReminderSnapshots(templateContext, config);
 
     const reminderAction = input.reminderAction ?? "none";
@@ -624,13 +642,20 @@ export async function orchestrateTourInvitationComms(input: {
 
 export async function orchestrateTourBookingConfirmed(
     supabase: SupabaseClient,
-    params: { orgId: string; booking: TourBookingRow; actorUserId?: string | null; deps?: TourCommsOrchestratorDeps }
+    params: {
+        orgId: string;
+        booking: TourBookingRow;
+        actorUserId?: string | null;
+        actionModel?: TourCommsOrchestrateInput["actionModel"];
+        deps?: TourCommsOrchestratorDeps;
+    }
 ): Promise<TourCommsOrchestrationResult> {
     return orchestrateTourCommsForBooking({
         supabase,
         orgId: params.orgId,
         booking: params.booking,
         actorUserId: params.actorUserId,
+        actionModel: params.actionModel ?? null,
         immediateEventKey: "tour_confirmation",
         immediateGenerationToken: "confirmed",
         lifecycleAction: "confirm",
@@ -641,12 +666,19 @@ export async function orchestrateTourBookingConfirmed(
 
 export async function orchestrateTourBookingRescheduled(
     supabase: SupabaseClient,
-    params: { orgId: string; booking: TourBookingRow; actorUserId?: string | null; deps?: TourCommsOrchestratorDeps }
+    params: {
+        orgId: string;
+        booking: TourBookingRow;
+        actorUserId?: string | null;
+        actionModel?: TourCommsOrchestrateInput["actionModel"];
+        deps?: TourCommsOrchestratorDeps;
+    }
 ): Promise<TourCommsOrchestrationResult> {
     return orchestrateTourCommsForBooking({
         supabase,
         orgId: params.orgId,
         booking: params.booking,
+        actionModel: params.actionModel ?? null,
         actorUserId: params.actorUserId,
         immediateEventKey: "tour_reschedule",
         immediateGenerationToken: `rescheduled:${params.booking.start_at}`,
@@ -658,12 +690,19 @@ export async function orchestrateTourBookingRescheduled(
 
 export async function orchestrateTourBookingCanceled(
     supabase: SupabaseClient,
-    params: { orgId: string; booking: TourBookingRow; actorUserId?: string | null; deps?: TourCommsOrchestratorDeps }
+    params: {
+        orgId: string;
+        booking: TourBookingRow;
+        actorUserId?: string | null;
+        actionModel?: TourCommsOrchestrateInput["actionModel"];
+        deps?: TourCommsOrchestratorDeps;
+    }
 ): Promise<TourCommsOrchestrationResult> {
     return orchestrateTourCommsForBooking({
         supabase,
         orgId: params.orgId,
         booking: params.booking,
+        actionModel: params.actionModel ?? null,
         actorUserId: params.actorUserId,
         immediateEventKey: "tour_cancel",
         immediateGenerationToken: "canceled",
