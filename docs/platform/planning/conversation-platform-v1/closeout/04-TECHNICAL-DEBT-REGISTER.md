@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-04
+supersedes: []
+---
+
 # Conversation Technical Debt Register
 
 Every known remaining debt in the communications surface as of 2026-07-31.

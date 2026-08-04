@@ -1,6 +1,6 @@
 ---
 title: Blocked-send visibility — delivery record
-status: delivered — browser proof outstanding
+status: sprint
 stage: realization
 sprint: interactive-tour-delivery (slot 4)
 base: origin/staging @ 0aa49972a
@@ -8,6 +8,8 @@ date: 2026-08-04
 ---
 
 # Blocked-send visibility
+
+**State:** delivered; browser proof outstanding.
 
 What the platform does when it refuses to send, and what an operator can see.
 Concrete state only — no estimates, no percentages.
