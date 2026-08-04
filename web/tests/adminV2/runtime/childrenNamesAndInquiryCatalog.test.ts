@@ -55,7 +55,7 @@ function layout(keys: string[]) {
             {
                 id: "col",
                 label: "Children",
-                width: "auto" as const,
+                width: "small" as const,
                 builderSlot: "groupCount" as const,
                 blocks: [
                     {

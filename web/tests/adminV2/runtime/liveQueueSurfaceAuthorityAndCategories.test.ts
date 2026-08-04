@@ -23,7 +23,8 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                 id: "col-1",
                 label: "Primary",
                 width: "large",
-                builderSlot: "primary",
+                scope: { type: "main_record" },
+                builderSlot: "identity",
                 blocks: [
                     {
                         type: "field_group",
@@ -38,7 +39,8 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                 id: "col-2",
                 label: "Secondary",
                 width: "small",
-                builderSlot: "secondary",
+                scope: { type: "main_record" },
+                builderSlot: "groupCount",
                 blocks: [
                     {
                         type: "field_group",
@@ -65,6 +67,7 @@ function layoutWithKeys(keys: string[]): QueueRecordLayoutConfigV3 {
                         id: "vcol",
                         label: "Status only",
                         width: "medium",
+                        scope: { type: "main_record" },
                         builderSlot: "status",
                         blocks: [
                             {

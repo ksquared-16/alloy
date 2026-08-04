@@ -16,7 +16,8 @@ function makeConfig(): QueueRecordLayoutConfigV3 {
             {
                 id: "secondary",
                 label: "Secondary",
-                width: "md",
+                width: "medium",
+                scope: { type: "main_record" },
                 builderSlot: "groupCount",
                 rowIndex: 2,
                 blocks: [

@@ -26,6 +26,7 @@ function col(builderSlot: string, fields: QueueRecordFieldConfig[]): QueueRecord
         id: `col-${builderSlot}-${fields.map((f) => f.fieldKey).join("-")}`,
         label: builderSlot,
         width: "large",
+        scope: { type: "main_record" },
         builderSlot: builderSlot as QueueRecordColumnConfig["builderSlot"],
         blocks: [
             {
@@ -190,8 +191,10 @@ describe("collection presentation — preview and live share one path", () => {
             col("identity", [{ id: "customer.display_name", fieldKey: "customer.display_name", label: "Household", display: "text" }]),
             col("groupCount", [
                 {
+                    id: "children.names",
                     fieldKey: "children.names",
                     label: "Children names",
+                    display: "text",
                     collectionPresentation: namesWithAge,
                 },
                 { id: "children.count", fieldKey: "children.count", label: "Children count", display: "text" },
@@ -225,8 +228,10 @@ describe("collection presentation — preview and live share one path", () => {
         const published = layout([
             col("groupCount", [
                 {
+                    id: "children.names",
                     fieldKey: "children.names",
                     label: "Children names",
+                    display: "text",
                     collectionPresentation: namesWithAge,
                 },
             ]),
@@ -274,8 +279,10 @@ describe("collection presentation — preview and live share one path", () => {
             layout([
                 col("groupCount", [
                     {
+                        id: "children.summary",
                         fieldKey: "children.summary",
                         label: "Children summary",
+                        display: "text",
                         collectionPresentation: {
                             displayMode: "summary",
                             includedFields: ["first_name", "last_name"],

@@ -20,8 +20,8 @@ function layoutWithFields(fieldKeys: string[]): QueueRecordLayoutConfigV3 {
             {
                 id: "col-1",
                 label: "Primary",
-                width: "auto",
-                builderSlot: "primary",
+                width: "small",
+                builderSlot: "identity",
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),
@@ -109,8 +109,8 @@ describe("queue row compact publish validation", () => {
                         {
                             id: "col-v",
                             label: "Primary",
-                            width: "auto" as const,
-                            builderSlot: "primary" as const,
+                            width: "small" as const,
+                            builderSlot: "identity" as const,
                             blocks: [
                                 {
                                     id: nextQueueRecordBlockId("fg"),

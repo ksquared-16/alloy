@@ -103,7 +103,7 @@ describe("resolveQueueRowCompactSlots", () => {
                 {
                     id: "col-children",
                     label: "",
-                    width: "auto",
+                    width: "small",
                     builderSlot: "groupCount",
                     blocks: [
                         {
@@ -145,7 +145,7 @@ describe("resolveQueueRowCompactSlots", () => {
                 {
                     id: "col-contact",
                     label: "",
-                    width: "auto",
+                    width: "small",
                     builderSlot: "identity",
                     blocks: [
                         {
@@ -156,6 +156,7 @@ describe("resolveQueueRowCompactSlots", () => {
                                     id: "f-phone",
                                     fieldKey: "person.phone",
                                     label: "Phone",
+                                    display: "text",
                                 },
                             ],
                         },
@@ -164,7 +165,7 @@ describe("resolveQueueRowCompactSlots", () => {
                 {
                     id: "col-work",
                     label: "",
-                    width: "auto",
+                    width: "small",
                     builderSlot: "work",
                     blocks: [
                         {
@@ -175,6 +176,7 @@ describe("resolveQueueRowCompactSlots", () => {
                                     id: "f-work",
                                     fieldKey: "opportunity.next_step",
                                     label: "Next step",
+                                    display: "text",
                                 },
                             ],
                         },

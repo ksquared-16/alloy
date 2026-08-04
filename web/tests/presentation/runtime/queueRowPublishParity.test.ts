@@ -26,7 +26,7 @@ function layoutWithFields(fieldKeys: string[]): QueueRecordLayoutConfigV3 {
             {
                 id: "col-1",
                 label: "Primary",
-                width: "auto",
+                width: "small",
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),

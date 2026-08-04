@@ -34,7 +34,6 @@ function sampleChild(overrides: Partial<ChildrenEvidenceChild> = {}): ChildrenEv
         teacher: null,
         startDate: "Aug 4, 2026",
         status: null,
-        statusKey: null,
         needsAttention: false,
         missingLine: null,
         detailLine: null,

@@ -27,7 +27,7 @@ function layoutWithDefaultAndStageVariant(args: {
             {
                 id: "col-default",
                 label: "Primary",
-                width: "auto",
+                width: "small",
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),
@@ -52,7 +52,7 @@ function layoutWithDefaultAndStageVariant(args: {
                     {
                         id: "col-status",
                         label: "",
-                        width: "auto",
+                        width: "small",
                         builderSlot: "status",
                         blocks: [
                             {

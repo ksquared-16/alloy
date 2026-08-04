@@ -100,7 +100,7 @@ describe("6E — resolver injection restores avatars", () => {
     });
 
     it("resolves per person, so one authorization does not cover another", () => {
-        const rows = [
+        const rows: Record<string, unknown>[] = [
             { id: PERSON_A, metadata: {} },
             { id: PERSON_B, metadata: {} },
         ];
@@ -132,7 +132,7 @@ describe("6E — resolver injection restores avatars", () => {
     });
 
     it("tolerates a row with no person id", () => {
-        const rows = [{ metadata: {} } as Record<string, unknown>];
+        const rows: Record<string, unknown>[] = [{ metadata: {} } as Record<string, unknown>];
         expect(() => applyResolvedPhotoUrls(rows, new Map())).not.toThrow();
     });
 });
