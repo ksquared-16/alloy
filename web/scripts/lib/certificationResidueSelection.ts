@@ -79,7 +79,16 @@ export function classifyThread(
  * a tenant claiming its programs were never published. Verification asserts the exact expected
  * count for these rather than tolerating "some rows remain".
  */
-export const CONFIG_EVENT_SUBJECTS = ["program", "gl_accounts"] as const;
+export const CONFIG_EVENT_SUBJECTS = [
+    "program",
+    "gl_accounts",
+    /**
+     * The reset's own audit event. It is the record that the baseline was established, written by
+     * `certification_reset_execute` itself — deleting it on a later run would erase the provenance
+     * of the very tenant state being certified. Preserved for the same reason program history is.
+     */
+    "certification_reset",
+] as const;
 
 /** Event subjects that are operational and follow their deleted subject. */
 export const OPERATIONAL_EVENT_SUBJECTS = [

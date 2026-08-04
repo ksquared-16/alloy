@@ -1,6 +1,6 @@
 {
   "purpose": "firefly_certification_reset_recovery",
-  "status": "pending_deletion",
+  "status": "completed",
   "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
   "bucket": "org_documents",
   "expected_object_count": 73,
@@ -92,5 +92,16 @@
     "93667019-bd28-49b5-a688-acc9bb1e0a19/pos_intake/f78b387f-fba9-4f42-936b-57a47460de8f-wi3-slice5c-qa-1783742173392-needs-review.pdf",
     "93667019-bd28-49b5-a688-acc9bb1e0a19/pos_intake/fa0acb3d-44f6-4556-a5d0-11ad9e94dc27-proving-journey-1785284437772-94791.pdf",
     "93667019-bd28-49b5-a688-acc9bb1e0a19/pos_intake/fead1576-b017-4a4f-a2d9-5b2fae897fab-upload-1784936787878.pdf"
-  ]
+  ],
+  "completed_at": "2026-08-04",
+  "completion_evidence": {
+    "executed_under_plan_identity": "30190d071ed3adc407e0039accfab41952c1f583ac26ec273308b456f36a909c",
+    "planned": 73,
+    "attempted": 73,
+    "deleted": 73,
+    "already_missing": 0,
+    "failed": 0,
+    "verified_absent": "0 objects remain under org_documents/93667019-bd28-49b5-a688-acc9bb1e0a19",
+    "note": "Paths retained as audit evidence. status=completed makes a later run propose zero storage work without losing the record of what was removed."
+  }
 }

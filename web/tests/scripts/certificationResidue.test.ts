@@ -97,7 +97,7 @@ describe("workflow event classification", () => {
             "child_placements", "tour_bookings", "gl_accounts", "schedule_assignments",
             "customer_members", "child_enrollment_agreements", "child", "form_packet_sessions",
             "opportunity", "staging_resend_smoke", "staging_live_validation", "customers",
-            "opportunity_customer_members", "communications_unknown",
+            "opportunity_customer_members", "communications_unknown", "certification_reset",
         ];
         for (const t of OBSERVED) {
             const d = classifyWorkflowEvent({ id: `e-${t}`, entity_type: t });

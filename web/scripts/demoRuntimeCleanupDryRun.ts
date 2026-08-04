@@ -201,6 +201,11 @@ async function main(): Promise<void> {
             if (!v.ok) {
                 console.log(`  REFUSED — ${v.problems.join("; ")}`);
                 console.log("  (manifest is for another org or has been tampered with; storage stays untouched)\n");
+            } else if (manifest.status === "completed") {
+                // The manifest has already been executed and verified absent. Its paths are kept as
+                // audit evidence, but proposing them again would report work that does not exist.
+                console.log(`  manifest: ${manifest.objects.length} objects, status=COMPLETED (already removed)`);
+                console.log(`  TOTAL storage objects to remove: 0\n`);
             } else {
                 const derived = ids.residue?.storageObjects.map((o) => o.path) ?? [];
                 const union = [...new Set([...derived, ...manifest.objects])].sort();

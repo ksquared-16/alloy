@@ -471,6 +471,39 @@ requires a fresh dry run and renewed authorization.
 
 ---
 
+## 4sexies. EXECUTED 2026-08-04 — baseline established, with one preservation defect
+
+Plan identity `30190d071e…` verified, atomic RPC committed **849 rows**, database verified, then
+storage removed **73/73** with 0 failures. `baselineEstablished: true`.
+
+**Operational: 26/26 certification tables at ZERO.** Storage: 0 objects remain under the org prefix.
+Audit event `certification.reset.executed` written. Second dry run proposes **0 database rows and
+0 storage objects**; zero-state identity `f585538e7364ec75b6fc3911d11633f104de70a063b470738d99c911635bf8e7`.
+
+Preserved: `lifecycle_builder_v1` `4609859e…dd8dd4` unchanged · departments 5 · work_units 9 ·
+entity_layouts 265 · form_definitions 34 · business_process_drafts 1 · publications 9 ·
+field_definitions 202 · action_placements 158 · protected events 20 `program` + 10 `gl_accounts`
+(+1 reset audit).
+
+### THE DEFECT — locations 21 → 20
+
+`locations.customer_id → customers(id)` is **ON DELETE CASCADE**. One location referenced a deleted
+customer and Postgres removed it. Configuration preservation required 21.
+
+The guard inventory checked **RESTRICT** foreign keys — the ones that would *block* a delete — and
+never enumerated **CASCADE** foreign keys, the ones that silently propagate one. A blocking FK
+announces itself by failing; a cascading FK does not. `locations` is the only configuration table
+reachable this way; every other cascade target was already inside the deletion contract.
+
+The verification did not catch it either: the config check asserts a table did not lose *all* rows,
+so 21→20 read as "OK".
+
+**Owed:** enumerate CASCADE FKs from every deletion anchor to any preserved table, add them to the
+preflight, and change the config assertion from "not empty" to "exact expected count". The lost
+location's identity is not recoverable from this side — it went with the cascade.
+
+---
+
 ## 5. Interface
 
 ```text
