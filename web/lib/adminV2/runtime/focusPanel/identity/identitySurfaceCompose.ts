@@ -176,6 +176,22 @@ const CHILD_RESOLVERS: Record<string, Resolver> = {
         subject.kind === "child" && "startDate" in subject.value ? subject.value.startDate ?? null : null,
     "child.desired_start_date": (subject) =>
         subject.kind === "child" && "startDate" in subject.value ? subject.value.startDate ?? null : null,
+    "inquiry_child.start_date": (subject) => {
+        if (subject.kind !== "child") return null;
+        const child = subject.value as {
+            requestedStart?: string | null;
+            startDate?: string | null;
+        };
+        return child.requestedStart ?? child.startDate ?? null;
+    },
+    "inquiry_child.requested_days_per_week": (subject) =>
+        subject.kind === "child" && "requestedDaysPerWeek" in subject.value
+            ? (subject.value as { requestedDaysPerWeek?: string | null }).requestedDaysPerWeek ?? null
+            : null,
+    "inquiry_child.weekdays": (subject) =>
+        subject.kind === "child" && "preferredWeekdays" in subject.value
+            ? (subject.value as { preferredWeekdays?: string | null }).preferredWeekdays ?? null
+            : null,
     "child.status": (subject) =>
         subject.kind === "child" && "status" in subject.value ? subject.value.status ?? null : null,
     "child.readiness_summary": (subject) =>

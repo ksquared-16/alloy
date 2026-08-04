@@ -1279,6 +1279,12 @@ const CHILDREN_FIELD_TRUTH_META: Record<string, { icon: LucideIcon; get: (c: Chi
     "child.room": { icon: DoorOpen, get: (c) => c.room },
     "child.start_date": { icon: CalendarClock, get: (c) => c.startDate },
     "child.desired_start_date": { icon: CalendarClock, get: (c) => c.startDate },
+    "inquiry_child.start_date": { icon: CalendarClock, get: (c) => c.requestedStart ?? c.startDate },
+    "inquiry_child.requested_days_per_week": {
+        icon: CalendarDays,
+        get: (c) => c.requestedDaysPerWeek,
+    },
+    "inquiry_child.weekdays": { icon: CalendarDays, get: (c) => c.preferredWeekdays },
     "inquiry_child.schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
     "inquiry_child.desired_schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
     "child.status": { icon: BadgeCheck, get: (c) => c.status },

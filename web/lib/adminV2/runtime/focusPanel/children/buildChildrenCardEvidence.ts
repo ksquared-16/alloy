@@ -29,6 +29,12 @@ import { resolveInquiryChildGenderLabelFromRaw } from "@/lib/admin/drawer/inquir
 import { personDrawerGenderDisplayLabel } from "@/lib/admin/person/personDrawerGenderField";
 import { primaryAssignmentFromScheduling } from "@/lib/adminV2/runtime/focusPanel/identity/assignmentProgramRoomGating";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import {
+    resolvePreferredWeekdays,
+    resolveRequestedDaysPerWeek,
+    resolveRequestedStart,
+} from "@/lib/enrollment/effectiveDateAuthority";
+import { formatWeekdays } from "@/lib/scheduling/projection/buildSchedulingProjection";
 
 export type ChildStatusTone = "positive" | "work" | "risk" | "neutral";
 
@@ -85,6 +91,15 @@ export type ChildrenEvidenceChild = {
     teacher: string | null;
     /** Human-readable start date (Focus Panel date doctrine). */
     startDate: string | null;
+    /**
+     * Family Requested Start when distinct from OCM display — same grain as startDate
+     * when participation metadata owns the preferred date.
+     */
+    requestedStart: string | null;
+    /** Requested days/week label (e.g. "3 days per week"); null when unset. */
+    requestedDaysPerWeek: string | null;
+    /** Preferred weekdays label (e.g. "Mon, Wed, Fri"); null when unset. */
+    preferredWeekdays: string | null;
     status: string | null;
     statusTone: ChildStatusTone;
     /** Missing operational essentials (program / schedule / start) for this child. */
@@ -167,6 +182,31 @@ function childName(row: {
     return composed || "Child";
 }
 
+function participationMetaForMember(
+    truth: Record<string, unknown>,
+    memberId: string | null,
+    row: Record<string, unknown>,
+    raw: Record<string, unknown>,
+): Record<string, unknown> {
+    const bag = truth._enrollment_participation_by_member;
+    if (memberId && bag && typeof bag === "object" && !Array.isArray(bag)) {
+        const fromBag = (bag as Record<string, unknown>)[memberId];
+        if (fromBag && typeof fromBag === "object" && !Array.isArray(fromBag)) {
+            return fromBag as Record<string, unknown>;
+        }
+    }
+    const nested = row.participation_metadata ?? raw.participation_metadata;
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+        return nested as Record<string, unknown>;
+    }
+    const meta: Record<string, unknown> = {};
+    for (const key of ["start_date", "requested_days_per_week", "weekdays"] as const) {
+        if (row[key] !== undefined) meta[key] = row[key];
+        else if (raw[key] !== undefined) meta[key] = raw[key];
+    }
+    return meta;
+}
+
 /**
  * Options for the children evidence build. `childDetailFieldKeys` comes from the
  * PUBLISHED Children Surface config (metadata.nestedSurfaces["children_surface"]) and
@@ -234,6 +274,26 @@ export function buildChildrenCardEvidence(
         const teacher = trimOrNull((row as { teacher_label?: unknown }).teacher_label);
         const startDateIso = trimOrNull(row.start_date)?.slice(0, 10) ?? null;
         const startDate = formatFocusPanelDate(startDateIso);
+        const participationMeta = participationMetaForMember(
+            context.truth as Record<string, unknown>,
+            memberId,
+            row as unknown as Record<string, unknown>,
+            raw,
+        );
+        const requestedStartIso = resolveRequestedStart({
+            processInstanceMetadata: participationMeta,
+            ocmStartDate: startDateIso,
+            opportunityDesiredStartDate: null,
+        });
+        const requestedStart = formatFocusPanelDate(requestedStartIso);
+        const requestedDaysN = resolveRequestedDaysPerWeek(participationMeta);
+        const requestedDaysPerWeek =
+            requestedDaysN != null
+                ? `${requestedDaysN} day${requestedDaysN === 1 ? "" : "s"} per week`
+                : null;
+        const preferredDays = resolvePreferredWeekdays(participationMeta);
+        const preferredWeekdays =
+            preferredDays.length > 0 ? formatWeekdays(preferredDays) : null;
         const dobAge = formatFocusPanelDobAgeLine(row.dob, row.age);
         // Operator-facing value is the child's PROCESS STAGE (the retired "Participation Status" is
         // gone). Sourced from stage_key where present, else mapped from the stage-equivalent
@@ -260,6 +320,9 @@ export function buildChildrenCardEvidence(
             "inquiry_child.desired_schedule_type": schedule,
             "child.start_date": startsLabel,
             "child.desired_start_date": startsLabel,
+            "inquiry_child.start_date": requestedStart ? `starts ${requestedStart}` : startsLabel,
+            "inquiry_child.requested_days_per_week": requestedDaysPerWeek,
+            "inquiry_child.weekdays": preferredWeekdays,
             "child.date_of_birth": dobAge,
         };
         const configuredKeys = (options.childDetailFieldKeys ?? []).filter(
@@ -345,6 +408,9 @@ export function buildChildrenCardEvidence(
             schedule,
             teacher,
             startDate,
+            requestedStart,
+            requestedDaysPerWeek,
+            preferredWeekdays,
             // The child's PROCESS STAGE (replaces the retired Participation Status). Falls back to
             // the canonical New Lead label, then humanize; null key → null → badge suppressed.
             status: processStageLabel ?? canonicalNewLeadStatusLabel(statusKey) ?? humanizeStatusKey(statusKey),

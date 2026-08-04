@@ -316,11 +316,25 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageColumn: "schedule_type",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.start_date", "Start date", "date", 130, {
+    childField("inquiry_child.start_date", "Requested Start", "date", 130, {
         entityType: "inquiry_child",
         fieldKey: "start_date",
         storageTable: "opportunity_customer_members",
         storageColumn: "start_date",
+        enrollmentDetail: true,
+    }),
+    childField("inquiry_child.requested_days_per_week", "Requested Days per Week", "number", 132, {
+        entityType: "inquiry_child",
+        fieldKey: "requested_days_per_week",
+        storageTable: "opportunity_customer_members",
+        storageColumn: "field_values",
+        enrollmentDetail: true,
+    }),
+    childField("inquiry_child.weekdays", "Preferred Weekdays", "multiselect", 134, {
+        entityType: "inquiry_child",
+        fieldKey: "weekdays",
+        storageTable: "opportunity_customer_members",
+        storageColumn: "field_values",
         enrollmentDetail: true,
     }),
     childField("inquiry_child.program_room_cohort_key", "Room / cohort", "select", 140, {
