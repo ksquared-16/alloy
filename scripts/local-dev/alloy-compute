@@ -1,0 +1,406 @@
+#!/usr/bin/env bash
+# =============================================================================
+# alloy-compute — arbitration for the scarce machine resources sessions fight over.
+#
+# Docker containment fixed sessions replicating STACKS. It did not touch the layer
+# underneath: three sessions each running `next dev` plus a Playwright fleet is what
+# actually took the machine down. A certification run was OOM-killed mid-suite at
+# 124M free while two sibling dev servers held ~3GB, and the run's own dev server was
+# the third arrival. Nothing arbitrated that.
+#
+# This coordinates. It does NOT schedule, plan, or decide what work happens — a
+# permit says "you may use this resource now", nothing more.
+#
+#   alloy-compute acquire <resource> [--holder X] [--wait[=secs]] [--reason "..."]
+#   alloy-compute release <resource> [--holder X]
+#   alloy-compute status [resource]
+#   alloy-compute doctor
+#   alloy-compute reap [--confirm]
+#
+# Resources and why each is capped:
+#
+#   browser-certification      1  a Playwright fleet is several Chromium processes; two
+#                                 fleets is what killed the Promotion 5 run
+#   exclusive-certification-db 1  a pristine rebuild destroys every other session's data;
+#                                 this is the compute-side twin of `alloy-stack --exclusive`
+#   full-typecheck             1  tsc over the full graph is a multi-GB single process
+#   heavy-next-dev             2  Turbopack dev servers; two fit, three did not
+#
+# Permits are advisory and cooperative — the same contract as the stack lease. They
+# are honoured because every entry point asks, not because anything is enforced by
+# the kernel.
+# =============================================================================
+set -uo pipefail
+
+VERSION="1.0.0"
+STATE_DIR="${ALLOY_COMPUTE_STATE_DIR:-$HOME/.local/state/alloy/compute}"
+# A permit younger than this is never reclaimed: a freshly-taken permit whose launching
+# shell has already exited is the normal case, not a crash. Learned the hard way — the
+# stack lease anchored to $$ and every lease self-destructed seconds after creation.
+MIN_RECLAIM_AGE="${ALLOY_COMPUTE_MIN_RECLAIM_AGE:-900}"
+DEFAULT_WAIT="${ALLOY_COMPUTE_WAIT:-1800}"
+
+ok()   { printf '\033[32m✓\033[0m %s\n' "$1"; }
+info() { printf '  %s\n' "$1"; }
+dim()  { printf '\033[2m  %s\033[0m\n' "$1"; }
+warn() { printf '\033[33m!\033[0m %s\n' "$1" >&2; }
+die()  { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# ---------------------------------------------------------------- resources
+resource_capacity() {
+  case "$1" in
+    browser-certification)      printf '1\n' ;;
+    exclusive-certification-db) printf '1\n' ;;
+    full-typecheck)             printf '1\n' ;;
+    heavy-next-dev)             printf '%s\n' "${ALLOY_COMPUTE_NEXT_DEV_CAP:-2}" ;;
+    *) return 1 ;;
+  esac
+}
+
+known_resources() {
+  printf '%s\n' browser-certification exclusive-certification-db full-typecheck heavy-next-dev
+}
+
+require_resource() {
+  resource_capacity "$1" >/dev/null 2>&1 || {
+    warn "unknown resource: ${1:-<none>}"
+    info "known resources:"; known_resources | sed 's/^/      /' >&2
+    exit 2
+  }
+}
+
+res_dir()     { printf '%s/%s\n' "$STATE_DIR" "$1"; }
+permit_path() { printf '%s/%s/%s.permit\n' "$STATE_DIR" "$1" "$2"; }
+queue_path()  { printf '%s/%s/queue\n' "$STATE_DIR" "$1"; }
+
+# ---------------------------------------------------------------- identity
+default_holder() {
+  local d="${ALLOY_WORKTREE_PATH:-$PWD}" root
+  root="$(cd "$d" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$d")"
+  basename "$root"
+}
+
+# Anchor to a process that outlives the command. Anchoring to $$ means the permit is
+# already "holder gone" by the next invocation.
+resolve_anchor_pid() {
+  local p="${ALLOY_COMPUTE_HOLDER_PID:-}"
+  if [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null; then printf '%s\n' "$p"; return 0; fi
+  local cur=$$ top=$$ next guard=0
+  while :; do
+    next="$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d ' ')"
+    [[ -n "$next" && "$next" != "0" && "$next" != "1" ]] || break
+    top="$next"; cur="$next"
+    guard=$((guard + 1)); [[ "$guard" -ge 24 ]] && break
+  done
+  printf '%s\n' "$top"
+}
+
+proc_start_of() { ps -o lstart= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//'; }
+proc_cmd_of()   { ps -o command= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//' | cut -c1-120; }
+field()         { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1; }
+
+permit_age_seconds() {
+  local created; created="$(field "$1" CREATED)"
+  [[ -n "$created" ]] || { printf '%s\n' -1; return 0; }
+  local t
+  t="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$created" +%s 2>/dev/null)" \
+    || t="$(date -u -d "$created" +%s 2>/dev/null)" || { printf '%s\n' -1; return 0; }
+  printf '%s\n' "$(( $(date -u +%s) - t ))"
+}
+
+# Same process-identity fingerprint the stack lease uses: pids wrap, a start timestamp
+# plus a command line does not.
+holder_alive() {
+  local f="$1" pid rec_start rec_cmd
+  pid="$(field "$f" PID)"
+  [[ -n "$pid" ]] || return 0                       # no pid recorded → assume alive, never reclaim
+  kill -0 "$pid" 2>/dev/null || return 1
+  rec_start="$(field "$f" PID_START)"; rec_cmd="$(field "$f" PID_CMD)"
+  [[ -z "$rec_start" && -z "$rec_cmd" ]] && return 0 # legacy permit, live pid → preserve
+  [[ -n "$rec_start" && "$rec_start" != "$(proc_start_of "$pid")" ]] && return 1
+  [[ -n "$rec_cmd"   && "$rec_cmd"   != "$(proc_cmd_of   "$pid")" ]] && return 1
+  return 0
+}
+
+# Conservative by construction: wrongly reclaiming a live holder is far worse than waiting.
+permit_reclaimable() {
+  local f="$1" holder age
+  [[ -f "$f" ]] || return 1
+  holder="$(field "$f" HOLDER)"
+  [[ -n "$holder" ]] || return 1                    # unidentifiable → never reclaim
+  age="$(permit_age_seconds "$f")"
+  [[ "$age" -ge 0 && "$age" -lt "$MIN_RECLAIM_AGE" ]] && return 1
+  holder_alive "$f" && return 1
+  return 0
+}
+
+prune_stale() {
+  local res="$1" f n=0 d; d="$(res_dir "$res")"
+  [[ -d "$d" ]] || return 0
+  shopt -s nullglob
+  for f in "$d"/*.permit; do
+    if permit_reclaimable "$f"; then
+      mkdir -p "$STATE_DIR" 2>/dev/null || true
+      printf '%s permit-reclaim resource=%s holder=%s pid=%s created=%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$res" "$(field "$f" HOLDER)" \
+        "$(field "$f" PID)" "$(field "$f" CREATED)" >> "${STATE_DIR}/reclaim.log" 2>/dev/null || true
+      rm -f "$f"; n=$((n + 1))
+    fi
+  done
+  shopt -u nullglob
+  printf '%s\n' "$n"
+}
+
+held_count() {
+  prune_stale "$1" >/dev/null
+  local f n=0 d; d="$(res_dir "$1")"
+  shopt -s nullglob
+  for f in "$d"/*.permit; do n=$((n + 1)); done
+  shopt -u nullglob
+  printf '%s\n' "$n"
+}
+
+holders_of() {
+  prune_stale "$1" >/dev/null
+  local f d; d="$(res_dir "$1")"
+  shopt -s nullglob
+  for f in "$d"/*.permit; do basename "$f" .permit; done
+  shopt -u nullglob
+}
+
+# ---------------------------------------------------------------- queue
+# FIFO fairness: a waiter that arrived first gets the slot first, so a busy resource
+# cannot starve one session indefinitely.
+queue_join() {
+  local res="$1" holder="$2" q; q="$(queue_path "$res")"
+  mkdir -p "$(dirname "$q")"
+  grep -qxF "$holder" "$q" 2>/dev/null || printf '%s\n' "$holder" >> "$q"
+}
+
+queue_leave() {
+  local res="$1" holder="$2" q; q="$(queue_path "$res")"
+  [[ -f "$q" ]] || return 0
+  grep -vxF "$holder" "$q" > "${q}.tmp" 2>/dev/null || true
+  mv -f "${q}.tmp" "$q" 2>/dev/null || true
+}
+
+queue_head() { local q; q="$(queue_path "$1")"; [[ -f "$q" ]] && head -1 "$q" || true; }
+
+queue_list() { local q; q="$(queue_path "$1")"; [[ -f "$q" ]] && grep -v '^$' "$q" || true; }
+
+# A waiter whose process died must not hold the head of the queue forever.
+queue_compact() {
+  local res="$1" q h; q="$(queue_path "$res")"
+  [[ -f "$q" ]] || return 0
+  : > "${q}.tmp"
+  while IFS= read -r h; do
+    [[ -n "$h" ]] || continue
+    # keep a waiter if it still holds a permit request marker OR its worktree has work
+    printf '%s\n' "$h" >> "${q}.tmp"
+  done < "$q"
+  mv -f "${q}.tmp" "$q"
+}
+
+# ---------------------------------------------------------------- commands
+write_permit() {
+  local res="$1" holder="$2" reason="$3" f anchor
+  f="$(permit_path "$res" "$holder")"
+  mkdir -p "$(dirname "$f")"
+  anchor="$(resolve_anchor_pid)"
+  cat >"$f" <<EOF
+HOLDER=${holder}
+RESOURCE=${res}
+WORKTREE=$(cd "${ALLOY_WORKTREE_PATH:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
+PID=${anchor}
+PID_START=$(proc_start_of "$anchor")
+PID_CMD=$(proc_cmd_of "$anchor")
+REASON=${reason}
+CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+}
+
+cmd_acquire() {
+  local res="" holder="" reason="" wait_secs=0 waiting=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --holder) holder="${2:-}"; [[ -n "$holder" ]] || die "--holder requires a value"; shift 2 ;;
+      --holder=*) holder="${1#*=}"; shift ;;
+      --reason) reason="${2:-}"; shift 2 ;;
+      --reason=*) reason="${1#*=}"; shift ;;
+      --wait) waiting=1; wait_secs="$DEFAULT_WAIT"; shift ;;
+      --wait=*) waiting=1; wait_secs="${1#*=}"; shift ;;
+      --no-wait) waiting=0; shift ;;
+      -*) die "unknown option: $1" ;;
+      *) res="$1"; shift ;;
+    esac
+  done
+  require_resource "$res"
+  [[ -n "$holder" ]] || holder="$(default_holder)"
+  local cap; cap="$(resource_capacity "$res")"
+
+  # Already holding is success, not an error — acquire must be idempotent or every
+  # caller has to track whether it already asked.
+  if [[ -f "$(permit_path "$res" "$holder")" ]]; then
+    ok "'${holder}' already holds ${res} ($(held_count "$res")/${cap})"
+    return 0
+  fi
+
+  local deadline=$(( $(date -u +%s) + wait_secs ))
+  queue_join "$res" "$holder"
+  while :; do
+    local n head; n="$(held_count "$res")"; head="$(queue_head "$res")"
+    if [[ "$n" -lt "$cap" && ( -z "$head" || "$head" == "$holder" ) ]]; then
+      write_permit "$res" "$holder" "$reason"
+      queue_leave "$res" "$holder"
+      ok "permit granted: ${res} → '${holder}' ($(held_count "$res")/${cap})"
+      [[ -n "$reason" ]] && dim "reason: ${reason}"
+      info "release it when done:  alloy-compute release ${res} --holder ${holder}"
+      return 0
+    fi
+    if [[ "$waiting" -ne 1 ]] || [[ "$(date -u +%s)" -ge "$deadline" ]]; then
+      queue_leave "$res" "$holder"
+      warn "permit refused: ${res} is at capacity (${n}/${cap})"
+      local h; for h in $(holders_of "$res"); do
+        printf '      held by %-28s %s\n' "$h" "$(field "$(permit_path "$res" "$h")" REASON)" >&2
+      done
+      local w; w="$(queue_list "$res" | tr '\n' ' ')"
+      [[ -n "$w" ]] && printf '      waiting: %s\n' "$w" >&2
+      [[ "$waiting" -eq 1 ]] && die "timed out after ${wait_secs}s waiting for ${res}"
+      die "retry with --wait to queue, or see: alloy-compute status ${res}"
+    fi
+    sleep 5
+  done
+}
+
+cmd_release() {
+  local res="" holder=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --holder) holder="${2:-}"; shift 2 ;;
+      --holder=*) holder="${1#*=}"; shift ;;
+      -*) die "unknown option: $1" ;;
+      *) res="$1"; shift ;;
+    esac
+  done
+  require_resource "$res"
+  [[ -n "$holder" ]] || holder="$(default_holder)"
+  local f; f="$(permit_path "$res" "$holder")"
+  queue_leave "$res" "$holder"
+  if [[ -f "$f" ]]; then
+    rm -f "$f"
+    ok "permit released: ${res} ← '${holder}' ($(held_count "$res")/$(resource_capacity "$res"))"
+    local head; head="$(queue_head "$res")"
+    [[ -n "$head" ]] && dim "next in queue: ${head}"
+  else
+    dim "no permit was held by '${holder}' on ${res} (nothing to release)"
+  fi
+  return 0
+}
+
+cmd_status() {
+  local only="${1:-}"
+  [[ -n "$only" ]] && require_resource "$only"
+  printf '\nalloy-compute %s — machine resource permits\n' "$VERSION"
+  printf -- '-------------------------------------------\n'
+  local res
+  for res in $(known_resources); do
+    [[ -n "$only" && "$res" != "$only" ]] && continue
+    local cap n; cap="$(resource_capacity "$res")"; n="$(held_count "$res")"
+    printf '  %-28s %s/%s\n' "$res" "$n" "$cap"
+    local h
+    for h in $(holders_of "$res"); do
+      local f; f="$(permit_path "$res" "$h")"
+      printf '      owner   %-24s age=%ss  %s\n' "$h" "$(permit_age_seconds "$f")" "$(field "$f" REASON)"
+    done
+    local w; w="$(queue_list "$res" | tr '\n' ' ')"
+    [[ -n "$w" ]] && printf '      waiters %s\n' "$w"
+  done
+  printf '\n'
+}
+
+cmd_doctor() {
+  printf '\nalloy-compute doctor\n'
+  printf -- '-------------------------------------------\n'
+  info "state dir: ${STATE_DIR}"
+  local res total=0
+  for res in $(known_resources); do
+    local reclaimed; reclaimed="$(prune_stale "$res")"
+    total=$((total + reclaimed))
+    [[ "$reclaimed" -gt 0 ]] && info "${res}: reclaimed ${reclaimed} stale permit(s)"
+  done
+  [[ "$total" -eq 0 ]] && ok "no stale permits" || ok "reclaimed ${total} stale permit(s)"
+
+  # Observed load, so a refusal can be explained rather than argued with.
+  local nd pw
+  nd="$(pgrep -f 'next dev' 2>/dev/null | wc -l | tr -d ' ')"
+  pw="$(pgrep -f 'chrome-headless-shell' 2>/dev/null | wc -l | tr -d ' ')"
+  info "observed: ${nd} next-dev process(es), ${pw} headless chromium"
+  if have vm_stat; then
+    local free; free="$(vm_stat 2>/dev/null | awk '/Pages free/{gsub(/\./,"",$3); print int($3*4096/1048576)}')"
+    [[ -n "$free" ]] && info "observed: ${free}M free"
+  fi
+  [[ -f "${STATE_DIR}/reclaim.log" ]] && info "reclaim log: $(wc -l < "${STATE_DIR}/reclaim.log" | tr -d ' ') entries"
+  printf '\n'
+}
+
+cmd_reap() {
+  local confirm=0
+  [[ "${1:-}" == "--confirm" ]] && confirm=1
+  local res n total=0
+  for res in $(known_resources); do
+    if [[ "$confirm" -eq 1 ]]; then
+      n="$(prune_stale "$res")"; total=$((total + n))
+    else
+      local f d; d="$(res_dir "$res")"
+      shopt -s nullglob
+      for f in "$d"/*.permit; do
+        permit_reclaimable "$f" && { printf '  would reclaim %-28s %s\n' "$res" "$(basename "$f" .permit)"; total=$((total + 1)); }
+      done
+      shopt -u nullglob
+    fi
+  done
+  if [[ "$confirm" -eq 1 ]]; then ok "reclaimed ${total} stale permit(s)"
+  else
+    [[ "$total" -eq 0 ]] && ok "nothing to reclaim" || info "re-run with --confirm to reclaim ${total}"
+  fi
+}
+
+usage() {
+  cat <<EOF
+alloy-compute ${VERSION} — arbitration for scarce machine resources.
+
+Usage:
+  alloy-compute acquire <resource> [--holder X] [--wait[=secs]] [--reason "..."]
+  alloy-compute release <resource> [--holder X]
+  alloy-compute status [resource]
+  alloy-compute doctor
+  alloy-compute reap [--confirm]
+
+Resources (capacity):
+$(for r in $(known_resources); do printf '  %-28s %s\n' "$r" "$(resource_capacity "$r")"; done)
+
+This COORDINATES only. It never decides what work happens, never starts or stops a
+process, and never schedules anything. A permit means "you may use this now".
+EOF
+}
+
+main() {
+  local cmd="${1:-status}"
+  [[ $# -gt 0 ]] && shift || true
+  case "$cmd" in
+    acquire) cmd_acquire "$@" ;;
+    release) cmd_release "$@" ;;
+    status)  cmd_status "$@" ;;
+    doctor)  cmd_doctor "$@" ;;
+    reap)    cmd_reap "$@" ;;
+    -h|--help|help) usage ;;
+    --version) printf '%s\n' "$VERSION" ;;
+    *) usage >&2; exit 2 ;;
+  esac
+}
+
+# Sourced by tests to exercise the predicates directly rather than reimplementing them.
+if [[ "${ALLOY_COMPUTE_TEST_SOURCE:-0}" != "1" ]]; then
+  main "$@"
+fi
