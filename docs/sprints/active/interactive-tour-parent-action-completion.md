@@ -181,7 +181,63 @@ Verified truth:
   `TourCommsSubject`
 - **no second communications runtime was created**
 
-## 5. Out of scope
+## 5. Recipient resolution — root cause (Phase 1)
+
+`eligibility_blocked:RECIPIENT_UNRESOLVED` was **two caller defects**, not a fixture
+problem and not a gap in the Communications identity model.
+
+**Canonical recipient authority chain (verified):**
+
+```
+opportunity.primary_person_id  (or booking.primary_person_id when a booking exists)
+  → resolveTourCommsParentRecipient        the ONE tour recipient resolver
+  → persons row                            canonical identity, email + phone columns
+  → TourCommsParentRecipient               { personId, displayName, email, smsTo }
+  → enqueueCanonicalOutboundMessage        typed `recipientPersonId` + `toRaw`
+  → evaluateEligibility                    the ONE eligibility authority
+  → communication_messages
+```
+
+**Defect 1 — identity dropped at the boundary.** `sendImmediateTourComms` held the
+resolved `recipientPersonId`, wrote it into outbound `metadata`, and omitted it from
+the enqueue call. `evaluateEligibility` reads the typed field and fails closed when
+absent — correct behaviour, since an unidentified external send cannot be checked for
+opt-out, suppression or channel usability. Metadata is telemetry; the typed field is
+authority.
+
+**Defect 2 — `tour_invitation` was unrenderable.** It was never added to
+`EVENT_ALIASES`, so `normalizeTourCommsEventKey` returned null and the send was
+skipped as `empty_body`. Slice D invitations could never render a body.
+`tour_pending_internal` had the same latent gap. Identity entries are now derived from
+`TOUR_COMMS_EVENT_KEYS`.
+
+Answers to the diagnosis questions:
+
+1. **Fixture valid?** Yes — a canonical `persons` row with email and phone, reached
+   through the opportunity party.
+2. **persons, contact, or both?** `persons`. No compatibility contact was involved.
+3. **Same identity across invitation and booking?** Yes — both resolve through
+   `resolveTourCommsParentRecipient`; the invitation additionally pins
+   `recipient_person_id` on `tour_invitations`.
+4. **Booking service losing the invitation recipient?** No. It re-resolves from the
+   booking/opportunity party and reaches the same person.
+5. **Canonical person or legacy contact assumptions?** Canonical person.
+6. **Expected for the fixture?** No — it reproduced with a fully canonical person and
+   relationship, which is what made it a caller defect rather than a fixture defect.
+7. **Authoritative fix point?** The caller. `evaluateEligibility` and
+   `resolveTourCommsParentRecipient` are unchanged and remain single authorities.
+
+Classification: **caller passed insufficient canonical context.** Eligibility was not
+weakened; no tour-specific recipient lookup was added.
+
+### Still runtime-unproven
+
+Live enqueue after the fix is **not** certified. The shared certification stack was
+destroyed three times mid-run by other workers — the last time while this session held
+the `exclusive-certification-db` permit, which coordinates but does not prevent another
+holder from stopping the stack. Phases 2–4 and the browser matrix remain open.
+
+## 6. Out of scope
 
 No-show follow-up, inbound SMS replies, calendar-provider sync, parent portal or
 login, second invitation state machine.
