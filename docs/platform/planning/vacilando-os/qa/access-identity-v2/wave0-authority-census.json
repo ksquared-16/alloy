@@ -4,36 +4,45 @@
   "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
   "plan_section": "§4 — Wave 0, W-0",
   "mission": {
-    "mission_id": "msn_2d054741a54698fa4c",
+    "mission_id": "msn_f74ed02c126c88d7ff",
     "mission_version": 1,
-    "assignment_id": "asg_708252478f6fdd",
-    "content_hash": "2c0b0b8fee88469de91e37587a3bb242",
-    "phase": "Wave 0 — Live authority census"
+    "assignment_id": "asg_2a1f4d9dc80899",
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "phase": "Wave 0 — Live authority census",
+    "note": "Mission 2 (Identity & Access Platform) re-issued W-0 and re-ran the census on 2026-08-04. The original execution was mission msn_2d054741a54698fa4c / assignment asg_708252478f6fdd (content hash 2c0b0b8fee88469de91e37587a3bb242), preserved under run_history."
   },
   "worktree": "wt6-vacilando-os-product-def",
-  "branch": "agent/claude/6-vacilando-os-product-def",
+  "branch": "hotfix/vacilando-ui-freshness-flash",
+  "branch_note": "The 2026-07-31 run was authored on agent/claude/6-vacilando-os-product-def. This worktree has since merged origin/staging (5118940f7), which is the base the 2026-08-04 re-run was verified against.",
   "prepared_at": "2026-07-31T15:23:43Z",
   "prepared_by": "claude (Vacilando managed slot 6)",
-  "last_execution_attempt_at": "2026-07-31T15:36:50Z",
+  "last_execution_attempt_at": "2026-08-04T17:00:23Z",
   "status": "executed_complete",
   "execution": {
     "executed": true,
-    "executed_at": "2026-07-31T15:48:45.465Z",
+    "executed_at": "2026-08-04T17:00:23.000Z",
     "executed_by": "trusted_host_action",
     "target_database": {
       "channel_identifier": "alloy_deployed_primary",
       "channel_fingerprint": "b15dad2c6d030ed4",
       "current_database": "postgres",
       "org_count": 2,
-      "census_run_at": "2026-07-31T15:48:45.275355+00:00",
+      "census_run_at": "2026-08-04T17:00:21.773733+00:00",
       "project_ref_confirmed": false,
       "note": "The trusted host names the target 'alloy_deployed_primary' and fingerprints it as b15dad2c6d030ed4 — a durable identifier that future censuses can compare against, which is what Wave 0 actually needs. It is NOT a Supabase project ref: current_database() returns 'postgres' on every Supabase project, so the census output alone cannot distinguish one. The mapping from alloy_deployed_primary to project ref ikaxilmwmrmbagoidedu is asserted by the execution channel, not proven by this evidence. Recorded as asserted rather than confirmed."
     },
     "operator_decision": {
-      "question": "How should Wave 0's read-only SELECTs reach the deployed database?",
-      "chosen_option": "trusted_host_action — the Director executed the read-only census on the trusted host",
-      "answered_at": "2026-07-31",
-      "outcome": "executed successfully; no privileged credential reached the worker"
+      "question": "Wave 0 already has live evidence — accept the 2026-07-31 census, or re-run it for Mission 2?",
+      "chosen_option": "trusted_host_action — the Director re-ran the read-only census on the trusted host, against the already-committed query (option b)",
+      "answered_at": "2026-08-04",
+      "outcome": "executed successfully; no privileged credential reached the worker",
+      "not_adopted": "The worker recommended option (c) — fold in the self-identifying target column recorded at target.improvement_for_next_run. The re-run used the committed query unchanged (hash 743cd63b…), so that improvement is still outstanding and target.project_ref_confirmed remains false.",
+      "prior_decision": {
+        "question": "How should Wave 0's read-only SELECTs reach the deployed database?",
+        "chosen_option": "trusted_host_action",
+        "answered_at": "2026-07-31",
+        "outcome": "executed successfully; established the channel this re-run reused"
+      }
     },
     "blocker": null,
     "blocker_history": {
@@ -44,18 +53,75 @@
       "structural_finding": "DATABASE_URL is on the toolkit's explicit denylist twice: as a secret-like substring (scripts/local-dev/lib/verify.sh:202) and as a named privileged variable (:210). Its only reader is alloy_load_trusted_server_env_exports (:495-523), which exists solely to spawn the alloy-dev-start Next process. The refusal was working as designed.",
       "resolution": "The trusted host action (database.read_census) is the correct answer and the one worth reusing: the Director executes privileged reads host-side and returns only results, so the worker never holds a credential and the denylist is never weakened. Every future live-evidence step in this programme — including re-running this census before each lockout-class switch, and the §11 migration preflights, all of which require read-only queries against the same database — should use this channel rather than asking an operator to paste anything."
     },
-    "trusted_host_action_id": "tha_1e353138da1197",
-    "authorization_id": "tha_auth_d8394598adbe",
+    "trusted_host_action_id": "tha_8defba3adcee6a",
+    "authorization_id": "tha_auth_eec51323ab20",
     "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
     "database_target": "alloy_deployed_primary",
     "database_target_fingerprint": "b15dad2c6d030ed4"
+  },
+  "run_history": [
+    {
+      "run": 1,
+      "executed_at": "2026-07-31T15:48:45.465Z",
+      "census_run_at": "2026-07-31T15:48:45.275355+00:00",
+      "mission_id": "msn_2d054741a54698fa4c",
+      "assignment_id": "asg_708252478f6fdd",
+      "trusted_host_action_id": "tha_1e353138da1197",
+      "authorization_id": "tha_auth_d8394598adbe",
+      "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+      "note": "First execution. Produced the counts that struck M8, emptied the L2/L3/L4 remediation sets, and sized M1 at 2 rows."
+    },
+    {
+      "run": 2,
+      "executed_at": "2026-08-04T17:00:23.000Z",
+      "census_run_at": "2026-08-04T17:00:21.773733+00:00",
+      "mission_id": "msn_f74ed02c126c88d7ff",
+      "assignment_id": "asg_2a1f4d9dc80899",
+      "trusted_host_action_id": "tha_8defba3adcee6a",
+      "authorization_id": "tha_auth_eec51323ab20",
+      "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+      "note": "Re-run under Mission 2, same query, same target fingerprint. Every count identical to run 1 — see drift_since_previous_run. This is the current evidence of record; results[] holds run 2."
+    }
+  ],
+  "drift_since_previous_run": {
+    "compared": "2026-07-31T15:48:45Z (run 1) vs 2026-08-04T17:00:21Z (run 2)",
+    "elapsed": "~4 days",
+    "verdict": "ZERO DRIFT on every consequence-bearing count. All six queries returned exactly what they returned on 2026-07-31, so every §4 rule outcome stands re-confirmed rather than merely re-asserted.",
+    "unchanged": {
+      "org_count": 2,
+      "q1_handle_new_user_defined": 1,
+      "q1_application_triggers": 0,
+      "q2_principals_without_membership": 0,
+      "q2_legacy_only_authorized": 0,
+      "q3_undefined_membership_rows": 0,
+      "q4_membership_rows": 8,
+      "q4_distinct_user_org_pairs": 6,
+      "q4_pairs_without_profile": 2,
+      "q4_profiles_without_membership": 0,
+      "q5_admin_ops_org_role_pairs": 3,
+      "q5_pairs_with_no_definition": 0,
+      "q5_pairs_defined_but_inactive": 0,
+      "q6_restricted_admin_ops_pairs": 1,
+      "q6_restricted_site_scope_pairs": 2
+    },
+    "changed": [
+      {
+        "field": "q1_auth_users_triggers",
+        "from": "54 triggers on auth.users",
+        "to": "62 triggers on auth.users",
+        "consequence": "NONE. All 62 are tgisinternal = true referential-integrity triggers (RI_FKey_setnull_del / RI_FKey_noaction_upd); application_triggers is still 0. The 8 new rows are the FK triggers created by the migrations added since the last run — the deployed schema grew new foreign keys referencing auth.users. Q1's verdict is unchanged: handle_new_user() remains DEFINED BUT NOT ATTACHED, so G1 stays latent and W-20 stays in wave 5."
+      }
+    ],
+    "why_q4_did_not_grow": "Q4 was the count expected to drift, because W-5 has not landed — POST /api/admin/users still inserts into user_roles alone (web/app/api/admin/users/route.ts:101-105), so every membership the product creates adds a fail-open pair. It held at 2 because q4_membership_rows also held at 8: no membership was created through the product in this window. That is an absence of activity, NOT a repaired defect. The moment the product is used in earnest the number moves, which is precisely W-5's argument.",
+    "what_this_does_and_does_not_license": "It licenses M1 being sized at 2 TODAY and the L2/L3/L4 remediation sets being empty TODAY. It does not convert any count into an invariant: residual_risks[0] stands unchanged, and each §11 preflight must still re-run the census rather than cite run 2."
   },
   "target": {
     "expected_project_ref": "ikaxilmwmrmbagoidedu",
     "expected_project_ref_source": "docs/sprints/archive/07_2026/staging_migration_deployment_plan.md:3-4",
     "confirmed_against_live": false,
     "note": "UNRESOLVED BY THE EVIDENCE, and recorded honestly rather than assumed. current_database() returns 'postgres' on every Supabase project, so the returned row cannot distinguish one project from another. The trusted host action asserts the deployed DATABASE_URL was the target — correct by construction, but asserted by the execution channel rather than proven by the census output. org_count = 2 is the only distinguishing datum captured.",
-    "improvement_for_next_run": "Add a self-identifying column to combined_query — inet_server_addr(), or the org id/name set — so a future census proves its own target instead of relying on the channel's assertion."
+    "improvement_for_next_run": "Add a self-identifying column to combined_query — the org id/name set (preferred; inet_server_addr() can return NULL through a connection pooler) — so a future census proves its own target instead of relying on the channel's assertion.",
+    "improvement_status": "STILL OUTSTANDING after run 2. The 2026-08-04 re-run deliberately used the committed query unchanged, so the target is again asserted by the channel rather than evidenced by the output. Run 2 does add one weak corroboration: it returned the same org_count (2) against the same channel fingerprint (b15dad2c6d030ed4) as run 1, which is consistent with the same target but does not identify it. Carrying this improvement a third time is the wrong outcome — it should land with whichever census next changes the query."
   },
   "method": {
     "read_only": true,
@@ -94,6 +160,15 @@
       "answer": "Yes, for every table touched. All six queries executed without error against user_roles, role_definitions, user_access_profiles, user_profiles, app_users, orgs and pg_trigger, and every column the census names resolved. In particular user_access_profiles (introduced by 20260504103000_user_access_scope_tables_v1.sql) exists with department_scope and site_scope, so that migration IS applied on the target.",
       "value": "This retires the pre-execution residual risk that a query would error on drift rather than return a wrong number. It did not happen.",
       "limit": "It proves only that the tables and columns the census names are present and correctly typed. It says nothing about the wider 28-migration Processing/Identity backlog recorded as unapplied against staging, which touches other surfaces and remains an open concern for the §11 migrations."
+    },
+    "schema_reverification_2026_08_04": {
+      "why": "Run 2 executes on a different base than run 1: this worktree has since merged origin/staging (5118940f7) and the migration tree grew from 289 to 302 files. The census had to be re-grounded before its counts could be trusted on that base.",
+      "checked": [
+        "None of the 13 migrations added since run 1 alters user_roles, role_definitions, user_access_profiles, user_profiles, app_users or orgs. The six queries resolve unchanged, and run 2 executing clean confirms it live.",
+        "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql is LIVE on the target — applied via the Supabase dashboard on 2026-07-30 as version 20260730000602, vendored into the repo on 2026-07-31 (555fa056a). It predates BOTH runs, so neither run's counts are affected by it."
+      ],
+      "material_finding_outside_w0_scope": "That migration DROPS public.permissions and public.permission_keys as tables and recreates them as VIEWS over permission_definitions, collapses role_permission_grants onto a single role_permission_grants_permission_definitions_fkey, and adds an orgs_seed_default_role_definitions trigger on public.orgs. The census reads none of these, so W-0 is unaffected. But plan §7/W-9 still describes 'three catalog tables' with 'two foreign keys on the same column', and §5/W-3's reasoning rests on the same three-table picture. That premise is now false on the deployed target. Recorded as a follow-up for the W-9 owner; NOT edited into §7 by this assignment, whose scope is W-0.",
+      "not_checked": "Whether the deployed schema matches the repo for anything the census does not read. The 28-migration Processing/Identity backlog remains unassessed and is still an open concern for every §11 preflight."
     }
   },
   "queries": [
@@ -110,10 +185,11 @@
       "result": {
         "answer": "handle_new_user() is DEFINED but NOT ATTACHED to auth.users.",
         "handle_new_user_functions_defined": 1,
-        "triggers_on_auth_users_total": 54,
+        "triggers_on_auth_users_total": 62,
         "application_triggers": 0,
-        "internal_constraint_triggers": 54,
-        "verdict": "G1 is LATENT, not live. All 54 triggers on auth.users are tgisinternal=true referential-integrity triggers (RI_ConstraintTrigger_*, running RI_FKey_cascade_del / RI_FKey_noaction_upd / RI_FKey_setnull_del / RI_FKey_noaction_del). Zero application triggers exist, so no new auth user currently receives a default role by trigger.",
+        "internal_constraint_triggers": 62,
+        "triggers_on_auth_users_total_at_run_1": 54,
+        "verdict": "G1 is LATENT, not live. All 62 triggers on auth.users are tgisinternal=true referential-integrity triggers (RI_ConstraintTrigger_*, running RI_FKey_cascade_del / RI_FKey_noaction_upd / RI_FKey_setnull_del / RI_FKey_noaction_del). Zero application triggers exist, so no new auth user currently receives a default role by trigger. The total rose from 54 at run 1 purely because new migrations added foreign keys referencing auth.users; the application-trigger count — the only figure Q1's rule reads — is 0 in both runs.",
         "consequence": "The plan §4 rule 'a non-zero Q1 promotes G1 from latent to live and moves W-20 into wave 2' DOES NOT FIRE. W-20 stays in wave 5.",
         "residual_hazard": "The function still exists (1 definition) with no trigger referencing it. An unattached trigger function named handle_new_user is a loaded gun: any migration or dashboard action that attaches it silently restores the default-to-ops escalation path G1 describes, and nothing in the codebase would flag it. W-20 should give it an explicit disposition — drop it, or document why it is retained — rather than leaving it defined and unreferenced. This is a finding only Wave 0 could produce: version control shows the function, never its attachment."
       }
@@ -241,7 +317,7 @@
   "results": {
     "database": "postgres",
     "org_count": 2,
-    "census_run_at": "2026-07-31T15:48:45.275355+00:00",
+    "census_run_at": "2026-08-04T17:00:21.773733+00:00",
     "q2_via_app_users": 0,
     "q4_membership_rows": 8,
     "q2_via_user_profiles": 0,
@@ -569,6 +645,54 @@
         "tgenabled": "O",
         "tgisinternal": true,
         "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51722",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51723",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51761",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51762",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51766",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51767",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51771",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51772",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
       }
     ],
     "q4_pairs_without_profile": 2,
@@ -614,17 +738,50 @@
       }
     ],
     "applied_at": "2026-07-31",
+    "reconfirmed_at": "2026-08-04",
+    "reconfirmation_note": "Run 2 returned identical values for all six rules, so every outcome below is re-confirmed against live data rather than carried forward on the run-1 snapshot. No outcome changed; nothing was re-applied because nothing moved.",
     "applied": [
-      { "rule": "q1 shows a non-internal, enabled trigger running handle_new_user", "fired": false, "observed": "1 function definition, 0 application triggers (54 internal FK triggers only)", "outcome": "W-20 STAYS in wave 5. G1 remains latent." },
-      { "rule": "q2_legacy_only_authorized > 0", "fired": false, "observed": 0, "outcome": "W-20 needs no remediation step; its ritual collapses to a straight deletion." },
-      { "rule": "q3_undefined_membership_rows > 0", "fired": false, "observed": 0, "outcome": "M8 REMOVED from the §11 register. M9 applies directly." },
-      { "rule": "q4_pairs_without_profile > 0", "fired": true, "observed": 2, "outcome": "M1 sized at exactly 2 rows. W-7 gated behind M1." },
-      { "rule": "q5_pairs_with_no_definition > 0", "fired": false, "observed": 0, "outcome": "W-13 needs no remediation step ahead of M7." },
-      { "rule": "q6_restricted_admin_ops_pairs > 0", "fired": true, "observed": 1, "outcome": "W-8 is a behaviour change for 1 named principal, not a no-op." }
+      {
+        "rule": "q1 shows a non-internal, enabled trigger running handle_new_user",
+        "fired": false,
+        "observed": "1 function definition, 0 application triggers (62 internal FK triggers only; 54 at run 1 — internal count only, rule unaffected)",
+        "outcome": "W-20 STAYS in wave 5. G1 remains latent."
+      },
+      {
+        "rule": "q2_legacy_only_authorized > 0",
+        "fired": false,
+        "observed": 0,
+        "outcome": "W-20 needs no remediation step; its ritual collapses to a straight deletion."
+      },
+      {
+        "rule": "q3_undefined_membership_rows > 0",
+        "fired": false,
+        "observed": 0,
+        "outcome": "M8 REMOVED from the §11 register. M9 applies directly."
+      },
+      {
+        "rule": "q4_pairs_without_profile > 0",
+        "fired": true,
+        "observed": 2,
+        "outcome": "M1 sized at exactly 2 rows. W-7 gated behind M1."
+      },
+      {
+        "rule": "q5_pairs_with_no_definition > 0",
+        "fired": false,
+        "observed": 0,
+        "outcome": "W-13 needs no remediation step ahead of M7."
+      },
+      {
+        "rule": "q6_restricted_admin_ops_pairs > 0",
+        "fired": true,
+        "observed": 1,
+        "outcome": "W-8 is a behaviour change for 1 named principal, not a no-op."
+      }
     ]
   },
   "headline_finding": {
     "summary": "Four of the six consequence rules did not fire. Three of the four lockout-class workstreams (L2/W-13, L3/W-16, L4/W-20) have an EMPTY remediation set. Only L1 (W-6/W-7) has real work, and it is 2 rows.",
+    "reconfirmed_2026_08_04": "An independent re-run four days later returned every one of these numbers unchanged. The finding is now twice-measured rather than once-measured — but see drift_since_previous_run.why_q4_did_not_grow: the stability reflects an idle tenant, not a fixed defect.",
     "scale": "The target database holds 2 orgs, 8 membership rows and 6 distinct (user, org) pairs. This is a pre-production-scale tenant.",
     "implication_for_the_ritual": "The §2 four-step switch ritual — seed, dual-read, prove zero across an observation window, switch — was designed for an UNKNOWN blast radius. At 6 pairs the blast radius is not merely known, it is exhaustively enumerable. A traffic-based observation window is the weaker instrument here: with this little traffic, 'zero divergences observed' is mostly evidence that nobody logged in. RECOMMENDATION: for this tenant, satisfy step 3 ('prove zero') by exhaustive enumeration of all 6 pairs — computing both the old and new answers for every one — rather than by observing divergences over a window. That is a stronger proof AND a cheaper one, and it dissolves the 'observation window is unspecified' limit recorded in plan §14.3 item 5. This is a recommendation to the workstream owners, not a unilateral change to the ritual.",
     "caution": "Small numbers reduce blast radius; they do not make the defects less real. The 2 fail-open pairs and the 1 silently-unrestricted admin are genuine, and the same code ships to any tenant that grows. W-5 (create path writes a profile) matters MORE at this scale, not less: it is what stops Q4 from growing the moment the product starts being used in earnest. Re-running this census before each lockout-class switch is cheap and is now a solved operation."
@@ -634,7 +791,9 @@
     "query_text_for_q1_q6": true,
     "counts_recorded": true,
     "met": true,
-    "met_statement": "Plan §4 requires 'counts and the query text for each of Q1–Q6' committed to this file, with every one of L1–L4 citing it before proceeding. All six queries were executed read-only against the deployed database via trusted host action tha_1e353138da1197, and all six results are recorded with their §4 consequence applied. W-0 is COMPLETE and no longer gates waves 2 or 5.",
+    "met_statement": "Plan §4 requires 'counts and the query text for each of Q1–Q6' committed to this file, with every one of L1–L4 citing it before proceeding. All six queries were executed read-only against the deployed database via trusted host action tha_8defba3adcee6a (run 2, 2026-08-04), and all six results are recorded with their §4 consequence applied. W-0 is COMPLETE and no longer gates waves 2 or 5.",
+    "met_at_run_1_too": "Run 1 (tha_1e353138da1197, 2026-07-31) independently met the same criteria. Run 2 does not rescue a failed run; it refreshes a passing one, which is what plan §4 and residual_risks[0] ask of every consumer.",
+    "reconfirmed_2026_08_04": "Re-executed under Mission 2 with the identical committed query (hash 743cd63b…) against the identical target fingerprint (b15dad2c6d030ed4). Every consequence-bearing count is unchanged — see drift_since_previous_run. The one observable difference is the internal FK trigger total on auth.users (54 → 62), which Q1's rule does not read.",
     "superseded_note": "This file previously carried an honest_statement asserting W-0 was NOT met. That was correct when written, across two blocked execution attempts, and is superseded by execution at 2026-07-31T15:48:45Z."
   },
   "consumers": [
@@ -666,7 +825,7 @@
   "changed_product_files": [],
   "migrations_applied": [],
   "residual_risks": [
-    "COUNTS ARE A SNAPSHOT, not an invariant. They describe the database at 2026-07-31T15:48:45Z. Q4 in particular can GROW at any time, because the defect that produces it (W-5 — the create path writes no profile row) is still live: every membership created through POST /api/admin/users until W-5 ships adds another fail-open pair. Any lockout-class switch must re-run this census immediately before it, not cite this snapshot. That is now cheap via the trusted host action.",
+    "COUNTS ARE A SNAPSHOT, not an invariant. They describe the database at 2026-08-04T17:00:21Z. Q4 in particular can GROW at any time, because the defect that produces it (W-5 — the create path writes no profile row) is still live: every membership created through POST /api/admin/users until W-5 ships adds another fail-open pair. Any lockout-class switch must re-run this census immediately before it, not cite this snapshot. That is now cheap via the trusted host action. NOTE: run 2 returning identical counts four days after run 1 is NOT evidence that the counts are stable — q4_membership_rows also held at 8, meaning no membership was created in the window. Zero drift here reflects zero activity, not a repaired defect, and must not be read as licence to skip the next re-run.",
     "The target is identified as 'alloy_deployed_primary' (fingerprint b15dad2c6d030ed4) by the execution channel, not proven by the census output — current_database() is 'postgres' on every Supabase project. The mapping to project ref ikaxilmwmrmbagoidedu is asserted rather than evidenced. Low risk, but it means 'we queried the right database' rests on the channel's word. The fix is one extra self-identifying column next time.",
     "Q3 and Q5 both returned zero, which makes the FK (M9) and the portal grant (M7) look unconditionally safe. They are safe AGAINST TODAY'S DATA. user_roles.role remains unconstrained text (C2) until M9 actually lands, so a new row naming an undefined role can appear between this census and the migration. M9's preflight must re-run Q3 rather than trust this result.",
     "The 28-migration Processing/Identity backlog recorded as unapplied against staging was NOT assessed here. The census proves only that the six tables it reads are current. Every §11 migration still needs its own preflight against the real target.",

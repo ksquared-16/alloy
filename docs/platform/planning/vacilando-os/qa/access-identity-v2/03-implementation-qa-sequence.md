@@ -14,6 +14,7 @@
 **Date** 2026-07-30 · **W-0 executed 2026-07-31** (mission `msn_2d054741a54698fa4c`, assignment `asg_708252478f6fdd`)
 · **W-1…W-3 executed 2026-07-31** (same mission, assignment `asg_d77353d7377647`)
 · **W-4 executed 2026-07-31** (same mission, assignment `asg_d203f547736c16`)
+· **W-0 re-run 2026-08-04, zero drift** (mission `msn_f74ed02c126c88d7ff`, assignment `asg_2a1f4d9dc80899`)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -190,9 +191,9 @@ population rather than a no-op.
 
 | Field | Value |
 |---|---|
-| Evidence file | [`wave0-authority-census.json`](./wave0-authority-census.json) — **counts recorded; exit criteria met** |
+| Evidence file | [`wave0-authority-census.json`](./wave0-authority-census.json) — **counts recorded; exit criteria met**. Holds two runs: `run_history` and `drift_since_previous_run`; `results` carries the current (2026-08-04) run |
 | Queries | Q1–Q6 written and schema-verified against `supabase/migrations`, plus one combined single-statement form returning all answers as one JSON row |
-| Executed | **Yes** — 2026-07-31T15:48:45Z, read-only, against the deployed database |
+| Executed | **Yes, twice** — 2026-07-31T15:48:45Z and re-run 2026-08-04T17:00:21Z, read-only, against the deployed database. Same query hash, same target fingerprint, identical counts |
 | Channel | Vacilando **trusted host action** `database.read_census` (`tha_1e353138da1197`, auth `tha_auth_d8394598adbe`, query hash `743cd63b…`). The Director executed host-side and returned results only; no privileged credential reached the worker. |
 | Target | `alloy_deployed_primary`, fingerprint `b15dad2c6d030ed4`. Note `current_database()` = `postgres` on every Supabase project, so the project ref is **asserted by the channel, not proven by the output** — see the census file's `target.improvement_for_next_run`. |
 | Prior blockage | Two sessions and seven routes failed first. `DATABASE_URL` is on the toolkit's denylist twice — secret-like substring (`lib/verify.sh:202`) and named privileged variable (`:210`) — and its only reader exists solely to spawn the `alloy-dev-start` Next process. The refusal was working as designed; the trusted host action is the right resolution because it satisfies the read **without weakening the denylist**. Retained as `execution.blocker_history`. |
@@ -254,6 +255,53 @@ remains an open concern for every §11 migration.
 One access note, recorded for whoever re-runs this: **Q1 and Q2 read `auth.users`**, and Q1 reads `pg_trigger`
 over it. A read-only role scoped to `public` would fail or silently under-report. The trusted host action has
 the necessary access; a hand-provisioned read-only role would need an explicit `SELECT` grant on `auth.users`.
+
+#### W-0 re-run under Mission 2 — **DONE 2026-08-04**, assignment `asg_2a1f4d9dc80899`
+
+Mission 2 re-issued W-0 against an evidence file that was already executed and complete. Re-asserting it would
+have been the cheap answer and the wrong one: §4's own rule is that **the counts are a snapshot and every
+consumer re-runs rather than cites**. The census was therefore re-executed rather than re-read.
+
+| Field | Value |
+|---|---|
+| Channel | Trusted host action `database.read_census` — `tha_8defba3adcee6a`, auth `tha_auth_eec51323ab20` |
+| Query | **Unchanged**, hash `743cd63b…` — byte-identical to run 1, so the two runs are directly comparable |
+| Target | `alloy_deployed_primary`, fingerprint `b15dad2c6d030ed4` — same as run 1 |
+| Executed | 2026-08-04T17:00:21Z, read-only, Director host-side; no credential reached the worker |
+| Base | This worktree has since merged `origin/staging` (`5118940f7`); the migration tree grew 289 → 302 |
+
+**Result: zero drift.** Every consequence-bearing count returned exactly what it returned on 2026-07-31 —
+Q1 (0 application triggers), Q2 (0), Q3 (0), Q4 (**2** of 6 pairs, from 8 rows), Q5 (0 / 0), Q6 (1 / 2).
+All six §4 rules therefore stand **re-confirmed against live data** rather than carried forward on a snapshot.
+The lockout-class picture is unchanged: L2, L3 and L4 remediation sets are empty; L1 is 2 rows.
+
+**One observable difference, with no consequence.** Triggers on `auth.users` rose 54 → 62. All 62 are
+`tgisinternal = true` FK triggers — the new ones created by migrations that added foreign keys referencing
+`auth.users`. **Application triggers are still 0**, which is the only figure Q1's rule reads, so
+`handle_new_user()` remains defined-but-unattached, G1 stays latent, and W-20 stays in wave 5.
+
+**Do not read stability as safety.** Q4 was the count expected to move, because W-5 has not landed —
+`POST /api/admin/users` still inserts into `user_roles` alone (`web/app/api/admin/users/route.ts:101-105`).
+It held at 2 because `q4_membership_rows` also held at 8: **no membership was created through the product in
+this window.** That is an absence of activity, not a repaired defect. Two identical runs four days apart are
+*not* evidence that the number is stable under load, and §11's preflights still each re-run the census.
+
+**A schema fact both runs predate, outside W-0's scope.** Migration
+`20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` went live on the target via the
+Supabase dashboard on 2026-07-30 (as version `20260730000602`) and was vendored into the repo on 2026-07-31
+(`555fa056a`). It **drops `public.permissions` and `public.permission_keys` as tables and recreates them as
+views** over `permission_definitions`, collapses `role_permission_grants` onto a single
+`role_permission_grants_permission_definitions_fkey`, and adds an `orgs_seed_default_role_definitions` trigger
+on `public.orgs`. The census reads none of these, so **both runs' counts are unaffected**. But **§7/W-9 still
+describes three catalog tables carrying two FKs on one column, and §5/W-3's reasoning rests on that same
+three-table picture — a premise now false on the deployed target.** Recorded as a follow-up for the W-9 owner;
+deliberately **not** edited into §7 by this assignment, whose scope is W-0.
+
+**Still outstanding: the census cannot identify its own target.** `target.improvement_for_next_run` — add a
+self-identifying column so the output evidences which database it hit — was carried into a second run
+unadopted, because run 2 deliberately reused the committed query. `current_database()` is `postgres` on every
+Supabase project, so "we queried the right database" still rests on the channel's assertion. It should land
+with whichever census next changes the query.
 
 ---
 
@@ -603,7 +651,11 @@ lack a profile. Note the three distinct numbers: the preflight rule means **2** 
 collide with. **This is the only non-empty remediation population in the whole programme.**
 
 Because W-5 is still open, this count **grows with every membership the product creates**. Re-run the census
-immediately before M1 rather than citing 2; the number is a snapshot taken 2026-07-31.
+immediately before M1 rather than citing 2; the number is a snapshot, last taken 2026-08-04.
+
+**The 2026-08-04 re-run returned 2 again — and that is not reassurance.** `q4_membership_rows` also held at 8,
+so no membership was created in the interval; the count was stable because the tenant was idle, not because
+the fail-open path was fixed. M1 still sizes itself from a fresh census, never from this line.
 
 **QA.** Tier A: post-apply anti-join returns zero. Evidence file per §11.
 **Exit.** Every membership has exactly one profile row, and W-0 Q4 re-run returns 0.
@@ -1028,9 +1080,9 @@ principle, and would return the moment Q3 becomes non-zero. Combining M3/M4 prod
 be applied safely and cannot be reverted cleanly.
 
 **Nine migrations remain, not ten.** Each still requires its own read-only preflight against the target
-immediately before the authorization ask — W-0's counts are a 2026-07-31 snapshot, not a standing warrant.
-The trusted host action (`database.read_census`) is the channel for those preflights; none of them needs an
-operator to handle a credential.
+immediately before the authorization ask — W-0's counts are a snapshot (last refreshed 2026-08-04), not a
+standing warrant. The trusted host action (`database.read_census`) is the channel for those preflights; none
+of them needs an operator to handle a credential, and it has now been exercised twice.
 
 **This phase applies no migration and writes no SQL.** The register is a plan.
 
@@ -1144,10 +1196,13 @@ Per the assignment constraints:
    model at all, so the *service-client* half of W-15 is 5 routes, not ~500. This does **not** resize W-15
    overall: its main body is bringing ~500 routes from "gates on portal eligibility" to a declared
    capability, which W-4 does not measure and cannot — W-4 proves resolution, never gating.
-3. ~~**Wave 0 is a plan for queries, not their results.**~~ **RESOLVED 2026-07-31.** Wave 0 executed; its
-   counts are in §4 and have been applied. The reordering it produced: W-20 stays in wave 5 (G1 latent), M8 is
-   struck, and L2/L3/L4 have empty remediation sets. Waves 2 and 5 are no longer gated by W-0. The counts are
-   a snapshot — each lockout-class switch and each §11 preflight must re-run the census rather than cite it.
+3. ~~**Wave 0 is a plan for queries, not their results.**~~ **RESOLVED 2026-07-31, re-confirmed 2026-08-04.**
+   Wave 0 executed; its counts are in §4 and have been applied. The reordering it produced: W-20 stays in
+   wave 5 (G1 latent), M8 is struck, and L2/L3/L4 have empty remediation sets. Waves 2 and 5 are no longer
+   gated by W-0. A second independent run four days later returned every count unchanged, so the findings are
+   twice-measured. The counts remain a snapshot — each lockout-class switch and each §11 preflight must re-run
+   the census rather than cite it, and the zero-drift result does **not** relax that, because the interval
+   contained no membership activity.
 4. **Membership writers beyond `POST /api/admin/users` were not enumerated.** W-5 carries that audit as its
    first step; if other writers exist, W-5 grows. **Partially answered by W-2 on 2026-07-31:** the routes
    under `web/app/api` that write `user_roles` or `user_access_profiles` are `users/route.ts` (create),
@@ -1182,6 +1237,16 @@ Per the assignment constraints:
 9. **W-4 changes no route.** It measures and freezes; it remediates nothing. The five unauthorized
    `book-v2` routes it names are live exposure today and remain so until W-15. Wave 1 being "complete" is a
    statement about the wave's scope, not about the system being safe.
+10. **§7/W-9's premise is stale against the deployed target, and this plan has not been corrected.** Migration
+   `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` is live on the target (dashboard
+   -applied 2026-07-30, vendored 2026-07-31 in `555fa056a`): `public.permissions` and `public.permission_keys`
+   are now **views** over `permission_definitions`, `role_permission_grants` carries a **single**
+   `…_permission_definitions_fkey`, and `orgs` has an `orgs_seed_default_role_definitions` trigger. W-9 is
+   written against "three catalog tables" and "two foreign keys on the same column with different `ON DELETE`
+   semantics", and §5/W-3's execution record reasons from the same three-table picture. **Neither was rewritten
+   — the W-0 re-run that found this was scoped to W-0.** W-9's owner must re-derive its scope (much of it may
+   already be done) before scheduling wave 3, and W-3's record should be annotated rather than silently left to
+   read as current. Found 2026-08-04.
 8. **No effort is budgeted for governance-doc reconciliation.**
    `docs/platform/governance/roles-and-permissions.md` is `status: canonical` and states a rule the code does
    not follow, with a dead "Expanded reference" pointer (phase 2 §15.6). It should land with W-15, and is not
