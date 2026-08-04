@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
-import { listMetricDefinitions } from "@/lib/metrics/registry";
+import { getMetricDefinition, listMetricDefinitions } from "@/lib/metrics/registry";
 import { resolveMetrics } from "@/lib/metrics/metricEngine";
 import { writeMetricSnapshot } from "@/lib/metrics/snapshots/writeMetricSnapshot";
 import type { MetricSnapshotScopeType } from "@/lib/metrics/snapshots/types";
@@ -72,6 +72,16 @@ export async function writeOrgMetricSnapshots(params: {
 
     for (const window of windows) {
         for (const target of targets) {
+            // A metric whose source data carries no site linkage can only be
+            // answered org-wide. Snapshotting the org number under a site scope
+            // would persist a row that READS as a site figure and is not one, so
+            // those keys are skipped for narrowed targets rather than written.
+            const keysForTarget =
+                target.scopeType === "org"
+                    ? metricKeys
+                    : metricKeys.filter((key) => !getMetricDefinition(key).orgScopeOnly);
+            if (keysForTarget.length === 0) continue;
+
             const resolved = await resolveMetrics({
                 ctx: {
                     supabase: params.supabase,
@@ -86,7 +96,7 @@ export async function writeOrgMetricSnapshots(params: {
                     siteLocationId: target.scopeType === "site" ? target.scopeId : null,
                     mode: "live",
                 },
-                keys: metricKeys,
+                keys: keysForTarget,
                 orgMetadata: params.orgMetadata,
                 includeKpi: false,
             });

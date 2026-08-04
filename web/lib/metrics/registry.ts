@@ -201,6 +201,151 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         sources: ["opportunities", "evaluateOperationalReadiness"],
         snapshotSemantics: true,
     },
+    // ---- Trust: governed reasoning execution --------------------------------
+    // Every definition below is org-scope only: no Trust table carries a site,
+    // location or work-unit column, so a site figure cannot be computed and must
+    // not be faked from the org figure.
+    "trust.governed_decisions_created": {
+        key: "trust.governed_decisions_created",
+        label: "Governed decisions requested",
+        description:
+            "Decision Contracts submitted in the window. This is REQUESTED work, not completed work \u2014 " +
+            "a contract exists from the moment a capability asks for a decision. " +
+            "Authoritative source: trust_decision_contracts.created_at.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_decision_contracts"],
+        orgScopeOnly: true,
+    },
+    "trust.governed_decisions_completed": {
+        key: "trust.governed_decisions_completed",
+        label: "Governed decisions completed",
+        description:
+            "Decision Packages produced in the window. One completed contract produces exactly one package, " +
+            "so this is completed work and is deliberately distinct from decisions requested. " +
+            "Authoritative source: trust_decision_packages.created_at.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_decision_packages"],
+        orgScopeOnly: true,
+    },
+    "trust.recommendation_rate": {
+        key: "trust.recommendation_rate",
+        label: "Recommendation rate",
+        description:
+            "Share of completed decisions that produced a recommendation. " +
+            "Numerator: packages with outcome = recommended. Denominator: all packages in window. " +
+            "Null when no decision completed.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "percent",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_decision_packages"],
+        orgScopeOnly: true,
+    },
+    "trust.governed_refusal_rate": {
+        key: "trust.governed_refusal_rate",
+        label: "Governed refusal rate",
+        description:
+            "Share of completed decisions the platform deliberately REFUSED \u2014 policy, permission, " +
+            "unsupported class, insufficient information, privacy or budget. " +
+            "Excludes failed_validation and failed_reasoning, which are failures rather than refusals. " +
+            "Denominator: all packages in window.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "percent",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_decision_packages"],
+        orgScopeOnly: true,
+    },
+    "trust.reasoning_failure_rate": {
+        key: "trust.reasoning_failure_rate",
+        label: "Reasoning failure rate",
+        description:
+            "Share of completed decisions that FAILED rather than refused: failed_validation or failed_reasoning. " +
+            "Kept separate from the refusal rate because a deliberate refusal and a broken execution are " +
+            "different operational events. Denominator: all packages in window.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "percent",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_decision_packages"],
+        orgScopeOnly: true,
+    },
+    "trust.deterministic_resolution_rate": {
+        key: "trust.deterministic_resolution_rate",
+        label: "Deterministic resolution rate",
+        description:
+            "Share of governed decisions resolved without escalating beyond deterministic reasoning. " +
+            "Numerator: usage rows with escalation_level = 0. Denominator: all usage rows in window. " +
+            "Local-model execution is NOT distinguishable from deterministic in the current schema.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "percent",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_reasoning_usage"],
+        orgScopeOnly: true,
+    },
+    "trust.escalated_decision_count": {
+        key: "trust.escalated_decision_count",
+        label: "Escalated decisions",
+        description:
+            "Governed decisions that escalated beyond deterministic reasoning (escalation_level > 0). " +
+            "This counts escalation DEPTH, not provider usage \u2014 the schema records no provider identity. " +
+            "Authoritative source: trust_reasoning_usage.escalation_level.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_reasoning_usage"],
+        orgScopeOnly: true,
+    },
+    "trust.reasoning_latency_p50": {
+        key: "trust.reasoning_latency_p50",
+        label: "Reasoning latency (median)",
+        description:
+            "Median end-to-end governed-decision latency, reported in hours to match the platform duration format. " +
+            "Covers the whole runtime pass; validation latency is not persisted separately. " +
+            "Authoritative source: trust_reasoning_usage.latency_ms.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "duration",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_reasoning_usage"],
+        orgScopeOnly: true,
+    },
+    "trust.provider_cost_units": {
+        key: "trust.provider_cost_units",
+        label: "Provider cost units",
+        description:
+            "Total provider cost units consumed by governed reasoning in the window. " +
+            "Read from the usage/economics record, never from a Decision Package (ADR-2). " +
+            "Structurally zero until a provider-backed strategy runs. Decimal precision is preserved.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_reasoning_usage"],
+        orgScopeOnly: true,
+    },
+    "trust.executions_committed_count": {
+        key: "trust.executions_committed_count",
+        label: "Committed executions",
+        description:
+            "Decision Packages an execution authority committed, counted from append-only execution observations. " +
+            "Accepted is NOT executed: only an `executed` observation counts. " +
+            "Deduplicated by package, so a replayed observation cannot inflate the figure.",
+        pack: "trust",
+        computationKind: "event_window",
+        format: "count",
+        defaultWindow: "rolling_30d",
+        sources: ["trust_decision_observations"],
+        orgScopeOnly: true,
+    },
 };
 
 const KEYS = new Set<string>(Object.keys(DEFINITIONS));

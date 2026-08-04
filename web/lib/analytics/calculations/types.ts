@@ -110,11 +110,20 @@ export type OperationalCalculation = OperationalCalculationGovernance & {
     requiredInputs: readonly string[];
 };
 
-/** Maps an OIP pack to its owning business process. Identity for current packs. */
+/**
+ * Maps an OIP pack to its owning business process. Identity for most packs.
+ *
+ * `trust` is deliberately NOT identity. Trust is platform infrastructure every
+ * capability consumes, not a business process an organization runs \u2014 inventing a
+ * "trust" business process would file reasoning governance alongside enrollment
+ * and billing, which is a category error. It maps onto operational health, where
+ * platform reliability already lives.
+ */
 export const PACK_TO_BUSINESS_PROCESS: Record<MetricPackKey, OperationalCalculationBusinessProcess> = {
     enrollment: "enrollment",
     communications: "communications",
     forms: "forms",
     operational_health: "operational_health",
     capacity: "capacity",
+    trust: "operational_health",
 };

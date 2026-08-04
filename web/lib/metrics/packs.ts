@@ -51,6 +51,27 @@ const PACKS: readonly MetricPackDefinition[] = [
         domainStatus: "available",
     },
     {
+        key: "trust",
+        label: "Trust",
+        description:
+            "Governed reasoning: decision volume, outcome mix, deterministic resolution, latency and cost. " +
+            "Organization-wide only \u2014 Trust records carry no site linkage.",
+        metricKeys: [
+            "trust.governed_decisions_created",
+            "trust.governed_decisions_completed",
+            "trust.recommendation_rate",
+            "trust.governed_refusal_rate",
+            "trust.reasoning_failure_rate",
+            "trust.deterministic_resolution_rate",
+            "trust.escalated_decision_count",
+            "trust.reasoning_latency_p50",
+            "trust.provider_cost_units",
+            "trust.executions_committed_count",
+        ],
+        defaultSurfaceOrder: 45,
+        domainStatus: "available",
+    },
+    {
         key: "capacity",
         label: "Capacity",
         description: "Room and program capacity utilization.",
