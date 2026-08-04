@@ -142,6 +142,28 @@ use, and is served only where a route opts in.
 
 No schema change.
 
+## 3b. Certification status of the boundary — stated precisely
+
+An earlier report overstated the runtime evidence for the missing-transition path.
+The three claims are NOT equivalent and are recorded separately:
+
+| # | Claim | Status |
+|---|---|---|
+| 1 | Absent / no-op process synchronization does not revoke a booking | **Runtime certified** |
+| 2 | An explicit missing-transition failure degrades *after* the booking commits | **Test certified only** |
+| 3 | That explicit failure records `tour_stage_sync_follow_up_required` and is operator-visible in a live tenant | **Runtime UNPROVEN** |
+
+Why (3) is not yet proven: the two fixtures used did not reach the failing branch.
+The `closed`-stage record bypassed the transition lookup entirely, and the `lead`-stage
+record sat in a tenant with **no configured stage plans**, so the signal returned
+without work rather than raising a missing-transition exception. In both runs
+`workflow_events` contained **zero** `tour_stage_sync_follow_up_required` rows — which
+is the correct outcome for a no-op, and is NOT evidence for the failure path.
+
+Claim (3) must not be asserted until a certification fixture deliberately configures a
+process state that reaches the failing branch. Until then the follow-up recorder is
+proven by unit test only.
+
 ## 4. Correction to the durable record
 
 An earlier revision of the Slice D artifact claimed `orchestrateTourCommsForBooking`
