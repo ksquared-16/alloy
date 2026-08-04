@@ -33,11 +33,11 @@ function layoutWithDefaultAndStageVariant(args: {
                     {
                         id: nextQueueRecordBlockId("fg"),
                         type: "field_group",
-                        title: null,
                         fields: args.defaultKeys.map((fieldKey) => ({
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,
                             label: fieldKey,
+                            display: "text" as const,
                         })),
                     },
                 ],
@@ -60,7 +60,6 @@ function layoutWithDefaultAndStageVariant(args: {
                             {
                                 id: nextQueueRecordBlockId("fg"),
                                 type: "field_group",
-                                title: null,
                                 fields: [
                                     {
                                         id: nextQueueRecordBlockId("f"),

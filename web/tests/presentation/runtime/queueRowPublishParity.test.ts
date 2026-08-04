@@ -33,11 +33,11 @@ function layoutWithFields(fieldKeys: string[]): QueueRecordLayoutConfigV3 {
                     {
                         id: nextQueueRecordBlockId("fg"),
                         type: "field_group",
-                        title: null,
                         fields: fieldKeys.map((fieldKey) => ({
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,
                             label: fieldKey,
+                            display: "text" as const,
                         })),
                     },
                 ],

@@ -34,6 +34,10 @@ function sampleChild(overrides: Partial<ChildrenEvidenceChild> = {}): ChildrenEv
         teacher: null,
         startDate: "Aug 4, 2026",
         status: null,
+        // Both required and both determined, not chosen: the canonical statusTone(null) in
+        // buildChildrenCardEvidence returns "neutral", and this child authors no flags.
+        statusTone: "neutral",
+        flags: [],
         needsAttention: false,
         missingLine: null,
         detailLine: null,

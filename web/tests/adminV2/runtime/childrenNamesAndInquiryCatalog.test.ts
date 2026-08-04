@@ -62,7 +62,6 @@ function layout(keys: string[]) {
                     {
                         id: nextQueueRecordBlockId("fg"),
                         type: "field_group" as const,
-                        title: null,
                         fields: keys.map((fieldKey) => ({
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,

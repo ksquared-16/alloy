@@ -64,7 +64,13 @@ function makeContext(): QueueRowContext {
             case_type_label: "Enrollment",
             case_status_key: "open",
             case_status_label: "Open",
-        },
+        },        primary_contact: null,
+        attention_summary: null,
+        work_summary: null,
+        current_work_summary: null,
+        next_best_action: null,
+        drawer_open: { entity_type: "opportunities", entity_id: "opp-1" },
+
         related_subjects_summary: [
             {
                 subject_type: "child",

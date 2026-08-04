@@ -169,6 +169,15 @@ describe("P6.S2 Current Work catalog fallback", () => {
                 version: 1,
                 lifecycle_key: "enrollment",
                 stage_key: "lead",
+                // journey_segment is "family" for every enrollment family-side stage in the
+                // canonical plan (defaultEnrollmentStageOperatingPlans.ts). The three rule
+                // collections are required but this test authors none — it exercises the
+                // catalog-fallback path for helpful_actions — so empty is the honest value,
+                // not a placeholder.
+                journey_segment: "family",
+                outcomes: [],
+                outcome_rules: [],
+                attention_rules: [],
                 work_templates: [
                     {
                         template_key: "contact_family",
