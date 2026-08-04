@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { getDecision, answerDecision, createDecision, listDecisions } from "./decisions.mjs";
 import { resumeAssignments, pauseAssignments, listAssignments } from "./worker-assignment.mjs";
+import { lookupIdempotency, recordIdempotency } from "./director-idempotency.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const DIR = join(RUNTIME_ROOT, "vacilando", "director-messages");
@@ -56,7 +57,15 @@ export function interpretOperatorMessage({ kind, message, decision = null } = {}
   const rejects = kind === "reject_direction"
     || /\b(reject|instead|prefer|change|don't|do not|rather)\b/i.test(lower);
 
-  if (kind === "ask" || (isQuestion && kind !== "reject_direction")) {
+  // Alignment notes are recorded; only escalate to clarification when clearly a question.
+  if (kind === "context" && !isQuestion) {
+    return {
+      action: "acknowledged",
+      summary: "Director recorded your context and will keep it in mind for this mission.",
+    };
+  }
+
+  if (kind === "ask" || kind === "context" || (isQuestion && kind !== "reject_direction")) {
     return {
       action: "clarification",
       summary: "Director needs one focused clarification before acting.",
@@ -80,46 +89,84 @@ export function interpretOperatorMessage({ kind, message, decision = null } = {}
 }
 
 /**
- * Submit Ask Director or Reject with direction.
+ * Submit Ask Director, Share context, or Reject with direction.
  * Always preserves verbatim operator text for audit.
  */
 export function submitOperatorDirectorMessage({
   missionId,
   decisionId = null,
-  kind, // ask | reject_direction
+  reviewId = null,
+  kind, // ask | context | reject_direction | request_changes
   message,
   actor = "operator",
   nowMs,
+  idempotencyKey = null,
+  skipSideEffects = false,
 } = {}) {
   if (!missionId) return { ok: false, error: "missing_mission_id" };
-  if (!["ask", "reject_direction"].includes(kind)) return { ok: false, error: "invalid_kind" };
+  if (!["ask", "context", "reject_direction", "request_changes"].includes(kind)) {
+    return { ok: false, error: "invalid_kind" };
+  }
   const verbatim = String(message || "").trim();
   if (!verbatim) return { ok: false, error: "empty_message" };
+
+  if (idempotencyKey) {
+    const prior = lookupIdempotency(missionId, `msg:${idempotencyKey}`);
+    if (prior?.messageId) {
+      const existing = listDirectorMessages(missionId, { limit: 200 })
+        .find((m) => m.messageId === prior.messageId);
+      if (existing) {
+        return { ok: true, deduped: true, message: existing, messageId: existing.messageId, interpretation: existing.interpretation, outcome: { action: "deduped" } };
+      }
+    }
+  }
 
   const decision = decisionId ? getDecision(missionId, decisionId) : null;
   if (decisionId && !decision) return { ok: false, error: "decision_not_found" };
 
   const messageId = "odm_" + randomBytes(8).toString("hex");
-  const interpretation = interpretOperatorMessage({ kind, message: verbatim, decision });
+  const interpretation = kind === "request_changes"
+    ? {
+      action: "request_changes_recorded",
+      summary: "Director recorded your change request for this deliverable.",
+    }
+    : interpretOperatorMessage({ kind, message: verbatim, decision });
 
   const record = persistMessage({
     schema_version: "vacilando.operator_director_message.v1",
     messageId,
     missionId,
     decisionId: decisionId || null,
+    reviewId: reviewId || null,
     kind,
     verbatim,
     actor,
     interpretation,
+    idempotencyKey: idempotencyKey || null,
     at: iso(nowMs),
   });
 
+  if (idempotencyKey) {
+    recordIdempotency(missionId, `msg:${idempotencyKey}`, { messageId, trigger: kind });
+  }
+
+  if (skipSideEffects) {
+    return { ok: true, deduped: false, message: record, messageId, interpretation, outcome: { action: interpretation.action } };
+  }
+
+  const askLike = kind === "ask" || kind === "context";
   appendTimelineEvent(missionId, {
     type: "operator_message",
-    summary: kind === "ask"
-      ? `You asked Director: ${verbatim.slice(0, 120)}`
-      : `You rejected with direction: ${verbatim.slice(0, 120)}`,
-    headline: kind === "ask" ? "Asked Director" : "Rejected with direction",
+    summary: kind === "reject_direction" || kind === "request_changes"
+      ? `You requested changes: ${verbatim.slice(0, 120)}`
+      : kind === "context"
+        ? `You shared context with Director: ${verbatim.slice(0, 120)}`
+        : `You asked Director: ${verbatim.slice(0, 120)}`,
+    headline: kind === "reject_direction" || kind === "request_changes"
+      ? "You requested changes"
+      : kind === "context"
+        ? "You shared context with Director"
+        : "Asked Director",
     visibility: "summary",
     decisionId: decisionId || null,
     actor,
@@ -127,6 +174,7 @@ export function submitOperatorDirectorMessage({
       messageId,
       kind,
       verbatim,
+      reviewId: reviewId || null,
     },
     nowMs,
   });
@@ -147,7 +195,35 @@ export function submitOperatorDirectorMessage({
     });
   }
 
-  if (interpretation.action === "resume") {
+  // Deliverable-scoped context/ask: Director turn is owned by deliverable-director-loop
+  // (skip heuristic ack so we do not double-fire).
+  if (reviewId && (kind === "context" || kind === "ask" || kind === "request_changes")) {
+    return {
+      ok: true,
+      deduped: false,
+      message: record,
+      messageId,
+      interpretation,
+      outcome: { action: "awaiting_deliverable_director_turn" },
+      answered: null,
+      revisedDecision: null,
+      openDecisions: listDecisions(missionId, { status: "open" }),
+    };
+  }
+
+  if (interpretation.action === "acknowledged") {
+    appendTimelineEvent(missionId, {
+      type: "director_response",
+      summary: interpretation.summary,
+      headline: "Director recorded your context",
+      visibility: "summary",
+      decisionId: decisionId || null,
+      actor: "director",
+      detail: { messageId, action: "acknowledged", verbatim_ref: messageId, reviewId: reviewId || null },
+      nowMs,
+    });
+    outcome = { action: "acknowledged" };
+  } else if (interpretation.action === "resume") {
     const paused = listAssignments(missionId).filter((a) => a.status === "paused").map((a) => a.assignmentId);
     const ids = (decision?.affectedAssignments?.length ? decision.affectedAssignments : paused);
     if (ids.length) {
@@ -221,13 +297,14 @@ export function submitOperatorDirectorMessage({
         action: "clarification",
         question: interpretation.clarificationQuestion,
         verbatim_ref: messageId,
+        reviewId: reviewId || null,
       },
       nowMs,
     });
     outcome = {
       action: "clarification",
       question: interpretation.clarificationQuestion,
-      decisionStillOpen: kind === "ask" && decision?.status === "open",
+      decisionStillOpen: askLike && decision?.status === "open",
     };
   }
 

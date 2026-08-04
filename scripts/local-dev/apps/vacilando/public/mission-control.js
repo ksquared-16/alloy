@@ -24,15 +24,41 @@
 
   const V2 = window.VacilandoV2;
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let apiToken = null;
+  async function ensureApiSession() {
+    if (apiToken !== null) return apiToken;
+    try {
+      const r = await fetch("/api/v2/session", { cache: "no-store" });
+      const j = await r.json();
+      apiToken = j.authRequired ? (j.token || "") : "";
+    } catch {
+      apiToken = "";
+    }
+    return apiToken;
+  }
+
   const get = async (p) => {
-    const r = await fetch(p, { cache: "no-store" });
+    const headers = {};
+    if (p.startsWith("/api/v2/deliverable-reviews") || p.startsWith("/api/v2/director/messages")) {
+      const tok = await ensureApiSession();
+      if (tok) headers.Authorization = `Bearer ${tok}`;
+    }
+    const r = await fetch(p, { cache: "no-store", headers });
     if (!r.ok) throw new Error(`http_${r.status}`);
     return r.json();
   };
   const post = async (p, body) => {
+    const headers = { "content-type": "application/json" };
+    if (p.startsWith("/api/v2/deliverable-reviews") || p.startsWith("/api/v2/director/")) {
+      const tok = await ensureApiSession();
+      if (tok) headers.Authorization = `Bearer ${tok}`;
+    }
+    if (body?.idempotency_key || body?.idempotencyKey) {
+      headers["X-Idempotency-Key"] = body.idempotency_key || body.idempotencyKey;
+    }
     const r = await fetch(p, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body || {}),
     });
     const j = await r.json().catch(() => ({}));
@@ -56,7 +82,7 @@
     });
   }
 
-  const DEFAULT_MAX_AGE_MS = 3500;
+  const DEFAULT_MAX_AGE_MS = 12000;
 
   function markFetched(key) {
     V2.state._fetchedAt = V2.state._fetchedAt || {};
@@ -90,6 +116,66 @@
     return true;
   };
 
+  /** Fingerprint for paint suppression — ignore heartbeat / relative-time churn. */
+  function stableViewFingerprint(value) {
+    const VOLATILE = new Set([
+      "updatedAt", "updated_at", "updatedLabel", "timeLabel", "heartbeatLabel",
+      "heartbeatSecondsAgo", "generatedAt", "generated_at", "sessionDuration",
+      "lastHeartbeatAt", "estimatedCheckpoint", "estimatedCheckpointLabel",
+    ]);
+    const walk = (v) => {
+      if (Array.isArray(v)) return v.map(walk);
+      if (v && typeof v === "object") {
+        const out = {};
+        for (const [k, val] of Object.entries(v)) {
+          if (VOLATILE.has(k)) continue;
+          out[k] = walk(val);
+        }
+        return out;
+      }
+      return v;
+    };
+    try { return JSON.stringify(walk(value)); } catch { return String(Date.now()); }
+  }
+
+  function paintIfChanged(cacheKey, payload, { force = false } = {}) {
+    const next = stableViewFingerprint(payload);
+    V2.state._paintFp = V2.state._paintFp || {};
+    if (!force && V2.state._paintFp[cacheKey] === next) return false;
+    V2.state._paintFp[cacheKey] = next;
+    bump();
+    schedulePaint();
+    return true;
+  }
+
+  /** Update heartbeat / activity copy in place — avoids full-page flash. */
+  function patchLiveActivity(payload) {
+    const dash = payload?.dashboard || payload?.overview || payload;
+    const work = dash?.currentWork || [];
+    for (const w of work) {
+      const live = w.liveActivity;
+      if (!live?.sessionId) continue;
+      const sid = String(live.sessionId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const el = document.querySelector(`[data-live-session="${sid}"]`);
+      if (!el) continue;
+      const bits = [
+        live.filesInspected != null ? `${live.filesInspected} files inspected` : null,
+        live.percent != null ? `${live.percent}% complete` : null,
+        live.heartbeatLabel ? `Heartbeat: ${live.heartbeatLabel}` : null,
+        live.estimatedCheckpoint ? `Estimated checkpoint: ${live.estimatedCheckpoint}` : null,
+      ].filter(Boolean).join(" · ");
+      const title = el.querySelector("[data-live-title]");
+      const detail = el.querySelector("[data-live-detail]");
+      const meta = el.querySelector("[data-live-meta]");
+      if (title) title.textContent = `${live.workerLabel || "Worker"} · ${live.activity || "—"}`;
+      if (detail) {
+        if (live.detail) { detail.hidden = false; detail.textContent = live.detail; }
+        else detail.hidden = true;
+      }
+      if (meta) meta.textContent = bits;
+    }
+  }
+
   /** Drop cached Mission Control views so Refresh / external Director answers are visible. */
   V2.invalidatePresentationCaches = function () {
     V2.state.decisionDetail = null;
@@ -111,6 +197,7 @@
     V2.state.improvementDetail = null;
     V2.state._fetchedAt = {};
     V2.state._inflight = {};
+    V2.state._paintFp = {};
   };
 
   /** Reload whatever Mission Control route is on screen after a hard invalidate. */
@@ -143,9 +230,28 @@
     schedulePaint();
   };
 
+  /** True while Improve / review / confirm dialogs own the screen. */
+  V2.hasOperatorOverlay = function () {
+    return !!document.querySelector(".ov");
+  };
+
+  /** Apply a known revision bump (invalidate + reload). */
+  V2.applyPresentationRevision = function (next) {
+    if (V2.hasOperatorOverlay()) {
+      V2.state._pendingServerRevision = next;
+      return false;
+    }
+    V2.state._serverRevision = next;
+    V2.state._pendingServerRevision = null;
+    V2.invalidatePresentationCaches();
+    V2.reloadActiveView();
+    return true;
+  };
+
   /**
    * Poll control-plane revision. When Director/workers mutate durable state
    * outside this window, caches drop and the active view reloads.
+   * Never hard-reloads while an operator dialog is open (avoids flash / focus loss).
    */
   V2.syncPresentationRevision = async function ({ force = false } = {}) {
     if (V2.state._revisionInflight) return;
@@ -154,15 +260,19 @@
       const j = await get("/api/v2/revision");
       const next = j.revision || "";
       const prev = V2.state._serverRevision || null;
-      V2.state._serverRevision = next;
       V2.state._serverRevisionAt = Date.now();
-      if (force || (prev && next && prev !== next)) {
-        V2.invalidatePresentationCaches();
-        V2.state._serverRevision = next;
-        V2.reloadActiveView();
+      const changed = !!(prev && next && prev !== next);
+      if (force || changed) {
+        if (!V2.applyPresentationRevision(next) && !force) {
+          // Deferred under overlay — keep displayed revision as prev until dialog closes.
+          return;
+        }
         try { await V2.fetchNeedsYou(); } catch { /* */ }
-      } else if (!prev) {
-        try { await V2.fetchNeedsYou(); } catch { /* */ }
+      } else {
+        V2.state._serverRevision = next || prev;
+        if (!prev) {
+          try { await V2.fetchNeedsYou(); } catch { /* */ }
+        }
       }
     } catch { /* offline — keep prior */ }
     finally {
@@ -170,11 +280,20 @@
     }
   };
 
+  V2.flushPendingPresentationRevision = function () {
+    const pending = V2.state._pendingServerRevision;
+    if (!pending || V2.hasOperatorOverlay()) return;
+    V2.applyPresentationRevision(pending);
+    V2.fetchNeedsYou?.().catch(() => {});
+  };
+
   V2.startFreshnessLoop = function () {
     if (V2.state._freshnessStarted) return;
     V2.state._freshnessStarted = true;
     const tick = () => {
       if (document.visibilityState === "hidden") return;
+      if (V2.hasOperatorOverlay()) return;
+      V2.flushPendingPresentationRevision();
       try {
         const raw = location.hash.replace(/^#\/?/, "");
         const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "missions";
@@ -185,9 +304,14 @@
     setInterval(tick, 2500);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
+        if (V2.hasOperatorOverlay()) {
+          V2.syncPresentationRevision({ force: false });
+          return;
+        }
+        V2.flushPendingPresentationRevision();
         V2.syncPresentationRevision({ force: false });
+        // Soft expire only — do not hard-reload the whole view on every focus.
         V2.expirePresentationCaches();
-        V2.reloadActiveView();
       }
     });
     window.addEventListener("focus", () => {
@@ -196,7 +320,16 @@
     window.addEventListener("hashchange", () => {
       // Soft-expire on navigation so the destination revalidates without blanking.
       V2.expirePresentationCaches();
+      // Route changes dismiss leftover dialogs so MC is never locked.
+      document.querySelectorAll(".ov").forEach((el) => {
+        try { el.remove(); } catch { /* */ }
+      });
+      V2.flushPendingPresentationRevision();
     });
+    // Apply deferred revision shortly after an overlay closes.
+    document.addEventListener("click", () => {
+      queueMicrotask(() => V2.flushPendingPresentationRevision());
+    }, true);
     // First sync shortly after boot.
     setTimeout(() => V2.syncPresentationRevision(), 400);
   };
@@ -388,11 +521,17 @@ We'll capture the context automatically.</p>
   // ---- fetches (view models) ----
   V2.fetchOverview = async (id) => {
     try {
-      V2.state.overview = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(id));
+      const had = Boolean(V2.state.overview);
+      const payload = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(id));
+      V2.state.overview = payload;
       V2.state.selectedMissionId = id;
       V2.state.overviewError = null;
       markFetched(`overview:${id}`);
-      bump(); schedulePaint();
+      // Soft-patch live activity without a full shell rewrite when nothing material changed.
+      // Always full-paint when recovering from a blank/missing dashboard.
+      if (!paintIfChanged(`overview:${id}`, payload, { force: !had })) {
+        patchLiveActivity(payload);
+      }
     } catch (e) {
       V2.state.overviewError = String(e.message || e);
       bump(); schedulePaint();
@@ -409,7 +548,7 @@ We'll capture the context automatically.</p>
         if (window.vacilandoNative?.setDockBadge) window.vacilandoNative.setDockBadge(items.length);
       } catch { /* */ }
       markFetched("needsYou");
-      bump(); schedulePaint();
+      paintIfChanged("needsYou", V2.state.needsYou);
     } catch { /* keep */ }
   };
   V2.fetchWorkers = async () => {
@@ -593,13 +732,17 @@ We'll capture the context automatically.</p>
       lead: filter === "archived" || filter === "history"
         ? "Archived certification and validation history — read-only."
         : "Control plane home — missions, workers, and what needs you.",
-      actions: `<button class="btn" data-nav="kickoff">Create Mission</button>`,
+      actions: filter === "archived" || filter === "history"
+        ? `<button class="btn" data-nav="kickoff">Create Mission</button>`
+        : `<button class="btn ghost" type="button" data-mc-day-start>Start of day</button>
+           <button class="btn ghost" type="button" data-mc-day-stop>Stop of day</button>
+           <button class="btn" data-nav="kickoff">Create Mission</button>`,
     }) + summaryPanel + filterBar + `<div class="mc-list">${cards}</div></div>`;
   };
 
   V2.viewMissionDetail = function (id) {
     V2.state.selectedMissionId = id;
-    V2.revalidate(`overview:${id}`, () => V2.fetchDashboard(id));
+    V2.revalidate(`overview:${id}`, () => V2.fetchDashboard(id), { maxAgeMs: 12000 });
     const dashPayload = V2.state.overview;
     const dash = dashPayload?.dashboard || dashPayload?.overview;
     if (!dash || (dash.missionId || dash.header?.missionId) !== id) {
@@ -633,6 +776,9 @@ We'll capture the context automatically.</p>
           ${actionBtn(s.primaryAction)}
           ${actionBtn(s.secondaryAction)}
           ${actionBtn(s.certifyAction)}
+          ${dash.posture?.busy || (dash.currentWork || []).some((w) => w.status === "running")
+            ? `<button class="btn ghost" type="button" data-mc-resume-stalled="${esc(id)}">Relaunch worker</button>`
+            : ""}
         </div>
       </div>
       <div class="mc-stat-grid">
@@ -661,6 +807,29 @@ We'll capture the context automatically.</p>
         <button class="${primary}" ${kindAttr}="${esc(c.missionId || id)}">${esc(c.label)}</button>
       </article>`;
     }).join("");
+
+    function renderDeliverableConversation(thread) {
+      const rows = Array.isArray(thread) ? thread : [];
+      if (!rows.length) {
+        return `<div class="drev-thread" id="drev-thread">
+          <h4>Conversation</h4>
+          <p class="muted drev-thread-empty">No notes yet. Share context or certify with a note to start the thread.</p>
+        </div>`;
+      }
+      const bubbles = rows.map((m) => {
+        const who = m.actor === "director" ? "Director" : "You";
+        const cls = m.actor === "director" ? "director" : "you";
+        const when = m.at ? esc(String(m.at).replace("T", " ").slice(0, 16)) : "";
+        return `<div class="drev-bubble ${cls}">
+          <div class="drev-bubble-meta"><span>${who}</span>${when ? `<time>${when}</time>` : ""}</div>
+          <div class="drev-bubble-text">${esc(m.text || "")}</div>
+        </div>`;
+      }).join("");
+      return `<div class="drev-thread" id="drev-thread">
+        <h4>Conversation</h4>
+        <div class="drev-thread-list">${bubbles}</div>
+      </div>`;
+    }
 
     function renderDeliverableReview(o) {
       if (!o || o.kind !== "deliverable_review") return null;
@@ -715,8 +884,8 @@ We'll capture the context automatically.</p>
       if (o.actions?.requestChanges) {
         actions.push(`<button class="btn ghost" type="button" data-drev-changes="${esc(o.reviewId)}" data-mission="${esc(id)}">Request changes</button>`);
       }
-      if (o.actions?.askDirector) {
-        actions.push(`<button class="btn ghost" type="button" data-drev-ask="${esc(o.reviewId)}" data-mission="${esc(id)}">Ask Director</button>`);
+      if (o.actions?.shareContext || o.actions?.askDirector) {
+        actions.push(`<button class="btn ghost" type="button" data-drev-context="${esc(o.reviewId)}" data-mission="${esc(id)}">Share context with Director</button>`);
       }
       const risks = (o.residualRisks || []).map((x) => `<li>${esc(x)}</li>`).join("") || "<li class=\"muted\">None recorded</li>";
       const deferred = (o.deferredWork || []).map((x) => `<li>${esc(x)}</li>`).join("");
@@ -734,7 +903,7 @@ We'll capture the context automatically.</p>
           <ol class="drev-steps">
             <li class="done"><span class="drev-step-n">1</span><div><b>A worker finished ${esc(wave)}</b><div class="muted">Someone did the assignment and attached proof.</div></div></li>
             <li class="${step >= 2 ? "done" : ""}"><span class="drev-step-n">2</span><div><b>Director checked that proof</b><div class="muted">Director reviewed evidence and wrote a recommendation for you.</div></div></li>
-            <li class="${step === 3 ? "here" : step > 3 ? "done" : ""}"><span class="drev-step-n">3</span><div><b>${ready ? "You’re here — say yes or no" : stuck ? "You’re here — Director is stuck" : "Waiting on Director"}</b><div class="muted">${ready ? "Press Certify if you trust Director’s recommendation. Or request changes / ask a question." : stuck ? "Don’t guess. Press “Have Director re-check” first. Only request changes if you want a worker to redo something specific." : "You’ll get a decision when Director is ready."}</div></div></li>
+            <li class="${step === 3 ? "here" : step > 3 ? "done" : ""}"><span class="drev-step-n">3</span><div><b>${ready ? "You’re here — say yes or no" : stuck ? "You’re here — Director is stuck" : "Waiting on Director"}</b><div class="muted">${ready ? "Press Certify if you trust Director’s recommendation. Or share context / request changes." : stuck ? "Don’t guess. Press “Have Director re-check” first. Only request changes if you want a worker to redo something specific." : "You’ll get a decision when Director is ready."}</div></div></li>
             <li class="${step >= 4 ? "done" : ""}"><span class="drev-step-n">4</span><div><b>Mission moves on</b><div class="muted">After you certify, this page should change — Director unlocks the next piece of work.</div></div></li>
           </ol>
         </article>`;
@@ -748,10 +917,11 @@ We'll capture the context automatically.</p>
         <h3>${esc(o.headline)}</h3>
         <p class="muted">${esc(o.assignment?.title || "")}</p>
         ${ready ? `<p class="drev-you-are-here">Right now: Director is asking you to approve ${esc(wave)}’s certification so the mission can continue.</p>` : ""}
-        ${stuck ? `<p class="drev-you-are-here drev-stuck-here">Right now: you’re blocked on Director for ${esc(wave)}. Use “Have Director re-check” — don’t sit in Ask Director loops without context.</p>` : ""}
+        ${stuck ? `<p class="drev-you-are-here drev-stuck-here">Right now: you’re blocked on Director for ${esc(wave)}. Use “Have Director re-check” — don’t sit in Share context loops without a re-check.</p>` : ""}
 
         ${processStrip}
         ${stuckBanner}
+        ${renderDeliverableConversation(o.conversation)}
 
         ${execSentences ? `<article class="mc-card drev-exec">
           <h4 style="margin-top:0">What got done (plain English)</h4>
@@ -854,13 +1024,13 @@ We'll capture the context automatically.</p>
     const local = dash.localServer || {};
     const localActions = [];
     if (local.actions?.start) {
-      localActions.push(`<button class="btn" type="button" data-mc-server-start="${esc(local.actions.start.slot)}">${esc(local.actions.start.label)}</button>`);
+      localActions.push(`<button class="btn" type="button" data-mc-server-start="${esc(id)}" data-worktree="${esc(local.actions.start.worktree || local.worktree || "")}">${esc(local.actions.start.label)}</button>`);
     }
     if (local.actions?.open) {
       localActions.push(`<a class="btn" href="${esc(local.actions.open.href)}" target="_blank" rel="noopener">${esc(local.actions.open.label)} ↗</a>`);
     }
     if (local.actions?.stop) {
-      localActions.push(`<button class="btn ghost" type="button" data-mc-server-stop="${esc(local.actions.stop.slot)}">${esc(local.actions.stop.label)}</button>`);
+      localActions.push(`<button class="btn ghost" type="button" data-mc-server-stop="${esc(id)}" data-worktree="${esc(local.actions.stop.worktree || local.worktree || "")}">${esc(local.actions.stop.label)}</button>`);
     }
     const localServerSec = `<section class="mc-sec mc-local-server">
       <div class="mc-card-h">
@@ -869,7 +1039,7 @@ We'll capture the context automatically.</p>
       </div>
       <p>${esc(local.detail || "")}</p>
       <p class="muted">${esc(local.note || "Workers do not need this server to code.")}</p>
-      ${local.slot != null ? `<p class="muted mono">slot ${esc(local.slot)}${local.port ? ` · :${esc(local.port)}` : ""}${local.worktree ? ` · ${esc(local.worktree)}` : ""}</p>` : ""}
+      ${local.worktree || local.slot != null ? `<p class="muted mono">${local.worktree ? esc(local.worktree) : ""}${local.slot != null ? ` · slot ${esc(local.slot)}` : ""}${local.port ? ` · :${esc(local.port)}` : ""}</p>` : ""}
       ${local.conflictDetail ? `<p class="mc-error-inline">${esc(local.conflictDetail)}</p>` : ""}
       <div class="mc-actions" style="margin-top:10px">${localActions.join("") || `<span class="muted">No server actions available</span>`}</div>
     </section>`;
@@ -916,10 +1086,10 @@ We'll capture the context automatically.</p>
         ? work.map((w) => {
             const live = w.liveActivity;
             const liveBlock = live && ["active", "starting", "waiting_ack", "blocked"].includes(w.lifecycleState)
-              ? `<div class="mc-live-activity">
-                  <div><b>${esc(live.workerLabel || "Worker")}</b> · ${esc(live.activity || "—")}</div>
-                  ${live.detail ? `<div class="muted">${esc(live.detail)}</div>` : ""}
-                  <div class="muted">${esc([
+              ? `<div class="mc-live-activity" data-live-session="${esc(live.sessionId || "")}">
+                  <div data-live-title><b>${esc(live.workerLabel || "Worker")}</b> · ${esc(live.activity || "—")}</div>
+                  <div class="muted" data-live-detail ${live.detail ? "" : "hidden"}>${esc(live.detail || "")}</div>
+                  <div class="muted" data-live-meta>${esc([
                     live.filesInspected != null ? `${live.filesInspected} files inspected` : null,
                     live.percent != null ? `${live.percent}% complete` : null,
                     live.heartbeatLabel ? `Heartbeat: ${live.heartbeatLabel}` : null,
@@ -927,10 +1097,14 @@ We'll capture the context automatically.</p>
                   ].filter(Boolean).join(" · "))}</div>
                 </div>`
               : "";
+            const rowActions = w.status === "running" || w.lifecycleState === "active"
+              ? `<div class="mc-actions" style="margin-top:8px"><button class="btn ghost sm" type="button" data-mc-resume-stalled="${esc(id)}">Relaunch worker</button></div>`
+              : "";
             return `<div class="mc-work-row">
             <div class="mc-card-h"><b>${esc(w.title)}</b><span class="mc-pill">${esc(w.lifecycleLabel || w.statusLabel)}</span></div>
             <div class="muted">${esc(w.handledByLabel || w.lifecycleExplanation || "Director is preparing execution")}</div>
             ${liveBlock || (w.progressSummary && w.progressSummary !== w.lifecycleExplanation ? `<div>${esc(w.progressSummary)}</div>` : "")}
+            ${rowActions}
           </div>`;
           }).join("")
         : `<div class="rempty">No work items yet</div>`}
@@ -1472,6 +1646,11 @@ We'll capture the context automatically.</p>
       V2.state.runtimeDiagnosticsError = String(e.message || e);
     }
     try {
+      V2.state.dayOps = await get("/api/v2/day");
+    } catch {
+      V2.state.dayOps = null;
+    }
+    try {
       const j2 = await get("/api/v2/trusted-host/diagnostics");
       V2.state.trustedHostDiagnostics = j2.diagnostics || j2;
       V2.state.trustedHostDiagnosticsError = null;
@@ -1479,7 +1658,11 @@ We'll capture the context automatically.</p>
       V2.state.trustedHostDiagnosticsError = String(e.message || e);
     }
     markFetched("runtimeDiagnostics");
-    bump(); schedulePaint();
+    paintIfChanged("runtimeDiagnostics", {
+      diag: V2.state.runtimeDiagnostics,
+      day: V2.state.dayOps,
+      tha: V2.state.trustedHostDiagnostics,
+    });
   };
 
   V2.viewSettings = function () {
@@ -1488,6 +1671,7 @@ We'll capture the context automatically.</p>
       V2.fetchRuntimeDiagnostics();
     }
     const diag = V2.state.runtimeDiagnostics;
+    const day = V2.state.dayOps || {};
     const claude = diag?.claude || {};
     const ex = diag?.execution || {};
     const tha = V2.state.trustedHostDiagnostics;
@@ -1496,7 +1680,21 @@ We'll capture the context automatically.</p>
         : "bad";
     const thaHostPill = !tha ? ""
       : (tha.hostRuntimeAvailable && tha.databaseCredentialAvailable) ? "ok" : "warn";
-    return shell("Settings", { lead: "Diagnostics and legacy tools." }) + `
+    const dayPill = day.status === "paused" ? "warn" : "ok";
+    return shell("Settings", { lead: "Day controls, diagnostics, and legacy tools." }) + `
+      <section class="mc-sec">
+        <h3>Start / stop of day</h3>
+        <p>${esc(day.detail || "Pause all registered workers overnight, or resume them in the morning.")}</p>
+        <p class="muted">${esc(day.note || "Uses alloy-worker-pause --all / alloy-worker-resume --all.")}</p>
+        <div class="mc-card-h" style="margin:10px 0">
+          <b>Day status</b>
+          <span class="mc-pill ${dayPill}">${esc(day.statusLabel || "—")}</span>
+        </div>
+        <div class="mc-actions row gap">
+          <button class="btn" type="button" data-mc-day-start>Start of day</button>
+          <button class="btn ghost" type="button" data-mc-day-stop>Stop of day</button>
+        </div>
+      </section>
       <section class="mc-sec">
         <h3>Diagnostics</h3>
         <p class="muted">Execution runtime configuration and Claude availability.</p>
@@ -1709,7 +1907,7 @@ We'll capture the context automatically.</p>
     }
   }
 
-  function openDirectorTextDialog({ title, lead, confirmLabel, onSubmit }) {
+  function openDirectorTextDialog({ title, lead, confirmLabel, placeholder, allowEmpty = false, onSubmit }) {
     document.querySelectorAll(".ov.drev-dialog").forEach((el) => el.remove());
     const ov = document.createElement("div");
     ov.className = "ov drev-dialog";
@@ -1717,7 +1915,7 @@ We'll capture the context automatically.</p>
       <h3>${esc(title)}</h3>
       <p class="mc-lead">${esc(lead || "")}</p>
       <label class="ci-q">Your message
-        <textarea id="drev-msg" rows="5" autofocus placeholder="Write direction for Director…"></textarea>
+        <textarea id="drev-msg" rows="5" autofocus placeholder="${esc(placeholder || "Write direction for Director…")}"></textarea>
       </label>
       <div class="ov-actions">
         <button type="button" class="btn ghost" data-drev-cancel>Cancel</button>
@@ -1729,8 +1927,8 @@ We'll capture the context automatically.</p>
       if (ev.target === ov || ev.target.closest("[data-drev-cancel]")) ov.remove();
     });
     ov.querySelector("[data-drev-send]")?.addEventListener("click", async () => {
-      const msg = ov.querySelector("#drev-msg")?.value?.trim();
-      if (!msg) { toast("Enter a message for Director.", "err"); return; }
+      const msg = ov.querySelector("#drev-msg")?.value?.trim() || "";
+      if (!allowEmpty && !msg) { toast("Enter a message for Director.", "err"); return; }
       try {
         await onSubmit(msg);
         ov.remove();
@@ -1741,15 +1939,57 @@ We'll capture the context automatically.</p>
     setTimeout(() => ov.querySelector("#drev-msg")?.focus(), 30);
   }
 
-  async function acceptDeliverable(missionId, reviewId) {
-    if (V2.state.kickoffBusy) return;
+  function openCertifyDialog({ missionId, reviewId, waveLabel }) {
+    document.querySelectorAll(".ov.drev-dialog").forEach((el) => el.remove());
+    const ov = document.createElement("div");
+    ov.className = "ov drev-dialog";
+    const label = waveLabel ? `Certify ${waveLabel}` : "Certify deliverable";
+    ov.innerHTML = `<div class="ov-card wide" role="dialog" aria-label="${esc(label)}">
+      <h3>${esc(label)}</h3>
+      <p class="mc-lead">Confirm you trust Director’s recommendation. Optionally leave a note for alignment — residual risk you accept, preference for the next wave, or product judgment.</p>
+      <label class="ci-q">Note for Director <span class="muted">(optional)</span>
+        <textarea id="drev-msg" rows="4" autofocus placeholder="e.g. Accept residual risk on X; prefer Y for next wave…"></textarea>
+      </label>
+      <div class="ov-actions">
+        <button type="button" class="btn ghost" data-drev-cancel>Cancel</button>
+        <button type="button" class="btn" data-drev-send>Confirm certify</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener("click", (ev) => {
+      if (ev.target === ov || ev.target.closest("[data-drev-cancel]")) ov.remove();
+    });
+    ov.querySelector("[data-drev-send]")?.addEventListener("click", async () => {
+      const note = ov.querySelector("#drev-msg")?.value?.trim() || "";
+      const btn = ov.querySelector("[data-drev-send]");
+      if (btn) btn.disabled = true;
+      const ok = await acceptDeliverable(missionId, reviewId, note);
+      if (ok) ov.remove();
+      else if (btn) btn.disabled = false;
+    });
+    setTimeout(() => ov.querySelector("#drev-msg")?.focus(), 30);
+  }
+
+  function scrollToOutcomeThread() {
+    requestAnimationFrame(() => {
+      const el = document.getElementById("drev-thread")
+        || document.getElementById("mc-outcome")
+        || document.querySelector(".mc-outcome");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  async function acceptDeliverable(missionId, reviewId, operatorNote = "") {
+    if (V2.state.kickoffBusy) return false;
     V2.state.kickoffBusy = "Recording your certification";
     bump(); schedulePaint();
     try {
+      const note = String(operatorNote || "").trim();
       const out = await post("/api/v2/deliverable-reviews/accept", {
         mission_id: missionId,
         review_id: reviewId,
-        response: "Operator certified deliverable from Mission Control",
+        response: note || "Operator certified deliverable from Mission Control",
+        operator_note: note || null,
       });
       if (out && out.ok === false) {
         throw Object.assign(new Error(out.detail || out.error || "Certification failed"), { body: out });
@@ -1769,10 +2009,13 @@ We'll capture the context automatically.</p>
       bump(); schedulePaint();
       await V2.fetchDashboard(missionId);
       bump(); schedulePaint();
+      scrollToOutcomeThread();
+      return true;
     } catch (e) {
       V2.state.kickoffBusy = null;
       toast(String(e?.body?.detail || e.message || e), "err");
       bump(); schedulePaint();
+      return false;
     }
   }
 
@@ -1788,7 +2031,9 @@ We'll capture the context automatically.</p>
       if (out && out.ok === false) {
         throw Object.assign(new Error(out.detail || out.error || "Re-check failed"), { body: out });
       }
-      V2.state.overview = null;
+      // Do not blank the dashboard before replacement arrives — that produced an
+      // empty beige screen with only the toast after "still blocked" rechecks.
+      V2.state._paintFp = {};
       V2.state.missionsHome = null;
       V2.state.needsYou = null;
       V2.state.kickoffBusy = null;
@@ -1796,17 +2041,24 @@ We'll capture the context automatically.</p>
       toast(
         state === "ready_for_review"
           ? "Director re-checked — Certify is available now."
-          : "Director re-checked — still blocked. Read What’s blocking you.",
+          : "Director re-checked — still blocked. Scroll to What’s blocking you.",
         state === "ready_for_review" ? "ok" : "err",
       );
       await refreshNeedsBadge();
-      bump(); schedulePaint();
       await V2.fetchDashboard(missionId);
+      V2.state.showOutcome = true;
       bump(); schedulePaint();
+      requestAnimationFrame(() => {
+        const el = document.getElementById("mc-outcome")
+          || document.querySelector(".drev-stuck-here")
+          || document.querySelector(".mc-outcome");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (e) {
       V2.state.kickoffBusy = null;
       toast(String(e?.body?.detail || e.message || e), "err");
       bump(); schedulePaint();
+      try { await V2.fetchDashboard(missionId); } catch { /* */ }
     }
   }
 
@@ -1890,65 +2142,68 @@ We'll capture the context automatically.</p>
     }
   }
 
-  async function missionServerCommand(command, slot) {
-    const label = command === "server.start" ? "Starting local Alloy app…" : "Stopping local Alloy app…";
+  async function missionServerCommand(action, missionId) {
+    const label = action === "start" ? "Starting local Alloy app…" : "Stopping local Alloy app…";
     toast(label, "ok");
     try {
-      const preview = await post("/api/commands/preview", { command, input: { slot: Number(slot) } });
-      if (preview && preview.ok === false) {
-        throw new Error(preview.reason || (preview.errors || []).join("; ") || preview.code || "Not eligible");
-      }
-      const out = await post("/api/commands", {
-        command,
-        input: { slot: Number(slot) },
-        confirm: true,
-        actor: "operator",
+      const out = await post("/api/v2/missions/local-server", {
+        mission_id: missionId,
+        action,
       });
-      const stage = out?.stage;
-      const result = out?.result;
-      const d = result?.data;
-      const okc = result ? (result.exit === undefined || result.exit === 0) && (d?.ok !== false) : out?.ok;
-      if (stage !== "execute" || !okc) {
-        const msg = result?.stdout || result?.stderr || out?.reason || out?.code || "Command did not run";
-        throw new Error(String(msg).split("\n").slice(0, 3).join(" "));
+      if (out && out.ok === false) {
+        throw new Error(out.detail || out.error || "Server command failed");
       }
       V2.state.overview = null;
+      V2.state._paintFp = {};
       bump(); schedulePaint();
-      if (command === "server.start") {
-        toast(`Slot ${slot} server starting…`, "ok");
-        watchMissionServerReady(Number(slot), preview?.target?.port || preview?.preview?.effects);
-      } else {
-        toast(`Slot ${slot} server stopped`, "ok");
+      toast(out.message || (action === "start" ? "Server starting…" : "Server stopped"), "ok");
+      if (action === "start") {
+        watchMissionServerReady(missionId, out.localServer?.port);
+      } else if (missionId) {
+        setTimeout(() => V2.fetchDashboard(missionId), 800);
       }
-      // Refresh dashboard so status flips when ready
-      const mid = V2.state.selectedMissionId;
-      if (mid) setTimeout(() => V2.fetchDashboard(mid), 1500);
     } catch (e) {
       toast(e?.message || String(e), "err");
     }
   }
 
-  function watchMissionServerReady(slot, _hint) {
-    const deadline = Date.now() + 75000;
+  function watchMissionServerReady(missionId, _port) {
+    const deadline = Date.now() + 90000;
     const iv = setInterval(async () => {
       if (Date.now() > deadline) {
         clearInterval(iv);
-        toast(`Slot ${slot} server did not come up in time`, "err");
+        toast("Local Alloy app did not come up in time", "err");
         return;
       }
       try {
-        const mid = V2.state.selectedMissionId;
-        if (!mid) { clearInterval(iv); return; }
-        const dash = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(mid));
+        if (!missionId) { clearInterval(iv); return; }
+        const dash = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(missionId));
         V2.state.overview = dash;
-        bump(); schedulePaint();
+        if (!paintIfChanged(`overview:${missionId}`, dash)) patchLiveActivity(dash);
         const local = dash?.dashboard?.localServer || dash?.localServer;
         if (local?.status === "running") {
           clearInterval(iv);
-          toast(`Slot ${slot} app is up on :${local.port}`, "ok");
+          toast(`App is up on :${local.port}`, "ok");
         }
       } catch { /* keep polling */ }
-    }, 2500);
+    }, 3000);
+  }
+
+  async function runDayOps(kind) {
+    const path = kind === "start" ? "/api/v2/day/start" : "/api/v2/day/stop";
+    toast(kind === "start" ? "Starting the day…" : "Stopping the day…", "ok");
+    try {
+      const out = await post(path, {});
+      if (out && out.ok === false) {
+        throw new Error(out.detail || out.error || "Day command failed");
+      }
+      V2.state.dayOps = out.dayOps || null;
+      V2.state.runtimeDiagnostics = null;
+      bump(); schedulePaint();
+      toast(out.message || (kind === "start" ? "Start of day complete." : "Stop of day complete."), "ok");
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
   }
 
   async function advanceImplementation(missionId) {
@@ -2100,7 +2355,11 @@ We'll capture the context automatically.</p>
       ev.preventDefault();
       ev.stopPropagation();
       if (drevApprove.disabled || V2.state.kickoffBusy) return;
-      acceptDeliverable(drevApprove.dataset.mission, drevApprove.dataset.drevApprove);
+      openCertifyDialog({
+        missionId: drevApprove.dataset.mission,
+        reviewId: drevApprove.dataset.drevApprove,
+        waveLabel: drevApprove.textContent?.replace(/^Certify\s+/i, "").trim() || "",
+      });
       return;
     }
     const drevRecheck = ev.target.closest("[data-drev-recheck]");
@@ -2128,27 +2387,34 @@ We'll capture the context automatically.</p>
           V2.state.overview = null;
           await refreshNeedsBadge();
           toast("Changes requested — Director will relaunch.");
-          V2.fetchOverview(missionId);
+          await V2.fetchDashboard(missionId);
+          V2.state.showOutcome = true;
+          bump(); schedulePaint();
+          scrollToOutcomeThread();
         },
       });
       return;
     }
-    const drevAsk = ev.target.closest("[data-drev-ask]");
-    if (drevAsk) {
-      const missionId = drevAsk.dataset.mission;
-      const reviewId = drevAsk.dataset.drevAsk;
+    const drevContext = ev.target.closest("[data-drev-context],[data-drev-ask]");
+    if (drevContext) {
+      const missionId = drevContext.dataset.mission;
+      const reviewId = drevContext.dataset.drevContext || drevContext.dataset.drevAsk;
       openDirectorTextDialog({
-        title: "Ask Director",
-        lead: "Your question is persisted on the mission. Director will interpret and respond.",
-        confirmLabel: "Ask Director",
+        title: "Share context with Director",
+        lead: "Leave alignment notes Director should keep — product judgment, residual risk you accept, preference for the next wave, or a question. Review context is attached automatically.",
+        confirmLabel: "Share with Director",
+        placeholder: "Share context or ask Director…",
         onSubmit: async (message) => {
-          await post("/api/v2/deliverable-reviews/ask", {
+          await post("/api/v2/deliverable-reviews/share-context", {
             mission_id: missionId,
             review_id: reviewId,
             message,
           });
-          toast("Message sent to Director.");
-          V2.fetchOverview(missionId);
+          toast("Context shared with Director.");
+          V2.state.showOutcome = true;
+          await V2.fetchDashboard(missionId);
+          bump(); schedulePaint();
+          scrollToOutcomeThread();
         },
       });
       return;
@@ -2170,7 +2436,7 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
     if (!t) return;
 
     if (t.dataset.mcCertify) {
@@ -2221,14 +2487,30 @@ We'll capture the context automatically.</p>
     }
     if (t.dataset.mcServerStart) {
       const ok = window.confirm(
-        `Start the Alloy app server for slot ${t.dataset.mcServerStart}?\n\nThis is for your QA click-through only. Claude/Cursor do not need it to code.\nPrefer one running Alloy app at a time.`
+        "Start the local Alloy app for this mission?\n\nThis is for your QA click-through only. Claude/Cursor do not need it to code.\nPrefer one running Alloy app at a time."
       );
       if (!ok) return;
-      missionServerCommand("server.start", t.dataset.mcServerStart);
+      missionServerCommand("start", t.dataset.mcServerStart);
       return;
     }
     if (t.dataset.mcServerStop) {
-      missionServerCommand("server.stop", t.dataset.mcServerStop);
+      missionServerCommand("stop", t.dataset.mcServerStop);
+      return;
+    }
+    if (t.hasAttribute("data-mc-day-start")) {
+      const ok = window.confirm(
+        "Start of day — resume all paused workers?\n\nRuns: alloy-worker-resume --all"
+      );
+      if (!ok) return;
+      runDayOps("start");
+      return;
+    }
+    if (t.hasAttribute("data-mc-day-stop")) {
+      const ok = window.confirm(
+        "Stop of day — pause all registered workers for the night?\n\nRuns: alloy-worker-pause --all\nWorktrees and changes are preserved."
+      );
+      if (!ok) return;
+      runDayOps("stop");
       return;
     }
 

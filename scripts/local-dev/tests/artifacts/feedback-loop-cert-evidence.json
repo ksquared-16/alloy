@@ -1,0 +1,75 @@
+{
+  "ok": true,
+  "runtimeRoot": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dfl-cert-rHhoXv",
+  "missionId": "msn_2d054741a54698fa4c",
+  "reviewId": "drev_37ec8035fcec",
+  "directorInput": {
+    "schema_version": "vacilando.deliverable_director_input.v1",
+    "missionId": "msn_2d054741a54698fa4c",
+    "reviewId": "drev_37ec8035fcec",
+    "assignmentId": "asg_d203f547736c16",
+    "trigger": "share_context",
+    "deliverableTitle": "Wave 1 — Service-client principal check (W-4)",
+    "certificationState": "cannot_verify",
+    "recommendation": "not_ready",
+    "operatorVerbatim": "ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted.",
+    "conversation": [
+      {
+        "at": "2026-08-04T16:19:57.702Z",
+        "actor": "you",
+        "kind": "context",
+        "text": "ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted."
+      }
+    ],
+    "operatorContext": [
+      {
+        "messageId": "odm_e63a1856d5ce1b67",
+        "kind": "context",
+        "at": "2026-08-04T16:19:57.702Z",
+        "verbatim": "Context for Director (auto-attached — alignment feedback from the operator):\nDeliverable: Wave 1 — Service-client principal check (W-4)\nReview: drev_37ec8035fcec\nCertification state: cannot_verify\nRecommendation: not_ready\nFailed checks:\n- Required evidence exists: 0 meaningful evidence item(s); 0 total attached.\nOperator context: ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted.\nTreat this as product/alignment context for the mission. Acknowledge and incorporate it; only ask a clarification if the note is incomplete."
+      }
+    ],
+    "reopenReason": null,
+    "evidenceSummary": [],
+    "builtAt": "2026-08-04T16:19:57.704Z"
+  },
+  "directorResponse": {
+    "schema_version": "vacilando.deliverable_director_response.v1",
+    "trigger": "share_context",
+    "summary": "Incorporating your context for this deliverable: “ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted.”. I will apply this alignment on the next verification and any relaunch.",
+    "incorporatedOperatorExcerpt": "ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted.",
+    "usedConversationCount": 1,
+    "usedEvidenceCount": 0,
+    "missionId": "msn_2d054741a54698fa4c",
+    "reviewId": "drev_37ec8035fcec",
+    "at": "2026-08-04T16:19:57.704Z"
+  },
+  "conversation": [
+    {
+      "at": "2026-08-04T16:19:57.702Z",
+      "actor": "you",
+      "kind": "context",
+      "text": "ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted."
+    },
+    {
+      "at": "2026-08-04T16:19:57.704Z",
+      "actor": "director",
+      "kind": "director_response",
+      "text": "Incorporating your context for this deliverable: “ALIGN-eef50e: prefer wave order A before B; residual docs risk accepted.”. I will apply this alignment on the next verification and any relaunch."
+    }
+  ],
+  "recheckSemantics": {
+    "usesConversationThread": true,
+    "usesCurrentEvidence": true,
+    "description": "Re-check re-runs Director verification against current assignment evidence AND injects the full operator↔Director conversation for this review (same assignment lineage via reviewId binding) into the Director input. It does not discard shared context."
+  },
+  "certifyNoteSemantics": {
+    "emptyNote": "records_only",
+    "withNote": "records_and_director_message",
+    "description": "Empty certify note: acceptance_note null + history/timeline only. Non-empty note: also submits a kind=context Director message bound to reviewId and runs a Director turn that acknowledges the note in the conversation."
+  },
+  "auth": {
+    "required": true,
+    "unauthorizedRejected": true
+  }
+}

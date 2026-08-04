@@ -14,13 +14,22 @@ import { join, resolve } from "node:path";
 import { REPO_ROOT } from "./knowledge.mjs";
 import { getAssignment, listAssignments, updateAssignment } from "./worker-assignment.mjs";
 import { listEvidence } from "./evidence.mjs";
-import { appendTimelineEvent } from "./timeline.mjs";
-import { submitOperatorDirectorMessage } from "./director-comms.mjs";
+import { appendTimelineEvent, readTimeline } from "./timeline.mjs";
+import { submitOperatorDirectorMessage, listDirectorMessages } from "./director-comms.mjs";
+import {
+  executeDeliverableDirectorTurn,
+  buildDeliverableDirectorInput,
+  RECHECK_SEMANTICS,
+  CERTIFY_NOTE_SEMANTICS,
+  conversationForReview,
+} from "./deliverable-director-loop.mjs";
 import {
   parseTestEvidenceSemantics,
   reconcileDeliverableEvidence,
   resolveDeliverableCommit,
 } from "./deliverable-evidence.mjs";
+
+export { RECHECK_SEMANTICS, CERTIFY_NOTE_SEMANTICS };
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -333,28 +342,33 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
   // Tests — use structured semantics (never naive /fail/i).
   // Census / docs assignments often require log+document only — missing tests
   // must not hard-fail those (Wave 0 dead-end for the operator).
+  // Attaching a "Tests executed — N/A" stub must NOT invent a test requirement.
   const testEv = artifacts.filter((e) => e.type === "test" || /^Tests executed$/i.test(e.title || ""));
   const requiredTypes = (assignment.requiredEvidence || [])
     .map((x) => String(typeof x === "string" ? x : x?.type || x || "").toLowerCase())
     .filter(Boolean);
   const expectedBlob = JSON.stringify(expected || []);
+  const testNa = (text) => /not applicable|none is applicable|no test suite|not required for (this|a) (assignment|specification)|specification artifact/i
+    .test(String(text || ""));
   const expectsTests = requiredTypes.includes("test")
-    || testEv.length > 0
     || (Array.isArray(report.tests) && report.tests.length > 0)
     || /\.(test|spec)\.(ts|tsx|js|mjs)\b/i.test(expectedBlob)
     || /\b(vitest|npm test|tier-[ab]|red-before)\b/i.test(String(report.summary || ""));
   const testSemantics = testEv.map((e) =>
     parseTestEvidenceSemantics(e.description || e.title || "", { exitCode: e.exitCode }));
+  const allTestEvNa = testEv.length > 0 && testEv.every((e) => testNa(e.description || e.title || ""));
   const suiteFailed = testSemantics.some((s) => s.test_run_status === "failed");
   const suitePassed = testSemantics.some((s) => s.test_run_status === "passed") && !suiteFailed;
-  if (!expectsTests && testEv.length === 0) {
+  if (!expectsTests || allTestEvNa) {
     checks.push(checkItem(
       "tests_passed",
       "Required tests ran and passed",
       "pass",
-      requiredTypes.length
-        ? `Automated tests were not required (required evidence: ${requiredTypes.join(", ")}).`
-        : "Automated tests were not required for this assignment.",
+      allTestEvNa
+        ? "Worker recorded that automated tests are not applicable for this specification deliverable."
+        : (requiredTypes.length
+          ? `Automated tests were not required (required evidence: ${requiredTypes.join(", ")}).`
+          : "Automated tests were not required for this assignment."),
     ));
   } else {
     checks.push(checkItem(
@@ -1099,24 +1113,50 @@ export function acceptDeliverableReview(missionId, reviewId, {
     .filter((a) => (a.dependencies || []).includes(review.assignment_id) && a.status === "ready")
     .map((a) => shortDeliverableName(a.title))
     .filter(Boolean);
+  const note = String(response || "").trim() || null;
   appendTimelineEvent(missionId, {
     type: "deliverable_accepted",
     headline: `You certified ${short}`,
-    summary: unlocked.length
-      ? `Director unlocked ${unlocked[0]}.`
-      : "Director continues execution.",
+    summary: [
+      unlocked.length ? `Director unlocked ${unlocked[0]}.` : "Director continues execution.",
+      note ? `Your note: ${note.slice(0, 160)}` : null,
+    ].filter(Boolean).join(" "),
     visibility: "summary",
     assignmentId: review.assignment_id,
     actor,
-    detail: { review_id: reviewId, approval_meaning: review.approval_meaning, unlocked },
+    detail: {
+      review_id: reviewId,
+      approval_meaning: review.approval_meaning,
+      unlocked,
+      operator_note: note,
+    },
     nowMs,
   });
+
+  if (note) {
+    try {
+      const out = submitOperatorDirectorMessage({
+        missionId,
+        reviewId,
+        kind: "context",
+        message: `Certified ${short} with note: ${note}`,
+        actor,
+        nowMs,
+      });
+      executeDeliverableDirectorTurn(missionId, review, {
+        trigger: "certify_note",
+        operatorVerbatim: note,
+        operatorMessageId: out.messageId || out.message?.messageId,
+        nowMs,
+      });
+    } catch { /* best-effort — certification already recorded */ }
+  }
 
   import("./assignment-dispatch.mjs")
     .then(({ scheduleDispatchAfterKickoff }) => scheduleDispatchAfterKickoff(missionId, { actor: "director" }))
     .catch(() => {});
 
-  return { ok: true, review };
+  return { ok: true, review, certifyNoteSemantics: CERTIFY_NOTE_SEMANTICS };
 }
 
 /**
@@ -1126,6 +1166,7 @@ export function requestDeliverableChanges(missionId, reviewId, {
   direction,
   actor = "operator",
   nowMs,
+  idempotencyKey = null,
 } = {}) {
   const verbatim = String(direction || "").trim();
   if (!verbatim) return { ok: false, error: "empty_direction" };
@@ -1164,10 +1205,24 @@ export function requestDeliverableChanges(missionId, reviewId, {
 
   const msg = submitOperatorDirectorMessage({
     missionId,
-    kind: "reject_direction",
-    message: `Request changes on ${review.deliverable_title}: ${verbatim}`,
+    reviewId,
+    kind: "request_changes",
+    message: [
+      `Operator direction: ${verbatim}`,
+      `Deliverable: ${review.deliverable_title}`,
+      `Review: ${reviewId}`,
+    ].join("\n"),
     actor,
     nowMs,
+    idempotencyKey,
+  });
+
+  const turn = executeDeliverableDirectorTurn(missionId, review, {
+    trigger: "request_changes",
+    operatorVerbatim: verbatim,
+    operatorMessageId: msg.messageId || msg.message?.messageId,
+    nowMs,
+    idempotencyKey,
   });
 
   const short = shortDeliverableName(review.deliverable_title);
@@ -1178,17 +1233,33 @@ export function requestDeliverableChanges(missionId, reviewId, {
     visibility: "summary",
     assignmentId: review.assignment_id,
     actor,
-    detail: { review_id: reviewId, director_message: msg.messageId || null },
+    detail: {
+      review_id: reviewId,
+      director_message: msg.messageId || msg.message?.messageId || null,
+      director_response_id: turn.directorResponseId || null,
+    },
     nowMs,
   });
 
-  return { ok: true, review: getDeliverableReview(missionId, reviewId), directorMessage: msg };
+  import("./assignment-dispatch.mjs")
+    .then(({ scheduleDispatchAfterKickoff }) => scheduleDispatchAfterKickoff(missionId, { actor: "director" }))
+    .catch(() => {});
+
+  return {
+    ok: true,
+    review: getDeliverableReview(missionId, reviewId),
+    directorMessage: msg,
+    directorTurn: turn,
+    directorInput: turn.input,
+  };
 }
 
 export function askDirectorAboutDeliverable(missionId, reviewId, {
   message,
   actor = "operator",
   nowMs,
+  kind = "ask",
+  idempotencyKey = null,
 } = {}) {
   const review = getDeliverableReview(missionId, reviewId);
   if (!review) return { ok: false, error: "review_not_found" };
@@ -1201,50 +1272,114 @@ export function askDirectorAboutDeliverable(missionId, reviewId, {
   const blockers = (review.evidence_reconciliation?.blocking_discrepancies || [])
     .map((d) => d.detail)
     .filter(Boolean);
+  const isContext = kind === "context";
   const contextLines = [
-    `Context for Director (auto-attached — do not ask the operator to restate this):`,
+    isContext
+      ? `Context for Director (auto-attached — alignment feedback from the operator):`
+      : `Context for Director (auto-attached — do not ask the operator to restate this):`,
     `Deliverable: ${review.deliverable_title}`,
     `Review: ${review.review_id}`,
     `Certification state: ${review.certification_state}`,
     `Recommendation: ${review.recommendation}`,
     failedChecks.length ? `Failed checks:\n- ${failedChecks.join("\n- ")}` : "Failed checks: none recorded",
     blockers.length ? `Blocking discrepancies:\n- ${blockers.join("\n- ")}` : null,
-    `Operator question: ${verbatim}`,
-    `Respond with a concrete next step the operator can take (Certify, wait for re-check, or request a specific worker repair). Do not ask a vague clarifying question if this context is enough.`,
+    isContext ? `Operator context: ${verbatim}` : `Operator question: ${verbatim}`,
+    isContext
+      ? `Treat this as product/alignment context for the mission. Acknowledge and incorporate it; only ask a clarification if the note is incomplete.`
+      : `Respond with a concrete next step the operator can take (Certify, wait for re-check, or request a specific worker repair). Do not ask a vague clarifying question if this context is enough.`,
   ].filter(Boolean);
 
   const out = submitOperatorDirectorMessage({
     missionId,
-    kind: "ask",
+    reviewId,
+    kind: isContext ? "context" : "ask",
     message: contextLines.join("\n"),
     actor,
     nowMs,
+    idempotencyKey,
   });
 
-  appendTimelineEvent(missionId, {
-    type: "operator_message",
-    headline: "You asked Director about a deliverable",
-    summary: verbatim.slice(0, 200),
-    visibility: "summary",
-    assignmentId: review.assignment_id,
-    actor,
-    detail: { review_id: reviewId, messageId: out.messageId },
+  if (out.deduped) {
+    return {
+      ok: true,
+      deduped: true,
+      review,
+      directorMessage: out,
+      directorTurn: null,
+      directorInput: null,
+    };
+  }
+
+  const turn = executeDeliverableDirectorTurn(missionId, review, {
+    trigger: isContext ? "share_context" : "ask",
+    operatorVerbatim: verbatim,
+    operatorMessageId: out.messageId || out.message?.messageId,
     nowMs,
+    idempotencyKey,
   });
 
-  return { ok: out.ok !== false, review, directorMessage: out };
+  return {
+    ok: out.ok !== false && turn.ok !== false,
+    deduped: Boolean(turn.deduped),
+    review,
+    directorMessage: out,
+    directorTurn: turn,
+    directorInput: turn.input,
+    directorResponse: turn.response,
+  };
+}
+
+/**
+ * Operator shares alignment feedback (not necessarily a question) on an open review.
+ */
+export function shareContextWithDirector(missionId, reviewId, {
+  message,
+  actor = "operator",
+  nowMs,
+  idempotencyKey = null,
+} = {}) {
+  return askDirectorAboutDeliverable(missionId, reviewId, {
+    message,
+    actor,
+    nowMs,
+    kind: "context",
+    idempotencyKey,
+  });
+}
+
+/**
+ * Recent operator ↔ Director turns for a mission / deliverable review.
+ * Newest last, capped for the outcome card thread.
+ * Strict: messages without matching reviewId are excluded (no cross-review bleed).
+ */
+export function listDeliverableConversation(missionId, {
+  reviewId = null,
+  limit = 12,
+} = {}) {
+  if (!reviewId) return [];
+  return conversationForReview(missionId, reviewId, { limit });
 }
 
 /**
  * Operator asks Director to re-run verification on a stuck deliverable review.
- * Replaces dead-end "Request changes / Ask Director" loops when evidence already exists.
+ *
+ * Semantics (RECHECK_SEMANTICS): uses BOTH current evidence AND the full
+ * operator↔Director conversation for the prior reviewId. Shared context is
+ * not discarded. The new review is force-created from evidence; a Director
+ * turn then responds with the conversation incorporated.
  */
 export function recheckDeliverableReview(missionId, reviewId, {
   actor = "operator",
   nowMs,
+  idempotencyKey = null,
 } = {}) {
   const prior = getDeliverableReview(missionId, reviewId);
   if (!prior) return { ok: false, error: "review_not_found" };
+
+  const priorInput = buildDeliverableDirectorInput(missionId, prior, {
+    trigger: "recheck",
+  });
+
   const out = createDeliverableReview(missionId, prior.assignment_id, {
     actor: "director",
     nowMs,
@@ -1253,11 +1388,55 @@ export function recheckDeliverableReview(missionId, reviewId, {
   });
   if (!out.ok) return out;
 
+  // Carry conversation onto the new review: copy prior review-scoped messages
+  // are still under prior reviewId; also run a turn bound to the NEW review that
+  // quotes prior conversation via operatorVerbatim from prior input.
+  const priorConversation = priorInput.ok ? priorInput.input.conversation : [];
+  const latestOperator = [...priorConversation].reverse().find((t) => t.actor === "you");
+
+  // Carry the latest operator note onto the new review so the thread stays review-scoped.
+  if (latestOperator?.text) {
+    submitOperatorDirectorMessage({
+      missionId,
+      reviewId: out.review.review_id,
+      kind: "context",
+      message: [
+        `Context carried from prior review ${reviewId}:`,
+        `Operator context: ${latestOperator.text}`,
+      ].join("\n"),
+      actor: "operator",
+      nowMs,
+      skipSideEffects: true,
+    });
+  }
+
+  const turn = executeDeliverableDirectorTurn(missionId, out.review, {
+    trigger: "recheck",
+    operatorVerbatim: latestOperator?.text || null,
+    nowMs,
+    idempotencyKey,
+  });
+
+  // Annotate recommendation detail when context was present.
+  if (turn.ok && turn.response?.incorporatedOperatorExcerpt) {
+    const store = readStore(missionId);
+    const r = store.reviews.find((x) => x.review_id === out.review.review_id);
+    if (r) {
+      r.recommendation_detail = [
+        r.recommendation_detail || "",
+        `Operator context considered: “${turn.response.incorporatedOperatorExcerpt}”.`,
+      ].filter(Boolean).join("\n\n");
+      r.director_input_snapshot = turn.input;
+      r.recheck_semantics = { ...RECHECK_SEMANTICS };
+      writeStore(store);
+    }
+  }
+
   appendTimelineEvent(missionId, {
     type: "deliverable_verified",
     headline: `Director re-checked ${shortDeliverableName(prior.deliverable_title)}`,
     summary: out.review.certification_state === "ready_for_review"
-      ? "Director can now recommend certification."
+      ? (turn.response?.summary || "Director can now recommend certification.")
       : (out.review.recommendation_detail || "Director still cannot recommend certification."),
     visibility: "summary",
     assignmentId: prior.assignment_id,
@@ -1266,11 +1445,26 @@ export function recheckDeliverableReview(missionId, reviewId, {
       prior_review_id: reviewId,
       review_id: out.review.review_id,
       certification_state: out.review.certification_state,
+      recheck_semantics: { ...RECHECK_SEMANTICS },
+      director_input: turn.input
+        ? {
+          conversation_count: turn.input.conversation.length,
+          evidence_count: turn.input.evidenceSummary.length,
+          incorporated_excerpt: turn.response?.incorporatedOperatorExcerpt || null,
+        }
+        : null,
     },
     nowMs,
   });
 
-  return { ok: true, review: out.review, prior };
+  return {
+    ok: true,
+    review: getDeliverableReview(missionId, out.review.review_id) || out.review,
+    prior,
+    directorTurn: turn,
+    directorInput: turn.input,
+    recheckSemantics: RECHECK_SEMANTICS,
+  };
 }
 
 /** Operator-facing view model — executive certification briefing. */
@@ -1408,11 +1602,13 @@ export function deliverableReviewVm(missionId, review = null) {
     deferredWork: r.deferred_work || [],
     approvalMeaning: r.approval_meaning,
     rejectionConsequence: r.rejection_consequence,
+    conversation: listDeliverableConversation(missionId, { reviewId: r.review_id, limit: 12 }),
     actions: {
       approve: ready,
       recheck: stuck,
       requestChanges: ["ready_for_review", "cannot_verify", "evidence_discrepancy"].includes(state),
       askDirector: true,
+      shareContext: true,
     },
     technical: {
       workerClaimSummary: r.director_verification?.worker_claims?.summary || null,

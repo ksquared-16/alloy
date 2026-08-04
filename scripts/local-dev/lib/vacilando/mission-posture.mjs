@@ -15,7 +15,7 @@ import { listDecisions } from "./decisions.mjs";
 import { canCertifyMission } from "./evidence.mjs";
 import { getMission } from "./commands/missions.mjs";
 import { listWorkerTelemetry } from "./worker-health.mjs";
-import { getActiveSessionForAssignment } from "./execution-session.mjs";
+import { getActiveSessionForAssignment, listExecutionSessions } from "./execution-session.mjs";
 import { canAdvanceToImplementation } from "./mission-advance.mjs";
 import { silentRecoveryState } from "./silent-worker-recover.mjs";
 import {
@@ -28,6 +28,21 @@ const LIVE_SESSION = new Set([
 ]);
 const LIVE_WORKER = new Set(["healthy", "starting", "recovering"]);
 const GHOST_WORKER = new Set(["unresponsive", "stalled", "failed", "stopped", "complete"]);
+
+function thrashingOnAssignment(missionId, assignmentId) {
+  if (!assignmentId) return { thrashing: false, failedRecent: 0 };
+  const since = Date.now() - 3 * 60 * 60 * 1000;
+  let failedRecent = 0;
+  try {
+    const sessions = listExecutionSessions({ missionId, assignmentId, limit: 40 }) || [];
+    for (const s of sessions) {
+      if (!["failed", "lost"].includes(s.status)) continue;
+      const at = Date.parse(s.updated_at || s.completed_at || s.created_at || 0);
+      if (Number.isFinite(at) && at >= since) failedRecent += 1;
+    }
+  } catch { /* */ }
+  return { thrashing: failedRecent >= 3, failedRecent };
+}
 
 function hasLiveSession(missionId, assignments) {
   for (const a of assignments) {
@@ -303,15 +318,35 @@ export function deriveMissionPosture(missionId) {
 
   // Live work wins — only when something is actually running.
   if (busy) {
+    const runningAsg = claimedRunning[0];
+    const thrash = thrashingOnAssignment(missionId, runningAsg?.assignmentId);
+    if (thrash.thrashing) {
+      return {
+        ...base,
+        id: "worker_thrashing",
+        status: "executing",
+        label: "Worker keeps restarting",
+        detail: `A worker is reporting activity, but this deliverable has failed or been lost ${thrash.failedRecent} times in the last few hours. You can relaunch cleanly if it looks stuck.`,
+        next: "Relaunch the worker — or open the mission to inspect progress",
+        needsYou: true,
+        busy: true,
+        workersLine,
+        primaryAction: action("resume_stalled", "Relaunch worker", { missionId }),
+        secondaryAction: action("open_mission", "Inspect mission", { href: `missions/${missionId}`, missionId }),
+        thrashCount: thrash.failedRecent,
+      };
+    }
     return {
       ...base,
       id: "executing",
       status: "executing",
       label: "In progress",
       detail: "A worker is actively executing. Watch Current Work and Timeline for live updates.",
-      next: "Wait for the worker — or open the mission to inspect progress",
+      next: "Wait for the worker — or relaunch if progress looks stuck",
       busy: true,
       primaryAction: action("open_mission", "Watch progress", { href: `missions/${missionId}`, missionId }),
+      // Always offer an escape hatch — auto-resume is invisible to operators.
+      secondaryAction: action("resume_stalled", "Relaunch worker", { missionId }),
     };
   }
 

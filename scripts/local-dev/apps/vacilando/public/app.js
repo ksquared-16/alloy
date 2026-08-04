@@ -301,17 +301,11 @@ function renderMcView(r, V2) {
 }
 
 function render(force) {
-  // A leftover modal must not permanently lock Mission Control navigation.
-  const ov = document.querySelector(".ov");
-  if (ov && !force) {
-    // Still allow hash-driven MC navigation to dismiss a stuck overlay.
-    const r0 = parseRoute();
-    if (MC_ROUTES.has(r0.name) && window.VacilandoV2?.enabled) {
-      try { ov.remove(); } catch { /* */ }
-    } else {
-      return;
-    }
-  }
+  // Operator dialogs (Improve Vacilando, deliverable review, confirms) own the
+  // screen. Background freshness must not remove them or rebuild #view under them
+  // — that caused a full-UI flash every ~2s while heartbeats bumped revision.
+  // Hash navigation dismisses leftover overlays in mission-control.js.
+  if (document.querySelector(".ov")) return;
   const r = parseRoute();
   const V2 = window.VacilandoV2;
 
@@ -2026,10 +2020,13 @@ function adoptSnapshot(s) {
 function onSnap(s) {
   if (!adoptSnapshot(s)) return;
   chrome();
-  // On Mission Control routes, board SSE must not thrash #view — but it SHOULD
-  // poke the V2 revision sync so Director/worker mutations surface promptly.
+  // On Mission Control routes, board SSE must not thrash #view — debounce revision sync.
   const r = parseRoute();
   if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
+    const now = Date.now();
+    const last = window.VacilandoV2.state?._lastSseRevisionSync || 0;
+    if (now - last < 8000) return;
+    window.VacilandoV2.state._lastSseRevisionSync = now;
     window.VacilandoV2.syncPresentationRevision?.();
     return;
   }

@@ -312,6 +312,11 @@ export function serializeAssignmentPrompt(assignment, context) {
     `## Constraints`,
     ...(context?.globalConstraints || []).map((c) => `- ${c.text || c}`),
     "",
+    ...(assignment.reopen_reason ? [
+      `## Operator change request (reopen)`,
+      assignment.reopen_reason,
+      "",
+    ] : []),
     `## Completion contract`,
     `- Acknowledge context (version + contentHash) before changing code`,
     `- Submit start report before edits`,
