@@ -1,6 +1,8 @@
-import Link from "next/link";
+"use client";
+
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import type {
     ConfigurationPublicationStatus,
     OrganizationConfigurationDomain,
@@ -101,13 +103,15 @@ export function ConfigDomainCard({
                 </div>
             </div>
 
-            <Link
+            <AdminV2NavLink
                 href={domain.href}
-                className="flex items-center justify-between border-t border-alloy-stone/25 bg-alloy-stone/[0.025] px-3 py-1.5 text-[11px] font-semibold text-[#007d68] transition-colors hover:bg-alloy-bend-pine/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-alloy-bend-pine/35"
+                className="block w-full border-t border-alloy-stone/25 bg-alloy-stone/[0.025] text-[11px] font-semibold text-[#007d68] transition-colors hover:bg-alloy-bend-pine/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-alloy-bend-pine/35"
             >
-                Open {domain.label}
-                <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
+                <span className="flex w-full items-center justify-between px-3 py-1.5">
+                    Open {domain.label}
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                </span>
+            </AdminV2NavLink>
         </article>
     );
 }

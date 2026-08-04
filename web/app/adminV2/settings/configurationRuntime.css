@@ -302,6 +302,21 @@
     transition: background 0.12s ease;
 }
 
+/* AdminV2NavLink wraps children in `.adminv2-nav-link__inner` — keep row flex layout. */
+.config-platform-row.adminv2-nav-link {
+    display: flex;
+    width: 100%;
+}
+
+.config-platform-row.adminv2-nav-link > .adminv2-nav-link__inner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    width: 100%;
+    flex: 1;
+}
+
 .config-platform-row:hover {
     background: color-mix(in srgb, var(--cr-pine) 5%, white);
 }

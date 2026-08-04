@@ -257,20 +257,28 @@ export function configurationModeNavItemActive(
     if (h === "/adminV2/settings/actions") {
         return p === h || p.startsWith(`${h}/`) || p.startsWith("/settings/actions");
     }
-    if (h === settings("processes")) {
+    if (h === settings("processes") || h === "/organization/processes") {
         return (
-            p === h
-            || p.startsWith(`${h}/`)
-            || p.startsWith("/settings/processes")
-            || p.startsWith("/settings/business-processes")
+            p === "/organization/processes"
+            || p.startsWith("/organization/processes/")
+            || p === "/settings/processes"
+            || p.startsWith("/settings/processes/")
+            || p === "/settings/business-processes"
+            || p.startsWith("/settings/business-processes/")
+            || p === "/settings/organization/processes"
+            || p.startsWith("/settings/organization/processes/")
         );
     }
-    if (h === settings("surfaces")) {
+    if (h === settings("surfaces") || h === "/organization/surfaces") {
         return (
-            p === h
-            || p.startsWith(`${h}/`)
-            || p.startsWith("/settings/surfaces")
-            || p.startsWith("/settings/layouts")
+            p === "/organization/surfaces"
+            || p.startsWith("/organization/surfaces/")
+            || p === "/settings/surfaces"
+            || p.startsWith("/settings/surfaces/")
+            || p === "/settings/layouts"
+            || p.startsWith("/settings/layouts/")
+            || p === "/settings/organization/surfaces"
+            || p.startsWith("/settings/organization/surfaces/")
         );
     }
     if (hrefPath === "/organization/operational-intelligence") {

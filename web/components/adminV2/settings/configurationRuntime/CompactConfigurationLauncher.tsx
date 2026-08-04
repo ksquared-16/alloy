@@ -2,6 +2,7 @@
 
 import { ArrowUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { commitAdminV2NavLinkNavigation } from "@/lib/adminV2/navigation/adminV2SoftNavLinkCommit";
 import {
     markConfigurationContinuity,
     prepareConfigurationSoftNavTarget,
@@ -40,7 +41,9 @@ export function CompactConfigurationLauncher({
     const open = (href: string) => {
         markConfigurationContinuity("acknowledge", { href, surface: continuitySurface });
         void prepareConfigurationSoftNavTarget(href, (target) => router.prefetch(target));
-        router.push(href, { scroll: false });
+        // Soft-nav with reload-floor recovery — bare router.push can stall on rewritten
+        // `/organization/*` URLs and bounce the operator back to the Organization landing.
+        commitAdminV2NavLinkNavigation(href, { router });
     };
 
     return (

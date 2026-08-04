@@ -32,6 +32,20 @@ describe("canonical settings routes — Configuration Runtime Phase 2A", () => {
         expect(normalizeToCanonicalAdminPath("/adminV2/settings/layouts")).toBe("/settings/layouts");
     });
 
+    it("normalizes organization product paths and rewrite destinations", () => {
+        expect(normalizeToCanonicalSettingsPath("/settings/organization/processes")).toBe(
+            "/organization/processes",
+        );
+        expect(normalizeToCanonicalSettingsPath("/organization/processes")).toBe(
+            "/organization/processes",
+        );
+        expect(normalizeToCanonicalAdminPath("/adminV2/settings/organization/processes")).toBe(
+            "/organization/processes",
+        );
+        expect(normalizeToCanonicalAdminPath("/organization/surfaces")).toBe("/organization/surfaces");
+        expect(normalizeToCanonicalAdminPath("/organization/access")).toBe("/organization/access");
+    });
+
     it("configuration workspace domain links prefer /settings or Organization product routes", () => {
         const hrefs = CONFIGURATION_WORKSPACE_DOMAINS.flatMap((d) => d.items.map((i) => i.href));
         expect(

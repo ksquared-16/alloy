@@ -77,7 +77,10 @@ function isAdminConfigPath(path: string): boolean {
     return (
         path === CANONICAL_SETTINGS_BASE
         || path.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+        // Productized Organization domains live under `/organization/{slug}` — must keep
+        // Configuration Mode rail mounted (exact `/organization` alone is not enough).
         || path === CANONICAL_ORGANIZATION_BASE
+        || path.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)
         || path === CANONICAL_ADMIN_BASE
         || path.startsWith(`${CANONICAL_ADMIN_BASE}/`)
     );

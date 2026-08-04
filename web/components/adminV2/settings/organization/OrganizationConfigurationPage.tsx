@@ -139,7 +139,7 @@ export default function OrganizationConfigurationPage({
                                         Locations consume published Organization configuration. Add a Location before assigning Programs or other publishable configuration.
                                     </p>
                                     <Link
-                                        href="/settings/locations"
+                                        href="/organization/locations"
                                         className="mt-1.5 inline-block text-[11px] font-semibold text-[#007d68]"
                                     >
                                         Open Locations →
@@ -154,7 +154,7 @@ export default function OrganizationConfigurationPage({
                                         >
                                             <div className="flex items-start justify-between gap-2">
                                                 <Link
-                                                    href={`/settings/locations?locationId=${encodeURIComponent(location.id)}`}
+                                                    href={`/organization/locations?locationId=${encodeURIComponent(location.id)}`}
                                                     className="truncate text-[12px] font-semibold text-alloy-midnight underline-offset-2 hover:text-alloy-bend-pine hover:underline"
                                                 >
                                                     {location.label}
