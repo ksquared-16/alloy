@@ -850,17 +850,56 @@ We'll capture the context automatically.</p>
         : ""}
     </section>` : "";
 
-    const confGlanceSec = confGlance.label ? `<section class="mc-sec mc-conf-glance" id="mc-conf-glance">
-      <h3>${esc(confGlance.label)}</h3>
-      <p class="mc-conf-glance-line">
-        <strong>${esc(confGlance.bandLabel || "—")}</strong>
-        ${confGlance.percent != null ? `<span class="muted">(${esc(String(confGlance.percent))}%)</span>` : ""}
-        ${confGlance.recommendation ? ` · <span>${esc(confGlance.recommendation)}</span>` : ""}
-      </p>
-      ${(confGlance.why || []).length ? `<ul>${confGlance.why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
-      ${confGlance.secondaryNote ? `<p class="muted">${esc(confGlance.secondaryNote)}</p>` : ""}
-      <p class="muted">Full calculation is under Technical depth.</p>
-    </section>` : "";
+    const confGlanceSec = (() => {
+      const c = confGlance;
+      if (!c?.label && c?.kind !== "explained_confidence") return "";
+      const label = c.label || "Confidence";
+      const rec = c.recommendation?.verb || c.recommendation || null;
+      const recDetail = typeof c.recommendation === "object" ? c.recommendation.detail : null;
+      const supporting = c.supporting || [];
+      const reducing = c.reducing || [];
+      const uncertainty = c.remainingUncertainty || [];
+      const increase = c.increaseConfidence || [];
+      const mark = (m) => (m === "support" ? "✓" : m === "concern" ? "✗" : "⚠");
+
+      const whyRows = [
+        ...supporting.map((f) => `<li class="mc-conf-item support"><span class="mc-conf-mark">${mark(f.mark)}</span><div><b>${esc(f.label)}</b><div class="muted">${esc(f.text)}</div></div></li>`),
+        ...reducing.map((f) => `<li class="mc-conf-item ${esc(f.mark || "partial")}"><span class="mc-conf-mark">${mark(f.mark)}</span><div><b>${esc(f.label)}</b><div class="muted">${esc(f.text)}</div></div></li>`),
+      ].join("");
+
+      const uncRows = uncertainty.length
+        ? uncertainty.map((u) => `<li class="${u.blocking ? "blocking" : ""}"><b>${esc(u.label)}</b> — ${esc(u.text)}${u.blocking ? ` <span class="mc-pill warn">Blocking</span>` : ""}</li>`).join("")
+        : `<li class="muted">None material recorded</li>`;
+
+      const incRows = increase.length
+        ? increase.map((x) => `<li>
+            <b>${esc(x.what)}</b>
+            <div class="muted">${esc(x.why)}</div>
+            <div class="muted">Expected: ${esc(x.expectedImprovement)}</div>
+          </li>`).join("")
+        : `<li class="muted">Nothing material — confidence factors are already supportive.</li>`;
+
+      return `<section class="mc-sec mc-conf-explained tone-${esc(c.tone || "neutral")}" id="mc-conf-glance">
+        <h3>${esc(label)}</h3>
+        <div class="mc-conf-overall">
+          <div class="mc-conf-pct">${c.percent != null ? `${esc(String(c.percent))}%` : "—"}</div>
+          <div>
+            <div class="mc-pill ${esc(c.tone || "")}">${esc(c.bandLabel || "—")}</div>
+            ${rec ? `<p class="mc-conf-rec"><b>Recommended:</b> ${esc(rec)}</p>` : ""}
+            ${recDetail ? `<p class="muted">${esc(recDetail)}</p>` : ""}
+            ${c.blocking ? `<p class="warn">Unresolved uncertainty is treated as blocking until addressed.</p>` : ""}
+          </div>
+        </div>
+        <h4>Why this confidence</h4>
+        <ul class="mc-conf-why-list">${whyRows || `<li class="muted">Director is still forming a confidence picture.</li>`}</ul>
+        <h4>Remaining uncertainty</h4>
+        <ul class="mc-conf-uncertainty">${uncRows}</ul>
+        <h4>What increases confidence</h4>
+        <ul class="mc-conf-increase">${incRows}</ul>
+        ${c.secondaryNote ? `<p class="muted">${esc(c.secondaryNote)}</p>` : ""}
+        <p class="muted">Raw factor scores and weights are under Technical depth.</p>
+      </section>`;
+    })();
 
     const evidenceStripSec = `<section class="mc-sec mc-evidence-strip" id="mc-evidence-strip">
       <div class="mc-card-h"><h3 style="margin:0">Evidence</h3>
