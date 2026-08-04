@@ -504,6 +504,73 @@ location's identity is not recoverable from this side — it went with the casca
 
 ---
 
+## 4septies. The lost location — classified, not restored
+
+### What was deleted, established from mechanism rather than memory
+
+`ON DELETE CASCADE` on `locations.customer_id` can only fire for a row whose `customer_id`
+referenced a deleted customer. A row with `customer_id IS NULL` cannot cascade. So the deleted
+location **necessarily** carried a `customer_id` pointing at one of the 59 removed test customers.
+That is not inference from a remembered value; it is the only mechanism capable of removing it.
+
+Corroboration: **all 20 survivors have `customer_id IS NULL`** — the deleted row was the only
+customer-owned location in the org, and there are now zero customer-owned locations across the whole
+project.
+
+No exact attribute recovery was needed or attempted, because the classification does not turn on the
+row's label or address.
+
+### Classification: OPERATIONAL ARTIFACT
+
+The surviving 20 are Firefly's canonical configuration exactly:
+
+- **3 `site`** — North Campus, South Campus, West Campus (Bend)
+- **17 `unit`** — Infant A/B, Toddler 1/2, Preschool 1/2, Pre-K, Bears, Giraffe, Monkeys, Tigers, Zebras…
+
+Per Alloy's location doctrine, sites and units are platform configuration; operational customer
+identities do not own canonical location configuration. The `locations` table also carries
+`address1/city/beds/baths/home_type_key` — a service-address shape inherited from the home-services
+model, where `customer_id` marks *a customer's property*, i.e. operational data.
+
+**The expected preservation count should have been 20, not 21.** The pre-reset baseline captured 21
+because an operational row was sitting in a configuration table. The reset did not corrupt the
+configuration baseline; it revealed a modeling defect and removed the artifact.
+
+Hierarchy integrity after: 0 orphan parents, 0 orphan program links, 0 customer-owned locations.
+
+**Not restored.** Restoring it would mean either recreating a deleted operational customer as
+configuration scaffolding, or reinserting a row with a dangling FK — both worse than the defect.
+
+### The modeling defect that remains
+
+`locations.customer_id → customers(id) ON DELETE CASCADE` couples a configuration table to an
+operational one. It is now an **adjudicated blocking edge**: a future reset that would cascade into
+`locations` stops and asks. The deeper schema question — whether customer-owned service addresses
+belong in `locations` at all — is a separate product decision and is not resolved here.
+
+---
+
+## 4octies. Cascade safety and exact-set preservation
+
+Two defects allowed a protected row to disappear unnoticed.
+
+**Only blocking constraints were inventoried.** RESTRICT edges announce themselves by failing;
+CASCADE / SET NULL / SET DEFAULT succeed quietly. `certificationCascadeGuard.ts` now enumerates
+propagation edges where the parent is in the deletion graph and the child is not, classifies each as
+`intended_dependent_deletion` / `protected_configuration_mutation` / `safe_nullification` /
+`unexpected_propagation`, and **blocks** on anything touching a protected table or carrying no
+policy. Unknown edges fail closed.
+
+**Verification asked the wrong question.** It asserted a protected table still had *some* rows, which
+21 → 20 passes. `comparePreservation()` now compares exact count **and** ID-set hash per table, with
+approved deltas stated explicitly rather than inferred. A swapped row with an unchanged count fails
+too.
+
+Regression tests cover all six required scenarios, including a test that demonstrates the old rule
+passing 21 → 20 while the new rule fails it.
+
+---
+
 ## 5. Interface
 
 ```text

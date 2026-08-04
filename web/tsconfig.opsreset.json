@@ -17,6 +17,7 @@
     "scripts/lib/certificationPlanIdentity.ts",
     "scripts/lib/certificationResetAdapter.ts",
     "scripts/lib/certificationResetOrchestrator.ts",
+    "scripts/lib/certificationCascadeGuard.ts",
     "tests/scripts/enrollmentRuntimeReset.test.ts",
     "tests/scripts/enrollmentRuntimeResetIncludeClosed.test.ts",
     "tests/scripts/certificationBaseline.test.ts",
@@ -24,6 +25,7 @@
     "tests/scripts/certificationPlanIdentity.test.ts",
     "tests/scripts/certificationResetAdapter.test.ts",
     "tests/scripts/certificationAdapterIntegration.test.ts",
-    "tests/scripts/certificationOrchestration.test.ts"
+    "tests/scripts/certificationOrchestration.test.ts",
+    "tests/scripts/certificationCascadeGuard.test.ts"
   ]
 }
