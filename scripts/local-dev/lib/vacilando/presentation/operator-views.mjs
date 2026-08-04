@@ -56,6 +56,7 @@ import {
   getLatestAcceptedDeliverableReview,
 } from "../deliverable-review.mjs";
 import { composeExecutiveL1 } from "./executive-overview.mjs";
+import { missionJourneyVm } from "./mission-journey.mjs";
 
 
 const STATUS_COPY = {
@@ -1270,11 +1271,6 @@ export function missionDashboardVm(missionId) {
   }).filter((r) => r.activeWorkers > 0 || r.tokens !== "Unavailable" || r.estimatedCost !== "Unavailable"
     || usageEvents.some((e) => providerLabel(e.workerId, e.model) === r.provider));
 
-  const MILESTONE_TYPES = new Set([
-    "mission_started", "phase_started", "phase_completed", "assignment_started",
-    "assignment_completed", "decision_requested", "decision_answered",
-    "evidence_added", "validation", "recovery", "progress",
-  ]);
   const timelineAll = readTimelineSummary(missionId, { limit: 40 }).map(timelineEventVm);
   const recentProgress = [...timelineAll].reverse()
     .filter((e) => MILESTONE_TYPES.has(e.type))
@@ -1383,6 +1379,7 @@ export function missionDashboardVm(missionId) {
       factors: confFactors,
     },
     executive,
+    journey: missionJourneyVm(missionId),
     // Compatibility for older clients still reading overview shape
     header: {
       missionId,
@@ -1543,16 +1540,34 @@ export function workersHomeVm() {
   };
 }
 
+/** Timeline event types that read as operational milestones rather than raw engineering chatter. */
+const MILESTONE_TYPES = new Set([
+  "mission_started", "phase_started", "phase_completed", "assignment_started",
+  "assignment_completed", "decision_requested", "decision_answered",
+  "evidence_added", "validation", "recovery", "progress",
+]);
+
 export function timelinePageVm(missionId) {
   const events = (readTimeline(missionId, { limit: 200 }) || readTimelineSummary(missionId, { limit: 100 }))
     .map(timelineEventVm)
     .reverse();
+  const journey = missionJourneyVm(missionId);
+  // DX-4 §10.5 — Recent Progress merges into the Journey; the dashboard no longer duplicates it.
+  const milestones = events.filter((e) => MILESTONE_TYPES.has(e.type)).slice(0, 8).map((e) => ({
+    headline: e.headline,
+    explanation: e.explanation,
+    timeLabel: e.timeLabel,
+    actor: e.actor,
+    type: e.type,
+  }));
   return {
     kind: "timeline_page",
     missionId,
     title: getBrief(missionId)?.title || missionId,
+    journey,
+    milestones,
     events,
-    empty: events.length === 0,
+    empty: events.length === 0 && !(journey?.stages?.length),
   };
 }
 

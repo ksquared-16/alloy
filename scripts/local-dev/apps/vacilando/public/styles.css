@@ -968,3 +968,32 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .mc-outcome-label{font-size:22px}
   .mc-stat-grid-compact{grid-template-columns:1fr}
 }
+
+/* Director Experience V2 — DX-4 Mission Journey */
+.mc-journey-strip .mc-journey-here,
+.mc-journey-page .mc-journey-here{margin:6px 0 10px;font-weight:700;color:var(--ink-1)}
+.mc-journey-rail{list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 4px;padding:0;margin:8px 0 12px}
+.mc-journey-rail-item{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
+.mc-journey-rail-item.here{color:var(--ink-1);font-weight:700}
+.mc-journey-rail-item.status-complete{color:rgba(47,107,69,.95)}
+.mc-journey-rail-sep{color:var(--ink-3);margin:0 2px}
+.mc-journey-rail-mark{font-size:12px;min-width:1em;text-align:center}
+.mc-journey-rail-item.gate .mc-journey-rail-mark{color:#a75a2e}
+.mc-journey-rail-item.gate-pending{color:#a75a2e;font-weight:700}
+.mc-journey-milestones .mc-tl-row{padding:6px 0}
+.mc-journey-stages{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.mc-journey-stage{padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fbf7f0)}
+.mc-journey-stage.here{border-color:rgba(194,112,63,.45);background:rgba(194,112,63,.06);box-shadow:0 0 0 1px rgba(194,112,63,.12)}
+.mc-journey-stage.status-complete{border-color:rgba(47,107,69,.28)}
+.mc-journey-here-badge{margin:0 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;color:#a75a2e}
+.mc-journey-dl{margin:10px 0 0}
+.mc-journey-dl > div{display:grid;grid-template-columns:160px 1fr;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.05)}
+.mc-journey-dl > div:first-child{border-top:0}
+.mc-journey-dl dt{font-size:12px;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.03em}
+.mc-journey-dl dd{margin:0;font-size:14.5px;line-height:1.45}
+.mc-journey-gates{margin-top:10px}
+.mc-journey-gates ul{margin:6px 0 0;padding-left:18px}
+.mc-eng-history{border-style:dashed}
+@media(max-width:720px){
+  .mc-journey-dl > div{grid-template-columns:1fr}
+}

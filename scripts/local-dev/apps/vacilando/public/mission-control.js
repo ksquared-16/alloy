@@ -361,7 +361,7 @@
       workers: "Workers",
       decisions: "Decisions",
       evidence: "Evidence",
-      timeline: "Timeline",
+      timeline: "Mission Journey",
       kickoff: "Mission Brief",
       improvements: "Improvements",
       settings: "Settings",
@@ -451,7 +451,7 @@ We'll capture the context automatically.</p>
     if (!missionId) return "";
     const tabs = [
       ["dashboard", `missions/${missionId}`, "Dashboard"],
-      ["timeline", `timeline/${missionId}`, "Timeline"],
+      ["timeline", `timeline/${missionId}`, "Journey"],
       ["workers", `workers?mission=${encodeURIComponent(missionId)}`, "Workers"],
       ["decisions", `decisions?mission=${encodeURIComponent(missionId)}`, "Decisions"],
       ["evidence", `evidence/${missionId}`, "Evidence"],
@@ -641,6 +641,34 @@ We'll capture the context automatically.</p>
     bump(); schedulePaint();
   };
 
+  /**
+   * DX-4 phase rail — shared by the Overview strip and the Mission Journey page.
+   * Spec §10.2: complete ✓, you-are-here ●, decision gate ◆, upcoming ○.
+   */
+  V2.journeyRailHtml = function (rail, { currentId = null } = {}) {
+    const items = rail || [];
+    if (!items.length) return "";
+    return `<ol class="mc-journey-rail" aria-label="Mission journey phases">
+      ${items.map((s, i) => {
+        const cur = s.current || s.status === "current" || s.id === currentId;
+        const gate = Boolean(s.gate);
+        const mark = s.status === "complete" ? "✓"
+          : s.gatePending ? "◆"
+            : cur ? "●"
+              : s.status === "blocked" ? "!"
+                : "○";
+        const label = s.gateLabel
+          ? `${s.title} — ${s.gatePending ? "decision waiting" : "decision"}: ${s.gateLabel}`
+          : s.title;
+        return `<li class="mc-journey-rail-item status-${esc(s.status || "")}${cur ? " here" : ""}${gate ? " gate" : ""}${s.gatePending ? " gate-pending" : ""}" title="${esc(label)}">
+          ${i ? `<span class="mc-journey-rail-sep" aria-hidden="true">→</span>` : ""}
+          <span class="mc-journey-rail-mark">${mark}</span>
+          <span class="mc-journey-rail-title">${esc(s.title)}</span>
+        </li>`;
+      }).join("")}
+    </ol>`;
+  };
+
   V2.viewMissions = function () {
     V2.revalidate(`missions:${V2.state.missionsFilter || "active"}`, () => V2.fetchMissions(V2.state.missionsFilter || "active"));
     if (!V2.state.missionsHome && !V2.state.missionsError) {
@@ -763,7 +791,6 @@ We'll capture the context automatically.</p>
     const conf = dash.confidence || {};
     const needs = dash.needsMe || [];
     const work = dash.currentWork || [];
-    const progress = dash.recentProgress || [];
     const timeline = dash.timeline || [];
     const providers = dash.providers || [];
     const usage = dash.resourcesUsage || {};
@@ -773,6 +800,7 @@ We'll capture the context automatically.</p>
     const decisionPack = exec.decisions || {};
     const evidenceStrip = exec.evidence || {};
     const confGlance = exec.confidence || {};
+    const journeyStrip = exec.journey || dash.journey || null;
 
     const heroPrimary = exec.primaryAction || s.primaryAction;
     // Never promote vague "Review outcome" as the only hero CTA when a real decision exists.
@@ -910,11 +938,23 @@ We'll capture the context automatically.</p>
         : `<ul class="mc-evidence-preview">${(evidenceStrip.artifacts || []).map((a) =>
             `<li><b>${esc(a.title)}</b><span class="muted"> — ${esc(a.proves || a.type)}</span></li>`).join("")}</ul>`}
       <div class="mc-depth-links">
-        <button class="btn ghost sm" type="button" data-nav="timeline/${esc(id)}">Story / timeline</button>
+        <button class="btn ghost sm" type="button" data-nav="timeline/${esc(id)}">Mission Journey</button>
         <button class="btn ghost sm" type="button" data-nav="decisions/${esc(id)}">Decisions archive</button>
         <a class="btn ghost sm" href="#mc-depth">Technical depth</a>
       </div>
     </section>`;
+
+    const journeyRailHtml = V2.journeyRailHtml;
+
+    const journeyStripSec = journeyStrip?.rail?.length ? `<section class="mc-sec mc-journey-strip" id="mc-journey-strip">
+      <div class="mc-card-h">
+        <h3 style="margin:0">Mission Journey</h3>
+        <button class="btn ghost sm" type="button" data-nav="timeline/${esc(id)}">Open journey</button>
+      </div>
+      <p class="mc-journey-here">${esc(journeyStrip.youAreHereLabel || "")}</p>
+      ${journeyRailHtml(journeyStrip.rail, { currentId: journeyStrip.currentStageId })}
+      ${journeyStrip.nextAfterHere ? `<p class="muted"><b>Next:</b> ${esc(journeyStrip.nextAfterHere)}</p>` : ""}
+    </section>` : "";
 
     const outcome = dash.outcome;
     const showOutcome = Boolean(outcome) && (V2.state.showOutcome !== false);
@@ -1106,7 +1146,7 @@ We'll capture the context automatically.</p>
             · Review <code>${esc(o.technical?.reviewId || o.reviewId || "—")}</code></p>
           <p class="muted">Verified ${esc(o.technical?.verifiedAt || "—")} by ${esc(o.technical?.verifiedBy || "—")}</p>
           <button class="btn ghost" data-nav="evidence/${esc(id)}">Open Evidence gallery</button>
-          <button class="btn ghost" data-nav="timeline/${esc(id)}">Open Timeline</button>
+          <button class="btn ghost" data-nav="timeline/${esc(id)}">Open Mission Journey</button>
         </details>
         ${missionChoices ? `<h4 style="margin-top:22px">Mission next steps</h4>${missionChoices}` : ""}
       </section>`;
@@ -1235,18 +1275,11 @@ We'll capture the context automatically.</p>
       </div>`).join("") || `<div class="rempty">No usage recorded yet</div>`}
     </details>`;
 
-    const recentSec = `<section class="mc-sec">
-      <h3>Recent Progress</h3>
-      ${progress.length
-        ? progress.map((p) => `<div class="mc-tl-row">
-            <div class="mc-tl-time">${esc(p.timeLabel)}</div>
-            <div><b>${esc(p.headline)}</b>${p.explanation ? `<div class="muted">${esc(p.explanation)}</div>` : ""}</div>
-          </div>`).join("")
-        : `<div class="rempty">No milestones yet</div>`}
-    </section>`;
+    // DX-4 §10.5 — Recent Progress merged into Mission Journey; no duplicate column here.
 
     const tlSec = `<section class="mc-sec">
-      <h3>Timeline</h3>
+      <h3>Engineering timeline</h3>
+      <p class="muted">Event history. Prefer Mission Journey for operational progress.</p>
       ${timeline.length
         ? timeline.map((e) => `<div class="mc-tl-row">
             <div class="mc-tl-time">${esc(e.timeLabel)} · ${esc(e.actor)}</div>
@@ -1257,7 +1290,7 @@ We'll capture the context automatically.</p>
             </div>
           </div>`).join("")
         : `<div class="rempty">No timeline events</div>`}
-      <button class="btn sm" data-nav="timeline/${esc(id)}">Full timeline</button>
+      <button class="btn sm" data-nav="timeline/${esc(id)}">Mission Journey</button>
     </section>`;
 
     const confSec = `<section class="mc-sec mc-confidence">
@@ -1290,7 +1323,7 @@ We'll capture the context automatically.</p>
         ${localServerSec}
         ${directorSec}
         ${needsSec}
-        <div class="mc-grid">${workSec}${recentSec}</div>
+        ${workSec}
         ${usageSec}
         ${confSec}
         ${tlSec}
@@ -1299,7 +1332,7 @@ We'll capture the context automatically.</p>
 
     // When deliverable certification is open, L1 still leads; DREV remains the cert briefing.
     // Suppress a second mission-level decision strip duplicate inside DREV (missionChoices cleared).
-    const l1 = outcomeHeroSec + execSummarySec + decisionSec + confGlanceSec + evidenceStripSec;
+    const l1 = outcomeHeroSec + execSummarySec + decisionSec + confGlanceSec + evidenceStripSec + journeyStripSec;
     const certOrOutcome = showOutcome ? outcomeSec : "";
 
     return shell(s.title || "Mission Dashboard", {
@@ -1331,29 +1364,93 @@ We'll capture the context automatically.</p>
   V2.viewTimeline = function (missionId) {
     const mid = missionId || V2.state.selectedMissionId;
     if (!mid) {
-      return shell("Timeline") + `<div class="rempty">Open a mission to see its story.</div>
+      return shell("Mission Journey") + `<div class="rempty">Open a mission to see its journey.</div>
         <button class="btn" data-nav="missions">Missions</button></div>`;
     }
     V2.revalidate(`timeline:${mid}`, () => V2.fetchTimeline(mid));
     if (!V2.state.timelineVm || V2.state.timelineMissionId !== mid) {
       V2.fetchTimeline(mid);
-      return shell("Timeline", { missionId: mid, active: "timeline" })
-        + `<div class="empty"><span class="spin"></span> Loading timeline…</div></div>`;
+      return shell("Mission Journey", { missionId: mid, active: "timeline" })
+        + `<div class="empty"><span class="spin"></span> Loading journey…</div></div>`;
     }
     const page = V2.state.timelineVm;
+    const journey = page.journey || {};
+    const stages = journey.stages || [];
     const events = page.events || [];
-    const rows = events.map((e) => `<article class="mc-tl-event">
+
+    const stageCards = stages.map((s) => {
+      const isHere = s.status === "current";
+      const statusLabel = s.status === "complete" ? "Complete"
+        : s.status === "current" ? "You are here"
+          : s.status === "blocked" ? "Blocked"
+            : "Upcoming";
+      const gates = (s.gates || []).map((g) => `<li>${esc(g.label)}</li>`).join("");
+      return `<article class="mc-journey-stage status-${esc(s.status || "")}${isHere ? " here" : ""}">
+        ${isHere ? `<p class="mc-journey-here-badge">YOU ARE HERE</p>` : ""}
+        <div class="mc-card-h">
+          <h3 style="margin:0">${esc(s.title)}</h3>
+          <span class="mc-pill ${esc(s.status === "complete" ? "ok" : s.status === "current" ? "warn" : "")}">${esc(statusLabel)}</span>
+        </div>
+        <dl class="mc-journey-dl">
+          <div><dt>Outcome</dt><dd>${esc(s.outcome || "—")}</dd></div>
+          ${s.decisionProduced ? `<div><dt>Decision produced</dt><dd>${esc(s.decisionProduced)}</dd></div>` : ""}
+          ${s.decisionWaiting ? `<div><dt>Decision waiting</dt><dd>${esc(s.decisionWaiting)}</dd></div>` : ""}
+          ${s.decisionNext && !s.decisionWaiting ? `<div><dt>What happens next</dt><dd>${esc(s.decisionNext)}</dd></div>` : ""}
+        </dl>
+        ${gates ? `<div class="mc-journey-gates"><span class="muted">Available gates</span><ul>${gates}</ul></div>` : ""}
+      </article>`;
+    }).join("") || `<div class="rempty">Journey stages unavailable for this mission.</div>`;
+
+    const engRows = events.map((e) => `<article class="mc-tl-event">
       <div class="mc-tl-time">${esc(e.timeLabel)} · ${esc(e.actor)}</div>
       <h4>${esc(e.headline)}</h4>
       ${e.explanation ? `<p>${esc(e.explanation)}</p>` : ""}
       ${e.expandable ? `<details><summary>Details</summary><pre class="mono">${esc(JSON.stringify(e.detail, null, 2))}</pre></details>` : ""}
-    </article>`).join("") || `<div class="rempty">No timeline events yet for this mission.</div>`;
+    </article>`).join("") || `<div class="rempty">No engineering events yet for this mission.</div>`;
 
-    return shell(page.title || "Timeline", {
+    const rail = journey.rail || stages.map((s) => ({
+      id: s.id,
+      title: s.title,
+      status: s.status,
+      current: s.status === "current",
+      gate: Boolean(s.decisionWaiting),
+      gatePending: Boolean(s.decisionWaiting),
+      gateLabel: s.decisionWaiting || s.decisionProduced || null,
+    }));
+    const railHtml = V2.journeyRailHtml(rail, { currentId: journey.currentStageId });
+
+    // §10.5 — Recent Progress lives here now, not as a second dashboard column.
+    const milestones = page.milestones || [];
+    const milestoneSec = milestones.length ? `<section class="mc-sec mc-journey-milestones">
+      <h3>Recent progress</h3>
+      <p class="muted">Milestones behind the phases above.</p>
+      ${milestones.map((m) => `<div class="mc-tl-row">
+        <div class="mc-tl-time">${esc(m.timeLabel)}${m.actor ? ` · ${esc(m.actor)}` : ""}</div>
+        <div><b>${esc(m.headline)}</b>${m.explanation && m.explanation !== m.headline
+          ? `<div class="muted">${esc(m.explanation)}</div>` : ""}</div>
+      </div>`).join("")}
+    </section>` : "";
+
+    return shell(page.title || "Mission Journey", {
       missionId: mid,
       active: "timeline",
-      lead: "The story of this mission in plain language.",
-    }) + `<div class="mc-tl">${rows}</div></div>`;
+      lead: journey.youAreHereLabel || "Operational progress for this mission — not an engineering log.",
+    }) + `
+      <section class="mc-sec mc-journey-page" id="mc-journey">
+        <h3>Mission Journey</h3>
+        <p class="muted">${esc(journey.completedCount || 0)} of ${esc(journey.totalCount || stages.length)} phases complete
+          ${journey.nextAfterHere ? ` · Next: ${esc(journey.nextAfterHere)}` : ""}</p>
+        ${railHtml}
+        <div class="mc-journey-stages">${stageCards}</div>
+      </section>
+      ${milestoneSec}
+      <details class="mc-sec mc-eng-history">
+        <summary><h3 style="display:inline">Show engineering activity</h3>
+          <span class="muted"> — workers, tests, browser cert, timeline messages</span>
+        </summary>
+        <div class="mc-tl">${engRows}</div>
+      </details>
+    </div>`;
   };
 
   V2.viewWorkers = function () {

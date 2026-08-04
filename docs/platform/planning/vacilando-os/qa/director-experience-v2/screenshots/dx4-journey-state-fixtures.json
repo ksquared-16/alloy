@@ -1,0 +1,56 @@
+{
+  "discovery": {
+    "missionId": "msn_7d2a987984b1063297",
+    "youAreHere": "You are here — Mission",
+    "stages": [
+      {
+        "title": "Mission",
+        "status": "current",
+        "outcome": "Waiting for Director to approve execution",
+        "waiting": "Approve execution",
+        "produced": null
+      },
+      {
+        "title": "Discovery",
+        "status": "upcoming",
+        "outcome": "No assignments in this phase yet",
+        "waiting": null,
+        "produced": null
+      },
+      {
+        "title": "Architecture",
+        "status": "upcoming",
+        "outcome": "No assignments in this phase yet",
+        "waiting": null,
+        "produced": null
+      }
+    ]
+  },
+  "implementation_or_cert": {
+    "missionId": "msn_4b82549964fad44ce5",
+    "youAreHere": "You are here — Mission",
+    "stages": [
+      {
+        "title": "Mission",
+        "status": "current",
+        "outcome": "Waiting for Director to approve execution",
+        "waiting": "Approve execution",
+        "produced": null
+      },
+      {
+        "title": "Discovery",
+        "status": "upcoming",
+        "outcome": "No assignments in this phase yet",
+        "waiting": null,
+        "produced": null
+      },
+      {
+        "title": "Implementation",
+        "status": "upcoming",
+        "outcome": "No assignments in this phase yet",
+        "waiting": null,
+        "produced": null
+      }
+    ]
+  }
+}
