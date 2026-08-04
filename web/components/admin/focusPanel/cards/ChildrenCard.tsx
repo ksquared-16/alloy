@@ -1282,9 +1282,9 @@ const CHILDREN_FIELD_TRUTH_META: Record<string, { icon: LucideIcon; get: (c: Chi
     "inquiry_child.start_date": { icon: CalendarClock, get: (c) => c.requestedStart ?? c.startDate },
     "inquiry_child.requested_days_per_week": {
         icon: CalendarDays,
-        get: (c) => c.requestedDaysPerWeek,
+        get: (c) => c.requestedDaysPerWeek ?? null,
     },
-    "inquiry_child.weekdays": { icon: CalendarDays, get: (c) => c.preferredWeekdays },
+    "inquiry_child.weekdays": { icon: CalendarDays, get: (c) => c.preferredWeekdays ?? null },
     "inquiry_child.schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
     "inquiry_child.desired_schedule_type": { icon: CalendarDays, get: (c) => c.schedule },
     "child.status": { icon: BadgeCheck, get: (c) => c.status },
