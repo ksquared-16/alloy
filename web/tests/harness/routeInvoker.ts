@@ -56,15 +56,21 @@ export function buildRequest(opts: {
  * Non-JSON bodies are returned as `{ raw }` rather than throwing, so a handler
  * that 500s with an HTML error page produces a readable assertion failure.
  */
-export async function invokeRoute<T = unknown>(
-    handler: (req: NextRequest, ctx?: never) => Promise<Response> | Response,
+/**
+ * `ctx?: never` claimed route handlers take no context. Dynamic App Router handlers declare a
+ * REQUIRED one — `(req, { params }: { params: Promise<{ id: string }> })` — so every such test
+ * failed to typecheck while the body cast to `unknown` and invoked it correctly anyway. The
+ * signature was describing something the helper never believed.
+ *
+ * Generic in the context type instead: the handler declares what it needs, and the caller must
+ * supply exactly that. Handlers taking no context still infer cleanly.
+ */
+export async function invokeRoute<T = unknown, C = unknown>(
+    handler: (req: NextRequest, ctx: C) => Promise<Response> | Response,
     request: NextRequest,
-    routeContext?: unknown
+    routeContext?: C
 ): Promise<RouteResponse<T>> {
-    const res = await (handler as (req: NextRequest, ctx?: unknown) => Promise<Response> | Response)(
-        request,
-        routeContext
-    );
+    const res = await handler(request, routeContext as C);
 
     let body: unknown;
     const text = await res.text();

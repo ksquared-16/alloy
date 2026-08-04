@@ -31,7 +31,7 @@ function recordWithLinkedCells(
                     label: cell.label ?? cell.fieldRef,
                     value: "sample",
                     labelMode: "hidden" as const,
-                    policy: (cell.linked === false ? "read-only" : "linked") as const,
+                    policy: cell.linked === false ? ("read-only" as const) : ("linked" as const),
                     editable: false,
                     linked: cell.linked !== false,
                     linkLabel: cell.linkLabel ?? null,

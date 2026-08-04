@@ -110,8 +110,8 @@ describe("resolveQueueRowCompactSlots", () => {
                             type: "field_group",
                             id: "grp-children",
                             fields: [
-                                { id: "f-names", fieldKey: "children.names", label: "Children names" },
-                                { id: "f-count", fieldKey: "children.count", label: "Children count" },
+                                { id: "f-names", fieldKey: "children.names", label: "Children names", display: "text" },
+                                { id: "f-count", fieldKey: "children.count", label: "Children count", display: "text" },
                             ],
                         },
                     ],

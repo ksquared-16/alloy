@@ -66,6 +66,7 @@ function layout(keys: string[]) {
                             id: nextQueueRecordBlockId("f"),
                             fieldKey,
                             label: fieldKey,
+                                display: "text" as const,
                         })),
                     },
                 ],

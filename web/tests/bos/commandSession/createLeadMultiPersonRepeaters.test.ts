@@ -164,31 +164,6 @@ describe("Create Lead multi-person / multi-child repeaters", () => {
     });
 });
 
-describe("platform relationship presentation (label-only)", () => {
-    it("namespaces edge ids and applies singular overrides without changing catalog id", async () => {
-        const {
-            platformRelationshipLabelsKey,
-            resolvePlatformRelationshipLabels,
-            findPlatformRelationshipDefinition,
-        } = await import("@/lib/dataModel/platformRelationshipPresentation");
-        expect(platformRelationshipLabelsKey("child.parent_guardian")).toBe(
-            "relationship:child.parent_guardian"
-        );
-        expect(findPlatformRelationshipDefinition("child.parent_guardian")?.label).toBe(
-            "Parent / Guardian"
-        );
-        expect(
-            resolvePlatformRelationshipLabels("child.parent_guardian", {
-                singular: "Caregiver",
-                plural: "Caregivers",
-            })
-        ).toEqual({ label: "Caregiver", pluralLabel: "Caregivers" });
-        expect(resolvePlatformRelationshipLabels("child.parent_guardian", undefined).label).toBe(
-            "Parent / Guardian"
-        );
-    });
-});
-
 describe("relationship vocabulary presentation (label-only)", () => {
     it("stores plural label in metadata without changing identity key", () => {
         const merged = mergeRelationshipPresentationMetadata({

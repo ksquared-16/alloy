@@ -8,7 +8,7 @@ import {
     OI_QA_FIXTURE_PREFIX,
     OI_QA_UTILIZATION_MATRIX,
     oiQaRoomLabel,
-} from "../lib/operationalQuestions/oiQaFixtures";
+} from "../../lib/operationalQuestions/oiQaFixtures";
 
 console.log(`${OI_QA_FIXTURE_PREFIX} utilization fixture matrix (non-destructive reference)`);
 for (const row of OI_QA_UTILIZATION_MATRIX) {

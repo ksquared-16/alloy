@@ -69,9 +69,9 @@ describe("children identity published config parity", () => {
 
     it("preserves authored Program then Schedule order on identity", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_facts" });
+        config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_fact" });
         config = addFieldToNestedGroup(config, "identity", "inquiry_child.schedule_type", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
         // Force order: Program then Schedule in context facts.
         config = {
@@ -100,7 +100,7 @@ describe("children identity published config parity", () => {
 
     it("makes Program editable when no primary assignment exists", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_facts" });
+        config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_fact" });
         const vm = buildChildIdentityRecordVM({
             config,
             child: sampleChild({
@@ -120,7 +120,7 @@ describe("children identity published config parity", () => {
 
     it("fills Program from evidence and links Change in Assignments when primary exists", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
-        config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_facts" });
+        config = addFieldToNestedGroup(config, "identity", "inquiry_child.program", { tier: "context_fact" });
         const vm = buildChildIdentityRecordVM({
             config,
             child: sampleChild({
@@ -141,7 +141,7 @@ describe("children identity published config parity", () => {
     it("displays Location as the site label, never the location_id UUID", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "identity", "inquiry_child.location_id", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
         const uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
         const vm = buildChildIdentityRecordVM({
@@ -164,7 +164,7 @@ describe("children identity published config parity", () => {
     it("treats Location as Editable (not Linked), including legacy Linked policies", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "identity", "inquiry_child.location_id", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
         const group = config.groups.find((g) => g.key === "identity");
         if (group) {
@@ -193,7 +193,7 @@ describe("children identity published config parity", () => {
     it("annotates Location when display inherits the lead site", () => {
         let config = defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
         config = addFieldToNestedGroup(config, "identity", "inquiry_child.location_id", {
-            tier: "context_facts",
+            tier: "context_fact",
         });
         const vm = buildChildIdentityRecordVM({
             config,

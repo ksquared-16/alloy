@@ -14,7 +14,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-// @ts-expect-error — plain .mjs check script, no type declarations
 import { runServiceClientPrincipalCheck } from "../../scripts/checkServiceClientPrincipal.mjs";
 
 type Row = {
