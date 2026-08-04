@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { rescheduleTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
-import { tourPublicErr, tourPublicJson } from "@/lib/tours/public/tourPublicHttp";
+import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
 import { mintActionsFor, POST_BOOKING_ACTION_KINDS } from "@/lib/tours/invitation/mintTourInvitation";
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const booking = bound.booking;
 
     if (auth.link.consumed_at) {
-        return tourPublicJson({ ok: true, booking, idempotent_replay: true });
+        return tourPublicJson({ ok: true, booking: publicTourBookingView(booking), idempotent_replay: true });
     }
 
     let body: { start_at?: string; end_at?: string; timezone?: string };
