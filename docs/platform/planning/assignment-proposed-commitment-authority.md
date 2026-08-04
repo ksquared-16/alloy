@@ -25,22 +25,35 @@ trio; Start Date resolves from the first qualifying **committed** assignment via
 ## Assignments Focus Panel card (product model)
 
 The Assignments card (`scheduling`) presents the **organization’s proposed or committed
-operational offer** for a child: campus, program, room, schedule, Start Date, tuition plan,
-estimated tuition, and quote — with compact proposed/committed state and contextual readiness.
+operational offers** for a child as a **collection of independent service entries**
+(core care, before/after care, enrichment, …). Each entry owns schedule, dates, commercial
+terms, quote, proposal/commitment state, and compact readiness.
+
+A child may have zero, one, or many entries. Do not collapse concurrent services into one
+campus/program/room/schedule object.
 
 **Family-request facts** (Requested Start, Requested Days per Week, Preferred Weekdays, and
 other preferred enrollment preferences) are **child-enrollment fields**. They may appear on the
 Children card when configured; they are not Assignment sections.
 
-**Readiness** is derived from the assignment + configured process rules. Present required/missing
-state on offer fields and a compact card summary (e.g. “3 items required”); server-side preflight
-remains authoritative. Do not render a large standalone “Readiness gaps” panel as the primary UX.
+**Interest** (family expressed interest without an operational offer) is composed from its
+canonical source — never stored as a third `commitment_kind` value.
 
-**Estimated tuition** is an attribute of the assignment proposal (near Tuition Plan). Quote
-snapshots remain immutable commercial artifacts — not ledger truth.
+**Readiness** is per assignment entry. Present required/missing state on offer fields and a
+compact per-entry summary (e.g. “2 items required”); server-side preflight remains authoritative.
+Incomplete add-on proposals must not block committing an unrelated enrollment-establishing
+assignment unless process configuration explicitly aggregates them.
+
+**Estimated tuition** is an attribute of each assignment proposal (near Tuition Plan). Quote
+snapshots are scoped by `schedule_assignment_id` and remain immutable commercial artifacts —
+not ledger truth. Regenerating one entry’s quote must not supersede another entry’s quote.
+
+**Enrollment Start Date** derives only from committed assignments whose category/row
+**establishes enrollment** (`establishesEnrollment` on assignment-type behavior, defaulting
+from `primaryEligible` / primary rows). Enrichment and add-on commitments do not redefine it.
 
 `commitment_kind` must **not** become a visible parallel lifecycle or duplicate status system;
-use compact proposed/committed treatment only.
+use compact proposed/committed (and Interest outside that field) treatment only.
 
 ## Authority XOR (child subjects)
 

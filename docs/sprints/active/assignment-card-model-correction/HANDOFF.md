@@ -3,7 +3,7 @@ owner: sprint
 status: active
 sprint: assignment-card-model-correction
 slot: 6
-staging_base: 8fa5697a3df724946eba8cdd4481fa6f6fe48fa1
+staging_base: b6cb38f7b04458377ef2f8bbd92ea1a04c713c5c
 last_reviewed: 2026-08-04
 ---
 
@@ -13,42 +13,40 @@ last_reviewed: 2026-08-04
 
 | Field | Value |
 |-------|-------|
-| Root | managed worktree `/Users/Kelly/Code/alloy-worktrees/wt6-assignment-card-model-correction` |
 | Slot | 6 · port 3016 |
+| Worktree | `/Users/Kelly/Code/alloy-worktrees/wt6-assignment-card-model-correction` |
 | Branch | `agent/cursor/6-assignment-card-model-correction` |
-| Staging base | `8fa5697a3df724946eba8cdd4481fa6f6fe48fa1` (PR #321 merged) |
-| Server | not required for unit certification |
+| Staging base (cardinality pass) | `b6cb38f7b` (merged into branch) |
 
-## Model correction
+## Product model
 
-Assignment card = org proposed/committed offer (site, program, room, schedule, start, tuition, estimate, quote) with compact state + readiness summary.
+1. **Offer correction** — Assignment = org offer, not five-section report; family request on Children.
+2. **Cardinality** — Assignment = collection of independent service entries (Preschool + Before Care + Soccer Shots). Ledger already multi-row; card/quotes/readiness/Start Date corrected.
 
-Family-request fields = optional Children placements via catalog + nested surface config.
+## Key invariants
 
-## Files changed (core)
+- Interest ∉ `commitment_kind`
+- Quotes scoped by `schedule_assignment_id`
+- Enrollment Start only from enrollment-establishing committed rows (`establishesEnrollment` / primary)
+- Per-entry readiness; add-ons do not block core commit by default
 
-- `web/lib/enrollment/buildAssignmentCardModel.ts`
-- `web/components/admin/focusPanel/cards/AssignmentCardSections.tsx`
-- `web/components/admin/focusPanel/cards/AssignmentProposalControls.tsx`
-- `web/components/admin/focusPanel/cards/SchedulingCard.tsx`
-- `web/lib/layout/childcareLayoutFieldCatalog.ts`
-- `web/lib/fields/consumerCanonicalProviderAssembly.ts`
-- Children evidence / identity compose / mutation binding / edit state
-- Tests + Playwright selectors
-- `docs/platform/planning/assignment-proposed-commitment-authority.md`
+## Files (cardinality pass)
 
-## Tests
+- `buildAssignmentCardModel.ts` / `FromTruth.ts` — multi-entry
+- `AssignmentCardSections.tsx` — collection UI
+- `assignmentQuoteSnapshot.ts` / quote API — per-entry scope
+- `effectiveDateAuthority.ts` + `assignmentTypeBehavior.ts` — establishesEnrollment
+- Tests updated; Playwright selectors for collection
 
-- `tests/enrollment/buildAssignmentCardModel.test.ts` — offer model
-- `tests/enrollment/childrenEnrollmentFieldPlacement.test.ts` — optional placement
-- Authority / readiness / preflight suites retained
+## Validation
 
-## Deferrals
+- Unit suites green (cardinality + quotes + dates + Children placement)
+- `typecheck` / `typecheck:tests` green
 
-- Full browser screenshot matrix (before = prior sprint five-panel evidence) pending authenticated slot-6 server cert
-- Do not force Firefly v129 Children field placements unless QA requests a draft layout
-- Do not merge automatically — open PR when Kelly authorizes
+## Browser cert
 
-## Explicitly untouched
+Run authenticated multi-child matrix on port 3016 before PR. Evidence dir: sprint active folder / `.alloy-agent-evidence`.
 
-Effective-date authority, quote immutability, primary-contact, ledger posting, readiness **enforcement**, LayoutDoc `scheduling` key.
+## Do not merge automatically
+
+Return PR-ready after browser cert; Kelly authorizes PR creation.

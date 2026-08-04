@@ -32,6 +32,8 @@ export type GenerateAssignmentQuoteInput = {
     generatedAt?: string;
     snapshotId: string;
     pricingInputsExtra?: Record<string, unknown>;
+    /** Scopes quote history to one assignment entry. */
+    scheduleAssignmentId?: string | null;
 };
 
 export type GenerateAssignmentQuoteResult =
@@ -95,6 +97,7 @@ export function generateAssignmentQuoteSnapshot(
     };
 
     const prior = input.metadata && typeof input.metadata === "object" ? { ...input.metadata } : {};
+    // Legacy child-level stamp retained for compat; per-entry quotes are authoritative.
     prior.tuition_plan_id = offeringId;
 
     const { metadata, snapshot } = appendAssignmentQuoteSnapshot(prior, {
@@ -108,6 +111,7 @@ export function generateAssignmentQuoteSnapshot(
         pricing_inputs,
         created_by: input.actorUserId,
         generated_at: generatedAt,
+        schedule_assignment_id: input.scheduleAssignmentId ?? null,
     });
 
     return { ok: true, metadata, snapshot };

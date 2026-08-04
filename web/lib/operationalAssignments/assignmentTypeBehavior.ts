@@ -30,6 +30,12 @@ export const ELIGIBLE_CATALOG_CATEGORIES = [
 export type AssignmentTypeBehavior = {
     description?: string | null;
     primaryEligible?: boolean;
+    /**
+     * When true, committed assignments of this category may define the child's
+     * Enrollment Start Date. When absent, defaults to `primaryEligible`.
+     * Enrichment / add-on categories should set false (or leave primaryEligible false).
+     */
+    establishesEnrollment?: boolean;
     /** @deprecated Prefer programRequirement */
     requiresProgram?: boolean;
     /** @deprecated Prefer roomRequirement */
@@ -86,6 +92,12 @@ export function readAssignmentTypeBehavior(raw: unknown): AssignmentTypeBehavior
     return {
         description: typeof bag.description === "string" ? bag.description : null,
         primaryEligible: bag.primaryEligible === true,
+        establishesEnrollment:
+            bag.establishesEnrollment === true
+                ? true
+                : bag.establishesEnrollment === false
+                  ? false
+                  : undefined,
         requiresProgram: programRequirement === "required",
         requiresRoom: roomRequirement === "required",
         allowsOverlap: bag.allowsOverlap === true,
@@ -99,6 +111,13 @@ export function readAssignmentTypeBehavior(raw: unknown): AssignmentTypeBehavior
     };
 }
 
+/** Whether committed rows of this category may define child Enrollment Start Date. */
+export function assignmentTypeEstablishesEnrollment(behavior: AssignmentTypeBehavior): boolean {
+    if (behavior.establishesEnrollment === true) return true;
+    if (behavior.establishesEnrollment === false) return false;
+    return behavior.primaryEligible === true;
+}
+
 /** Normalize for write — keep legacy booleans in sync with tri-state. */
 export function writeAssignmentTypeBehavior(behavior: AssignmentTypeBehavior): AssignmentTypeBehavior {
     const programRequirement = behavior.programRequirement ?? (behavior.requiresProgram ? "required" : "optional");
@@ -106,6 +125,7 @@ export function writeAssignmentTypeBehavior(behavior: AssignmentTypeBehavior): A
     return {
         description: behavior.description ?? null,
         primaryEligible: behavior.primaryEligible === true,
+        establishesEnrollment: assignmentTypeEstablishesEnrollment(behavior),
         allowsOverlap: behavior.allowsOverlap === true,
         programRequirement,
         roomRequirement,

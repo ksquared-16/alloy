@@ -305,9 +305,10 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         await openFirstChildAssignments(page);
         await snap(page, "03-assignments-child-open");
 
-        // 1–2: Assignment offer (coherent card — not five-section stack)
+        // 1–2: Assignment collection (coherent multi-entry card — not five-section stack)
         const sectionsRoot = page.locator("[data-assignment-card-sections='true']");
         const offerRoot = page.locator("[data-assignment-offer='true']");
+        const collectionRoot = page.locator("[data-assignment-collection='true']");
         const legacySectionKeys = [
             "family_request",
             "proposed_assignment",
@@ -319,8 +320,9 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         let fiveSectionGone = true;
         if ((await sectionsRoot.count()) > 0 || (await offerRoot.count()) > 0) {
             offerOk =
-                (await offerRoot.count()) > 0
-                && (await page.locator("[data-assignment-offer-fields='true'], [data-assignment-empty='true']").count()) > 0;
+                (await collectionRoot.count()) > 0
+                || ((await offerRoot.count()) > 0
+                    && (await page.locator("[data-assignment-offer-fields='true'], [data-assignment-empty='true'], [data-assignment-entry='true']").count()) > 0);
             for (const key of legacySectionKeys) {
                 if ((await page.locator(`[data-assignment-section='${key}']`).count()) > 0) {
                     fiveSectionGone = false;
@@ -338,10 +340,10 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         );
         mark(
             2,
-            "Assignments card coherent offer (no five-section stack)",
+            "Assignments card coherent multi-entry offer (no five-section stack)",
             offerOk && fiveSectionGone ? "pass" : offerOk ? "partial" : "fail",
             offerOk && fiveSectionGone
-                ? "offer model visible; family_request/five panels absent"
+                ? "collection/offer model visible; family_request/five panels absent"
                 : `offerOk=${offerOk} fiveSectionGone=${fiveSectionGone}`,
         );
 

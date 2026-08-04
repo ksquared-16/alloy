@@ -33,6 +33,11 @@ export type AssignmentQuoteSnapshot = {
     expires_at?: string | null;
     supersedes_snapshot_id?: string | null;
     accepted_at?: string | null;
+    /**
+     * When set, quote belongs to one assignment entry. Regeneration supersedes only
+     * peers with the same schedule_assignment_id (or both unset for legacy bag).
+     */
+    schedule_assignment_id?: string | null;
 };
 
 export const ASSIGNMENT_QUOTE_SNAPSHOTS_METADATA_KEY = "assignment_quote_snapshots" as const;
@@ -55,19 +60,29 @@ export function listAssignmentQuoteSnapshots(
     });
 }
 
+function quoteEntryKey(row: Pick<AssignmentQuoteSnapshot, "schedule_assignment_id">): string {
+    const id = trimOrNull(row.schedule_assignment_id);
+    return id ?? "";
+}
+
 export function activeAssignmentQuoteSnapshot(
     metadata: Record<string, unknown> | null | undefined,
+    scheduleAssignmentId?: string | null,
 ): AssignmentQuoteSnapshot | null {
     const rows = listAssignmentQuoteSnapshots(metadata);
-    const accepted = rows.find((r) => r.status === "accepted");
+    const scope = trimOrNull(scheduleAssignmentId) ?? "";
+    const scoped = rows.filter((r) => quoteEntryKey(r) === scope);
+    const pool = scoped.length > 0 || scope ? scoped : rows.filter((r) => !trimOrNull(r.schedule_assignment_id));
+    const accepted = pool.find((r) => r.status === "accepted");
     if (accepted) return accepted;
-    const generated = [...rows].reverse().find((r) => r.status === "generated" || r.status === "draft");
+    const generated = [...pool].reverse().find((r) => r.status === "generated" || r.status === "draft");
     return generated ?? null;
 }
 
 /**
- * Append an immutable generated snapshot. Prior generated/draft snapshots for the same
- * offering are marked superseded (history preserved).
+ * Append an immutable generated snapshot. Prior generated/draft snapshots for the
+ * same assignment entry (schedule_assignment_id) are marked superseded. Other
+ * entries' quotes are left alone.
  */
 export function appendAssignmentQuoteSnapshot(
     existingMetadata: Record<string, unknown> | null | undefined,
@@ -76,7 +91,9 @@ export function appendAssignmentQuoteSnapshot(
     const meta = {
         ...(existingMetadata && typeof existingMetadata === "object" ? existingMetadata : {}),
     };
+    const entryKey = quoteEntryKey(snapshot);
     const prior = listAssignmentQuoteSnapshots(meta).map((row) => {
+        if (quoteEntryKey(row) !== entryKey) return row;
         if (row.status === "generated" || row.status === "draft") {
             return {
                 ...row,
@@ -90,6 +107,7 @@ export function appendAssignmentQuoteSnapshot(
         ...snapshot,
         status: snapshot.status ?? "generated",
         currency: snapshot.currency || "USD",
+        schedule_assignment_id: trimOrNull(snapshot.schedule_assignment_id),
         pricing_inputs: { ...(snapshot.pricing_inputs ?? {}) },
     };
     // Freeze: callers must not mutate the object after append.

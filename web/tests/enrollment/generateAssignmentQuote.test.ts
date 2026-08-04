@@ -165,4 +165,80 @@ describe("generateAssignmentQuoteSnapshot", () => {
             }),
         ).toEqual([]);
     });
+
+    it("scopes regeneration to one schedule_assignment_id without mutating peer quotes", () => {
+        const preschool = generateAssignmentQuoteSnapshot({
+            metadata: {},
+            rates,
+            programKey: "preschool",
+            scheduleKey: "full_day",
+            locationId: null,
+            effectiveDate: "2026-09-15",
+            actorUserId: "u1",
+            snapshotId: "q-pre",
+            scheduleAssignmentId: "oa-preschool",
+            generatedAt: "2026-08-01T00:00:00Z",
+        });
+        expect(preschool.ok).toBe(true);
+        if (!preschool.ok) return;
+
+        const before = generateAssignmentQuoteSnapshot({
+            metadata: preschool.metadata,
+            rates: [
+                {
+                    id: "rate-before",
+                    program_key: "preschool",
+                    schedule_key: "full_day",
+                    rate_cents: 18000,
+                    billing_period: "monthly",
+                    location_id: null,
+                },
+            ],
+            programKey: "preschool",
+            scheduleKey: "full_day",
+            locationId: null,
+            offeringId: "rate-before",
+            effectiveDate: "2026-09-15",
+            actorUserId: "u1",
+            snapshotId: "q-before",
+            scheduleAssignmentId: "oa-before",
+            generatedAt: "2026-08-02T00:00:00Z",
+        });
+        expect(before.ok).toBe(true);
+        if (!before.ok) return;
+
+        const before2 = generateAssignmentQuoteSnapshot({
+            metadata: before.metadata,
+            rates: [
+                {
+                    id: "rate-before-2",
+                    program_key: "preschool",
+                    schedule_key: "full_day",
+                    rate_cents: 20000,
+                    billing_period: "monthly",
+                    location_id: null,
+                },
+            ],
+            programKey: "preschool",
+            scheduleKey: "full_day",
+            locationId: null,
+            offeringId: "rate-before-2",
+            effectiveDate: "2026-09-15",
+            actorUserId: "u1",
+            snapshotId: "q-before-2",
+            scheduleAssignmentId: "oa-before",
+            generatedAt: "2026-08-03T00:00:00Z",
+        });
+        expect(before2.ok).toBe(true);
+        if (!before2.ok) return;
+
+        expect(activeAssignmentQuoteSnapshot(before2.metadata, "oa-preschool")?.id).toBe("q-pre");
+        expect(activeAssignmentQuoteSnapshot(before2.metadata, "oa-preschool")?.amount_cents).toBe(
+            120000,
+        );
+        expect(activeAssignmentQuoteSnapshot(before2.metadata, "oa-before")?.id).toBe("q-before-2");
+        expect(listAssignmentQuoteSnapshots(before2.metadata).find((r) => r.id === "q-before")?.status).toBe(
+            "superseded",
+        );
+    });
 });

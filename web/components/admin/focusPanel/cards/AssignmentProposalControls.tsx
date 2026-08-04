@@ -28,6 +28,8 @@ export type AssignmentTuitionRateOption = {
 type Props = {
     customerMemberId: string;
     opportunityId: string | null;
+    /** When set, quote history is scoped to this assignment entry. */
+    scheduleAssignmentId?: string | null;
     participationMetadata?: Record<string, unknown> | null;
     rates?: AssignmentTuitionRateOption[] | null;
     /** When false, primary commit path is blocked — explain briefly. */
@@ -40,6 +42,7 @@ type Props = {
 export default function AssignmentProposalControls({
     customerMemberId,
     opportunityId,
+    scheduleAssignmentId = null,
     participationMetadata,
     rates: ratesProp,
     canCommit = true,
@@ -107,6 +110,7 @@ export default function AssignmentProposalControls({
                     customer_member_id: customerMemberId,
                     opportunity_id: opportunityId,
                     offering_id: offeringId.trim() || undefined,
+                    schedule_assignment_id: scheduleAssignmentId || undefined,
                 }),
             });
             const json = (await res.json().catch(() => ({}))) as {
@@ -129,12 +133,13 @@ export default function AssignmentProposalControls({
         } finally {
             setQuoteBusy(false);
         }
-    }, [customerMemberId, offeringId, onSaved, opportunityId]);
+    }, [customerMemberId, offeringId, onSaved, opportunityId, scheduleAssignmentId]);
 
     return (
         <div
             data-assignment-proposal-controls="true"
             data-assignment-child={customerMemberId}
+            data-assignment-entry-id={scheduleAssignmentId ?? undefined}
             style={{
                 display: "grid",
                 gap: 10,
