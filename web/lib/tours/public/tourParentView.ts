@@ -29,7 +29,13 @@ export type TourParentState =
  * anyone who opened dev tools — so the wire carries an intent and the page maps
  * that to a route.
  */
-export type TourParentIntent = "book" | "decline" | "confirm" | "reschedule" | "cancel";
+export type TourParentIntent =
+    | "book"
+    | "decline"
+    | "confirm"
+    | "reschedule"
+    /** Opens the bounded cancellation flow. Does NOT cancel. */
+    | "cancel";
 
 export type TourParentAction = {
     intent: TourParentIntent;
@@ -39,9 +45,15 @@ export type TourParentAction = {
 
 export type TourParentView = {
     headline: string;
-    /** "For Rowan Reyes" — omitted when the record has no usable name. */
+    /**
+     * Retained in the model but NOT rendered on the parent surface: the record's
+     * internal label ("Inquiry 0010 — Test Family 0010") is our vocabulary, not a
+     * parent's. The surface shows the campus, its address, and the time.
+     */
     childLine: string | null;
     locationLine: string;
+    /** Street address of the campus, so the parent knows where to go. */
+    locationAddress: string | null;
     /** Why the parent is here, in one sentence. */
     bodyLine: string;
     state: TourParentState;
@@ -89,6 +101,7 @@ function childLineFor(opportunityLabel: string): string | null {
 export function buildTourParentView(input: {
     opportunityLabel: string;
     locationLabel: string;
+    locationAddress?: string | null;
     /** Invitation status — one of draft/active/booked/declined/expired/revoked/superseded. */
     invitationStatus: string;
     /** Booking status_key when a booking exists. */
@@ -107,7 +120,12 @@ export function buildTourParentView(input: {
     const bookingLabel = formatParentTourTime(input.bookingStartAt ?? null, input.bookingTimezone ?? null);
     const can = (k: TourActionKind) => input.availableActions.includes(k);
 
-    const base = { childLine, locationLine: location, bookingLabel };
+    const base = {
+        childLine,
+        locationLine: location,
+        locationAddress: (input.locationAddress ?? "").trim() || null,
+        bookingLabel,
+    };
 
     // Terminal states first — they outrank whatever the credential permits.
     if (input.invitationStatus === "declined") {
@@ -168,8 +186,11 @@ export function buildTourParentView(input: {
         if (can("reschedule_tour")) {
             actions.push({ intent: "reschedule", label: "Choose a different time", tone: "secondary" });
         }
-        if (can("cancel_tour")) {
-            actions.push({ intent: "cancel", label: "Cancel my visit", tone: "quiet" });
+        // The Manage credential opens the bounded cancellation flow. A `cancel_tour`
+        // credential also lands here — that is the parent returning to the final
+        // confirmation step with the credential the intent route minted.
+        if (can("view_tour_details") || can("cancel_tour")) {
+            actions.push({ intent: "cancel", label: "Cancel tour", tone: "quiet" });
         }
         return {
             ...base,

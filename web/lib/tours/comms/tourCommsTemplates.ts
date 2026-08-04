@@ -98,7 +98,7 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
         "",
         "Add to calendar: {{add_to_calendar_url}}",
         "Need to reschedule? {{reschedule_url}}",
-        "Need to cancel? {{cancel_url}}",
+        "Manage or cancel your tour: {{cancel_url}}",
         "",
         "We look forward to meeting you.",
         "",
@@ -126,7 +126,7 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
         "Add to calendar: {{add_to_calendar_url}}",
         "",
         "If this time does not work, please contact us or reschedule here: {{reschedule_url}}",
-        "Need to cancel? {{cancel_url}}",
+        "Manage or cancel your tour: {{cancel_url}}",
         "",
         "Thank you,",
         "{{org_name}}",
@@ -215,7 +215,7 @@ export function omitEmptyOptionalTourCommsLines(text: string): string {
         if (!t) return true;
         if (/^Add to calendar:\s*$/i.test(t)) return false;
         if (/^Need to reschedule\?\s*$/i.test(t)) return false;
-        if (/^Need to cancel\?\s*$/i.test(t)) return false;
+        if (/^Manage or cancel your tour:\s*$/i.test(t)) return false;
         if (/^Book a new time:\s*$/i.test(t)) return false;
         if (/^If you would like to book a new time:\s*$/i.test(t)) return false;
         if (/^If this time does not work.*:\s*$/i.test(t)) return false;

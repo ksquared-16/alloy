@@ -19,17 +19,17 @@ import { formatParentTourTime, tourSlotDayKey, formatParentTimeOnly } from "@/li
 
 const BASE = "https://app.example.invalid";
 const actions = [
-    { id: "1", actionKind: "view_tour_details" as const, rawToken: "TOK_VIEW" },
+    { id: "1", actionKind: "view_tour_details" as const, rawToken: "TOK_MANAGE" },
     { id: "2", actionKind: "confirm_tour" as const, rawToken: "TOK_CONFIRM" },
     { id: "3", actionKind: "reschedule_tour" as const, rawToken: "TOK_RESCHED" },
-    { id: "4", actionKind: "cancel_tour" as const, rawToken: "TOK_CANCEL" },
 ];
 
 describe("the parent-safe action model", () => {
-    it("offers reschedule and cancel for a live booking", () => {
+    it("offers reschedule and Manage for a live booking", () => {
+        // Manage, not a direct cancel: cancellation is a bounded flow.
         const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey: "confirmed" });
         expect(m.rescheduleUrl).toBe(`${BASE}/tour-booking/TOK_RESCHED`);
-        expect(m.cancelUrl).toBe(`${BASE}/tour-booking/TOK_CANCEL`);
+        expect(m.manageUrl).toBe(`${BASE}/tour-booking/TOK_MANAGE`);
     });
 
     it("does NOT offer confirm on an already-confirmed booking", () => {
@@ -47,7 +47,7 @@ describe("the parent-safe action model", () => {
         "offers nothing once the booking is %s",
         (statusKey) => {
             const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey: statusKey });
-            expect(m).toEqual({ rescheduleUrl: null, cancelUrl: null, confirmUrl: null });
+            expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null });
         }
     );
 
@@ -61,7 +61,7 @@ describe("the parent-safe action model", () => {
 
     it("degrades to no actions rather than emitting a broken origin", () => {
         const m = buildTourParentActionModel({ actions, baseUrl: "  ", bookingStatusKey: "confirmed" });
-        expect(m).toEqual({ rescheduleUrl: null, cancelUrl: null, confirmUrl: null });
+        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null });
     });
 });
 

@@ -23,6 +23,9 @@ export const TOUR_PUBLIC_RATE_LIMIT = {
     confirm: { max: 30, windowMs: 60_000 },
     reschedule: { max: 30, windowMs: 60_000 },
     cancel: { max: 30, windowMs: 60_000 },
+    // Authorises the bounded cancellation step; mints a credential, so it is
+    // budgeted like a mutation even though it changes no booking state.
+    cancel_intent: { max: 30, windowMs: 60_000 },
 } satisfies Record<string, Window>;
 
 export type TourPublicRateLimitKind = keyof typeof TOUR_PUBLIC_RATE_LIMIT;
