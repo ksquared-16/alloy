@@ -177,7 +177,7 @@ BEGIN
     -- Every statement is org-scoped in addition to the id list. Widening the id list can never
     -- widen tenancy.
 
-    DELETE FROM public.communication_message_reads WHERE message_id IN (
+    DELETE FROM public.communication_message_reads WHERE org_id = p_org_id AND message_id IN (
         SELECT id FROM public.communication_messages WHERE org_id = p_org_id AND thread_id = ANY(v_threads));
     GET DIAGNOSTICS v_n = ROW_COUNT; v_counts := v_counts || jsonb_build_object('communication_message_reads', v_n);
 
@@ -236,10 +236,10 @@ BEGIN
     DELETE FROM public.form_submissions WHERE org_id = p_org_id AND id = ANY(v_forms);
     GET DIAGNOSTICS v_n = ROW_COUNT; v_counts := v_counts || jsonb_build_object('form_submissions', v_n);
 
-    DELETE FROM public.document_field_values WHERE document_id = ANY(v_documents);
+    DELETE FROM public.document_field_values WHERE org_id = p_org_id AND document_id = ANY(v_documents);
     GET DIAGNOSTICS v_n = ROW_COUNT; v_counts := v_counts || jsonb_build_object('document_field_values', v_n);
 
-    DELETE FROM public.document_versions WHERE document_id = ANY(v_documents);
+    DELETE FROM public.document_versions WHERE org_id = p_org_id AND document_id = ANY(v_documents);
     GET DIAGNOSTICS v_n = ROW_COUNT; v_counts := v_counts || jsonb_build_object('document_versions', v_n);
 
     DELETE FROM public.documents WHERE org_id = p_org_id AND id = ANY(v_documents);
