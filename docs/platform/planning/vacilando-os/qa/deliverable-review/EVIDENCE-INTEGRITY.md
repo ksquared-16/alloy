@@ -29,3 +29,20 @@ That matched the substring **`fail` inside `0 failed`**, so a passing suite was 
 | Approval | Enabled despite failed card | Disabled if any blocking discrepancy |
 
 Screenshot after: `w4-evidence-integrity-after.png`
+
+## Durable policy (Mission 2 W-4 — “70/70 green” → incomplete)
+
+**Root cause:** Worker shorthand (`70/70 green`, results only on `completionReport.tests`)
+never matched `N passed` / `ok:true`. Parser returned `incomplete`, and
+`tests_passed` treated incomplete as a **hard fail** → Certify stuck forever on re-check.
+
+**Policy (do not regress):**
+
+1. Parse **all** test text: evidence descriptions **and** `completionReport.tests[].results`.
+2. Recognize shorthand: `N/N green`, `Tests N passed`, narrative “green across…”.
+3. Aggregate via `evaluateAssignmentTests` — any real failure fails; any clear pass passes.
+4. **Never** hard-fail Certify solely because one free-text blob is “incomplete” when the
+   completion record shows a successful run with no failure signals.
+
+Regression: `scripts/local-dev/tests/deliverable-evidence-integrity.test.mjs`
+

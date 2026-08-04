@@ -27,6 +27,7 @@ import {
   parseTestEvidenceSemantics,
   reconcileDeliverableEvidence,
   resolveDeliverableCommit,
+  evaluateAssignmentTests,
 } from "./deliverable-evidence.mjs";
 
 export { RECHECK_SEMANTICS, CERTIFY_NOTE_SEMANTICS };
@@ -339,47 +340,16 @@ export function runDirectorVerification(missionId, assignmentId, { nowMs } = {})
     { claim: report.summary ? "Worker claimed scope was respected." : null },
   ));
 
-  // Tests — use structured semantics (never naive /fail/i).
-  // Census / docs assignments often require log+document only — missing tests
-  // must not hard-fail those (Wave 0 dead-end for the operator).
-  // Attaching a "Tests executed — N/A" stub must NOT invent a test requirement.
-  const testEv = artifacts.filter((e) => e.type === "test" || /^Tests executed$/i.test(e.title || ""));
-  const requiredTypes = (assignment.requiredEvidence || [])
-    .map((x) => String(typeof x === "string" ? x : x?.type || x || "").toLowerCase())
-    .filter(Boolean);
-  const expectedBlob = JSON.stringify(expected || []);
-  const testNa = (text) => /not applicable|none is applicable|no test suite|not required for (this|a) (assignment|specification)|specification artifact/i
-    .test(String(text || ""));
-  const expectsTests = requiredTypes.includes("test")
-    || (Array.isArray(report.tests) && report.tests.length > 0)
-    || /\.(test|spec)\.(ts|tsx|js|mjs)\b/i.test(expectedBlob)
-    || /\b(vitest|npm test|tier-[ab]|red-before)\b/i.test(String(report.summary || ""));
-  const testSemantics = testEv.map((e) =>
-    parseTestEvidenceSemantics(e.description || e.title || "", { exitCode: e.exitCode }));
-  const allTestEvNa = testEv.length > 0 && testEv.every((e) => testNa(e.description || e.title || ""));
-  const suiteFailed = testSemantics.some((s) => s.test_run_status === "failed");
-  const suitePassed = testSemantics.some((s) => s.test_run_status === "passed") && !suiteFailed;
-  if (!expectsTests || allTestEvNa) {
-    checks.push(checkItem(
-      "tests_passed",
-      "Required tests ran and passed",
-      "pass",
-      allTestEvNa
-        ? "Worker recorded that automated tests are not applicable for this specification deliverable."
-        : (requiredTypes.length
-          ? `Automated tests were not required (required evidence: ${requiredTypes.join(", ")}).`
-          : "Automated tests were not required for this assignment."),
-    ));
-  } else {
-    checks.push(checkItem(
-      "tests_passed",
-      "Required tests ran and passed",
-      testEv.length === 0 ? "fail" : (suiteFailed ? "fail" : suitePassed ? "pass" : "fail"),
-      testEv.length === 0
-        ? "No test evidence attached."
-        : (testSemantics[0]?.result_summary || (suitePassed ? "Test evidence reports a passing run." : "Test evidence does not show a clear pass.")),
-    ));
-  }
+  // Tests — structured semantics across evidence + completionReport.tests.
+  // Never hard-fail Certify on parser-blind "incomplete" when the worker recorded
+  // a successful run (see evaluateAssignmentTests).
+  const testEval = evaluateAssignmentTests({ assignment, report, artifacts });
+  checks.push(checkItem(
+    "tests_passed",
+    "Required tests ran and passed",
+    testEval.checkStatus,
+    testEval.detail,
+  ));
 
   // Evidence presence
   const meaningful = artifacts.filter((e) => !/^(log|notes|document)\s*[—-]/i.test(e.title || ""));

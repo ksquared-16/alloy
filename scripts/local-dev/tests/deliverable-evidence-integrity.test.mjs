@@ -6,6 +6,7 @@ import {
   parseTestEvidenceSemantics,
   reconcileDeliverableEvidence,
   workerClaimsTestsPassed,
+  evaluateAssignmentTests,
 } from "../lib/vacilando/deliverable-evidence.mjs";
 import {
   createDeliverableReview,
@@ -49,6 +50,53 @@ const aid = "asg_d203f547736c16";
   assert.equal(slash.failed_count, 0);
   assert.ok(slash.raw_signals.includes("slash_all_green"));
   assert.match(slash.result_summary, /70 tests passed/i);
+}
+
+// --- Durable: incomplete shorthand must not block when completionReport.tests is clear ---
+{
+  const evaled = evaluateAssignmentTests({
+    assignment: {
+      assignmentId: "asg_test",
+      requiredEvidence: ["log", "document"],
+      expectedDeliverables: ["web/tests/access/serviceClientPrincipalCheck.test.ts"],
+    },
+    report: {
+      summary: "Re-verified W-4. Check is green.",
+      tests: [{
+        ran: true,
+        results: "70/70 green across all four Wave 1 suites. Typecheck NOT run — command-approval wall.",
+      }],
+    },
+    artifacts: [{
+      evidenceId: "ev_tests",
+      type: "test",
+      title: "Tests executed",
+      // Deliberately ambiguous alone — used to yield "incomplete"
+      description: "Wave 1 suites executed; see completion report.",
+    }],
+  });
+  assert.equal(evaled.checkStatus, "pass", "completionReport.tests shorthand must unblock tests_passed");
+  assert.equal(evaled.suitePassed, true);
+  assert.equal(evaled.suiteFailed, false);
+}
+
+{
+  const failed = evaluateAssignmentTests({
+    assignment: { requiredEvidence: ["test"] },
+    report: { tests: [{ ran: true, results: "3 passed, 2 failed — suite FAILED" }] },
+    artifacts: [{ type: "test", title: "Tests executed", description: "3 passed, 2 failed — suite FAILED" }],
+  });
+  assert.equal(failed.checkStatus, "fail");
+  assert.equal(failed.suiteFailed, true);
+}
+
+{
+  assert.equal(
+    workerClaimsTestsPassed({
+      tests: [{ ran: true, results: "70/70 green across suites" }],
+    }),
+    true,
+  );
 }
 
 
