@@ -216,5 +216,5 @@ One primary category per defect, even when there are secondary consequences.
   the served HTML exposed no project ref, so **which backend it was using could not be proven**. It
   was left running — a dry run performs zero writes. **Resolve its target before Phase 5.**
 - Nothing was paused during this slice, so nothing needs resuming.
-- Credentials: the trusted root env `/Users/Kelly/Alloy/web/.env.local` was sourced into a single
+- Credentials: the trusted root env (the canonical checkout's `web/.env.local`) was sourced into a single
   command per invocation. No key was copied into the worktree, printed, logged, or committed.
