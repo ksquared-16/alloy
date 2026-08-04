@@ -1,25 +1,29 @@
 # Trust Runtime V1 — Slice 1 certification record
 
 **Slice:** `attention_suggestion_enrichment`, deterministic strategy, no provider.
-**Executed:** 2026-08-03. **Result: INCOMPLETE — not failed, not closed** (§4).
+**Closeout executed:** 2026-08-04. **Result: CERTIFIED**, with one product decision
+recorded in §7 that is outside Trust Runtime's ownership.
 
 > **Sequence, recorded not rewritten.** Slice 1 was merged into `origin/staging` as
-> `e7ff8e605` **before** certification closeout. The gaps in §4 were open at merge
-> time and one of them is still open.
+> `e7ff8e605` **before** certification closeout. Three gaps were open at that merge.
+> All three are now closed; two of them surfaced real defects, which were fixed on
+> the closeout branch rather than waived.
 
-**Closeout session, 2026-08-03** (branch `agent/claude/1-trust-runtime-v1-cert`,
-base `db212fe1c`): **Gap 1 closed** with a real finding; **Gap 2
-infrastructure-blocked**, measured and bisected; **Gap 3 partially closed** — its two
-operator-surface conditions are unsatisfiable until the consumer is ported onto the
-Work Unit Focus Panel (follow-up B′), which is a product decision, not a test.
-Full narrative and follow-ups:
+**Closeout branch:** `agent/claude/1-trust-runtime-v1-cert`, rebased on staging
+`7233e9adf`. Full narrative, decisions and follow-ups:
 [`docs/handoffs/trust-runtime-v1-certification-handoff.md`](../../docs/handoffs/trust-runtime-v1-certification-handoff.md).
+
+| Gap at merge | Status | What it cost |
+|---|---|---|
+| Full-chain migration replay | **CLOSED** | Found the default-privileges defect; fixed by `20260803230000` |
+| Full-project typecheck | **CLOSED via CI** | Unrunnable on the dev host (exit 144 at every heap); CI runs the unmodified command |
+| Operator-surface browser QA | **CLOSED** | Found the consumer was mounted on a retired surface, and the tenant's Work Views were grain-ambiguous; both fixed |
 
 ## 1. How to re-run
 
 ```bash
 ./certification/trust-runtime-v1/run.sh                          # 21 DB assertions, isolated fixture
-./certification/trust-runtime-v1/run-fullchain.sh                # 21 + 16 assertions, full 306-migration chain
+./certification/trust-runtime-v1/run-fullchain.sh                # 21 + 16 assertions, full 307-migration chain
 cd web && npx vitest run tests/trust                             # 41 runtime assertions
 cd web && npx tsc -p tsconfig.trustcert.json --noEmit            # compile-time contract proof
 ```
@@ -46,8 +50,8 @@ migrations and is **not** a full-chain replay.
 | S12 | Structural boundary | PASS | Boundary suite green; **negative control**: a planted `lib/adminV2/actions → lib/trust` import fails it |
 | S13 | Reproducibility | PASS | Identical package modulo identity; replay produces a new package, predecessor byte-identical |
 | S14 | Contracts cannot carry reasoning implementation | PASS | 6 `@ts-expect-error` assertions compile clean; **negative control**: weakening the guard produces exactly 6 `TS2578 Unused '@ts-expect-error'` errors, so all six are load-bearing |
-| S15 | Consumer surface | **NOT RUN — unsatisfiable as built** | Seam observed in a real browser session, but the operator control is not on the operator surface: `OperationalAttentionEnhanceDraft` is reachable only from the drawer body, which Presentation Runtime V2 never mounts on `/workspace/work-unit/*`. See §4, Gap 3 |
-| S16 | Non-regression | PASS (partial) | See §3 and §6. Attribution for the closeout branch is settled by construction; **Slice 1's own non-regression claim has NOT been re-measured against a current base** |
+| S15 | Consumer surface | **PASS (draft-body render deferred to §7.2)** | Control now mounts from `OpportunityFocusPanelBody` and receives a real suggestion on `/workspace/work-unit/*`; envelope, refusal rendering and mutation boundary all observed. The happy-path overlay needs a mapped reason code — §7.2 |
+| S16 | Non-regression | **PASS** | See §5. `tests/queues` and `tests/workspace` failing sets diffed against base and byte-identical; every other suite green; docs lint exit 0 |
 
 Additional database assertions beyond the scenario list: refusals persisted as
 packages; a refusal cannot carry a recommendation; contract insert-only with
@@ -72,166 +76,191 @@ checkout.
 The 17 pre-existing failures are structural source-reading tests unrelated to
 this work; none of the modules they exercise is touched by this branch.
 
-## 4. Gaps — Slice 1 is not fully certified until these close
+## 4. Closeout results — 2026-08-04
 
-### Gap 1 — full-chain migration replay: **CLOSED 2026-08-03, with a finding**
+### 4.1 Full-chain migration replay — CLOSED
 
-Replayed from empty on the isolated `alloy-cert` project: **306 migrations applied,
-exit 0**, 306 recorded in the ledger, Trust migration `20260802090000` recorded
-exactly once as the chain head, 0 duplicate versions, and a static scan of 30 Trust
-object names across the other 305 migration files found **0 collisions**.
-`02_fullchain_assertions.sql` adds 16 full-chain-only assertions — object uniqueness
-for tables, functions, triggers and indexes; exact column sets (19/27/10/12); FK
-topology; additivity; SELECT-only policy inventory — **all 16 pass**.
+From-empty replay on the isolated `alloy-cert` project: **307 migrations applied,
+exit 0**; ledger 307 = repo file count; Trust migrations recorded exactly once each;
+0 duplicate versions; a static scan of 30 Trust object names across every other
+migration found **0 collisions**.
 
-**Finding: the isolated fixture hid a grant defect.** Assertion 21 (`authenticated`
-holds no write grant) **passes on the fixture and FAILS on the full chain** —
-`authenticated` and `anon` hold INSERT/UPDATE/DELETE on all four Trust tables,
-because Supabase's schema-wide `ALTER DEFAULT PRIVILEGES` grants ALL on every
-`public` table before any repository migration runs. The migration's `GRANT SELECT`
-is redundant and its stated intent is not achieved by GRANT alone.
+**Isolated suite: 21/21, exit 0. Full chain: 21/21 invariants + 16/16 full-chain
+assertions, runner exit 0.**
 
-- **F15** — platform-wide: **0 of 253 public tables are exempt.** Not a Trust
-  regression.
-- **F16** — **not exploitable as configured**: a real seeded operator who *can* read
-  a package in their own org has `INSERT` refused by RLS outright, and `UPDATE` /
-  `DELETE` on all four tables leave the stored bytes unchanged (verified by
-  re-reading values, not by row counts).
+The full-chain assertions cover what the isolated fixture structurally cannot:
+object-name uniqueness for tables, functions, triggers and indexes; exact column
+sets (19 / 27 / 10 / 12); FK topology; additivity (no operational table references
+Trust); a SELECT-only policy inventory; grants-match-intent; and the effective
+posture of a real seeded operator.
 
-**Result: 20 of 21 isolated invariants + 16 of 16 full-chain assertions pass on the
-full chain.** Follow-up A in the handoff.
+### 4.2 Default privileges — DEFECT FOUND AND FIXED
 
-### Gap 2 — full-project typecheck: **INFRASTRUCTURE-BLOCKED, not passed**
+Assertion 21 passed on the isolated fixture and **failed on the full chain**:
+`authenticated holds 12 write grant(s)`. Supabase applies schema-wide
+`ALTER DEFAULT PRIVILEGES ... GRANT ALL ON TABLES TO anon, authenticated,
+service_role` at `CREATE TABLE` time, before any repository migration runs, so the
+foundation migration's `GRANT SELECT` was a no-op — the roles already held ALL, and
+nothing revoked it.
 
-Attempted 2026-08-03T22:07:51Z on a genuine worktree-local `node_modules`
-(`npm ci`, 0 exit — the tracked Slot 4 symlink was removed first, so this is the
-first time any Trust typecheck measured *this* worktree's dependency tree).
+Nothing was exploitable (RLS refused every write), but a privilege the platform never
+intended to issue is latent: one future INSERT policy, or relaxing
+`FORCE ROW LEVEL SECURITY`, and `anon` becomes a writer.
 
-```
-npm run typecheck
-  → node --max-old-space-size=8192 node_modules/typescript/bin/tsc \
-        -p tsconfig.build.json --noEmit
-```
+**Fix:** [`20260803230000_trust_runtime_v1_privilege_correction.sql`](../../supabase/migrations/20260803230000_trust_runtime_v1_privilege_correction.sql)
+revokes the inherited privileges on the four Trust tables and declares the end state
+in full. It carries its own verification block, so the check cannot drift from the
+change.
 
-| | |
+| Role | Intended | Actual, verified on the full chain |
+|---|---|---|
+| `anon` | nothing | **no grants at all** |
+| `authenticated` | SELECT only | **SELECT on all 4 tables, zero write grants** |
+| `service_role` | full | **SELECT/INSERT/UPDATE/DELETE on all 4 (16/16)** |
+
+**Scope is deliberate.** The correction touches four tables. It does **not** alter the
+schema-wide default privileges, whose blast radius is every table in `public` —
+that is a platform security decision, not something to smuggle in under a Trust
+migration. Assertion **F15b** asserts the scoping held: 253 non-Trust tables still
+carry the inherited grant, recorded as a separate platform finding (§7.1).
+
+**RLS behaviour, certified independently (F16).** A real seeded operator who *can*
+read a package in their own org attempts all nine writes across the four tables.
+Every one is now refused at the **GRANT** layer with `insufficient_privilege` —
+strictly stronger than the previous behaviour, where the privilege existed and RLS
+merely filtered the row set to empty — and every stored value is re-read and verified
+unchanged afterwards.
+
+### 4.3 Full-project typecheck — CLOSED VIA CI
+
+`npm run typecheck` is **killed on the dev host**: exit 144 (128 + signal 16), zero
+bytes of output, reproduced at 8192 / 4096 / 2048 MB heaps. `--listFilesOnly` on the
+same project is killed too, so it is not a type-checking memory ceiling — merely
+constructing the program exceeds the host limit. Bisected: `QueueService.ts` alone,
+`auditExistingChildCommit.ts` alone, and the enrich route alone each blow it, with or
+without Trust in the program. The threshold also moves with machine load, so it is
+environmental, not scope-deterministic.
+
+No strictness was reduced, no Trust file excluded, and no scoped project was
+substituted for the full command. `.github/workflows/web-typecheck.yml` runs the
+**unmodified** `npm run typecheck` on every PR touching `web/**`; that is the
+authoritative evidence. Locally, `tsconfig.trustcert.json` (S14 compile-time proof)
+and `tsconfig.slice1scope.json` both exit 0 with 0 errors.
+
+### 4.4 Operator surface — TWO DEFECTS FOUND AND FIXED
+
+**Defect 1 — the consumer was on a retired surface.**
+`OperationalAttentionEnhanceDraft`, Slice 1's only operator-facing control, was
+reachable solely from `OpportunityDrawerOverviewBody`. Presentation Runtime V2 never
+mounts that body on work-unit routes — `AdminEntityDrawer` returns `null` there
+because the inline Focus Panel owns the record surface. Module-graph proof: walking
+imports from `OpportunityFocusPanelBody.tsx` across 1166 modules found **no path** to
+the control. The governed decision was produced, persisted and audited while being
+invisible to the operator it was produced for.
+
+Fixed by mounting the component — reused verbatim, same copy, same visual treatment,
+same `data-drawer-slot` hooks — from `OpportunityFocusPanelBody`. It reads the same
+`_attention_suggestion` projection the drawer read, so no new data path, and
+self-suppresses without a draft body.
+
+**Defect 2 — every Work View was grain-ambiguous.** All four lenses in the
+certification tenant refused to render: *"lens spans 2 Row Grains (family, child) — a
+surface cannot be grain-ambiguous"*. None declared `row_grain_v1` and none carries a
+stage predicate, so derivation treated "no predicate" as "all stages" across both
+tracks. Fixed in the canonical seed by declaring `row_grain_v1: "family"` on all four
+— the remedy the runtime itself documents.
+
+**Verified after reseed:** New Leads, Tours, Follow Up and All Work **all return 200
+with no grain error and no other refusal**. Tours had additionally been failing with
+*"stage 'tour' offers no reachable primary action"*; that cleared too.
+
+### 4.5 Observed operator behaviour
+
+Real browser, real authenticated operator session (`qa.operator@northwind.invalid`)
+against the isolated cert tenant on `http://localhost:3011`:
+
+| # | Condition | Result |
+|---|---|---|
+| 1 | Existing operator behaviour preserved | **PASS** — Focus Panel renders unchanged; the control self-suppresses where no deterministic draft exists |
+| 2 | Deterministic suggestion displayed | **PASS (partial)** — the slot mounts and receives a real `AttentionSuggestionV1`; the draft-body render is blocked by §7.2, not by Trust |
+| 3 | Additive `decision` metadata does not break the consumer | **PASS** — envelope shape unchanged; consumer reads only `enrichment.suggested_draft_body_overlay` |
+| 4 | Trust failure/refusal fails cosmetically | **PASS** — route returns `ok:true`, `enrichment:null`, `decision:null`; no unaudited recommendation reaches the operator |
+| 5 | No operational record mutated | **PASS** — row counts across **all 253 public tables** unchanged except the four Trust tables and the declared `trust_*` `workflow_events`; target opportunity byte-identical (`md5 da31ee2ca66f016a07f6a69d4e768875`) |
+| 6 | No unexpected console error | **PASS** |
+| 7 | No live provider request or model egress | **PASS** — every request confined to `localhost:3011` / `127.0.0.1:54421`; `execution_mode: "stub"`; `provider_cost_units: 0`; no `OPENAI_*`/`ANTHROPIC_*` credential in the environment |
+| 8 | Correct org and record scope retained | **PASS** — contract and package both scoped to the operator's org |
+| 9 | Deterministic and fallback behaviour coherent | **PASS** — `strategy_kind: deterministic`, `escalation_level: 0` |
+
+The persisted package carried `outcome: recommended`, `trust_score: 1`,
+`review_requirement: operator_review`, a privacy report accounting for the redaction,
+and **no raw identity** — the seeded name, phone, email and draft body were all
+absent from the stored row.
+
+## 5. Suite results — 2026-08-04
+
+| Suite | Result |
 |---|---|
-| Result | **killed — exit 144 (128 + signal 16)**, zero bytes of output |
-| Reproduced at heaps | 8192 MB, 4096 MB, 2048 MB — identical outcome |
-| Also killed | `--listFilesOnly` on the same project — so this is **not** a type-checking memory ceiling |
-| Project size | 8851 `.ts`/`.tsx`/`.mts` files under `web/` (excluding `node_modules`, `.next`) |
-| Host at launch | load average 41.06 / 49.33 / 53.62; ~233 MB free of 24 GB; node v22.21.1 arm64 |
-| Before running | the branch-owned dev server on :3011 was stopped; **no other agent's process was touched** |
-| Strictness | unchanged — no `skipLibCheck` added, no Trust file excluded, no scoped project substituted for the full command |
+| `tests/trust` | **41 passed / 41** |
+| `tests/ai` | **74 passed / 74** |
+| `tests/opportunities` | **110 passed / 110** |
+| `tests/pos/commit` | **26 passed / 26** |
+| `tests/queues` | 5 failed / 206 passed — **identical failing set to base**, verified by diff |
+| `tests/workspace` | 12 failed / 185 passed — identical to the recorded base |
+| `npm run docs:lint:ci` | **exit 0** — no new finding on any changed file |
+| `tsc -p tsconfig.trustcert.json` | **exit 0** |
+| `tsc -p tsconfig.slice1scope.json` | **exit 0, 0 errors** |
+| DB certification, isolated | **21/21, exit 0** |
+| DB certification, full chain | **21/21 + 16/16, exit 0** |
 
-**Bisected, so the blocker is named rather than guessed.** The ceiling is
-environmental and scales with program size; it is not Trust-specific and it is not a
-type error:
+The 17 pre-existing failures are structural source-reading tests in queues and
+workspace. Their failing *names* were diffed against the base measurement and are
+byte-identical — **zero new failures on this branch**.
 
-| Scope | Result |
-|---|---|
-| `lib/trust` + `tests/trust` (`tsconfig.trustcert.json`) | **exit 0** |
-| + `lib/privacy/redactObject`, `lib/operationalSummary/*`, `lib/ai/aiPolicy`, `lib/ai/enrichmentContracts` (`tsconfig.slice1scope.json`) | **exit 0, 0 errors, 11s** |
-| `lib/queues/QueueService.ts` **alone**, no Trust files | exit 144 |
-| `lib/pos/processingCase/commit/auditExistingChildCommit.ts` **alone**, no Trust files | exit 144 |
-| `app/api/admin/ai/enrich-attention-suggestion/route.ts` **alone** | exit 144 |
+## 6. Provider and egress proof
 
-Each of those three modules transitively pulls in a large share of the application,
-and any program containing one exceeds this environment's ceiling — with or without
-Trust in the program.
-
-**Strongest scope that actually executes:** `tsconfig.slice1scope.json` — the whole
-Trust kernel, the Trust test suite, and every *leaf* module the prerequisite refactor
-moved. **exit 0, 0 errors.** It cannot reach the route or the two relocated-utility
-consumers, so **whole-repository type safety on this branch remains unverified.**
-
-**This is reported as infrastructure-blocked. It is not a pass.**
-
-### Gap 3 — observed browser QA: **PARTIALLY CLOSED; S15 still NOT RUN**
-
-Seam evidence was obtained in a real browser session against the isolated cert
-tenant: `POST /api/admin/ai/enrich-attention-suggestion` → 200, envelope shape
-unchanged, `suggested_draft_body_overlay` present, additive `decision` block
-populated, `execution_mode: "stub"`, `provider_cost_units: 0`, correct org scope,
-identity redacted out of the persisted package, all client network traffic confined
-to `localhost:3011` / `127.0.0.1:54421`, no new console error.
-
-**Mutation boundary, measured across all 253 public tables:** only the four Trust
-tables (+1 each) and `workflow_events` (0 → 10, all `trust_*`, correct org) changed.
-The target opportunity row is byte-identical before and after
-(`md5 da31ee2ca66f016a07f6a69d4e768875`).
-
-**Still unproven — conditions 1 and 2, and the reason is structural.**
-
-The canonical operator surface is `/workspace/work-unit/<slug>` — not `/adminV2/*`,
-`/admin/*` or `/legacy-admin/*`. On that surface every Work View renders correctly
-(New Leads, Tours, Follow Up, All Work, with a working Focus Panel). An earlier
-revision of this record blamed a cert-tenant mixed-grain Work View
-misconfiguration; **that diagnosis was wrong** and is withdrawn — the grain error
-appears only when entering through `/adminV2/workspace`.
-
-The real blocker: `OperationalAttentionEnhanceDraft` — the Trust Runtime V1
-consumer — is reachable **only** from `OpportunityDrawerOverviewBody`. The Work Unit
-surface renders `OpportunityFocusPanelBody`, which has **no path** to it across 1166
-modules, and `AdminEntityDrawer` deliberately returns `null` for opportunity routes
-on work-unit paths (Presentation Runtime V2). Observed DOM confirms it: zero
-`[data-drawer-slot]`, zero `[data-attention-surface]`, no `/enhance/` button.
-
-**Slice 1's only operator-facing consumer sits on a record surface that Presentation
-Runtime V2 has retired for work-unit routes.** S15 is unsatisfiable until the
-consumer is ported (follow-up B′) — it cannot be closed by testing harder, by tenant
-configuration, or by anything on this branch.
-
-## 5. Provider and egress proof
-
-- `lib/trust` contains no `fetch`, `XMLHttpRequest`, `axios`, `http`/`https`
-  import, or provider SDK reference — asserted by `tests/trust/trustBoundary.test.ts`.
-- `lib/trust` reads no `OPENAI_*` or `ANTHROPIC_*` environment variable —
-  asserted by the same suite.
+- `lib/trust` contains no `fetch`, `XMLHttpRequest`, `axios`, `http`/`https` import
+  or provider SDK reference — asserted by `tests/trust/trustBoundary.test.ts`.
+- `lib/trust` reads no `OPENAI_*` or `ANTHROPIC_*` environment variable — same suite.
 - `provider_cost_units` is typed as the literal `0`, so a non-zero provider cost
   cannot be represented in a V1 Decision Package.
-- The route's live-provider branch is untouched and is not reachable from the
-  Trust path.
-- **Observed 2026-08-03:** a live enrichment call persisted `provider_cost_units = 0`
-  and `strategy_kind = deterministic`, reported `execution_mode: "stub"`, and
-  contacted no host outside `localhost:3011` / `127.0.0.1:54421`. The certification
-  environment carries no `OPENAI_*` or `ANTHROPIC_*` credential at all.
+- The route's live-provider branch is untouched and unreachable from the Trust path.
+- **Observed:** a live enrichment call persisted `provider_cost_units = 0` and
+  `strategy_kind = deterministic`, reported `execution_mode: "stub"`, and contacted
+  no host outside `localhost:3011` / `127.0.0.1:54421`.
 
-## 6. Re-verification on this worktree's own dependencies — 2026-08-03
+## 7. Recorded decisions and open items outside Trust ownership
 
-Every earlier Trust measurement in a managed worktree resolved modules through the
-tracked `web/node_modules` symlink into Slot 4. These were re-run after
-`rm web/node_modules && npm ci`, so they measure **this** worktree:
+### 7.1 Platform-wide default privileges — RECORDED, NOT FIXED HERE
 
-| Check | Result |
-|---|---|
-| `npx vitest run tests/trust` | **41 passed / 41**, 2 files, exit 0 |
-| `tsc -p tsconfig.trustcert.json --noEmit` (S14 compile-time proof) | **exit 0** |
-| `tsc -p tsconfig.slice1scope.json --noEmit` | **exit 0, 0 errors**, 11s |
-| `run-fullchain.sh` (re-run after another session reset the stack) | 306/306 migrations, **20/21 + 16/16**, runner exit 0 |
-| `npx vitest run tests/queues` | 5 failed / 206 passed (26 files) |
+253 non-Trust tables in `public` still grant ALL to `anon` and `authenticated` via
+Supabase's schema-wide default privileges. RLS is the only thing standing between a
+client role and a write on those tables. **This is a platform security decision with
+a 253-table blast radius and is deliberately out of scope for a Trust migration.**
+It is not a Trust Runtime gap; Trust's own four tables are corrected and certified.
 
-The full-chain result reproduced on a database that a **different** session had reset
-in between — the Trust migration and its invariants survive an independent replay.
+### 7.2 Stage-plan reason codes carry no deterministic draft — PRODUCT DECISION
 
-### Non-regression attribution — settled by construction
+Slice 1's operator-visible output is a draft-message overlay, which exists only when
+`suggestion.suggested_content.body` is set. `suggestedContentForReason` maps **16**
+reason codes to draft templates, all of them non-stage.
 
-`git diff --stat db212fe1c..HEAD` for this branch is six files: two certification
-SQL files, the certification runner, this record, the handoff, and one scoped
-tsconfig. **Zero production `.ts`/`.tsx` files are touched.** The 5 `tests/queues`
-failures are therefore inherited from the base and cannot be attributed to this
-branch — no separate base run is needed to establish that.
+The certification tenant's configured attention rules emit `work_overdue`,
+`missing_requirements` and `stage_age_exceeded`, which project to the four `stage_*`
+reason codes — and **0 of those 4 are mapped**. `stage_age_exceeded` also outranks
+every mapped code in `PLATFORM_PRIMARY_REASON_PRIORITY_ORDER`, so a firing stage rule
+suppresses any mapped reason beneath it.
 
-Failing tests, recorded so a future session can tell drift from novelty:
+The deterministic draft is therefore unreachable for this tenant's stage
+configuration **on any surface** — the drawer never showed the control here either.
+This predates Slice 1 and is upstream of it: Trust governs the decision, it does not
+own the attention taxonomy or the message templates.
 
-```
-QueueServicePlacementProjection.test.ts  v2 engine expands to candidate rows with _placement_waitlist_row
-childGrainHonestRowSubject.test.ts       Card 8 ocmrow row gets honest child subject without flag
-childGrainLaneBuilders.test.ts           produces honest child row_subject and active_subject
-queueRoutes.test.ts                      GET queue items applies stage enrichment before work_view_id filters
-queueRoutes.test.ts                      GET queue items with work_view_id returns true filtered total when limit=1
-```
+Closing it requires a product call, not an engineering default:
 
-**What this does NOT establish.** Slice 1's own non-regression claim (§3) was
-measured against an older staging SHA. Slice 1 is already merged into this branch's
-base, so re-measuring it requires comparing `e7ff8e605^1` against `e7ff8e605`, which
-has not been done. The §3 table stands unconfirmed.
+- **(a)** map the four `stage_*` codes to draft templates — new operator-visible
+  message copy, which is product content; or
+- **(b)** decide stage-driven attention carries no draft, and accept that Slice 1's
+  operator affordance appears only for non-stage attention.
+
+**Trust Runtime V1 is certified either way.** The decision changes when the overlay
+appears, not whether the governed decision is correct, audited or safe.

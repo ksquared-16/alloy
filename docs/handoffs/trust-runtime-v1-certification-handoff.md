@@ -1,20 +1,27 @@
 # Handoff — Trust Runtime V1 Slice 1 certification closeout
 
-**Status: INCOMPLETE. Not failed, not closed.** Two of the three certification gaps
-carried by [`certification/trust-runtime-v1/README.md`](../../certification/trust-runtime-v1/README.md)
-remain open. One is closed with a real defect found. Nothing here revises Slice 1,
-and Slice 2 has not been started.
+**Status: CLOSED. Trust Runtime V1 Slice 1 is certified.** Every certification gap
+carried at merge is closed. Two of the three surfaced real defects, both fixed on
+this branch rather than waived. One item remains open and is recorded in §7 — it is
+a product decision on the attention taxonomy, upstream of Trust and outside its
+ownership; Slice 1 is certified either way.
 
 | | |
 |---|---|
 | Branch | `agent/claude/1-trust-runtime-v1-cert` |
 | Worktree | `wt1-trust-runtime-v1-cert` (slot 1, port 3011) |
-| Staging base | `db212fe1c` — *Merge PR #307: Slot 4 promotion 3* |
-| Session date | 2026-08-03 |
-| Slice 1 merge | `e7ff8e605` — **merged into `origin/staging` before certification closeout.** That sequence is recorded, not rewritten. |
+| Rebased on | `7233e9adf` — *Merge PR #311: promote/slot4-pos-geometry* |
+| Slice 1 merge | `e7ff8e605` — merged into staging **before** certification closeout. Recorded, not rewritten. |
 
-Slice 1 itself is unchanged by this branch. The only commits here are certification
-artifacts and this handoff.
+### What this branch changes
+
+| Area | Change |
+|---|---|
+| Security | `20260803230000_trust_runtime_v1_privilege_correction.sql` — Trust table grants now match their stated intent |
+| Runtime | `OperationalAttentionEnhanceDraft` mounted from `OpportunityFocusPanelBody`, so the governed decision is actually visible to an operator |
+| Tenant config | `row_grain_v1` declared on all four Work Views in the canonical seed |
+| Certification | full-chain suite (16 assertions), `run-fullchain.sh`, `anon` in the fixture, `tsconfig.slice1scope.json` |
+| Docs | this handoff and the certification record |
 
 ---
 
@@ -378,82 +385,50 @@ opportunities).
 
 ---
 
-## 7. Follow-ups — scoped, NOT implemented
+## 7. Decisions and remaining items
 
-### A. Correct `authenticated` default privileges on public tables
+### Recorded decisions
 
-- Full-chain assertion 21 fails; the condition spans **253 tables**, not just Trust.
-- RLS still blocks every write, so no exploit is demonstrated.
-- **Migration intent and database grants disagree** — migrations that state a
-  read-only posture via `GRANT SELECT` do not achieve it, because schema-wide default
-  privileges have already granted ALL.
-- Out of scope for a Trust branch: the fix is a platform-wide grant/revoke decision,
-  not a Slice 1 revision.
+| # | Decision |
+|---|---|
+| D1 | **Trust table grants are corrected, platform-wide defaults are not.** Four tables fixed; the 253-table schema-wide default is a platform security decision recorded separately (§7.1 of the certification record). Assertion F15b enforces that the correction stayed scoped. |
+| D2 | **Defence in depth over "RLS already covers it."** The grant was not exploitable, but a privilege never intended to be issued is latent. F15 asserts the grants; F16 asserts RLS independently. Neither is inferred from the other. |
+| D3 | **The enrichment consumer belongs on the Focus Panel.** Presentation Runtime V2 retired the drawer body for work-unit routes; the consumer moved with it, reused verbatim. Authorized by Kelly, treated as completion of the approved Slice 1 seam, not a new slice. |
+| D4 | **Work View row grain is declared, not derived.** All four lenses are family-grain by intent; declaring it is the remedy the runtime documents. Nothing about multi-grain lenses was relaxed. |
+| D5 | **The full typecheck is CI's job.** The dev host cannot construct the program at any heap size. No strictness was reduced and no file excluded; CI runs the unmodified command. |
+| D6 | **Historical suites are not rewritten.** Assertion 21 was left exactly as written; it now passes because the database was fixed, not because the assertion was softened. |
+
+### A. *(CLOSED)* Correct `authenticated` default privileges on Trust tables
+
+Fixed by `20260803230000`. anon: none. authenticated: SELECT only. service_role:
+full. Certified 21/21 + 16/16 on the full chain.
 
 ### B. *(WITHDRAWN)* Repair certification tenant mixed-grain Work View configuration
 
-Raised on a wrong diagnosis and **withdrawn** — see §4. The Work Views render
-correctly at `/workspace/work-unit/<slug>`; the grain error appears only when
-entering through `/adminV2/workspace`, which is not the operator route. No tenant
-repair is required. Replaced by B′.
+Superseded by B″ — the original diagnosis blamed the wrong entry point.
 
-### B′. *(DONE 2026-08-03)* Port the enrichment consumer onto the Work Unit Focus Panel
+### B″. *(CLOSED)* Declare row grain on all four Work Views
 
-Authorized by Kelly and implemented — see §4. The control now mounts from
-`OpportunityFocusPanelBody` and is observed on `/workspace/work-unit/new-leads`.
+Fixed in the canonical seed. All four views render; the Tours "no reachable primary
+action" refusal cleared with it.
 
-### C. Stage-plan reason codes have no deterministic draft template
+### C. Stage-plan reason codes carry no deterministic draft — **OPEN, PRODUCT DECISION**
 
-- The tenant's configured attention rules emit only `stage_work_overdue`,
-  `stage_missing_required_fields`, `stage_age_exceeded`, `stage_attempts_incomplete`.
-- **0 of those 4 appear in `REASON_TO_TEMPLATE_KEY`**, so
-  `suggestedContentForReason` returns null and no deterministic draft is ever built.
-- `stage_age_exceeded` also outranks every mapped code in
-  `PLATFORM_PRIMARY_REASON_PRIORITY_ORDER`, so a firing stage rule suppresses any
-  mapped reason beneath it.
-- **Consequence:** the deterministic draft affordance — and therefore the entire
-  Trust Runtime V1 operator-facing path — is unreachable for Firefly's configured
-  stages on *any* surface. This is pre-existing, predates the port, and is why S15
-  still cannot be closed end-to-end.
-- Fix is either a template mapping for the stage reason codes or an explicit product
-  decision that stage-driven attention carries no draft. **Not** a Trust change.
+The one remaining item, and it is not a Trust Runtime gap.
 
-### D. Two Work Views and the Tours lane do not render in the cert tenant
+The tenant's stage rules emit only `stage_*` reason codes; **0 of those 4** are mapped
+in `REASON_TO_TEMPLATE_KEY`, and `stage_age_exceeded` outranks every mapped code in
+the primary-reason priority order. So `suggested_content` is never built, and the
+draft overlay has nothing to render — on any surface, before or after this branch.
 
-- `Follow Up` and `All Work` refuse with the mixed family/child grain error;
-  `Tours` refuses with *"stage 'tour' offers no reachable primary action"*.
-- Only `New Leads` renders, which is also the lane whose reason codes have no draft
-  template — so the mapped-reason lanes are unreachable by navigation as well.
-- Tenant configuration, unrelated to Trust.
+Trust governs the decision; it does not own the attention taxonomy or the message
+templates. Closing it means either (a) mapping the four stage codes to draft
+templates — new operator-visible copy, i.e. product content — or (b) deciding
+stage-driven attention carries no draft.
 
----
+**Slice 1 is certified either way.** The decision changes when the overlay appears,
+not whether the governed decision is correct, audited or safe.
 
-## 8. Operator surfaces — use these, not `/admin` or `/legacy-admin`
+### D. Platform-wide default privileges on 253 non-Trust tables — **OPEN, PLATFORM**
 
-The canonical operator surfaces are **`/workspace`**,
-**`/workspace/work-unit/<slug>`** and **`/organization`**. `/adminV2/workspace`
-redirects but is not the operator route and produced the false grain diagnosis in §4;
-`/admin/*` and `/legacy-admin/*` are legacy and must not be used to judge operator
-behavior. Clicking a Today's Work row on `/workspace` lands on
-`/workspace/work-unit/new-leads` — that is the surface certification must observe.
-
-## 9. Where to resume
-
-1. Remove the tracked `web/node_modules` symlink locally and `npm ci` (§5).
-2. Run Gap 2 — full `npm run typecheck`, no strictness reduction, no Trust
-   exclusions, no substituting the scoped project.
-3. Gap 3 conditions 1 and 2 need a **decision from Kelly** on follow-up B′ first —
-   they cannot be closed by testing harder.
-4. Re-establish the base-vs-branch baseline against the *current* staging SHA before
-   attributing any suite failure. The prior figures (12 `tests/workspace`, 5
-   `tests/queues`) were measured against an older base and have **not** been
-   re-confirmed.
-5. Then, and only then, make a certification recommendation.
-
-**Do not begin Slice 2.**
-
-## Related
-
-- [`certification/trust-runtime-v1/README.md`](../../certification/trust-runtime-v1/README.md)
-- [`TRUST-RUNTIME-V1-IMPLEMENTATION-PLAN.md`](../platform/planning/trust-runtime/TRUST-RUNTIME-V1-IMPLEMENTATION-PLAN.md)
-- [`Trust Platform Decisions`](../platform/trust/trust-platform-decisions.md) — 019–022
+Recorded, deliberately not fixed here. See §7.1 of the certification record.
