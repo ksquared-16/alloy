@@ -17,7 +17,6 @@ const { composeExecutiveL1 } = await import("../lib/vacilando/presentation/execu
 const { timelinePageVm, missionDashboardVm } = await import("../lib/vacilando/presentation/operator-views.mjs");
 const { ingestMissionBrief, approveMissionExecution } = await import("../lib/vacilando/mission-kickoff.mjs");
 const { listAssignments, updateAssignment } = await import("../lib/vacilando/worker-assignment.mjs");
-const { requestDecision, answerDecision } = await import("../lib/vacilando/decisions.mjs");
 
 const brief = {
   title: "DX-4 Mission Journey Fixture",
