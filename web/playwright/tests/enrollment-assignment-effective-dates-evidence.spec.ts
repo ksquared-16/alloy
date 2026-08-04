@@ -1,10 +1,10 @@
 /**
- * Sprint browser certification — Enrollment Assignment & Effective Dates (slot 3).
- * Creates an isolated lead, opens Focus Panel Assignments, and exercises the
- * operator matrix with screenshots + authenticated API corroboration.
+ * Sprint browser certification — Assignment card offer model (slot 6).
+ * Opens Focus Panel Assignments and exercises the operator matrix with
+ * screenshots + authenticated API corroboration.
  *
  * Run:
- *   cd web && PLAYWRIGHT_BASE_URL=http://127.0.0.1:3013 \
+ *   cd web && PLAYWRIGHT_BASE_URL=http://127.0.0.1:3016 \
  *     npx playwright test playwright/tests/enrollment-assignment-effective-dates-evidence.spec.ts \
  *     --config=playwright.config.ts
  */
@@ -12,10 +12,15 @@ import { test, expect, type Page, type APIRequestContext } from "@playwright/tes
 import path from "node:path";
 import fs from "node:fs";
 
+// slot6 storage may be stale; slot3 holds a working Vacilando auth capture for this tenant.
+const AUTH_SLOT = process.env.ALLOY_AUTH_SLOT ?? "slot3";
 const STORAGE = path.join(
     process.env.HOME ?? "",
-    ".local/state/alloy-dev/auth/slot3/storage-state.json",
+    `.local/state/alloy-dev/auth/${AUTH_SLOT}/storage-state.json`,
 );
+/** Seeded Firefly Kurzman Enrollment opportunity (realization / assignment certs). */
+const KURZMAN_OPPORTUNITY_ID =
+    process.env.ASSIGN_CERT_OPPORTUNITY_ID ?? "df771481-841f-4329-b7bb-c0a03d9fb621";
 const EVIDENCE_DIR = path.join(
     process.cwd(),
     "../.alloy-agent-evidence/enrollment-assignment-effective-dates/browser",
@@ -65,30 +70,55 @@ async function resolveApprovedEnrollmentFamily(request: APIRequestContext) {
     expect(slug.department_id).toBeTruthy();
     const locationId = await resolveSiteLocationId(request);
 
-    // Preferred: approved seeded Kurzman Enrollment family (2 children + 2 adults).
+    const kurzmanLead = {
+        opportunityId: KURZMAN_OPPORTUNITY_ID,
+        familyName: "Kurzman",
+        childFirst: "Lennon",
+        secondChildFirst: "Wrigley",
+        workUnitId: slug.work_unit_id!,
+        departmentId: slug.department_id!,
+        locationId,
+        source: "seeded_kurzman" as const,
+    };
+
+    // Preferred: known seeded Kurzman Enrollment opportunity (2 children + 2 adults).
+    const knownRes = await request.get(`/api/admin/opportunities/${KURZMAN_OPPORTUNITY_ID}`);
+    if (knownRes.ok()) {
+        return kurzmanLead;
+    }
+
     const searchRes = await request.get("/api/admin/global-search?q=Kurzman&limit=20");
     if (searchRes.ok()) {
         const search = (await searchRes.json()) as {
-            groups?: Array<{ hits?: Array<{ opportunity_id?: string; name?: string; household_name?: string }> }>;
-            results?: Array<{ opportunity_id?: string; name?: string }>;
+            groups?: Array<{
+                hits?: Array<{
+                    opportunity_id?: string;
+                    entity_id?: string;
+                    id?: string;
+                    name?: string;
+                    household_name?: string;
+                }>;
+            }>;
+            results?: Array<{ opportunity_id?: string; entity_id?: string; id?: string; name?: string }>;
         };
         const hits = [
             ...(search.groups ?? []).flatMap((g) => g.hits ?? []),
             ...(search.results ?? []),
         ];
-        const oppId = hits.find((h) => h.opportunity_id)?.opportunity_id;
+        const oppId = hits
+            .map((h) => h.opportunity_id ?? h.entity_id ?? h.id)
+            .find((id) => typeof id === "string" && id.length > 0);
         if (oppId) {
-            return {
-                opportunityId: oppId,
-                familyName: "Kurzman",
-                childFirst: "Lennon",
-                secondChildFirst: "Wrigley",
-                workUnitId: slug.work_unit_id!,
-                departmentId: slug.department_id!,
-                locationId,
-                source: "seeded_kurzman" as const,
-            };
+            return { ...kurzmanLead, opportunityId: oppId };
         }
+    }
+
+    // If entity GET failed only due to shape/route, still prefer the seeded id when search is empty —
+    // Focus Panel deep-link will surface a clear UI failure if the record is gone.
+    if (knownRes.status() === 404) {
+        // fall through to create_lead
+    } else if (knownRes.status() !== 401 && knownRes.status() !== 403) {
+        return kurzmanLead;
     }
 
     // Fallback: create_lead (may land in processing_review — not preferred for this sprint).
@@ -330,6 +360,10 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
                 path: path.join(EVIDENCE_DIR, "04-assignment-offer.png"),
             });
         }
+        const collectionUiAbsent =
+            (await page.locator("[data-assignment-entries='true'], [data-assignment-entry='true'], [data-assignment-interest-row='true']").count()) === 0
+            && (await page.getByRole("button", { name: /^Add assignment$/i }).count()) === 0;
+        await snap(page, "04b-coherent-offer-no-collection");
         mark(
             1,
             "Open Enrollment record with ≥1 child",
@@ -343,6 +377,14 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
             offerOk && fiveSectionGone
                 ? "offer model visible; family_request/five panels absent"
                 : `offerOk=${offerOk} fiveSectionGone=${fiveSectionGone}`,
+        );
+        mark(
+            21,
+            "No multi-entry / interest-row collection on Assignment card",
+            collectionUiAbsent ? "pass" : "fail",
+            collectionUiAbsent
+                ? "no assignment-entries/interest rows / Add assignment collection chrome"
+                : "collection chrome still present after cardinality revert",
         );
 
         // 3–4: requested days save + reload persist
@@ -826,7 +868,7 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         await snap(page, "15-final-focus-panel");
 
         // Core hard gates — remaining rows may be partial when UI chrome is flaky under cold compile
-        expect(sectionsOk, "Assignments five sections must render").toBeTruthy();
+        expect(offerOk && fiveSectionGone, "Assignments coherent offer must render (no five-section stack)").toBeTruthy();
         expect(daysPersisted, "requested days must persist").toBeTruthy();
         expect(serverBlocked, "server must block incomplete enrollment outcome").toBeTruthy();
 
