@@ -363,6 +363,9 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                 boundary: "outside",
                 run: async () => {
                     if (!row || status === "requested" || status === "pending_approval") return null;
+                    // The caller owns the send. It has post-booking credentials to mint
+                    // first, and a confirmation without them is a dead end for the parent.
+                    if (input.deferConfirmationComms) return null;
                     const booking = row;
                     await afterTourBookingComms("create_confirmed", () =>
                         orchestrateTourBookingConfirmed(supabase, {
@@ -640,10 +643,13 @@ export async function rescheduleTourBooking(
                 previous_location_id: existing.location_id,
             },
         }),
-        comms: (row) => ({
-            label: "reschedule",
-            run: () => orchestrateTourBookingRescheduled(supabase, { orgId, booking: row }),
-        }),
+        comms: (row) =>
+            input.deferLifecycleComms
+                ? null
+                : {
+                      label: "reschedule",
+                      run: () => orchestrateTourBookingRescheduled(supabase, { orgId, booking: row }),
+                  },
     });
 }
 
@@ -693,10 +699,13 @@ export async function cancelTourBooking(
                 previous_end_at: prior.end_at,
             },
         }),
-        comms: (row) => ({
-            label: "cancel",
-            run: () => orchestrateTourBookingCanceled(supabase, { orgId, booking: row, actorUserId: input.canceledBy }),
-        }),
+        comms: (row) =>
+            input.deferLifecycleComms
+                ? null
+                : {
+                      label: "cancel",
+                      run: () => orchestrateTourBookingCanceled(supabase, { orgId, booking: row, actorUserId: input.canceledBy }),
+                  },
     });
 }
 
