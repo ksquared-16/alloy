@@ -126,8 +126,10 @@ describe("duplicate registration fails loudly, per registry", () => {
         };
 
         expect(() => composeTrustRegistry([PLATFORM, a, clash])).toThrow(TrustRegistryCompositionError);
+        // `[\s\S]` rather than the `s` (dotAll) flag: the project targets ES2017,
+        // where that flag is a compile error under `npm run typecheck:tests`.
         expect(() => composeTrustRegistry([PLATFORM, a, clash])).toThrow(
-            /Duplicate decision_class key "alpha".*capability\.alpha.*capability\.clashing_class/s,
+            /Duplicate decision_class key "alpha"[\s\S]*capability\.alpha[\s\S]*capability\.clashing_class/,
         );
     });
 
