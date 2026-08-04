@@ -87,7 +87,7 @@ export function classifyReviewQuestionMapping(question: ReviewQuestionInput): Re
     if (question.ignored) return "ignored";
     if (question.questionSubject === "processing_only") return "form_field_only";
 
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const fieldSource =
         question.field_source ??
@@ -111,7 +111,7 @@ export function formatReviewDestinationDisplay(question: ReviewQuestionInput): s
     if (disposition === "form_field_only") return "Form field only";
     if (disposition === "unresolved") return "Unresolved";
 
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const fieldSource =
         question.field_source ??
@@ -147,9 +147,34 @@ export const NAME_REPRESENTATION_OPTIONS: Array<{ value: NameRepresentation; lab
     { value: "first_middle_last", label: "First + middle + last (three fields)" },
 ];
 
-export function inferQuestionIntent(label: string): QuestionIntent {
+/** Person-name labels that carry no subject of their own — the section supplies it. */
+const BARE_NAME_LABEL_RE = /^\s*(full\s*|legal\s*|first\s*|last\s*|middle\s*|preferred\s*)?name\s*:?\s*$/i;
+
+/**
+ * Which person a SECTION is about. Real forms print "Parent or Guardian #1" as a heading and then a
+ * bare "Name:" line underneath — the label alone says nothing, so a label-only reader classified it
+ * as generic and every such question fell through to "form field only". That is why a guardian's
+ * name appeared to be stored nowhere.
+ */
+function sectionIdentityIntent(sectionTitle: string): QuestionIntent | null {
+    const t = sectionTitle.trim();
+    if (!t) return null;
+    if (/\bemergency\b/i.test(t)) return "emergency_contact";
+    if (/\b(parent|guardian|mother|father|caregiver)s?\b/i.test(t)) return "guardian_identity";
+    if (/\b(child|student|pupil)\b/i.test(t)) return "child_identity";
+    return null;
+}
+
+export function inferQuestionIntent(label: string, sectionTitle = ""): QuestionIntent {
     const text = label.trim();
     if (!text) return "generic";
+
+    // A bare "Name:" takes its subject from the section it sits under. Checked FIRST so a guardian
+    // section is not out-competed by the generic fallthrough below.
+    if (BARE_NAME_LABEL_RE.test(text)) {
+        const fromSection = sectionIdentityIntent(sectionTitle);
+        if (fromSection) return fromSection;
+    }
     if (/\b(signature|sign\s*here|e-?sign)\b/i.test(text)) return "signature";
     if (/\b(child|student|pupil)('?s)?\s*name\b|\bname\s*of\s*(child|student)\b/i.test(text)) return "child_identity";
     if (/\b(parent|guardian|mother|father|caregiver)('?s)?\s*name\b/i.test(text)) return "guardian_identity";
@@ -185,11 +210,27 @@ export function supportsNameRepresentation(intent: QuestionIntent, type?: string
     return intent === "child_identity" || intent === "guardian_identity" || intent === "emergency_contact";
 }
 
+/**
+ * A person's name defaults to SEPARATE first and last fields.
+ *
+ * Paper forms almost always print one "Name: ______" line, and the old default mirrored that
+ * literally — so "Child's Name" and a guardian's "Name" both became a single full-name field. That
+ * is faithful to the paper and wrong for the record: operators sort, search, greet and match on
+ * first and last name, and a single blob has to be re-split by hand later (badly, for anyone with a
+ * two-word surname).
+ *
+ * The document still wins when it is EXPLICIT: a line that actually says "full name" or "name as it
+ * appears on…" is asking for one field, so it keeps one. Everything downstream — the expansion in
+ * `expandQuestionsForDraftSave`, the canonical first/last field sources — already existed; only this
+ * default was holding names together.
+ */
 export function defaultNameRepresentation(intent: QuestionIntent, evidenceLabel = ""): NameRepresentation {
-    if (intent === "child_identity" || intent === "guardian_identity") {
-        return /\bfirst(\s|_|-)?name\b/i.test(evidenceLabel) ? "first_last" : "full_name";
+    if (!supportsNameRepresentation(intent)) return "full_name";
+    // An explicit single-field request in the source document is honoured.
+    if (/\bfull\s*name\b|\bname\s+as\s+it\s+appears\b|\blegal\s+name\b/i.test(evidenceLabel)) {
+        return "full_name";
     }
-    return "full_name";
+    return "first_last";
 }
 
 export function deriveResolutionStatus(question: ReviewQuestionInput): QuestionResolutionStatus {
@@ -285,16 +326,35 @@ const PROCESSING_FIELD_LABEL_BY_KEY = new Map<string, string>(
     ] as const
 );
 
-/** Human label for where data is stored — shows canonical field when known. */
+/**
+ * Human label for where data is stored — shows canonical field when known.
+ *
+ * IMPORTANT: a question has NO `field_source` until the concept review is applied. Detection alone
+ * never binds storage. Labelling that state "Form field only — not synced to records" read as a
+ * decision Alloy had made, when it is really "not decided yet" — which is why a guardian's Name
+ * appeared to be heading nowhere. `context` lets the caller say which it actually is.
+ */
 export function storageSummaryLabel(
     fieldSource?: FormFieldSource | null,
-    destinationFieldId?: string | null
+    destinationFieldId?: string | null,
+    context?: {
+        /** Label of the relationship collection this question's section belongs to, when bound. */
+        relationshipLabel?: string | null;
+        /** True when a concept proposal covering this question is still awaiting a decision. */
+        awaitingConceptDecision?: boolean;
+    }
 ): string {
     if (destinationFieldId) {
         const option = reviewFieldOptionById(destinationFieldId);
         if (option) return option.label;
     }
-    if (!fieldSource) return "Form field only — not synced to records";
+    if (!fieldSource) {
+        // Ordered most-specific first: a bound relationship is a real answer, a pending concept is
+        // an honest "not yet", and only the remainder is genuinely form-only.
+        if (context?.relationshipLabel) return `Collected as ${context.relationshipLabel}`;
+        if (context?.awaitingConceptDecision) return "Not decided yet — set this in concept review";
+        return "Form field only — not stored on a record";
+    }
     const selected = PROCESSING_FIELD_LABEL_BY_KEY.get(`${fieldSource.entity_type}:${fieldSource.field_key}`);
     if (selected) return selected;
     const subject =
@@ -326,7 +386,7 @@ export function expandQuestionsForDraftSave(
         const forceFormOnly =
             options?.generateAnyway && disposition === "unresolved";
 
-        const intent = inferQuestionIntent(question.evidenceLabel || label);
+        const intent = inferQuestionIntent(question.evidenceLabel || label, question.section ?? "");
         let subject = question.questionSubject ?? defaultSubjectForIntent(intent);
         if (
             question.nameRepresentation &&
@@ -441,7 +501,9 @@ export function seedReviewQuestionFromDraftField(field: {
     field_source?: FormFieldSource;
 }): ReviewQuestionInput {
     const evidenceLabel = field.label;
-    const intent = inferQuestionIntent(evidenceLabel);
+    // The seed is where a question first gets its subject, so the section must be considered here
+    // too — otherwise a bare "Name" under "Parent or Guardian #1" is born as form-only.
+    const intent = inferQuestionIntent(evidenceLabel, field.section ?? "");
     const questionSubject = field.field_source
         ? field.field_source.entity_type === "child" || field.field_source.entity_type === "customer_member"
             ? "child"

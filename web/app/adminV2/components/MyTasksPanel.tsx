@@ -89,6 +89,7 @@ import { dispatchFocusCurrentWork } from "@/lib/workItems/workItemsNavigation";
 import { draftToOperationalTaskBody } from "@/lib/workItems/commitWorkItemDraft";
 import { markSessionCommitted, type WorkItemCreationSession } from "@/lib/workItems/workItemCreationRuntime";
 import type { WorkItemDraftEntity } from "@/lib/workItems/workItemDraftV1";
+import { WS_QUEUE_RAIL } from "@/components/workspace/workspaceTokens";
 
 export type { MyTasksTaskRow };
 
@@ -827,7 +828,7 @@ export default function MyTasksPanel({
         <div className="flex min-h-0 flex-1 overflow-hidden bg-white" data-adminv2-tasks-panel="true" data-adminv2-tasks-workspace="true">
             <WorkspaceZonePanel
                 title="Folders, views, sources"
-                className="w-[24%] min-w-[12rem] max-w-[16rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                className={`w-[24%] min-w-[12rem] max-w-[16rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
                 data-testid="work-items-fvs-rail"
             >
                 <FoldersViewsSourcesRail
@@ -847,7 +848,7 @@ export default function MyTasksPanel({
 
             <WorkspaceZonePanel
                 title="Queue"
-                className="w-[31%] min-w-[15rem] max-w-[20rem] shrink-0 self-stretch border-0 border-r border-stone-200"
+                className={`w-[31%] min-w-[15rem] max-w-[20rem] shrink-0 self-stretch border-0 ${WS_QUEUE_RAIL}`}
                 data-testid="work-items-queue"
             >
                 <div className="flex min-h-0 flex-1 flex-col gap-2 p-2" data-adminv2-tasks-queue="true">

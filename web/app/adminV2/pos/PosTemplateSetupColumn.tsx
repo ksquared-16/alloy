@@ -24,6 +24,7 @@ import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 import { computePageMaps, pdfBboxToSvgRect, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
+import ProcessingPdfCanvas, { type PdfHighlightRegion } from "./ProcessingPdfCanvas";
 import PendingManualFieldEditor from "./PendingManualFieldEditor";
 import {
     applyEscapeToCanvas,
@@ -150,6 +151,9 @@ export default function PosTemplateSetupColumn({
         reviewQuestionsRef.current = reviewQuestions;
     }, [reviewQuestions]);
     const [busy, setBusy] = useState(false);
+    // Import progress the operator sees. Every value is backed by a real transition — the request
+    // being in flight, or its response having arrived — never by a timer.
+    const [detectStage, setDetectStage] = useState<"idle" | "reading" | "preparing">("idle");
     const [creating, setCreating] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -259,7 +263,15 @@ export default function PosTemplateSetupColumn({
         return () => window.clearTimeout(t);
     }, [conceptDecisions, caseId, discovery]);
 
+    // Auto-detect bookkeeping lives in refs ON PURPOSE: any of these held as state would land in the
+    // effect's dependency list and tear down the in-flight request that sets it (see the auto-detect
+    // effect below for the deadlock this caused).
     const autoDetectAttemptedRef = useRef<string | null>(null);
+    /** caseId of the request currently in flight, or null. */
+    const detectInFlightRef = useRef<string | null>(null);
+    /** The case this component is currently showing — used to decide whether a response is stale. */
+    const detectCaseRef = useRef<string | null>(caseId);
+    const mountedRef = useRef(true);
 
     const clearSelection = () => {
         setSelectedQuestionId(null);
@@ -371,6 +383,49 @@ export default function PosTemplateSetupColumn({
         return computePageMaps(fields, draft?.pdf_pages);
     }, [reviewQuestions, draft?.pdf_pages]);
 
+    // Detected regions drawn over the real document. Only questions that carry the geometry the
+    // detector actually read are shown — a highlight can never point somewhere Alloy did not look.
+    const documentRegions = useMemo<PdfHighlightRegion[]>(
+        () =>
+            reviewQuestions
+                .filter((q) => typeof q.page === "number" && Array.isArray(q.bbox) && !q.ignored)
+                .map((q) => ({
+                    id: q.id,
+                    page: q.page as number,
+                    bbox: q.bbox as [number, number, number, number],
+                    tone: q.mappingOrigin === "operator_created" ? ("operator" as const) : ("auto" as const),
+                })),
+        [reviewQuestions]
+    );
+
+    // Show the source document itself whenever we have one. The SVG schematic remains the fallback
+    // for text/OCR-derived drafts with no PDF, and for the draw-a-region mapping interaction, which
+    // is built against that canvas.
+    const showDocumentCanvas =
+        leftView === "highlights" && !!pdfUrl && canvasState.mode !== "draw_region" && !pendingManualRegion;
+
+    // Sections that Configuration Discovery resolved to a RELATIONSHIP. Questions inside them are
+    // collected through that relationship (the Person is created/linked at submission), so they are
+    // not "form field only" even though they carry no per-question field_source.
+    const relationshipLabelBySection = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const p of discovery?.proposals ?? []) {
+            if (p.disposition !== "relationship_binding") continue;
+            const title = (p.source.section_title ?? "").trim().toLowerCase();
+            const role = (p.target_relationship_role ?? "").replace(/_/g, " ").trim();
+            if (title && role) map.set(title, role);
+        }
+        return map;
+    }, [discovery]);
+
+    const conceptsAwaitingDecision = useMemo(
+        () =>
+            (discovery?.proposals ?? []).some(
+                (p) => (conceptDecisions[p.id] ?? p.decision_state) === "proposed"
+            ),
+        [discovery, conceptDecisions]
+    );
+
     const regionMeta = useMemo(
         () =>
             reviewQuestions
@@ -394,35 +449,73 @@ export default function PosTemplateSetupColumn({
         [reviewQuestions]
     );
 
+    // AUTO-DETECT after import.
+    //
+    // This effect used to deadlock, and the symptom was "Reading your document" forever while the
+    // server had already answered 200 in seconds:
+    //
+    //   `busy` was BOTH set inside the effect and listed as a dependency. `setBusy(true)` runs
+    //   synchronously (before the first await), so the dependency changed while the request was in
+    //   flight; React tore the effect down, the cleanup set `cancelled = true`, and when the POST
+    //   resolved every line was skipped by `if (cancelled) return` — no draft, no error, and `busy`
+    //   stuck true forever. Nothing could recover, because this surface has no polling: the case is
+    //   fetched once per caseId and never revalidated.
+    //
+    // The fix is to keep in-flight bookkeeping in refs so it can never feed the dependency list, and
+    // to make staleness mean "the case changed or we unmounted" rather than "the effect re-ran".
+    // No timers, no polling: the awaited response is authoritative and is now actually applied.
     useEffect(() => {
-        if (!caseId || draft || busy || creating || !shouldAutoDetect) return;
+        if (!caseId || draft || creating || !shouldAutoDetect) return;
+        if (detectInFlightRef.current) return;
         if (autoDetectAttemptedRef.current === caseId) return;
         autoDetectAttemptedRef.current = caseId;
-        let cancelled = false;
+        detectInFlightRef.current = caseId;
+
+        // Staleness is keyed to the CASE, not to this effect instance.
+        const requestedCaseId = caseId;
+        const isStale = () => mountedRef.current === false || detectCaseRef.current !== requestedCaseId;
+
         (async () => {
             setBusy(true);
             setErr(null);
+            setDetectStage("reading");
             try {
-                const next = await postDetect(caseId);
-                if (cancelled) return;
+                const next = await postDetect(requestedCaseId);
+                if (isStale()) return;
+                setDetectStage("preparing");
                 setDraft(next);
                 const seeded = seedReviewQuestions(next);
                 setReviewQuestions(seeded);
                 reviewQuestionsRef.current = seeded;
                 await reload();
             } catch (e) {
-                if (!cancelled) setErr(e instanceof Error ? e.message : "Couldn't read this document");
+                // Surface the failure. Swallowing it here is what turned a timeout into a hang.
+                if (!isStale()) setErr(e instanceof Error ? e.message : "Couldn't read this document");
             } finally {
-                if (!cancelled) setBusy(false);
+                detectInFlightRef.current = null;
+                // Always clear the spinner for the case we were working on, even if it is no longer
+                // the visible one — a stuck `busy` also permanently wedges the guard above.
+                if (mountedRef.current) {
+                    setBusy(false);
+                    setDetectStage("idle");
+                }
             }
         })();
-        return () => {
-            cancelled = true;
-        };
-    }, [caseId, draft, busy, creating, shouldAutoDetect, reload]);
+    }, [caseId, draft, creating, shouldAutoDetect, reload]);
 
+    // Reset the per-case guard when the case actually changes. This must not run as a separate
+    // mount effect: effects fire in order, so a bare `[caseId]` reset ran immediately AFTER the
+    // auto-detect effect above and erased the guard it had just written.
     useEffect(() => {
-        autoDetectAttemptedRef.current = null;
+        mountedRef.current = true;
+        if (detectCaseRef.current !== caseId) {
+            detectCaseRef.current = caseId;
+            autoDetectAttemptedRef.current = null;
+            detectInFlightRef.current = null;
+        }
+        return () => {
+            mountedRef.current = false;
+        };
     }, [caseId]);
 
     if (!detail) return null;
@@ -521,7 +614,7 @@ export default function PosTemplateSetupColumn({
                         patch.displayLabel !== undefined ||
                         patch.destinationFieldId !== undefined)
                 ) {
-                    const intent = inferQuestionIntent(merged.evidenceLabel || merged.displayLabel);
+                    const intent = inferQuestionIntent(merged.evidenceLabel || merged.displayLabel, merged.section ?? "");
                     const subject = merged.questionSubject ?? defaultSubjectForIntent(intent);
                     merged.field_source = deriveFieldSources({
                         subject,
@@ -601,7 +694,7 @@ export default function PosTemplateSetupColumn({
         try {
             const id = `manual_${Date.now().toString(36)}`;
             const saved = buildSavedManualQuestion(pendingManualRegion, id);
-            const intent = inferQuestionIntent(saved.evidenceLabel || saved.displayLabel);
+            const intent = inferQuestionIntent(saved.evidenceLabel || saved.displayLabel, saved.section ?? "");
             const subject = saved.questionSubject ?? defaultSubjectForIntent(intent);
             const field_source = deriveFieldSources({
                 subject,
@@ -787,6 +880,7 @@ export default function PosTemplateSetupColumn({
                 <ProcessingNativeFormCreatingState
                     mode="detecting"
                     error={err}
+                    detectStage={detectStage === "preparing" ? "preparing" : "reading"}
                     onRetry={err ? () => void handleDetect() : undefined}
                 />
             );
@@ -872,7 +966,7 @@ export default function PosTemplateSetupColumn({
                         <p className="mt-1 text-[12px] text-alloy-midnight/55">Review what Alloy will include before generating.</p>
                     </header>
 
-                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
+                    <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-white p-4">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Form setup</h3>
                         <div className="mt-3 space-y-3">
                             <div>
@@ -889,7 +983,7 @@ export default function PosTemplateSetupColumn({
                         </div>
                     </section>
 
-                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.03] p-3">
+                    <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-alloy-stone/[0.03] p-3">
                         <div className="flex flex-wrap gap-3">
                             <SummaryRow label="Mapped" value={summaryCounts.mapped} tone="pine" />
                             <SummaryRow label="Form field only" value={summaryCounts.formFieldOnly} tone="midnight" />
@@ -906,7 +1000,7 @@ export default function PosTemplateSetupColumn({
                         ) : null}
                     </section>
 
-                    <section className="mb-4 rounded-xl border border-alloy-stone/15 bg-white p-4">
+                    <section className="mb-4 rounded-xl border border-alloy-stone/22 bg-white p-4">
                         <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Included fields</h3>
                         {includedSections.every((s) => s.fields.length === 0) ? (
                             <p className="mt-2 text-[11px] text-alloy-midnight/40">No active questions to include.</p>
@@ -935,7 +1029,7 @@ export default function PosTemplateSetupColumn({
                         )}
                     </section>
 
-                    <section className="rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.02] p-3 text-[11px]">
+                    <section className="rounded-lg border border-alloy-stone/18 bg-alloy-stone/[0.02] p-3 text-[11px]">
                         <h3 className="font-semibold uppercase tracking-wide text-alloy-midnight/35">Source details</h3>
                         <dl className="mt-2 grid gap-1.5 sm:grid-cols-2">
                             <DetailRow label="Source filename" value={sourceFilename} />
@@ -946,7 +1040,7 @@ export default function PosTemplateSetupColumn({
                         </dl>
                     </section>
                 </div>
-                <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+                <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                     {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                     <div className="flex items-center justify-end gap-2">
                         <button type="button" onClick={() => setPhase("review")} className={WS_ACTION_SECONDARY}>
@@ -1005,6 +1099,24 @@ export default function PosTemplateSetupColumn({
                     onDecision={setConceptDecision}
                     onBulkAcceptHighConfidence={bulkAcceptHighConfidence}
                     onOpenDetailed={() => setReviewMode("detailed")}
+                    onReviewProposal={(proposal) => {
+                        // "Review recommended" must lead somewhere the operator can actually CHANGE
+                        // something. Open the detailed review and select the question this proposal
+                        // was read from, matched on the source labels the proposal carries.
+                        setReviewMode("detailed");
+                        const labels = new Set(
+                            (proposal.source.labels ?? []).map((l) => l.trim().toLowerCase()).filter(Boolean)
+                        );
+                        const match = reviewQuestionsRef.current.find((q) => {
+                            const evidence = (q.evidenceLabel || "").trim().toLowerCase();
+                            const display = (q.displayLabel || "").trim().toLowerCase();
+                            return (evidence && labels.has(evidence)) || (display && labels.has(display));
+                        });
+                        if (match) {
+                            setSelectedQuestionId(match.id);
+                            setEditingQuestionId(match.id);
+                        }
+                    }}
                     onApply={applyConfiguration}
                     applying={applying}
                     applicationCounts={applicationCounts}
@@ -1012,7 +1124,7 @@ export default function PosTemplateSetupColumn({
             ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {discovery && !created ? (
-                <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-1.5">
+                <div className="shrink-0 border-b border-alloy-stone/22 px-3 py-1.5">
                     <button type="button" onClick={() => setReviewMode("concepts")} className="text-[11px] font-semibold text-alloy-bend-pine hover:underline" data-testid="concept-back">
                         ← Back to concept review
                     </button>
@@ -1066,6 +1178,20 @@ export default function PosTemplateSetupColumn({
                         </div>
                     }
                 >
+                    {showDocumentCanvas ? (
+                        // THE SOURCE DOCUMENT ITSELF, with the detected regions drawn over it.
+                        // Deliberately NOT nested in ProcessingSourceDocumentViewport: that wrapper
+                        // owns its own scroll container and applies a CSS `zoom`, which would both
+                        // double-scroll and rescale an already-rasterized bitmap (blurry). The canvas
+                        // rasterizes at the requested scale itself, so it stays crisp.
+                        <ProcessingPdfCanvas
+                            url={pdfUrl!}
+                            regions={documentRegions}
+                            selectedId={selectedQuestionId}
+                            onSelectRegion={(id) => (id ? setSelectedQuestionId(id) : clearSelection())}
+                            onError={(message) => setPdfErr(message)}
+                        />
+                    ) : null}
                     <ProcessingSourceDocumentViewport
                         key={`${detail.id}-${leftView}`}
                         pdfMode={leftView === "pdf" && !!pdfUrl}
@@ -1093,7 +1219,7 @@ export default function PosTemplateSetupColumn({
                             ) : null
                         }
                     >
-                        {leftView === "highlights" ? (
+                        {leftView === "highlights" && !showDocumentCanvas ? (
                             hasRegions ? (
                                 <>
                                     <PosPdfFieldMap
@@ -1127,7 +1253,7 @@ export default function PosTemplateSetupColumn({
                             <iframe
                                 src={pdfUrl}
                                 title="Source PDF"
-                                className="w-full rounded border border-alloy-stone/15 bg-white"
+                                className="w-full rounded border border-alloy-stone/22 bg-white"
                                 style={{ height: "72rem" }}
                             />
                         ) : pdfErr ? (
@@ -1173,6 +1299,17 @@ export default function PosTemplateSetupColumn({
                                     />
                                 ) : null}
                                 <ProcessingQuestionReviewList
+                                    storageContext={(q) => {
+                                        // A question is only "form field only" once the concept review
+                                        // has actually decided so. Before that it is undecided, and a
+                                        // guardian/emergency section is collected through its
+                                        // relationship rather than as a loose field.
+                                        const rel = relationshipLabelBySection.get((q.section ?? "").trim().toLowerCase());
+                                        return {
+                                            relationshipLabel: rel ?? null,
+                                            awaitingConceptDecision: !rel && conceptsAwaitingDecision,
+                                        };
+                                    }}
                                     questions={reviewQuestions}
                                     selectedId={selectedQuestionId}
                                     editingId={editingQuestionId}
@@ -1215,7 +1352,7 @@ export default function PosTemplateSetupColumn({
                                 {fullText === null ? (
                                     <div className="text-[11px] text-alloy-midnight/40">Loading…</div>
                                 ) : (fullText || draft.diagnostics.extracted_text_preview) ? (
-                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/15 bg-alloy-stone/[0.03] p-2 text-[10px] leading-snug text-alloy-midnight/65">
+                                    <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/22 bg-alloy-stone/[0.03] p-2 text-[10px] leading-snug text-alloy-midnight/65">
                                         {matchedTextLines.lines.join("\n")}
                                     </pre>
                                 ) : (
@@ -1243,7 +1380,7 @@ export default function PosTemplateSetupColumn({
             </div>
 
             {/* Footer — below review workspace; document scroll stays above */}
-            <div className="shrink-0 border-t border-alloy-stone/12 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
+            <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                 {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
                     <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
@@ -1289,7 +1426,7 @@ export default function PosTemplateSetupColumn({
 
 function SummaryPanel({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <section className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-alloy-bend-pine bg-white p-3">
+        <section className="rounded-xl border border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white p-3">
             <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{title}</h3>
             <div className="mt-2">{children}</div>
         </section>

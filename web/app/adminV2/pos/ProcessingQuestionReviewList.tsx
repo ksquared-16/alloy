@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import React, { useEffect, useRef } from "react";
 import { Check, EyeOff, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import {
     NAME_REPRESENTATION_OPTIONS,
@@ -46,7 +47,7 @@ const CONFIDENCE_TONE: Record<string, { label: string; cls: string }> = {
 };
 
 function resolvedFieldSource(question: ReviewQuestionInput) {
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     return (
         question.field_source ??
@@ -65,7 +66,7 @@ function fieldMatchConfidence(question: ReviewQuestionInput): { label: string; p
     if (question.mappingOrigin === "operator_created") {
         return { label: "Operator mapped", percent: null };
     }
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const suggestion = suggestReviewDestinationField({
         evidenceLabel: question.evidenceLabel,
@@ -129,6 +130,15 @@ type Props = {
     sectionInfo?: Record<string, SectionInfo>;
     /** Operator changed a section's disposition. Disabled once the form is created. */
     onSectionDisposition?: (title: string, disposition: SectionDisposition) => void;
+    /**
+     * Why a question currently has no record binding. Detection never binds storage — only applying
+     * the concept review does — so without this the list reports "form field only" for questions
+     * whose destination simply has not been decided yet.
+     */
+    storageContext?: (question: ReviewQuestionInput) => {
+        relationshipLabel?: string | null;
+        awaitingConceptDecision?: boolean;
+    };
 };
 
 export function ProcessingQuestionReviewList({
@@ -146,6 +156,7 @@ export function ProcessingQuestionReviewList({
     onStartMapping,
     sectionInfo,
     onSectionDisposition,
+    storageContext,
 }: Props) {
     const activeCount = questions.filter((q) => !q.ignored).length;
     const sections = questions.reduce<Array<{ title: string; questions: ReviewQuestionInput[] }>>((acc, q) => {
@@ -156,13 +167,61 @@ export function ProcessingQuestionReviewList({
         return acc;
     }, []);
 
+    // Reading order across sections — the order the operator sees, so Up/Down match the eye.
+    const orderedIds = sections.flatMap((s) => s.questions.map((q) => q.id));
+    const listRef = useRef<HTMLDivElement | null>(null);
+
+    // Keep the selection visible. Selection changes from EITHER side (this list, or clicking a
+    // region in the document), so this is what makes highlight -> question sync legible.
+    useEffect(() => {
+        if (!selectedId || !listRef.current) return;
+        const node = listRef.current.querySelector(`[data-testid="review-question-${CSS.escape(selectedId)}"]`);
+        node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, [selectedId]);
+
+    // Arrow keys walk the list; Home/End jump to the ends. Buttons already handle Enter/Space, so
+    // this only adds the traversal that was missing.
+    const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!orderedIds.length) return;
+        const key = e.key;
+        if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Home" && key !== "End") return;
+        // Never hijack arrows while the operator is typing in an inline editor.
+        const target = e.target as HTMLElement | null;
+        if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+
+        e.preventDefault();
+        const current = selectedId ? orderedIds.indexOf(selectedId) : -1;
+        let next: number;
+        if (key === "Home") next = 0;
+        else if (key === "End") next = orderedIds.length - 1;
+        else if (key === "ArrowDown") next = current < 0 ? 0 : Math.min(current + 1, orderedIds.length - 1);
+        else next = current < 0 ? orderedIds.length - 1 : Math.max(current - 1, 0);
+
+        const id = orderedIds[next];
+        if (id) {
+            onSelect(id);
+            // Move focus with the selection so continued arrowing stays on the list.
+            const el = listRef.current?.querySelector<HTMLElement>(
+                `[data-testid="review-question-${CSS.escape(id)}"] button`
+            );
+            el?.focus({ preventScroll: true });
+        }
+    };
+
     return (
-        <>
+        <div
+            ref={listRef}
+            role="listbox"
+            aria-label="Review questions"
+            tabIndex={-1}
+            onKeyDown={onListKeyDown}
+            data-testid="review-questions-list"
+        >
             <p className="mb-1.5 text-[9px] font-medium text-alloy-midnight/40">
                 {activeCount} active question{activeCount === 1 ? "" : "s"}
                 {questions.length > activeCount ? ` · ${questions.length - activeCount} ignored` : ""}
             </p>
-            <div className="divide-y divide-alloy-stone/10">
+            <div className="divide-y divide-alloy-stone/22">
                 {sections.map((section) => (
                     <section key={section.title} className="py-2 first:pt-0 last:pb-0">
                         <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -205,12 +264,12 @@ export function ProcessingQuestionReviewList({
                                 </div>
                             );
                         })()}
-                        <ol className="divide-y divide-alloy-stone/[0.08]">
+                        <ol className="divide-y divide-alloy-stone/15">
                             {section.questions.map((q) => {
                                 const sel = selectedId === q.id;
                                 const isEditing = editingId === q.id;
                                 const mapped = typeof q.page === "number" && Array.isArray(q.bbox);
-                                const intent = inferQuestionIntent(q.evidenceLabel || q.displayLabel);
+                                const intent = inferQuestionIntent(q.evidenceLabel || q.displayLabel, q.section ?? "");
                                 const resolvedSubject = q.questionSubject ?? defaultSubjectForIntent(intent);
                                 const status = deriveResolutionStatus(q);
                                 const showNameRep =
@@ -308,7 +367,7 @@ export function ProcessingQuestionReviewList({
                                         </div>
 
                                         {!q.ignored && sel ? (
-                                            <ReviewQuestionInspector question={q} showNameRep={showNameRep} onUpdate={onUpdate} />
+                                            <ReviewQuestionInspector question={q} showNameRep={showNameRep} onUpdate={onUpdate} storageCtx={storageContext?.(q)} />
                                         ) : null}
 
                                         {isEditing && !q.ignored ? (
@@ -332,7 +391,7 @@ export function ProcessingQuestionReviewList({
                     </section>
                 ))}
             </div>
-        </>
+        </div>
     );
 }
 
@@ -340,12 +399,14 @@ function ReviewQuestionInspector({
     question,
     showNameRep,
     onUpdate,
+    storageCtx,
 }: {
+    storageCtx?: { relationshipLabel?: string | null; awaitingConceptDecision?: boolean };
     question: ReviewQuestionInput;
     showNameRep: boolean;
     onUpdate: (id: string, patch: Partial<ReviewQuestionInput>) => void;
 }) {
-    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel);
+    const intent = inferQuestionIntent(question.evidenceLabel || question.displayLabel, question.section ?? "");
     const subject = question.questionSubject ?? defaultSubjectForIntent(intent);
     const eligibleFields = eligibleCanonicalFieldsForSubject(subject);
     const suggestion = suggestReviewDestinationField({
@@ -475,7 +536,7 @@ function ReviewQuestionInspector({
 
             <div className="flex items-center gap-1 text-[9px] font-medium text-alloy-bend-pine">
                 <Check className="h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
-                <span>{storageSummaryLabel(fieldSource, selectedFieldId || null)}</span>
+                <span>{storageSummaryLabel(fieldSource, selectedFieldId || null, storageCtx)}</span>
             </div>
         </div>
     );

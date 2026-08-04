@@ -15,12 +15,13 @@ import {
 } from "@/lib/pos/processingCase/recommendation/recommendationSummary";
 
 const PILL_BY_CONFIDENCE: Record<string, string> = {
-    ready: "border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine",
-    high: "border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine",
-    medium: "border-alloy-gold/40 bg-alloy-gold/[0.15] text-alloy-gold-dark",
-    low: "border-alloy-gold/40 bg-alloy-gold/[0.15] text-alloy-gold-dark",
+    ready: "border-alloy-bend-pine/35 bg-alloy-bend-pine/[0.10] text-alloy-bend-pine",
+    high: "border-alloy-bend-pine/35 bg-alloy-bend-pine/[0.10] text-alloy-bend-pine",
+    medium: "border-alloy-gold/45 bg-alloy-gold/[0.18] text-alloy-gold-dark",
+    low: "border-alloy-gold/45 bg-alloy-gold/[0.18] text-alloy-gold-dark",
     review: "border-alloy-stone/40 bg-alloy-stone/50 text-alloy-midnight/60",
 };
+
 
 export default function RecommendationBadge({
     rec,

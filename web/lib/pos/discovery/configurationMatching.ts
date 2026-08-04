@@ -87,13 +87,27 @@ const HEALTH_RE = /medical|health|immuniz|allerg|diabet|asthma|seizure|convuls|m
  */
 const CANONICAL_CONCEPT_BINDINGS: Record<string, { entity_type: string; field_key: string; band: Confidence["band"] }> = {
     "child.date_of_birth": { entity_type: "customer_member", field_key: "dob", band: "high" },
-    "child.name": { entity_type: "customer_member", field_key: "display_name", band: "high" },
+    // Names resolve to the REGISTERED split fields (see systemFieldRegistry): there is no
+    // person-level display_name/full_name system field, and generation has always built first+last.
+    "child.name": { entity_type: "child", field_key: "child_first_name", band: "high" },
     "child.allergies": { entity_type: "customer_member", field_key: "allergies", band: "review" },
     "person.email": { entity_type: "person", field_key: "email", band: "high" },
     "person.phone": { entity_type: "person", field_key: "phone", band: "high" },
-    "person.name": { entity_type: "person", field_key: "full_name", band: "high" },
+    "person.name": { entity_type: "guardian", field_key: "guardian_first_name", band: "high" },
     "household.address": { entity_type: "customer", field_key: "address", band: "review" },
 };
+
+/**
+ * A person's name is CAPTURED as separate first + last fields, even though the concept matches one
+ * canonical name field. Saying only "matched to display_name" understated what the operator is
+ * approving — the generated form has always split it (see expandQuestionsForDraftSave), so the
+ * explanation now says so rather than leaving them to discover it after generating.
+ */
+function nameCaptureNote(fieldKey: string): string {
+    // A name concept anchors on the FIRST-name field; generation adds the last-name field alongside
+    // it. Saying only "matched to child_first_name" would understate what the operator approves.
+    return /_first_name$/i.test(fieldKey) ? " Captured as separate first and last name fields." : "";
+}
 
 const SCREENING_SECTION_RE = /chronic|health history|nature of reaction|recurring/i;
 const DURABLE_ATTR_RE = /nickname|doctor|dentist|physician|provider|practice|hospital|clinic/i;
@@ -143,7 +157,7 @@ function reuseFieldProposal(
         target_field_source: field_source,
         confidence: conf(band, [`matched to ${field_source.entity_type}.${field_source.field_key}`, ...(note ? [note] : [])]),
         alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
-        explanation: `Matched "${concept.label}" to the canonical ${field_source.entity_type} field ${field_source.field_key} — reuse the existing field rather than create a duplicate.`,
+        explanation: `Matched "${concept.label}" to the canonical ${field_source.entity_type} field ${field_source.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(field_source.field_key)}`,
     };
 }
 
@@ -231,7 +245,7 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
             target_field_source: { entity_type: semantic.entity_type, field_key: semantic.field_key },
             confidence: conf(semantic.band, [`matched by concept "${concept.concept_key}" to ${semantic.entity_type}.${semantic.field_key}`]),
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
-            explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.`,
+            explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(semantic.field_key)}`,
         };
     }
 
@@ -268,7 +282,7 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
                 ...(binding.note ? [binding.note] : []),
             ]),
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
-            explanation: `Matched "${concept.label}" to the canonical ${binding.field_source.entity_type} field ${binding.field_source.field_key} — reuse the existing field rather than create a duplicate.`,
+            explanation: `Matched "${concept.label}" to the canonical ${binding.field_source.entity_type} field ${binding.field_source.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(binding.field_source.field_key)}`,
         };
     }
 

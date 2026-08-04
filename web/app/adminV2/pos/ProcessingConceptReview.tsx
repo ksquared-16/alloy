@@ -118,6 +118,7 @@ export default function ProcessingConceptReview({
     onDecision,
     onBulkAcceptHighConfidence,
     onOpenDetailed,
+    onReviewProposal,
     onApply,
     applying = false,
     applicationCounts = null,
@@ -128,6 +129,8 @@ export default function ProcessingConceptReview({
     onDecision: (proposalId: string, state: ProposalDecisionState) => void;
     onBulkAcceptHighConfidence: () => void;
     onOpenDetailed: () => void;
+    /** Open the detailed question review focused on this proposal, so the operator can actually change it. */
+    onReviewProposal?: (proposal: ConfigurationProposal) => void;
     onApply?: () => void;
     applying?: boolean;
     applicationCounts?: Record<string, number> | null;
@@ -147,8 +150,14 @@ export default function ProcessingConceptReview({
         (p) => p.confidence.band === "high" && (decisions[p.id] ?? p.decision_state) === "proposed"
     ).length;
 
+    // Review progress, shown in the pinned bar so the operator always knows what is left.
+    const totalProposals = discovery.proposals.length;
+    const pendingCount = discovery.proposals.filter((p) => (decisions[p.id] ?? p.decision_state) === "proposed").length;
+    const decidedCount = totalProposals - pendingCount;
+
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4" data-testid="processing-concept-review">
+        <div className="flex min-h-0 flex-1 flex-col bg-white" data-testid="processing-concept-review">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             <div className="mx-auto max-w-4xl">
                 {/* header */}
                 <header className="flex flex-wrap items-start justify-between gap-3">
@@ -173,66 +182,127 @@ export default function ProcessingConceptReview({
                     </div>
                 </header>
 
-                {/* summary chips */}
-                <div className="mt-4 flex flex-wrap gap-2" data-testid="concept-summary">
-                    {discovery.summary.map((s) => (
-                        <div key={s.category} className="rounded-xl border border-alloy-stone/15 bg-alloy-stone/[0.03] px-3 py-2">
-                            <div className="text-[16px] font-semibold tabular-nums text-alloy-midnight">{s.count}</div>
-                            <div className="text-[10px] font-medium text-alloy-midnight/55">{s.label}</div>
-                        </div>
-                    ))}
+                {/* summary — one condensed strip rather than a block of tiles */}
+                <div
+                    className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.03] px-3 py-2 shadow-[0_1px_3px_rgba(24,39,58,0.04)]"
+                    data-testid="concept-summary"
+                >
+                    {discovery.summary
+                        .filter((s) => s.count > 0)
+                        .map((s) => (
+                            <span key={s.category} className="flex items-baseline gap-1.5 text-[11px]">
+                                <span className="text-[13px] font-semibold tabular-nums text-alloy-midnight">{s.count}</span>
+                                <span className="text-alloy-midnight/55">{s.label}</span>
+                            </span>
+                        ))}
                 </div>
 
                 {/* grouped concepts */}
                 <div className="mt-5 space-y-5">
                     {grouped.map(({ category, proposals }) => (
-                        <section key={category} data-testid={`concept-group-${category}`}>
-                            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{CATEGORY_TITLE[category]}</h3>
-                            <div className="mt-2 space-y-1.5">
+                        // Each category is its own bounded group, so the eye can tell where one kind
+                        // of decision ends and the next begins instead of reading one long ribbon.
+                        <section
+                            key={category}
+                            className="overflow-hidden rounded-xl border border-alloy-stone/22 bg-white shadow-[0_1px_3px_rgba(24,39,58,0.04)]"
+                            data-testid={`concept-group-${category}`}
+                        >
+                            <h3 className="border-b border-alloy-stone/22 bg-alloy-stone/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                {CATEGORY_TITLE[category]}
+                            </h3>
+                            <div className="space-y-1.5 p-2.5">
                                 {proposals.map((p) => {
                                     const concept = conceptById.get(p.candidate_id);
                                     const state = decisions[p.id] ?? p.decision_state;
                                     const ignored = state === "ignored";
                                     const accepted = state === "accepted";
+                                    // A decided proposal needs far less room than one still asking for
+                                    // attention: accepted/ignored rows collapse to a single line so the
+                                    // list stays scannable and the undecided items stand out.
+                                    const settled = accepted || ignored;
+                                    const needsReview = !settled && p.confidence.band !== "high";
+
+                                    if (settled) {
+                                        return (
+                                            <div
+                                                key={p.id}
+                                                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5 ${
+                                                    ignored
+                                                        ? "border-alloy-stone/22 bg-alloy-stone/[0.04] opacity-60"
+                                                        : "border-alloy-bend-pine/35 bg-alloy-bend-pine/[0.05]"
+                                                }`}
+                                                data-testid={`concept-row-${p.id}`}
+                                                data-concept-state={ignored ? "ignored" : "accepted"}
+                                            >
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    {accepted ? (
+                                                        <Check className="h-3.5 w-3.5 shrink-0 text-alloy-bend-pine" aria-hidden />
+                                                    ) : null}
+                                                    <span className="truncate text-[12px] font-semibold text-alloy-midnight">
+                                                        {concept?.label ?? p.candidate_id}
+                                                    </span>
+                                                    <span className="shrink-0 text-[10px] text-alloy-midnight/45">
+                                                        {DISPOSITION_LABEL[p.disposition]}
+                                                    </span>
+                                                    {targetSummary(p) ? (
+                                                        <span className="truncate text-[10px] text-alloy-midnight/40">{targetSummary(p)}</span>
+                                                    ) : null}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDecision(p.id, "proposed")}
+                                                    className="shrink-0 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight hover:underline"
+                                                    data-testid={`concept-undo-${p.id}`}
+                                                >
+                                                    Undo
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+
                                     return (
                                         <div
+                                            className="rounded-xl border border-alloy-stone/22 bg-white px-3.5 py-2.5 shadow-[0_1px_3px_rgba(24,39,58,0.05)] transition-colors"
                                             key={p.id}
-                                            className={`rounded-xl border px-3.5 py-2.5 transition-colors ${
-                                                ignored
-                                                    ? "border-alloy-stone/15 bg-alloy-stone/[0.03] opacity-55"
-                                                    : accepted
-                                                      ? "border-alloy-bend-pine/30 bg-alloy-bend-pine/[0.04]"
-                                                      : "border-alloy-stone/15 bg-white"
-                                            }`}
                                             data-testid={`concept-row-${p.id}`}
+                                            data-concept-state="proposed"
                                         >
                                             <div className="flex flex-wrap items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[13px] font-semibold text-alloy-midnight">{concept?.label ?? p.candidate_id}</span>
-                                                    <span className="rounded border border-alloy-stone/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                                                    <span className="rounded border border-alloy-stone/25 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                                         {DISPOSITION_LABEL[p.disposition]}
                                                     </span>
                                                     {bandChip(p.confidence.band)}
-                                                    {accepted ? <Check className="h-3.5 w-3.5 text-alloy-bend-pine" aria-hidden /> : null}
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
-                                                    {!ignored ? (
+                                                    {/* Anything short of high confidence is asking the operator to LOOK.
+                                                        Give them a way to actually go and change it, not just accept it. */}
+                                                    {needsReview && onReviewProposal ? (
                                                         <button
                                                             type="button"
-                                                            onClick={() => onDecision(p.id, accepted ? "proposed" : "accepted")}
-                                                            className="rounded-lg bg-alloy-bend-pine px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
-                                                            data-testid={`concept-accept-${p.id}`}
+                                                            onClick={() => onReviewProposal(p)}
+                                                            className="rounded-lg border border-alloy-stone/25 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:border-alloy-stone/45"
+                                                            data-testid={`concept-review-${p.id}`}
                                                         >
-                                                            {accepted ? "Accepted" : "Accept"}
+                                                            Review
                                                         </button>
                                                     ) : null}
                                                     <button
                                                         type="button"
-                                                        onClick={() => onDecision(p.id, ignored ? "proposed" : "ignored")}
-                                                        className="rounded-lg border border-alloy-stone/20 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/60"
+                                                        onClick={() => onDecision(p.id, "accepted")}
+                                                        className="rounded-lg bg-alloy-bend-pine px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
+                                                        data-testid={`concept-accept-${p.id}`}
+                                                    >
+                                                        Accept
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onDecision(p.id, "ignored")}
+                                                        className="rounded-lg border border-alloy-stone/25 px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/60"
                                                         data-testid={`concept-ignore-${p.id}`}
                                                     >
-                                                        {ignored ? "Restore" : "Ignore"}
+                                                        Ignore
                                                     </button>
                                                 </div>
                                             </div>
@@ -265,20 +335,33 @@ export default function ProcessingConceptReview({
                     </div>
                 ) : null}
 
-                <div className="mt-6 flex items-center justify-end gap-2 border-t border-alloy-stone/12 pt-3">
-                    <p className="mr-auto text-[11px] text-alloy-midnight/45">
-                        Applying binds questions to existing fields and prepares new-field/requirement proposals — new
-                        fields are never created until you confirm.
-                    </p>
-                    <button type="button" onClick={onOpenDetailed} className={WS_ACTION_SECONDARY} data-testid="concept-continue">
-                        Detailed form
+            </div>
+            </div>
+
+            {/* PINNED action bar — the operator should never have to scroll a long review to the
+                bottom just to apply it. Sits outside the scroll container, so it is always reachable. */}
+            <div
+                className="flex shrink-0 items-center justify-end gap-2 border-t border-alloy-stone/22 bg-white px-5 py-2.5 shadow-[0_-2px_8px_rgba(24,39,58,0.06)]"
+                data-testid="concept-action-bar"
+            >
+                <p className="mr-auto text-[11px] text-alloy-midnight/45">
+                    {decidedCount > 0 ? (
+                        <>
+                            <span className="font-semibold text-alloy-midnight">{decidedCount}</span> of {totalProposals} reviewed
+                            {pendingCount > 0 ? ` · ${pendingCount} still to review` : " · all reviewed"}
+                        </>
+                    ) : (
+                        "New fields are never created until you confirm."
+                    )}
+                </p>
+                <button type="button" onClick={onOpenDetailed} className={WS_ACTION_SECONDARY} data-testid="concept-continue">
+                    Detailed form
+                </button>
+                {onApply ? (
+                    <button type="button" onClick={onApply} disabled={applying} className={WS_ACTION_PRIMARY} data-testid="concept-apply">
+                        {applying ? "Applying…" : "Apply approved configuration"}
                     </button>
-                    {onApply ? (
-                        <button type="button" onClick={onApply} disabled={applying} className={WS_ACTION_PRIMARY} data-testid="concept-apply">
-                            {applying ? "Applying…" : "Apply approved configuration"}
-                        </button>
-                    ) : null}
-                </div>
+                ) : null}
             </div>
         </div>
     );

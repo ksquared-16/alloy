@@ -22,6 +22,11 @@ import { useProcessingFolders } from "@/lib/pos/useProcessingFolders";
 import { caseMatchesCategoryFolder } from "@/lib/pos/processingFolderConfig";
 import { ProcessingFolderIcon } from "@/lib/pos/processingFolderIcons";
 import { PROCESSING_EMPTY, PROCESSING_QUEUE_METADATA, PROCESSING_QUEUE_ROW_TITLE } from "@/lib/pos/processingPresentationTokens";
+import {
+    QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
+    QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
+    QUEUE_ROW_CARD_SHELL_CLASS,
+} from "@/lib/presentation/runtime/queueRowCardShell";
 import { WS_ICON_ATTENTION, WS_ICON_INTERACTIVE, WS_ICON_STRUCTURAL, WS_TEXT_MUTED, WS_TEXT_PRIMARY, WS_TEXT_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 /**
@@ -89,10 +94,16 @@ const LANE_TONE: Record<string, string> = {
     archived: "text-alloy-midnight/35",
 };
 
-const QUEUE_ROW_CLASS =
-    "flex w-full items-center gap-1.5 border-b border-alloy-stone/10 px-2 py-[5px] text-left transition-colors hover:bg-alloy-stone/[0.04]";
-const QUEUE_ROW_SELECTED_CLASS =
-    "border-l-2 border-l-alloy-bend-pine bg-alloy-bend-pine/[0.06] hover:bg-alloy-bend-pine/[0.08]";
+// Queue rows use the SAME shell as every other queue surface (work-unit queue, configuration rails),
+// so a change to the house card treatment reaches Processing too instead of this rail drifting on
+// its own flat divider list.
+//
+// No local border colour: the perimeter and elevation belong to `.alloy-os-queue-row-card`, which
+// reuses the Focus Panel card tokens. Overriding it here is precisely how this surface would end up
+// looking "slightly different" from /work-unit again. Only the padding is tightened, because this
+// rail is far narrower than the work-unit queue panel.
+const QUEUE_ROW_CLASS = `${QUEUE_ROW_CARD_SHELL_CLASS} !px-2 !py-1.5 transition-colors ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
+const QUEUE_ROW_SELECTED_CLASS = QUEUE_ROW_CARD_SELECTED_BORDER_CLASS;
 
 function formatAge(iso: string | null): string {
     if (!iso) return "—";
@@ -245,7 +256,7 @@ export default function ProcessingQueueList({
                 <div className={`px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${WS_TEXT_MUTED}`}>
                     {lane.label} · {count}
                 </div>
-                <ul>{laneRows.map((row) => renderRow(row))}</ul>
+                <ul className="flex flex-col gap-1.5">{laneRows.map((row) => renderRow(row))}</ul>
             </div>
         );
     };
@@ -295,7 +306,12 @@ export default function ProcessingQueueList({
                         </span>
                         <span className={`mt-0.5 flex items-center gap-1 truncate ${PROCESSING_QUEUE_METADATA} ${laneTone}`}>
                             <span>{laneLabel}</span>
-                            {rec ? (
+                            {/* A badge every single row shares is not a signal — it is noise that
+                                costs a line of scanning and tells the operator nothing about which
+                                item to pick up. "Manual review" is currently the universal fallback,
+                                so it is suppressed until the recommender can actually discriminate;
+                                actions that DO say something still show. */}
+                            {rec && rec.action !== "manual_review" ? (
                                 <>
                                     <span aria-hidden className="text-alloy-midnight/15">·</span>
                                     <RecommendationBadge rec={rec} />
@@ -384,7 +400,7 @@ export default function ProcessingQueueList({
                 <div className={`px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide ${LANE_TONE[lane.key] ?? "text-alloy-midnight/40"}`}>
                     {lane.label} · {count}
                 </div>
-                <ul>{laneRows.map((row) => renderRow(row))}</ul>
+                <ul className="flex flex-col gap-1.5">{laneRows.map((row) => renderRow(row))}</ul>
             </div>
         );
     };
@@ -495,7 +511,7 @@ export default function ProcessingQueueList({
                                 {openFolders[folder.id] ? (
                                     <div className="border-b border-alloy-stone/10 py-0.5">
                                         {folderRows.length > 0 ? (
-                                            <ul>{folderRows.map((row) => renderRow(row))}</ul>
+                                            <ul className="flex flex-col gap-1.5">{folderRows.map((row) => renderRow(row))}</ul>
                                         ) : (
                                             <p className="px-3 py-1.5 text-[10px] text-alloy-midnight/35">No active items</p>
                                         )}
@@ -511,7 +527,7 @@ export default function ProcessingQueueList({
                     {openFolders.completed ? (
                         <div className="py-0.5">
                             {completedRows.length > 0 ? (
-                                <ul>{completedRows.map((row) => renderRow(row))}</ul>
+                                <ul className="flex flex-col gap-1.5">{completedRows.map((row) => renderRow(row))}</ul>
                             ) : (
                                 <p className="px-3 py-1.5 text-[10px] text-alloy-midnight/35">No completed items</p>
                             )}

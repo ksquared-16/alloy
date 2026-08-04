@@ -52,6 +52,12 @@ export interface BuildFormDraftInput {
     fileName?: string | null;
     classificationKey?: string | null;
     extractedTextAvailable: boolean;
+    /**
+     * Page dimensions from native-layout extraction. Required to place a field box on a page — the
+     * AcroForm path has always supplied this; the layout path never did, so its drafts could not be
+     * drawn even once the fields carried a bbox.
+     */
+    pdfPages?: StoredFormDraftPreview["pdf_pages"];
 }
 
 export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredFormDraftPreview {
@@ -87,6 +93,9 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
                 confidence: f.confidence === "invalid" ? "low" : f.confidence,
                 evidence: f.evidence,
                 ...(typeof f.page === "number" ? { page: f.page } : {}),
+                // Geometry the native-layout detector recovered. Without it the review canvas has
+                // nothing to place, which is why Detailed Questions rendered an empty document.
+                ...(Array.isArray(f.bbox) ? { bbox: f.bbox } : {}),
             });
             fieldIds.push(id);
         }
@@ -123,6 +132,7 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
             section_count: sections.length,
             field_count: fields.length,
         },
+        ...(input.pdfPages && input.pdfPages.length > 0 ? { pdf_pages: input.pdfPages } : {}),
         generator_version: FORM_DRAFT_GENERATOR_VERSION,
         generated_at: "", // stamped by the store layer
     };
