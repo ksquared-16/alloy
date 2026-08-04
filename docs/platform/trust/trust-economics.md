@@ -389,6 +389,7 @@ The objective is to continuously reduce the amount of reasoning required to prod
 
 - [`Trust Runtime`](./trust-runtime.md)
 - [`Reasoning Runtime`](./reasoning-runtime.md)
+- [`Reasoning Deployment Strategy`](./reasoning-deployment-strategy.md)
 - [`Operational Learning`](./operational-learning.md)
 - [`Trust Governance`](./trust-governance.md)
 - [`Platform Integration`](./platform-integration.md)

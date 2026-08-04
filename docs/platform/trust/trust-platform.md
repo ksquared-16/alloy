@@ -253,18 +253,19 @@ The Trust Platform documentation should be read in this order.
 8. [`Information Classification`](./information-classification.md)
 9. [`Privacy Runtime`](./privacy-runtime.md)
 10. [`Reasoning Runtime`](./reasoning-runtime.md)
+11. [`Reasoning Deployment Strategy`](./reasoning-deployment-strategy.md)
 
 ### Intelligence
 
-11. [`Operational Learning`](./operational-learning.md)
-12. [`Trust Economics`](./trust-economics.md)
-13. [`Trust Governance`](./trust-governance.md)
+12. [`Operational Learning`](./operational-learning.md)
+13. [`Trust Economics`](./trust-economics.md)
+14. [`Trust Governance`](./trust-governance.md)
 
 ### Integration
 
-14. [`Platform Integration`](./platform-integration.md)
-15. [`Trust Platform Decisions`](./trust-platform-decisions.md)
-16. [`Platform Decisions`](../foundation/platform-decisions.md) (Alloy-wide register)
+15. [`Platform Integration`](./platform-integration.md)
+16. [`Trust Platform Decisions`](./trust-platform-decisions.md)
+17. [`Platform Decisions`](../foundation/platform-decisions.md) (Alloy-wide register)
 
 ---
 

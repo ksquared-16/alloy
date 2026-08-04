@@ -436,6 +436,7 @@ Never:
 - [`Trust Runtime`](./trust-runtime.md)
 - [`Decision Contracts`](./decision-contract.md)
 - [`Reasoning Runtime`](./reasoning-runtime.md)
+- [`Reasoning Deployment Strategy`](./reasoning-deployment-strategy.md)
 
 ---
 

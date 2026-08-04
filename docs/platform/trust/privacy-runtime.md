@@ -461,6 +461,7 @@ Never:
 - [`Knowledge Platform`](./knowledge-platform.md)
 - [`Information Classification`](./information-classification.md)
 - [`Reasoning Runtime`](./reasoning-runtime.md)
+- [`Reasoning Deployment Strategy`](./reasoning-deployment-strategy.md)
 
 ---
 
