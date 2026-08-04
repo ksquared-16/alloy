@@ -131,10 +131,38 @@ resolve_stack_workdir() {
   return 1
 }
 
+# THE ownership choke point for stopping the shared stack.
+#
+# Every stop path in this file (release, reap, doctor rebuild) funnels through
+# here, so the certification-ownership check lives here once rather than at three
+# call sites that could drift apart.
+#
+# This command is otherwise deliberately self-contained (see header). The guard is
+# the one exception: correctness beats self-containment when the alternative is
+# destroying another worker's certification run. If the guard library is missing we
+# REFUSE rather than proceed unguarded — failing closed is the whole point.
+cert_ownership_guard_or_die() {
+  local op="$1" what="$2"
+  local guard_lib="${BASH_SOURCE[0]%/*}/lib/cert-ownership.sh"
+  if [[ ! -f "$guard_lib" ]]; then
+    bad "certification ownership guard is missing: ${guard_lib}"
+    die "refusing ${what} rather than acting without an ownership check"
+  fi
+  # shellcheck source=lib/cert-ownership.sh
+  source "$guard_lib"
+  alloy_cert_guard "$op" "$what" || exit 1
+}
+
 # Stop a stack by project name. Label-scoped, so it can only ever affect the
 # containers of the project named — never a neighbour's.
 stop_stack_by_project() {
   local proj="$1" workdir="${2:-}"
+
+  # Only the sanctioned certification stack is ownership-protected; stopping an
+  # unsanctioned stray stack stays ordinary housekeeping.
+  if [[ "$proj" == "$SANCTIONED_PROJECT" ]]; then
+    cert_ownership_guard_or_die stop-stack "stopping the shared certification stack"
+  fi
   if [[ -n "$workdir" && -d "$workdir" ]] && have supabase \
      && [[ "$(config_project_id "${workdir}/supabase/config.toml")" == "$proj" ]]; then
     supabase stop --workdir "$workdir" >/dev/null 2>&1 || true
