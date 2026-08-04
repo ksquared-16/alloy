@@ -14,17 +14,24 @@ export type TourCommsTemplateEventAlias =
     | "reminder"
     | "no_show_follow_up";
 
+/**
+ * Short human aliases only. Canonical `tour_*` keys are derived from
+ * `TOUR_COMMS_EVENT_KEYS` below rather than restated by hand.
+ *
+ * This map previously listed every canonical key manually and had silently drifted:
+ * `tour_invitation` and `tour_pending_internal` were missing, so
+ * `normalizeTourCommsEventKey` returned null for them, `renderTourCommsTemplate`
+ * returned null, and the send was skipped as `empty_body`. An entire message type
+ * could not render and nothing failed loudly. Deriving the identity entries makes a
+ * newly added event key renderable by construction.
+ */
 const EVENT_ALIASES: Record<string, TourCommsEventKey> = {
     confirmation: "tour_confirmation",
     reschedule: "tour_reschedule",
     cancel: "tour_cancel",
     reminder: "tour_reminder",
     no_show_follow_up: "tour_no_show_followup",
-    tour_confirmation: "tour_confirmation",
-    tour_reschedule: "tour_reschedule",
-    tour_cancel: "tour_cancel",
-    tour_reminder: "tour_reminder",
-    tour_no_show_followup: "tour_no_show_followup",
+    ...Object.fromEntries(TOUR_COMMS_EVENT_KEYS.map((k) => [k, k])),
 };
 
 export type TourCommsDefaultTemplateSet = Record<
