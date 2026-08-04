@@ -405,6 +405,72 @@ treated as mid-reset, not as a baseline.
 
 ---
 
+## 4quinquies. RECOVERY EXECUTION ATTEMPT 2026-08-04 — refused cleanly. Nothing changed.
+
+Every pre-execute gate passed: HEAD `5b3ac27db`, staging `e6ff28cf8` unchanged and 0 behind, tree
+clean and pushed, all six slots stopped, zero compute permits, no stacks or leases, no servers or
+runners, tenant **stable across two 45-second intervals**, configuration baseline matching
+(`lifecycle_builder_v1` `4609859e…dd8dd4`, program 20, gl_accounts 10), manifest valid at 73 objects
+`b891466617…`, zero unexplained survivors, and the plan identity recomputed **identical** to the
+authorized `aa82e0e4…b022`.
+
+The run then refused:
+
+```text
+certification_reset_execute FAILED — database rolled back, zero rows deleted,
+zero storage objects touched: Could not find the function
+public.certification_reset_execute(p_actor, p_graph, p_org_id, p_purpose)
+in the schema cache
+```
+
+### Root cause
+
+`supabase/migrations/20260804090000_certification_reset_authority.sql` exists on this branch and has
+been applied to the **isolated certification stack**, where it was certified 16/16. It has never
+been applied to **hosted Firefly**, and it is not on `origin/staging`. The reset authority the
+execution depends on does not exist in the target database.
+
+### The design held
+
+This is the failure mode the whole recovery slice was built for, and it behaved exactly as
+specified: the adapter treated the RPC error as total failure, storage was never reached, and the
+run exited non-zero without verification.
+
+Verified after the attempt — the tenant is **byte-identical** to its pre-execute state:
+opportunities 8, customers 59, persons 53, customer_persons 41, customer_members 20, contacts 5,
+operational_tasks 1, process_instances 13, workflow_events 419, every `processing_*` table
+unchanged, and all **73 storage objects still present**. Zero rows deleted. Zero objects deleted.
+
+Contrast with the first execution attempt, which deleted 9 tables' worth of leaves before failing.
+The difference is atomicity plus ordering, and this is the evidence that both work.
+
+### What this now needs — a decision, not a retry
+
+Applying the migration to hosted Firefly is **not** part of "execute the reset". It would:
+
+- run DDL against shared hosted infrastructure
+- from a branch that is not on staging
+- creating a permanent `SECURITY DEFINER` function
+- and **replacing three production immutability guard functions** on the hosted database
+
+That is a schema promotion with a platform-safety dimension, and it belongs in the managed
+promotion workflow rather than in a reset run. The options:
+
+1. **Promote the branch** (PR → staging → hosted migration) and then re-run the recovery with a
+   freshly recomputed plan identity. Slowest, most orthodox, leaves the authority on staging where
+   it can be reviewed.
+2. **Apply this single migration to hosted Firefly only**, as a governed non-production schema
+   change, keeping the branch unmerged. Faster; puts schema on hosted that is not on staging, which
+   is its own kind of drift.
+3. Reconsider whether the hosted tenant needs the authority at all — it does, because the three
+   append-only Processing tables cannot otherwise reach zero.
+
+Until one is chosen and executed, hosted recovery cannot proceed. The plan identity
+`aa82e0e4…b022` remains valid only while the tenant is unchanged; any schema or data movement
+requires a fresh dry run and renewed authorization.
+
+---
+
 ## 5. Interface
 
 ```text
