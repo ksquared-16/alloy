@@ -54,19 +54,18 @@ echo
 echo "============================================================"
 echo "isolated invariant suite on the full chain: ${inv_pass}/21 passed (rc=${inv_rc})"
 if [[ "$inv_rc" -ne 0 ]]; then
+    echo "  FAIL — all 21 invariants must pass on the full chain."
     if grep -q 'CERT FAIL 21: authenticated holds' <<<"$inv_out"; then
-        echo "  KNOWN, CHARACTERISED: assertion 21 fails on the full chain only."
-        echo "  Supabase's schema-wide ALTER DEFAULT PRIVILEGES grants ALL on every"
-        echo "  table in 'public' to anon and authenticated before any repository"
-        echo "  migration runs, so the Trust migration's GRANT SELECT is redundant"
-        echo "  and its intent (no write grant) is not achieved by GRANT alone."
-        echo "  Assertion F15 proves the condition is platform-wide, not Trust-specific."
-        echo "  Assertion F16 proves it is not exploitable: RLS refuses every write."
-        echo "  This is a REAL certification finding — see certification/trust-runtime-v1/README.md."
-    else
-        echo "  UNEXPECTED failure — not the known grant condition. Investigate."
-        exit 1
+        echo "  Assertion 21 is the inherited-default-privileges finding. It was"
+        echo "  corrected by 20260803230000_trust_runtime_v1_privilege_correction.sql."
+        echo "  Seeing it again means that migration did not run, or something"
+        echo "  re-granted the schema-wide defaults after it."
     fi
+    exit 1
 fi
-echo "FULL-CHAIN CERTIFICATION COMPLETE"
+if [[ "$inv_pass" -ne 21 ]]; then
+    echo "  FAIL — expected 21 passing assertions, counted ${inv_pass}."
+    exit 1
+fi
+echo "FULL-CHAIN CERTIFICATION COMPLETE — 21/21 invariants + 16/16 full-chain assertions"
 echo "============================================================"

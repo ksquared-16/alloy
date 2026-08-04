@@ -10,18 +10,26 @@
 --   F1–F6   collision — no Trust object silently reused, replaced or skipped
 --   F7–F10  schema shape — the four tables are exactly as specified
 --   F11–F13 topology — FKs point where they should and nothing depends on Trust
---   F14–F16 RLS, policy inventory, and the EFFECTIVE posture of `authenticated`
+--   F14–F16 RLS, policy inventory, grants-match-intent, and the effective
+--           posture of `authenticated` against a real seeded operator
 --
 -- Run with: certification/trust-runtime-v1/run-fullchain.sh
 --
 -- NOTE ON GRANTS. Assertion 21 of 01_slice1_invariants.sql ("authenticated
--- holds no write grant on Trust tables") PASSES against the isolated fixture
--- and FAILS against the full chain, because Supabase's schema-wide
+-- holds no write grant on Trust tables") originally PASSED against the isolated
+-- fixture and FAILED against the full chain: Supabase's schema-wide
 -- ALTER DEFAULT PRIVILEGES grants ALL on every table in `public` to anon and
--- authenticated before any repository migration runs. That is a platform-wide
--- condition (253/253 public tables), not a Trust regression. F16 therefore
--- asserts what actually protects the data — that RLS refuses the write anyway,
--- for a real authenticated user who can see the row.
+-- authenticated before any repository migration runs, so the foundation
+-- migration's `GRANT SELECT` was a no-op.
+--
+-- `20260803230000_trust_runtime_v1_privilege_correction.sql` revokes those
+-- inherited privileges on the four Trust tables. Assertion 21 now passes on the
+-- full chain, F15 asserts the corrected end state (anon nothing, authenticated
+-- SELECT only, service_role full), F15b asserts the correction stayed scoped to
+-- Trust rather than silently changing a 253-table platform default, and F16
+-- proves the effective posture independently: a real authenticated org member
+-- who CAN read a package has all nine write attempts refused at the GRANT
+-- layer, with every stored value verified unchanged afterwards.
 -- =============================================================================
 
 \set ON_ERROR_STOP on
@@ -36,6 +44,7 @@ DECLARE
     v_count integer;
     v_txt text;
     v_passed integer := 0;
+    v_writes_refused integer := 0;
     c_tables text[] := ARRAY['trust_decision_contracts','trust_decision_packages',
                              'trust_decision_observations','trust_reasoning_usage'];
     c_functions text[] := ARRAY['enforce_trust_decision_contract_immutability',
@@ -267,25 +276,65 @@ BEGIN
     RAISE NOTICE 'PASS F14 — RLS on all four tables; exactly four policies exist and every one of them is SELECT-only';
 
     -- =========================================================================
-    -- F15 — the inherited platform grant is recorded, not hidden.
-    --       This assertion documents the condition; F16 proves it is not
-    --       exploitable. It fails only if Trust is treated DIFFERENTLY from
-    --       the rest of the schema, which would mean a Trust-specific grant.
+    -- F15 — GRANTS MATCH INTENT.
+    --
+    -- Supabase's schema-wide default privileges grant ALL on every table in
+    -- `public` to anon and authenticated at CREATE TABLE time, before any
+    -- repository migration runs, so the foundation migration's `GRANT SELECT`
+    -- was a no-op and assertion 21 failed on the full chain.
+    -- `20260803230000_trust_runtime_v1_privilege_correction.sql` revokes the
+    -- inherited privileges on the four Trust tables. This asserts the corrected
+    -- end state exactly: anon nothing, authenticated SELECT only, service_role
+    -- full. F16 separately proves RLS still refuses writes, so the two defences
+    -- are certified independently rather than one being assumed from the other.
     -- =========================================================================
-    SELECT count(DISTINCT table_name) INTO v_count
-    FROM information_schema.role_table_grants
-    WHERE table_schema='public' AND grantee='authenticated' AND privilege_type='INSERT';
     SELECT count(*) INTO v_count
-    FROM (SELECT table_name FROM information_schema.tables
-          WHERE table_schema='public' AND table_type='BASE TABLE'
-          EXCEPT
-          SELECT table_name FROM information_schema.role_table_grants
-          WHERE table_schema='public' AND grantee='authenticated' AND privilege_type='INSERT') q;
+    FROM information_schema.role_table_grants
+    WHERE table_schema='public' AND table_name = ANY(c_tables) AND grantee='anon';
     IF v_count <> 0 THEN
-        RAISE EXCEPTION 'FULLCHAIN FAIL 15: % public table(s) lack the platform-wide authenticated INSERT grant — the grant on Trust tables is therefore Trust-specific, not inherited', v_count;
+        RAISE EXCEPTION 'FULLCHAIN FAIL 15: anon holds % grant(s) on Trust tables — an unauthenticated role must hold none', v_count;
+    END IF;
+
+    SELECT count(*) INTO v_count
+    FROM information_schema.role_table_grants
+    WHERE table_schema='public' AND table_name = ANY(c_tables) AND grantee='authenticated'
+      AND privilege_type <> 'SELECT';
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FULLCHAIN FAIL 15: authenticated holds % non-SELECT grant(s) on Trust tables — the inherited default privileges were not revoked', v_count;
+    END IF;
+
+    SELECT count(*) INTO v_count
+    FROM information_schema.role_table_grants
+    WHERE table_schema='public' AND table_name = ANY(c_tables) AND grantee='authenticated'
+      AND privilege_type = 'SELECT';
+    IF v_count <> 4 THEN
+        RAISE EXCEPTION 'FULLCHAIN FAIL 15: authenticated holds SELECT on % of 4 Trust tables — an operator must still be able to read the decision record', v_count;
+    END IF;
+
+    SELECT count(*) INTO v_count
+    FROM information_schema.role_table_grants
+    WHERE table_schema='public' AND table_name = ANY(c_tables) AND grantee='service_role'
+      AND privilege_type IN ('SELECT','INSERT','UPDATE','DELETE');
+    IF v_count <> 16 THEN
+        RAISE EXCEPTION 'FULLCHAIN FAIL 15: service_role holds % of the expected 16 CRUD grants — the runtime could not persist a Decision Package', v_count;
     END IF;
     v_passed := v_passed + 1;
-    RAISE NOTICE 'PASS F15 — the authenticated write GRANT on Trust tables is the platform-wide Supabase default (0 of 253 public tables are exempt), not a Trust-specific grant';
+    RAISE NOTICE 'PASS F15 — grants match intent: anon holds nothing, authenticated holds SELECT only, service_role holds full CRUD';
+
+    -- =========================================================================
+    -- F15b — the correction is SCOPED. It fixes the four Trust tables and does
+    --        not silently alter the schema-wide default privileges, whose blast
+    --        radius is every table in `public`. The platform-wide condition is
+    --        recorded as a separate finding, not fixed under a Trust migration.
+    -- =========================================================================
+    SELECT count(*) INTO v_count
+    FROM information_schema.role_table_grants
+    WHERE table_schema='public' AND grantee='authenticated' AND privilege_type='INSERT'
+      AND NOT (table_name = ANY(c_tables));
+    IF v_count = 0 THEN
+        RAISE EXCEPTION 'FULLCHAIN FAIL 15b: no non-Trust table carries the inherited authenticated INSERT grant — the correction changed platform-wide defaults, which is out of scope for a Trust migration';
+    END IF;
+    RAISE NOTICE '        F15b — correction is scoped to Trust: % non-Trust table(s) still carry the platform-wide inherited grant (recorded as a separate platform finding, deliberately not changed here)', v_count;
 
     -- =========================================================================
     -- F16 — EFFECTIVE POSTURE. A real authenticated user, a member of the org,
@@ -337,32 +386,45 @@ BEGIN
         RAISE EXCEPTION 'FULLCHAIN FAIL 16: the probe user cannot see its own package — the write probes would be vacuous';
     END IF;
 
-    -- INSERT: refused by RLS (no INSERT policy exists).
+    -- Every write is attempted. Since the privilege correction, `authenticated`
+    -- holds SELECT only, so each one is refused at the GRANT layer with
+    -- `insufficient_privilege` — strictly stronger than the previous behaviour,
+    -- where the privilege existed and RLS merely filtered the row set to empty.
+    -- Both layers are asserted: the refusal count must be 9, AND the stored
+    -- bytes must be unchanged.
+    v_writes_refused := 0;
+
     BEGIN
         INSERT INTO public.trust_decision_contracts
             (org_id, decision_class_key, intent, privacy_policy_key, validation_policy_key,
              correlation_id, initiating_actor_type, channel, runtime_version, registry_version)
         VALUES (v_org, 'attention_suggestion_enrichment', 'client-forged', 'p', 'v',
                 'client-forged', 'system', 'system', 'rt-1', 'reg-1');
-        RESET ROLE;
-        RAISE EXCEPTION 'FULLCHAIN FAIL 16: an authenticated client INSERTED a Decision Contract';
-    EXCEPTION WHEN insufficient_privilege THEN
-        NULL; -- refused by row-level security, as required
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1;
     END;
 
-    -- UPDATE / DELETE: no UPDATE or DELETE policy exists, so no row is
-    -- visible to mutate. Assert the stored bytes are unchanged rather than
-    -- trusting the reported row count.
-    UPDATE public.trust_decision_packages SET explanation = 'tampered' WHERE id = v_pkg;
-    DELETE FROM public.trust_decision_packages WHERE id = v_pkg;
-    UPDATE public.trust_decision_observations SET observation_kind = 'accepted' WHERE package_id = v_pkg;
-    DELETE FROM public.trust_decision_observations WHERE package_id = v_pkg;
-    UPDATE public.trust_reasoning_usage SET outcome = 'tampered' WHERE contract_id = v_contract;
-    DELETE FROM public.trust_reasoning_usage WHERE contract_id = v_contract;
-    UPDATE public.trust_decision_contracts SET intent = 'tampered' WHERE id = v_contract;
-    DELETE FROM public.trust_decision_contracts WHERE id = v_contract;
+    BEGIN UPDATE public.trust_decision_packages SET explanation = 'tampered' WHERE id = v_pkg;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN DELETE FROM public.trust_decision_packages WHERE id = v_pkg;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN UPDATE public.trust_decision_observations SET observation_kind = 'accepted' WHERE package_id = v_pkg;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN DELETE FROM public.trust_decision_observations WHERE package_id = v_pkg;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN UPDATE public.trust_reasoning_usage SET outcome = 'tampered' WHERE contract_id = v_contract;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN DELETE FROM public.trust_reasoning_usage WHERE contract_id = v_contract;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN UPDATE public.trust_decision_contracts SET intent = 'tampered' WHERE id = v_contract;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
+    BEGIN DELETE FROM public.trust_decision_contracts WHERE id = v_contract;
+    EXCEPTION WHEN insufficient_privilege THEN v_writes_refused := v_writes_refused + 1; END;
 
     RESET ROLE;
+
+    IF v_writes_refused <> 9 THEN
+        RAISE EXCEPTION 'FULLCHAIN FAIL 16: only % of 9 client writes were refused at the privilege layer', v_writes_refused;
+    END IF;
 
     SELECT explanation INTO v_txt FROM public.trust_decision_packages WHERE id = v_pkg;
     IF v_txt IS DISTINCT FROM 'original' THEN
@@ -379,7 +441,7 @@ BEGIN
     SELECT count(*) INTO v_count FROM public.trust_decision_contracts WHERE correlation_id = 'client-forged';
     IF v_count <> 0 THEN RAISE EXCEPTION 'FULLCHAIN FAIL 16: a forged contract row survived'; END IF;
     v_passed := v_passed + 1;
-    RAISE NOTICE 'PASS F16 — despite the inherited GRANT, an authenticated org member who CAN read a package cannot insert, update or delete any Trust row: RLS refuses every write';
+    RAISE NOTICE 'PASS F16 — an authenticated org member who CAN read a package cannot write any Trust table: all 9 write attempts refused at the GRANT layer, and every stored value verified unchanged';
 
     RAISE NOTICE '=================================================';
     RAISE NOTICE 'TRUST RUNTIME V1 SLICE 1 — FULL CHAIN: % / 16 assertions passed', v_passed;
