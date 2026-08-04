@@ -44,7 +44,8 @@ main() {
   # any kind, so any worker could wipe a certification tenant another worker was
   # mid-run against — which is exactly what happened, three times.
   alloy_cert_guard destroy-db "database reset" || exit 1
-  alloy_supabase_db_reset "$@"
+  # Tell the library-level guard it has already been satisfied for this process.
+  ALLOY_CERT_GUARD_APPLIED=1 alloy_supabase_db_reset "$@"
 }
 
 main "$@"
