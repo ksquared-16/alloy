@@ -146,7 +146,11 @@ alloy_cert_guard() {
   fi
 
   local self owner
-  self="$(alloy_cert_self_holder)"
+  # An explicitly named caller wins over cwd derivation. `alloy-stack release <holder>`
+  # names the worker it acts for, and the shell's cwd is frequently somewhere else
+  # entirely — deriving identity from PWD there made the OWNER look like a stranger
+  # and refused its own cleanup.
+  self="${ALLOY_CERT_CALLER_HOLDER:-$(alloy_cert_self_holder)}"
   owner="$(alloy_cert_current_owner)"
 
   # Caller owns it: everything is allowed, including owned cleanup.
