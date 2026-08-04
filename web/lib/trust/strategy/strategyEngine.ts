@@ -14,9 +14,7 @@
 import type { DecisionClassDefinitionV1 } from "@/lib/trust/decisionClasses/decisionClassRegistry";
 import type { ReasoningStrategyV1 } from "@/lib/trust/reasoning/reasoningStrategy";
 import { escalationLevelOf, REASONING_STRATEGY_KINDS } from "@/lib/trust/reasoning/reasoningStrategy";
-import { attentionSuggestionEnrichmentDeterministicStrategy } from "@/lib/trust/reasoning/strategies/attentionSuggestionEnrichmentDeterministic";
-
-const STRATEGIES: readonly ReasoningStrategyV1[] = [attentionSuggestionEnrichmentDeterministicStrategy];
+import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
 
 export type StrategySelection =
     | { readonly ok: true; readonly strategy: ReasoningStrategyV1; readonly escalation_level: number }
@@ -34,7 +32,9 @@ export type StrategySelection =
  * deterministic one that satisfies the same class.
  */
 export function selectStrategy(decisionClass: DecisionClassDefinitionV1): StrategySelection {
-    const candidates = STRATEGIES.filter((s) => s.decision_class_key === decisionClass.key).sort(
+    // Indexed by the composition root, so this is a lookup rather than a scan.
+    // The composed list is frozen; sorting a copy keeps it that way.
+    const candidates = [...TRUST_REGISTRY.listStrategiesForDecisionClass(decisionClass.key)].sort(
         (a, b) => escalationLevelOf(a.kind) - escalationLevelOf(b.kind),
     );
 

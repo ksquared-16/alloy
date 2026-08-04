@@ -5,13 +5,17 @@
  * owned by the domain or platform that owns each rule and records the result.
  * It owns no business rule and never re-implements one.
  *
- * Every entry below is a call-out. If a rule needs to change, it changes in its
- * owning module, not here.
+ * Every policy is a list of call-outs. If a rule needs to change, it changes in
+ * its owning module, not here. The POLICIES themselves live in their owning
+ * capability's contribution module and are composed by the composition root
+ * (Slice 0.2); this module owns the policy type and the orchestration, not the
+ * entries.
  *
  * @see docs/platform/trust/trust-platform-decisions.md — Decision 022
+ * @see lib/trust/registry/trustRegistry.ts — the composition root
  */
 
-import { safeParseAttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
+import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
 
 export type ValidatorResult = {
     /** The module that owns the rule. Recorded so a package names its authority. */
@@ -55,32 +59,8 @@ export type ValidationPolicyV1 = {
     }[];
 };
 
-const ATTENTION_SUGGESTION_ENRICHMENT_V1: ValidationPolicyV1 = {
-    key: "attention_suggestion_enrichment_v1",
-    version: "1.0.0",
-    callOuts: [
-        {
-            // The enrichment envelope's shape is owned by lib/ai, which authored
-            // the operator-facing contract. Trust calls that owner's parser; it
-            // does not restate the schema.
-            owner: "lib/ai/attentionSuggestionAiEnrichmentSchema",
-            validator_key: "safeParseAttentionSuggestionAiEnrichmentV1",
-            invoke(recommendation) {
-                const parsed = safeParseAttentionSuggestionAiEnrichmentV1(recommendation);
-                return parsed
-                    ? { passed: true, detail: "Recommendation satisfies AttentionSuggestionAiEnrichmentV1." }
-                    : { passed: false, detail: "Recommendation does not satisfy AttentionSuggestionAiEnrichmentV1." };
-            },
-        },
-    ],
-};
-
-const VALIDATION_POLICIES: ReadonlyMap<string, ValidationPolicyV1> = new Map([
-    [ATTENTION_SUGGESTION_ENRICHMENT_V1.key, ATTENTION_SUGGESTION_ENRICHMENT_V1],
-]);
-
 export function resolveValidationPolicyVersion(key: string): string | null {
-    return VALIDATION_POLICIES.get(key)?.version ?? null;
+    return TRUST_REGISTRY.getValidationPolicy(key)?.version ?? null;
 }
 
 export type ValidationOrchestrationResult =
@@ -128,7 +108,7 @@ export async function orchestrateValidation(input: {
     policy_key: string;
     recommendation: Record<string, unknown>;
 }): Promise<ValidationOrchestrationResult> {
-    const policy = VALIDATION_POLICIES.get(input.policy_key);
+    const policy = TRUST_REGISTRY.getValidationPolicy(input.policy_key);
     if (!policy) {
         return {
             ok: false,

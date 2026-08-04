@@ -1,14 +1,19 @@
 /**
- * Decision Class Registry — code-owned and closed.
+ * Decision Classes — definition contract and lookup.
  *
  * A Decision Class declares the governance a decision is subject to. It never
  * executes anything. Capabilities extend the Trust Runtime by registering a
  * class; they never modify the Decision Contract specification.
  *
- * V1 registers exactly one class.
+ * The class DEFINITIONS live in their owning capability's contribution module,
+ * and the composition root composes them (Slice 0.2). This module owns the
+ * definition type and the lookup, not the entries.
  *
  * @see docs/platform/trust/decision-contract.md
+ * @see lib/trust/registry/trustRegistry.ts — the composition root
  */
+
+import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
 
 /** Risk tier — the first-class axis `AI_ALLOWED_FEATURES` lacked. */
 export const TRUST_RISK_TIERS = ["mandatory", "fallback", "convenience", "prohibited"] as const;
@@ -47,38 +52,31 @@ export type DecisionClassDefinitionV1 = {
     readonly requires_allowed_feature: string | null;
 };
 
-export const ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY = "attention_suggestion_enrichment" as const;
-
-const ATTENTION_SUGGESTION_ENRICHMENT: DecisionClassDefinitionV1 = {
-    key: ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY,
-    risk_tier: "convenience",
-    required_information: ["deterministic_attention_suggestion"],
-    knowledge_categories: [],
-    privacy_policy_key: "attention_suggestion_minimization_v1",
-    validation_policy_key: "attention_suggestion_enrichment_v1",
-    strategy_preference: ["deterministic"],
-    trust_threshold: 0.5,
-    review_requirement: "operator_review",
-    learning_policy_key: "none_v1",
-    economic_policy: { max_latency_ms: 5_000, max_escalation_level: 0 },
-    requires_allowed_feature: "draft_enrichment",
-};
-
-const REGISTRY: ReadonlyMap<string, DecisionClassDefinitionV1> = new Map([
-    [ATTENTION_SUGGESTION_ENRICHMENT.key, ATTENTION_SUGGESTION_ENRICHMENT],
-]);
+/**
+ * Re-exported from the owning capability so every existing import path keeps
+ * working. The key itself now lives in a leaf module, which is what lets the
+ * strategy, the contribution and the consumer each name it without importing
+ * one another.
+ */
+export { ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/keys";
 
 /** Bumped whenever a class definition changes; pinned into every contract for replay. */
 export const DECISION_CLASS_REGISTRY_VERSION = "trust-decision-classes-v1.0.0" as const;
 
+/**
+ * Absent returns `null`, deliberately. An unregistered Decision Class is an
+ * OPERATIONAL condition: the runtime turns it into a
+ * `refused_unsupported_class` Decision Package. It is never an exception.
+ */
 export function resolveDecisionClass(key: string): DecisionClassDefinitionV1 | null {
-    return REGISTRY.get(key) ?? null;
+    return TRUST_REGISTRY.getDecisionClass(key);
 }
 
+/** Registered keys, in composition order. */
 export function listDecisionClassKeys(): readonly string[] {
-    return [...REGISTRY.keys()];
+    return TRUST_REGISTRY.listDecisionClassKeys();
 }
 
 export function isRegisteredDecisionClass(key: string): boolean {
-    return REGISTRY.has(key);
+    return TRUST_REGISTRY.getDecisionClass(key) !== null;
 }
