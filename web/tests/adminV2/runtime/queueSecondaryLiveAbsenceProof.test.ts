@@ -14,7 +14,8 @@ import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts"
 function secondaryConfig(): QueueRecordLayoutConfigV3 {
     return {
         version: 3,
-        surfaceId: "queue_row_enrollment",
+        variant: "operational-row",
+        fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
         columns: [
             {
                 id: "secondary",
@@ -45,7 +46,7 @@ function secondaryConfig(): QueueRecordLayoutConfigV3 {
                 ],
             },
         ],
-    } as QueueRecordLayoutConfigV3;
+    };
 }
 
 describe("live Secondary absence root cause", () => {
@@ -54,12 +55,12 @@ describe("live Secondary absence root cause", () => {
         const emptyCtx = {
             contract_version: "1.1-partial",
             row_subject: {
-                subject_type: "opportunity",
+                subject_type: "case",
                 subject_id: "opp-wenc",
                 display_name: "Wenc Family",
             },
             related_subjects_summary: [],
-        } as unknown as QueueRowContext;
+        };
 
         const band = resolveCompactSecondaryBand(emptyCtx, mapped.slots.groupCount, {
             publishedAuthority: true,

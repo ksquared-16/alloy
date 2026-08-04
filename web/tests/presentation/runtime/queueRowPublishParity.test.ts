@@ -10,6 +10,7 @@ import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3
 import { nextQueueRecordBlockId } from "@/lib/layout/queueRecordLayoutIds";
 import { resolveQueueRowFieldValueFromContext } from "@/lib/presentation/runtime/resolveCompactSlotDisplay";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { QUEUE_ROW_CONTEXT_CONTRACT_VERSION } from "@/lib/workUnits/lifecycleSubjectContracts";
 import {
     navigateFocusPanelCardLink,
     resolveFocusPanelCardLinkForField,
@@ -64,8 +65,8 @@ describe("published queue row config is authoritative", () => {
 });
 
 describe("restored compact providers", () => {
-    const ctx = {
-        contract_version: 1,
+    const ctx: QueueRowContext = {
+        contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
         row_subject: { subject_type: "case", subject_id: "c1", display_name: "Kurzman" },
         row_stage: "waitlist",
         lifecycle_key: "enrollment",
@@ -87,7 +88,7 @@ describe("restored compact providers", () => {
         drawer_open: { entity_type: "opportunities", entity_id: "o1", stage_focus_key: "waitlist" },
         waitlist_context: { position_label: "#3", wait_since: "12d" },
         placement_context: { location_id: null, room_label: "Nest", program_label: "Infant", schedule_label: "FT" },
-    } as QueueRowContext;
+    };
 
     it("resolves waitlist position, wait since, next step, and room", () => {
         expect(isCompactRowEffectiveFieldKey("waitlist.positionLabel")).toBe(true);
