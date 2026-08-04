@@ -52,7 +52,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
         return tourPublicJson({
             ok: true,
-            booking: { id: confirmed.id, status_key: confirmed.status_key, start_at: confirmed.start_at, end_at: confirmed.end_at, timezone: confirmed.timezone },
+            booking: publicTourBookingView(confirmed),
         });
     } catch {
         // The action is NOT consumed, so a transient failure stays retryable.
