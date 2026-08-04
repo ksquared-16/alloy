@@ -32,6 +32,13 @@ run_sql "$CERT_DIR/00_fixture.sql"
 echo "--- applying the Trust Runtime V1 migration ---"
 run_sql "$ROOT/supabase/migrations/20260802090000_trust_runtime_v1_foundation.sql"
 
+echo "--- applying the privilege correction ---"
+# A bare Postgres container has no Supabase default privileges, so the REVOKEs
+# are a no-op here. It runs anyway so BOTH certification paths assert the same
+# end state, and so the migration's own self-verification block is exercised in
+# isolation as well as on the full chain.
+run_sql "$ROOT/supabase/migrations/20260803230000_trust_runtime_v1_privilege_correction.sql"
+
 echo "--- invariant assertions ---"
 run_sql "$CERT_DIR/01_slice1_invariants.sql"
 

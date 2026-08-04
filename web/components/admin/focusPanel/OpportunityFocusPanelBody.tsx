@@ -3,6 +3,8 @@
 import { useEffect, useMemo } from "react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
+import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
+import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
@@ -124,8 +126,34 @@ export default function OpportunityFocusPanelBody({
     // operator's terms, exactly where the action would otherwise be.
     const absence = !enriched ? commitCritical?.actionAbsence ?? null : null;
 
+    // TRUST RUNTIME V1, SLICE 1 — the consumer surface.
+    //
+    // The governed deterministic enrichment has always had exactly one operator-facing
+    // control, `OperationalAttentionEnhanceDraft`. It was reachable only from
+    // `OpportunityDrawerOverviewBody`, and Presentation Runtime V2 never mounts that body on
+    // work-unit surfaces (`AdminEntityDrawer` returns null there — the inline Focus Panel owns
+    // the record surface). The decision was therefore produced, persisted and audited while
+    // being invisible to the operator it was produced for.
+    //
+    // The component is reused VERBATIM — same copy, same visual treatment, same
+    // `data-drawer-slot` hooks the drawer QA already asserts. Only its mount point moves.
+    //
+    // It reads the same compat projection the drawer read (`_attention_suggestion` on the
+    // above-fold record) and self-suppresses when there is no draft body, so a subject with no
+    // deterministic draft renders exactly as it does today. Commit-critical renders carry no
+    // record, so nothing is shown until the VM settles — the pending → enriched transition
+    // stays a prop change, never a remount.
+    const attentionSuggestion = (enriched?.record?._attention_suggestion ?? null) as
+        | AttentionSuggestionV1
+        | null;
+
     return (
         <>
+        {attentionSuggestion ? (
+            <div className="mb-2" data-focus-panel-slot="trust_enhance_draft">
+                <OperationalAttentionEnhanceDraft suggestion={attentionSuggestion} />
+            </div>
+        ) : null}
         {absence ?
             <p
                 className="mb-3 rounded-md border border-dashed border-[var(--alloy-border-subtle,#d4d4d8)] px-3 py-2 text-sm text-[var(--alloy-text-secondary,#52525b)]"
