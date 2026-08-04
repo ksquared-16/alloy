@@ -1,8 +1,8 @@
 # Trust Runtime V1 — Slice 1 certification record
 
 **Slice:** `attention_suggestion_enrichment`, deterministic strategy, no provider.
-**Closeout executed:** 2026-08-04. **Result: CERTIFIED**, with one product decision
-recorded in §7 that is outside Trust Runtime's ownership.
+**Closeout executed:** 2026-08-04. **Result: CERTIFIED — COMPLETE.**
+Every certification gap is closed and the final decision is ratified (§7.2).
 
 > **Sequence, recorded not rewritten.** Slice 1 was merged into `origin/staging` as
 > `e7ff8e605` **before** certification closeout. Three gaps were open at that merge.
@@ -50,7 +50,7 @@ migrations and is **not** a full-chain replay.
 | S12 | Structural boundary | PASS | Boundary suite green; **negative control**: a planted `lib/adminV2/actions → lib/trust` import fails it |
 | S13 | Reproducibility | PASS | Identical package modulo identity; replay produces a new package, predecessor byte-identical |
 | S14 | Contracts cannot carry reasoning implementation | PASS | 6 `@ts-expect-error` assertions compile clean; **negative control**: weakening the guard produces exactly 6 `TS2578 Unused '@ts-expect-error'` errors, so all six are load-bearing |
-| S15 | Consumer surface | **PASS (draft-body render deferred to §7.2)** | Control now mounts from `OpportunityFocusPanelBody` and receives a real suggestion on `/workspace/work-unit/*`; envelope, refusal rendering and mutation boundary all observed. The happy-path overlay needs a mapped reason code — §7.2 |
+| S15 | Consumer surface | **PASS** | Control now mounts from `OpportunityFocusPanelBody` and receives a real suggestion on `/workspace/work-unit/*`; envelope, refusal rendering and mutation boundary all observed. Rendering no overlay when no template is configured is the ratified correct behaviour — §7.2 |
 | S16 | Non-regression | **PASS** | See §5. `tests/queues` and `tests/workspace` failing sets diffed against base and byte-identical; every other suite green; docs lint exit 0 |
 
 Additional database assertions beyond the scenario list: refusals persisted as
@@ -182,7 +182,7 @@ against the isolated cert tenant on `http://localhost:3011`:
 | # | Condition | Result |
 |---|---|---|
 | 1 | Existing operator behaviour preserved | **PASS** — Focus Panel renders unchanged; the control self-suppresses where no deterministic draft exists |
-| 2 | Deterministic suggestion displayed | **PASS (partial)** — the slot mounts and receives a real `AttentionSuggestionV1`; the draft-body render is blocked by §7.2, not by Trust |
+| 2 | Deterministic suggestion displayed | **PASS** — the slot mounts and receives a real `AttentionSuggestionV1`; no overlay renders because no template is configured for this reason code, which §7.2 ratifies as correct |
 | 3 | Additive `decision` metadata does not break the consumer | **PASS** — envelope shape unchanged; consumer reads only `enrichment.suggested_draft_body_overlay` |
 | 4 | Trust failure/refusal fails cosmetically | **PASS** — route returns `ok:true`, `enrichment:null`, `decision:null`; no unaudited recommendation reaches the operator |
 | 5 | No operational record mutated | **PASS** — row counts across **all 253 public tables** unchanged except the four Trust tables and the declared `trust_*` `workflow_events`; target opportunity byte-identical (`md5 da31ee2ca66f016a07f6a69d4e768875`) |
@@ -238,29 +238,43 @@ client role and a write on those tables. **This is a platform security decision 
 a 253-table blast radius and is deliberately out of scope for a Trust migration.**
 It is not a Trust Runtime gap; Trust's own four tables are corrected and certified.
 
-### 7.2 Stage-plan reason codes carry no deterministic draft — PRODUCT DECISION
+### 7.2 Stage-driven attention produces no family-facing draft — DECIDED, CLOSED
 
-Slice 1's operator-visible output is a draft-message overlay, which exists only when
-`suggestion.suggested_content.body` is set. `suggestedContentForReason` maps **16**
-reason codes to draft templates, all of them non-stage.
+**Ratified by the architecture owner, 2026-08-04. This is the final Trust Runtime V1
+decision and it closes the last open certification item.**
 
-The certification tenant's configured attention rules emit `work_overdue`,
-`missing_requirements` and `stage_age_exceeded`, which project to the four `stage_*`
-reason codes — and **0 of those 4 are mapped**. `stage_age_exceeded` also outranks
-every mapped code in `PLATFORM_PRIMARY_REASON_PRIORITY_ORDER`, so a firing stage rule
-suppresses any mapped reason beneath it.
+#### Decision
 
-The deterministic draft is therefore unreachable for this tenant's stage
-configuration **on any surface** — the drawer never showed the control here either.
-This predates Slice 1 and is upstream of it: Trust governs the decision, it does not
-own the attention taxonomy or the message templates.
+Stage-driven attention does **not** automatically produce suggested family-facing
+draft content.
 
-Closing it requires a product call, not an engineering default:
+A suggested draft may appear **only** when the reason code is explicitly mapped to an
+approved configured template. The four `stage_*` reason codes
+(`stage_work_overdue`, `stage_missing_required_fields`, `stage_age_exceeded`,
+`stage_attempts_incomplete`) are deliberately left unmapped.
 
-- **(a)** map the four `stage_*` codes to draft templates — new operator-visible
-  message copy, which is product content; or
-- **(b)** decide stage-driven attention carries no draft, and accept that Slice 1's
-  operator affordance appears only for non-stage attention.
+#### Consequence
 
-**Trust Runtime V1 is certified either way.** The decision changes when the overlay
-appears, not whether the governed decision is correct, audited or safe.
+- The **governed decision, explanation, attention state, privacy, audit and mutation
+  safety are complete** and independent of whether a draft exists.
+- **Suggested content is optional and configuration-dependent.** It is an overlay on
+  a decision, never the decision itself.
+- **The absence of a configured template is a valid "no draft" state, not a Trust
+  Runtime failure.** A Decision Package is still produced, still persisted, still
+  auditable; the operator simply sees no wording overlay.
+
+#### Rationale
+
+Family-facing copy is product content. Generating it automatically from a
+stage-timing signal would put words in front of a family because a record aged, not
+because anyone approved that message. Requiring an explicit template mapping keeps
+authorship with the people who own the tenant's voice, and keeps Trust in its lane:
+it governs whether a recommendation is safe to show, not what the organization says.
+
+#### Effect on certification
+
+`suggestedContentForReason` returning `null` for an unmapped reason is **correct
+behaviour**, and the enrichment control self-suppressing when there is no draft body
+is **correct behaviour**. Scenario S15 is satisfied: the operator surface renders the
+governed decision, and renders no overlay exactly when no template is configured.
+

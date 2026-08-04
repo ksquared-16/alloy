@@ -412,23 +412,37 @@ Superseded by B″ — the original diagnosis blamed the wrong entry point.
 Fixed in the canonical seed. All four views render; the Tours "no reachable primary
 action" refusal cleared with it.
 
-### C. Stage-plan reason codes carry no deterministic draft — **OPEN, PRODUCT DECISION**
+### C. *(DECIDED, CLOSED)* Stage-driven attention produces no family-facing draft
 
-The one remaining item, and it is not a Trust Runtime gap.
+**Ratified by the architecture owner, 2026-08-04 — the final Trust Runtime V1
+decision.**
 
-The tenant's stage rules emit only `stage_*` reason codes; **0 of those 4** are mapped
-in `REASON_TO_TEMPLATE_KEY`, and `stage_age_exceeded` outranks every mapped code in
-the primary-reason priority order. So `suggested_content` is never built, and the
-draft overlay has nothing to render — on any surface, before or after this branch.
+Stage-driven attention does not automatically produce suggested family-facing draft
+content. A draft may appear only when the reason code is explicitly mapped to an
+approved configured template; the four `stage_*` codes stay unmapped, and no copy or
+mapping was invented for them in this mission.
 
-Trust governs the decision; it does not own the attention taxonomy or the message
-templates. Closing it means either (a) mapping the four stage codes to draft
-templates — new operator-visible copy, i.e. product content — or (b) deciding
-stage-driven attention carries no draft.
+- Governed decision, explanation, attention state, privacy, audit and mutation safety
+  remain complete and independent of any draft.
+- Suggested content is optional and configuration-dependent.
+- **Absence of a configured template is a valid "no draft" state, not a Trust Runtime
+  failure.**
 
-**Slice 1 is certified either way.** The decision changes when the overlay appears,
-not whether the governed decision is correct, audited or safe.
+Family-facing copy is product content; generating it from a stage-timing signal would
+put words in front of a family because a record aged, not because anyone approved
+that message. `suggestedContentForReason` returning null, and the control
+self-suppressing, are both correct behaviour. S15 is satisfied.
 
-### D. Platform-wide default privileges on 253 non-Trust tables — **OPEN, PLATFORM**
+### D. Platform-wide default privileges on 253 non-Trust tables — **EXTERNAL FOLLOW-UP**
 
-Recorded, deliberately not fixed here. See §7.1 of the certification record.
+**Owner: the main platform stabilization effort. Not Trust.**
+
+253 non-Trust tables in `public` grant ALL to `anon` and `authenticated` through
+Supabase's schema-wide default privileges; RLS is the only thing between a client role
+and a write. Same class of defect as the one fixed on the Trust tables, with a
+253-table blast radius instead of four.
+
+Recorded here as a **security follow-up** so it is not lost. The Trust branch is
+deliberately **not** expanded to solve it — a platform-wide grant change is not a
+Trust Runtime decision, and bundling it into a certification merge would put an
+untested 253-table security change behind a Trust review.
