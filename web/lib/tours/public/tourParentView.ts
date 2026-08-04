@@ -216,3 +216,85 @@ export function buildTourParentView(input: {
         notice: null,
     };
 }
+
+/**
+ * Calendar helpers. Pure, and expressed in the TOUR's timezone — a parent choosing a
+ * visit must see the centre's day and time, never their own device's.
+ */
+
+/** `2026-08-05` in the tour's timezone — the grouping key for a calendar day. */
+export function tourSlotDayKey(startAt: string, timezone: string | null): string | null {
+    const d = new Date(startAt);
+    if (Number.isNaN(d.getTime())) return null;
+    try {
+        // en-CA yields ISO-ordered y-m-d, which sorts correctly as a string.
+        return new Intl.DateTimeFormat("en-CA", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            timeZone: timezone || "UTC",
+        }).format(d);
+    } catch {
+        return null;
+    }
+}
+
+/** "9:00 AM" — the time alone, for a chip under an already-chosen day. */
+export function formatParentTimeOnly(startAt: string, timezone: string | null): string {
+    const d = new Date(startAt);
+    if (Number.isNaN(d.getTime())) return "";
+    try {
+        return new Intl.DateTimeFormat("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            timeZone: timezone || "UTC",
+        }).format(d);
+    } catch {
+        return "";
+    }
+}
+
+/** "Wednesday, August 5" — the chosen day, spelled out. */
+export function formatParentDayLabel(dayKey: string): string {
+    const [y, m, d] = dayKey.split("-").map((n) => Number(n));
+    if (!y || !m || !d) return "";
+    // Noon UTC keeps the calendar date stable regardless of the render timezone.
+    const dt = new Date(Date.UTC(y, m - 1, d, 12));
+    return new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        timeZone: "UTC",
+    }).format(dt);
+}
+
+/** Month label for the calendar header, e.g. "August 2026". */
+export function formatParentMonthLabel(dayKey: string): string {
+    const [y, m] = dayKey.split("-").map((n) => Number(n));
+    if (!y || !m) return "";
+    return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(
+        new Date(Date.UTC(y, m - 1, 1, 12))
+    );
+}
+
+/**
+ * Build the weeks of a month grid for `dayKeys`, padded to whole Sunday-start weeks.
+ * Empty string means "no cell" (leading/trailing padding).
+ */
+export function buildTourCalendarWeeks(monthOfDayKey: string): string[][] {
+    const [y, m] = monthOfDayKey.split("-").map((n) => Number(n));
+    if (!y || !m) return [];
+    const first = new Date(Date.UTC(y, m - 1, 1, 12));
+    const daysInMonth = new Date(Date.UTC(y, m, 0, 12)).getUTCDate();
+    const lead = first.getUTCDay();
+
+    const cells: string[] = Array.from({ length: lead }, () => "");
+    for (let d = 1; d <= daysInMonth; d += 1) {
+        cells.push(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    }
+    while (cells.length % 7 !== 0) cells.push("");
+
+    const weeks: string[][] = [];
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+    return weeks;
+}
