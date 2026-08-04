@@ -16,8 +16,16 @@ import type { MintedAction } from "@/lib/tours/invitation/mintTourInvitation";
 export type TourParentActionModel = {
     /** Present when the parent may choose a different time. */
     rescheduleUrl: string | null;
-    /** Present when the parent may cancel. */
-    cancelUrl: string | null;
+    /**
+     * The secure booking-management surface.
+     *
+     * Cancellation is a BOUNDED flow, never a one-tap link in a message: a
+     * mis-tap in an inbox must not release a family's appointment. This URL opens
+     * a read-only view of the current booking from which the parent can choose to
+     * cancel, read the consequence, and confirm — and only then is a cancel
+     * credential minted. There is deliberately no `cancelUrl` here.
+     */
+    manageUrl: string | null;
     /**
      * Present ONLY when confirmation is a distinct required lifecycle step — i.e. the
      * booking is not already confirmed. An action is not offered merely because a
@@ -42,7 +50,7 @@ export function buildTourParentActionModel(args: {
     bookingStatusKey: string;
 }): TourParentActionModel {
     const base = String(args.baseUrl ?? "").trim();
-    if (!base) return { rescheduleUrl: null, cancelUrl: null, confirmUrl: null };
+    if (!base) return { rescheduleUrl: null, manageUrl: null, confirmUrl: null };
 
     const find = (kind: string) => args.actions.find((a) => a.actionKind === kind)?.rawToken ?? null;
 
@@ -50,16 +58,17 @@ export function buildTourParentActionModel(args: {
     if (terminal) {
         // Nothing is actionable on a tour that is over or called off. Offering a
         // reschedule link here would be an invitation to a dead end.
-        return { rescheduleUrl: null, cancelUrl: null, confirmUrl: null };
+        return { rescheduleUrl: null, manageUrl: null, confirmUrl: null };
     }
 
     const reschedule = find("reschedule_tour");
-    const cancel = find("cancel_tour");
+    // `view_tour_details` is the Manage credential: reusable, and it can only READ.
+    const manage = find("view_tour_details");
     const confirm = args.bookingStatusKey === "confirmed" ? null : find("confirm_tour");
 
     return {
         rescheduleUrl: reschedule ? actionUrl(base, reschedule) : null,
-        cancelUrl: cancel ? actionUrl(base, cancel) : null,
+        manageUrl: manage ? actionUrl(base, manage) : null,
         confirmUrl: confirm ? actionUrl(base, confirm) : null,
     };
 }

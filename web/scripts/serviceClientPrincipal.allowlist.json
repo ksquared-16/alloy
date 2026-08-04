@@ -1,14 +1,14 @@
 {
   "$comment": [
-    "W-4 (I-3) — reviewed exception register for the service-client principal check.",
+    "W-4 (I-3) \u2014 reviewed exception register for the service-client principal check.",
     "Enforced by web/scripts/checkServiceClientPrincipal.mjs; locked by web/tests/access/serviceClientPrincipalCheck.test.ts.",
     "",
     "Three lists, three different meanings. Do not merge them.",
-    "  exceptions — a route with a VERIFIED orthogonal authorization model. Reviewed and permanent.",
+    "  exceptions \u2014 a route with a VERIFIED orthogonal authorization model. Reviewed and permanent.",
     "               Adding one is a security decision: name the model and cite the line that enforces it.",
-    "  baseline   — a route with NO verified model. Real W-15 remediation work, frozen 2026-07-31.",
+    "  baseline   \u2014 a route with NO verified model. Real W-15 remediation work, frozen 2026-07-31.",
     "               FROZEN: entries may be removed as they are fixed, never added.",
-    "  advisory_transitive_only — reaches a service client through a helper rather than importing one,",
+    "  advisory_transitive_only \u2014 reaches a service client through a helper rather than importing one,",
     "               so it is outside the enforced predicate. Listed so the set cannot grow silently.",
     "",
     "All three lists may only shrink. A stale entry fails the check."
@@ -19,12 +19,12 @@
     {
       "route": "app/api/action/[token]/route.ts",
       "model": "capability-token",
-      "reason": "Read-only action-link metadata. The row is selected BY the bearer token (`.eq(\"token\", token)` at :22) — the token is the authorization, per I-4. No caller-supplied row selector."
+      "reason": "Read-only action-link metadata. The row is selected BY the bearer token (`.eq(\"token\", token)` at :22) \u2014 the token is the authorization, per I-4. No caller-supplied row selector."
     },
     {
       "route": "app/api/action/[token]/consume/route.ts",
       "model": "capability-token",
-      "reason": "Row selected by the bearer token (:17). Expiry and single-use are checked and return 410 (verified by phase 3 §13.1 / I-4)."
+      "reason": "Row selected by the bearer token (:17). Expiry and single-use are checked and return 410 (verified by phase 3 \u00a713.1 / I-4)."
     },
     {
       "route": "app/api/action-links/resolve/route.ts",
@@ -49,7 +49,7 @@
     {
       "route": "app/api/public/forms/[token]/submissions/route.ts",
       "model": "capability-token",
-      "reason": "Creates a draft tied to the resolved public link (:46). Creates only — no caller-supplied row selector."
+      "reason": "Creates a draft tied to the resolved public link (:46). Creates only \u2014 no caller-supplied row selector."
     },
     {
       "route": "app/api/public/forms/[token]/submissions/[submissionId]/route.ts",
@@ -69,7 +69,7 @@
     {
       "route": "app/api/webhooks/resend/route.ts",
       "model": "webhook-signature",
-      "reason": "Svix `Webhook.verify` against RESEND_WEBHOOK_SECRET at :69, and it returns 400 before `createAdminClient()` is constructed at :91 — no statement reaches the database on an unsigned request. The handler documents that session auth MUST NOT gate it."
+      "reason": "Svix `Webhook.verify` against RESEND_WEBHOOK_SECRET at :69, and it returns 400 before `createAdminClient()` is constructed at :91 \u2014 no statement reaches the database on an unsigned request. The handler documents that session auth MUST NOT gate it."
     },
     {
       "route": "app/api/verticals/route.ts",
@@ -79,7 +79,7 @@
     {
       "route": "app/api/public/booking-config/route.ts",
       "model": "public-catalog-read + env-pinned-org",
-      "reason": "Pricing/addon catalogs for the public booking UI. The org is pinned to ALLOY_PUBLIC_ORG_ID from the environment (:26) — never caller-supplied — and the handler is read-only."
+      "reason": "Pricing/addon catalogs for the public booking UI. The org is pinned to ALLOY_PUBLIC_ORG_ID from the environment (:26) \u2014 never caller-supplied \u2014 and the handler is read-only."
     },
     {
       "route": "app/api/public/field-definitions/route.ts",
@@ -89,7 +89,7 @@
     {
       "route": "app/api/vendor-application/route.ts",
       "model": "public-intake-create + env-pinned-org",
-      "reason": "Unauthenticated vendor application intake. Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:33-37). Creates only — it selects no existing row by a caller-supplied id."
+      "reason": "Unauthenticated vendor application intake. Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:33-37). Creates only \u2014 it selects no existing row by a caller-supplied id."
     }
   ],
   "baseline": [],
@@ -100,7 +100,7 @@
     },
     {
       "route": "app/api/webhooks/twilio/sms-status/route.ts",
-      "reason": "Twilio status callback; delegates to `handleTwilioSmsStatus`, which holds the service client. Webhook model — signature verification lives in the helper, not the route, which is why the route itself shows no principal."
+      "reason": "Twilio status callback; delegates to `handleTwilioSmsStatus`, which holds the service client. Webhook model \u2014 signature verification lives in the helper, not the route, which is why the route itself shows no principal."
     },
     {
       "route": "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
@@ -108,7 +108,7 @@
     },
     {
       "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
-      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (:20) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link↔invitation recipient binding, and the action kind. `requiredActions` is the route constant `[view_tour_slots, view_tour_details]` (:16) — never request-supplied — so a decline- or cancel-only token cannot read context. Read-only; discloses labels and status, never a person, opportunity, process or household id."
+      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (:20) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link\u2194invitation recipient binding, and the action kind. `requiredActions` is the route constant `[view_tour_slots, view_tour_details]` (:16) \u2014 never request-supplied \u2014 so a decline- or cancel-only token cannot read context. Read-only; discloses labels and status, never a person, opportunity, process or household id."
     },
     {
       "route": "app/api/public/tour-booking/[token]/slots/route.ts",
@@ -129,6 +129,10 @@
     {
       "route": "app/api/public/tour-booking/[token]/cancel/route.ts",
       "reason": "Same guard-held client and same capability model. Route constant `[cancel_tour]` (:16). Booking id is credential-bound via `loadBoundBooking`, and the cancel is single-use through `consumeTourAction`."
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/cancel-intent/route.ts",
+      "reason": "Recipient-scoped capability token, not a session principal. Same guard-held client and model as the other public tour routes: `guardTourActionRoute` holds the service client and returns it only after `authorizeTourAction` verifies the token hash, the link\u2194invitation recipient binding, and the action kind. Route constant `[view_tour_details]` \u2014 a read-only Manage credential, so the caller cannot mutate. It mints a single-use `cancel_tour` credential bound to the booking loaded from the credential via `loadBoundBooking`, never from the request; it performs no cancellation itself."
     }
   ],
   "reviewed_note": "2026-08-03: dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink). 2026-08-04 re-review: all 17 remaining entries re-checked against the tree — every one still exists, still holds a service client, and still resolves no principal (asserted by the lock). Citations spot-verified line-by-line for the two subject-binding entries (:58/:144, :114) and the tour-booking token resolve (:30). The ratchet ceiling was tightened 26 → 17 to match the post-retirement floor."
