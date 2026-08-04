@@ -6,6 +6,7 @@ import { tourPublicErr, tourPublicJson } from "@/lib/tours/public/tourPublicHttp
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
+import { mintActionsFor, POST_BOOKING_ACTION_KINDS } from "@/lib/tours/invitation/mintTourInvitation";
 import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
 import { assertBookingLocationMatchesOpportunity, fetchOpportunityForTourAdmin } from "@/lib/tours/admin/opportunityTourContext";
 
@@ -141,6 +142,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             .update({ status: "booked", updated_at: new Date().toISOString() })
             .eq("id", invitation.id)
             .eq("status", "active");
+
+        // The parent now needs a way to confirm, reschedule, or cancel. Without this
+        // the confirmation message has nothing to link to and the lifecycle the
+        // invitation promised dead-ends at the booking — the same shape of gap the
+        // reschedule route already closes for its replacement booking.
+        await mintActionsFor({
+            supabase,
+            orgId: link.org_id,
+            invitationId: invitation.id,
+            recipientPersonId: invitation.recipient_person_id,
+            opportunityId: invitation.opportunity_id,
+            locationId: link.location_id,
+            expiresAt: link.expires_at,
+            kinds: POST_BOOKING_ACTION_KINDS,
+            bookingId: booking.id,
+        });
 
         // A booked invitation makes outstanding select/decline actions meaningless.
         await invalidateIncompatibleTourActions({
