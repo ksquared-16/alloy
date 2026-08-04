@@ -104,6 +104,7 @@ describe("resolveQueueRowCompactSlots", () => {
                     id: "col-children",
                     label: "",
                     width: "small",
+                    scope: { type: "main_record" } as const,
                     builderSlot: "groupCount",
                     blocks: [
                         {
@@ -146,6 +147,7 @@ describe("resolveQueueRowCompactSlots", () => {
                     id: "col-contact",
                     label: "",
                     width: "small",
+                    scope: { type: "main_record" } as const,
                     builderSlot: "identity",
                     blocks: [
                         {
@@ -166,6 +168,7 @@ describe("resolveQueueRowCompactSlots", () => {
                     id: "col-work",
                     label: "",
                     width: "small",
+                    scope: { type: "main_record" } as const,
                     builderSlot: "work",
                     blocks: [
                         {

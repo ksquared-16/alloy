@@ -28,6 +28,7 @@ function layoutWithDefaultAndStageVariant(args: {
                 id: "col-default",
                 label: "Primary",
                 width: "small",
+                scope: { type: "main_record" } as const,
                 blocks: [
                     {
                         id: nextQueueRecordBlockId("fg"),
@@ -53,6 +54,7 @@ function layoutWithDefaultAndStageVariant(args: {
                         id: "col-status",
                         label: "",
                         width: "small",
+                        scope: { type: "main_record" } as const,
                         builderSlot: "status",
                         blocks: [
                             {
@@ -64,6 +66,7 @@ function layoutWithDefaultAndStageVariant(args: {
                                         id: nextQueueRecordBlockId("f"),
                                         fieldKey: "opportunity.status_label",
                                         label: args.variantStatusLabel,
+                                        display: "text",
                                     },
                                 ],
                             },

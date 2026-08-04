@@ -56,6 +56,7 @@ function layout(keys: string[]) {
                 id: "col",
                 label: "Children",
                 width: "small" as const,
+                scope: { type: "main_record" } as const,
                 builderSlot: "groupCount" as const,
                 blocks: [
                     {

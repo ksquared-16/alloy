@@ -21,6 +21,7 @@ function layoutWithFields(fieldKeys: string[]): QueueRecordLayoutConfigV3 {
                 id: "col-1",
                 label: "Primary",
                 width: "small",
+                scope: { type: "main_record" } as const,
                 builderSlot: "identity",
                 blocks: [
                     {
@@ -110,6 +111,7 @@ describe("queue row compact publish validation", () => {
                             id: "col-v",
                             label: "Primary",
                             width: "small" as const,
+                            scope: { type: "main_record" } as const,
                             builderSlot: "identity" as const,
                             blocks: [
                                 {
@@ -121,6 +123,7 @@ describe("queue row compact publish validation", () => {
                                             id: nextQueueRecordBlockId("f"),
                                             fieldKey: "opportunity.location",
                                             label: "Campus",
+                                            display: "text",
                                         },
                                     ],
                                 },
