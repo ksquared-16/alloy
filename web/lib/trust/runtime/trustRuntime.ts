@@ -23,6 +23,7 @@
 
 import { randomUUID } from "crypto";
 
+import type { TrustRuntimeAuthorization } from "@/lib/trust/authorization/trustAuthorizationDecision";
 import type { InformationClass } from "@/lib/trust/classification/informationClasses";
 import { classifyElements } from "@/lib/trust/classification/informationClasses";
 import type { DecisionContractV1 } from "@/lib/trust/contract/decisionContractTypes";
@@ -81,16 +82,8 @@ export type TrustRuntimeInput = {
      * that refusal as a Decision Package; it never re-decides authorization,
      * because authorization is not reasoning (Decision 019).
      */
-    readonly authorization?: TrustAuthorizationDecision;
+    readonly authorization?: TrustRuntimeAuthorization;
 };
-
-export type TrustAuthorizationDecision =
-    | { readonly permitted: true }
-    | {
-          readonly permitted: false;
-          readonly outcome: "refused_policy" | "refused_permission";
-          readonly detail: string;
-      };
 
 type PackageDraft = {
     outcome: DecisionPackageOutcome;

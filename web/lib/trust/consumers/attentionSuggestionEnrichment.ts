@@ -14,6 +14,11 @@
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import type { AttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/enrichmentContracts";
 import { safeParseAttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
+import type {
+    TrustAuthorizationDecision,
+    TrustRuntimeAuthorization,
+} from "@/lib/trust/authorization/trustAuthorizationDecision";
+import { toTrustRuntimeAuthorization } from "@/lib/trust/authorization/trustAuthorizationDecision";
 import type { InformationClass } from "@/lib/trust/classification/informationClasses";
 import { createDecisionContract } from "@/lib/trust/contract/createDecisionContract";
 import type { TrustChannel, TrustInitiatingActor } from "@/lib/trust/contract/decisionContractTypes";
@@ -22,7 +27,7 @@ import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { executeDecisionContract } from "@/lib/trust/runtime/trustRuntime";
-import type { TrustAuthorizationDecision, TrustRuntimeStep } from "@/lib/trust/runtime/trustRuntime";
+import type { TrustRuntimeStep } from "@/lib/trust/runtime/trustRuntime";
 
 /**
  * Meaning of each element the Decision Class consumes. Classification is by
@@ -44,8 +49,16 @@ export type AttentionSuggestionEnrichmentDecisionInput = {
     readonly correlation_id: string;
     readonly initiating_actor: TrustInitiatingActor;
     readonly channel: TrustChannel;
-    /** Set false when org policy or permission already denied the request. */
-    readonly policy_permits: boolean;
+    /**
+     * The canonical, already-resolved authorization decision. When present it is
+     * authoritative and the legacy booleans below are ignored.
+     */
+    readonly authorization?: TrustAuthorizationDecision;
+    /**
+     * Legacy inputs, retained so existing callers and the V1 certification suite
+     * keep working unchanged. Superseded by {@link authorization}.
+     */
+    readonly policy_permits?: boolean;
     readonly policy_denial_reason?: string | null;
     readonly permission_permits?: boolean;
     readonly permission_denial_reason?: string | null;
@@ -97,53 +110,74 @@ export async function decideAttentionSuggestionEnrichment(
     // refuses an unregistered class rather than throwing.
     const contract = built.contract;
 
-    // Policy and permission are resolved by their existing owners before the
-    // contract is executed. The Trust Runtime records the refusal; it does not
-    // re-decide authorization.
-    const authorization: TrustAuthorizationDecision = !input.policy_permits
-        ? {
-              permitted: false,
-              outcome: "refused_policy",
-              detail: input.policy_denial_reason ?? "Organization AI policy does not permit this decision class.",
-          }
-        : input.permission_permits === false
-          ? {
+    // Authorization is resolved by its existing owners before the contract is
+    // executed. The Trust Runtime records the refusal; it never re-decides
+    // authorization, and it never reads RBAC or tenant policy itself.
+    const authorization: TrustRuntimeAuthorization = input.authorization
+        ? toTrustRuntimeAuthorization(input.authorization)
+        : legacyAuthorization(input);
+
+    return runDecision();
+
+    /**
+     * The pre-Slice-0.3 shape: two booleans resolved by the caller. Retained so
+     * the V1 certification suite and any remaining caller behave identically.
+     * Absent booleans mean "permitted", matching the previous default.
+     */
+    function legacyAuthorization(
+        legacy: AttentionSuggestionEnrichmentDecisionInput,
+    ): TrustRuntimeAuthorization {
+        if (legacy.policy_permits === false) {
+            return {
+                permitted: false,
+                outcome: "refused_policy",
+                detail: legacy.policy_denial_reason ?? "Organization AI policy does not permit this decision class.",
+            };
+        }
+        if (legacy.permission_permits === false) {
+            return {
                 permitted: false,
                 outcome: "refused_permission",
-                detail: input.permission_denial_reason ?? "Caller lacks the permission required for this decision class.",
-            }
-          : { permitted: true };
+                detail:
+                    legacy.permission_denial_reason ??
+                    "Caller lacks the permission required for this decision class.",
+            };
+        }
+        return { permitted: true };
+    }
 
-    const resolvedInformation = authorization.permitted
-        ? {
-              deterministic_attention_suggestion: input.deterministic
-                  ? {
-                        primary_reason_code: input.deterministic.source.primary_reason_code,
-                        next_action_key: input.deterministic.next_action.key,
-                        template_key: input.deterministic.suggested_content?.template_key ?? null,
-                        channel: input.deterministic.suggested_content?.channel ?? null,
-                        reasoning_summary: input.deterministic.reasoning.summary,
-                        draft_body: input.deterministic.suggested_content?.body ?? null,
-                    }
-                  : null,
-          }
-        : {};
+    async function runDecision(): Promise<AttentionSuggestionEnrichmentDecision> {
+        const resolvedInformation = authorization.permitted
+            ? {
+                  deterministic_attention_suggestion: input.deterministic
+                      ? {
+                            primary_reason_code: input.deterministic.source.primary_reason_code,
+                            next_action_key: input.deterministic.next_action.key,
+                            template_key: input.deterministic.suggested_content?.template_key ?? null,
+                            channel: input.deterministic.suggested_content?.channel ?? null,
+                            reasoning_summary: input.deterministic.reasoning.summary,
+                            draft_body: input.deterministic.suggested_content?.body ?? null,
+                        }
+                      : null,
+              }
+            : {};
 
-    const execution = await executeDecisionContract({
-        contract,
-        resolvedInformation,
-        semanticMap: ATTENTION_SUGGESTION_SEMANTIC_MAP,
-        repository,
-        authorization,
-        nowIso: input.nowIso,
-        clock: input.clock,
-        supersedesPackageId: input.supersedesPackageId ?? null,
-    });
+        const execution = await executeDecisionContract({
+            contract,
+            resolvedInformation,
+            semanticMap: ATTENTION_SUGGESTION_SEMANTIC_MAP,
+            repository,
+            authorization,
+            nowIso: input.nowIso,
+            clock: input.clock,
+            supersedesPackageId: input.supersedesPackageId ?? null,
+        });
 
-    const enrichment =
-        execution.package.outcome === "recommended" && execution.package.recommendation
-            ? safeParseAttentionSuggestionAiEnrichmentV1(execution.package.recommendation)
-            : null;
+        const enrichment =
+            execution.package.outcome === "recommended" && execution.package.recommendation
+                ? safeParseAttentionSuggestionAiEnrichmentV1(execution.package.recommendation)
+                : null;
 
-    return { package: execution.package, step_trace: execution.step_trace, enrichment };
+        return { package: execution.package, step_trace: execution.step_trace, enrichment };
+    }
 }
