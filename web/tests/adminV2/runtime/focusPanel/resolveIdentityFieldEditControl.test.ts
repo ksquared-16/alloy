@@ -14,8 +14,16 @@ describe("resolveIdentityFieldEditControl", () => {
         const control = resolveIdentityFieldEditControl("child.custom_picklist", [
             {
                 field_key: "custom_picklist",
+                // Every value below is fixed by this test's own scenario: a TENANT CUSTOM
+                // (is_system false) ACTIVE select on the child entity, resolved as
+                // "child.custom_picklist". label is unread here, so it stays null rather than
+                // asserting a display string the test never exercises.
+                label: null,
+                entity_type: "child",
                 field_type: "select",
                 config: { option_set_key: "custom_picklist" },
+                is_system: false,
+                is_active: true,
             },
         ]);
         expect(control).toEqual({

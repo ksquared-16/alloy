@@ -19,6 +19,29 @@ import { resolveBosProcessEffectiveCommandKeys } from "@/lib/bos/commandSession/
 import { queryBosSlashCatalog } from "@/lib/bos/commandSession/slash/queryBosSlashCatalog";
 import { classifyRecordHeaderActionsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/classifyCurrentWorkActions";
 import { resolveCurrentWorkTemplateFromPublishedPlan } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkTemplateFromPublishedPlan";
+import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+
+// Mirrors the canonical construction used by the passing sibling suites (see
+// tests/adminV2/runtime/filterRightRailActionsForCurrentWork.test.ts). The old literal carried
+// `confirmation`, `requiresEntityId` and `placementId` - none of which are on
+// ResolvedActionForClient. Confirmation is owned by the COMMAND runtime
+// (CommandExecutionConfirmation / destructive confirmationPolicy), not by the action
+// presentation contract, and this test asserts neither: it only classifies actions into
+// Current Work buckets.
+function registryAction(key: string, label: string): ResolvedActionForClient {
+    return {
+        key,
+        label,
+        description: null,
+        action_type: "registry",
+        icon: null,
+        style: null,
+        display_style: "outline",
+        payload: {},
+        workflow_id: null,
+    };
+}
 
 describe("P6.S2 process runtime projection", () => {
     it("uses command_set_v1 when present and preserves process order", () => {
@@ -59,20 +82,8 @@ describe("P6.S2 process runtime projection", () => {
 
         const classified = classifyRecordHeaderActionsForCurrentWork({
             recordHeaderSlots: {
-                primary: [
-                    {
-                        key: "schedule_tour",
-                        label: "Schedule tour",
-                        description: null,
-                        icon: null,
-                        confirmation: null,
-                        requiresEntityId: true,
-                        placementId: "p1",
-                    },
-                ],
-                secondary: [],
-                header: [],
-                overflow: [],
+                ...emptyResolvedActionsBySlot(),
+                primary: [registryAction("schedule_tour", "Schedule tour")],
             },
             showOutcomeCompletion: false,
             primaryActionLabel: null,
@@ -164,7 +175,14 @@ describe("P6.S2 Current Work catalog fallback", () => {
                         label: "Contact Family",
                         required: true,
                         primary: true,
-                        // no helpful_actions → catalog fallback
+                        // due_policy and owner_strategy became required on StageWorkTemplateV1 and
+                        // have NO platform default — parseWorkTemplate rejects a template missing
+                        // either. These are not invented: they are the values the canonical plan
+                        // ships for this exact identity (enrollment / lead / contact_family) in
+                        // defaultEnrollmentStageOperatingPlans.ts.
+                        due_policy: { kind: "offset_days", days: 1 },
+                        owner_strategy: "record_owner",
+                        // still no helpful_actions → catalog fallback (the behaviour under test)
                     },
                 ],
             },

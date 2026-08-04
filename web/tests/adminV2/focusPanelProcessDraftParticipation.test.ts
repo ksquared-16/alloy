@@ -35,6 +35,7 @@ const draft = (over: Partial<ProcessDraftChildFacts> = {}): ProcessDraftChildFac
     startDate: "2026-09-01",
     programCategoryId: "prog-draft",
     siteLocationId: "site-1",
+    siteLocationLabel: null,
     ...over,
 });
 
