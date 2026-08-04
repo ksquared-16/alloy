@@ -3,9 +3,17 @@
 import { useState } from "react";
 
 import LifecycleStageOutcomeBehaviorEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeBehaviorEditor";
-import { newOutcomeDraft, type StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
+import {
+    ensureOutgoingTransitionToStage,
+    newOutcomeDraft,
+    type StageOperatingPlanEditorDraft,
+} from "@/lib/lifecycle/stageOperatingPlanEditorModel";
+import {
+    outcomeAutomationSummaryForOutcome,
+    readComposableOutcomeBehaviorDraft,
+    upsertComposableOutcomeBehavior,
+} from "@/lib/lifecycle/stageOutcomeAutomation";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
-import { outcomeAutomationSummaryForOutcome } from "@/lib/lifecycle/stageOutcomeAutomation";
 import {
     setWorkTemplateOutcomeRefs,
     workTemplateOutcomeRefs,
@@ -16,6 +24,10 @@ type Props = {
     transitionOptions: StageOutcomeTransitionOption[];
     /** Operator-facing stage name, used when explaining that it has no outgoing transitions. */
     stageLabel?: string;
+    /** Stage that owns these outcomes. With `processStages`, enables authoring an exit path here. */
+    stageKey?: string;
+    /** Every stage in the process — the destinations a new exit path may target. */
+    processStages?: Array<{ key: string; label: string }>;
     onChange: (draft: StageOperatingPlanEditorDraft) => void;
     /** When set, only outcomes available on this Work Template are shown/edited. */
     workTemplateKey?: string;
@@ -25,6 +37,8 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
     draft,
     transitionOptions,
     stageLabel,
+    stageKey,
+    processStages,
     onChange,
     workTemplateKey,
 }: Props) {
@@ -53,6 +67,48 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
     const scopedOutcomes = scopedRefs
         .map((ref) => draft.outcomes.find((outcome) => outcome.outcome_key === ref))
         .filter((outcome): outcome is NonNullable<typeof outcome> => Boolean(outcome));
+
+    /**
+     * Destinations an exit path from this stage may target. A stage cannot transition to itself,
+     * which the operating contract already rejects (`transition_destination_self`).
+     */
+    const transitionDestinations = (processStages ?? []).filter((stage) => stage.key !== stageKey);
+    const canAuthorTransition = Boolean(stageKey?.trim()) && transitionDestinations.length > 0;
+
+    /**
+     * Author an exit path from inside the outcome that needs one, and point that outcome at it.
+     *
+     * Choosing "Move through transition" with no configured path used to be a dead end: the
+     * control was disabled, and the only text nearby told the operator to go and create the very
+     * thing the disabled control needed. This introduces no new transition semantics — it writes
+     * the same canonical `outgoing_transitions` entry the "Ways out of this stage" panel writes,
+     * from where the requirement is actually discovered. Find-or-create lives in the model module.
+     *
+     * ONE `onChange`, deliberately. Creating the path and pointing the outcome at it are a single
+     * draft edit. Doing them as two calls meant the second was computed from the `draft` captured
+     * in this render — the one without the new path — so writing the outcome rule silently threw
+     * the transition away and the operator's click appeared to do nothing.
+     */
+    const createTransitionForOutcome = (outcomeKey: string, targetStageKey: string): void => {
+        const result = ensureOutgoingTransitionToStage(
+            stageKey ?? "",
+            draft.outgoing_transitions,
+            targetStageKey,
+            transitionDestinations.find((stage) => stage.key === targetStageKey)?.label,
+        );
+        if (!result.transition_ref) return;
+
+        const behavior = readComposableOutcomeBehaviorDraft(outcomeKey, draft.outcome_rules);
+        onChange({
+            ...draft,
+            outgoing_transitions: result.transitions,
+            outcome_rules: upsertComposableOutcomeBehavior(draft.outcome_rules, outcomeKey, {
+                ...behavior,
+                movement: "move_through_transition",
+                transition_ref: result.transition_ref,
+            }),
+        });
+    };
 
     const addOutcome = () => {
         const keys = new Set(draft.outcomes.map((outcome) => outcome.outcome_key));
@@ -276,6 +332,15 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                 rules={draft.outcome_rules}
                                 workTemplates={draft.work_templates}
                                 transitionOptions={transitionOptions}
+                                transitionDestinations={
+                                    canAuthorTransition ? transitionDestinations : undefined
+                                }
+                                onCreateTransition={
+                                    canAuthorTransition ?
+                                        (targetStageKey: string) =>
+                                            createTransitionForOutcome(outcome.outcome_key, targetStageKey)
+                                    :   undefined
+                                }
                                 onRulesChange={(outcome_rules) => onChange({ ...draft, outcome_rules })}
                             />
                             </div>

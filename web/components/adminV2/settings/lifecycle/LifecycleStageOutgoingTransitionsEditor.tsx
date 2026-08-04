@@ -19,7 +19,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import type { StageOperatingPlanV1, StageOutgoingTransitionV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import { isConfiguredClosedStatus, resolveOutcomeStatusOptions } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
-import { newOutgoingTransitionDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
+import { nextOutgoingTransitionDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import { summarizeStageOperatingPlan } from "@/lib/lifecycle/stageOperatingPlanSummary";
 
 type Props = {
@@ -70,15 +70,12 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                     type="button"
                     className="text-[0.6875rem] font-semibold text-alloy-pine transition-opacity hover:opacity-70"
                     data-testid="stage-transition-add"
-                    onClick={() => {
-                        const refs = new Set(transitions.map((transition) => transition.transition_ref));
-                        let index = transitions.length;
-                        while (refs.has(`${stageKey.trim() || "stage"}_transition_${index + 1}`)) index += 1;
+                    onClick={() =>
                         onChange([
                             ...transitions,
-                            newOutgoingTransitionDraft(stageKey, index, destinations[0]?.key),
-                        ]);
-                    }}
+                            nextOutgoingTransitionDraft(stageKey, transitions, destinations[0]?.key),
+                        ])
+                    }
                 >
                     + Add path
                 </button>

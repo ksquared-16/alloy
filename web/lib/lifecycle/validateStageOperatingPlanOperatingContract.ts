@@ -401,7 +401,25 @@ export function validateStageOperatingPlanOperatingContract(
         }
     }
 
-    return issues;
+    // One problem, reported once.
+    //
+    // Two passes can reach the same conclusion about the same control by different routes: an
+    // outcome whose `transition_ref` is not an edge fails both the behaviour check and the
+    // rule-target check, and each phrases it its own way ("not a valid outgoing edge" /
+    // "must reference a configured transition identity"). One control, one code, one problem —
+    // two sentences about it is the same restatement noise as a warning printed per outcome, and
+    // the surface keys its list by `controlId:code`, so the pair also collided as a React key.
+    //
+    // Deliberately NOT part of the identity: `message`. Two wordings of one diagnosis are still
+    // one diagnosis, and keeping both is what produced the duplicate. Genuinely different problems
+    // differ by code, control, or grain — all of which are kept.
+    const seen = new Set<string>();
+    return issues.filter((issue) => {
+        const identity = `${issue.code}|${issue.controlId}|${issue.outcome_key ?? ""}|${issue.template_key ?? ""}`;
+        if (seen.has(identity)) return false;
+        seen.add(identity);
+        return true;
+    });
 }
 
 export function stageOperatingContractHasBlockingErrors(

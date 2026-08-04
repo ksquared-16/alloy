@@ -176,3 +176,80 @@ export function newOutgoingTransitionDraft(
         available: true,
     };
 }
+
+/**
+ * Append-safe transition draft: picks the first `transition_ref` this stage is not already using.
+ *
+ * `transition_ref` is the identity an outcome stores, and a duplicate one is rejected by the
+ * operating contract (`transition_identity_duplicate`). Two surfaces now author exit paths — the
+ * "Ways out of this stage" panel and the outcome editor — so ref allocation lives here rather
+ * than being reimplemented next to each button, where the two copies could drift apart and mint
+ * the same ref.
+ */
+export function nextOutgoingTransitionDraft(
+    stageKey: string,
+    transitions: ReadonlyArray<StageOutgoingTransitionV1>,
+    targetStageKey: string = "",
+): StageOutgoingTransitionV1 {
+    const taken = new Set(transitions.map((transition) => transition.transition_ref));
+    let index = transitions.length;
+    while (taken.has(`${stageKey.trim() || "stage"}_transition_${index + 1}`)) index += 1;
+    return newOutgoingTransitionDraft(stageKey, index, targetStageKey);
+}
+
+export type EnsureOutgoingTransitionResult = {
+    transitions: StageOutgoingTransitionV1[];
+    /** The path an outcome should reference, or null when the request was not answerable. */
+    transition_ref: string | null;
+    created: boolean;
+};
+
+/**
+ * Find-or-create the exit path from `stageKey` to `targetStageKey`.
+ *
+ * Reuse before creation is the whole point: an outcome that needs a way out should adopt the one
+ * the stage already has rather than mint a second path to the same destination every time someone
+ * configures another outcome. Two paths to one stage remain a legitimate configuration (different
+ * label, different resulting status) — this never removes or rewrites one, it only declines to add
+ * a redundant one by accident.
+ *
+ * Returns the input array untouched when nothing is created, so callers can treat an unchanged
+ * reference as "no draft edit needed".
+ */
+export function ensureOutgoingTransitionToStage(
+    stageKey: string,
+    /**
+     * Undefined is meaningful, not missing: it marks a legacy plan whose first-class transitions
+     * were never authored. Authoring one is precisely the moment that array should exist, so this
+     * materialises it rather than refusing.
+     */
+    transitions: ReadonlyArray<StageOutgoingTransitionV1> | undefined,
+    targetStageKey: string,
+    targetStageLabel?: string,
+): EnsureOutgoingTransitionResult {
+    const source = stageKey.trim();
+    const target = targetStageKey.trim();
+    const current = [...(transitions ?? [])];
+
+    // A stage cannot exit into itself; the operating contract rejects it as
+    // `transition_destination_self`, so never author one here either.
+    if (!source || !target || source === target) {
+        return { transitions: current, transition_ref: null, created: false };
+    }
+
+    const existing = current.find((transition) => transition.target_stage_key === target);
+    if (existing) return { transitions: current, transition_ref: existing.transition_ref, created: false };
+
+    const created = {
+        ...nextOutgoingTransitionDraft(source, current, target),
+        // The standalone panel opens a row with no destination, so "New transition" is the right
+        // placeholder there. Here the destination is the operator's answer, so the path can name
+        // itself and read as a sentence in the exits list immediately.
+        label: `Move to ${targetStageLabel?.trim() || target}`,
+    };
+    return {
+        transitions: [...current, created],
+        transition_ref: created.transition_ref,
+        created: true,
+    };
+}
