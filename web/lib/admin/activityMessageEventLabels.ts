@@ -8,7 +8,7 @@ function readChannel(payload: Record<string, unknown>): string {
     return typeof ch === "string" ? ch.trim().toLowerCase() : "";
 }
 
-type MessageEventKind = "sent" | "received" | "queued" | "delivered" | "failed";
+type MessageEventKind = "sent" | "received" | "queued" | "delivered" | "failed" | "blocked" | "deferred";
 
 const CHANNEL_NOUNS: Record<string, string> = {
     email: "Email",
@@ -22,6 +22,11 @@ const KIND_VERBS: Record<MessageEventKind, string> = {
     queued: "queued",
     delivered: "delivered",
     failed: "failed",
+    // Policy outcomes, worded apart from `failed` on purpose: nothing broke, the
+    // platform declined to send. Conflating the two sends an operator chasing a
+    // provider incident that never happened.
+    blocked: "blocked",
+    deferred: "deferred",
 };
 
 function channelPhrase(channel: string, kind: MessageEventKind): string | null {
@@ -44,6 +49,13 @@ export function resolveCommunicationMessageEventTitle(
     // always the newest event — leaving it unmapped is what surfaced the raw key to operators.
     if (et === "message_delivered") return channelPhrase(ch, "delivered") ?? "Message delivered";
     if (et === "message_failed") return channelPhrase(ch, "failed") ?? "Message failed";
+    // Emitted by BOTH policy boundaries — the enqueue eligibility gate
+    // (canonicalOutboundEnqueue) and dispatch revalidation
+    // (communication_message_sender.py). Unmapped, a durable refusal reached the
+    // operator as the raw key `message_blocked`, which is the same way
+    // `message_delivered` was found above.
+    if (et === "message_blocked") return channelPhrase(ch, "blocked") ?? "Message blocked";
+    if (et === "message_deferred") return channelPhrase(ch, "deferred") ?? "Message deferred";
 
     return null;
 }

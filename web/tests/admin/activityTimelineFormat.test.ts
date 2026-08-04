@@ -70,4 +70,28 @@ describe("activityTimelineFormat (generic)", () => {
         expect(parts).toEqual({ timestamp: wantTs, body: "Hello" });
         expect(wantTs).not.toContain(",");
     });
+
+    // A refusal without its reason answers a question the operator did not have:
+    // they can already see that nothing arrived.
+    it("shows the operator-safe reason as the detail for a blocked send", () => {
+        const out = formatActivityTimelineEvent({
+            event_type: "message_blocked",
+            payload: {
+                channel: "sms",
+                reason: "SUPPRESSED",
+                operator_message: "This address is suppressed after a hard bounce.",
+            },
+        });
+        expect(out.title).toBe("SMS blocked");
+        expect(out.detail).toBe("This address is suppressed after a hard bounce.");
+    });
+
+    it("falls back to the block code when no operator message was recorded", () => {
+        const out = formatActivityTimelineEvent({
+            event_type: "message_deferred",
+            payload: { channel: "email", reason: "QUIET_HOURS" },
+        });
+        expect(out.title).toBe("Email deferred");
+        expect(out.detail).toBe("Quiet Hours");
+    });
 });
