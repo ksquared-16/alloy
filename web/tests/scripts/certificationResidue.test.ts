@@ -84,6 +84,30 @@ describe("workflow event classification", () => {
         expect(d.verdict).toBe("ambiguous");
         expect(d.reason).toMatch(/unclassified workflow event subject/);
     });
+
+    /**
+     * Regression: `customers` was missing, and the guard caught it on a LIVE tenant — a single new
+     * event written between two dry runs aborted the whole run. That is the guard working, but the
+     * gap was real. This pins every subject type observed on hosted Firefly so the same omission
+     * cannot recur silently.
+     */
+    it("classifies every subject type observed on the hosted tenant", () => {
+        const OBSERVED = [
+            "form_submissions", "documents", "opportunities", "program", "persons",
+            "child_placements", "tour_bookings", "gl_accounts", "schedule_assignments",
+            "customer_members", "child_enrollment_agreements", "child", "form_packet_sessions",
+            "opportunity", "staging_resend_smoke", "staging_live_validation", "customers",
+            "opportunity_customer_members", "communications_unknown",
+        ];
+        for (const t of OBSERVED) {
+            const d = classifyWorkflowEvent({ id: `e-${t}`, entity_type: t });
+            expect(d.verdict, `subject "${t}" must be classified, not ambiguous`).not.toBe("ambiguous");
+        }
+    });
+
+    it("treats customers as operational — they are removed by anchor A2", () => {
+        expect(classifyWorkflowEvent({ id: "e", entity_type: "customers" }).verdict).toBe("delete");
+    });
 });
 
 describe("A4 subjectless rows", () => {

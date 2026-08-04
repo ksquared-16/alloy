@@ -86,6 +86,7 @@ export const OPERATIONAL_EVENT_SUBJECTS = [
     "opportunities",
     "opportunity",
     "opportunity_customer_members",
+    "customers",
     "persons",
     "child",
     "customer_members",
