@@ -415,6 +415,19 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     }, [requestNonce, children]);
 
     const activeChild = children.find((c) => c.id === activeChildId) ?? null;
+    const activeOfferModel = activeChild
+        ? buildAssignmentCardModelForChild({
+              truth: context.truth as Record<string, unknown>,
+              customerMemberId: activeChild.id,
+              projection: (projById[activeChild.id] as never) ?? null,
+              requiredRuleIds: Array.isArray(
+                  (context.truth as Record<string, unknown>)._assignment_requirement_rule_ids,
+              )
+                  ? ((context.truth as Record<string, unknown>)
+                        ._assignment_requirement_rule_ids as string[])
+                  : ["child:start_date", "child:desired_schedule", "child:program_interest"],
+          })
+        : null;
     // While the Linked host elevates Scheduling, keep reporting focused even before
     // the request effect resolves activeChildId (avoids a mount-time "base" flash).
     const hostElevated = coordination?.activeDepth?.card === "scheduling";
@@ -450,31 +463,14 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             receded={receded}
         >
             {/*
-              Assignments card sections — Family request / Proposed / Commercial /
-              Committed / Readiness gaps. Observes buildAssignmentCardModel; does not
-              invent a parallel card runtime or alter reveal gates.
+              Assignment offer — site/program/room/schedule/start/tuition/quote with
+              compact readiness. Family-request fields belong on Children when configured.
             */}
             <div data-scheduling-card="true" data-assignments-card="true">
-                {activeChild ? (
+                {activeChild && activeOfferModel ? (
                     <>
                         <AssignmentCardSections
-                            model={buildAssignmentCardModelForChild({
-                                truth: context.truth as Record<string, unknown>,
-                                customerMemberId: activeChild.id,
-                                projection: (projById[activeChild.id] as never) ?? null,
-                                requiredRuleIds: Array.isArray(
-                                    (context.truth as Record<string, unknown>)
-                                        ._assignment_requirement_rule_ids,
-                                )
-                                    ? ((context.truth as Record<string, unknown>)
-                                          ._assignment_requirement_rule_ids as string[])
-                                    : [
-                                          "child:requested_days_per_week",
-                                          "child:start_date",
-                                          "child:desired_schedule",
-                                          "child:program_interest",
-                                      ],
-                            })}
+                            model={activeOfferModel}
                             childId={activeChild.id}
                             childName={activeChild.name}
                             style={{ marginBottom: 12 }}
@@ -487,6 +483,12 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                                     ._enrollment_participation_by_member as
                                     | Record<string, Record<string, unknown>>
                                     | undefined)?.[activeChild.id] ?? null
+                            }
+                            canCommit={activeOfferModel.readinessReady}
+                            commitBlockedReason={
+                                activeOfferModel.readinessReady
+                                    ? null
+                                    : `Cannot commit yet — ${activeOfferModel.readinessSummary.toLowerCase()}.`
                             }
                             style={{ marginBottom: 12 }}
                         />

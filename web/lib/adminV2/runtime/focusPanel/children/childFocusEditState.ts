@@ -24,8 +24,28 @@ const VALUE_KEYS: ChildFocusEditValueKey[] = [
     "program_room_cohort_key",
     "schedule_type",
     "start_date",
+    "requested_days_per_week",
+    "weekdays",
     "dob",
 ];
+
+function formatWeekdaysEditValue(raw: unknown): string {
+    if (!Array.isArray(raw)) return "";
+    return raw
+        .map((d) => (typeof d === "number" ? d : Number(d)))
+        .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+        .join(",");
+}
+
+function parseWeekdaysEditValue(raw: string): number[] | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(/[,\s]+/).filter(Boolean);
+    const days = parts
+        .map((p) => Number(p))
+        .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+    return days.length ? days : null;
+}
 
 function trimStr(value: unknown): string {
     if (value == null) return "";
@@ -76,6 +96,21 @@ export function seedChildFocusEditValues(truth: Record<string, unknown>, childId
     const opportunitySiteId =
         trimStr(truth.location_id) || trimStr(truth._location_id) || trimStr(truth["opportunity.location_id"]);
     const ownedSiteId = trimStr(row.location_id);
+    const memberId = trimStr(row.customer_member_id);
+    const bag = truth._enrollment_participation_by_member;
+    const fromBag =
+        memberId && bag && typeof bag === "object" && !Array.isArray(bag)
+            ? (bag as Record<string, unknown>)[memberId]
+            : null;
+    const participation =
+        fromBag && typeof fromBag === "object" && !Array.isArray(fromBag)
+            ? (fromBag as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+    const requestedDaysRaw =
+        participation.requested_days_per_week
+        ?? (row as { requested_days_per_week?: unknown }).requested_days_per_week;
+    const weekdaysRaw =
+        participation.weekdays ?? (row as { weekdays?: unknown }).weekdays;
     return {
         childId: row.id,
         row,
@@ -86,6 +121,11 @@ export function seedChildFocusEditValues(truth: Record<string, unknown>, childId
             program_room_cohort_key: trimStr(row.program_room_cohort_key),
             schedule_type: trimStr(row.schedule_type),
             start_date: row.start_date ? String(row.start_date).slice(0, 10) : "",
+            requested_days_per_week:
+                requestedDaysRaw != null && String(requestedDaysRaw).trim()
+                    ? String(requestedDaysRaw).trim()
+                    : "",
+            weekdays: formatWeekdaysEditValue(weekdaysRaw),
             dob: row.dob ? String(row.dob).slice(0, 10) : "",
         },
     };
@@ -171,6 +211,25 @@ export function buildChildFocusSavePatch(args: {
     }
     if (args.editableKeys.has("start_date") && fullOcmPatch.start_date !== undefined) {
         ocmPatch.start_date = fullOcmPatch.start_date;
+    }
+    if (args.editableKeys.has("requested_days_per_week")) {
+        const next = args.draft.requested_days_per_week.trim();
+        const prev = args.baseline.requested_days_per_week.trim();
+        if (next !== prev) {
+            if (!next) {
+                ocmPatch.requested_days_per_week = null;
+            } else {
+                const n = Number(next);
+                ocmPatch.requested_days_per_week = Number.isFinite(n) ? Math.floor(n) : null;
+            }
+        }
+    }
+    if (args.editableKeys.has("weekdays")) {
+        const next = args.draft.weekdays.trim();
+        const prev = args.baseline.weekdays.trim();
+        if (next !== prev) {
+            ocmPatch.weekdays = parseWeekdaysEditValue(next);
+        }
     }
 
     return { identityPatch, ocmPatch };

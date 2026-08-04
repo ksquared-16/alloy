@@ -18,6 +18,8 @@ export type ChildFocusMutationValueKey =
     | "program_room_cohort_key"
     | "schedule_type"
     | "start_date"
+    | "requested_days_per_week"
+    | "weekdays"
     | "dob";
 
 const CONTACT_MUTATION_BY_REF: Readonly<Record<string, ContactMutationValueKey>> = {
@@ -56,6 +58,8 @@ const CHILD_FOCUS_MUTATION_BY_REF: Readonly<Record<string, ChildFocusMutationVal
     "inquiry_child.program_room_cohort_key": "program_room_cohort_key",
     "inquiry_child.schedule_type": "schedule_type",
     "inquiry_child.start_date": "start_date",
+    "inquiry_child.requested_days_per_week": "requested_days_per_week",
+    "inquiry_child.weekdays": "weekdays",
     "child.location": "location_id",
     "child.program": "program_category_id",
     "child.room": "program_room_cohort_key",
@@ -97,10 +101,11 @@ export function isEnrollmentOcmMutationValueKey(valueKey: ChildFocusMutationValu
     return valueKey !== "dob";
 }
 
-export function inputTypeForIdentityFieldRef(refKey: string): "text" | "email" | "tel" | "date" {
+export function inputTypeForIdentityFieldRef(refKey: string): "text" | "email" | "tel" | "date" | "number" {
     const trimmed = reconcileLegacyChildEnrollmentAlias(refKey.trim());
     if (trimmed === "contact.email") return "email";
     if (trimmed === "contact.phone") return "tel";
     if (trimmed === "inquiry_child.start_date" || trimmed === "child.date_of_birth") return "date";
+    if (trimmed === "inquiry_child.requested_days_per_week") return "number";
     return "text";
 }

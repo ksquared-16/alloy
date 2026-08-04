@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-26
+last_reviewed: 2026-08-04
 supersedes: []
 ---
 
@@ -21,6 +21,26 @@ trio; Start Date resolves from the first qualifying **committed** assignment via
 | `assignment_type` / `operational_assignment_types` | Assignment Kind |
 | `commitment_kind = proposed` | Planned / Proposed Assignment |
 | `commitment_kind = committed` | Active / Upcoming Assignment (agreement-backed) |
+
+## Assignments Focus Panel card (product model)
+
+The Assignments card (`scheduling`) presents the **organization’s proposed or committed
+operational offer** for a child: campus, program, room, schedule, Start Date, tuition plan,
+estimated tuition, and quote — with compact proposed/committed state and contextual readiness.
+
+**Family-request facts** (Requested Start, Requested Days per Week, Preferred Weekdays, and
+other preferred enrollment preferences) are **child-enrollment fields**. They may appear on the
+Children card when configured; they are not Assignment sections.
+
+**Readiness** is derived from the assignment + configured process rules. Present required/missing
+state on offer fields and a compact card summary (e.g. “3 items required”); server-side preflight
+remains authoritative. Do not render a large standalone “Readiness gaps” panel as the primary UX.
+
+**Estimated tuition** is an attribute of the assignment proposal (near Tuition Plan). Quote
+snapshots remain immutable commercial artifacts — not ledger truth.
+
+`commitment_kind` must **not** become a visible parallel lifecycle or duplicate status system;
+use compact proposed/committed treatment only.
 
 ## Authority XOR (child subjects)
 

@@ -36,6 +36,9 @@ export type ChildFocusEditValues = {
     program_room_cohort_key: string;
     schedule_type: string;
     start_date: string;
+    requested_days_per_week: string;
+    /** Comma-separated weekday ints (0–6), e.g. "1,3,5". */
+    weekdays: string;
     dob: string;
 };
 
@@ -106,7 +109,8 @@ export function resolveChildFocusEditPolicy(
                 configKey: fieldKey,
                 valueKey,
                 label: resolveCanonicalIdentityFieldLabel(fieldKey, tenantFieldDefinitions),
-                inputType: inputType === "date" ? "date" : "text",
+                inputType:
+                    inputType === "date" ? "date" : inputType === "number" ? "text" : "text",
                 displayed,
                 editable,
                 unsupported,

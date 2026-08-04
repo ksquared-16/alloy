@@ -21,6 +21,7 @@ import {
 } from "@/lib/fields/platformFieldCatalog";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { enrichProvidersWithChildEnrollmentProjections } from "@/lib/fields/canonicalFieldProjection";
+import { CHILDCARE_STARTER_FIELD_CATALOG } from "@/lib/layout/childcareLayoutFieldCatalog";
 
 export type ConsumerProviderAssemblyFilter = {
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
@@ -54,6 +55,36 @@ function providerFromPlatformFieldCatalog(field: PlatformFieldDefinition): Canon
     };
 }
 
+/** Optional child-enrollment facts (Requested Days, Preferred Weekdays, …) from the starter catalog. */
+function providerFromChildcareEnrollmentDetail(
+    entry: (typeof CHILDCARE_STARTER_FIELD_CATALOG)[number],
+): CanonicalDataProvider {
+    return {
+        refKey: entry.refKey,
+        label: entry.pickerLabel,
+        kind: "business_field",
+        outputShape: "scalar",
+        entityNamespace: namespaceFromRefKey(entry.refKey),
+        categoryKey: "inquiry_participation",
+        fieldType: entry.fieldType,
+        valueType:
+            entry.fieldType === "number"
+                ? "number"
+                : entry.fieldType === "date"
+                  ? "date"
+                  : entry.fieldType === "multiselect"
+                    ? "choice"
+                    : "text",
+        isSystem: true,
+        availability: FOCUS_PANEL_AVAILABILITY,
+        source: {
+            source: "childcare_layout_catalog",
+            sourceModule: "web/lib/layout/childcareLayoutFieldCatalog.ts",
+        },
+        resolverOwner: entry.storagePath ?? "web/lib/layout/childcareLayoutFieldCatalog.ts",
+    };
+}
+
 function mergePlatformCatalogProviders(
     base: readonly CanonicalDataProvider[],
     filter: ConsumerProviderAssemblyFilter,
@@ -84,6 +115,17 @@ function mergePlatformCatalogProviders(
             const catalogProvider = providerFromPlatformFieldCatalog(platformField);
             if (!consumerSupportsProviderInPicker(consumer, catalogProvider)) continue;
             merged.set(platformField.refKey, catalogProvider);
+        }
+    }
+    // Focus Panel / drawer Children composition: optional enrollment-detail facts that live
+    // on participation metadata (not native OCM columns) must still be pickable.
+    if (consumer === "focus_panel" || consumer === "drawer") {
+        for (const entry of CHILDCARE_STARTER_FIELD_CATALOG) {
+            if (!entry.enrollmentDetail || !entry.refKey.startsWith("inquiry_child.")) continue;
+            if (merged.has(entry.refKey)) continue;
+            const provider = providerFromChildcareEnrollmentDetail(entry);
+            if (!consumerSupportsProviderInPicker(consumer, provider)) continue;
+            merged.set(entry.refKey, provider);
         }
     }
     return [...merged.values()].sort((a, b) => a.label.localeCompare(b.label));
