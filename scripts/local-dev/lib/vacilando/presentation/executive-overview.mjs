@@ -14,9 +14,14 @@ import {
   deliverableReviewVm,
 } from "../deliverable-review.mjs";
 import { listEvidence } from "../evidence.mjs";
-import { getMissionConfidence } from "../mission-confidence.mjs";
 import { buildDirectorSummary } from "../director-summary.mjs";
 import { listDecisions } from "../decisions.mjs";
+import {
+  explainedConfidenceVm,
+  confidenceGlanceVm,
+} from "./explained-confidence.mjs";
+
+export { explainedConfidenceVm, confidenceGlanceVm };
 
 /** @typedef {{ id: string, kind: string, label: string, explanation?: string, missionId?: string }} PostureChoice */
 
@@ -436,48 +441,6 @@ export function evidenceStripVm(missionId, { limit = 3 } = {}) {
 }
 
 /**
- * Primary confidence glance for L1 — one truth only (no dual large %).
- * Does not change confidence math.
- */
-export function confidenceGlanceVm(missionId, {
-  reviewVm = null,
-  missionConfidence = null,
-} = {}) {
-  const open = reviewVm || (getOpenDeliverableReview(missionId) ? deliverableReviewVm(missionId) : null);
-  const mc = missionConfidence || getMissionConfidence(missionId);
-
-  if (open?.kind === "deliverable_review") {
-    const cert = open.certification?.confidence || {};
-    const rec = open.directorRecommendation || open.recommendation || {};
-    const pct = cert.pct ?? rec.confidencePct ?? null;
-    const reasons = cert.reasons || [];
-    return {
-      kind: "confidence_glance",
-      primaryKind: "certification",
-      label: "Certification confidence",
-      bandLabel: pct != null && pct >= 80 ? "High" : pct != null && pct >= 55 ? "Moderate" : pct != null ? "Low" : (mc.bandLabel || "—"),
-      percent: pct,
-      why: reasons.slice(0, 3),
-      recommendation: rec.headline || (open.operatorMayApprove ? `Certify ${open.waveLabel || "deliverable"}` : null),
-      secondaryNote: mc?.percent != null
-        ? `Mission confidence ${mc.percent}% is available under Technical depth.`
-        : null,
-    };
-  }
-
-  return {
-    kind: "confidence_glance",
-    primaryKind: "mission",
-    label: "Mission confidence",
-    bandLabel: mc.bandLabel || "—",
-    percent: mc.percent,
-    why: [],
-    recommendation: null,
-    secondaryNote: null,
-  };
-}
-
-/**
  * Compose Executive L1 package for Mission Dashboard.
  */
 export function composeExecutiveL1(missionId, {
@@ -503,7 +466,14 @@ export function composeExecutiveL1(missionId, {
     progress,
   });
   const evidence = evidenceStripVm(missionId);
-  const confidence = confidenceGlanceVm(missionId, { reviewVm, missionConfidence });
+  const confidence = confidenceGlanceVm(missionId, {
+    reviewVm,
+    missionConfidence,
+    decisions,
+  });
+  // Prefer nested explained panel as the L1 authority
+  const explained = confidence.explained
+    || explainedConfidenceVm(missionId, { reviewVm, missionConfidence, decisions });
 
   // Prefer recommended decision action over vague "Review outcome"
   let primaryAction = decisions.primaryAction;
@@ -538,7 +508,7 @@ export function composeExecutiveL1(missionId, {
     overview,
     decisions,
     evidence,
-    confidence,
+    confidence: explained,
     primaryAction,
     depthHint: "Technical depth holds local app, workers, usage, work inventory, and confidence calculation.",
   };

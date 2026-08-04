@@ -1,0 +1,9 @@
+{
+  "hasExplainedPanel": true,
+  "hasUncertainty": true,
+  "hasIncrease": true,
+  "hasPercent": true,
+  "hasRecommended": true,
+  "depthHasCalculation": true,
+  "noDuplicateMissionPctInGlanceAndHero": true
+}
