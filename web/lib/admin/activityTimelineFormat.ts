@@ -189,6 +189,19 @@ function resolveEventDetail(event: ActivityTimelineEventInput, options: Activity
         return formatActivitySummaryHumanizingKeys(summaryRaw.trim(), statusKeys);
     }
 
+    // A policy refusal without its reason answers the wrong question: the
+    // operator can already see that nothing arrived. Both boundaries put the
+    // operator-safe explanation at the top level of the payload — the enqueue
+    // eligibility gate (canonicalOutboundEnqueue) and dispatch revalidation
+    // (communication_message_sender.py, which spreads DispatchDecision.to_audit)
+    // — so one rule serves both.
+    if (tLower === "message_blocked" || tLower === "message_deferred") {
+        const explanation = strOrEmpty(payload.operator_message);
+        if (explanation) return explanation;
+        const code = strOrEmpty(payload.reason);
+        return code ? humanizeSnakeCaseToken(code, statusKeys) : null;
+    }
+
     const transitionTypes = toTypeSet(options.statusTransitionEventTypes);
     if (transitionTypes.size > 0 && transitionTypes.has(tLower)) {
         const o = strOrEmpty(payload.old_status_key) || strOrEmpty(payload.previous_status_key);
