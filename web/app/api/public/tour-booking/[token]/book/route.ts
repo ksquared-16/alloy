@@ -7,6 +7,12 @@ import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { mintActionsFor, POST_BOOKING_ACTION_KINDS } from "@/lib/tours/invitation/mintTourInvitation";
+import { buildTourParentActionModel } from "@/lib/tours/invitation/tourParentActionModel";
+import {
+    orchestrateTourBookingConfirmed,
+    runTourCommsOrchestratorBestEffort,
+} from "@/lib/tours/comms/tourCommsOrchestrator";
+import { resolvePublicBaseUrl } from "@/lib/tours/public/resolvePublicBaseUrl";
 import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
 import { assertBookingLocationMatchesOpportunity, fetchOpportunityForTourAdmin } from "@/lib/tours/admin/opportunityTourContext";
 
@@ -135,6 +141,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         primaryPersonId: oppRes.row.primary_person_id,
         primaryContactId: oppRes.row.primary_contact_id,
         approvalRequired: Boolean(ru.approval_required),
+        // The confirmation cannot be rendered until the scoped reschedule/cancel
+        // credentials exist, and those can only be minted after this commits. We send
+        // it ourselves, below, through the same orchestrator.
+        deferConfirmationComms: true,
         metadata: { tour_public_booking_link_id: link.id, rule_id: ruleId },
     };
 
@@ -155,7 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // the confirmation message has nothing to link to and the lifecycle the
         // invitation promised dead-ends at the booking — the same shape of gap the
         // reschedule route already closes for its replacement booking.
-        await mintActionsFor({
+        const minted = await mintActionsFor({
             supabase,
             orgId: link.org_id,
             invitationId: invitation.id,
@@ -174,6 +184,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             keepLinkId: link.id,
             reason: "booked",
         });
+
+        // ONE confirmation, after the credentials exist, through the SAME orchestrator
+        // the admin path uses. Declared best-effort: a delivery failure must never
+        // revoke a booking the parent successfully made.
+        const actionModel = buildTourParentActionModel({
+            actions: minted.ok ? minted.actions : [],
+            baseUrl: resolvePublicBaseUrl(request),
+            bookingStatusKey: booking.status_key,
+        });
+        await runTourCommsOrchestratorBestEffort("public_book_confirmed", () =>
+            orchestrateTourBookingConfirmed(supabase, {
+                orgId: link.org_id,
+                booking,
+                actorUserId: null,
+                actionModel,
+            })
+        );
 
         for (const event of ["tour_slot_selected", "tour_booked"] as const) {
             await recordTourEvent(supabase, {
