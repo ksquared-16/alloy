@@ -15,8 +15,16 @@
 import { createHash } from "crypto";
 
 export const CERTIFICATION_RESET_PURPOSE = "certification_baseline_reset";
-/** Bump when the resolver's meaning changes, so old identities cannot silently validate. */
-export const CERTIFICATION_RESOLVER_VERSION = "a4.1";
+/**
+ * Bump when the resolver's meaning OR the database authority changes, so an old identity cannot
+ * silently validate against a different execution engine.
+ *
+ * The migration version is part of this deliberately. A plan approved while the reset authority did
+ * not yet exist on hosted would otherwise keep the same identity once it was promoted — the ids and
+ * the configuration are unchanged, but the thing that would execute them is not. Promotion voids
+ * prior authorizations, and the identity has to say so rather than relying on someone remembering.
+ */
+export const CERTIFICATION_RESOLVER_VERSION = "a4.2+authority-20260804090000";
 
 export type StorageManifest = {
     purpose: string;
