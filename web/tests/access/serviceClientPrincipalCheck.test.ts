@@ -158,8 +158,14 @@ describe("W-4 · the ratchet", () => {
         expect(current.filter((r) => !FROZEN_BASELINE.includes(r))).toEqual([]);
     });
 
-    it("does not grow the total exception count past the 2026-07-31 baseline of 26", () => {
-        expect(report.counts.subject_unresolved).toBeLessThanOrEqual(26);
+    it("does not grow the total exception count past the current floor of 17", () => {
+        // Ratcheted 26 → 17 on 2026-08-04. The 2026-07-31 baseline of 26 was set when the
+        // book-v2 funnel still existed; its retirement (ea3eaf377, via staging merge 5118940f7)
+        // removed all 9 of the unresolved routes it owned — 5 frozen baseline + 4 exceptions.
+        // Leaving the ceiling at 26 would have let 9 new exceptions be added silently, which is
+        // the one property this workstream exists to provide. A ratchet is only a ratchet if it
+        // follows the floor down.
+        expect(report.counts.subject_unresolved).toBeLessThanOrEqual(17);
     });
 
     it("does not grow the advisory transitive-only set past its baseline of 3", () => {

@@ -15,6 +15,8 @@
  * here as regression locks rather than fixes. See the W-1 execution record in §5 of the plan.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -269,6 +271,125 @@ describe("W-1 — routes that gated on access.ok alone now require portal eligib
             expect(await reachedDataLayerAfter(route.call, route.probe)).toBe(false);
         });
     }
+});
+
+/**
+ * RL-1 family coverage — added by the Mission 2 re-verification (2026-08-04).
+ *
+ * The six route-level locks above name six files. They cannot notice a *seventh* analytics route
+ * arriving ungated, and between the W-1 execution (2026-07-31) and this re-verification the repo
+ * grew from 539 to 559 API routes. That gap was closed by hand this run; this block is the durable
+ * form of that census, so the next contributor does not have to repeat it.
+ *
+ * **This is not RL-1's tier-A half.** That is W-14's declared `(route → capability)` table across
+ * all 559 routes. This is scoped to the three families W-1 owns, and it proves only that each route
+ * *references* a gate that enforces portal eligibility — never that the gate's result is honoured.
+ * W-1's own finding (a route holding two access resolutions, only the first gating) is exactly the
+ * error this cannot catch, and W-4's record states the same limit for the same reason.
+ */
+const ANALYTICS_FAMILY_DIRS = [
+    "app/api/admin/analytics",
+    "app/api/admin/metrics",
+    "app/api/admin/intelligence",
+] as const;
+
+/**
+ * Gates that deny a principal the portal refuses to admit.
+ *
+ * `requireAdminOrOps` qualifies through `getAdminOrgContextLightCached`, which returns null unless
+ * `bundle.portalEligible` (`lib/adminAuth.ts:43-45`). `getAdminContextCached` returns 403 on the
+ * same condition. `requireAnalyticsV2Admin*` wrap the latter.
+ */
+const SUFFICIENT_GATES = [
+    "requireAnalyticsReadAccess",
+    "requireAnalyticsV2AdminContext",
+    "requireAnalyticsV2AdminMutate",
+    "requireAdminOrOps",
+    "getAdminContextCached",
+    "loadAdminRouteGate",
+] as const;
+
+/**
+ * The G2 primitives. These resolve an access context that is `ok` for *any* authenticated org
+ * member, so a route holding only these is the exposure W-1 closed.
+ */
+const RAW_RESOLUTIONS = ["getAdminAccessContextCached", "loadAdminAccessBundleCached"] as const;
+
+/** Reviewed exceptions. Empty by design — an entry here is a security decision, per W-4's ratchet. */
+const FAMILY_GATE_EXCEPTIONS: { route: string; reason: string }[] = [];
+
+function routeFilesUnder(dirs: readonly string[]): string[] {
+    const webRoot = path.resolve(__dirname, "../..");
+    const found: string[] = [];
+
+    const walk = (abs: string) => {
+        if (!fs.existsSync(abs)) return;
+        for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+            const next = path.join(abs, entry.name);
+            if (entry.isDirectory()) walk(next);
+            else if (entry.name === "route.ts") found.push(path.relative(webRoot, next));
+        }
+    };
+
+    for (const dir of dirs) walk(path.join(webRoot, dir));
+    return found.sort();
+}
+
+function gatesPortalEligibility(source: string): boolean {
+    return SUFFICIENT_GATES.some((gate) => source.includes(gate));
+}
+
+describe("W-1 — every analytics-family route references a portal-enforcing gate (RL-1 coverage)", () => {
+    const webRoot = path.resolve(__dirname, "../..");
+    const routes = routeFilesUnder(ANALYTICS_FAMILY_DIRS);
+
+    it("finds the analytics family, so the assertions below are not vacuous", () => {
+        // 26 route files as of 2026-08-04. Asserted as a floor: new routes are expected, and each
+        // one must satisfy the gate assertion below rather than change this number.
+        expect(routes.length).toBeGreaterThanOrEqual(20);
+        expect(routes).toContain("app/api/admin/metrics/resolve/route.ts");
+        expect(routes).toContain("app/api/admin/intelligence/operational/route.ts");
+    });
+
+    it("rejects a route that holds only a raw access resolution (the G2 shape)", () => {
+        // Proves the predicate can fail. A check that cannot be shown to go red is not evidence.
+        const g2Shape = `
+            const access = await getAdminAccessContextCached();
+            if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        `;
+        expect(gatesPortalEligibility(g2Shape)).toBe(false);
+        expect(RAW_RESOLUTIONS.some((raw) => g2Shape.includes(raw))).toBe(true);
+        expect(gatesPortalEligibility(`await requireAnalyticsReadAccess();`)).toBe(true);
+    });
+
+    it("actually reads every family route — an empty gate list flags all of them", () => {
+        // Non-vacuity, measured against the real files rather than a synthetic string: if the scan
+        // silently read nothing (wrong root, bad glob), this would flag zero and the assertion
+        // below would pass for the wrong reason.
+        const noGates: readonly string[] = [];
+        const flaggedWithNoGates = routes.filter((route) => {
+            const source = fs.readFileSync(path.join(webRoot, route), "utf8");
+            return source.length > 0 && !noGates.some((gate) => source.includes(gate));
+        });
+        expect(flaggedWithNoGates).toEqual(routes);
+        expect(flaggedWithNoGates.length).toBe(routes.length);
+    });
+
+    it("names no route that gates on a raw access resolution alone", () => {
+        const excepted = new Set(FAMILY_GATE_EXCEPTIONS.map((e) => e.route));
+        const ungated = routes.filter((route) => {
+            if (excepted.has(route)) return false;
+            return !gatesPortalEligibility(fs.readFileSync(path.join(webRoot, route), "utf8"));
+        });
+        expect(ungated).toEqual([]);
+    });
+
+    it("carries no stale exception", () => {
+        for (const exception of FAMILY_GATE_EXCEPTIONS) {
+            expect(routes).toContain(exception.route);
+            expect(exception.reason.length).toBeGreaterThan(0);
+        }
+    });
 });
 
 describe("W-1 — routes already portal-gated stay gated (RL-1 regression lock)", () => {

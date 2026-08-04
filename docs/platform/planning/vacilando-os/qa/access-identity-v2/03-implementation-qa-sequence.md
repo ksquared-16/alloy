@@ -15,6 +15,11 @@
 · **W-1…W-3 executed 2026-07-31** (same mission, assignment `asg_d77353d7377647`)
 · **W-4 executed 2026-07-31** (same mission, assignment `asg_d203f547736c16`)
 · **W-0 re-run 2026-08-04, zero drift** (mission `msn_f74ed02c126c88d7ff`, assignment `asg_2a1f4d9dc80899`)
+· **W-1…W-3 re-verified 2026-08-04** (same mission, assignment `asg_e9308076173af6`) — locks hold; W-3's
+recorded *reasoning* is superseded by a migration from another track (§5, §14.3.10)
+· **W-4 re-verified 2026-08-04** (same mission, assignment `asg_91e144a61569e4`) — check green across a
+20-route expansion; baseline 26 → 17, entirely the `book-v2` retirement; a slack ratchet ceiling was
+found and tightened (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -473,6 +478,73 @@ seeding `workflows.*` into all three catalog tables, or a visible-but-disabled r
 record is therefore removal, not the repoint written above** — a future contributor reading only the
 recommendation would reintroduce the 400.
 
+#### Wave 1 re-verification under Mission 2 — **DONE 2026-08-04**, assignment `asg_e9308076173af6`
+
+Mission 2 re-issued W-1…W-3 against records that were already executed and green. §4's rule for W-0 applies
+here for the same reason: **re-execute rather than re-assert**. The three suites were re-run on the current
+base, and each lock's *subject* was re-enumerated — a lock naming six files cannot notice a seventh arriving.
+
+| Field | Value |
+|---|---|
+| Base | `9e19c8736`, after this worktree merged `origin/staging` (`5118940f7`); migrations 289 → **302**, API routes 539 → **559** |
+| Branch | `hotfix/vacilando-ui-freshness-flash` — **not** the slot's nominal `agent/claude/6-vacilando-os-product-def`. All three Wave 1 artifacts are present on it; recorded, not changed |
+| Suites | 50 tests green, matching the 2026-07-31 record exactly (31 + 14 + 5). **55** after this assignment's addition |
+| Evidence | [`wave1-reverification-evidence.json`](./wave1-reverification-evidence.json) |
+
+**W-1 / RL-1 — holds, and the lock was widened.** All six routes still carry their gates. The three families
+W-1 owns were re-enumerated at **26 route files**; every one references a gate that denies a principal the
+portal refuses to admit. The one new route resolving the raw G2 primitive
+(`metrics/snapshots/write/route.ts:47,89`) gates through `requireAdminOrOps()` at `:45` first — which
+qualifies via `bundle.portalEligible` (`lib/adminAuth.ts:43-45`) — so it is the *two access resolutions*
+shape W-1 documented, not a new exposure.
+
+That census was done by hand this run, which is precisely the thing §10.2 says not to leave as a number in a
+document. It is now a test: `analyticsRouteGates.test.ts` walks the three family directories and asserts each
+route references a sufficient gate, with an empty reviewed exception list in W-4's ratchet idiom. **This is
+not RL-1's tier-A half** — that remains W-14's 559-route declared table. It proves a gate is *referenced*,
+never that its result is honoured, which is the same limit W-4's record states, and W-1's own two-resolution
+finding is exactly the error it cannot catch. Four tests added, two of them non-vacuity proofs (the predicate
+rejects a synthetic G2 shape; an empty gate list flags all 26 real files, so a silently-empty scan fails).
+
+**W-2 / RL-11 — holds; the writer set did not grow.** Routes touching `user_roles` / `user_access_profiles`
+were re-enumerated: still exactly the four writers W-2 guarded, plus two readers. The one new file in that set,
+`app/api/admin/access-scope-debug/route.ts`, is a read-only `GET` gated by `loadAdminRouteGate` and scoped to
+the caller's own row (`:22-23`) — not a membership writer, so it needs no self-authority guard.
+
+**W-3 / RL-2 — test green, but its recorded reasoning is now false.** This is the substantive finding of the
+re-run, and it is why re-executing beat re-asserting.
+
+W-3 removed the `workflows.*` grid row on the grounds that the plan's recommended repoint to `ops.workflows.*`
+could not work — those keys lived only in `permission_keys`, and a grant would violate
+`role_permission_grants_permissions_fkey`. **Both grounds are now false.** Migration
+`20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql`, vendored at `555fa056a` *hours
+after* W-3 shipped at `41610954c`, seeds `ops.workflows.read`/`ops.workflows.write` into
+`permission_definitions` (`:106-113`) and drops that FK (`:134`) in favour of a single
+`role_permission_grants_permission_definitions_fkey` (`:137`).
+
+The W-0 re-run flagged this migration's catalog collapse as a follow-up for the W-9 owner and noted it also
+undercuts W-3's premise. Confirmed here, and it is sharper than "a premise is stale":
+
+- That migration comes from a **different planning track** (`vertical-slice-v1/access-roles-v2-proposal.md`
+  §3.1) which independently implements C5 *and* most of W-9. It is already applied to the deployed target.
+- Its header asserts **"The grid now writes `ops.workflows.*`"** (`:16`) and it grants those keys to every
+  org's `admin` role (`:116-122`) — to back a grid row that this repo deleted. The two tracks closed the same
+  defect by opposite remedies, and neither is aware of the other.
+- The exit criterion is nonetheless **met**: no grid row names an unseeded key, and a full-grid save
+  round-trips. It is met vacuously, because the row is gone.
+- RL-2 does not adjudicate this. It parses `permission_definitions` INSERTs, and `ops.workflows.*` now parses
+  as seeded — so the lock passes under *either* remedy and blocks neither.
+
+The `permissionGrid.ts` comment has been corrected in place: the ratified decision (row removed) stands, its
+two dead justifications are marked dead, and the surviving reason — **no route enforces `workflows.*`, so the
+row grants nothing** — is stated as the one that never depended on the catalog. Whether to now restore and
+repoint the row is a product decision, raised rather than absorbed, and recorded in §14.3.10.
+
+**Not re-verified: typecheck.** Both `npm run typecheck` and a direct `tsc -p tsconfig.build.json` were
+unavailable behind a command-approval wall in this session, so the 2026-07-31 `rc=0` was **not** reproduced.
+The change is confined to one test file using only `node:fs`, `node:path` and vitest, and it executes green —
+but that is not a typecheck, and this record does not claim one.
+
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
 517 of 539 route files hold a service-role client. I-3 requires every one to resolve and gate a principal
@@ -500,16 +572,21 @@ workstream's value is that the number stops growing silently.
 
 ##### The baseline
 
-| Measure | Count |
-|---|---|
-| API route files | **539** |
-| …hold a service-role client by direct import | **520** |
-| …of those, resolve a principal | **494** |
-| …of those, resolve none — **the exception baseline** | **26** |
-| — reviewed exceptions, each with a named authorization model | **21** |
-| — frozen W-15 remediation baseline, no model | **5** |
-| Reach a service client transitively (through a helper) | 536 |
-| …transitive-only *and* unresolved — advisory, not enforced | **3** |
+| Measure | 2026-07-31 | 2026-08-04 |
+|---|---|---|
+| API route files | **539** | **559** |
+| …hold a service-role client by direct import | **520** | **537** |
+| …of those, resolve a principal | **494** | **520** |
+| …of those, resolve none — **the exception baseline** | **26** | **17** |
+| — reviewed exceptions, each with a named authorization model | **21** | **17** |
+| — frozen W-15 remediation baseline, no model | **5** | **0** |
+| Reach a service client transitively (through a helper) | 536 | 556 |
+| …transitive-only *and* unresolved — advisory, not enforced | **3** | **3** |
+
+**The 2026-08-04 column is the live one.** The prose below was written against the 2026-07-31 column and is
+preserved as the reasoning of record; where it says 26, 21 or 5, the current figures are 17, 17 and 0. The
+entire delta is the retirement of the `book-v2` funnel — see the re-verification record at the end of this
+workstream, which reconciles it route by route.
 
 **The number is 26, not "large".** The exit criterion above predicted a large baseline; it is 26 of 520, and
 **only 5 of those are actual remediation work.** The prediction was wrong for a specific and checkable
@@ -565,6 +642,14 @@ bounds, stated so the number is not over-read:
 
 ##### What the 5 baseline routes actually are
 
+> **Closed 2026-08-04 by deletion, not by remediation.** All five routes below were removed from the tree
+> with the GoHighLevel / legacy-cleaning retirement (`ea3eaf377`, PR #294, reaching this branch via the
+> staging merge `5118940f7`). The frozen baseline is now empty and **W-15 inherits no work from it.** The
+> finding is kept in full because the exposure was real while it shipped, and because the *shape* — a public
+> funnel that accepts a caller-supplied row id and acts on it with a service-role client — is the pattern
+> W-15 must recognise if it reappears. The `lib/book-v2/**` helpers survive the retirement; no route reaches
+> them without a principal.
+
 The frozen baseline is not a residue of unclassified routes — it is a **named finding**. All five are
 `book-v2` public-funnel routes that accept a caller-supplied row id (`opportunity_id`, `customer_id`,
 `person_id`) from the request body and then read or write **that row** with a service-role client, with no
@@ -601,12 +686,81 @@ Three lists, three meanings, and **all three may only shrink**:
 - `exceptions` — a verified orthogonal authorization model. Adding one is a security decision: the entry
   must name the model and cite the enforcing line, and the lock requires both.
 - `baseline` — **frozen 2026-07-31**. The lock pins its contents to the five routes above, so it can be
-  emptied by fixing them and cannot be extended by adding a sixth.
+  emptied by fixing them and cannot be extended by adding a sixth. **Emptied 2026-08-04** when those five
+  were retired; the pin is now the empty set, so no baseline entry can ever be added.
 - `advisory_transitive_only` — must match the computed set exactly, in both directions.
+
+The `exceptions` list is the one that is **not** frozen — by design, since a new route with a genuine
+authorization model must be addable. What bounds it is a numeric ceiling on the unresolved count, and that
+ceiling must be re-tightened whenever the floor drops, or a shrink hands out free exceptions. It was
+**26 → 17 on 2026-08-04**; see the re-verification record below.
 
 A **stale** entry is itself a failure — if a route is deleted, stops holding a service client, or starts
 resolving a principal, the check goes red until the list is updated. That is what stops the register
 decaying into residue, which is the failure mode the exit criterion names.
+
+#### W-4 re-verification under Mission 2 — **DONE 2026-08-04**, assignment `asg_91e144a61569e4`
+
+Mission 2 re-issued W-4 against a record already executed and green. §4's rule applies: **re-execute rather
+than re-assert**. This is the fourth leg of the Wave 1 re-verification recorded under §5's W-3 heading
+(assignment `asg_e9308076173af6` covered W-1…W-3 and scoped W-4 out).
+
+| Field | Value |
+|---|---|
+| Base | `9e19c8736`, after this worktree merged `origin/staging` (`5118940f7`); API routes 539 → **559** |
+| Branch | `hotfix/vacilando-ui-freshness-flash` — same anomaly the W-1…W-3 leg recorded; all W-4 artifacts are present on it |
+| Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **15 tests green**, matching the 2026-07-31 record exactly |
+| Wave 1 total | **70 tests green** across all four Wave 1 suites (15 + 36 + 14 + 5) |
+| Evidence | [`w4-reverification-evidence.json`](./w4-reverification-evidence.json); snapshot [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) regenerated and **byte-identical** to the committed copy |
+
+**The check holds: `ok: true`, zero violations, zero stale entries, across a 20-route expansion.** This is the
+first evidence that the workstream does the thing it was built to do. 20 new route files arrived with the
+staging merge, 17 of them holding a service-role client directly, and **every one resolves a principal** — the
+unresolved count did not rise. The exit criterion's promise was that the number stops growing silently; it was
+untested until the surface actually grew.
+
+**The −9 delta is entirely `book-v2`, and it reconciles exactly.** The baseline fell 26 → 17 between the two
+runs, which is the kind of movement that should be assumed suspicious until it is accounted for route by route:
+
+| Removed | Count | List it was on |
+|---|---|---|
+| `confirm`, `quote-refine`, `service-details`, `opportunity-discount`, `ensure-customer` | 5 | frozen `baseline` |
+| `availability`, `validate-promo` | 2 | `exceptions` (public-catalog-read) |
+| `quote-start`, `specialty-quote-start` | 2 | `exceptions` (public-intake-create) |
+
+9 routes, all `book-v2`, all deleted by `ea3eaf377` (retire GoHighLevel and the legacy cleaning product).
+21 − 4 = 17 exceptions and 26 − 9 = 17 unresolved, which is what the check reports. **No route was quietly
+moved off a list, and no unresolved route was reclassified as an exception.** The intermediate commit
+`2ec3d322d` that emptied the lists is a *consequence* of the deletion — the shrink-only rule made the stale
+entries fail Vercel's prebuild, which is the register working as designed rather than being worked around.
+
+**One defect found and fixed: the ratchet had gone slack.** The lock capped `subject_unresolved` at the
+2026-07-31 figure of 26 while the live floor had fallen to 17. Because `exceptions` is deliberately *not*
+frozen — only `baseline` is — that ceiling was the only thing bounding exception growth, so **9 new
+service-role routes with no principal could have been added and the build would have stayed green.** A
+retirement had silently bought the codebase nine free exceptions. The ceiling is now 17, equal to the floor,
+so any addition goes red. This is the ratchet's whole purpose and it had quietly stopped applying: *a ratchet
+is only a ratchet if it follows the floor down.*
+
+**The register was re-reviewed, not re-asserted.** All 17 entries still exist, still hold a service client and
+still resolve no principal — the lock asserts each directly, so a route that got fixed or deleted cannot sit
+there unnoticed. Two citations were re-checked line-by-line this run, chosen as the register's strongest
+claim: the subject-binding pair `public/forms/[token]/submissions/[submissionId]` (`:58`, `:144`) and
+`…/submit` (`:114`) still call `verifySubmissionBelongsToPublicEmbed` before the read/update, and
+`public/tour-booking/[token]/book` still resolves its link by token at `:30`. The four authorization models
+now stand at capability-token **12**, webhook-signature **1**, public-catalog-read **3**,
+public-intake-create **1**.
+
+**The honest limit above is unchanged and still governs**: this check proves a principal is *resolved*, never
+that the result *gates* the handler. Nothing in this re-run narrows it. W-14 and W-15 still own that proof.
+
+**Not re-verified: typecheck, and the check's own CLI.** `node`, `npx node` and `npm run` were each blocked
+behind a command-approval wall in this session, so `npm run check:service-client-principal` was not executed
+as a command and the prior record's `prebuild` `rc=0` was **not** reproduced. The check was instead run
+through `runServiceClientPrincipalCheck()` — the exported function the CLI is a thin wrapper over
+(`checkServiceClientPrincipal.mjs`, CLI block) — via vitest, which is what the lock itself does. The evidence
+snapshot regenerated through that path is byte-identical to the committed one, so the check's *result* is
+verified at this base; its *CI wiring* is carried forward on the 2026-07-31 record and is not re-proven here.
 
 ---
 
@@ -1133,7 +1287,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts` |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. **Re-verified 2026-08-04**: green across a 20-route expansion; ceiling ratcheted 26 → 17 |
 
 RL-2 is listed *because* it is temporary: W-3 adds it and W-10 replaces it. An assertion that becomes
 structurally unnecessary should be replaced deliberately, not quietly deleted when it starts failing.
@@ -1237,6 +1391,23 @@ Per the assignment constraints:
 9. **W-4 changes no route.** It measures and freezes; it remediates nothing. The five unauthorized
    `book-v2` routes it names are live exposure today and remain so until W-15. Wave 1 being "complete" is a
    statement about the wave's scope, not about the system being safe.
+10. **A second planning track has been closing the same defects, and this plan did not know.** Migration
+    `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` implements
+    `vertical-slice-v1/access-roles-v2-proposal.md` §3.1; it is **applied to the deployed target** and
+    vendored here at `555fa056a`. It independently closes C5 (by repointing the grid to `ops.workflows.*`
+    and seeding those keys into `permission_definitions`) and performs most of **W-9** — collapsing
+    `permissions` and `permission_keys` into views over `permission_definitions` and replacing the dual FK
+    with one. Consequences this plan has **not** absorbed, listed so no owner assumes their section is current:
+    - **§7/W-9 describes a three-table catalog with two FKs on one column. That picture is false on the
+      target.** W-9's owner must re-derive scope before starting; much of it may already be done.
+    - **W-3 and that migration closed C5 by opposite remedies** — this repo deletes the grid row, the
+      migration grants `ops.workflows.*` to every org's `admin` to back it. Nothing is broken (no route
+      enforces `workflows.*`), but the two are incoherent and one of them should yield. Restoring and
+      repointing the row would now validate, where on 2026-07-31 it would not.
+    - **RL-2 adjudicates neither**, since `ops.workflows.*` now parses as seeded.
+    - The general lesson is the one W-0 already recorded about `current_database()`: **this programme's
+      documents describe a target that other work is changing underneath them.** Every remaining wave should
+      re-verify its premises against the migration tree at start, not cite this plan's §5–§9 as current.
 10. **§7/W-9's premise is stale against the deployed target, and this plan has not been corrected.** Migration
    `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` is live on the target (dashboard
    -applied 2026-07-30, vendored 2026-07-31 in `555fa056a`): `public.permissions` and `public.permission_keys`
