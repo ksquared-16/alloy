@@ -23,6 +23,10 @@ Enrollment Focus Panel Summary **v129** — Assignments Visible (Classification 
 
 ## Next
 
-1. Green focused enrollment tests on staging graph  
-2. Acquire `full-typecheck` permit → production + full graph  
-3. Push regularly; no merge until authorized  
+1. ~~Green focused enrollment tests on staging graph~~ **53 passed** @ `8c10221b3`
+2. Acquire `full-typecheck` permit → production + full graph (currently held by interactive-tour-delivery)
+3. Push regularly; no merge until authorized
+
+## Land tip
+
+`8c10221b31c7c29cac8f3107c1c459ebb414f2f7` (pushed) 
