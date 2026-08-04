@@ -1830,10 +1830,31 @@ export default function LifecycleActivationBoard({
         repairLifecycleWorkUnits,
     ]);
 
+    /**
+     * Publishing rendered actions UP into an ancestor's state is a render loop waiting to happen,
+     * so this seam is now defensive on both counts that made it loop.
+     *
+     * 1. The callback is held in a ref. It is `setContextActions` today, but any parent passing an
+     *    inline handler would otherwise re-fire this effect on every render.
+     * 2. The clear runs on real unmount only. It used to be this effect's cleanup, so every
+     *    dependency change pushed `null` up before pushing the element back — the ancestor's state
+     *    alternated `element → null → element` without end, and each hop re-rendered this subtree.
+     *    That starved the main thread: `/organization/processes` never got past "Loading process…",
+     *    could not be scrolled, and swallowed clicks on the breadcrumb.
+     *
+     * `processContextActions` remains the trigger and must stay memoized on stable deps — see
+     * `handleRepairVisibility` in LifecycleBuilderPrimary for the dependency that broke it.
+     */
+    const onContextActionsChangeRef = useRef(onContextActionsChange);
     useEffect(() => {
-        onContextActionsChange?.(processContextActions);
-        return () => onContextActionsChange?.(null);
-    }, [onContextActionsChange, processContextActions]);
+        onContextActionsChangeRef.current = onContextActionsChange;
+    }, [onContextActionsChange]);
+
+    useEffect(() => {
+        onContextActionsChangeRef.current?.(processContextActions);
+    }, [processContextActions]);
+
+    useEffect(() => () => onContextActionsChangeRef.current?.(null), []);
 
     if (bootLoading && runtimeDepartmentId && processId) {
         return (
