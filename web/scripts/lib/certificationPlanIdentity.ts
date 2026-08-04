@@ -71,6 +71,30 @@ export function shortIdentity(identity: string): string {
     return identity.slice(0, 16);
 }
 
+/**
+ * Assemble the reviewable plan from a resolved graph, the frozen manifest and the configuration
+ * fingerprint. One builder, so the dry run and the execute cannot disagree about what a plan IS.
+ */
+export function buildCertificationPlan(input: {
+    orgId: string;
+    databaseIds: Record<string, string[]>;
+    workflowEventIds: string[];
+    protectedWorkflowEventIds: string[];
+    storagePaths: string[];
+    configurationFingerprint: string;
+}): CertificationPlan {
+    return {
+        orgId: input.orgId,
+        mode: "certification_baseline",
+        databaseIds: input.databaseIds,
+        workflowEventIds: input.workflowEventIds,
+        protectedWorkflowEventIds: input.protectedWorkflowEventIds,
+        storagePaths: input.storagePaths,
+        configurationFingerprint: input.configurationFingerprint,
+        resolverVersion: CERTIFICATION_RESOLVER_VERSION,
+    };
+}
+
 export type ManifestValidation = { ok: boolean; problems: string[] };
 
 /**

@@ -176,6 +176,8 @@ async function findOrgId(client: Client, orgId: string): Promise<{ id: string; n
 async function main(): Promise<void> {
     const execute = process.argv.includes("--execute");
     const certificationBaseline = process.argv.includes("--certification-baseline");
+    // The plan the operator actually reviewed. Execute refuses without it; there is no force.
+    const authorizedPlanId = process.argv.find((a) => a.startsWith("--authorized-plan-id="))?.split("=")[1]?.trim() ?? "";
     // Certification is a superset — it cannot mean "widest breadth, but skip the closed ones".
     const includeClosedOpportunities =
         certificationBaseline || process.argv.includes("--include-closed-opportunities");
@@ -197,6 +199,13 @@ async function main(): Promise<void> {
     }
     if (execute && process.env.CONFIRM_RESET_OPERATIONAL_STATE?.trim() !== "true") {
         console.error("Refusing --execute: set CONFIRM_RESET_OPERATIONAL_STATE=true.");
+        process.exit(1);
+    }
+    if (execute && certificationBaseline && !authorizedPlanId) {
+        console.error(
+            "Refusing --execute --certification-baseline: --authorized-plan-id=<hash> is required.\n" +
+                "Run the dry run first and pass the printed 'Authorization plan identity'."
+        );
         process.exit(1);
     }
 
@@ -255,6 +264,7 @@ async function main(): Promise<void> {
             // invocation's command line, not something an ambient env var can switch on.
             [INCLUDE_CLOSED_OPPORTUNITIES_ENV]: includeClosedOpportunities ? "true" : "false",
             [CERTIFICATION_BASELINE_ENV]: certificationBaseline ? "true" : "false",
+            DEMO_CLEANUP_AUTHORIZED_PLAN_ID: authorizedPlanId,
         },
     });
     if (res.status !== 0) {

@@ -35,7 +35,18 @@ import {
     type ResolvedDemoIds,
 } from "./lib/demoRuntimeCleanupScope";
 import { PROCESSING_LINK_COLUMN } from "./lib/certificationBaselineSelection";
-import { executeCertificationResetAtomically } from "./lib/certificationResetAdapter";
+import { createHash } from "crypto";
+import { existsSync, readFileSync } from "fs";
+import {
+    buildCertificationPlan,
+    computePlanIdentity,
+    validateStorageManifest,
+    type StorageManifest,
+} from "./lib/certificationPlanIdentity";
+import {
+    executeCertificationReset,
+    supabaseStorageClient,
+} from "./lib/certificationResetOrchestrator";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import {
     executeCommunicationsOrphanDeletes,
@@ -53,6 +64,16 @@ loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
 type SupabaseAdmin = ReturnType<typeof createAdminClient>;
+
+/** Post-commit emptiness check. Storage may only begin once every one of these reads zero. */
+const CERTIFICATION_VERIFY_EMPTY = [
+    "opportunities", "customers", "persons", "customer_persons", "customer_members", "contacts",
+    "operational_tasks", "process_instances", "tour_bookings", "communication_threads",
+    "communication_messages", "form_submissions", "form_packet_sessions", "documents",
+    "processing_cases", "processing_case_sources", "processing_facts", "processing_resolutions",
+    "processing_commit_plans", "processing_plan_operations", "processing_commit_attempts",
+    "processing_approvals", "processing_exceptions",
+] as const;
 
 function errMessage(err: unknown): string {
     if (err && typeof err === "object" && "message" in err && typeof (err as { message: string }).message === "string") {
@@ -541,19 +562,104 @@ async function main(): Promise<void> {
      * touch the immutable Processing ledger and their failure mode is not this one.
      */
     if (scope.certificationBaseline) {
-        const atomic = await executeCertificationResetAtomically(supabase, scope, ids, {
+        const authorized = process.env.DEMO_CLEANUP_AUTHORIZED_PLAN_ID?.trim() ?? "";
+        if (!authorized) {
+            throw new Error(
+                "Refusing certification execute — no authorized plan identity. Run the dry run and pass " +
+                    "--authorized-plan-id=<hash>."
+            );
+        }
+
+        // Recompute the identity from the FRESHLY RESOLVED plan. If the tenant moved since the
+        // dry run, this differs and the run aborts before the RPC — a changed tenant needs a new
+        // authorization, and there is deliberately no override.
+        const manifestPath = resolve(
+            process.cwd(),
+            "../certification/bp-config-integrity/evidence/firefly-storage-recovery-manifest.json"
+        );
+        const manifest = existsSync(manifestPath)
+            ? (JSON.parse(readFileSync(manifestPath, "utf8")) as StorageManifest)
+            : null;
+        if (!manifest) throw new Error("Refusing certification execute — storage recovery manifest is missing.");
+        const storagePaths = validateStorageManifest(manifest, scope.orgId).ok ? manifest.objects : [];
+
+        const { data: deptRows } = await supabase.from("departments").select("metadata").eq("org_id", scope.orgId);
+        const lifecycle = (deptRows ?? [])
+            .map((d) => (d as { metadata?: Record<string, unknown> }).metadata?.lifecycle_builder_v1)
+            .filter(Boolean);
+        const configurationFingerprint = createHash("sha256").update(JSON.stringify(lifecycle)).digest("hex");
+
+        const currentPlanId = computePlanIdentity(
+            buildCertificationPlan({
+                orgId: scope.orgId,
+                databaseIds: {
+                    opportunities: ids.opportunityIds,
+                    customers: ids.customerIds,
+                    persons: ids.personIds,
+                    customer_members: ids.customerMemberIds,
+                    communication_threads: ids.threadIds,
+                    documents: ids.documentIds,
+                    form_submissions: ids.formSubmissionIds,
+                    form_packet_sessions: ids.residue?.formPacketSessionIds ?? [],
+                    contacts: ids.residue?.contactIds ?? [],
+                    operational_tasks: ids.residue?.operationalTaskIds ?? [],
+                    processing_cases: ids.processingCaseIds ?? [],
+                    processing_commit_plans: ids.processingPlanIds ?? [],
+                },
+                workflowEventIds: ids.residue?.workflowEventIds ?? [],
+                protectedWorkflowEventIds: (ids.residue?.preservedWorkflowEvents ?? []).map((p) => p.id),
+                storagePaths,
+                configurationFingerprint,
+            })
+        );
+
+        const outcome = await executeCertificationReset({
+            supabase,
+            scope,
+            ids,
+            authorizedPlanId: authorized,
+            currentPlanId,
+            manifest,
+            storageClient: supabaseStorageClient(supabase),
+            verifyDatabase: async (client, orgId) => {
+                const problems: string[] = [];
+                for (const table of CERTIFICATION_VERIFY_EMPTY) {
+                    const { count, error } = await client
+                        .from(table)
+                        .select("*", { count: "exact", head: true })
+                        .eq("org_id", orgId);
+                    if (error) problems.push(`${table}: ${error.message}`);
+                    else if ((count ?? 0) > 0) problems.push(`${table} still has ${count} rows`);
+                }
+                return problems;
+            },
             log: (m) => console.log(m),
         });
 
         console.log("\n--- ACTUAL committed deletion counts (from the transaction) ---\n");
-        for (const [table, n] of Object.entries(atomic.deleted).sort()) {
+        for (const [table, n] of Object.entries(outcome.database.deleted).sort()) {
             if (n > 0) console.log(`${table}: ${n}`);
         }
-        console.log(`\nTOTAL rows actually deleted: ${atomic.totalDeleted}`);
-        console.log(
-            "\nDatabase transaction committed. Storage deletion is a SEPARATE step and has NOT run —" +
-                "\nit is ordered after database verification by contract §4quater.\n"
-        );
+        console.log(`\nTOTAL rows actually deleted: ${outcome.database.totalDeleted}`);
+        console.log(`database verified: ${outcome.database.verified}`);
+        for (const p of outcome.database.verificationProblems) console.log(`  - ${p}`);
+
+        if (outcome.storage) {
+            console.log("\n--- storage cleanup ---\n");
+            console.log(`planned:        ${outcome.storage.plannedCount}`);
+            console.log(`attempted:      ${outcome.storage.attempted.length}`);
+            console.log(`deleted:        ${outcome.storage.deleted.length}`);
+            console.log(`already absent: ${outcome.storage.alreadyMissing.length}`);
+            console.log(`FAILED:         ${outcome.storage.failed.length}`);
+            for (const f of outcome.storage.unexpectedRemaining) console.log(`  remaining: ${f}`);
+        } else {
+            console.log("\nstorage cleanup did NOT run (database verification failed).");
+        }
+
+        console.log(`\nbaselineEstablished: ${outcome.baselineEstablished}\n`);
+        if (!outcome.baselineEstablished) {
+            process.exitCode = 1;
+        }
         return;
     }
 

@@ -6,6 +6,7 @@
  */
 
 import { config as loadEnv } from "dotenv";
+import { createHash } from "crypto";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -19,7 +20,12 @@ import {
     parseDemoCleanupScopeFromEnv,
 } from "./lib/demoRuntimeCleanupScope";
 import { PROCESSING_CLEANUP_TABLE_ORDER } from "./lib/certificationBaselineSelection";
-import { validateStorageManifest, type StorageManifest } from "./lib/certificationPlanIdentity";
+import {
+    buildCertificationPlan,
+    computePlanIdentity,
+    validateStorageManifest,
+    type StorageManifest,
+} from "./lib/certificationPlanIdentity";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import { printCommunicationsOrphanReport } from "./lib/communicationsOrphanResetExecute";
 import { buildDemoCleanupCounts, buildEnrollmentResetSelection, resolveDemoIds } from "./lib/demoRuntimeCleanupPlan";
@@ -247,6 +253,66 @@ async function main(): Promise<void> {
         }
     }
     console.log(`\nTOTAL (sum of table counts, may double-count FK-expanded rows): ${total}`);
+
+    /**
+     * THE BINDING PLAN IDENTITY.
+     *
+     * This is what an authorization is FOR. Execute recomputes it and refuses on any difference, so
+     * approving a report approves exactly this graph — not "a reset of this tenant, whenever".
+     */
+    if (scope.certificationBaseline) {
+        const manifestPath = resolve(
+            process.cwd(),
+            "../certification/bp-config-integrity/evidence/firefly-storage-recovery-manifest.json"
+        );
+        const manifest: StorageManifest | null = existsSync(manifestPath)
+            ? (JSON.parse(readFileSync(manifestPath, "utf8")) as StorageManifest)
+            : null;
+        const storagePaths = manifest && validateStorageManifest(manifest, scope.orgId).ok ? manifest.objects : [];
+
+        const { data: deptRows } = await supabase.from("departments").select("metadata").eq("org_id", scope.orgId);
+        const lifecycle = (deptRows ?? [])
+            .map((d) => (d as { metadata?: Record<string, unknown> }).metadata?.lifecycle_builder_v1)
+            .filter(Boolean);
+        const configurationFingerprint = createHash("sha256").update(JSON.stringify(lifecycle)).digest("hex");
+
+        const plan = buildCertificationPlan({
+            orgId: scope.orgId,
+            databaseIds: {
+                opportunities: ids.opportunityIds,
+                customers: ids.customerIds,
+                persons: ids.personIds,
+                customer_members: ids.customerMemberIds,
+                communication_threads: ids.threadIds,
+                documents: ids.documentIds,
+                form_submissions: ids.formSubmissionIds,
+                form_packet_sessions: ids.residue?.formPacketSessionIds ?? [],
+                contacts: ids.residue?.contactIds ?? [],
+                operational_tasks: ids.residue?.operationalTaskIds ?? [],
+                processing_cases: ids.processingCaseIds ?? [],
+                processing_commit_plans: ids.processingPlanIds ?? [],
+            },
+            workflowEventIds: ids.residue?.workflowEventIds ?? [],
+            protectedWorkflowEventIds: (ids.residue?.preservedWorkflowEvents ?? []).map((p) => p.id),
+            storagePaths,
+            configurationFingerprint,
+        });
+        const identity = computePlanIdentity(plan);
+
+        console.log("\n=== AUTHORIZATION PLAN ===\n");
+        console.log(`Authorization plan identity: ${identity}`);
+        console.log(`  org:                    ${scope.orgId}`);
+        console.log(`  mode:                   ${plan.mode}`);
+        console.log(`  resolver version:       ${plan.resolverVersion}`);
+        console.log(`  configuration:          sha256 ${configurationFingerprint.slice(0, 16)}…`);
+        console.log(`  database ids:           ${Object.values(plan.databaseIds).reduce((a, b) => a + b.length, 0)}`);
+        console.log(`  workflow events:        ${plan.workflowEventIds.length}`);
+        console.log(`  protected events:       ${plan.protectedWorkflowEventIds.length}`);
+        console.log(`  storage objects:        ${plan.storagePaths.length}`);
+        console.log(`\nTo execute this exact plan:`);
+        console.log(`  ... -- --execute --certification-baseline --authorized-plan-id=${identity}\n`);
+    }
+
     console.log("\nDry-run complete. No rows deleted.\n");
 }
 
