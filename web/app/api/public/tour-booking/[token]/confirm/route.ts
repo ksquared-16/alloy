@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { confirmTourBooking } from "@/lib/tours/bookings/tourBookingService";
-import { tourPublicErr, tourPublicJson } from "@/lib/tours/public/tourPublicHttp";
+import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
 import { consumeTourAction } from "@/lib/tours/public/authorizeTourAction";
 import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const booking = bound.booking;
 
     if (booking.status_key === "confirmed") {
-        return tourPublicJson({ ok: true, booking, idempotent_replay: true });
+        return tourPublicJson({ ok: true, booking: publicTourBookingView(booking), idempotent_replay: true });
     }
     if (["canceled", "completed", "no_show"].includes(booking.status_key)) {
         return tourPublicErr("This tour can no longer be confirmed.", 409, { code: "NOT_CONFIRMABLE" });
