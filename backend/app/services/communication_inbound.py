@@ -417,8 +417,7 @@ def persist_inbound_communication_sms(
         if mid:
             emit_for_communication_message(
                 org_id=org_id,
-                entity_type=entity_type,
-                entity_id=entity_id,
+                subject_entity=(entity_type, entity_id),
                 event_type="message_received",
                 message_id=str(mid),
                 thread_id=thread_id,
