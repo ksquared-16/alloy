@@ -34,6 +34,7 @@ import {
     type DemoCleanupScope,
     type ResolvedDemoIds,
 } from "./lib/demoRuntimeCleanupScope";
+import { PROCESSING_LINK_COLUMN } from "./lib/certificationBaselineSelection";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import {
     executeCommunicationsOrphanDeletes,
@@ -312,6 +313,37 @@ async function executeDeletes(
         }
     }
 
+    /**
+     * PROCESSING GRAPH (certification baseline, anchor A3).
+     *
+     * Deleted BEFORE opportunities, because a case can name one as `primary_opportunity_id`.
+     * The ids come from the same `resolveDemoIds` the dry run used — dry-run and execute resolve
+     * one graph, so what was reported is exactly what is removed.
+     */
+    if (scope.certificationBaseline && ids.processingCaseIds?.length) {
+        const caseIds = ids.processingCaseIds;
+        deleted.processing_plan_operations = await deleteByIn(
+            supabase,
+            "processing_plan_operations",
+            "plan_id",
+            ids.processingPlanIds ?? [],
+            orgId
+        );
+        for (const table of [
+            "processing_commit_attempts",
+            "processing_approvals",
+            "processing_exceptions",
+            "processing_resolutions",
+            "processing_facts",
+            "processing_case_sources",
+            "processing_commit_plans",
+        ] as const) {
+            // The link column is NOT uniform — processing_case_sources uses processing_case_id.
+            deleted[table] = await deleteByIn(supabase, table, PROCESSING_LINK_COLUMN[table], caseIds, orgId);
+        }
+        deleted.processing_cases = await deleteByIn(supabase, "processing_cases", "id", caseIds, orgId);
+    }
+
     deleted.process_instances = await deleteProcessInstancesForCleanup(supabase, orgId, opp, members, idsOnly);
     deleted.opportunities = await deleteByIn(supabase, "opportunities", "id", opp, orgId);
 
@@ -348,6 +380,59 @@ async function executeDeletes(
     } else {
         deleted.customers = await deleteByOr(supabase, "customers", orgId, orDemo);
         deleted.persons = await deleteByOr(supabase, "persons", orgId, orDemo);
+    }
+
+    /**
+     * A4 + subject fixes (§4ter). After identities are gone, before the configuration tail.
+     *
+     * Storage objects are removed alongside the document rows: leaving 53 orphaned PDFs in
+     * `org_documents` would be residue of exactly the kind this contract exists to eliminate, just
+     * one layer down where nothing counts it. Failures are collected and reported, never swallowed.
+     */
+    if (scope.certificationBaseline && ids.residue) {
+        const r = ids.residue;
+        deleted.contacts = (deleted.contacts ?? 0) + (await deleteByIn(supabase, "contacts", "id", r.contactIds, orgId));
+        deleted.operational_tasks =
+            (deleted.operational_tasks ?? 0) +
+            (await deleteByIn(supabase, "operational_tasks", "id", r.operationalTaskIds, orgId));
+        deleted.form_packet_session_items = await deleteByIn(
+            supabase,
+            "form_packet_session_items",
+            "session_id",
+            r.formPacketSessionIds,
+            orgId
+        );
+        deleted.form_packet_sessions = await deleteByIn(
+            supabase,
+            "form_packet_sessions",
+            "id",
+            r.formPacketSessionIds,
+            orgId
+        );
+        deleted.workflow_events =
+            (deleted.workflow_events ?? 0) +
+            (await deleteByIn(supabase, "workflow_events", "id", r.workflowEventIds, orgId));
+
+        let storageRemoved = 0;
+        const storageFailures: string[] = [];
+        const byBucket = new Map<string, string[]>();
+        for (const o of r.storageObjects) byBucket.set(o.bucket, [...(byBucket.get(o.bucket) ?? []), o.path]);
+        for (const [bucket, paths] of byBucket) {
+            for (const part of chunk(paths, 100)) {
+                const { data, error } = await supabase.storage.from(bucket).remove(part);
+                if (error) storageFailures.push(`${bucket}: ${error.message}`);
+                else storageRemoved += (data ?? []).length;
+            }
+        }
+        deleted.storage_objects = storageRemoved;
+        if (storageFailures.length) {
+            console.error(`\nSTORAGE CLEANUP FAILURES (${storageFailures.length}):`);
+            for (const f of storageFailures.slice(0, 10)) console.error(`  - ${f}`);
+            throw new Error(
+                `Storage cleanup failed for ${storageFailures.length} batch(es). Database rows were deleted but ` +
+                    `objects remain — reconcile before treating this tenant as a clean baseline.`
+            );
+        }
     }
 
     deleted[PROTECTED_LOCATIONS_TABLE_KEY] = 0;

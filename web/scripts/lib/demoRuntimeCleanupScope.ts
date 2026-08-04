@@ -31,6 +31,32 @@ export const COMMUNICATIONS_ORPHAN_RESET_MODE = "communications_orphan_reset";
 /** Status keys for enrollment New Leads / lifecycle lead lane visibility. */
 export const ENROLLMENT_LEAD_STATUS_KEYS = ["new_inquiry", "needs_qualification", "open"] as const;
 
+/**
+ * Opt-in widening of `enrollment_runtime_reset` opportunity selection to CLOSED opportunities.
+ *
+ * The default selection is open-only (lead status keys, plus anything sitting on an enrollment
+ * work unit). That leaves closed opportunities behind, and because the shared-reference guard
+ * correctly refuses to delete families and children still referenced by those survivors, the
+ * catch-all Work Views stay non-empty after a reset.
+ *
+ * This flag does NOT weaken any guard. It widens exactly one thing — which opportunities are
+ * candidates — and every downstream protection (org scoping, golden-path exclusion, shared
+ * references, configuration preservation) continues to run unchanged over the wider set.
+ */
+export const INCLUDE_CLOSED_OPPORTUNITIES_ENV = "DEMO_CLEANUP_INCLUDE_CLOSED_OPPORTUNITIES";
+
+/**
+ * Certification baseline — the widest sanctioned breadth.
+ *
+ * Adds two anchors to the opportunity graph: operational identities no preserved record references,
+ * and the Processing operational graph (which on this tenant is anchored to nothing at all, so the
+ * opportunity graph can never reach it). Also switches verification from "four tables are empty" to
+ * the full product-facing emptiness contract.
+ *
+ * @see docs/handoffs/firefly-certification-deletion-contract.md
+ */
+export const CERTIFICATION_BASELINE_ENV = "DEMO_CLEANUP_CERTIFICATION_BASELINE";
+
 export type DemoCleanupMode = "default" | typeof ENROLLMENT_RUNTIME_RESET_MODE | typeof COMMUNICATIONS_ORPHAN_RESET_MODE;
 
 /** Output key for demo-tagged locations — visibility only, never deleted. */
@@ -45,6 +71,16 @@ export type DemoCleanupScope = {
     demoSeedRunId: string | null;
     /** When set, only rows with this metadata.demo_seed_family_key. */
     demoSeedFamilyKey: string | null;
+    /**
+     * enrollment_runtime_reset only — widen opportunity selection to every operational
+     * opportunity in the org, open AND closed. Default false (open-only).
+     */
+    includeClosedOpportunities: boolean;
+    /**
+     * enrollment_runtime_reset only — add the unlinked-operational-identity and Processing anchors,
+     * and require the full verification contract. Implies `includeClosedOpportunities`.
+     */
+    certificationBaseline: boolean;
 };
 
 export type ResolvedDemoIds = {
@@ -61,6 +97,30 @@ export type ResolvedDemoIds = {
     sharedPersonIds: string[];
     /** enrollment_runtime_reset only — customers preserved because they are linked to non-target records. */
     sharedCustomerIds: string[];
+    /** certification baseline only — Processing cases selected by anchor A3. */
+    processingCaseIds?: string[];
+    /** certification baseline only — commit plans belonging to those cases. */
+    processingPlanIds?: string[];
+    /** certification baseline only — cases kept, with the reason each was kept. */
+    preservedProcessingCases?: Array<{ id: string; reason: string }>;
+    /** certification baseline only — A4 + subject-fix additions (§4ter). */
+    residue?: {
+        contactIds: string[];
+        operationalTaskIds: string[];
+        formPacketSessionIds: string[];
+        workflowEventIds: string[];
+        storageObjects: Array<{ bucket: string; path: string; documentId: string }>;
+        preserved: Array<{ id: string; reason: string }>;
+        preservedWorkflowEvents: Array<{ id: string; reason: string }>;
+        report: Record<string, number>;
+    };
+    /** certification baseline only — identity classification, for the operator-facing report. */
+    certificationSummary?: {
+        targetCustomers: number;
+        targetPersons: number;
+        protectedCustomers: Array<{ id: string; reason: string }>;
+        protectedPersons: Array<{ id: string; reason: string }>;
+    };
 };
 
 /** PostgREST `.or()` filter for metadata-tagged demo rows. */
@@ -197,12 +257,33 @@ export function parseDemoCleanupScopeFromEnv(): DemoCleanupScope {
             );
         }
     }
+
+    const certificationBaseline = process.env[CERTIFICATION_BASELINE_ENV]?.trim() === "true";
+    // Certification mode is a superset — it cannot mean "widest breadth, but skip the closed ones".
+    const includeClosedOpportunities =
+        certificationBaseline || process.env[INCLUDE_CLOSED_OPPORTUNITIES_ENV]?.trim() === "true";
+
+    // The widened selections are defined only for the enrollment reset. Refuse rather than silently
+    // ignore them, so a mistyped invocation can never look like it did something it did not do.
+    for (const [flag, envName] of [
+        [includeClosedOpportunities, INCLUDE_CLOSED_OPPORTUNITIES_ENV],
+        [certificationBaseline, CERTIFICATION_BASELINE_ENV],
+    ] as const) {
+        if (flag && cleanupMode !== ENROLLMENT_RUNTIME_RESET_MODE) {
+            throw new Error(
+                `${envName}=true requires DEMO_CLEANUP_MODE=${ENROLLMENT_RUNTIME_RESET_MODE} (got "${cleanupMode}")`
+            );
+        }
+    }
+
     return {
         orgId,
         cleanupMode,
         demoSeedPackage: process.env.DEMO_SEED_PACKAGE?.trim() || null,
         demoSeedRunId: process.env.DEMO_SEED_RUN_ID?.trim() || null,
         demoSeedFamilyKey: process.env.DEMO_SEED_FAMILY_KEY?.trim() || null,
+        includeClosedOpportunities,
+        certificationBaseline,
     };
 }
 

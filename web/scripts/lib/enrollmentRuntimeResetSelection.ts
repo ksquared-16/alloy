@@ -24,7 +24,26 @@ export type EnrollmentResetSelection = {
     selected: EnrollmentResetOpportunityRow[];
     excludedGoldenPath: EnrollmentResetOpportunityRow[];
     enrollmentWorkUnitIds: string[];
+    /** True when selection was widened to every opportunity in the org, open AND closed. */
+    includeClosedOpportunities: boolean;
 };
+
+export type EnrollmentResetSelectionOptions = {
+    /**
+     * Widen candidate selection to every operational opportunity in THIS org, open and closed.
+     *
+     * Scope is still exactly one organization: the widened query keeps the same `org_id` equality
+     * filter as the narrow one, and every row is re-checked against `orgId` after it comes back.
+     * Golden-path exclusion, the shared-reference guard, and configuration preservation are
+     * untouched — they simply run over a larger candidate set.
+     */
+    includeClosedOpportunities?: boolean;
+};
+
+/** PostgREST caps a single response; page explicitly so a wide selection can never truncate. */
+const OPPORTUNITY_PAGE_SIZE = 1000;
+
+const OPPORTUNITY_COLUMNS = "id, name, title, status_key, work_unit_id, org_id, metadata";
 
 function displayName(row: {
     name?: string | null;
@@ -74,34 +93,65 @@ export async function resolveEnrollmentWorkUnitIds(
 
 export async function buildEnrollmentResetSelection(
     supabase: SupabaseAdmin,
-    orgId: string
+    orgId: string,
+    options: EnrollmentResetSelectionOptions = {}
 ): Promise<EnrollmentResetSelection> {
+    const includeClosedOpportunities = options.includeClosedOpportunities === true;
     const enrollmentWorkUnitIds = await resolveEnrollmentWorkUnitIds(supabase, orgId);
     const withMeta = new Map<string, { row: EnrollmentResetOpportunityRow; metadata: unknown }>();
 
-    const collect = (rows: Array<Record<string, unknown>> | null) => {
+    const collect = (rows: Array<Record<string, unknown>> | null, source: string) => {
         for (const r of rows ?? []) {
+            // Defence in depth: the query is org-scoped, but a candidate that is not this org's
+            // must never reach the delete planner. Widening status must never widen tenancy.
+            const rowOrgId = r.org_id;
+            if (rowOrgId != null && rowOrgId !== orgId) {
+                throw new Error(
+                    `[${source}] refusing out-of-org opportunity ${String(r.id)} (org_id=${String(rowOrgId)}, expected ${orgId})`
+                );
+            }
             const row = toRow(r);
             withMeta.set(row.id, { row, metadata: (r as { metadata?: unknown }).metadata });
         }
     };
 
-    const { data: byStatus, error: statusErr } = await supabase
-        .from("opportunities")
-        .select("id, name, title, status_key, work_unit_id, metadata")
-        .eq("org_id", orgId)
-        .in("status_key", [...ENROLLMENT_LEAD_STATUS_KEYS]);
-    if (statusErr) throw new Error(`[opportunities enrollment status scope] ${statusErr.message}`);
-    collect((byStatus ?? []) as Array<Record<string, unknown>>);
-
-    for (const part of chunk(enrollmentWorkUnitIds, 200)) {
-        const { data, error } = await supabase
+    if (includeClosedOpportunities) {
+        // WIDENED SELECTION — every operational opportunity in this org, open and closed.
+        //
+        // Paged rather than issued as one request: the narrow selection returns a few hundred rows
+        // and fits comfortably, but the whole-org set does not. A silently truncated page here
+        // would under-report the dry run, which is the number a destructive decision gets made
+        // from — so it is read to exhaustion, in a stable order, or not at all.
+        for (let offset = 0; ; offset += OPPORTUNITY_PAGE_SIZE) {
+            const { data, error } = await supabase
+                .from("opportunities")
+                .select(OPPORTUNITY_COLUMNS)
+                .eq("org_id", orgId)
+                .order("id", { ascending: true })
+                .range(offset, offset + OPPORTUNITY_PAGE_SIZE - 1);
+            if (error) throw new Error(`[opportunities org-wide scope] ${error.message}`);
+            const page = (data ?? []) as Array<Record<string, unknown>>;
+            collect(page, "opportunities org-wide scope");
+            if (page.length < OPPORTUNITY_PAGE_SIZE) break;
+        }
+    } else {
+        const { data: byStatus, error: statusErr } = await supabase
             .from("opportunities")
-            .select("id, name, title, status_key, work_unit_id, metadata")
+            .select(OPPORTUNITY_COLUMNS)
             .eq("org_id", orgId)
-            .in("work_unit_id", part);
-        if (error) throw new Error(`[opportunities enrollment work_unit scope] ${error.message}`);
-        collect((data ?? []) as Array<Record<string, unknown>>);
+            .in("status_key", [...ENROLLMENT_LEAD_STATUS_KEYS]);
+        if (statusErr) throw new Error(`[opportunities enrollment status scope] ${statusErr.message}`);
+        collect((byStatus ?? []) as Array<Record<string, unknown>>, "opportunities enrollment status scope");
+
+        for (const part of chunk(enrollmentWorkUnitIds, 200)) {
+            const { data, error } = await supabase
+                .from("opportunities")
+                .select(OPPORTUNITY_COLUMNS)
+                .eq("org_id", orgId)
+                .in("work_unit_id", part);
+            if (error) throw new Error(`[opportunities enrollment work_unit scope] ${error.message}`);
+            collect((data ?? []) as Array<Record<string, unknown>>, "opportunities enrollment work_unit scope");
+        }
     }
 
     const selected: EnrollmentResetOpportunityRow[] = [];
@@ -123,5 +173,6 @@ export async function buildEnrollmentResetSelection(
         selected,
         excludedGoldenPath,
         enrollmentWorkUnitIds,
+        includeClosedOpportunities,
     };
 }
