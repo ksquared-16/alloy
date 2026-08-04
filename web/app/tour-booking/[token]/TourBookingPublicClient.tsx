@@ -48,6 +48,8 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     const [busy, setBusy] = useState(false);
     const [loaded, setLoaded] = useState(false);
     const [day, setDay] = useState<string | null>(null);
+    /** Bounded cancellation: the parent has chosen Cancel and must confirm. */
+    const [confirmingCancel, setConfirmingCancel] = useState(false);
 
     const api = useCallback((suffix: string) => `/api/public/tour-booking/${encodeURIComponent(token)}${suffix}`, [token]);
 
@@ -136,9 +138,46 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                 case "confirm":
                     path = "/confirm";
                     break;
-                case "cancel":
-                    path = "/cancel";
-                    break;
+                case "cancel": {
+                    if (!confirmingCancel) {
+                        // First press only REVEALS the consequence. Nothing is
+                        // authorised and nothing is mutated until the parent confirms.
+                        setConfirmingCancel(true);
+                        setBusy(false);
+                        return;
+                    }
+                    // Confirmed. Ask for the bounded, single-use credential, then use
+                    // it — the message never carried one.
+                    const intent = await fetch(api("/cancel-intent"), { method: "POST" });
+                    if (!intent.ok) {
+                        setTrouble(intent.status === 409 ? GONE : ACTION_TROUBLE);
+                        setBusy(false);
+                        return;
+                    }
+                    const ij = (await intent.json()) as { cancel_url?: string };
+                    const url = String(ij.cancel_url ?? "");
+                    if (!url) {
+                        setTrouble(ACTION_TROUBLE);
+                        setBusy(false);
+                        return;
+                    }
+                    // The intent returns the parent-facing PAGE url; the mutation lives
+                    // on the API path for that same credential.
+                    const boundedToken = url.split("/").filter(Boolean).pop() ?? "";
+                    const res2 = await fetch(
+                        `/api/public/tour-booking/${encodeURIComponent(boundedToken)}/cancel`,
+                        { method: "POST" }
+                    );
+                    if (!res2.ok && res2.status !== 409) {
+                        setTrouble(ACTION_TROUBLE);
+                        setBusy(false);
+                        return;
+                    }
+                    setConfirmingCancel(false);
+                    await load();
+                    setBusy(false);
+                    return;
+                }
             }
 
             const res = await fetch(api(path), {
@@ -205,8 +244,10 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
 
             <header className="space-y-1.5">
                 <h1 className="text-2xl font-semibold leading-tight text-alloy-midnight">{view.headline}</h1>
-                {view.childLine ? <p className="text-[15px] text-alloy-midnight/70">{view.childLine}</p> : null}
                 <p className="text-[15px] font-medium text-alloy-midnight/80">{view.locationLine}</p>
+                {view.locationAddress ? (
+                    <p className="text-[15px] text-alloy-midnight/60">{view.locationAddress}</p>
+                ) : null}
             </header>
 
             <p className="text-[15px] leading-relaxed text-alloy-midnight/75">{view.bodyLine}</p>
@@ -323,8 +364,38 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                 )
             ) : null}
 
+            {confirmingCancel ? (
+                <div className="space-y-3 rounded-2xl border border-alloy-midnight/10 bg-white p-4 shadow-sm">
+                    <p className="text-[15px] font-semibold text-alloy-midnight">Cancel this tour?</p>
+                    <p className="text-[15px] leading-relaxed text-alloy-midnight/75">
+                        {view.bookingLabel
+                            ? `We'll release your ${view.bookingLabel} visit at ${view.locationLine}, and the time may be taken by another family.`
+                            : `We'll release your visit at ${view.locationLine}, and the time may be taken by another family.`}
+                    </p>
+                    <p className="text-[14px] leading-relaxed text-alloy-midnight/60">
+                        You can always ask us for a new time later.
+                    </p>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void act({ intent: "cancel", label: "Cancel tour", tone: "quiet" })}
+                        className="w-full rounded-xl border border-alloy-bend-pine bg-white px-4 py-3.5 text-[15px] font-semibold text-[#007d68] transition disabled:opacity-40"
+                    >
+                        Yes, cancel my tour
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setConfirmingCancel(false)}
+                        className="w-full rounded-xl bg-alloy-bend-pine px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:opacity-40"
+                    >
+                        Keep my tour
+                    </button>
+                </div>
+            ) : null}
+
             <div className="space-y-2.5 pt-1">
-                {view.actions.map((a) => {
+                {(confirmingCancel ? [] : view.actions).map((a) => {
                     const disabled = busy || (needsPick && a.intent === "book" && !pick);
                     const cls =
                         a.tone === "primary"

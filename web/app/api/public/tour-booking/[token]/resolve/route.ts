@@ -74,6 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const view = buildTourParentView({
         opportunityLabel: labels.opportunity_label,
         locationLabel: labels.location_label,
+        locationAddress: labels.location_address ?? null,
         invitationStatus: auth.invitation.status,
         bookingStatusKey,
         bookingStartAt,
