@@ -312,6 +312,13 @@ async function sendImmediateTourComms(params: {
         orgId: params.orgId,
         primaryEntityType: "opportunities",
         primaryEntityId: params.subject.opportunityId,
+        // THE recipient identity, carried as a typed canonical field — not merely
+        // telemetry. It was previously recorded in `metadata` only, so canonical
+        // eligibility received `null` and correctly failed closed with
+        // RECIPIENT_UNRESOLVED: an external send with no resolved identity cannot be
+        // evaluated for opt-out, suppression or channel usability. The identity was
+        // already resolved here; it just never crossed the boundary.
+        recipientPersonId: params.recipientPersonId,
         channelRaw: params.channel,
         toRaw: params.recipientTo,
         bodyRaw: body,
