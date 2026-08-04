@@ -1,25 +1,22 @@
 /**
- * Assignments Focus Panel card — calm sectioned presentation model.
+ * Assignments Focus Panel card — operational assignment offer model.
  *
- * Separates Family request / Proposed assignment / Commercial estimate /
- * Committed assignment / Readiness gaps without inventing a new card runtime.
+ * The card answers: where is this child being assigned, when, on what schedule,
+ * and under what commercial arrangement? Family-request facts (Requested Start /
+ * Days / Preferred Weekdays) are child-enrollment fields — not Assignment sections.
+ *
  * Pure: no fetch, no Date.now, no mutation.
- *
- * @see docs/sprints/active/enrollment-assignment-effective-dates/current-state-audit.md (D8)
- * @see web/components/admin/focusPanel/cards/SchedulingCard.tsx (operator title Assignments)
  */
 
 import {
     EFFECTIVE_DATE_LABELS,
-    resolveEnrollmentDate,
     resolveOperationalStartDate,
-    resolvePreferredWeekdays,
-    resolveRequestedDaysPerWeek,
     resolveRequestedStart,
     type AssignmentCommitmentKind,
     type AssignmentDateCandidate,
 } from "@/lib/enrollment/effectiveDateAuthority";
 import type {
+    AssignmentReadinessFactorKey,
     AssignmentReadinessGap,
     AssignmentReadinessResult,
 } from "@/lib/enrollment/assignmentProposalReadiness";
@@ -30,6 +27,7 @@ import {
 import { formatFocusPanelDate } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import { formatWeekdays } from "@/lib/scheduling/projection/buildSchedulingProjection";
 
+/** @deprecated Five-section chrome removed; retained only for migration helpers. */
 export const ASSIGNMENT_CARD_SECTION_TITLES = {
     family_request: "Family request",
     proposed_assignment: "Proposed assignment",
@@ -38,6 +36,7 @@ export const ASSIGNMENT_CARD_SECTION_TITLES = {
     readiness_gaps: "Readiness gaps",
 } as const;
 
+/** @deprecated */
 export type AssignmentCardSectionKey = keyof typeof ASSIGNMENT_CARD_SECTION_TITLES;
 
 export type AssignmentCardField = {
@@ -45,8 +44,13 @@ export type AssignmentCardField = {
     label: string;
     value: string | null;
     present: boolean;
+    /** Config/readiness marks this offer field as required. */
+    required?: boolean;
+    /** Required and currently empty. */
+    missing?: boolean;
 };
 
+/** @deprecated Prefer AssignmentCardModel.fields */
 export type AssignmentCardSection = {
     key: AssignmentCardSectionKey;
     title: string;
@@ -54,6 +58,8 @@ export type AssignmentCardSection = {
     gaps: AssignmentReadinessGap[];
     empty: boolean;
 };
+
+export type AssignmentCardState = "none" | "proposed" | "committed";
 
 /** Lightweight assignment row for presentation (proposed or committed OA summary). */
 export type AssignmentCardAssignmentSummary = {
@@ -66,6 +72,7 @@ export type AssignmentCardAssignmentSummary = {
     scheduleTypeLabel?: string | null;
     roomName?: string | null;
     programLabel?: string | null;
+    siteLabel?: string | null;
     arriveTime?: string | null;
     departTime?: string | null;
     patternLabel?: string | null;
@@ -76,30 +83,62 @@ export type BuildAssignmentCardModelArgs = {
     ocmStartDate?: string | null;
     opportunityDesiredStartDate?: string | null;
     agreementStartDate?: string | null;
-    /** Participation schedule intent label before / alongside OA. */
     scheduleTypeLabel?: string | null;
+    siteLabel?: string | null;
     proposedAssignments?: readonly AssignmentCardAssignmentSummary[];
     committedAssignments?: readonly AssignmentCardAssignmentSummary[];
-    /** When omitted, derived from process metadata via activeAssignmentQuoteSnapshot. */
     quoteSnapshot?: AssignmentQuoteSnapshot | null;
     readiness?: AssignmentReadinessResult | null;
 };
 
 export type AssignmentCardModel = {
-    sections: AssignmentCardSection[];
-    /** Compact orientation line for summary-strip consumers. */
-    summaryLine: string;
-    requestedStart: string | null;
-    /** Resolved operational Start Date (first committed assignment / agreement fallback). */
-    startDate: string | null;
-    startDateSource: "committed_assignment" | "agreement_fallback" | null;
+    /** Compact operational state for the offer. */
+    state: AssignmentCardState;
+    stateLabel: string;
+    /** Offer fields in reading order (site → … → quote). */
+    fields: AssignmentCardField[];
+    /** e.g. "Ready to commit" / "3 items required". */
+    readinessSummary: string;
     readinessReady: boolean;
     readinessGapCount: number;
+    readinessGaps: AssignmentReadinessGap[];
+    summaryLine: string;
+    /** Family Requested Start — for Children/comparison only; not an Assignment section. */
+    requestedStart: string | null;
+    startDate: string | null;
+    startDateSource: "committed_assignment" | "agreement_fallback" | null;
+    quoteGeneratedAt: string | null;
+    /** @deprecated Temporary adapter for callers still keyed by section. */
+    sections: AssignmentCardSection[];
 };
 
-function field(key: string, label: string, value: string | null): AssignmentCardField {
+const OFFER_FACTOR_BY_FIELD: Partial<Record<string, AssignmentReadinessFactorKey[]>> = {
+    site: ["site"],
+    program: ["program"],
+    room: ["room"],
+    schedule: ["proposed_schedule"],
+    start_date: ["assignment_start"],
+    tuition_plan: ["tuition_plan"],
+    estimated_tuition: ["tuition_plan"],
+    quote: ["quote_generated"],
+};
+
+function field(
+    key: string,
+    label: string,
+    value: string | null,
+    opts?: { required?: boolean },
+): AssignmentCardField {
     const present = value != null && String(value).trim().length > 0;
-    return { key, label, value: present ? String(value).trim() : null, present };
+    const required = Boolean(opts?.required);
+    return {
+        key,
+        label,
+        value: present ? String(value).trim() : null,
+        present,
+        required,
+        missing: required && !present,
+    };
 }
 
 function formatDate(ymd: string | null): string | null {
@@ -146,53 +185,62 @@ function toDateCandidates(
     }));
 }
 
-function section(
-    key: AssignmentCardSectionKey,
-    fields: AssignmentCardField[],
-    gaps: AssignmentReadinessGap[] = [],
-): AssignmentCardSection {
-    const empty =
-        key === "readiness_gaps"
-            ? gaps.length === 0
-            : fields.every((f) => !f.present) && gaps.length === 0;
-    return {
-        key,
-        title: ASSIGNMENT_CARD_SECTION_TITLES[key],
-        fields,
-        gaps,
-        empty,
-    };
+function gapFactors(readiness: AssignmentReadinessResult | null | undefined): Set<AssignmentReadinessFactorKey> {
+    const set = new Set<AssignmentReadinessFactorKey>();
+    for (const g of readiness?.gaps ?? []) {
+        if (g.factor) set.add(g.factor);
+    }
+    return set;
+}
+
+function fieldRequired(
+    fieldKey: string,
+    factors: Set<AssignmentReadinessFactorKey>,
+): boolean {
+    const mapped = OFFER_FACTOR_BY_FIELD[fieldKey];
+    if (!mapped) return false;
+    return mapped.some((f) => factors.has(f));
+}
+
+function buildScheduleLabel(
+    row: AssignmentCardAssignmentSummary | null,
+    fallbackType: string | null | undefined,
+): string | null {
+    const type = row?.scheduleTypeLabel ?? row?.patternLabel ?? fallbackType ?? null;
+    const days =
+        row?.weekdays && row.weekdays.length > 0 ? formatWeekdays(row.weekdays) : null;
+    const hours = formatHours(row?.arriveTime, row?.departTime);
+    const parts = [type, days, hours].filter(Boolean);
+    return parts.length ? parts.join(" · ") : null;
+}
+
+function buildReadinessSummary(ready: boolean, gapCount: number): string {
+    if (ready || gapCount === 0) return "Ready to commit";
+    return gapCount === 1 ? "1 item required" : `${gapCount} items required`;
 }
 
 function buildSummaryLine(args: {
-    requestedStart: string | null;
+    state: AssignmentCardState;
     startDate: string | null;
-    hasProposed: boolean;
-    hasCommitted: boolean;
-    hasQuote: boolean;
+    readinessSummary: string;
     readinessReady: boolean;
-    readinessGapCount: number;
 }): string {
-    if (!args.readinessReady && args.readinessGapCount > 0) {
-        return args.readinessGapCount === 1
-            ? "1 readiness gap"
-            : `${args.readinessGapCount} readiness gaps`;
-    }
-    if (args.hasCommitted && args.startDate) {
+    if (!args.readinessReady) return args.readinessSummary;
+    if (args.state === "committed" && args.startDate) {
         return `Committed · ${EFFECTIVE_DATE_LABELS.startDate} ${formatDate(args.startDate)}`;
     }
-    if (args.hasCommitted) {
-        return "Committed assignment";
+    if (args.state === "committed") return "Committed";
+    if (args.state === "proposed") return "Proposed assignment";
+    return "No assignment yet";
+}
+
+function stateLabelFor(state: AssignmentCardState, startDate: string | null): string {
+    if (state === "committed") {
+        return startDate
+            ? `Committed · Effective ${formatDate(startDate)}`
+            : "Committed";
     }
-    if (args.hasProposed) {
-        return "Proposed assignment";
-    }
-    if (args.hasQuote) {
-        return "Commercial estimate ready";
-    }
-    if (args.requestedStart) {
-        return `${EFFECTIVE_DATE_LABELS.requestedStart} ${formatDate(args.requestedStart)}`;
-    }
+    if (state === "proposed") return "Proposed assignment";
     return "No assignment yet";
 }
 
@@ -206,9 +254,6 @@ export function buildAssignmentCardModel(args: BuildAssignmentCardModelArgs): As
         ocmStartDate: args.ocmStartDate,
         opportunityDesiredStartDate: args.opportunityDesiredStartDate,
     });
-    const requestedDays = resolveRequestedDaysPerWeek(meta);
-    const preferredWeekdays = resolvePreferredWeekdays(meta);
-    const enrollment = resolveEnrollmentDate({ processInstanceMetadata: meta });
 
     const committedRows = args.committedAssignments ?? [];
     const proposedRows = args.proposedAssignments ?? [];
@@ -224,119 +269,148 @@ export function buildAssignmentCardModel(args: BuildAssignmentCardModelArgs): As
 
     const proposed = primarySummary(proposedRows);
     const committed = primarySummary(committedRows);
+    const active = committed ?? proposed;
 
-    const familyFields: AssignmentCardField[] = [
-        field("requested_start", EFFECTIVE_DATE_LABELS.requestedStart, formatDate(requestedStart)),
-        field(
-            "requested_days_per_week",
-            EFFECTIVE_DATE_LABELS.requestedDaysPerWeek,
-            requestedDays != null ? String(requestedDays) : null,
-        ),
-        field(
-            "preferred_weekdays",
-            EFFECTIVE_DATE_LABELS.preferredDays,
-            preferredWeekdays.length > 0 ? formatWeekdays(preferredWeekdays) : null,
-        ),
-        field(
-            "enrollment_date",
-            EFFECTIVE_DATE_LABELS.enrollmentDate,
-            formatDate(enrollment.enrollmentDate),
-        ),
-    ];
-
-    const proposedFields: AssignmentCardField[] = [
-        field(
-            "proposed_schedule",
-            EFFECTIVE_DATE_LABELS.proposedSchedule,
-            proposed?.scheduleTypeLabel
-                ?? proposed?.patternLabel
-                ?? args.scheduleTypeLabel
-                ?? null,
-        ),
-        field(
-            "proposed_assignment_start",
-            "Assignment start",
-            formatDate(proposed?.start_date ?? null),
-        ),
-        field(
-            "proposed_days",
-            EFFECTIVE_DATE_LABELS.preferredDays,
-            proposed?.weekdays && proposed.weekdays.length > 0
-                ? formatWeekdays(proposed.weekdays)
-                : null,
-        ),
-        field("proposed_hours", "Hours", formatHours(proposed?.arriveTime, proposed?.departTime)),
-        field("proposed_room", "Room", proposed?.roomName ?? null),
-        field("proposed_program", "Program", proposed?.programLabel ?? null),
-    ];
-
-    const quoteStatusLabel = quote
-        ? quote.status.charAt(0).toUpperCase() + quote.status.slice(1)
-        : null;
-    const commercialFields: AssignmentCardField[] = [
-        field("quote_offering", "Tuition plan", quote?.offering_label ?? quote?.offering_id ?? null),
-        field(
-            "quote_amount",
-            "Estimate",
-            quote ? formatMoneyCents(quote.amount_cents, quote.currency) : null,
-        ),
-        field("quote_status", "Status", quoteStatusLabel),
-        field("quote_effective", "Effective", formatDate(quote?.effective_date ?? null)),
-    ];
-
-    const committedFields: AssignmentCardField[] = [
-        field("start_date", EFFECTIVE_DATE_LABELS.startDate, formatDate(startResolved.startDate)),
-        field(
-            "committed_schedule",
-            EFFECTIVE_DATE_LABELS.committedSchedule,
-            committed?.scheduleTypeLabel ?? committed?.patternLabel ?? null,
-        ),
-        field(
-            "committed_days",
-            "Days",
-            committed?.weekdays && committed.weekdays.length > 0
-                ? formatWeekdays(committed.weekdays)
-                : null,
-        ),
-        field("committed_hours", "Hours", formatHours(committed?.arriveTime, committed?.departTime)),
-        field("committed_room", "Room", committed?.roomName ?? null),
-        field("committed_program", "Program", committed?.programLabel ?? null),
-    ];
+    const hasCommitted =
+        committedRows.length > 0 || startResolved.source === "agreement_fallback";
+    const hasProposed =
+        Boolean(proposed) || Boolean(args.scheduleTypeLabel?.trim()) || Boolean(quote);
+    const state: AssignmentCardState = hasCommitted
+        ? "committed"
+        : hasProposed
+          ? "proposed"
+          : "none";
 
     const readiness = args.readiness ?? { ready: true, gaps: [] };
-    const readinessGaps = readiness.gaps ?? [];
+    const factors = gapFactors(readiness);
 
-    const sections: AssignmentCardSection[] = [
-        section("family_request", familyFields),
-        section("proposed_assignment", proposedFields),
-        section("commercial_estimate", commercialFields),
-        section("committed_assignment", committedFields),
-        section("readiness_gaps", [], readinessGaps),
+    const siteValue =
+        active?.siteLabel
+        ?? args.siteLabel
+        ?? (typeof meta?.location_label === "string" ? meta.location_label : null)
+        ?? null;
+    const programValue =
+        active?.programLabel
+        ?? (typeof meta?.program_label === "string" ? meta.program_label : null)
+        ?? null;
+    const roomValue = active?.roomName ?? null;
+    const scheduleValue = buildScheduleLabel(
+        active,
+        args.scheduleTypeLabel
+            ?? (typeof meta?.schedule_type === "string" ? meta.schedule_type : null),
+    );
+    const startValue =
+        state === "committed"
+            ? formatDate(startResolved.startDate)
+            : formatDate(proposed?.start_date ?? startResolved.startDate);
+    const tuitionPlan =
+        quote?.offering_label
+        ?? quote?.offering_id
+        ?? (typeof meta?.tuition_plan_id === "string" ? meta.tuition_plan_id : null);
+    const estimate = quote
+        ? formatMoneyCents(quote.amount_cents, quote.currency)
+        : null;
+    const quoteStatus = quote
+        ? `Generated ${formatFocusPanelDate(quote.generated_at.slice(0, 10)) ?? quote.generated_at.slice(0, 10)}`
+        : null;
+
+    const fields: AssignmentCardField[] = [
+        field("site", "Campus", siteValue, { required: fieldRequired("site", factors) }),
+        field("program", "Program", programValue, { required: fieldRequired("program", factors) }),
+        field("room", "Room", roomValue, { required: fieldRequired("room", factors) }),
+        field("schedule", "Schedule", scheduleValue, {
+            required: fieldRequired("schedule", factors),
+        }),
+        field("start_date", "Start Date", startValue, {
+            required: fieldRequired("start_date", factors),
+        }),
+        field("tuition_plan", "Tuition Plan", tuitionPlan, {
+            required: fieldRequired("tuition_plan", factors),
+        }),
+        field("estimated_tuition", "Estimated Tuition", estimate, {
+            required: fieldRequired("estimated_tuition", factors),
+        }),
+        field("quote", "Quote", quoteStatus, {
+            required: fieldRequired("quote", factors),
+        }),
     ];
 
     const readinessReady = readiness.ready;
-    const readinessGapCount = readinessGaps.length;
+    const readinessGapCount = (readiness.gaps ?? []).length;
+    const readinessSummary = buildReadinessSummary(readinessReady, readinessGapCount);
+    const stateLabel = stateLabelFor(state, startResolved.startDate);
+
+    // Deprecated section adapter — keep authority field lookups working in older tests
+    // without driving the public card chrome.
+    const sections: AssignmentCardSection[] = [
+        {
+            key: "proposed_assignment",
+            title: ASSIGNMENT_CARD_SECTION_TITLES.proposed_assignment,
+            fields: fields.filter((f) =>
+                ["site", "program", "room", "schedule", "start_date"].includes(f.key),
+            ),
+            gaps: [],
+            empty: state === "none",
+        },
+        {
+            key: "commercial_estimate",
+            title: ASSIGNMENT_CARD_SECTION_TITLES.commercial_estimate,
+            fields: fields.filter((f) =>
+                ["tuition_plan", "estimated_tuition", "quote"].includes(f.key),
+            ),
+            gaps: [],
+            empty: !quote,
+        },
+        {
+            key: "committed_assignment",
+            title: ASSIGNMENT_CARD_SECTION_TITLES.committed_assignment,
+            fields: [
+                field("start_date", EFFECTIVE_DATE_LABELS.startDate, formatDate(startResolved.startDate)),
+            ],
+            gaps: [],
+            empty: !hasCommitted,
+        },
+        {
+            key: "readiness_gaps",
+            title: ASSIGNMENT_CARD_SECTION_TITLES.readiness_gaps,
+            fields: [],
+            gaps: readiness.gaps ?? [],
+            empty: readinessGapCount === 0,
+        },
+        {
+            key: "family_request",
+            title: ASSIGNMENT_CARD_SECTION_TITLES.family_request,
+            fields: [
+                field("requested_start", EFFECTIVE_DATE_LABELS.requestedStart, formatDate(requestedStart)),
+            ],
+            gaps: [],
+            empty: !requestedStart,
+        },
+    ];
 
     return {
-        sections,
+        state,
+        stateLabel,
+        fields,
+        readinessSummary,
+        readinessReady,
+        readinessGapCount,
+        readinessGaps: readiness.gaps ?? [],
         summaryLine: buildSummaryLine({
-            requestedStart,
+            state,
             startDate: startResolved.startDate,
-            hasProposed: Boolean(proposed) || Boolean(args.scheduleTypeLabel?.trim()),
-            hasCommitted: committedRows.length > 0 || startResolved.source === "agreement_fallback",
-            hasQuote: Boolean(quote),
+            readinessSummary,
             readinessReady,
-            readinessGapCount,
         }),
         requestedStart,
         startDate: startResolved.startDate,
         startDateSource: startResolved.source,
-        readinessReady,
-        readinessGapCount,
+        quoteGeneratedAt: quote?.generated_at ?? null,
+        sections,
     };
 }
 
-/** Convenience: look up a section by key. */
+/** @deprecated Prefer model.fields */
 export function assignmentCardSection(
     model: AssignmentCardModel,
     key: AssignmentCardSectionKey,
@@ -344,12 +418,20 @@ export function assignmentCardSection(
     return model.sections.find((s) => s.key === key) ?? null;
 }
 
-/** Convenience: look up a field value by section + field key. */
+/** @deprecated Prefer model.fields */
 export function assignmentCardFieldValue(
     model: AssignmentCardModel,
     sectionKey: AssignmentCardSectionKey,
     fieldKey: string,
 ): string | null {
+    if (sectionKey === "family_request" && fieldKey === "requested_start") {
+        return formatDate(model.requestedStart);
+    }
+    if (sectionKey === "committed_assignment" && fieldKey === "start_date") {
+        return formatDate(model.startDate);
+    }
+    const fromOffer = model.fields.find((f) => f.key === fieldKey);
+    if (fromOffer) return fromOffer.value;
     const sec = assignmentCardSection(model, sectionKey);
     if (!sec) return null;
     return sec.fields.find((f) => f.key === fieldKey)?.value ?? null;

@@ -1,15 +1,13 @@
 "use client";
 
 /**
- * Assignments proposal controls — requested days/week + tuition plan + Generate Quote.
- * Saves participation via child-participation; quote via assignment-quote API.
+ * Assignment commercial controls — tuition plan + Generate Quote.
+ * Family-request editors (requested days) belong on Children when configured —
+ * not on the Assignment card.
  * Commercial estimate only — never posts ledger charges.
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { patchChildParticipation } from "@/lib/admin/drawer/inquiryChildFieldEdit";
-import { parseRequestedDaysPerWeekInput } from "@/lib/enrollment/requestedDaysPerWeek";
-import { resolveRequestedDaysPerWeek } from "@/lib/enrollment/effectiveDateAuthority";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 
 const T = {
@@ -30,10 +28,11 @@ export type AssignmentTuitionRateOption = {
 type Props = {
     customerMemberId: string;
     opportunityId: string | null;
-    /** Participation metadata for this child (from truth bag / PI). */
     participationMetadata?: Record<string, unknown> | null;
-    /** Optional eligible tuition plans (preferred when caller already resolved them). */
     rates?: AssignmentTuitionRateOption[] | null;
+    /** When false, primary commit path is blocked — explain briefly. */
+    canCommit?: boolean;
+    commitBlockedReason?: string | null;
     onSaved?: () => void;
     style?: CSSProperties;
 };
@@ -43,14 +42,11 @@ export default function AssignmentProposalControls({
     opportunityId,
     participationMetadata,
     rates: ratesProp,
+    canCommit = true,
+    commitBlockedReason = null,
     onSaved,
     style,
 }: Props) {
-    const initialDays = resolveRequestedDaysPerWeek(participationMetadata ?? null);
-    const [daysText, setDaysText] = useState(initialDays != null ? String(initialDays) : "");
-    const [daysError, setDaysError] = useState<string | null>(null);
-    const [daysBusy, setDaysBusy] = useState(false);
-
     const [rateOptions, setRateOptions] = useState<AssignmentTuitionRateOption[]>(ratesProp ?? []);
     const [offeringId, setOfferingId] = useState(
         typeof participationMetadata?.tuition_plan_id === "string"
@@ -95,28 +91,6 @@ export default function AssignmentProposalControls({
         };
     }, [opportunityId, ratesProp]);
 
-    const saveRequestedDays = useCallback(async () => {
-        const parsed = parseRequestedDaysPerWeekInput(daysText);
-        if (!parsed.ok) {
-            setDaysError(parsed.error);
-            return;
-        }
-        setDaysError(null);
-        setDaysBusy(true);
-        try {
-            await patchChildParticipation({
-                customerMemberId,
-                opportunityId,
-                patch: { requested_days_per_week: parsed.value },
-            });
-            onSaved?.();
-        } catch (err) {
-            setDaysError(err instanceof Error ? err.message : "Save failed");
-        } finally {
-            setDaysBusy(false);
-        }
-    }, [customerMemberId, daysText, onSaved, opportunityId]);
-
     const generateQuote = useCallback(async () => {
         if (!opportunityId) {
             setQuoteError("Opportunity required to generate a quote.");
@@ -137,7 +111,7 @@ export default function AssignmentProposalControls({
             });
             const json = (await res.json().catch(() => ({}))) as {
                 error?: string;
-                snapshot?: { offering_label?: string | null; amount_cents?: number };
+                snapshot?: { offering_label?: string | null; amount_cents?: number; offering_id?: string };
             };
             if (!res.ok) throw new Error(json.error ?? "Quote generation failed");
             const label =
@@ -146,8 +120,8 @@ export default function AssignmentProposalControls({
                     ? `$${(json.snapshot.amount_cents / 100).toFixed(2)}`
                     : "Quote generated");
             setQuoteLabel(label);
-            if (json.snapshot && typeof (json.snapshot as { offering_id?: string }).offering_id === "string") {
-                setOfferingId((json.snapshot as { offering_id: string }).offering_id);
+            if (json.snapshot?.offering_id) {
+                setOfferingId(json.snapshot.offering_id);
             }
             onSaved?.();
         } catch (err) {
@@ -171,65 +145,6 @@ export default function AssignmentProposalControls({
                 ...style,
             }}
         >
-            <div style={{ display: "grid", gap: 4 }}>
-                <label
-                    htmlFor={`assignment-requested-days-${customerMemberId}`}
-                    style={{ fontSize: 11, fontWeight: 650, color: T.slate }}
-                >
-                    Requested days per week
-                </label>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                        id={`assignment-requested-days-${customerMemberId}`}
-                        type="number"
-                        min={1}
-                        max={7}
-                        inputMode="numeric"
-                        value={daysText}
-                        placeholder="1–7"
-                        data-testid="assignment-requested-days"
-                        data-assignment-requested-days={customerMemberId}
-                        onChange={(e) => setDaysText(e.target.value)}
-                        onBlur={() => {
-                            void saveRequestedDays();
-                        }}
-                        style={{
-                            width: 72,
-                            padding: "6px 8px",
-                            fontSize: 13,
-                            borderRadius: 6,
-                            border: `1px solid ${T.border}`,
-                            color: T.forge,
-                        }}
-                    />
-                    <button
-                        type="button"
-                        disabled={daysBusy}
-                        onClick={() => {
-                            void saveRequestedDays();
-                        }}
-                        style={{
-                            appearance: "none",
-                            border: `1px solid ${T.border}`,
-                            background: "#fff",
-                            borderRadius: 6,
-                            padding: "6px 10px",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: T.forge,
-                            cursor: daysBusy ? "wait" : "pointer",
-                        }}
-                    >
-                        {daysBusy ? "Saving…" : "Save"}
-                    </button>
-                </div>
-                {daysError ? (
-                    <div style={{ fontSize: 11.5, color: T.ember }} role="alert">
-                        {daysError}
-                    </div>
-                ) : null}
-            </div>
-
             <div style={{ display: "grid", gap: 4 }}>
                 <label
                     htmlFor={`assignment-tuition-plan-${customerMemberId}`}
@@ -293,6 +208,15 @@ export default function AssignmentProposalControls({
             {quoteError ? (
                 <div style={{ fontSize: 11.5, color: T.ember }} role="alert">
                     {quoteError}
+                </div>
+            ) : null}
+            {!canCommit && commitBlockedReason ? (
+                <div
+                    data-assignment-commit-blocked="true"
+                    style={{ fontSize: 12, color: T.ember, fontWeight: 600 }}
+                    role="status"
+                >
+                    {commitBlockedReason}
                 </div>
             ) : null}
         </div>
