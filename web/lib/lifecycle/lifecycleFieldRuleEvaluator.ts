@@ -246,7 +246,9 @@ function evaluateChildRule(
     level: PersistedRequirementLevel
 ): RequirementViolation[] {
     const binding = lifecycleFieldRuleBinding(ruleId);
-    if (!binding?.ocm_field) return [];
+    // Prefer ocm_field; fall back to field_key for PI-overlay assignment proposal facts.
+    const childField = binding?.ocm_field ?? binding?.field_key ?? null;
+    if (!binding || !childField) return [];
     // Unknown is not empty — see evaluateCustomerMemberProfileRule. An absent children binding must
     // reserve judgment rather than report captured data as missing.
     const children = ctx.related?.inquiry_children;
@@ -258,17 +260,21 @@ function evaluateChildRule(
     const fieldLabels: Record<string, string> = {
         first_name: "First Name",
         last_name: "Last Name",
-        program_category_id: "Program Interest",
-        schedule_type: "Desired Schedule",
-        start_date: "Desired Start Date",
-        program_room_cohort_key: "Classroom or Room",
+        program_category_id: "Program",
+        schedule_type: "Proposed schedule",
+        start_date: "Requested Start",
+        program_room_cohort_key: "Room",
+        requested_days_per_week: "Requested days per week",
+        weekdays: "Preferred days",
+        tuition_plan_id: "Tuition plan",
+        quote_accepted: "Quote accepted",
     };
 
     if (children.length === 0 && ruleId !== "child:first_name" && ruleId !== "child:last_name") {
         return [
             fieldViolation(ctx, {
                 rule_id: ruleId,
-                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[binding.ocm_field] ?? binding.ocm_field}`,
+                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[childField] ?? childField}`,
                 field_key: "inquiry_children",
                 missing_reason: "Add at least one child before continuing.",
                 blocking_level,
@@ -279,16 +285,23 @@ function evaluateChildRule(
 
     for (const child of children) {
         const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
-        const value = child[binding.ocm_field as keyof InquiryChildCompletionSnapshot];
-        if (!completionValueEmpty(value)) continue;
+        const value = (child as Record<string, unknown>)[childField];
+        // Preferred weekdays: non-empty array required when configured.
+        if (childField === "weekdays") {
+            if (Array.isArray(value) && value.length > 0) continue;
+        } else if (childField === "quote_accepted") {
+            if (value === true || value === "true" || value === 1) continue;
+        } else if (!completionValueEmpty(value)) {
+            continue;
+        }
         violations.push(
             fieldViolation(ctx, {
                 rule_id: ruleId,
-                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[binding.ocm_field] ?? binding.ocm_field}`,
-                field_key: binding.ocm_field,
+                label: `${lifecycleEntityLabel("child")} · ${fieldLabels[childField] ?? childField}`,
+                field_key: childField,
                 entity_type: "inquiry_child",
                 entity_id: childId,
-                missing_reason: `${fieldLabels[binding.ocm_field] ?? "Field"} is required for each child.`,
+                missing_reason: `${fieldLabels[childField] ?? "Field"} is required for each child.`,
                 blocking_level,
                 requirement_level: level,
             })

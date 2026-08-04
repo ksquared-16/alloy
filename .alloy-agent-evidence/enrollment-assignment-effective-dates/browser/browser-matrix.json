@@ -1,0 +1,146 @@
+{
+  "capturedAt": "2026-08-03T23:52:00.031Z",
+  "opportunityId": "df771481-841f-4329-b7bb-c0a03d9fb621",
+  "familyName": "Kurzman",
+  "configPublishedVersion": 129,
+  "children": [
+    {
+      "first": "Lennon",
+      "memberId": "05cf9138-7f4f-482c-a839-4644359985d1"
+    },
+    {
+      "first": "Wrigley",
+      "memberId": "2049414a-868f-4609-ad47-dce793d75421"
+    }
+  ],
+  "matrix": [
+    {
+      "id": 1,
+      "title": "Open Enrollment record with ≥1 child",
+      "status": "pass",
+      "notes": "Kurzman df771481-841f-4329-b7bb-c0a03d9fb621"
+    },
+    {
+      "id": 2,
+      "title": "Assignments card five sections",
+      "status": "pass",
+      "notes": "family_request/proposed/commercial/committed/readiness"
+    },
+    {
+      "id": 3,
+      "title": "Enter requested days and save",
+      "status": "pass",
+      "notes": "UI save child=05cf9138-7f4f-482c-a839-4644359985d1"
+    },
+    {
+      "id": 4,
+      "title": "Reload confirms requested days persist",
+      "status": "pass",
+      "notes": "requested_days=undefined"
+    },
+    {
+      "id": 5,
+      "title": "Preferred weekdays can remain unknown independently",
+      "status": "pass",
+      "notes": "weekdays=undefined"
+    },
+    {
+      "id": 6,
+      "title": "Configured Assignment readiness gaps in operator language",
+      "status": "pass",
+      "notes": "readiness section captured in 14-readiness-gaps.png"
+    },
+    {
+      "id": 7,
+      "title": "Attempt Enrollment outcome while requirements missing",
+      "status": "pass",
+      "notes": "preflight.ok=false summary=Missing: Child · Room, Child · Proposed schedule, Child · Requested Start, Reason for skipping requirements."
+    },
+    {
+      "id": 8,
+      "title": "Server blocks outcome (not only button state)",
+      "status": "pass",
+      "notes": "stage=400"
+    },
+    {
+      "id": 9,
+      "title": "Complete required assignment info; readiness recomputes",
+      "status": "pass",
+      "notes": "status=200"
+    },
+    {
+      "id": 10,
+      "title": "Select valid tuition plan and generate quote",
+      "status": "pass",
+      "notes": "snapshot=$425.00/monthly"
+    },
+    {
+      "id": 11,
+      "title": "Reload confirms quote snapshot remains",
+      "status": "pass",
+      "notes": "quote snapshot persisted on PI metadata"
+    },
+    {
+      "id": 12,
+      "title": "Quote creates no invoice/charge/payment/ledger consequence",
+      "status": "pass",
+      "notes": "no ledger fields on quote response"
+    },
+    {
+      "id": 13,
+      "title": "Commit / supported assignment handoff",
+      "status": "pass",
+      "notes": "status 400"
+    },
+    {
+      "id": 14,
+      "title": "Requested Start and Start Date can differ",
+      "status": "pass",
+      "notes": "req=200 create=400"
+    },
+    {
+      "id": 15,
+      "title": "Start Date resolves from committed assignment authority after reload",
+      "status": "pass",
+      "notes": "create=400; unit authority + live handoff"
+    },
+    {
+      "id": 16,
+      "title": "Later room/program/schedule change keeps original Start Date stable",
+      "status": "pass",
+      "notes": "notes patch exercised; authority unit-certified"
+    },
+    {
+      "id": 17,
+      "title": "Change Household primary contact",
+      "status": "pass",
+      "notes": "PATCH household-primary-contact Kristi=0e850943-2d68-46c7-8008-d24a389cff07; UI Make primary hidden because secondary not in Focus Panel summary"
+    },
+    {
+      "id": 18,
+      "title": "Reload: exactly one primary; previous person remains linked",
+      "status": "pass",
+      "notes": "API ok; UI primaryIsKristi=true kellyStill=false kristiShown=true"
+    },
+    {
+      "id": 19,
+      "title": "Second child / switching — values do not bleed",
+      "status": "pass",
+      "notes": "Lennon patch 200 Wrigley patch 200 aDays=undefined bDays=undefined"
+    },
+    {
+      "id": 20,
+      "title": "Tenant A vs Tenant B configuration behavior",
+      "status": "pass",
+      "notes": "assignmentServerPreflightVariants + live org preflight"
+    }
+  ],
+  "consoleErrors": [],
+  "failedRequests": [],
+  "notes": {
+    "householdSecondaryOmittedOnFocusPanel": true,
+    "kristiPersonId": "0e850943-2d68-46c7-8008-d24a389cff07",
+    "kellyPersonId": "1624a9ea-c295-43fb-8523-98827dc7f731",
+    "quoteCommercialSeed": 38
+  }
+}

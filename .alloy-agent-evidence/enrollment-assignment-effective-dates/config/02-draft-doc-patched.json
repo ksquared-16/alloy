@@ -1,0 +1,93 @@
+{
+  "schedulingVisibility": "visible",
+  "milestonesVisibility": "linked",
+  "areas": [
+    {
+      "card": "current_work",
+      "colSpan": 6,
+      "rowSpan": 2,
+      "colStart": 1,
+      "rowStart": 1
+    },
+    {
+      "card": "billing_preview",
+      "colSpan": 6,
+      "rowSpan": 2,
+      "colStart": 1,
+      "rowStart": 7
+    },
+    {
+      "card": "children",
+      "colSpan": 6,
+      "rowSpan": 4,
+      "colStart": 7,
+      "rowStart": 1
+    },
+    {
+      "card": "household",
+      "colSpan": 6,
+      "rowSpan": 4,
+      "colStart": 7,
+      "rowStart": 6
+    },
+    {
+      "card": "scheduling",
+      "colSpan": 6,
+      "rowSpan": 2,
+      "colStart": 1,
+      "rowStart": 5
+    }
+  ],
+  "rows": [
+    {
+      "cells": [
+        {
+          "cards": [
+            "current_work"
+          ],
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "cells": [
+        {
+          "cards": [
+            "children"
+          ],
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "cells": [
+        {
+          "cards": [
+            "household"
+          ],
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "cells": [
+        {
+          "cards": [
+            "scheduling"
+          ],
+          "width": "full"
+        }
+      ]
+    },
+    {
+      "cells": [
+        {
+          "cards": [
+            "billing_preview"
+          ],
+          "width": "full"
+        }
+      ]
+    }
+  ]
+}

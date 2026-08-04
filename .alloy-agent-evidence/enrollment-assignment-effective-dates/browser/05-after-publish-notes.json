@@ -1,0 +1,11 @@
+{
+  "assign": 2,
+  "sections": {
+    "family_request": 1,
+    "proposed_assignment": 1,
+    "commercial_estimate": 1,
+    "committed_assignment": 1,
+    "readiness_gaps": 1
+  },
+  "url": "http://127.0.0.1:3013/workspace/work-unit/new-leads?subject_id=df771481-841f-4329-b7bb-c0a03d9fb621"
+}
