@@ -250,7 +250,7 @@ Decision Package lineage — they are convergence candidates, not rewrites.
 | **E-10** | One-way pseudonymization | Missing | AD-2 | No |
 | **E-11** | Provider registry inside the Reasoning Runtime | Absent (provider lives in `lib/ai`) | Phase 2 | No |
 | **E-12** | Local model host (Layer 1) | **Does not exist at all** | Phase 2 | Infrastructure |
-| **E-13** | Cancellation | **Not expressible** — no `cancelled` contract lifecycle state, no `cancelled` package outcome | Phase 2 | **Yes**, if adopted — see §14 |
+| **E-13** | Cancellation | Not expressible today. **Ruled (ADR-1):** a terminal `refused_cancelled` package outcome; **no** mutable `cancelled` lifecycle state | Phase 2 | **Yes** — `DECISION_PACKAGE_OUTCOMES` + `chk_tdp_outcome` |
 | **E-14** | Retry | **Already expressible** — contracts are immutable, so a retry is a new contract with package lineage | Phase 2 | No |
 | **E-15** | Scheduler (deferred / background) | Missing | Phase 6 | Deferred |
 | **E-16** | Knowledge asset substrate | Missing — no `knowledge_*` table | Phase 6 | Yes |
@@ -585,7 +585,7 @@ never been shown to be able to fail.
 | **C2** | **Local-model execution** | A Layer-1 strategy executes against an Alloy-hosted model; `escalation_level ≥ 1`; every request confined to the private host; package records strategy and cost, **not provider identity** | Removing the local host yields `failed_reasoning`, never a silent fall-through to an external provider | **2** |
 | **C3** | **Escalation to an external provider** | Layer-3 strategy runs only after the deterministic and local strategies are shown insufficient; escalation ladder ordering asserted; the outbound payload contains **no raw identity** | A class whose `max_escalation_level` is below the strategy's level yields `refused_budget`, never a downgrade-and-proceed | **2** |
 | **C4** | **Provider failure and timeout** | Provider returns 5xx / exceeds the class latency budget → Decision Package with `failed_reasoning`, explanation naming the failure class, zero writes outside Trust tables, operator keeps the deterministic experience | Failure must not raise past the runtime: a bare exception reaching the route fails the gate | **2** |
-| **C5** | **Cancellation and retry** | **Retry:** a re-run creates a *new* contract and a new package with `supersedes_package_id` set; the predecessor is byte-identical afterwards. **Cancellation:** see §14 — currently **not expressible**; the certification row is blocked on ADR-1 | A retry that mutates the predecessor fails; a cancellation that leaves a contract in `executing` forever fails | **2** (retry), blocked (cancellation) |
+| **C5** | **Cancellation and retry** | **Retry:** a re-run creates a *new* contract and a new package with `supersedes_package_id` set; the predecessor is byte-identical afterwards. **Cancellation:** a cancelled execution produces a terminal package with `outcome = refused_cancelled` (ADR-1); no mutable lifecycle state is introduced | A retry that mutates the predecessor fails; a cancellation that produces no package, or that leaves a contract short of a terminal package, fails | **2** |
 | **C6** | **Non-zero cost accounting** | A provider-backed decision persists `provider_cost_units > 0` on both the package and `trust_reasoning_usage`, and the value aggregates into `reasoning.cost_units_total` | A negative cost is refused; a provider call that records `0` fails the gate | **0** (representable), **2** (non-zero) |
 | **C7** | **Sensitive-value withholding** | A prohibited Information Class refuses the whole transform (`refused_privacy`) rather than silently dropping the element; the privacy report accounts for **every** transformation | Silently admitting a prohibited class fails; a `withhold` element appearing in the reasoning context fails | **0** (regression), **2** |
 | **C8** | **Reversible tokenization** | An identity element is replaced by an opaque, **org-scoped** token; the same value yields the same token within an org and a **different** token across orgs; the raw value is absent from every serialized artefact | A planted raw identity anywhere in the outbound payload fails the gate. Cross-org token collision fails | **2** |
@@ -707,9 +707,20 @@ and neither needs it:
 - **AD-3 (projection, not lifecycle) is already doctrine.** Decision 020 states it
   directly. The contradiction is in `lib/bos`, not in the corpus. **No amendment.**
 
-### 13.2 One proven contradiction — requires an architecture-owner ruling
+### 13.2 One proven contradiction — RULED AND CORRECTED, 2026-08-04
 
-**`trust-economics.md` §Cost Measurement contradicts `reasoning-runtime.md`
+**Status: resolved.** The architecture owner ruled that provider/model identity,
+usage, latency, routing and cost belong to **Trust usage / economics telemetry
+associated with a Decision Package**, and not inside the provider-independent
+Decision Package. The smallest necessary correction was applied to
+[`trust-economics.md`](../../trust/trust-economics.md) §Cost Measurement: `Provider`
+was removed from the list of fields a Decision Package records, and the requirement
+that provider and cost **are** measured in the associated usage/economics records
+was made explicit. `reasoning-runtime.md` is unchanged.
+
+The contradiction as it stood:
+
+**`trust-economics.md` §Cost Measurement contradicted `reasoning-runtime.md`
 §Provider Resolution.**
 
 | Document | Text |
@@ -738,36 +749,34 @@ The implemented shape already matches this reading: `trust_reasoning_usage` carr
 **has no provider column**. The corpus is out of step with itself; the code is not
 out of step with either.
 
-**Recorded as ADR-2 in §14. No doctrine file is edited by this document.**
+**Ruled 2026-08-04 in favour of this resolution. `trust-economics.md` corrected;
+`reasoning-runtime.md` untouched.** No other doctrine file is edited by this
+program.
 
 ---
 
-## 14. Unresolved architecture decisions
+## 14. Architecture decisions — resolved
 
-Two. Both must be answered before the phase that needs them; neither blocks Phase 0
-Slice 1.
+Both open ADRs were ruled on 2026-08-04. Neither blocked Phase 0 Slice 0.1.
 
-**ADR-1 — Cancellation is not expressible. What should it be?**
-`DECISION_CONTRACT_LIFECYCLE_STATES` runs `created → … → archived` with no
-`cancelled`, and `DECISION_PACKAGE_OUTCOMES` has no cancellation outcome. The
-database enforces **forward-only** lifecycle movement. Three options, in the order I
-would recommend them:
+**ADR-1 — Cancellation. RULED: option 1.** Cancellation is represented as a
+**terminal Decision Package outcome, `refused_cancelled`**. No mutable `cancelled`
+contract lifecycle state is added — the forward-only lifecycle stands, and "one
+contract produces exactly one package" is preserved. **A retry after cancellation
+is a new immutable contract with lineage to the prior attempt**, which contract
+immutability already makes automatic.
 
-1. **Cancellation is a refusal.** Add `refused_cancelled` to the outcome set. Keeps
-   the invariant "every contract produces exactly one package", requires a CHECK
-   extension on `chk_tdp_outcome`, and needs no new lifecycle state.
-2. **Cancellation is a lifecycle state.** Add `cancelled` as a terminal state.
-   Breaks "one contract → one package" unless a package is still produced, which
-   makes it option 1 with extra steps.
-3. **Cancellation is out of scope for V2.** A caller that abandons a decision simply
-   ignores the package. Cheapest, and honest as long as it is written down.
+Implementation requires extending `DECISION_PACKAGE_OUTCOMES` and the
+`chk_tdp_outcome` CHECK constraint. **Scheduled for Phase 2**, with the rest of
+execution control. It is explicitly **out of scope for Slice 0.1**: no cancellation
+persistence, no lifecycle state, no schema change, no provider control logic. The
+async seam must not carry speculative infrastructure for it.
 
-**Needed by:** Phase 2 (C5). **Blocked certification row:** C5, cancellation half.
-
-**ADR-2 — Provider identity in the Decision Package.** See §13.2. Ruling needed on
-whether `trust-economics.md` is amended to remove `Provider` from the package's
-recorded fields.
-**Needed by:** Phase 0 Slice 0.6 (measurement dimension set) and Phase 2.
+**ADR-2 — Provider identity in the Decision Package. RULED: keep packages
+provider-independent.** See §13.2. `trust-economics.md` §Cost Measurement corrected;
+`reasoning-runtime.md` unchanged. The Phase 0 measurement set therefore carries **no
+provider dimension**; provider utilization is measured in the associated usage /
+economics records, per that document's §Platform Metrics.
 
 Two further items are **decided but worth restating**, because they will be
 re-litigated by anyone who reads only the code:

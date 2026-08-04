@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-04
 supersedes: []
 ---
 
@@ -236,15 +236,18 @@ Decision Packages are never regenerated unnecessarily.
 
 ## Cost Measurement
 
-Every Decision Package records:
+Every Decision Package records **provider-independent** economics:
 
 - Strategy
-- Provider
 - Latency
 - Execution Cost
 - Cache Utilization
 - Escalation Level
 - Replay Cost
+
+**Provider identity is never recorded inside a Decision Package.** Decision Packages remain provider-independent, per [`Reasoning Runtime`](./reasoning-runtime.md): *"Providers never appear inside Decision Packages. Provider selection remains entirely internal."*
+
+Provider and model identity, provider usage, provider latency, routing and provider cost **are** measured — in the **Trust usage / economics records associated with a Decision Package**, which is where Operational Intelligence reads them. Measuring provider economics and keeping provider identity out of the package are complementary requirements, not competing ones.
 
 Operational Intelligence aggregates platform economics.
 
