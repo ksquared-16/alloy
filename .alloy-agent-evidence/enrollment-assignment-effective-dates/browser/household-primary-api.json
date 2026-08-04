@@ -1,0 +1,4 @@
+{
+  "status": 200,
+  "body": "{\"ok\":true,\"previous_primary_person_id\":\"1624a9ea-c295-43fb-8523-98827dc7f731\",\"customer_id\":\"06d52eeb-42a2-4e63-9454-f1355f3de330\",\"primary_person_id\":\"0e850943-2d68-46c7-8008-d24a389cff07\",\"opportunities_updated\":1,\"opportunity_ids\":[\"df771481-841f-4329-b7bb-c0a03d9fb621\"]}"
+}

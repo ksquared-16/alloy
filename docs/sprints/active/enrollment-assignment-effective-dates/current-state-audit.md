@@ -3,7 +3,7 @@ owner: sprint
 status: active
 sprint: enrollment-assignment-effective-dates
 slot: 3
-staging_base: 3195fae4a301e75cac43db934dcb163168e25674
+staging_base: 86c34f13ae5b8f10298a359c992efe9ab5fee701
 last_reviewed: 2026-08-03
 ---
 
@@ -12,9 +12,24 @@ last_reviewed: 2026-08-03
 **Worktree:** `/Users/Kelly/Code/alloy-worktrees/wt3-enrollment-assignment-effective-dates`  
 **Branch:** `agent/cursor/3-enrollment-assignment-effective-dates`  
 **Port:** `3013`  
-**Staging base SHA:** `3195fae4a301e75cac43db934dcb163168e25674` (verified clean, `0/0` vs `origin/staging`)
+**Staging base SHA:** `86c34f13ae5b8f10298a359c992efe9ab5fee701`
 
 Authority is **code + migrations + `docs/platform/**`**. Sprint/archive docs are historical only.
+
+---
+
+## Published-layout blocker (resolved — Classification A)
+
+| Fact | Detail |
+|------|--------|
+| Symptom | Firefly Enrollment Focus Panel Summary showed no Assignments card |
+| Cause | Published LayoutDoc **v128** set `scheduling` visibility to **`linked`** and omitted it from grid areas; runtime correctly honored published config over code defaults |
+| Not the cause | Key mismatch, preset defect, or materialization bug (defaults already mark Assignments visible) |
+| Repair | Canonical publish to **v129**: Assignments/`scheduling` → `visible` + grid placement (after Household in reading order); `milestones` parked linked |
+| Product code | Unchanged for this unblock |
+| Repeatability | Any tenant: Surfaces → Enrollment Focus Panel Summary → Assignments Visible → place → Publish |
+
+Evidence: `.alloy-agent-evidence/enrollment-assignment-effective-dates/config/`
 
 ---
 

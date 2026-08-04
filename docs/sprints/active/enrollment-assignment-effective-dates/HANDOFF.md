@@ -11,25 +11,39 @@
 | Root class | managed-worktree |
 | Worktree | `/Users/Kelly/Code/alloy-worktrees/wt3-enrollment-assignment-effective-dates` |
 | Branch | `agent/cursor/3-enrollment-assignment-effective-dates` |
-| Staging base (exact) | `3195fae4a301e75cac43db934dcb163168e25674` |
-| Final HEAD | `26dfe839ed0f436925c83578438fee89e7b9b30d` (run `git rev-parse HEAD` to confirm) |
-| Ahead of staging | local only — **not pushed** |
+| Staging base (exact) | `86c34f13ae5b8f10298a359c992efe9ab5fee701` |
+| Final HEAD | *(set at close — run `git rev-parse HEAD`)* |
+| Remote durability | Branch pushed to `origin`; local HEAD must equal remote HEAD at finish |
 | Server | toolkit-owned on 3013 when running; stop with finish |
 | Auth | `qa-slot3-performance@example.com` storage present/valid |
+| Seeded family | Kurzman `df771481-841f-4329-b7bb-c0a03d9fb621` |
+
+## Configuration root cause (Classification **A**)
+
+Firefly’s published Enrollment Focus Panel Summary **v128** set Assignments (`scheduling`) to **Linked** and omitted it from `metadata.focusPanelLayout.grid.areas`. The published LayoutDoc correctly overrode code defaults (which already mark Assignments **visible**). This is a **tenant published-configuration** issue, not a runtime materialization defect and not a broken enrollment preset.
+
+| | Version / id |
+|--|--|
+| Before | published **v128** `6bf3b8d6-94f8-4dd3-9c51-4dae96ad9dff` — scheduling `linked` |
+| After | published **v129** `a7ec300e-cbe2-451d-b4fe-c7e47e3f2afc` — scheduling `visible` + grid area |
+
+Repair used the canonical admin entity-layouts duplicate → PATCH draft → publish path. No Firefly-only runtime bypass. Other tenants: Surfaces → Enrollment Focus Panel Summary → Assignments Visible → place → Publish.
+
+Evidence: `.alloy-agent-evidence/enrollment-assignment-effective-dates/config/ROOT-CAUSE.md`
 
 ## Authority decisions (accepted)
 
 1. **Requested Start** = `process_instances.metadata.start_date` — never rewritten by commitment.
-2. **Start Date** = earliest qualifying **committed** `schedule_assignments.start_date` (`effectiveDateAuthority`); agreement fallback only when no OA row. Canceled excluded; superseded retained for original Start Date; later room/schedule changes do not rewrite; `excluded_from_start_date` correction path.
-3. **Enrollment Date** = process-instance stamp via configured paperwork-completion outcome target `stamp_enrollment_date`. `approve_enrollment` may invoke the same helper as **compat only** — does not own the meaning.
-4. **`commitment_kind`** = proposed vs committed assignment state only — not a parallel lifecycle, not BP stage replacement, not duplicate Start Date authority.
-5. **Requested days** = `requested_days_per_week` on participation metadata (1–7); preferred weekdays reuse existing `weekdays` draft key / SchedulingCard path.
+2. **Start Date** = earliest qualifying **committed** `schedule_assignments.start_date` (`effectiveDateAuthority`); agreement fallback only when no OA row.
+3. **Enrollment Date** = process-instance stamp via configured paperwork-completion outcome target `stamp_enrollment_date`.
+4. **`commitment_kind`** = proposed vs committed assignment state only.
+5. **Requested days** = `requested_days_per_week` on participation metadata (1–7); preferred weekdays reuse `weekdays`.
 6. **Quote** = immutable snapshot on PI metadata (`assignment_quote_snapshots`); not ledger.
-7. **Household primary** = existing `patchHouseholdPrimaryContact` + confirm modal on Household card.
+7. **Household primary** = `patchHouseholdPrimaryContact` / `PATCH …/household-primary-contact`.
 
 ## Migrations
 
-None added this sprint (reuse existing OA / participation / commercial tables).
+None added this sprint.
 
 ## Key files
 
@@ -41,25 +55,26 @@ None added this sprint (reuse existing OA / participation / commercial tables).
 - `web/components/admin/focusPanel/cards/AssignmentCardSections.tsx`
 - `web/components/admin/focusPanel/cards/AssignmentProposalControls.tsx`
 - `web/app/api/admin/enrollment/assignment-quote/route.ts`
-- Preflight: `lifecycleFieldRuleEvaluator.ts`, `loadRecordForEffectiveRequirements.ts` (PI overlay)
+- Preflight: `lifecycleFieldRuleEvaluator.ts`, `loadRecordForEffectiveRequirements.ts`
 - Doctrine: `stage-membership-and-outcomes.md`, `assignment-proposed-commitment-authority.md`
+- Playwright: `web/playwright/tests/enrollment-assignment-effective-dates-evidence.spec.ts`
 
-## Tests
+## Automated results
 
 | Suite | Result |
 |-------|--------|
 | `tests/enrollment/*` + household Make primary | **53 passed** |
-| `npm run typecheck` | **passed** (tsconfig.build.json) |
-| Staging-base `focusPanelMutation.saveInquiryChild` event-count | **FAIL (pre-existing)** — still fails on exact staging SHA; not introduced here |
-| Playwright evidence | Partial — authenticated `/workspace` screenshot captured; Focus Panel Assignments sections not opened in QA org (no row click / Thinking… load). Spec: `playwright/tests/enrollment-assignment-effective-dates-evidence.spec.ts` |
+| Focus Panel default/visibility tests | **14 passed** |
+| `npm run typecheck` | **passed** |
+| `HouseholdCardVerify` stub (prior Vercel fail) | present; in `tsconfig.build.json` graph |
+| Full `next build` on cert host | aborted under memory pressure (~300MB free); type graph certified |
+| Staging-base `saveInquiryChild` event-count | **FAIL (pre-existing)** |
 
-Evidence: `.alloy-agent-evidence/enrollment-assignment-effective-dates/`
+## Browser matrix
 
-## Browser / ops notes
+**20/20 pass** on Kurzman after v129 publish. See evidence `browser/browser-matrix.json` and `TEST-NOTES.md`.
 
-- Worktree had **invalid `node_modules` symlink** to another worktree; replaced with worktree-local `npm install` (Vacilando rule).
-- Dev server on 3013 is fragile under concurrent heavy `tsc` heap; restart with `alloy-dev-start` before UI QA.
-- Full operator-path browser certification of all 13 scenarios requires a seeded enrollment lead in the QA org with multi-child + commercial rates — **not completed in this finish window**. Unit/server evaluator coverage certifies authority, preflight variants, quote immutability, Start Date edge cases, and Household wiring.
+Deferral / observation: Focus Panel Household **summary** shows only the current primary adult (Kristi after flip); secondary (Kelly) remains linked at customer/API layer (`previous_primary_person_id`) but Make primary control is not painted without a visible secondary region. Not required to block promotion of the assignment work.
 
 ## Intentional deferrals
 
@@ -68,17 +83,16 @@ Evidence: `.alloy-agent-evidence/enrollment-assignment-effective-dates/`
 - BOS slash adapter for make_primary / assignment quote
 - Regenerating stale schema CSV
 - Fixing pre-existing `focusPanelMutation` double-dispatch assert
-- Exhaustive seeded browser matrix for all 13 scenarios (follow-up)
+- Focus Panel Household secondary-adult summary composition (Kristi/Kelly both visible + Make primary chrome)
+- Host-local full `next build` under memory pressure (CI/Vercel remains the production build gate)
 
 ## Promotion guidance
 
-1. Do **not** push until Kelly authorizes.
-2. `alloy-sprint-finish 3` is currently **blocked** by Vacilando durability (HEAD not on origin). After Kelly authorizes:  
-   `git -C …/wt3-enrollment-assignment-effective-dates push -u origin agent/cursor/3-enrollment-assignment-effective-dates`  
-   then re-run `alloy-sprint-finish 3`.
-3. Staging has moved **2 commits** past the original base since sprint start (`behind 2` at finish attempt). Reconcile only when Kelly asks (`alloy-worktree-sync` when clean, or explicit merge).
-4. PR into `staging` once authorized; then finish the slot.
+1. **Do not merge to staging** until Kelly authorizes.
+2. Branch is pushed for remote durability; re-run `alloy-sprint-finish 3` after local=remote HEAD and clean tree.
+3. If `origin/staging` moved past `86c34f13a`, use managed sync before PR.
+4. PR into `staging` only when Kelly asks.
 
 ## Exact next action
 
-**Kelly:** authorize `git push -u origin agent/cursor/3-enrollment-assignment-effective-dates` when ready for remote durability / review, or review locally on slot 3 first (`alloy-dev-start wt3-enrollment-assignment-effective-dates` → `http://localhost:3013`) with a seeded Enrollment lead.
+**Kelly:** review evidence + matrix on slot 3, then authorize PR/merge to staging when ready.

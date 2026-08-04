@@ -148,11 +148,18 @@ async function openFocusPanel(page: Page, opportunityId: string, familyName: str
         waitUntil: "commit",
         timeout: 120_000,
     });
-    await page.waitForTimeout(8000);
     await page.getByRole("button", { name: /^close$/i }).first().click({ timeout: 2000 }).catch(() => undefined);
 
-    // If subject deep-link did not paint Focus Panel, fall back to search-open (phase2a).
-    let assignments = page.locator("[data-assignments-card='true'], [data-scheduling-card='true']");
+    // Cold compile + Focus Panel composition can take ~20–40s before scheduling paints.
+    const assignmentsSel =
+        "[data-assignments-card='true'], [data-scheduling-card='true'], [data-universal-card-key='scheduling']";
+    let assignments = page.locator(assignmentsSel);
+    for (let i = 0; i < 25 && (await assignments.count()) === 0; i++) {
+        await page.waitForTimeout(2000);
+        assignments = page.locator(assignmentsSel);
+    }
+
+    // If subject deep-link did not paint Focus Panel, fall back to queue search-open.
     if ((await assignments.count()) === 0) {
         await page.goto(`/workspace/work-unit/${NEW_LEADS_SLUG}`, {
             waitUntil: "domcontentloaded",
@@ -169,9 +176,13 @@ async function openFocusPanel(page: Page, opportunityId: string, familyName: str
             });
             await page.waitForTimeout(2000);
         }
-        const search = page.getByRole("searchbox", { name: /Search records/i });
+        // Prefer work-unit record filter; global search shares the same aria-label.
+        const search = page
+            .getByTestId("wu-record-filter-search")
+            .or(page.getByPlaceholder("Search this view…"))
+            .or(page.getByRole("searchbox", { name: /Search records/i }).nth(1));
         if (await search.count()) {
-            await search.fill(familyName);
+            await search.first().fill(familyName);
             await page.waitForTimeout(1500);
         }
         const queueRow = page.getByRole("button", { name: new RegExp(`${familyName} Family|${familyName}`, "i") }).first();
@@ -180,9 +191,12 @@ async function openFocusPanel(page: Page, opportunityId: string, familyName: str
             await page.waitForTimeout(6000);
         }
         await page.getByRole("button", { name: /^close$/i }).first().click({ timeout: 2000 }).catch(() => undefined);
+        for (let i = 0; i < 15 && (await page.locator(assignmentsSel).count()) === 0; i++) {
+            await page.waitForTimeout(2000);
+        }
     }
 
-    assignments = page.locator("[data-assignments-card='true'], [data-scheduling-card='true']");
+    assignments = page.locator(assignmentsSel);
     if ((await assignments.count()) === 0) {
         await page.getByRole("button", { name: /View children|Assignments|Schedule/i }).first().click({ timeout: 5000 }).catch(() => undefined);
         await page.waitForTimeout(2000);
@@ -207,7 +221,7 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
     });
 
     test("authenticated Focus Panel assignment matrix", async ({ page, request }) => {
-        test.setTimeout(600_000);
+        test.setTimeout(900_000);
         await page.setViewportSize({ width: 1440, height: 960 });
 
         const consoleErrors: string[] = [];
