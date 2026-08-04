@@ -2,6 +2,55 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildCompletionContextFromRecord } from "@/lib/completion/evaluateCompletionRequirements";
 import type { CompletionEvaluationContext } from "@/lib/completion/requirementValidationTypes";
 import { resolveOpportunityDepartmentId } from "@/lib/opportunities/resolveOpportunityDepartmentId";
+import { listEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import {
+    resolveRequestedDaysPerWeek,
+    resolvePreferredWeekdays,
+} from "@/lib/enrollment/effectiveDateAuthority";
+import { activeAssignmentQuoteSnapshot } from "@/lib/enrollment/assignmentQuoteSnapshot";
+
+function overlayParticipationOntoChild(
+    child: Record<string, unknown>,
+    meta: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+    if (!meta || typeof meta !== "object") return child;
+    const next = { ...child };
+    // PI draft wins for assignment proposal facts when present (pre-materialization authority).
+    const pick = (key: string) => {
+        if (meta[key] !== undefined && meta[key] !== null && meta[key] !== "") {
+            next[key] = meta[key];
+        }
+    };
+    pick("start_date");
+    pick("schedule_type");
+    pick("program_category_id");
+    pick("location_id");
+    pick("program_room_cohort_key");
+    pick("tuition_plan_id");
+    pick("enrollment_date");
+    if (meta.requested_days_per_week !== undefined) {
+        next.requested_days_per_week = meta.requested_days_per_week;
+    } else {
+        const days = resolveRequestedDaysPerWeek(meta);
+        if (days != null) next.requested_days_per_week = days;
+    }
+    const weekdays = resolvePreferredWeekdays(meta);
+    if (weekdays.length > 0) next.weekdays = weekdays;
+    else if (Array.isArray(meta.weekdays)) next.weekdays = meta.weekdays;
+
+    if (meta.quote_accepted === true || meta.quote_accepted === "true") {
+        next.quote_accepted = true;
+    } else {
+        const snap = activeAssignmentQuoteSnapshot(meta);
+        if (snap?.status === "accepted") next.quote_accepted = true;
+    }
+    if (meta.assignment_quote_snapshots !== undefined) {
+        next.assignment_quote_snapshots = meta.assignment_quote_snapshots;
+    }
+    // Keep raw participation metadata for card assemblers.
+    next.participation_metadata = meta;
+    return next;
+}
 
 async function loadInquiryChildrenForOpportunity(
     supabase: SupabaseClient,
@@ -27,11 +76,23 @@ async function loadInquiryChildrenForOpportunity(
         outcome_status_key?: string | null;
     }>;
 
-    if (!ocms.length) return [];
+    // Also load enrollment process instances — children may exist only on PI (no OCM).
+    const instances = await listEnrollmentInstancesForLead(supabase, { orgId, opportunityId });
+    const metaByMember = new Map<string, Record<string, unknown>>();
+    for (const pi of instances) {
+        const sid = String(pi.subject_id ?? "").trim();
+        if (!sid) continue;
+        metaByMember.set(sid, (pi.metadata && typeof pi.metadata === "object" ? pi.metadata : {}) as Record<string, unknown>);
+    }
 
-    const memberIds = ocms
-        .map((r) => r.customer_member_id)
-        .filter((id): id is string => typeof id === "string" && id.trim() !== "");
+    if (!ocms.length && metaByMember.size === 0) return [];
+
+    const memberIds = [
+        ...new Set([
+            ...ocms.map((r) => r.customer_member_id).filter((id): id is string => typeof id === "string" && id.trim() !== ""),
+            ...metaByMember.keys(),
+        ]),
+    ];
 
     const membersById = new Map<
         string,
@@ -55,9 +116,9 @@ async function loadInquiryChildrenForOpportunity(
         }
     }
 
-    return ocms.map((ocm) => {
+    const fromOcm = ocms.map((ocm) => {
         const member = ocm.customer_member_id ? membersById.get(ocm.customer_member_id) : undefined;
-        return {
+        const base = {
             id: ocm.id,
             customer_member_id: ocm.customer_member_id ?? null,
             person_id: member?.person_id ?? null,
@@ -70,7 +131,36 @@ async function loadInquiryChildrenForOpportunity(
             start_date: ocm.start_date ?? null,
             outcome_status_key: ocm.outcome_status_key ?? null,
         };
+        const meta = ocm.customer_member_id ? metaByMember.get(ocm.customer_member_id) : undefined;
+        return overlayParticipationOntoChild(base, meta);
     });
+
+    // PI-only children (no OCM row) — still evaluate requirements at child grain.
+    const seen = new Set(fromOcm.map((c) => String(c.customer_member_id ?? "")));
+    for (const [memberId, meta] of metaByMember) {
+        if (seen.has(memberId)) continue;
+        const member = membersById.get(memberId);
+        fromOcm.push(
+            overlayParticipationOntoChild(
+                {
+                    id: memberId,
+                    customer_member_id: memberId,
+                    person_id: member?.person_id ?? null,
+                    first_name: member?.first_name ?? null,
+                    last_name: member?.last_name ?? null,
+                    location_id: null,
+                    program_category_id: null,
+                    program_room_cohort_key: null,
+                    schedule_type: null,
+                    start_date: null,
+                    outcome_status_key: null,
+                },
+                meta,
+            ),
+        );
+    }
+
+    return fromOcm;
 }
 
 export async function loadOpportunityRecordForEffectiveRequirements(

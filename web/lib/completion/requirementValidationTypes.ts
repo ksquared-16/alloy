@@ -115,6 +115,13 @@ export type InquiryChildCompletionSnapshot = {
     schedule_type?: string | null;
     start_date?: string | null;
     outcome_status_key?: string | null;
+    /** Assignment proposal — days/week intent (PI metadata overlay). */
+    requested_days_per_week?: number | string | null;
+    /** Preferred weekdays 0–6 (PI metadata overlay; not committed schedule). */
+    weekdays?: number[] | null;
+    tuition_plan_id?: string | null;
+    quote_accepted?: boolean | string | null;
+    enrollment_date?: string | null;
     /** Profile fields — hydrated from customer_member when available. */
     dob?: string | null;
     date_of_birth?: string | null;

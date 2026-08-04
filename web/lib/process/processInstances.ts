@@ -48,13 +48,42 @@ export type ProcessInstanceRow = {
 
 /** Enrollment participation payload carried in metadata (canonical fields; no OCM dependency). */
 export type EnrollmentParticipationMetadata = {
+    /** Family preferred start timing (Requested Start) — never rewritten by commitment. */
     start_date?: string | null;
     schedule_type?: string | null;
     program_category_id?: string | null;
     location_id?: string | null;
     program_room_cohort_key?: string | null;
     notes?: string | null;
+    /**
+     * Requested care intensity before exact weekdays are known.
+     * Distinct from preferred weekdays (`weekdays`) and from committed schedule_assignments.
+     */
+    requested_days_per_week?: number | null;
+    /** Preferred weekdays (0=Sun…6=Sat) — intent only until a proposed/committed assignment exists. */
+    weekdays?: number[] | null;
 };
+
+/**
+ * Focus Panel truth bag: customer_member_id → process_instances.metadata.
+ * Lets Assignments card / buildAssignmentCardModelFromTruth read requested_days and quotes
+ * without inventing a parallel fetch.
+ */
+export function buildEnrollmentParticipationByMemberMap(
+    instances: Array<{ subject_id: string; metadata?: Record<string, unknown> | null }>,
+): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const pi of instances) {
+        const subjectId = typeof pi.subject_id === "string" ? pi.subject_id.trim() : "";
+        if (!subjectId) continue;
+        const meta =
+            pi.metadata && typeof pi.metadata === "object" && !Array.isArray(pi.metadata)
+                ? { ...pi.metadata }
+                : {};
+        out[subjectId] = meta;
+    }
+    return out;
+}
 
 /** Build the insert row for an enrollment process instance (one per child per lead). */
 export function buildEnrollmentProcessInstanceInsert(args: {

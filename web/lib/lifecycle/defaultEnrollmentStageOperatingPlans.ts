@@ -528,6 +528,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "complete_to_enrolled",
                 when_outcome_key: "enrollment_complete",
                 targets: [
+                    // Paperwork-completion fact → process-instance Enrollment Date (not opportunity).
+                    { kind: "stamp_enrollment_date" },
                     { kind: "update_child_enrollment_status", disposition_key: "enrolled" },
                     { kind: "move_to_stage", stage_key: "enrolled" },
                     { kind: "mark_stage_work_complete" },
