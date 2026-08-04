@@ -35,7 +35,7 @@ import {
     type ResolvedDemoIds,
 } from "./lib/demoRuntimeCleanupScope";
 import { PROCESSING_LINK_COLUMN } from "./lib/certificationBaselineSelection";
-import { CERTIFICATION_RESET_PURPOSE } from "./lib/certificationPlanIdentity";
+import { executeCertificationResetAtomically } from "./lib/certificationResetAdapter";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import {
     executeCommunicationsOrphanDeletes,
@@ -142,83 +142,6 @@ async function deleteByOr(supabase: SupabaseAdmin, table: string, orgId: string,
     const { data, error } = await supabase.from(table).delete().eq("org_id", orgId).or(orFilter).select("id");
     if (error) throw new Error(`[${table} delete or] ${error.message}`);
     return (data ?? []).length;
-}
-
-/**
- * Certification execution — one atomic database transaction, via the governed reset authority.
- *
- * Everything destructive happens inside `certification_reset_execute`. This function's only jobs
- * are to refuse a malformed graph BEFORE the call and to report what the transaction actually
- * deleted, rather than what the plan hoped it would.
- */
-async function executeCertificationResetAtomically(
-    supabase: SupabaseAdmin,
-    scope: DemoCleanupScope,
-    ids: ResolvedDemoIds
-): Promise<Record<string, number>> {
-    if (!scope.certificationBaseline) {
-        throw new Error("executeCertificationResetAtomically called outside certification mode");
-    }
-
-    const graph = {
-        opportunity_ids: ids.opportunityIds,
-        customer_ids: ids.customerIds,
-        person_ids: ids.personIds,
-        customer_member_ids: ids.customerMemberIds,
-        thread_ids: ids.threadIds,
-        document_ids: ids.documentIds,
-        form_submission_ids: ids.formSubmissionIds,
-        form_packet_session_ids: ids.residue?.formPacketSessionIds ?? [],
-        contact_ids: ids.residue?.contactIds ?? [],
-        operational_task_ids: ids.residue?.operationalTaskIds ?? [],
-        workflow_event_ids: ids.residue?.workflowEventIds ?? [],
-        processing_case_ids: ids.processingCaseIds ?? [],
-        processing_plan_ids: ids.processingPlanIds ?? [],
-    } satisfies Record<string, string[]>;
-
-    // Fail BEFORE the call, not inside the transaction: a malformed id is a resolver defect, and
-    // discovering it mid-delete is how the last run ended.
-    const malformed: string[] = [];
-    for (const [key, values] of Object.entries(graph)) {
-        if (!Array.isArray(values)) {
-            malformed.push(`${key} is not an array`);
-            continue;
-        }
-        for (const v of values) {
-            if (typeof v !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
-                malformed.push(`${key} contains a non-uuid value`);
-                break;
-            }
-        }
-    }
-    if (malformed.length) {
-        throw new Error(`Refusing to invoke the reset authority — malformed graph: ${malformed.join("; ")}`);
-    }
-
-    console.log("\n--- invoking certification_reset_execute (atomic) ---\n");
-    console.log(`org: ${scope.orgId}`);
-    for (const [k, v] of Object.entries(graph)) if (v.length) console.log(`  ${k}: ${v.length}`);
-
-    const { data, error } = await supabase.rpc("certification_reset_execute", {
-        p_org_id: scope.orgId,
-        p_purpose: CERTIFICATION_RESET_PURPOSE,
-        p_actor: process.env.ALLOY_RESET_ACTOR?.trim() || "certification-reset-utility",
-        p_graph: graph,
-    });
-
-    if (error) {
-        // The whole transaction rolled back. Storage MUST NOT be touched.
-        throw new Error(
-            `certification_reset_execute FAILED — database rolled back, zero rows deleted, ` +
-                `zero storage objects touched: ${error.message}`
-        );
-    }
-
-    const result = (data ?? {}) as { ok?: boolean; deleted?: Record<string, number> };
-    if (!result.ok) {
-        throw new Error("certification_reset_execute returned a non-ok result; treating as failure");
-    }
-    return result.deleted ?? {};
 }
 
 async function executeDeletes(
@@ -618,15 +541,15 @@ async function main(): Promise<void> {
      * touch the immutable Processing ledger and their failure mode is not this one.
      */
     if (scope.certificationBaseline) {
-        const deletedAtomic = await executeCertificationResetAtomically(supabase, scope, ids);
+        const atomic = await executeCertificationResetAtomically(supabase, scope, ids, {
+            log: (m) => console.log(m),
+        });
 
         console.log("\n--- ACTUAL committed deletion counts (from the transaction) ---\n");
-        let total = 0;
-        for (const [table, n] of Object.entries(deletedAtomic).sort()) {
-            total += n;
+        for (const [table, n] of Object.entries(atomic.deleted).sort()) {
             if (n > 0) console.log(`${table}: ${n}`);
         }
-        console.log(`\nTOTAL rows actually deleted: ${total}`);
+        console.log(`\nTOTAL rows actually deleted: ${atomic.totalDeleted}`);
         console.log(
             "\nDatabase transaction committed. Storage deletion is a SEPARATE step and has NOT run —" +
                 "\nit is ordered after database verification by contract §4quater.\n"
