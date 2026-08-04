@@ -6,6 +6,7 @@
  */
 
 import { config as loadEnv } from "dotenv";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
@@ -18,6 +19,7 @@ import {
     parseDemoCleanupScopeFromEnv,
 } from "./lib/demoRuntimeCleanupScope";
 import { PROCESSING_CLEANUP_TABLE_ORDER } from "./lib/certificationBaselineSelection";
+import { validateStorageManifest, type StorageManifest } from "./lib/certificationPlanIdentity";
 import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
 import { printCommunicationsOrphanReport } from "./lib/communicationsOrphanResetExecute";
 import { buildDemoCleanupCounts, buildEnrollmentResetSelection, resolveDemoIds } from "./lib/demoRuntimeCleanupPlan";
@@ -171,6 +173,37 @@ async function main(): Promise<void> {
         console.log(`processing_cases preserved: ${ids.preservedProcessingCases?.length ?? 0}`);
         for (const p of (ids.preservedProcessingCases ?? []).slice(0, 15)) console.log(`  - ${p.id}: ${p.reason}`);
         console.log("");
+    }
+
+    if (scope.certificationBaseline) {
+        /**
+         * STORAGE RECOVERY MANIFEST.
+         *
+         * Storage selection normally derives from selected document ROWS. After the halted run
+         * those rows are gone, so derivation yields zero while 73 objects remain — residue one
+         * layer down, invisible to the count that matters. The manifest carries the previously
+         * authorized set forward.
+         *
+         * It is a frozen list, never a prefix scan: an object not in the manifest is not deleted,
+         * however tempting the shared org prefix makes it.
+         */
+        const manifestPath = resolve(process.cwd(), "../certification/bp-config-integrity/evidence/firefly-storage-recovery-manifest.json");
+        if (existsSync(manifestPath)) {
+            const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as StorageManifest;
+            const v = validateStorageManifest(manifest, scope.orgId);
+            console.log("--- storage recovery manifest ---\n");
+            if (!v.ok) {
+                console.log(`  REFUSED — ${v.problems.join("; ")}`);
+                console.log("  (manifest is for another org or has been tampered with; storage stays untouched)\n");
+            } else {
+                const derived = ids.residue?.storageObjects.map((o) => o.path) ?? [];
+                const union = [...new Set([...derived, ...manifest.objects])].sort();
+                console.log(`  manifest: ${manifest.objects.length} objects, sha256 ${manifest.manifest_sha256.slice(0, 16)}…`);
+                console.log(`  derived from surviving document rows: ${derived.length}`);
+                console.log(`  TOTAL storage objects to remove: ${union.length}`);
+                console.log(`  purpose=${manifest.purpose} status=${manifest.status}\n`);
+            }
+        }
     }
 
     if (scope.certificationBaseline && ids.residue) {

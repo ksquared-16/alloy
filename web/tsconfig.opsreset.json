@@ -14,9 +14,11 @@
     "scripts/lib/certificationBaselineResolver.ts",
     "scripts/lib/certificationResidueSelection.ts",
     "scripts/lib/certificationResidueResolver.ts",
+    "scripts/lib/certificationPlanIdentity.ts",
     "tests/scripts/enrollmentRuntimeReset.test.ts",
     "tests/scripts/enrollmentRuntimeResetIncludeClosed.test.ts",
     "tests/scripts/certificationBaseline.test.ts",
-    "tests/scripts/certificationResidue.test.ts"
+    "tests/scripts/certificationResidue.test.ts",
+    "tests/scripts/certificationPlanIdentity.test.ts"
   ]
 }
