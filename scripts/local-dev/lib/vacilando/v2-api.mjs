@@ -101,6 +101,7 @@ import {
   acceptDeliverableReview,
   requestDeliverableChanges,
   askDirectorAboutDeliverable,
+  shareContextWithDirector,
   recheckDeliverableReview,
   deliverableReviewVm,
 } from "./deliverable-review.mjs";
@@ -115,9 +116,31 @@ import {
   IMPROVEMENT_CATEGORIES,
   IMPROVEMENT_SEVERITIES,
 } from "./improvements.mjs";
+import {
+  authorizeV2Request,
+  pathRequiresV2Auth,
+  getVacilandoApiToken,
+  apiAuthRequired,
+  tokenFingerprint,
+} from "./vacilando-api-auth.mjs";
+import { RECHECK_SEMANTICS, CERTIFY_NOTE_SEMANTICS } from "./deliverable-director-loop.mjs";
 
-export async function handleV2Post(path, body) {
+function authGate(path, method, headers) {
+  const protectedDeliverable = path.startsWith("/api/v2/deliverable-reviews")
+    || path.startsWith("/api/v2/director/messages");
+  if (!protectedDeliverable) return { ok: true };
+  if (!apiAuthRequired()) return { ok: true };
+  const auth = authorizeV2Request(headers || {}, { mutation: method === "POST" });
+  if (!auth.ok) return { ok: false, status: auth.status, body: { ok: false, error: auth.error } };
+  return { ok: true, actor: auth.actor };
+}
+
+export async function handleV2Post(path, body, { headers = {} } = {}) {
   const v = body || {};
+  const gate = authGate(path, "POST", headers);
+  if (!gate.ok) return { status: gate.status, body: gate.body };
+  const actorDefault = gate.actor || v.actor || "operator";
+  const idempotencyKey = v.idempotency_key || v.idempotencyKey || headers["x-idempotency-key"] || headers["X-Idempotency-Key"] || null;
 
   if (path === "/api/v2/missions/brief/ingest") {
     try {
@@ -137,37 +160,56 @@ export async function handleV2Post(path, body) {
   if (path === "/api/v2/deliverable-reviews/accept") {
     const mid = v.mission_id || v.missionId;
     const rid = v.review_id || v.reviewId;
+    if (!mid || !rid) return { status: 400, body: { ok: false, error: "missing_ids" } };
     const out = acceptDeliverableReview(mid, rid, {
-      actor: v.actor || "operator",
-      response: v.response || v.note || null,
+      actor: actorDefault,
+      response: v.response || v.note || v.operator_note || null,
     });
-    return { status: out.ok ? 200 : 409, body: out };
+    return { status: out.ok ? 200 : 409, body: { ...out, certifyNoteSemantics: CERTIFY_NOTE_SEMANTICS } };
   }
   if (path === "/api/v2/deliverable-reviews/request-changes") {
     const mid = v.mission_id || v.missionId;
     const rid = v.review_id || v.reviewId;
+    if (!mid || !rid) return { status: 400, body: { ok: false, error: "missing_ids" } };
     const out = requestDeliverableChanges(mid, rid, {
       direction: v.direction || v.message || v.response,
-      actor: v.actor || "operator",
+      actor: actorDefault,
+      idempotencyKey,
     });
     return { status: out.ok ? 200 : 400, body: out };
   }
   if (path === "/api/v2/deliverable-reviews/ask") {
     const mid = v.mission_id || v.missionId;
     const rid = v.review_id || v.reviewId;
+    if (!mid || !rid) return { status: 400, body: { ok: false, error: "missing_ids" } };
     const out = askDirectorAboutDeliverable(mid, rid, {
       message: v.message || v.response,
-      actor: v.actor || "operator",
+      actor: actorDefault,
+      kind: v.kind === "context" ? "context" : "ask",
+      idempotencyKey,
+    });
+    return { status: out.ok ? 200 : 400, body: out };
+  }
+  if (path === "/api/v2/deliverable-reviews/share-context" || path === "/api/v2/deliverable-reviews/context") {
+    const mid = v.mission_id || v.missionId;
+    const rid = v.review_id || v.reviewId;
+    if (!mid || !rid) return { status: 400, body: { ok: false, error: "missing_ids" } };
+    const out = shareContextWithDirector(mid, rid, {
+      message: v.message || v.response || v.note,
+      actor: actorDefault,
+      idempotencyKey,
     });
     return { status: out.ok ? 200 : 400, body: out };
   }
   if (path === "/api/v2/deliverable-reviews/recheck") {
     const mid = v.mission_id || v.missionId;
     const rid = v.review_id || v.reviewId;
+    if (!mid || !rid) return { status: 400, body: { ok: false, error: "missing_ids" } };
     const out = recheckDeliverableReview(mid, rid, {
-      actor: v.actor || "operator",
+      actor: actorDefault,
+      idempotencyKey,
     });
-    return { status: out.ok ? 200 : 400, body: out };
+    return { status: out.ok ? 200 : 400, body: { ...out, recheckSemantics: RECHECK_SEMANTICS } };
   }
   if (path === "/api/v2/deliverable-reviews/create" || path === "/api/v2/deliverable-reviews/ensure") {
     const mid = v.mission_id || v.missionId;
@@ -590,16 +632,72 @@ export async function handleV2Post(path, body) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
   }
+  if (path === "/api/v2/missions/local-server" || path === "/api/v2/missions/local-server/control") {
+    try {
+      const { controlMissionLocalServer } = await import("./mission-local-server.mjs");
+      const mid = v.mission_id || v.missionId;
+      const action = v.action || v.command || null;
+      const out = controlMissionLocalServer(mid, action);
+      return { status: out.ok ? 200 : 409, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/day/stop" || path === "/api/v2/day/stop-of-day") {
+    try {
+      const { stopOfDay } = await import("./day-ops.mjs");
+      const out = stopOfDay();
+      return { status: out.ok ? 200 : 409, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/day/start" || path === "/api/v2/day/start-of-day") {
+    try {
+      const { startOfDay } = await import("./day-ops.mjs");
+      const out = startOfDay();
+      return { status: out.ok ? 200 : 409, body: out };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
 
   return null; // not a V2 route
 }
 
-export async function handleV2Get(path, url) {
+export async function handleV2Get(path, url, { headers = {} } = {}) {
   const q = (k) => url.searchParams.get(k);
+
+  if (path === "/api/v2/session") {
+    const required = apiAuthRequired();
+    const token = required ? getVacilandoApiToken() : null;
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        authRequired: required,
+        token: required ? token : null,
+        tokenFingerprint: required ? tokenFingerprint(token) : null,
+        isolation: {
+          boundary: "missionId",
+          organizations: "n/a — Vacilando control plane is single-tenant/local",
+        },
+        recheckSemantics: RECHECK_SEMANTICS,
+        certifyNoteSemantics: CERTIFY_NOTE_SEMANTICS,
+      },
+    };
+  }
+
+  const gate = authGate(path, "GET", headers);
+  if (!gate.ok) return { status: gate.status, body: gate.body };
 
   if (path === "/api/v2/runtime/diagnostics") {
     const { buildRuntimeDiagnostics } = await import("./runtime-diagnostics.mjs");
     return { status: 200, body: await buildRuntimeDiagnostics() };
+  }
+  if (path === "/api/v2/day" || path === "/api/v2/views/day" || path === "/api/v2/day/ops") {
+    const { dayOpsVm } = await import("./day-ops.mjs");
+    return { status: 200, body: { ok: true, ...dayOpsVm() } };
   }
   if (path === "/api/v2/trusted-host/diagnostics" || path === "/api/v2/views/trusted-host/diagnostics") {
     const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");

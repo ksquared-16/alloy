@@ -23,6 +23,7 @@ Before beginning an Alloy **implementation sprint** (new feature, remediation, o
 - Coherent **local** commits throughout; multiple commits are expected.
 - **“Commit” never means “push.”**
 - Do **not** push, merge, rebase, create/update a PR, trigger Vercel, or modify `staging` until Kelly explicitly authorizes promotion.
+- Push is a **checkpoint** (finished slice / end of day / Kelly ask) — not per-commit. Mid-sprint work stays local so Vercel is not flooded with Preview builds.
 - Do not modify sibling worktrees or the canonical checkout during implementation.
 
 ## First response

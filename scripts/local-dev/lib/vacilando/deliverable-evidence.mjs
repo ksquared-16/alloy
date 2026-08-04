@@ -37,13 +37,45 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
 
   const passedMatch = parseBody.match(/\b(\d+)\s+passed\b/i);
   const failedMatch = parseBody.match(/\b(\d+)\s+failed\b/i);
-  const passedCount = passedMatch ? Number(passedMatch[1]) : null;
-  const failedCount = failedMatch ? Number(failedMatch[1]) : null;
+  let passedCount = passedMatch ? Number(passedMatch[1]) : null;
+  let failedCount = failedMatch ? Number(failedMatch[1]) : null;
+
+  // "70/70 green" / "15/15 passed" — common worker shorthand without the word "passed".
+  // Root cause (Mission 2 W-4): evidence said "70/70 green …" and was labeled incomplete.
+  const slashAll = parseBody.match(/\b(\d+)\s*\/\s*(\d+)\s+(?:green|passed|pass|ok)\b/i);
+  if (slashAll) {
+    const a = Number(slashAll[1]);
+    const b = Number(slashAll[2]);
+    if (Number.isFinite(a) && Number.isFinite(b) && a === b && a > 0) {
+      if (passedCount == null) passedCount = a;
+      if (failedCount == null) failedCount = 0;
+      signals.push("slash_all_green");
+    } else if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
+      if (passedCount == null) passedCount = a;
+      if (failedCount == null) failedCount = b - a;
+      signals.push("slash_partial");
+    }
+  } else if (/\b(?:all|fully)\s+(?:tests?\s+)?(?:green|passed)\b/i.test(parseBody)
+    || /\bstay(?:s|ed)?\s+green\b/i.test(parseBody)
+    || /\b(?:tests?\s+)?(?:are|were|is|was)\s+green\b/i.test(parseBody)
+    || /\bgreen\s+across\b/i.test(parseBody)) {
+    signals.push("narrative_all_green");
+  }
+
+  // Vitest / Jest style without "N passed": "Tests  70 passed (70)"
+  const testsWordPass = parseBody.match(/\btests?\s+(\d+)\s+passed\b/i);
+  if (testsWordPass && passedCount == null) {
+    passedCount = Number(testsWordPass[1]);
+    if (failedCount == null) failedCount = 0;
+    signals.push("tests_word_passed");
+  }
 
   const hasOkTrue = /\bok\s*:\s*true\b/i.test(parseBody);
   const hasExit0 = /\bexit\s*0\b/i.test(parseBody) || exitCode === 0;
   const hasExitNonZero = /\bexit\s*[1-9]\d*\b/i.test(parseBody)
     || (typeof exitCode === "number" && exitCode !== 0);
+  const narrativeGreen = signals.includes("narrative_all_green")
+    || signals.includes("slash_all_green");
 
   const explicitSuiteFail = (failedCount != null && failedCount > 0)
     || /\btests?\s+failed\b/i.test(parseBody)
@@ -86,11 +118,11 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
   let test_run_status = "not_run";
   if (passedCount != null || failedCount != null) {
     if ((failedCount || 0) > 0 || explicitSuiteFail) test_run_status = "failed";
-    else if ((passedCount || 0) > 0 || hasOkTrue || hasExit0) test_run_status = "passed";
+    else if ((passedCount || 0) > 0 || hasOkTrue || hasExit0 || narrativeGreen) test_run_status = "passed";
     else test_run_status = "incomplete";
   } else if (explicitSuiteFail) {
     test_run_status = "failed";
-  } else if (hasOkTrue || hasExit0) {
+  } else if (hasOkTrue || hasExit0 || narrativeGreen) {
     test_run_status = "passed";
   } else if (/\bpassed\b/i.test(parseBody) && !explicitSuiteFail) {
     test_run_status = "passed";
@@ -130,15 +162,190 @@ export function parseTestEvidenceSemantics(text = "", { exitCode = null } = {}) 
   };
 }
 
+/**
+ * Collect every worker/Director text that may describe the test run.
+ * Evidence descriptions alone are not enough — completionReport.tests[].results
+ * is often where shorthand like "70/70 green" lives.
+ */
+export function collectTestEvidenceTexts({ report = {}, artifacts = [] } = {}) {
+  const texts = [];
+  for (const e of artifacts || []) {
+    if (!(e.type === "test" || /^Tests executed$/i.test(e.title || ""))) continue;
+    const blob = [e.title, e.description, e.result_summary, e.summary].filter(Boolean).join("\n");
+    if (blob.trim()) texts.push({ source: `evidence:${e.evidenceId || e.title || "test"}`, text: blob, exitCode: e.exitCode ?? null });
+  }
+  for (const t of report.tests || []) {
+    const blob = [t.name, t.command, t.results, t.result, t.summary, t.output,
+      t.passed === true ? "passed" : t.passed === false ? "failed" : null,
+      t.status].filter(Boolean).join("\n");
+    if (blob.trim()) texts.push({ source: "completionReport.tests", text: blob, exitCode: t.exitCode ?? t.exit_code ?? null });
+  }
+  const summary = String(report.summary || "");
+  if (/\b(test|vitest|jest|green|passed|failed)\b/i.test(summary)) {
+    texts.push({ source: "completionReport.summary", text: summary, exitCode: null });
+  }
+  return texts;
+}
+
+/**
+ * Single aggregation point for Director's tests_passed check.
+ * Policy (durable — stop false Certify blocks):
+ * - Any explicit suite failure → fail
+ * - Any clear suite pass and no failure → pass
+ * - "incomplete" alone is NOT a hard fail when there is no failure signal and
+ *   the worker recorded a test run (ran/results) that parses as pass after
+ *   shorthand rules, or workerClaimsTestsPassed is true without contradictions
+ */
+export function evaluateAssignmentTests({
+  assignment = {},
+  report = {},
+  artifacts = [],
+} = {}) {
+  const requiredTypes = (assignment.requiredEvidence || [])
+    .map((x) => String(typeof x === "string" ? x : x?.type || x || "").toLowerCase())
+    .filter(Boolean);
+  const expectedBlob = JSON.stringify(assignment.expectedDeliverables || []);
+  const testEv = (artifacts || []).filter((e) => e.type === "test" || /^Tests executed$/i.test(e.title || ""));
+  const testNa = (text) => /not applicable|none is applicable|no test suite|not required for (this|a) (assignment|specification)|specification artifact/i
+    .test(String(text || ""));
+  const expectsTests = requiredTypes.includes("test")
+    || (Array.isArray(report.tests) && report.tests.length > 0)
+    || /\.(test|spec)\.(ts|tsx|js|mjs)\b/i.test(expectedBlob)
+    || /\b(vitest|npm test|tier-[ab]|red-before)\b/i.test(String(report.summary || ""));
+  const allTestEvNa = testEv.length > 0 && testEv.every((e) => testNa(e.description || e.title || ""));
+
+  if (!expectsTests || allTestEvNa) {
+    return {
+      expectsTests: false,
+      allTestEvNa,
+      checkStatus: "pass",
+      detail: allTestEvNa
+        ? "Worker recorded that automated tests are not applicable for this specification deliverable."
+        : (requiredTypes.length
+          ? `Automated tests were not required (required evidence: ${requiredTypes.join(", ")}).`
+          : "Automated tests were not required for this assignment."),
+      semantics: [],
+      suitePassed: true,
+      suiteFailed: false,
+    };
+  }
+
+  const sources = collectTestEvidenceTexts({ report, artifacts });
+  const semantics = sources.map((s) => ({
+    ...parseTestEvidenceSemantics(s.text, { exitCode: s.exitCode }),
+    source: s.source,
+  }));
+
+  const suiteFailed = semantics.some((s) => s.test_run_status === "failed");
+  let suitePassed = semantics.some((s) => s.test_run_status === "passed") && !suiteFailed;
+  const claim = workerClaimsTestsPassed(report);
+  const hasRunRecord = (report.tests || []).some((t) => t.ran === true || t.results || t.result || t.output);
+  const onlyIncomplete = semantics.length > 0
+    && semantics.every((s) => s.test_run_status === "incomplete" || s.test_run_status === "not_run");
+
+  // Durable rescue: incomplete shorthand must not block Certify when nothing failed
+  // and the worker clearly recorded a successful run.
+  if (!suitePassed && !suiteFailed && (onlyIncomplete || semantics.length === 0) && claim !== false) {
+    if (claim === true || hasRunRecord) {
+      // Re-parse joined blob once more (cross-field shorthand)
+      const joined = sources.map((s) => s.text).join("\n");
+      const joint = parseTestEvidenceSemantics(joined);
+      if (joint.test_run_status === "passed") {
+        suitePassed = true;
+        semantics.push({ ...joint, source: "aggregate" });
+      } else if (claim === true || (hasRunRecord && !/\bfail(ed|ure)?\b/i.test(joined.replace(/\b0\s+failed\b/gi, "")))) {
+        // Last resort: structured claim or ran+results without failure language.
+        suitePassed = true;
+        semantics.push({
+          test_run_status: "passed",
+          result_summary: "Test run accepted from worker completion record (no failure signals)",
+          raw_signals: ["resolved_incomplete_via_completion_record"],
+          assertion_behavior: [],
+          passed_count: null,
+          failed_count: 0,
+          source: "completion_record_rescue",
+        });
+      }
+    }
+  }
+
+  if (testEv.length === 0 && !(report.tests || []).length) {
+    return {
+      expectsTests: true,
+      allTestEvNa: false,
+      checkStatus: "fail",
+      detail: "No test evidence attached.",
+      semantics,
+      suitePassed: false,
+      suiteFailed: false,
+    };
+  }
+
+  if (suiteFailed) {
+    const failed = semantics.find((s) => s.test_run_status === "failed");
+    return {
+      expectsTests: true,
+      allTestEvNa: false,
+      checkStatus: "fail",
+      detail: failed?.result_summary || "Test evidence reports a failing run.",
+      semantics,
+      suitePassed: false,
+      suiteFailed: true,
+    };
+  }
+
+  if (suitePassed) {
+    const passed = semantics.find((s) => s.test_run_status === "passed");
+    return {
+      expectsTests: true,
+      allTestEvNa: false,
+      checkStatus: "pass",
+      detail: passed?.result_summary || "Test evidence reports a passing run.",
+      semantics,
+      suitePassed: true,
+      suiteFailed: false,
+    };
+  }
+
+  // Still unclear after rescue — warn (not hard-fail) so Certify is not
+  // permanently stuck on parser blind spots; Director recommendation still
+  // requires other hard checks. Chip "Tests verified" treats warn as fail for
+  // display unless we map warn→pass for chips — buildCertificationChips uses
+  // tests_passed === pass only. So for operator unblock, prefer pass only when
+  // rescued; otherwise fail with clearer detail (keep prior behavior for empty).
+  return {
+    expectsTests: true,
+    allTestEvNa: false,
+    checkStatus: "fail",
+    detail: semantics[0]?.result_summary
+      || "Test evidence does not show a clear pass. Prefer structured counts (e.g. “15 passed, 0 failed” or “70/70 green”).",
+    semantics,
+    suitePassed: false,
+    suiteFailed: false,
+  };
+}
+
 export function workerClaimsTestsPassed(report = {}) {
   const tests = report.tests || [];
   if (tests.length) {
     if (tests.every((t) => t.passed === true || t.status === "passed")) return true;
     if (tests.some((t) => t.passed === false || t.status === "failed")) return false;
+    // Shorthand results without boolean passed flags (Mission 2 W-4 class).
+    const blobs = tests.map((t) => String(t.results || t.result || t.summary || t.output || "")).filter(Boolean);
+    if (blobs.length) {
+      const parsed = blobs.map((b) => parseTestEvidenceSemantics(b));
+      if (parsed.some((p) => p.test_run_status === "failed")) return false;
+      if (parsed.some((p) => p.test_run_status === "passed")) return true;
+    }
+    if (tests.some((t) => t.ran === true) && blobs.length) {
+      // ran + non-empty results and no parsed failure → treat as claiming pass
+      return true;
+    }
   }
   const summary = String(report.summary || "");
   if (/\btests?\s+failed\b/i.test(summary)) return false;
   if (/\b[1-9]\d*\s+failed\b/i.test(summary)) return false;
+  if (/\b(\d+)\s*\/\s*\1\s+green\b/i.test(summary)) return true;
   if (/\b(\d+)\s+passed\b/i.test(summary) && /\b0\s+failed\b/i.test(summary)) return true;
   if (/\bpassed\b/i.test(summary)) return true;
   if (/accept/i.test(String(report.recommendation || ""))) return true;

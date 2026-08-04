@@ -13,8 +13,8 @@
     "",
     "All three lists may only shrink. A stale entry fails the check."
   ],
-  "reviewed": "2026-08-03",
-  "reviewed_by": "assignment asg_d203f547736c16 (mission msn_2d054741a54698fa4c, W-4)",
+  "reviewed": "2026-08-04",
+  "reviewed_by": "assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 re-verification); originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
   "exceptions": [
     {
       "route": "app/api/action/[token]/route.ts",
@@ -117,5 +117,5 @@
       "reason": "Per-tenant subaccount variant of the same handler and the same model."
     }
   ],
-  "reviewed_note": "Dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink)."
+  "reviewed_note": "2026-08-03: dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink). 2026-08-04 re-review: all 17 remaining entries re-checked against the tree — every one still exists, still holds a service client, and still resolves no principal (asserted by the lock). Citations spot-verified line-by-line for the two subject-binding entries (:58/:144, :114) and the tour-booking token resolve (:30). The ratchet ceiling was tightened 26 → 17 to match the post-retirement floor."
 }

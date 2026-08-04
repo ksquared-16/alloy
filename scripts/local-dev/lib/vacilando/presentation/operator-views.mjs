@@ -917,6 +917,18 @@ export function listNeedsYou() {
         secondaryAction: posture.secondaryAction,
       }));
     }
+    if (posture.id === "worker_thrashing" && posture.needsYou) {
+      items.push(needsYouItemVm({
+        type: "worker_thrashing",
+        missionId,
+        title: posture.label,
+        body: posture.detail,
+        urgency: "Worker stuck",
+        recommendation: posture.next,
+        action: posture.primaryAction,
+        secondaryAction: posture.secondaryAction,
+      }));
+    }
   }
   // Merge / deployment flags (rare)
   for (const row of listMissionsV2({ includeArchived: false })) {

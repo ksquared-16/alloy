@@ -12,10 +12,13 @@ import {
   getLatestAcceptedDeliverableReview,
   deliverableReviewVm,
   acceptDeliverableReview,
+  shareContextWithDirector,
+  listDeliverableConversation,
   runDirectorVerification,
   listDeliverableReviews,
   supersedeOpenReviewsForAssignment,
 } from "../lib/vacilando/deliverable-review.mjs";
+import { listDirectorMessages } from "../lib/vacilando/director-comms.mjs";
 import { missionOutcomeVm } from "../lib/vacilando/presentation/operator-views.mjs";
 
 const mid = "msn_2d054741a54698fa4c";
@@ -67,12 +70,42 @@ assert.ok(vm.evidence.every((e) => e.proves && !/^document\s*[—-]\s*document$/
 assert.ok(vm.evidence.some((e) => /enforcement|baseline|build integration|commit/i.test(e.title)));
 assert.ok(vm.approvalMeaning);
 assert.equal(vm.actions.approve, true);
+assert.equal(vm.actions.shareContext, true);
+assert.ok(Array.isArray(vm.conversation));
 
+const shared = shareContextWithDirector(mid, created.review.review_id, {
+  message: "Prefer shipping wave order A before B; residual risk on docs is accepted.",
+  actor: "operator",
+});
+assert.ok(shared.ok, "share context");
+const contextMsg = [...listDirectorMessages(mid, { limit: 30 })].reverse()
+  .find((m) => m.reviewId === created.review.review_id && m.kind === "context");
+assert.ok(contextMsg, "context message persisted with reviewId");
+assert.match(contextMsg.verbatim || "", /alignment feedback|Operator context:/i);
+assert.match(contextMsg.verbatim || "", /Prefer shipping wave order A before B/);
+assert.ok((contextMsg.verbatim || "").includes(created.review.review_id));
+assert.ok(
+  listDeliverableConversation(mid, { reviewId: created.review.review_id }).some(
+    (t) => t.actor === "you" && /Prefer shipping wave order/.test(t.text),
+  ),
+);
+
+const acceptNote = "Accept residual risk on docs; next wave should prioritize Identity.";
 const accepted = acceptDeliverableReview(mid, created.review.review_id, {
-  response: "test accept",
+  response: acceptNote,
 });
 assert.ok(accepted.ok, "accept");
 assert.equal(accepted.review.certification_state, "accepted");
+assert.equal(accepted.review.acceptance_note, acceptNote);
+assert.ok(
+  (accepted.review.history || []).some((h) => h.action === "accepted" && h.note === acceptNote),
+);
+assert.ok(
+  listDeliverableConversation(mid, { reviewId: created.review.review_id }).some(
+    (t) => t.actor === "you" && /residual risk on docs/.test(t.text),
+  ),
+  "certify note appears in conversation",
+);
 
 // Regression: Certify must not look like a no-op.
 // 1) sibling ready rows are superseded

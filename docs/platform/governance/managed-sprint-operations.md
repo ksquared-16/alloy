@@ -112,6 +112,9 @@ Replace only `[objective]` with the sprint goal. Do not paste operational novels
 - Local commits only, in coherent chunks.
 - Multiple commits are expected.
 - Do not push, merge, rebase, open/update a PR, or touch `staging` / Vercel.
+- **Push is a checkpoint, not a heartbeat.** Mid-sprint work stays local. Push only when Kelly explicitly asks, or at an agreed **end-of-day / work-complete checkpoint** (finished sprint slice ready for PR). With six concurrent sprints, expect ~0–2 pushes/day for completed work — not a Preview deploy per commit.
+
+**Why:** Every remote push can trigger Vercel Preview builds. Alloy’s ignored-build step (`web/scripts/vercel-ignored-build.sh`) skips auto-deploy for non-`staging`/`main` branches, but the default agent posture remains: **commit locally; push rarely.**
 
 **Canonical sprint completion lifecycle**
 

@@ -884,6 +884,15 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .drev-tech{margin-top:18px}
 .drev-judgment li{margin:8px 0}
 .drev-judgment .mc-pill{display:none}
+.drev-thread{margin:16px 0 8px}
+.drev-thread h4{margin-bottom:8px}
+.drev-thread-empty{margin:0;font-size:13px}
+.drev-thread-list{display:flex;flex-direction:column;gap:8px;margin:0}
+.drev-bubble{padding:8px 10px;border-radius:10px;border:1px solid rgba(0,0,0,.06);background:rgba(0,0,0,.03);max-width:92%}
+.drev-bubble.you{align-self:flex-end;background:rgba(47,107,69,.08);border-color:rgba(47,107,69,.2)}
+.drev-bubble.director{align-self:flex-start;background:rgba(194,112,63,.07);border-color:rgba(194,112,63,.22)}
+.drev-bubble-meta{display:flex;justify-content:space-between;gap:12px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#667);margin-bottom:4px}
+.drev-bubble-text{font-size:13.5px;line-height:1.45;white-space:pre-wrap;color:var(--ink)}
 .mc-conf-big{font-size:42px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin:4px 0 8px}
 .mc-conf-why{margin:8px 0 12px;padding-left:18px}
 .mc-conf-why li{margin:4px 0}

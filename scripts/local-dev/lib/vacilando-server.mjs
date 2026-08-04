@@ -765,10 +765,10 @@ export function createVacilandoServer() {
         if (req.method === "POST") {
           const body = await readJsonBody(req);
           if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-          const out = await handleV2Post(path, body.value);
+          const out = await handleV2Post(path, body.value, { headers: req.headers });
           if (out) return sendJson(res, out.status, out.body);
         } else if (req.method === "GET") {
-          const out = await handleV2Get(path, url);
+          const out = await handleV2Get(path, url, { headers: req.headers });
           if (out) return sendJson(res, out.status, out.body);
         }
         return sendJson(res, 404, { ok: false, error: "unknown_v2_route", path });

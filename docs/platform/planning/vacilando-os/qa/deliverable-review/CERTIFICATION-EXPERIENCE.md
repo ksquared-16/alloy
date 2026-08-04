@@ -55,3 +55,14 @@ Without opening Technical Details, an unfamiliar reader should answer:
 - Needs You list item title already uses posture label; confirm dock copy never says “Deliverable ready”
 - Curated briefs for W-5+ so non-W-4 assignments get the same executive voice without generic fallbacks
 - Soften duplicate Confidence % (recommendation card + certification card) if operators find it redundant
+
+## Feedback loop — CLOSED
+
+Operator ↔ Director alignment on deliverable reviews (certify note, Share context,
+Request changes, Re-check, visible Conversation) is **closed** at commit
+`fbe918247`. Durable record:
+
+→ [`FEEDBACK-LOOP-CERTIFICATION.md`](FEEDBACK-LOOP-CERTIFICATION.md)
+
+Do not extend that capability’s product behavior on the closeout branch. Auth
+exposure follow-up only: [`../BACKLOG.md`](../BACKLOG.md) **CP-AUTH-NON-LOOPBACK**.

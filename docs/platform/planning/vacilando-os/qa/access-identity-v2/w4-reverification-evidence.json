@@ -1,0 +1,217 @@
+{
+  "artifact": "w4-reverification-evidence",
+  "plan": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "wave": 1,
+  "workstreams_reverified": ["W-4"],
+  "lock": "RL-15",
+  "mission": "msn_f74ed02c126c88d7ff",
+  "assignment": "asg_91e144a61569e4",
+  "context_version": "v1",
+  "content_hash": "3c36b58117e46b2363ef602b385409e7",
+  "protocol": "vacilando.worker.protocol.v1",
+  "worktree": "wt6-vacilando-os-product-def",
+  "branch": "hotfix/vacilando-ui-freshness-flash",
+  "commit": "9e19c8736",
+  "executed_utc": "2026-08-04T17:32:00Z",
+
+  "posture": {
+    "rule_applied": "Plan §4 — re-execute rather than re-assert. W-4 was recorded DONE 2026-07-31; this run re-ran the check against the current tree and re-reviewed the register's SUBJECT rather than re-citing its numbers.",
+    "prior_execution": {
+      "mission": "msn_2d054741a54698fa4c",
+      "assignment": "asg_d203f547736c16",
+      "executed_utc": "2026-07-31",
+      "evidence": "w4-service-client-principal-baseline.json"
+    },
+    "sibling_leg": {
+      "assignment": "asg_e9308076173af6",
+      "covered": ["W-1", "W-2", "W-3"],
+      "scoped_out": ["W-4"],
+      "note": "This assignment is the fourth leg of the same Wave 1 re-verification."
+    }
+  },
+
+  "result": {
+    "ok": true,
+    "violations": 0,
+    "stale": 0,
+    "lock_tests": { "file": "web/tests/access/serviceClientPrincipalCheck.test.ts", "passed": 15, "total": 15 },
+    "wave1_all_suites": {
+      "passed": 70,
+      "files": 4,
+      "breakdown": {
+        "serviceClientPrincipalCheck.test.ts": 15,
+        "analyticsRouteGates.test.ts": 36,
+        "selfAuthorityMutation.test.ts": 14,
+        "permissionGrid.test.ts": 5
+      }
+    },
+    "evidence_snapshot_regenerated": {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json",
+      "byte_identical_to_committed": true,
+      "significance": "The check at this base reproduces the committed snapshot exactly — zero drift."
+    }
+  },
+
+  "counts": {
+    "2026-07-31": {
+      "routes": 539,
+      "holds_service_client_direct": 520,
+      "subject_resolves_principal": 494,
+      "subject_unresolved": 26,
+      "listed_exceptions": 21,
+      "listed_baseline": 5,
+      "reaches_service_client_transitive": 536,
+      "transitive_only_unresolved": 3
+    },
+    "2026-08-04": {
+      "routes": 559,
+      "holds_service_client_direct": 537,
+      "resolves_principal": 536,
+      "subject_resolves_principal": 520,
+      "subject_unresolved": 17,
+      "listed_exceptions": 17,
+      "listed_baseline": 0,
+      "reaches_service_client_transitive": 556,
+      "transitive_only_unresolved": 3,
+      "listed_advisory": 3
+    }
+  },
+
+  "delta_reconciliation": {
+    "claim": "The entire -9 movement in the unresolved count is the book-v2 retirement. No route was reclassified.",
+    "surface_growth": {
+      "routes": { "before": 539, "after": 559, "delta": 20 },
+      "direct_holders": { "before": 520, "after": 537, "delta": 17 },
+      "new_unresolved_introduced": 0,
+      "significance": "First evidence the ratchet does its job: the API surface grew by 20 routes, 17 of them holding a service-role client directly, and every one resolves a principal. The exit criterion's promise (the number stops growing silently) was untested until the surface actually grew."
+    },
+    "removed_routes": {
+      "deleted_by": "ea3eaf377 — feat(retirement): retire GoHighLevel and the legacy cleaning product (PR #294)",
+      "reached_this_branch_via": "5118940f7 — merge(staging)",
+      "from_frozen_baseline": [
+        "app/api/book-v2/confirm/route.ts",
+        "app/api/book-v2/quote-refine/route.ts",
+        "app/api/book-v2/service-details/route.ts",
+        "app/api/book-v2/opportunity-discount/route.ts",
+        "app/api/book-v2/ensure-customer/route.ts"
+      ],
+      "from_exceptions": [
+        { "route": "app/api/book-v2/availability/route.ts", "model": "public-catalog-read" },
+        { "route": "app/api/book-v2/validate-promo/route.ts", "model": "public-catalog-read" },
+        { "route": "app/api/book-v2/quote-start/route.ts", "model": "public-intake-create" },
+        { "route": "app/api/book-v2/specialty-quote-start/route.ts", "model": "public-intake-create" }
+      ],
+      "arithmetic": "21 exceptions - 4 = 17; 26 unresolved - 9 = 17. Both match the check's live output.",
+      "verified_absent": "web/app/api/book-v2 does not exist on disk and no app/api/book-v2 path is tracked; lib/book-v2/** helpers survive and are reached only by routes that resolve a principal."
+    },
+    "intermediate_commit": {
+      "commit": "2ec3d322d",
+      "assessment": "A consequence of the deletion, not a workaround. The shrink-only rule made the now-stale entries fail Vercel's prebuild, which is the register working as designed. It emptied the lists rather than relaxing the check."
+    },
+    "exposure_status": "The five frozen-baseline routes were the largest live exposure Wave 1 documented. They are closed BY DELETION, not by remediation. W-15 inherits no work from the frozen baseline."
+  },
+
+  "defect_found_and_fixed": {
+    "id": "W4-RATCHET-SLACK",
+    "severity": "moderate — a silent weakening of the only bound on exception growth",
+    "file": "web/tests/access/serviceClientPrincipalCheck.test.ts",
+    "observed": "The lock asserted subject_unresolved <= 26 (the 2026-07-31 figure) while the live floor had fallen to 17.",
+    "why_it_matters": "The `exceptions` list is deliberately not frozen — only `baseline` is — so this numeric ceiling was the only thing bounding exception growth. With 9 routes of slack, nine new service-role routes resolving no principal could have been added to `exceptions` and the build would have stayed green. A retirement had silently bought the codebase nine free exceptions.",
+    "fix": "Ceiling tightened 26 -> 17, equal to the current floor, so any addition goes red. Comment records the retirement that caused the drop.",
+    "principle": "A ratchet is only a ratchet if it follows the floor down. Re-tighten whenever the floor drops.",
+    "verified": "15/15 lock tests green after the change; 17 <= 17 sits exactly at the floor."
+  },
+
+  "register_review": {
+    "entries": 17,
+    "structural_assertions_by_lock": [
+      "every listed route still exists",
+      "every listed route still holds a service client",
+      "no listed route now resolves a principal (stale-now-resolves would fail)",
+      "exceptions and baseline are disjoint",
+      "every exception carries a model and a reason > 40 chars"
+    ],
+    "citations_spot_verified_this_run": [
+      {
+        "route": "app/api/public/forms/[token]/submissions/[submissionId]/route.ts",
+        "claim": "verifySubmissionBelongsToPublicEmbed binds the caller-supplied submissionId before use",
+        "verified_at": [58, 144],
+        "status": "holds"
+      },
+      {
+        "route": "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts",
+        "claim": "same binding check before the submit path",
+        "verified_at": [114],
+        "status": "holds"
+      },
+      {
+        "route": "app/api/public/tour-booking/[token]/book/route.ts",
+        "claim": "resolveTourPublicBookingLinkByToken selects by token",
+        "verified_at": [30],
+        "status": "holds"
+      }
+    ],
+    "selection_rationale": "The subject-binding pair is the register's strongest claim — the only exceptions that accept a caller-supplied row id at all. The prior run spot-checked verticals and webhooks/resend; a different pair was chosen so coverage accumulates across runs.",
+    "authorization_models": {
+      "capability-token": 12,
+      "webhook-signature": 1,
+      "public-catalog-read": 3,
+      "public-intake-create": 1
+    }
+  },
+
+  "limits_unchanged": {
+    "stated_limit": "The check proves a principal is RESOLVED, never that the result GATES the handler. A resolution whose result is discarded passes. Nothing in this re-run narrows this; W-14's declared table and W-15's sweep still own that proof.",
+    "enforced_subject": "Direct holding only. Transitive reachers are advisory because the transitive graph over-credits (556 of 559 reach one).",
+    "non_ast_predicate": "SUPABASE_SERVICE_ROLE_KEY as a text marker, which can only widen the subject set, never narrow it."
+  },
+
+  "not_verified": {
+    "check_cli": {
+      "status": "NOT RUN AS A COMMAND",
+      "reason": "node, npx node and npm run were each blocked behind a command-approval wall in this session.",
+      "substitute": "The check was executed through runServiceClientPrincipalCheck(), the exported function the CLI is a thin wrapper over, via vitest — the same entry point the lock uses. The regenerated snapshot is byte-identical to the committed one.",
+      "consequence": "The check's RESULT is verified at this base. Its CI wiring (package.json prebuild, rc=0) is carried forward on the 2026-07-31 record and is NOT re-proven here."
+    },
+    "typecheck": {
+      "status": "NOT RUN",
+      "reason": "Same approval wall; unchanged from the W-1..W-3 leg.",
+      "consequence": "The one changed test file uses only node:fs, node:path and vitest and executes green, but green vitest is not a typecheck and this record does not claim one."
+    },
+    "tier_d_browser": {
+      "status": "NOT RUN",
+      "reason": "By design per §10.4 — W-4 is not lockout-class (L1-L4) and ships no user-visible surface."
+    },
+    "live_database": {
+      "status": "NOT QUERIED",
+      "reason": "W-4 is a static build-time check over repo source. Nothing in it depends on deployed state."
+    }
+  },
+
+  "changes_made_by_this_assignment": [
+    {
+      "path": "web/tests/access/serviceClientPrincipalCheck.test.ts",
+      "change": "Ratchet ceiling tightened 26 -> 17 with a comment recording the retirement that dropped the floor.",
+      "tests_added": 0,
+      "tests_after": 15
+    },
+    {
+      "path": "web/scripts/serviceClientPrincipal.allowlist.json",
+      "change": "reviewed date 2026-08-03 -> 2026-08-04, reviewed_by credits this assignment alongside the original, reviewed_note records the re-review and the ratchet tightening. No list membership changed."
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+      "change": "Baseline table given a live 2026-08-04 column; the 5-baseline-routes finding marked closed by deletion; the ratchet section corrected; the W-4 re-verification record added; header status line and the RL-15 row in §13 updated."
+    },
+    {
+      "path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json",
+      "change": "Regenerated. Byte-identical to the committed copy — recorded as a zero-drift result, not a no-op."
+    }
+  ],
+
+  "residual_risks": [
+    "The check's CI wiring was not re-proven this run (approval wall). If prebuild were unwired, this evidence would not detect it.",
+    "The stated limit still stands: 17 exceptions are trusted on their reasons, and a resolution whose result is discarded passes the check. W-14/W-15 own the gate proof.",
+    "The advisory transitive-only set (3 routes, 2 Twilio webhooks + 1 legacy intake) remains outside the enforced predicate by design."
+  ]
+}
