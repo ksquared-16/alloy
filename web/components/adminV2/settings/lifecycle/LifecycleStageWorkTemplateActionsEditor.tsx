@@ -366,6 +366,10 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                         draft={stageDraft}
                         transitionOptions={transitionOptions}
                         stageLabel={stageLabel}
+                        // Lets an outcome author the exit path it needs, instead of sending the
+                        // operator to another section to satisfy its own dependency.
+                        stageKey={stageKey}
+                        processStages={processStages}
                         workTemplateKey={work.template_key}
                         onChange={onStageDraftChange}
                     />
