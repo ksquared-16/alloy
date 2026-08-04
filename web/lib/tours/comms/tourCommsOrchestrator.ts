@@ -87,7 +87,7 @@ export type TourCommsOrchestrateInput = {
      * after the booking committed. Only URLs cross this boundary — never an action
      * kind, id, or status.
      */
-    actionModel?: { rescheduleUrl?: string | null; cancelUrl?: string | null; confirmUrl?: string | null } | null;
+    actionModel?: { rescheduleUrl?: string | null; manageUrl?: string | null; confirmUrl?: string | null } | null;
     deps?: TourCommsOrchestratorDeps;
 };
 
@@ -491,7 +491,9 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
         ? {
               ...baseContext,
               rescheduleUrl: input.actionModel.rescheduleUrl ?? baseContext.rescheduleUrl ?? null,
-              cancelUrl: input.actionModel.cancelUrl ?? baseContext.cancelUrl ?? null,
+              // `cancelUrl` in the template context is the MANAGE surface, never a
+              // direct destructive link — cancellation is a bounded flow.
+              cancelUrl: input.actionModel.manageUrl ?? baseContext.cancelUrl ?? null,
               ctaUrl: input.actionModel.confirmUrl ?? baseContext.ctaUrl ?? null,
           }
         : baseContext;
