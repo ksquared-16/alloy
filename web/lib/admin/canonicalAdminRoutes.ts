@@ -277,9 +277,14 @@ export function normalizeToCanonicalSettingsPath(pathname: string): string {
     ) {
         return CANONICAL_ADMIN_CONFIG_LANDING;
     }
+    // Compatibility `/settings/organization/{slug}` → canonical `/organization/{slug}`.
+    if (trimmed.startsWith(`${CANONICAL_SETTINGS_BASE}/organization/`)) {
+        const rest = trimmed.slice(`${CANONICAL_SETTINGS_BASE}/organization/`.length);
+        return rest ? `${CANONICAL_ORGANIZATION_BASE}/${rest}` : CANONICAL_ADMIN_CONFIG_LANDING;
+    }
     if (trimmed.startsWith("/admin/settings/")) {
         const normalized = `${CANONICAL_SETTINGS_BASE}${trimmed.slice("/admin/settings".length)}`;
-        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
+        return normalizeToCanonicalSettingsPath(normalized);
     }
     if (trimmed.startsWith(`${CANONICAL_SETTINGS_BASE}/`)) {
         return trimmed;
@@ -289,7 +294,7 @@ export function normalizeToCanonicalSettingsPath(pathname: string): string {
     }
     if (trimmed.startsWith(`${TRANSITIONAL_ADMIN_V2_BASE}/settings/`)) {
         const normalized = `${CANONICAL_SETTINGS_BASE}${trimmed.slice(`${TRANSITIONAL_ADMIN_V2_BASE}/settings`.length)}`;
-        return normalized === `${CANONICAL_SETTINGS_BASE}/organization` ? CANONICAL_ADMIN_CONFIG_LANDING : normalized;
+        return normalizeToCanonicalSettingsPath(normalized);
     }
     if (trimmed === `${TRANSITIONAL_ADMIN_V2_BASE}/settings`) {
         return CANONICAL_ADMIN_CONFIG_LANDING;
@@ -311,7 +316,9 @@ export function normalizeToCanonicalAdminPath(pathname: string): string {
     if (
         settingsNormalized === CANONICAL_ADMIN_CONFIG_LANDING ||
         settingsNormalized === CANONICAL_SETTINGS_BASE ||
-        settingsNormalized.startsWith(`${CANONICAL_SETTINGS_BASE}/`)
+        settingsNormalized.startsWith(`${CANONICAL_SETTINGS_BASE}/`) ||
+        settingsNormalized === CANONICAL_ORGANIZATION_BASE ||
+        settingsNormalized.startsWith(`${CANONICAL_ORGANIZATION_BASE}/`)
     ) {
         return settingsNormalized;
     }

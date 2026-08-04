@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 
 export function ConfigurationSectionItem({
     href,
@@ -18,7 +18,7 @@ export function ConfigurationSectionItem({
     testId?: string;
 }) {
     return (
-        <Link href={href} className="config-platform-row group" data-testid={testId}>
+        <AdminV2NavLink href={href} className="config-platform-row group" data-testid={testId}>
             <div className="config-platform-row__icon">{icon}</div>
             <div className="config-platform-row__copy min-w-0 flex-1">
                 <p className="config-platform-row__title truncate">{title}</p>
@@ -30,6 +30,6 @@ export function ConfigurationSectionItem({
                 className="config-platform-row__chevron shrink-0"
                 aria-hidden
             />
-        </Link>
+        </AdminV2NavLink>
     );
 }

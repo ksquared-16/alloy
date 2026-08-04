@@ -42,10 +42,14 @@ function AdminV2SettingsClientProvidersInner({
     const isProcessesSurface = useMemo(() => {
         const path = normalizeToCanonicalAdminPath(pathname ?? "");
         return (
-            path === "/settings/processes"
+            path === "/organization/processes"
+            || path.startsWith("/organization/processes/")
+            || path === "/settings/processes"
             || path.startsWith("/settings/processes/")
             || path === "/settings/business-processes"
             || path.startsWith("/settings/business-processes/")
+            || path === "/settings/organization/processes"
+            || path.startsWith("/settings/organization/processes/")
         );
     }, [pathname]);
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
