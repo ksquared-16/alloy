@@ -15,6 +15,7 @@
 #   certification/alloy-certify env       # write web/.env.certification.local from the stack
 #   certification/alloy-certify serve     # start the app on :3011 against the cert stack
 #   certification/alloy-certify verify    # playwright: capture session + run cert specs → evidence
+#   certification/alloy-certify journey   # the full proving journey, resetting only where a spec demands it
 #   certification/alloy-certify status    # print the readiness banner
 #   certification/alloy-certify down      # stop the app + stack cleanly
 #   certification/alloy-certify all       # up → env → serve → verify → status   (default)
@@ -39,21 +40,34 @@ die()   { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
 sb() { supabase --workdir "$CERT_DIR" "$@"; }
 
-cert_db_url() { sb status -o env 2>/dev/null | sed -n 's/^DB_URL="\(.*\)"$/\1/p'; }
+# `supabase status` reports an EMPTY DB_URL while the stack's containers are still
+# settling (or briefly absent). An empty URL is not "no stack" to psql — it falls
+# back to the local libpq defaults and happily connects somewhere else, which is
+# how a healthy shared stack produced `relation "public.industries" does not exist`.
+# Resolve with a short retry, and never return a blank URL.
+cert_db_url() {
+    local url i
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        url="$(sb status -o env 2>/dev/null | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+        [ -n "$url" ] && { printf '%s\n' "$url"; return 0; }
+        sleep 2
+    done
+    return 1
+}
 
+# Take the SHARED stack through the lease model, never a raw `supabase start`. A bare start
+# here is what produced a stack per session; it also leaves no lease, so the next session's
+# teardown sees no holders and stops the stack underneath this run.
 cmd_up() {
-    if curl -s -o /dev/null "http://127.0.0.1:54421/rest/v1/" 2>/dev/null; then
-        green "Local operator tenant already running (project alloy-cert :54421)"
-    else
-        info "Starting isolated cert stack (project alloy-cert)…"
-        sb start >/dev/null
-        green "Local operator tenant started"
-    fi
+    local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
+    [ -x "$stack" ] || die "alloy-stack not found at ${stack} — refusing to start a stack outside the lease model"
+    "$stack" use "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || die "could not take a lease on the shared stack"
     cmd_seed
 }
 
 cmd_seed() {
-    local db; db="$(cert_db_url)"; [ -n "$db" ] || die "cert stack not running"
+    local db; db="$(cert_db_url)" && [ -n "$db" ] \
+        || die "could not resolve the cert stack DB_URL after 10 attempts — is the shared stack up? (alloy-stack status)"
     # Already seeded? (idempotent — the representative seed is upsert-based anyway.)
     if psql "$db" -tAc "select 1 from orgs where slug='${ORG_SLUG}' limit 1" 2>/dev/null | grep -q 1; then
         green "Seeded data available (org ${ORG_SLUG})"
@@ -66,6 +80,13 @@ cmd_seed() {
     psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/operator-credential.sql" >/dev/null \
         || die "operator credential attach failed"
     green "Authenticated operator account ready (${OPERATOR_EMAIL})"
+
+    # Canonical environment storage. Idempotent, and deliberately NOT part of any
+    # certification fixture: a fixture that creates environment state cannot tear itself
+    # down without breaking the next run.
+    psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/environment-buckets.sql" >/dev/null \
+        || die "storage bucket provisioning failed"
+    green "Storage buckets provisioned (org_documents)"
 }
 
 cmd_env() {
@@ -122,9 +143,139 @@ cmd_verify() {
     green "Runtime verification ready — evidence in certification/evidence/"
 }
 
+# The proving journey: each spec file gets the tenant state it was actually written against.
+#
+# The suite holds two CONTRADICTORY requirements, and both are real:
+#
+#   * business-process-publication S1 and execution-graph G1 each assert a pre-publication
+#     tenant (`expect(publicationCount()).toBe(0)`) — and both of their files publish. Run
+#     alphabetically, the first passes and the second reads the first one's publications, so
+#     the suite could never be green in a single pass.
+#
+#   * schedule-tour T0 asserts the published configuration carries
+#     `tour_booking_scheduled_to_tour`. The canonical seed contains ZERO references to it — an
+#     earlier spec file authors it at runtime. T0 therefore passes on an INHERITED tenant and
+#     fails on a pristine one, exactly opposite to S1 and G1.
+#
+# Neither assertion is weakened; they prove the properties they were written to prove. The
+# harness resets before a file only when that file demands pristineness, and lets every other
+# file inherit — so the ordering dependencies the suite relies on survive. Detection greps the
+# specs, so a spec that starts or stops requiring a pristine tenant needs no change here.
+cmd_journey() {
+    local files=() f name rc=0 idx=0 needs_reset=0
+    local -a passed=() failed=()
+    while IFS= read -r f; do files+=("$f"); done < <(ls "$CERT_DIR"/playwright/*.cert.spec.ts | sort)
+    [ "${#files[@]}" -gt 0 ] || die "no certification specs found"
+    mkdir -p "$CERT_DIR/.run/journey"
+
+    info "Proving journey: ${#files[@]} spec files, each from a pristine tenant"
+    for f in "${files[@]}"; do
+        name="$(basename "$f")"
+        idx=$((idx + 1))
+
+        # Reset before a file ONLY when that file demands a pristine tenant, and always before
+        # the first. A blanket per-file reset is wrong in the other direction: schedule-tour T0
+        # asserts the published configuration carries `tour_booking_scheduled_to_tour`, the
+        # canonical seed contains ZERO references to it, and it is authored at runtime by an
+        # earlier spec file. T0 passes on an inherited tenant and fails on a pristine one, while
+        # S1 and G1 do the exact opposite.
+        #
+        # The suite genuinely holds both requirements, so the harness honours both rather than
+        # picking a side and calling the loser a defect. Detection reads the specs themselves, so
+        # a spec that starts (or stops) requiring pristineness needs no change here.
+        if [ "$idx" -eq 1 ] || grep -q 'publicationCount()).toBe(0)' "$f"; then
+            printf '\n── %s  [pristine reset]\n' "$name"
+            needs_reset=1
+        else
+            printf '\n── %s  [inherits tenant]\n' "$name"
+            needs_reset=0
+        fi
+        cmd_app_stop >/dev/null 2>&1
+        if [ "$needs_reset" -eq 0 ]; then
+            if ! ( cmd_serve ) > "$CERT_DIR/.run/journey/${name}.serve.log" 2>&1; then
+                printf '\033[31m✗ %s — app did not come up\033[0m\n' "$name" >&2
+                failed+=("$name"); rc=1; continue
+            fi
+            if ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
+                    CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
+                    "$WEB_DIR/node_modules/.bin/playwright" test -c "$CERT_DIR/playwright.config.ts" \
+                        ${CERT_WORKERS:+--workers="$CERT_WORKERS"} "playwright/${name}" \
+                        > "$CERT_DIR/.run/journey/${name}.log" 2>&1 ); then
+                green "$name  $(grep -oE '[0-9]+ passed' "$CERT_DIR/.run/journey/${name}.log" | tail -1)"
+                passed+=("$name")
+            else
+                printf '\033[31m✗ %s\033[0m\n' "$name" >&2
+                grep -E "^\s+[0-9]+ (passed|failed)|^  [0-9]+\) " "$CERT_DIR/.run/journey/${name}.log" \
+                    | head -6 | sed 's/^/      /' >&2
+                failed+=("$name"); rc=1
+            fi
+            continue
+        fi
+
+        # cmd_reset dies (exits) on failure, so it MUST run in a subshell here — otherwise one
+        # transient failure kills the whole journey instead of one file. `supabase db reset`
+        # restarts containers and then polls storage, which answers 502 for a few seconds while
+        # it comes back; under memory pressure that window is wider. Retry before giving up.
+        local attempt=0 reset_ok=0
+        while [ "$attempt" -lt 3 ]; do
+            attempt=$((attempt + 1))
+            if ( cmd_reset ) > "$CERT_DIR/.run/journey/${name}.reset.log" 2>&1; then reset_ok=1; break; fi
+            info "pristine reset attempt ${attempt}/3 failed — retrying (transient 502s while storage restarts)"
+            sleep 15
+        done
+        if [ "$reset_ok" -ne 1 ]; then
+            printf '\033[31m✗ %s — pristine reset failed after %s attempts\033[0m\n' "$name" "$attempt" >&2
+            tail -5 "$CERT_DIR/.run/journey/${name}.reset.log" | sed 's/^/      /' >&2
+            failed+=("$name"); rc=1; continue
+        fi
+
+        # Same reasoning: a serve timeout must fail this file, not abort the journey — and its
+        # reason must reach a log rather than /dev/null.
+        if ! ( cmd_serve ) > "$CERT_DIR/.run/journey/${name}.serve.log" 2>&1; then
+            printf '\033[31m✗ %s — app did not come up\033[0m\n' "$name" >&2
+            tail -4 "$CERT_DIR/.run/journey/${name}.serve.log" | sed 's/^/      /' >&2
+            failed+=("$name"); rc=1; continue
+        fi
+        if ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
+                CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
+                "$WEB_DIR/node_modules/.bin/playwright" test -c "$CERT_DIR/playwright.config.ts" \
+                    ${CERT_WORKERS:+--workers="$CERT_WORKERS"} "playwright/${name}" \
+                    > "$CERT_DIR/.run/journey/${name}.log" 2>&1 ); then
+            green "$name  $(grep -oE '[0-9]+ passed' "$CERT_DIR/.run/journey/${name}.log" | tail -1)"
+            passed+=("$name")
+        else
+            printf '\033[31m✗ %s\033[0m\n' "$name" >&2
+            grep -E "^\s+[0-9]+ (passed|failed)|^  [0-9]+\) " "$CERT_DIR/.run/journey/${name}.log" \
+                | head -6 | sed 's/^/      /' >&2
+            failed+=("$name"); rc=1
+        fi
+    done
+
+    printf '\n══ proving journey ══\n'
+    printf '  files passed : %s/%s\n' "${#passed[@]}" "${#files[@]}"
+    if [ "${#failed[@]}" -gt 0 ]; then
+        printf '  files FAILED : %s\n' "${failed[*]}"
+    fi
+    printf '  specs passed : %s\n' "$(cat "$CERT_DIR"/.run/journey/*.log 2>/dev/null | grep -oE '[0-9]+ passed' | awk '{s+=$1} END {print s+0}')"
+    printf '  specs failed : %s\n' "$(cat "$CERT_DIR"/.run/journey/*.log 2>/dev/null | grep -oE '[0-9]+ failed' | awk '{s+=$1} END {print s+0}')"
+    return "$rc"
+}
+
 # A pristine tenant. Publications and revisions are IMMUTABLE by design, so a certification run
 # that creates them cannot be undone in place — the only honest reset is a fresh database.
 cmd_reset() {
+    # This rebuilds the database of the SHARED stack. Publications and revisions are
+    # immutable by design, so certification genuinely cannot rerun without it — but the
+    # data belongs to every session on the stack, not just this one. Refuse unless we
+    # hold the stack alone. There is deliberately no bypass flag.
+    local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
+    if [ -x "$stack" ]; then
+        "$stack" exclusive "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" >/dev/null 2>&1 \
+            || die "cert reset needs the shared stack to itself — run: alloy-stack use --exclusive ${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")} (see: alloy-stack status)"
+        green "Shared stack held exclusively — a tenant rebuild is safe"
+    else
+        die "alloy-stack not found at ${stack} — refusing an ungated destructive reset"
+    fi
     info "Resetting the cert tenant (full migration history + representative seed)…"
     # Route through the toolkit wrapper, not a raw `supabase db reset`: it gates on Docker health
     # and retries the transient 502s that used to cost a turn each. Falls back only if absent.
@@ -148,10 +299,41 @@ cmd_status() {
     echo
 }
 
+# Stop only what this certification started. The stack is SHARED: a raw `sb stop` here
+# would tear it out from under every other session holding a lease, which is exactly the
+# bypass the lease model exists to prevent. Releasing is the sanctioned way to say "I am
+# done" — alloy-stack stops the stack itself, but only when the last holder leaves.
 cmd_down() {
-    [ -f "$SERVER_PID_FILE" ] && { kill "$(cat "$SERVER_PID_FILE")" 2>/dev/null || true; rm -f "$SERVER_PID_FILE"; info "app stopped"; }
-    sb stop >/dev/null 2>&1 || true
+    cmd_app_stop
+    local stack="$REPO_ROOT/scripts/local-dev/alloy-stack"
+    if [ -x "$stack" ]; then
+        "$stack" release "${ALLOY_CERT_HOLDER:-$(basename "$REPO_ROOT")}" || true
+    else
+        info "alloy-stack not found — leaving the shared stack alone (never a raw stop)"
+    fi
     green "Environment shut down cleanly"
+}
+
+# Stop the app without touching the shared stack or the lease.
+cmd_app_stop() {
+    local stopped=0 pid
+    if [ -f "$SERVER_PID_FILE" ]; then
+        pid="$(cat "$SERVER_PID_FILE" 2>/dev/null)"
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null && stopped=1
+        rm -f "$SERVER_PID_FILE"
+    fi
+    # The pid file records the launcher; Next spawns a child that outlives it and keeps
+    # the port bound, which is what left a dev server running after a "clean" teardown.
+    local held; held="$(lsof -ti "tcp:${APP_PORT}" 2>/dev/null || true)"
+    for pid in $held; do kill "$pid" 2>/dev/null && stopped=1; done
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1 || break
+        sleep 1
+    done
+    if lsof -ti "tcp:${APP_PORT}" >/dev/null 2>&1; then
+        for pid in $(lsof -ti "tcp:${APP_PORT}" 2>/dev/null); do kill -9 "$pid" 2>/dev/null || true; done
+    fi
+    [ "$stopped" -eq 1 ] && info "app stopped (port ${APP_PORT} released)" || info "no app was running on ${APP_PORT}"
 }
 
 case "${1:-all}" in
@@ -162,6 +344,8 @@ case "${1:-all}" in
     serve) cmd_serve ;;
     verify) cmd_verify ;;
     status) cmd_status ;;
+    app-stop) cmd_app_stop ;;
+    journey) cmd_journey ;;
     down) cmd_down ;;
     all) cmd_up; cmd_env; cmd_verify; cmd_status ;;
     *) die "unknown command: $1 (up|env|serve|verify|status|down|all)" ;;

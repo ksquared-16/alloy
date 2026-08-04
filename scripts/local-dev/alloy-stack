@@ -158,11 +158,98 @@ stack_age_seconds() {
   [[ "$t" -gt 0 ]] && printf '%s\n' "$(( now - t ))" || printf '999999\n'
 }
 
+lease_field() { sed -n "s/^$2=//p" "$1" | head -1; }
+
+# Process identity, recorded at lease creation so a REUSED pid cannot masquerade as the
+# original holder. PIDs wrap; a start timestamp plus the command line does not.
+proc_start_of() { ps -o lstart= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//'; }
+proc_cmd_of()   { ps -o command= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//' | cut -c1-120; }
+
+# Is the recorded holder still genuinely running?
+#   0 = the SAME process is alive   1 = not alive, or a different process now owns that pid
+lease_holder_process_alive() {
+  local f="$1" pid rec_start rec_cmd now_start now_cmd
+  pid="$(lease_field "$f" PID)"
+  [[ -n "$pid" && "$pid" =~ ^[0-9]+$ ]] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  rec_start="$(lease_field "$f" PID_START)"
+  rec_cmd="$(lease_field "$f" PID_CMD)"
+  # No recorded identity (a lease written by an older alloy-stack): treat the live pid as the
+  # holder. FAIL SAFE — we would rather keep a lease than reclaim one we cannot identify.
+  [[ -z "$rec_start" && -z "$rec_cmd" ]] && return 0
+  now_start="$(proc_start_of "$pid")"
+  now_cmd="$(proc_cmd_of "$pid")"
+  [[ -n "$rec_start" && "$rec_start" != "$now_start" ]] && return 1   # pid reused
+  [[ -n "$rec_cmd"   && "$rec_cmd"   != "$now_cmd"   ]] && return 1   # pid reused
+  return 0
+}
+
+# Any live process still working inside this holder's worktree, or driving a certification?
+# A dead launcher pid does not prove the work stopped — a detached test runner may outlive it.
+lease_has_active_work() {
+  local wt="$1"
+  [[ -n "$wt" ]] || return 1
+  pgrep -f "$wt" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+# RECLAIM RULES — every one must hold, or the lease is preserved.
+#   1. recorded pid not alive, OR a different process now holds that pid
+#   2. lease metadata identifies the expected holder + worktree (present and parseable)
+#   3. no live process associated with that worktree / certification run
+#   4. the decision is logged by the caller
+#   5-7. reclaiming NEVER stops the stack, drops volumes, or touches the containment hook —
+#        this function only removes a lease FILE.
+# A sprint outlives the shell that ran `alloy-stack use`. Anchoring a lease to $$ meant the
+# lease was already "holder-process-gone" by the time the next command ran — leases silently
+# evaporated seconds after being taken, so exclusivity held for exactly one invocation.
+# Anchor to something that lives as long as the session does.
+resolve_holder_pid() {
+  local p="${ALLOY_STACK_HOLDER_PID:-}"
+  if [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null; then printf '%s\n' "$p"; return 0; fi
+  local cur=$$ top=$$ next guard=0
+  while :; do
+    next="$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d ' ')"
+    [[ -n "$next" && "$next" != "0" && "$next" != "1" ]] || break
+    top="$next"; cur="$next"
+    guard=$((guard + 1)); [[ "$guard" -ge 24 ]] && break
+  done
+  printf '%s\n' "$top"
+}
+
+lease_age_seconds() {
+  local created; created="$(lease_field "$1" CREATED)"
+  [[ -n "$created" ]] || { printf '%s\n' -1; return 0; }
+  local then_s
+  then_s="$(date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$created" +%s 2>/dev/null)" \
+    || then_s="$(date -u -d "$created" +%s 2>/dev/null)" || { printf '%s\n' -1; return 0; }
+  printf '%s\n' "$(( $(date -u +%s) - then_s ))"
+}
+
+lease_reclaimable() {
+  local f="$1" holder wt age
+  holder="$(lease_field "$f" HOLDER)"
+  wt="$(lease_field "$f" WORKTREE)"
+  # (2) fail safe on missing/corrupt metadata — never destructively reclaim what we cannot identify
+  [[ -n "$holder" && -n "$wt" ]] || return 1
+  # (0) a young lease is never a crash. Reclaiming one steals the stack from a session that
+  #     is still setting up, which is how an "exclusive" window silently stopped being exclusive.
+  age="$(lease_age_seconds "$f")"
+  [[ "$age" -ge 0 && "$age" -lt "${LEASE_MIN_RECLAIM_AGE:-900}" ]] && return 1
+  # (1) the holder process must be gone or replaced
+  lease_holder_process_alive "$f" && return 1
+  # (3) and nothing must still be running in that worktree
+  lease_has_active_work "$wt" && return 1
+  return 0
+}
+
 lease_is_stale() {
   local f="$1" wt age_h now mt
-  # shellcheck source=/dev/null
-  wt="$(sed -n 's/^WORKTREE=//p' "$f" | head -1)"
+  wt="$(lease_field "$f" WORKTREE)"
   [[ -n "$wt" && ! -d "$wt" ]] && return 0   # worktree deleted → definitively gone
+  # A crashed holder used to pin the shared stack for the full TTL. An interrupted
+  # certification must not block the next one for twelve hours.
+  lease_reclaimable "$f" && return 0
   now="$(date +%s)"
   mt="$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo "$now")"
   age_h=$(( (now - mt) / 3600 ))
@@ -174,12 +261,59 @@ prune_stale_leases() {
   shopt -s nullglob
   for f in "$LEASE_DIR"/*.lease; do
     if lease_is_stale "$f"; then
+      # (4) every reclaim is recorded — on stderr so it survives `$(prune_stale_leases)` capture,
+      # and appended to a durable log so an interrupted run leaves an audit trail.
+      local why="ttl"
+      lease_reclaimable "$f" && why="holder-process-gone"
+      [[ -n "$(lease_field "$f" WORKTREE)" && ! -d "$(lease_field "$f" WORKTREE)" ]] && why="worktree-deleted"
+      printf 'lease-reclaim holder=%s reason=%s pid=%s created=%s\n' \
+        "$(lease_field "$f" HOLDER)" "$why" "$(lease_field "$f" PID)" "$(lease_field "$f" CREATED)" >&2
+      mkdir -p "${STATE_DIR}" 2>/dev/null || true
+      printf '%s lease-reclaim holder=%s reason=%s pid=%s created=%s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(lease_field "$f" HOLDER)" "$why" \
+        "$(lease_field "$f" PID)" "$(lease_field "$f" CREATED)" >> "${STATE_DIR}/reclaim.log" 2>/dev/null || true
+      # (5)(6)(7) removes ONLY the lease file — never the stack, never volumes, never the hook.
       rm -f "$f"
       pruned=$((pruned + 1))
     fi
   done
   shopt -u nullglob
   printf '%s\n' "$pruned"
+}
+
+# Names of every live lease other than the given holder, one per line.
+other_lease_holders() {
+  local self="$1" f h
+  prune_stale_leases >/dev/null
+  shopt -s nullglob
+  for f in "$LEASE_DIR"/*.lease; do
+    h="$(basename "$f" .lease)"
+    [[ "$h" == "$self" ]] || printf '%s\n' "$h"
+  done
+  shopt -u nullglob
+}
+
+# True only when <holder> holds the stack alone.
+#
+# Certification needs a PRISTINE, pre-publication tenant, and publications are immutable
+# by design — so the only honest way to rerun it is to rebuild the database. On a SHARED
+# stack that is other sessions' data too. Exclusivity is what makes "reset the tenant"
+# a safe operation instead of a silent theft.
+is_exclusive_holder() {
+  local self="$1"
+  [[ -f "$(lease_path "$self")" ]] || return 1
+  [[ -z "$(other_lease_holders "$self")" ]]
+}
+
+# Fail loudly, naming who is in the way. Never reclaims and never waits.
+require_exclusive() {
+  local self="$1" others
+  [[ -f "$(lease_path "$self")" ]] || die "'${self}' does not hold a lease — take one first: alloy-stack use ${self}"
+  others="$(other_lease_holders "$self")"
+  [[ -z "$others" ]] && return 0
+  warn "the shared stack is in use by other sessions:"
+  printf '%s\n' "$others" | sed 's/^/      /' >&2
+  die "refusing a destructive tenant rebuild while others hold the stack"
 }
 
 live_lease_count() {
@@ -193,23 +327,62 @@ live_lease_count() {
 
 # Apply the synthetic tenant if it is missing. Delegates to the sanctioned
 # seeding path (`alloy-certify seed`) rather than reimplementing it.
+#
+# Pass --required when a schema-only stack is not an acceptable outcome (rebuilds).
+# A rebuild that ends schema-only must FAIL, not warn: reporting success over a
+# half-built environment is how a certification run gets started against one.
 ensure_seeded() {
-  local workdir="$1"
+  local workdir="$1" required=0
+  [[ "${2:-}" == "--required" ]] && required=1
   local certify="${workdir}/alloy-certify"
   [[ -x "$certify" ]] || { dim "alloy-certify not present — skipping seed check"; return 0; }
-  if ALLOY_STACK_INTERNAL=1 "$certify" seed >/dev/null 2>&1; then
+
+  local out rc
+  out="$(ALLOY_STACK_INTERNAL=1 "$certify" seed 2>&1)"; rc=$?
+  if [[ $rc -eq 0 ]]; then
     ok "synthetic tenant present (org northwind-early-learning)"
-  else
-    warn "seed step did not complete — stack is up but may be schema-only"
-    info "run manually: ${certify} seed"
+    return 0
   fi
+
+  # Surface the actual failure. Swallowing it is what turned a wrong-connection
+  # error into an unexplained "may be schema-only" for a whole session.
+  warn "seed step failed (exit ${rc}):"
+  printf '%s\n' "$out" | tail -6 | sed 's/^/      /' >&2
+  if [[ $required -eq 1 ]]; then
+    die "rebuild did not reach a seeded baseline — stack left up, no lease taken"
+  fi
+  info "run manually: ${certify} seed"
   return 0
 }
 
 # ---------------------------------------------------------------- commands
 cmd_use() {
-  local holder="${1:-$(default_holder)}"
+  # `--holder X` and a bare positional are both accepted. Without the flag form,
+  # `alloy-stack use --holder promo5` silently created a lease literally named
+  # `--holder`, so `release promo5` then found nothing to release.
+  local holder="" exclusive=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --holder) holder="${2:-}"; [[ -n "$holder" ]] || die "--holder requires a value"; shift 2 ;;
+      --holder=*) holder="${1#*=}"; shift ;;
+      --exclusive) exclusive=1; shift ;;
+      -*) die "unknown option: $1" ;;
+      *) holder="$1"; shift ;;
+    esac
+  done
+  [[ -n "$holder" ]] || holder="$(default_holder)"
   docker_ok || die "Docker is not reachable. Run: alloy-docker-doctor --recover"
+
+  # Check BEFORE starting anything: an exclusive request that cannot be honoured must
+  # change nothing at all.
+  if [[ "$exclusive" -eq 1 ]]; then
+    local others; others="$(other_lease_holders "$holder")"
+    if [[ -n "$others" ]]; then
+      warn "exclusive lease refused — the shared stack is held by:"
+      printf '%s\n' "$others" | sed 's/^/      /' >&2
+      die "wait for them to release, or run without --exclusive (no tenant rebuild)"
+    fi
+  fi
 
   local workdir
   workdir="$(resolve_stack_workdir)" \
@@ -230,13 +403,24 @@ cmd_use() {
   # cannot execute. Without this step the shared stack comes up schema-only,
   # with no synthetic tenant — which is not what any session is asking for.
   # `alloy-certify seed` is idempotent (one SELECT when already seeded).
-  ensure_seeded "$workdir"
+  if [[ "${ALLOY_STACK_SEED_REQUIRED:-0}" == "1" ]]; then
+    ensure_seeded "$workdir" --required
+  else
+    ensure_seeded "$workdir"
+  fi
 
   local f; f="$(lease_path "$holder")"
+  # PID_START and PID_CMD are the anti-PID-reuse fingerprint: a recycled pid will not reproduce
+  # the original process's start timestamp or command line, so "same pid, different process" is
+  # detectable rather than being mistaken for a live holder.
+  local anchor; anchor="$(resolve_holder_pid)"
   cat >"$f" <<EOF
 HOLDER=${holder}
 WORKTREE=$(cd "${ALLOY_WORKTREE_PATH:-$PWD}" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
-PID=$$
+PID=${anchor}
+PID_START=$(proc_start_of "$anchor")
+PID_CMD=$(proc_cmd_of "$anchor")
+STACK_PROJECT=${SANCTIONED_PROJECT}
 PROVIDER=${ALLOY_PROVIDER:-unknown}
 SLOT=${ALLOY_WORKTREE_SLOT:-unknown}
 CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -250,6 +434,8 @@ cmd_release() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --keep-running) keep=1; shift ;;
+      --holder) holder="${2:-}"; [[ -n "$holder" ]] || die "--holder requires a value"; shift 2 ;;
+      --holder=*) holder="${1#*=}"; shift ;;
       -*) die "unknown option: $1" ;;
       *) holder="$1"; shift ;;
     esac
@@ -425,6 +611,92 @@ cmd_doctor() {
   return 1
 }
 
+# Rebuild the shared environment from committed migrations + canonical seed.
+#
+# `reap` cannot do this: it enumerates projects from RUNNING containers, so a stopped
+# stack's volumes are invisible to it and its data survives forever. That is the whole
+# point of a reset — discard accumulated state (fixture residue, certification leftovers)
+# and come back to exactly what the repository says the environment is.
+#
+# Guards: refuses while any lease is held; only ever touches volumes labelled for the
+# SANCTIONED project; requires --confirm; rebuilds through `use`, so the containment hook
+# and the canonical seed path are both honoured.
+cmd_reset() {
+  local confirm=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --confirm|--yes|-y) confirm=1; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  docker_ok || die "Docker unreachable"
+
+  prune_stale_leases >/dev/null
+  local held; held="$(live_lease_count)"
+  if [[ "$held" != "0" ]]; then
+    bad "refusing to reset — ${held} lease(s) held on '${SANCTIONED_PROJECT}'"
+    cmd_status
+    return 1
+  fi
+
+  if [[ "$confirm" -eq 0 ]]; then
+    warn "would REBUILD '${SANCTIONED_PROJECT}' from committed migrations + canonical seed"
+    info "this DISCARDS all data in the shared stack (that is the intent)"
+    info "to proceed:  alloy-stack reset --confirm"
+    return 0
+  fi
+
+  local workdir; workdir="$(resolve_stack_workdir || true)"
+  info "stopping '${SANCTIONED_PROJECT}' (if running)…"
+  stop_stack_by_project "$SANCTIONED_PROJECT" "$workdir"
+
+  # Only volumes belonging to the sanctioned project. Never a bare prune.
+  local removed=0 v
+  while IFS= read -r v; do
+    [[ -n "$v" ]] || continue
+    docker volume rm "$v" >/dev/null 2>&1 && { dim "removed volume $v"; removed=$((removed + 1)); }
+  done < <(docker volume ls -q 2>/dev/null | grep -E "_${SANCTIONED_PROJECT}\$" || true)
+  ok "discarded ${removed} data volume(s) for '${SANCTIONED_PROJECT}'"
+
+  mkdir -p "${STATE_DIR}" 2>/dev/null || true
+  printf '%s stack-reset project=%s volumes_removed=%s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$SANCTIONED_PROJECT" "$removed" >> "${STATE_DIR}/reclaim.log" 2>/dev/null || true
+
+  info "rebuilding from committed migrations + canonical seed…"
+  local rh="${ALLOY_STACK_RESET_HOLDER:-stack-reset}"
+  ALLOY_STACK_SEED_REQUIRED=1 cmd_use "$rh"
+  assert_ledger_matches_disk "$workdir"
+  cmd_release "$rh" --keep-running
+  ok "shared stack rebuilt and left running, zero leases held"
+}
+
+# The point of a rebuild is that the environment contains the committed migrations and
+# NOTHING ELSE. A restored backup silently carried a migration from an unmerged sibling
+# branch (20260801120000, interactive-tour-slice-c) into the shared stack; every session
+# then certified against schema that exists on no integration branch.
+assert_ledger_matches_disk() {
+  local workdir="$1"
+  local migdir="${workdir}/supabase/migrations"
+  [[ -d "$migdir" ]] || { dim "no migrations dir — skipping ledger check"; return 0; }
+  have psql || { dim "psql not on PATH — skipping ledger check"; return 0; }
+
+  local url; url="$(ALLOY_STACK_INTERNAL=1 supabase --workdir "$workdir" status -o env 2>/dev/null \
+    | sed -n 's/^DB_URL="\(.*\)"$/\1/p')"
+  [[ -n "$url" ]] || { warn "could not resolve DB_URL — skipping ledger check"; return 0; }
+
+  local extra
+  extra="$(comm -23 \
+    <(psql "$url" -tAc 'select version from supabase_migrations.schema_migrations order by version' 2>/dev/null | tr -d ' \r' | sort) \
+    <(ls "$migdir"/*.sql 2>/dev/null | sed 's|.*/||; s|_.*||' | sort))"
+
+  if [[ -n "$extra" ]]; then
+    warn "rebuilt stack carries migration(s) not present in this checkout:"
+    printf '%s\n' "$extra" | sed 's/^/      /' >&2
+    die "environment is not a clean rebuild — it retains foreign schema"
+  fi
+  ok "migration ledger matches committed migrations exactly"
+}
+
 usage() {
   cat <<EOF
 alloy-stack ${VERSION} — one shared local Supabase stack, leased by sessions.
@@ -439,6 +711,12 @@ Usage:
         [--force]                       include stacks started <1h ago (live sessions)
         [--volumes]                     also discard their data volumes
   alloy-stack doctor                    explain violations; non-zero exit if unclean
+  alloy-stack use --exclusive [holder]  take a lease ONLY if nobody else holds one.
+                                        Required before any pristine tenant rebuild.
+  alloy-stack exclusive [holder]        exit 0 iff <holder> holds the stack alone
+  alloy-stack reset [--confirm]         REBUILD the shared stack from committed
+                                        migrations + canonical seed. Refuses while any
+                                        lease is held. Discards shared data by design.
 
 Doctrine: sessions SHARE the '${SANCTIONED_PROJECT}' stack. Never run
 'supabase start' from your own directory — that is what produced 35 containers.
@@ -450,6 +728,11 @@ main() {
   [[ $# -gt 0 ]] && shift || true
   case "$cmd" in
     use)      cmd_use "$@" ;;
+    reset)    cmd_reset "$@" ;;
+    # Exit 0 only when the named holder has the stack to itself. Lets a certification
+    # harness gate a destructive tenant rebuild without reimplementing lease rules.
+    exclusive) require_exclusive "${1:-$(default_holder)}"
+               ok "'${1:-$(default_holder)}' holds the shared stack exclusively" ;;
     release)  cmd_release "$@" ;;
     status)   cmd_status "$@" ;;
     reap)     cmd_reap "$@" ;;
@@ -460,4 +743,8 @@ main() {
   esac
 }
 
-main "$@"
+# Sourced by tests to exercise the lease predicates directly rather than reimplementing them.
+# Any other invocation runs normally.
+if [[ "${ALLOY_STACK_TEST_SOURCE:-0}" != "1" ]]; then
+  main "$@"
+fi

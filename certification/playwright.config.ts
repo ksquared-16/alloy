@@ -19,6 +19,19 @@ export default defineConfig({
     // assertion — nothing about what the specs prove changes.
     timeout: Number(process.env.CERT_TIMEOUT_MS || 240_000),
     fullyParallel: false,
+    // fullyParallel:false only serializes tests WITHIN a file — separate spec files still run
+    // concurrently. Every spec drives the same single tenant and the same business-process
+    // configuration, so two workers edit one draft: the platform's optimistic-concurrency guard
+    // correctly answers 409 ("someone else changed this configuration while you were editing"),
+    // and revision counts drift under whichever spec published last.
+    //
+    // Observed directly at 2 workers: S2 got 409, G3 saw revisionCount 2 instead of 1, and T0
+    // read a rule set another file had just republished. Those are the platform defending itself,
+    // not product defects — but they make the certification unable to prove anything.
+    //
+    // The certification is a serial proving journey against one tenant. It is correct at exactly
+    // one worker. CERT_WORKERS can raise it, but nothing about this suite is parallel-safe today.
+    workers: Number(process.env.CERT_WORKERS || 1),
     reporter: [["list"], ["html", { outputFolder: "./evidence/report", open: "never" }]],
     use: {
         baseURL: process.env.CERT_APP_URL || "http://localhost:3011",
