@@ -71,7 +71,11 @@ export async function recordTourStageSyncFollowUp(
         const { error } = await args.supabase.from("workflow_events").insert({
             org_id: args.orgId,
             event_type: TOUR_STAGE_SYNC_FOLLOW_UP_EVENT,
-            entity_type: "opportunity",
+            // "opportunities", not "opportunity". The operator activity feed queries
+            // `entity_type = "opportunities"` (loadOpportunityRelatedActivityEvents),
+            // so the singular form made this event durable but INVISIBLE — recorded
+            // for an operator who could never see it.
+            entity_type: "opportunities",
             entity_id: args.opportunityId,
             action_type: "operational_follow_up",
             payload,
