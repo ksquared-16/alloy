@@ -14,6 +14,12 @@
 >
 > **Specification only.** No code, schema, migration, or UI is changed by this phase. Nothing here asserts
 > that Access & Identity UI exists or is complete, and no decision is answered.
+>
+> **[Output #12 — Part III, 2026-08-04.]** Part III (§§30–42) is the **QA and evidence plan**: a
+> verification tier and exit gate for every workstream Part II added, the fixture matrix as a buildable
+> module, the two-process harness as a design, the preflight-evidence contract — and `QE-1`…`QE-9`, nine
+> mechanically-verified findings about **what actually decides "met" in this programme**. Parts I and II
+> are unmodified except this note and §0's table.
 
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Sequenced implementation / QA plan* · assignment `asg_fccd7bdedcab5b`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
@@ -55,7 +61,10 @@ corpus's own recurring failure is *not checking that a plan's premises still hol
 | **§24** | Decision gates, all 21, by sitting; what each releases. | **new** |
 | **§25** | Regression locks `RL-16`…`RL-42`. | **new** |
 | **§26** | Corpus-integrity items `X-1`…`X-9` — Director-owned, and `X-9` is new. | **new** |
-| **§27–§29** | This revision's limits, reproduce commands, and provenance. | **new** |
+| **§27–§29** | The Part II revision's limits, reproduce commands, and provenance. | **new** |
+| **§30–§32** | **QA and evidence plan** — why §10 is not enough, **what actually decides "met"** (`QE-1`…`QE-8`), and the evidence contract `EA-1`…`EA-7`. | **new** |
+| **§33–§37** | Verification tier per workstream `W-23`…`W-53` · per-wave exit gates 6–12 · the fixture module · the two-process harness · preflight evidence. | **new** |
+| **§38–§42** | The evidence ledger, decisions `DR-8`…`DR-12`, and this part's limits, reproduce and provenance. | **new** |
 
 Workstreams are `W-n` and continue the accepted series without renumbering: `W-0`…`W-22` are the accepted
 plan's, `W-23`…`W-53` are new. Sizing is **S** ≤ 2 engineer-days · **M** 3–8 · **L** 9–20. These are
@@ -3019,3 +3028,623 @@ ls web/tests/access/          # four suites, no fixture module
 - **New findings by this phase:** `X-9` (§26.1) — documentary. **No product defect is asserted.**
 - **Method:** static and corpus-grounded. **No code, schema, migration, or UI was changed by this phase**,
   no request was issued, no browser used, and no decision answered. The only file written is this one.
+
+---
+---
+
+# Part III — QA and evidence plan **[new — Mission 2, required output #12]**
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *QA and evidence plan* · assignment `asg_ae2d65e739f71c`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-vacilando-os-product-def` @ `hotfix/vacilando-ui-freshness-flash`
+**Date** 2026-08-04
+**Base** `a89a19625` — the corpus at `b7cfc3653` (`03…` Part II) plus `bd760ffa7` (`07…` Mission 2 refresh)
+**Method** static and file-grounded. The acceptance runtime, the evidence runtime, this mission's compiled
+objective, its brief, its package register, its acceptance ledger and its 59-artifact evidence gallery were
+read this pass. **No code, schema, migration or UI changed. No test ran, no browser opened, no request
+issued, no decision answered.**
+
+> **What this part is.** §10 is the QA *architecture* for waves 0–5. This is the QA and evidence *plan* for
+> everything the corpus now contains: a verification tier and an exit gate for each of the thirty-one new
+> workstreams, the fixture matrix as a buildable artifact, the two-process harness as a design, the
+> preflight-evidence contract for the migration register — and, because a plan that produces evidence nobody
+> grades is not a plan, **an account of what actually decides "met" in this programme today.**
+>
+> The second half was not anticipated when §10 was written, and it is the more consequential half.
+
+**Registers used.** Findings new this pass are `QE-1`…`QE-9` — a fresh namespace, per `07…§6`'s rule that
+Mission 2 must not add a fourth colliding register. Evidence classes are `EA-1`…`EA-7`. Decisions continue
+`07…§10`'s `DR-` register from `DR-8` **without renumbering anything**, on §25's precedent. **No existing ID
+in this corpus is renumbered, merged or retired by this part.**
+
+---
+
+## 30. Why §10 does not already cover this
+
+§10 was written on 2026-07-30 against waves 0–5 and amended in Part II. Three gaps remain, and each is the
+reason for a section below.
+
+| # | Gap | Closed by |
+|---|---|---|
+| 1 | **Thirty-one workstreams have no verification tier.** §10.1 tiers `I-1`…`I-25`; §§16–22 introduced `W-23`…`W-53` against `I-26`…`I-34`, `S-1`…`S-7`, `IA-R1`…`IA-R10` and `07/AU-1`…`AU-5`. §25 assigns each *lock* a tier; **no section assigns each *workstream* one**, and eight workstreams have no lock at all (`QE-9`) | §33 |
+| 2 | **§10.4's exit gate is one paragraph for thirteen waves.** It is correct and it is generic. Waves 6–12 add four lockout classes (`L5`–`L8`), five migrations that are behaviour-preserving only if seeded correctly, and one wave that cannot be sized until a census answers | §34 |
+| 3 | **There is no evidence contract.** §10 says what to *test*. Nothing says what artifact a workstream produces, in what schema, at what path, or what makes an artifact admissible rather than decorative. §4 and §5 each improvised one — well, and differently | §32, §37 |
+
+And one gap that did not exist when §10 was written: **`07…` re-read the acceptance runtime line by line
+(`bd760ffa7`) and established that most of its checkers are unavailable to a specification mission.** That
+finding has a consequence for the evidence side of this plan which `07…` did not pursue, because it was
+grading the mission and this document is planning the evidence. §31 pursues it.
+
+**Two audiences, two clocks.** This part serves both and keeps them apart:
+
+- **The product** — waves 0–12. Evidence is produced by tests, checks, censuses and browser runs, and is
+  graded by the wave exit gates in §34. This is engineering evidence and it outlives the mission.
+- **The mission** — the twelve specification deliverables. Evidence is produced by reproduce blocks,
+  premise re-checks and coverage arithmetic, and is graded by the Vacilando runtime. §31 is about this one.
+
+Confusing them is how a mission accumulates 59 evidence artifacts that no grader reads.
+
+---
+
+## 31. What actually decides "met" — four graders, four answers **[`QE-1`…`QE-8`]**
+
+`07…§2` established what `acceptance.mjs` verifies. This section establishes something narrower and more
+uncomfortable: **`acceptance.mjs` is not in the path for this mission at all**, and three other mechanisms
+are. All eight findings below were verified mechanically this pass (§41) and **none is a product defect** —
+they are defects of the evidence apparatus, in the same class as `X-1`…`X-9`.
+
+### 31.1 The four mechanisms
+
+| # | Mechanism | Source | Reads | Verdict for Mission 2 |
+|---|---|---|---|---|
+| **G1** | `evaluateMission` — the acceptance gate | `acceptance.mjs:257-273` | a *package*'s `acceptance_criteria[].evidence_required` | **never ran** — no package exists (`QE-3`) |
+| **G2** | `acceptanceEvidenceCoverage` — the coverage view | `evidence.mjs:183-200` | the *brief*'s `acceptanceCriteria`, matched against artifact `acceptanceCriteriaIds` | **`AC1` = `missing`**, on 59 artifacts (`QE-2`) |
+| **G3** | `vacilando.deliverable_review.v1` — the per-assignment review | `deliverable-reviews/<msn>.json` | the *objective*'s `acceptance_criteria`, plus seven automatic checks | **7 of 7 pass, `met`** — for all eleven accepted deliverables (`QE-4`) |
+| **G4** | The operator | — | the document | the only one that read a word of it |
+
+**Three registers of acceptance criteria exist for this mission, and no two agree.** The brief holds one
+criterion; the compiled objective holds twelve; the assignment cards and the evidence gallery cite the
+objective's twelve. G1 grades the first, G2 grades the first, G3 grades the second.
+
+### 31.2 The findings
+
+**`QE-1` — `evidenceType: "document"` is not an evidence kind.** All twelve of the objective's criteria
+carry `"evidenceType": "document"` (`objectives/msn_f74ed02c126c88d7ff.json:231-303` **[verified]**).
+`document` is a member of `EVIDENCE_TYPES` in the *evidence* runtime (`evidence.mjs:19-23` — `screenshot`,
+`video`, `test`, `build`, `typecheck`, `browser`, `database`, `migration`, `diff`, `log`, `performance`,
+`security`, `commit`, `notes`, `document`). It is **not** a member of the *acceptance* runtime's kind
+vocabulary (`07…§2.1`'s ten: `file_exists`, `sections_present`, `git_clean_outside_docs`, `source_changed`,
+`tests_pass`, `qa_evidence`, `migration_accounted`, `intent_fidelity`,
+`rejected_patterns_not_reintroduced`). `checkEvidence("document", …)` matches no branch and reaches the
+terminal `operator_review` at `acceptance.mjs:249`.
+
+> **Two vocabularies share one field name.** `evidenceType` on a criterion is read by `checkEvidence` as a
+> *kind*; the compiler fills it from the *artifact-type* enum. Every one of Mission 2's twelve criteria is
+> therefore unautopassable by construction — **not because a specification is unverifiable, but because the
+> field was filled from the wrong list.** This is `X-9`'s failure mode — one namespace, two registers — in
+> code rather than in prose, and it is `DR-8`.
+
+**`QE-2` — the graded register and the evidenced register are disjoint.** The brief holds exactly one
+criterion: `AC1`, `evidenceType: null`, `phaseIds: []` (`mission-briefs/msn_f74ed02c126c88d7ff.json:20-27`
+**[verified]**) — `07…§3`'s finding, re-confirmed. `acceptanceEvidenceCoverage` iterates
+`getBrief(missionId).acceptanceCriteria` and links artifacts by
+`(a.acceptanceCriteriaIds || []).includes(c.id)` (`evidence.mjs:186-188`). **Zero of the gallery's 59
+artifacts name `AC1`**; all 59 name one of `AC_d1_existing_state`…`AC_d11_acceptance_rubric`. So the
+coverage view reports the mission's only graded criterion as `missing` while the gallery holds 59 artifacts
+attesting to eleven completed deliverables.
+
+**`QE-3` — the acceptance gate never ran.** `missions/packages.jsonl` contains no package for
+`msn_f74ed02c126c88d7ff`, and `acceptance/ledger.jsonl` contains no entry for it **[verified — zero matches
+in both]**. `evaluateMission` persists a ledger row on every evaluation (`acceptance.mjs:276+`), so an
+empty ledger is proof of absence, not of silence. **Everything `07…§§2–3` established about the gate is
+correct and, for this mission, unexercised.** It matters anyway — `07…§9` tells the Director to apply it,
+and Phase 5's implementation missions *will* be packaged.
+
+> **What a package would have decided, had one existed.** The implement-mode template
+> (`mission-package-compiler.mjs:124-130`) binds `AC1→source_changed`, `AC2→tests_pass`,
+> `AC3→qa_evidence`, `AC4→rejected_patterns_not_reintroduced`, `AC5→migration_accounted`. Against a
+> specification deliverable: `source_changed` **unmet** (no application source, and satisfying it would
+> violate the brief); `tests_pass` **unmet** (a spec has no suite); `qa_evidence` **unmet** — the deliverable
+> path is a `.md` file, `walkImages` (`acceptance.mjs:145`) reads it as a directory, fails, and returns
+> zero images. Three unmet → `gate: "fail"` (`:273`). **A correctly-executed specification phase would have
+> failed the gate outright**, which is a sharper version of `07…§4`'s point: the mismatch is not merely
+> unhelpful, it inverts. All twelve of this mission's phases carry `"kind": "implement"`
+> (`objectives/…json`, twelve occurrences **[verified]**) against a brief that forbids production code.
+
+**`QE-4` — the review that did accept the work passes seven checks, none of which reads the document.**
+The eleven `vacilando.deliverable_review.v1` records each report `"passed": 7, "total": 7`, every check
+`"source": "automatic"`. The three load-bearing ones, quoted from the `AC_d1_existing_state` review
+**[verified]**: `deliverables_exist` — *"Verified on disk"*; `acceptance_criteria` — *"Criteria in scope:
+`AC_d1_existing_state`. Evidence references them"*; `evidence_present` — *"4 meaningful evidence item(s); 4
+total attached."* **`met` in this programme means: the file exists at the declared path, the worker's
+reported files were in scope, and the worker attached artifacts naming the criterion.** The
+`acceptance_criteria` check is satisfied by the evidence *citing* the criterion — the worker supplies both
+sides. That is not a criticism of the reviews; it is the honest reading of what they assert, and the
+Director should read them as such.
+
+**`QE-5` — any artifact marks a criterion passed.** `evidence.mjs:189-192`:
+
+```js
+const hasFail = linked.some((a) => a.exitCode != null && a.exitCode !== 0);
+const status = !linked.length ? "missing" : hasFail ? "failed" : "passed";
+```
+
+There is no content predicate. A single `notes` artifact containing arbitrary prose yields `passed`.
+**`exitCode` is `null` on all 59 artifacts** (`QE-6`), so `hasFail` is structurally unreachable for this
+mission: the only way to fail coverage is to attach nothing.
+
+**`QE-6` — no artifact in the gallery is reproducible.** Across 59 artifacts, six fields are `null` on every
+one: `command`, `exitCode`, `repositorySha`, `branch`, `environment`, `verifiedBy` **[verified — 59/59 on
+each]**. The `commit` artifacts carry their SHA in a free-text `description`, not in `repositorySha`. So no
+artifact records what was run, whether it succeeded, or against which tree — the three things that
+distinguish evidence from assertion. The runtime *has* the channel: `recordValidationRun`
+(`evidence.mjs:129-169`) writes `{command, exitStatus, ok, branch, commitSha}` to `validation-runs.jsonl`.
+**No `validation-runs.jsonl` exists for any mission on this host** **[verified — zero files]**.
+
+**`QE-7` — the `diff` artifact is the working tree, not the deliverable.** Every criterion has exactly one
+`diff` artifact, and its description is a cumulative `--stat` of the *uncommitted tree at report time*. Two
+consequences, both visible in the gallery **[verified]**: `AC_d4_authentication`, `AC_d5_effective_access`,
+`AC_d6_product_ia` and `AC_d7_security_matrix` each attribute four files under
+`scripts/local-dev/apps/vacilando/` — **work belonging to a different branch's UI hotfix, not to Access &
+Identity** — and `01-existing-state-inventory.md` appears in the diff for six criteria after the one it
+belongs to. A deliverable's diff should be its own commit's; this is whatever happened to be dirty.
+
+**`QE-8` — there is no evidence profile for specification work.** `EVIDENCE_PROFILES`
+(`evidence.mjs:25-33`) defines seven: `code_only`, `execution_v1`, `execution_session_v1`, `ui`,
+`migration`, `security`, `performance`. Mission 2's assignments used `execution_session_v1 = ["log",
+"notes", "document"]` — which is why each criterion carries a `log`, a `notes` and a `document` artifact
+**whose `description` fields are byte-identical**, the worker's completion summary repeated three times.
+**59 artifacts carry roughly eleven distinct facts.** A specification profile — reproduce block, premise
+re-check, citation lint, coverage count — does not exist, and §32 is the specification for one (`DR-10`).
+
+### 31.3 What this means for the plan
+
+Not that the accepted deliverables are bad — this document has read six of them closely and they are
+strong. It means something narrower and load-bearing:
+
+**No mechanism in this programme has yet distinguished a good deliverable from a file at the right path.**
+`07…§9` already told the Director that `gate: "pass"` *"will not distinguish a phase that did excellent
+work from one that did none."* `QE-1`…`QE-8` show the same is true of the three mechanisms that actually
+ran. `07…§4`'s **`Count` mode** is the corpus's answer, and §32 is its evidence half: the artifact classes
+that make a `Count` criterion checkable by someone who was not there.
+
+---
+
+## 32. The evidence contract — `EA-1` … `EA-7`
+
+What a deliverable in this programme attaches so that its acceptance can be wrong. Each class states what
+it is, who produces it, where it lives, and — the point — **what it lets a reader falsify.**
+
+| # | Class | Produced by | Path / form | Makes falsifiable |
+|---|---|---|---|---|
+| **EA-1** | **Reproduce block** — the commands that establish the document's load-bearing claims, with expected output stated | the authoring worker | a `## Reproduce` section in the deliverable | every mechanical claim in the document. §28 and `07…§11` are the working examples |
+| **EA-2** | **Premise re-check record** — the claims inherited from another document that this one *re-ran* rather than carried | the authoring worker | a table in the deliverable, marked **[verified this pass]** vs **[carried]** | the difference between "this document checked it" and "this document repeated it". §27.2's rule |
+| **EA-3** | **Citation resolution** — every cross-document ID and `path:line` in the deliverable resolves | `RL-42` lint (`CR-1`…`CR-5`, `CV-1`) | CI check; failures listed in the deliverable | dangling citations, the failure `X-2`/`X-3` describe |
+| **EA-4** | **Coverage arithmetic** — the `Count` predicate for each criterion the phase claims, with its expected number | the authoring worker | a table binding criterion → count → where counted | `07…§9.3`: *"a `Count` row that has not been counted is not `met`"* |
+| **EA-5** | **Validation run record** — command, exit status, branch, commit SHA | `recordValidationRun` (`evidence.mjs:129`) | `validation-runs.jsonl` | that a check was run at all, and against which tree. **Currently unused by every mission on this host** (`QE-6`) |
+| **EA-6** | **Provenance block** — inputs reused, text carried, what was read in full, what was *not* consulted | the authoring worker | a `## Provenance` section | scope claims, and the "reuse, do not re-derive" instruction the assignment carries |
+| **EA-7** | **Negative control** — the check, run against a state it must reject, shown red | the workstream shipping the check | recorded in the wave evidence file | **vacuity.** `W-4`'s standard, promoted to a gate in §10.4 |
+
+**Three rules govern the set.**
+
+1. **An artifact nobody could have failed is not evidence.** `EA-7` is the general form of §10.4's
+   *"a wave that ships a check must show the check going red"*, and §10.2's disqualification of the
+   grep census is the same rule applied to a measurement. It applies to documents too: a coverage table
+   that counts what was written, by the person who wrote it, against a target they chose, is `EA-4` in
+   form and nothing in substance unless the target is the brief's.
+2. **Prose is one artifact however many times it is attached.** `QE-8` is the concrete case. Three
+   artifacts with identical `description` fields are one claim; the `evidence_present` check counts three
+   (`QE-4`).
+3. **An artifact carries what was run and against what.** `command`, `exitStatus`, `commitSha` — the
+   `EA-5` fields. This is the single cheapest repair available to the apparatus, because the channel
+   already exists and is called by nothing.
+
+**Which classes apply.** Specification deliverables (Mission 2's twelve): `EA-1`, `EA-2`, `EA-3`, `EA-4`,
+`EA-6` — and `EA-5` for any command the reproduce block actually ran. Implementation workstreams
+(waves 0–12): `EA-5`, `EA-7`, plus §34's per-wave file. **`EA-7` is required of every workstream that ships
+a check and of no workstream that does not** — which is the distinction §33's last column records.
+
+---
+
+## 33. Verification tier and lock, per workstream — `W-23` … `W-53`
+
+§10.1's tiers, applied to Part II. `Fixture` cites §10.3/§35. `Lock` cites §25. **`EA-7`** marks a
+workstream that ships a check and therefore owes a red-run; **`—`** marks one that ships behaviour only.
+
+| Workstream | Tier | Fixture | Lock | `EA-7` | Note |
+|---|:--:|---|---|:--:|---|
+| `W-23` census | — (read-only) | — | **none** | — | Evidence *is* the deliverable: `wave0-authority-census.json` shape, Q1–Q14 with query text (§4.1) |
+| `W-24` revocation effective | **C (2-proc)** + A | `F11` | `RL-16`, `RL-17` | ✅ | §36. A single-process pass is a false certification |
+| `W-25` deactivation revokes | C | `F12` | `RL-18` | — | `L6` — needs `W-23` Q10 first |
+| `W-26` account lifecycle | C + **D** | `F13` | `RL-19`, `RL-20` | — | `L5`. Largest new item; tier D required |
+| `W-27` step-up on re-key | C | `F13` | `RL-21` | — | |
+| `W-28` atomic authority writes | C + A | `F1`, `F5` | `RL-22` | ✅ | The A half is "no bare `DELETE` on a membership" |
+| `W-29` delegation gate key | B + **D** | `F9` | **none** — see `QE-9` | — | `L7`, and **unlocked**. `M17` conditional on Q11 |
+| `W-30` show/hide baseline | A | — | `RL-37` | ✅ | Cheapest in the plan; batch 2 |
+| `W-31` server-side password policy | C | — | `RL-38` | — | The lock must call the API directly, not the form |
+| `W-32` auth error text | A | — | `RL-29` | ✅ | Shared with `W-39` |
+| `W-33` per-org auth policy record | C | — | **none** — `QE-9` | — | `M11`. Behaviour-preserving **only if** every org seeds to current behaviour |
+| `W-34` request-identity mode | A + C | — | `RL-39` | ✅ | The lock exists to fail when the posture changes |
+| `W-35` declared abuse control | A | `F16` | `RL-31` | ✅ | Includes "no limiter backed by a module-level `Map`" — the `S-2` twin of `QE`'s cache problem |
+| `W-36` MFA by role | C | `F13` | **none** — `QE-9` | — | Unsizable until sitting 3 |
+| `W-37` session / trusted device | C | `F13` | **none** — `QE-9` | — | Unsizable until sitting 3 |
+| `W-38` credential-mail org bound | B + C | `F8` | `RL-27` | — | |
+| `W-39` public surface tenancy | A + C | `F16` | `RL-28`, `RL-29` | ✅ | |
+| `W-40` unauth side-effects | A + C | `F16` | `RL-30`, `RL-32` | ✅ | `RL-32` is the lock on what already works (§25) |
+| `W-41` one resolver | A | `F1`–`F10` | `RL-25` | ✅ | The A check is "exactly one module computes an admission set" |
+| `W-42` one normal form | A + property | **`F14`** | `RL-24` | ✅ | Property test over whitespace/case is the right shape here |
+| `W-43` read errors deny | C + A | **`F15`** | `RL-23` | ✅ | One `F15` variant per resolver read |
+| `W-44` retire role literals | A | — | `RL-26` | ✅ | |
+| `W-45` no unread state | A | — | `RL-33` | ✅ | Batch 2; no decision |
+| `W-46` member lifecycle projection | B | `F13` | **none** — `QE-9` | — | Sequence with `W-26` |
+| `W-47` absent scope distinguishable | A + C | `F6` | `RL-34` | ✅ | Batch 2; `GAP-3`'s render leg |
+| `W-48` effective access from resolver | B + C | `F1`–`F10` | **none** — `QE-9` | — | Closes `C11`/`IA-R4`; **unlocked, and it is the claim `W-21` failed to make** |
+| `W-49` chapter gates on capability | A + **D** | `F3`, `F4` | `RL-36` | ✅ | `L8` — needs Q12 |
+| `W-50` no inert capability | A | — | `RL-35` | ✅ | |
+| `W-51` three IA cleanups | B | — | **none** — `QE-9` | — | Cosmetic; the absence is correct |
+| `W-52` doc reconciliation | A | — | `RL-41` | ✅ | |
+| `W-53` audit | C | `F1` | `RL-40` | ✅ | Do not size before Q7 (§27.3) |
+
+### 33.1 `QE-9` — eight of thirty-one new workstreams carry no regression lock
+
+`W-23`, `W-29`, `W-33`, `W-36`, `W-37`, `W-46`, `W-48`, `W-51` **[verified: §25 names 23 of the 31]**.
+Four of the eight are benign — `W-23` is a census, `W-51` is cosmetic, `W-36`/`W-37` cannot be specified
+before sitting 3. **Four are not:**
+
+- **`W-29` is lockout class `L7` and has no lock.** It repoints the users-and-roles gate at a key the seed
+  withholds. §2's ritual and `M17` protect the *switch*; nothing protects the *regression*.
+- **`W-48` closes `C11`** — *effective access is computed by code that does not enforce* — which is the
+  finding `W-21` was supposed to close and did not (§9). A second attempt at a finding that already
+  escaped once is exactly where a lock belongs.
+- **`W-33` ships `M11`**, whose safety claim is *"behaviour-preserving by construction"* (§11). A claim of
+  that shape is a lock, unwritten.
+- **`W-46`** projects the lifecycle `W-26` creates; if it drifts, the surface lies about account state —
+  which is the `IA-R2` failure the workstream exists to fix.
+
+**Proposed, not minted here.** Four locks continuing §25 (`RL-43`…`RL-46`, for `W-29`, `W-33`, `W-46`,
+`W-48`) are the obvious repair, and this plan **records the gap rather than numbering it**, because §25 is
+Part II's register and this is the same document — minting into it silently is how `X-1` happened. The
+Director should either accept the four numbers or accept the gap knowingly.
+
+---
+
+## 34. Per-wave exit gates, waves 6–12
+
+§10.4 applies unchanged and is not restated. Each wave below adds what is specific to it. **Every wave
+produces one evidence file**, `waveN-execution-evidence.json`, in the `wave1-execution-evidence.json`
+shape — which already carries the right fields (`method.red_before_green_after`, per-suite `red_before`,
+the brokered `typecheck` block with its `request_id` and `rc`) and is the closest thing this programme has
+to `EA-5` and `EA-7` in one artifact.
+
+| Wave | Additional exit conditions |
+|---|---|
+| **0b** (`W-23`) | Q1–Q14 answered **with query text**, committed. Q6 re-run, not cited from 2026-07-31. **A wave that answers 12 of 14 does not close** — `W-19`, `W-15` and `W-53` are each sized against exactly one question |
+| **6** (`W-24`…`W-28`) | The two-process harness exists and `RL-16` runs in it (§36). `M12`'s seed count **equals** Q9 — not "approximately", and re-counted at preflight, because `L5` denies every principal it missed. `W-26` carries tier D evidence for one principal per lifecycle state |
+| **7** (`W-29`) | Q11 answered for **every** org. If any org lacks a holder, `M17` applied and re-verified **before** the gate moves. Tier D evidence from an `ops` principal *and* an `admin` principal — the gradient is the point |
+| **8** (`W-30`…`W-37`) | `W-30`–`W-32` may close independently. **`W-33`–`W-37` do not open before sitting 3**, and the wave does not close on a partial: `07/AU-1`…`AU-5` are claimed together or not at all (§23.6) |
+| **9** (`W-38`…`W-40`) | Q14's handler-level census exists and `W-40`'s exemption list is enumerated, reviewed and **shrinking** (`RL-30`). `RL-32` green *before* `W-39` and *after* — it locks what already works |
+| **10** (`W-41`…`W-44`) | One module computes admission (`RL-25`) proven by the check going red against the pre-`W-41` tree. `F14` and `F15` built. **`W-42` before `W-48`** — a preview that matches a runtime with two normal forms matches by luck |
+| **11** (`W-45`…`W-52`) | `W-49` carries tier D per access chapter (`L8`). `W-48` demonstrates preview ≡ runtime across the **whole** fixture matrix, not a sample — §2's "prove zero divergences" is a universal claim |
+| **12** (`W-53`) | Q7 answered first. If Q7 returns nothing, the wave is *build an audit store*, `W-53` is re-sized, and the rubric claim changes from "extend" to "establish" (§4.1) |
+
+### 34.1 Tier D — the only place a screenshot is both required and consumed
+
+Four lockout classes in Part II demand browser evidence: `L5` (`W-26`), `L6` (`W-25`), `L7` (`W-29`),
+`L8` (`W-49`). The worktree contract's format is the required one — **route, steps, expected vs observed,
+console errors, failed requests, evidence path** — on `http://localhost:3020` with the slot-6 QA identity,
+never production, and never claimed from code inspection.
+
+**And it is the one artifact the acceptance runtime actually reads.** `qa_evidence` walks a *directory* for
+`.png`/`.jpg`/`.jpeg`/`.gif`/`.webp` (`acceptance.mjs:30`, `:145`). So for implementation phases the
+evidence path declared on the package must be **a directory containing images** — which is precisely what
+tier D produces and precisely what a specification phase cannot (`QE-3`). Wave 6's and wave 11's
+lockout-class workstreams are the phases where `qa_evidence` becomes a real check rather than a category
+error, and the plan should let it be one.
+
+---
+
+## 35. The fixture matrix, as a buildable artifact
+
+§10.3 lists sixteen fixtures and §14.3.6 records that ten of them were never built. Listing them again
+would repeat the debt. This specifies the module.
+
+**Path** `web/tests/access/fixtures/principals.ts` — one module, imported by tiers B, C and D. Not inline
+in a suite; §10.4's amended gate turns on "exists as a shared artifact."
+
+**Shape** each fixture exports a builder returning the `AdminAccessContextSuccess` shape the existing
+convention already uses (`web/tests/admin/usersRolesAuth.test.ts:6-19` **[carried]**), plus, for tier C,
+the SQL to materialize the same principal against a real database. **One definition, two materializations**
+— because a fixture that means one thing to a unit test and another to an integration test is how a
+preview diverges from a runtime, which is `C11`.
+
+| Batch | Fixtures | Why then |
+|---|---|---|
+| **2** | `F1`–`F10`, **`F11`**, `F12` | §10.3 already places the matrix first in batch 2: `W-24` cannot be tested without `F11`, `W-25` without `F12` |
+| **4** | `F13` | Five lifecycle states; cannot be defined before `AD-5` fixes the state grain |
+| **5** | `F14` | With the vocabulary work, not after it |
+| **3** | `F15` | With `W-43`; one variant per resolver read |
+| **9** | `F16` | With the unauthenticated surface |
+
+**Three fixtures encode defects and must invert.** `F6` (membership, no profile), `F7` (`user_profiles.role`
+only) and `F10` (service-role client, no principal) resolve to *access* today and must resolve to *denial*
+after their workstream lands (§10.3). Each is therefore an `EA-7` in fixture form: **built before the fix,
+asserting the current wrong behaviour, then inverted with the diff shown.** A fixture written after its fix
+proves the fix agrees with itself.
+
+**`F13` is the one that cannot be written yet**, and it is stated here so its absence is a scheduling fact
+rather than an oversight: `AD-5` decides whether account state is per `(user, org)` or per credential
+(§24.2). `F13` is five principals under the first reading and a different object under the second.
+
+---
+
+## 36. The two-process harness — a design, not a requirement
+
+§10.5 establishes *that* `I-29`ᴬ needs two processes and why a single-process test *"passes for the wrong
+reason."* This specifies the harness, and corrects one clause of §10.5 in the process.
+
+**§10.5 says nothing in this repository's test conventions runs two processes. That is very nearly true,
+and the exception is the design.** `web/tests/processing/processingIdentityLocalPostgres.test.ts:10-31`
+**[verified this pass]** runs `execSync('node <certScript>')` from inside a Vitest case, against
+`DATABASE_URL` on port 54322, under `describe.skipIf(!localDbConfigured)`. **The test process is process A;
+the spawned script is process B; both talk to one database.** That is the entire mechanism `RL-16` needs.
+It is one file out of 2380 **[verified: exactly one test file in `web/tests/` imports `node:child_process`]**
+— so §10.5's conclusion stands, but the harness is a **generalization of an existing pattern, not a new
+capability**, which changes its cost and should change its scheduling.
+
+**The shape.**
+
+| Step | Process | Action |
+|---|---|---|
+| 1 | **A** (the Vitest process) | Resolve the fixture principal. Assert access granted. **The cache is now warm in A** |
+| 2 | **B** (spawned) | Perform the revocation through the real write path — the same call the product makes |
+| 3 | **A** | Resolve again. **Assert denial** |
+| 4 | **A** | Assert the denial came from a re-read, not a restart: A's PID is unchanged across steps 1 and 3 |
+
+**Step 4 is not ceremony.** Without it the harness can be satisfied by a fresh process, which is the
+single-process failure wearing two hats. Gate it on an explicit env opt-in in the `*.live.test.ts`
+convention (`web/tests/runtime/d1ProvisioningBudget.live.test.ts:14-24` **[carried]**) so CI never depends
+on a local stack.
+
+**What else it certifies.** `S-2`'s rate limiter has the same defect — a module-level `Map`, per process,
+failing permissive (`01…§17`, `§14.3`) **[carried]**. `RL-31` asserts *"no limiter's backing store is a
+module-level `Map`"* statically; the harness can assert it behaviourally, from the same fixture. **Both of
+this platform's security-relevant in-process maps are testable by one runner**, which is the argument for
+building it as a runner rather than as a test.
+
+**`W-23` Q8 prices it; it does not gate it.** §10.5 consequence 2, `02…§27`'s rule, and §24.3 all say the
+same thing and it is repeated here because this is where an implementer would be tempted to wait: **if Q8
+reports one long-lived process, build the harness anyway.** The deployment can grow to two without the
+suite noticing.
+
+---
+
+## 37. Preflight evidence for the migration register
+
+§11 registers seventeen migrations and two conditionals and states the apply gate. This states the
+*evidence*, because `acceptance.mjs` enforces a specific shape and §11 does not name it.
+
+**Verified this pass** (`acceptance.mjs:193-219`): for a migration whose `status` is
+`awaiting_authorization` and whose `target` matches `/^(shared|live|staging|production)$/i`, a missing or
+non-object `preflight` returns **`unmet`** — not `operator_review` — and `preflight.ok !== true` returns
+`unmet` with the summary quoted back. Only `preflight.ok === true` reaches `operator_review`. **Every one of
+`M1`–`M18` targets `shared`** (§11), so every one is subject to this.
+
+**The artifact.** `migrations[].preflight = { ok, summary, evidence_path }` in the vacilando report, with
+the JSON evidence at `evidence_path` under the QA directory, produced by the trusted host action
+`database.read_census` — the channel `W-0` established and `§4`'s execution record recommends for *"every
+remaining live-evidence step in this programme"* **[carried]**.
+
+**Preflight query, per migration.** §11's `Preflight focus` column is the specification; four need naming
+here because their query is not obvious from the column:
+
+| Migration | The preflight must establish | Why it is not obvious |
+|---|---|---|
+| `M12` (`W-26`, `L5`) | Row count **equals** `W-23` Q9, and every existing `(user, org)` seeds to `active` | An incomplete seed denies every principal it missed, on every request, in every org |
+| `M13` (`W-53`) | **Whether an audit store already exists** | It is Q7, not a safety check — §11 says so, and `M13` *"cannot be sized, let alone written, before Q7 answers"* |
+| `M14` (`W-28`) | Every membership backfills to its current effective state; **the migration deletes no row** | A partial backfill leaves memberships in no state at all |
+| `M17` (`W-29`, `L7`) | Q11 returns an org without a holder — **the trigger, not the safety check** | A conditional migration written before its census acquires a `WHERE` clause nobody can justify |
+
+**Two rules carried from the apply gate** and repeated because §11 says a phase shipped against them once:
+preflight `ok: true` **does not auto-apply**, and **accept ≠ authorize-apply** — a gate of `needs_operator`
+must not complete a phase or advance the spine, even in autonomous mode.
+
+**This phase applies no migration, writes no SQL, and runs no preflight.** §11 remains a register.
+
+---
+
+## 38. The evidence ledger — what proves what
+
+Two tables. The first is the product; the second is this mission. Neither asserts sufficiency —
+`07…§12.3`'s *"presence, not sufficiency"* governs both, as it governs §23.
+
+### 38.1 Product — rubric criterion → wave → evidence
+
+Rows are `07…§14`'s implementation criteria, bound to waves by §23.6 and to evidence by §§33–34. The
+`07/` prefix is `X-9`'s interim convention (§26.1).
+
+| Criteria | Wave | Tier | Evidence artifact |
+|---|---|:--:|---|
+| `07/AI-1`…`AI-3` | 6 | C | `wave6-execution-evidence.json` + `AD-19` ratification |
+| `07/AI-4`, `AI-5` | 6 | C + **D** | tier D per lifecycle state; `07…§3.1` calls `AI-5` *"the highest-value single test in this rubric"* **[carried]** |
+| `07/AR-1` | 4, 11 | A + D | `W-14`'s declared table + `W-49`'s chapter gates — four layers, four counts |
+| `07/AR-2`, `AR-3` | 10–11 | A + C | `RL-24`, `RL-25`; `AR-3` is `IA-R4` and is `W-48`'s claim |
+| `07/AR-4`, `AR-5`, `AR-7` | 11 | **Review** | no checker decides these — `07…` says so and this plan does not pretend otherwise |
+| `07/AR-6` | 3 | A | catalog reconciliation (`M5`) with its enumerated deletion list |
+| `07/AR-8` | 11 | A + C | `RL-34`. **1 of 6 states representable today** (`01…§28.3`) **[carried]** |
+| `07/AU-1`…`AU-5` | 8 | A + C | `RL-37`, `RL-38`, `RL-39` + `M11`'s preflight. **Claimed together** (§34) |
+| `07/AE-1` | 4 | A | *"must be a static property, not a sampled test"* **[carried]** — `W-14`'s table, not `W-15`'s sweep |
+| `07/AE-2` | 4 | A | action registry |
+| `07/AE-3` | 5 | A + C | `W-19`; satisfiable two ways, one of which **is** `AD-4` |
+| `07/AE-4` | 11 | A + D | `RL-36` |
+| `07/AE-5` | 4–5 | C | one test per boundary |
+| `07/AE-6` | 5, 7 | B + D | `W-2` ✅ covers the self-edit half; `W-29` the delegation half |
+| `07/AD-1`…`AD-5` | 12 | C | `RL-40`. **Read `X-9` before citing these by number** |
+
+### 38.2 Mission — specification criterion → evidence class
+
+`RB-` is `07…§6`'s register. The `EA-` column is this plan's contribution: what a phase attaches so its
+`Count` is checkable by someone who was not there.
+
+| Criterion | Mode | `EA` classes | The count, and where it comes from |
+|---|:--:|---|---|
+| `RB-24` all 18 deliverables reachable | Count | `EA-3`, `EA-4` | 18 from **one** index. `README.md` is the candidate and it currently indexes 4 of 8 numbered documents (`X-2`) |
+| `RB-25` each states provenance | Count | `EA-6` | 18 rows, each **new** / **refreshed** / **carried** with a base commit |
+| `RB-26` no unfalsifiable criterion | Count | `EA-4` | zero criteria with a null evidence type. **`QE-1` shows the roadmap would inherit twelve** if the compiler is not fixed first |
+| `RB-27` implementation-readiness | **Review** | `EA-1`, `EA-2` | operator judgment; `EA-1`/`EA-2` are what the operator reads *instead of* re-deriving |
+| `PG-1`…`PG-12` | gates | `EA-3`, `EA-6` | every phase, every time — *"a principle preserved in four phases and broken in the fifth is broken"* **[carried]** |
+
+**`RB-26` is where `QE-1` bites.** The criterion asks that no acceptance criterion the roadmap proposes be
+unfalsifiable. The roadmap is produced by a mission whose own twelve criteria are unfalsifiable by the
+runtime (`QE-1`) and whose brief-level criterion has been unfalsifiable for three consecutive missions
+(`07…§3`, `M3`). **A roadmap that propagates that pattern satisfies its own criterion only by not being
+checked**, which is `DR-7` and now also `DR-8`.
+
+---
+
+## 39. Decisions this part raises — `DR-8` … `DR-12`
+
+Continuing `07…§10` without renumbering, on §25's precedent. **None is worker-resolvable**; each is
+recorded with a recommendation and **not performed**.
+
+| # | Decision | Recommendation |
+|---|---|---|
+| `DR-8` | **`evidenceType` is filled from the artifact-type enum, not the checker-kind enum** (`QE-1`). All twelve of this mission's criteria therefore reach the terminal `operator_review` | Constrain the field to the checker vocabulary at compile time and fail loudly on an unknown kind. A criterion that silently means "ask a human" is indistinguishable from one that was never specified |
+| `DR-9` | **Which criterion register is authoritative — the brief's `AC1`, or the objective's twelve?** (`QE-2`) The coverage view grades the first, the deliverable reviews grade the second, and 59 artifacts cite the second | The objective's. It is well-formed, per-deliverable, and already used by everything that runs. Then `AC1` should be derived from it, not authored beside it |
+| `DR-10` | **Should a `specification` evidence profile exist?** (`QE-8`) `execution_session_v1` emits the same prose three times; there is no profile for reproduce-block / premise-recheck / coverage-count work | Yes — `EA-1`…`EA-4`, `EA-6` (§32). It is a one-line addition to `EVIDENCE_PROFILES` and it is the difference between 59 artifacts and eleven facts |
+| `DR-11` | **Should coverage require one attributable artifact?** (`QE-5`, `QE-6`) Any artifact with a null `exitCode` marks a criterion `passed`; all 59 have null `exitCode`, `command` and `repositorySha` | Yes — at least one artifact per criterion carrying `command` + `exitStatus` + `commitSha`, i.e. one `recordValidationRun` call. The channel exists and **no mission on this host has ever used it** |
+| `DR-12` | **Should the four `RL-43`…`RL-46` locks be minted?** (`QE-9`) Four workstreams with no regression lock, including one lockout-class (`W-29`) and one re-attempt at an escaped finding (`W-48`) | Yes, and by the Director rather than by a worker appending to §25 — which is how `X-1` happened |
+
+**`DR-8` and `DR-11` are the two that change what "accepted" means.** The others improve the record;
+those two make it possible for an acceptance to be wrong.
+
+---
+
+## 40. Limits — read before citing
+
+§14 bounds the accepted plan; §27 bounds the Part II re-sequencing. These bound **Part III**.
+
+1. **No product defect is asserted here.** `QE-1`…`QE-10` concern the *evidence apparatus* — the compiler,
+   the acceptance runtime, the evidence runtime and this mission's own records. Not one is a finding about
+   Access & Identity. The product findings in §§33–38 are **[carried]** from their owning documents.
+2. **Nothing in §31 was executed.** `evaluateMission`, `acceptanceEvidenceCoverage` and
+   `recordValidationRun` were **read**, and this mission's on-disk state was **read**. The verdicts in
+   §31.1 are derived from source plus state, not observed. `QE-3`'s *"never ran"* is inferred from an empty
+   ledger and an absent package — strong, but it is an absence.
+3. **§33's tiers are assignments, not estimates of effort.** A tier says where an invariant is cheapest to
+   assert. It does not say the assertion is easy, and for `W-26`, `W-33` and `W-53` the sizing caveat in
+   §27.3 governs — those workstreams are calibrated against a *description* of the codebase.
+4. **§34's exit gates cannot be complete for wave 8.** Six decisions gate it and *"until they are answered
+   `03` cannot even size it"* **[carried]**. The wave-8 row states a rule about closing, not a set of
+   conditions to satisfy.
+5. **§35 specifies a module that does not exist**, and §36 a harness that does not exist. Neither was
+   written this pass. The `execSync` precedent is real and verified; the generalization is a design.
+6. **§37 ran no preflight and §33 ran no test.** No query was issued against any database, no suite
+   executed, no browser opened. `M13`'s preflight in particular *cannot* be specified further until
+   `W-23` Q7 answers.
+7. **The `QE-` register is nine findings, not a defect count.** `QE-1`…`QE-8` are eight readings of one
+   underlying condition — *the evidence apparatus has three vocabularies and no content predicate* — and
+   quoting "eight defects in the acceptance runtime" would repeat the arithmetic error `01…§29` deflates
+   (§27.9). `QE-9` is independent and is about this plan, not the runtime.
+8. **§38.2 does not claim Mission 2 satisfies `RB-24`…`RB-27`.** It says what evidence would make each
+   checkable. `07…§6.6` records five partials and one thin row; nothing here closes any of them.
+9. **`DR-8`…`DR-12` are escalations.** No code was changed to fix `QE-1`, no register renumbered to fix
+   `QE-2`, no profile added for `QE-8`. Each would be a change to `scripts/local-dev/lib/vacilando/` —
+   application source, which this phase's brief forbids and this document did not touch.
+10. **This part is written to the product-source folder**, which `07…§2.4` establishes is **outside**
+    `ALLOWED_CHANGE_PREFIX`. That is `X-2`/`DR-4` and it is unresolved; this deliverable follows its
+    assignment's scope, exactly as §26.2 records `03`'s Part II doing, and adds one more file to the count
+    `DR-4` tracks. **Knowingly, and it is not a worker's call to fix.**
+
+---
+
+## 41. Reproduce
+
+```bash
+cd /Users/Kelly/Code/alloy-worktrees/wt6-vacilando-os-product-def   # @ a89a19625
+V=$HOME/.local/state/alloy-dev/vacilando
+A=scripts/local-dev/lib/vacilando/acceptance.mjs
+E=scripts/local-dev/lib/vacilando/evidence.mjs
+
+# --- QE-1: evidenceType is filled from the ARTIFACT enum, not the CHECKER enum
+rg -n '"evidenceType"' $V/objectives/msn_f74ed02c126c88d7ff.json | head    # 12 x "document"
+rg -n 'EVIDENCE_TYPES = new Set' -A 5 $E                                   # :19-23 — "document" is here
+rg -n 'if \(kind === "' $A                                                 # the checker kinds — it is not
+rg -n 'evidence kind .* is not auto-verifiable' $A                         # :249 terminal operator_review
+
+# --- QE-2: the graded register and the evidenced register are disjoint
+rg -n '"id": "AC' $V/mission-briefs/msn_f74ed02c126c88d7ff.json            # exactly one: AC1
+G=$V/evidence/msn_f74ed02c126c88d7ff/gallery.json
+rg -c '"evidenceId"' $G                                                    # 59 artifacts exist
+# the criterion IDs the artifacts actually cite — 59 lines, AC_d1..AC_d11, no AC1.
+# (a bare `rg AC1` returns 3, all inside prose descriptions — match the array element.)
+rg -o '^\s+"AC[A-Za-z0-9_]*"' $G | rg -o 'AC[A-Za-z0-9_]*' | sort -u | tr '\n' ' '; echo
+
+# --- QE-3: no package, no ledger entry — the acceptance gate never ran
+rg -c 'msn_f74ed02c126c88d7ff' $V/missions/packages.jsonl                  # 0
+rg -c 'msn_f74ed02c126c88d7ff' $V/acceptance/ledger.jsonl                  # 0
+rg -n '"kind": "implement"' $V/objectives/msn_f74ed02c126c88d7ff.json | wc -l   # 12 phases + 1
+rg -n 'evidence_required' -B 1 scripts/local-dev/lib/vacilando/mission-package-compiler.mjs | head -20
+rg -n 'IMAGE_EXTS|walkImages\(qaAbs\)' $A                                  # :30, :145 — qa_evidence wants images
+
+# --- QE-4 / QE-5: what "met" asserts
+rg -n '"passed": 7|"source": "automatic"|Evidence references them' \
+   $V/deliverable-reviews/msn_f74ed02c126c88d7ff.json | head
+rg -n 'const hasFail|const status = !linked.length' $E                     # :189-192 — no content predicate
+
+# --- QE-6: no artifact is reproducible; the channel that would fix it is unused
+for f in command exitCode repositorySha branch environment verifiedBy; do
+  printf '%s: ' "$f"; rg -c "\"$f\": null" $G; done                        # 59 each
+ls $V/evidence/*/validation-runs.jsonl                                     # no such file, any mission
+rg -n 'export function recordValidationRun' $E                             # :129 — the unused channel
+
+# --- QE-7: the diff artifact is the working tree, not the deliverable
+rg -n 'apps/vacilando/public/app.js' $G                                    # 4 Access criteria, foreign files
+
+# --- QE-8: no specification evidence profile
+rg -n 'EVIDENCE_PROFILES' -A 9 $E                                          # 7 profiles; none for specs
+
+# --- QE-9: eight of the 31 new workstreams carry no lock in §25
+# §25's rows name 23 distinct workstreams; W-23..W-53 is 31. The 8 absent are
+# W-23, W-29, W-33, W-36, W-37, W-46, W-48, W-51.
+P=docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
+rg '^\| \*\*RL-' $P | rg -o 'W-[0-9]+' | sort -u -V | tr '\n' ' '; echo
+
+# --- §36: the two-process precedent that already exists
+rg -ln 'node:child_process' web/tests/                 # exactly 1 file
+rg -n 'execSync|skipIf' web/tests/processing/processingIdentityLocalPostgres.test.ts   # :2, :15, :17
+
+# --- §35: the fixture matrix still does not exist
+ls web/tests/access/                                   # four suites, no fixtures module
+```
+
+---
+
+## 42. Provenance — Part III
+
+- **Inputs (reused, not re-derived).** `03…` Parts I and II — the wave map, `W-0`…`W-53`, the lockout
+  classes, §10's QA architecture, §11's migration register, §25's locks, §23's coverage and §26's
+  integrity findings. `07-director-acceptance-rubric.md` at `bd760ffa7` — §2's checker vocabulary, §2.3's
+  first-deliverable rule, §2.4's allowed path, §4's `Count` mode, §6's `RB-` criteria, §10's `DR-1`…`DR-7`.
+  `01…` Parts II and III, `02…` Parts II and III, `04…`, `05…`, `06…` — through `03…`'s bindings, not
+  re-read end to end this pass. [`MIGRATION-APPLY-GATE.md`](../vacilando-os/MIGRATION-APPLY-GATE.md).
+- **Read this pass, in source.** `scripts/local-dev/lib/vacilando/acceptance.mjs` (`:1-280`),
+  `evidence.mjs` (`:1-200`), `mission-package-compiler.mjs` (`:75-131`);
+  `web/tests/processing/processingIdentityLocalPostgres.test.ts`; `ls web/tests/access/`.
+- **Read this pass, in runtime state.** `objectives/`, `mission-briefs/`, `compiled-missions/`,
+  `deliverable-reviews/`, `evidence/…/gallery.json`, `missions/packages.jsonl`,
+  `acceptance/ledger.jsonl` for `msn_f74ed02c126c88d7ff`. **Read-only. Nothing in
+  `~/.local/state/alloy-dev/` was written by this phase.**
+- **Mechanically verified** (§41): the twelve `evidenceType: "document"` values and their absence from the
+  checker vocabulary; the brief's single `AC1`; 59 artifacts, zero naming `AC1`; the empty package and
+  ledger; twelve `"kind": "implement"` phases; `qa_evidence`'s image-only walk; the seven automatic review
+  checks and their details; the coverage status expression; six fields null on 59 of 59 artifacts; the
+  absent `validation-runs.jsonl`; the foreign files in four criteria's diff artifacts; the seven evidence
+  profiles; the eight unlocked workstreams; the single `child_process` test and its shape; the still-absent
+  fixture module.
+- **New findings by this phase:** `QE-1`…`QE-9` — **all documentary or apparatus-level. No product defect
+  is asserted.** New decisions escalated, not answered: `DR-8`…`DR-12`.
+- **Not consulted.** The deployed database; any application source under `web/app` or `web/lib`; the
+  running Director; the frozen QA copies, which are untouched.
+- **Method.** Static and file-grounded. **No code, schema, migration or UI was changed. No test ran, no
+  typecheck, no build, no browser, no request, no query. No decision was answered and no ID renumbered.
+  The only file written is this one.**

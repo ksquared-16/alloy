@@ -15,7 +15,7 @@ the real Access & Identity V2 mission through Mission Brief after Runtime V1 clo
 | `authority-path-inventory.md` | Accepted authority path inventory |
 | `01-existing-state-inventory.md` | Existing-state inventory (Part I) · Security threat & enforcement matrix (Part II) · **Gap analysis (Part III)** |
 | `02-canonical-access-identity-model.md` | Canonical access & identity model |
-| `03-implementation-qa-sequence.md` | **Sequenced implementation & QA plan — the plan of record.** Waves 0–12, `W-0`…`W-53`, with §23's coverage of every finding ID in the corpus |
+| `03-implementation-qa-sequence.md` | **Sequenced implementation & QA plan — the plan of record.** Part I–II: waves 0–12, `W-0`…`W-53`, with §23's coverage of every finding ID in the corpus. **Part III (§§30–42): the QA and evidence plan** — a tier and exit gate per workstream, the fixture module, the two-process harness, preflight evidence, and `QE-1`…`QE-9` on what actually decides "met" |
 
 **This folder holds three of the corpus's eight numbered documents** (`01`, `02`, `03`), plus the accepted
 authority-path inventory. `00-mission-intake-and-coverage.md`,
