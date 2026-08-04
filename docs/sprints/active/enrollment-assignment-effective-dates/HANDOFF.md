@@ -12,7 +12,7 @@
 | Worktree | `/Users/Kelly/Code/alloy-worktrees/wt3-enrollment-assignment-effective-dates` |
 | Branch | `agent/cursor/3-enrollment-assignment-effective-dates` |
 | Staging base (exact) | `4888371af23f274753932b0f50bfdb131cfcbc2c` |
-| Final HEAD | `12f2a3fcd3c1daa2ae778579a11f2d054e41a968` |
+| Final HEAD | `8eb2e0995140d55ee8701830176a4945ff9d0c15` |
 | Remote durability | Rebased onto current `origin/staging`; force-with-lease push before PR |
 | Server | toolkit-owned on 3013 when running; stop with finish |
 | Auth | `qa-slot3-performance@example.com` storage present/valid |
