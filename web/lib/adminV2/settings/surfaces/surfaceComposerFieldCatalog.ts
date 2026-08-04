@@ -29,6 +29,7 @@ import {
     isIdentityFieldOfferedInPicker,
 } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldPickerParity";
 import { resolveIdentityFieldEditContract } from "@/lib/adminV2/runtime/focusPanel/identity/identityFieldEditContract";
+import { CHILDCARE_STARTER_FIELD_CATALOG } from "@/lib/layout/childcareLayoutFieldCatalog";
 
 /** Derived display fields — not selectable as independent editable identity fields. */
 const NON_SELECTABLE_DERIVED_REFS = new Set<string>([
@@ -193,6 +194,40 @@ function entryMatchesNamespaces(
     return false;
 }
 
+/**
+ * Enrollment-detail inquiry_child facts (Requested Days, Preferred Weekdays, …)
+ * live in the childcare starter catalog on participation metadata — not native OCM
+ * columns — so Settings → Fields alone omits them. Merge them when Children /
+ * inquiry_child namespaces are in scope so Focus Panel Add-field can place them.
+ */
+function enrollmentDetailCatalogEntriesForNamespaces(
+    namespaces: readonly AvailableFieldEntityNamespace[],
+): SettingsFieldCatalogEntry[] {
+    const wantsInquiryChild = namespaces.some((ns) => ns === "inquiry_child" || ns === "child");
+    if (!wantsInquiryChild) return [];
+    const out: SettingsFieldCatalogEntry[] = [];
+    for (const entry of CHILDCARE_STARTER_FIELD_CATALOG) {
+        if (!entry.enrollmentDetail || !entry.refKey.startsWith("inquiry_child.")) continue;
+        // Native OCM columns (program, schedule, start_date, …) already come from Settings.
+        // Only participation `field_values` facts are missing from that catalog.
+        if (entry.storageColumn !== "field_values") continue;
+        out.push({
+            id: `childcare-enrollment-detail:${entry.refKey}`,
+            ownership: "platform",
+            refKey: entry.refKey,
+            label: entry.pickerLabel,
+            field_type: entry.fieldType,
+            section_key: "enrollment",
+            description: entry.description,
+            entity_type: "inquiry_child",
+            storage_line: entry.storagePath,
+            editable: true,
+            configurable: true,
+        });
+    }
+    return out;
+}
+
 function buildFieldsCatalogEntriesForNamespaces(args: {
     namespaces: readonly AvailableFieldEntityNamespace[];
     tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
@@ -208,6 +243,10 @@ function buildFieldsCatalogEntriesForNamespaces(args: {
         })) {
             if (!byRef.has(entry.refKey)) byRef.set(entry.refKey, entry);
         }
+    }
+    for (const entry of enrollmentDetailCatalogEntriesForNamespaces(args.namespaces)) {
+        // Prefer Settings native labels when present; otherwise offer enrollment-detail.
+        if (!byRef.has(entry.refKey)) byRef.set(entry.refKey, entry);
     }
     return [...byRef.values()];
 }

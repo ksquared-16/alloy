@@ -32,6 +32,19 @@ describe("identity picker field catalog", () => {
         expect(programFields.length).toBeLessThanOrEqual(1);
     });
 
+    it("offers Children enrollment-detail request fields in Add-field picker", () => {
+        const fields = identityPickerFieldsForNamespaces({
+            namespaces: ["child", "inquiry_child"],
+        });
+        const byKey = new Map(fields.map((f) => [f.key, f.label]));
+        expect(byKey.has("inquiry_child.requested_days_per_week")).toBe(true);
+        expect(byKey.has("inquiry_child.weekdays")).toBe(true);
+        expect(byKey.has("inquiry_child.start_date")).toBe(true);
+        expect(byKey.get("inquiry_child.start_date")?.toLowerCase()).toContain("desired start");
+        expect(byKey.get("inquiry_child.requested_days_per_week")?.toLowerCase()).toContain("requested days");
+        expect(byKey.get("inquiry_child.weekdays")?.toLowerCase()).toContain("weekday");
+    });
+
     it("never surfaces raw ref keys as labels", () => {
         const fields = identityPickerFieldsForNamespaces({ namespaces: ["child", "inquiry_child"] });
         expect(fields.every((f) => !f.label.includes("child."))).toBe(true);

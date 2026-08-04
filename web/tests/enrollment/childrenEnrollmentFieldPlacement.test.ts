@@ -34,7 +34,7 @@ describe("Children optional enrollment field placement", () => {
             expect(isFocusPanelFieldKnown(ref)).toBe(true);
         }
         expect(CHILDCARE_CATALOG_BY_REFKEY.get("inquiry_child.start_date")?.pickerLabel).toBe(
-            "Requested Start",
+            "Desired start date",
         );
         expect(CHILDCARE_CATALOG_BY_REFKEY.get("inquiry_child.requested_days_per_week")?.pickerLabel).toBe(
             "Requested Days per Week",

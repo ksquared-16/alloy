@@ -86,7 +86,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
     {
         field_key: "start_date",
         field_type: "date",
-        label: "Start date",
+        label: "Desired start date",
         section_key: "inquiry_participation",
         sort_order: 10,
         is_visible_in_drawer: true,

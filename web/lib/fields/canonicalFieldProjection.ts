@@ -81,7 +81,7 @@ export const CHILD_ENROLLMENT_PROJECTIONS: readonly CanonicalFieldProjection[] =
         projectionSubject: "child",
         providerRef: "inquiry_child.start_date",
         projectionKind: "inquiry_participation",
-        displayLabelOverride: "Start date",
+        displayLabelOverride: "Desired start date",
         writableViaOwner: true,
     },
     {

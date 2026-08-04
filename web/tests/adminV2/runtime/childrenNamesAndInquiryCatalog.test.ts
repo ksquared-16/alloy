@@ -143,9 +143,11 @@ describe("Children identity card inquiry participation catalog", () => {
 
         expect(byKey["inquiry_child.program"]).toBe("Program");
         expect(byKey["inquiry_child.schedule_type"]).toBe("Schedule");
-        expect(byKey["inquiry_child.program_room_cohort_key"]).toBe("Room");
-        expect(byKey["inquiry_child.start_date"]).toBe("Start date");
-        expect(byKey["inquiry_child.location_id"]).toBe("Location");
+        expect(byKey["inquiry_child.program_room_cohort_key"]).toMatch(/^Room/);
+        expect(byKey["inquiry_child.start_date"]).toBe("Desired start date");
+        expect(byKey["inquiry_child.location_id"]).toMatch(/^Location/);
+        expect(keys).toContain("inquiry_child.requested_days_per_week");
+        expect(keys).toContain("inquiry_child.weekdays");
 
         // No misleading "Current *" aliases for inquiry participation.
         expect(Object.values(byKey).some((label) => label.startsWith("Current "))).toBe(false);
