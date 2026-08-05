@@ -432,6 +432,76 @@ export async function applyRegistryResolvedActionClient(
             else host.router.refresh();
             return { ok: true };
         }
+        if (actionKey === "send_tour_invitation" || intent === "send_tour_invitation") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+
+            // Provisioning the command made it VISIBLE. This branch is what makes it
+            // RUN: `ui_intent` dispatch is a hardcoded chain keyed on action key, so a
+            // provisioned command with no branch here renders in the menu and does
+            // nothing when clicked — visible and inert, which reads to an operator as
+            // "I sent it" while nothing was created.
+            //
+            // Explicit confirmation first; the action declares confirmationPolicy
+            // "required" and this is where that is honoured on the Manage path.
+            const parentName = invocation?.display_name?.trim() || "this family";
+            const channels: string[] = [];
+            if (invocation?.email?.trim()) channels.push("email");
+            if (invocation?.phone?.trim()) channels.push("SMS");
+            const channelPhrase = channels.length ? channels.join(" and ") : "the contact details on file";
+            if (typeof window !== "undefined") {
+                const proceed = window.confirm(`Send this tour invitation to ${parentName} by ${channelPhrase}?`);
+                if (!proceed) return { ok: true };
+            }
+
+            // Registered action → canonical Actions Runtime, exactly as confirm_tour
+            // does. Recipient identity, offered times and send authority are all
+            // resolved server-side; nothing assembled here is trusted as input.
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action_key: "send_tour_invitation",
+                    entity_type: "opportunity",
+                    entity_id: eid,
+                    context: host.context,
+                }),
+            });
+            const json = (await res.json().catch(() => ({}))) as {
+                ok?: boolean;
+                error?: string | { message?: string };
+                result?: { detail?: Record<string, unknown> };
+            };
+            if (!res.ok || json.ok === false) {
+                const message =
+                    typeof json.error === "string"
+                        ? json.error
+                        : json.error?.message ?? "Send tour invitation failed";
+                return { ok: false, error: message };
+            }
+
+            // Per-channel truth, never a generic "Invitation sent". A channel the
+            // canonical enqueue refused is reported as refused — claiming otherwise is
+            // precisely the failure this capability exists to avoid.
+            const detail = json.result?.detail ?? {};
+            const sent = Array.isArray(detail.sent_channels) ? (detail.sent_channels as string[]) : [];
+            const skipped = Array.isArray(detail.skipped) ? (detail.skipped as string[]) : [];
+            const replay = detail.idempotent_replay === true;
+            const parts: string[] = [];
+            for (const ch of sent) parts.push(`${String(ch).toLowerCase() === "sms" ? "SMS" : "Email"} queued`);
+            for (const reason of skipped) parts.push(`not sent — ${String(reason).replace(/_/g, " ")}`);
+            if (!parts.length) parts.push("no eligible delivery channel");
+            if (typeof window !== "undefined") {
+                window.alert(
+                    `${replay ? "Existing invitation reused" : "Invitation created"} · ${parts.join(" · ")}`
+                );
+            }
+
+            if (host.invalidate)
+                host.invalidate({ entity_type: "opportunity", entity_id: eid, action_key: "send_tour_invitation" });
+            else host.router.refresh();
+            return { ok: true };
+        }
         if (actionKey === "send_email" || intent === "send_email") {
             if (!eid) return { ok: false, error: "entity_id required" };
             await launchContextualQuickMessage({

@@ -206,3 +206,63 @@ describe("registry and database provisioning stay in parity", () => {
         }
     });
 });
+
+// --- the dispatch branch: provisioned must also mean executable ------------
+
+/**
+ * `ui_intent` dispatch is a hardcoded chain keyed on action key. A command that
+ * is provisioned but has no branch renders in the Manage menu and does NOTHING
+ * when clicked — which reads to an operator as "I sent it" while no invitation,
+ * no message and no event were created. Certification hit exactly that.
+ */
+describe("the provisioned command is wired to the canonical runtime", () => {
+    const client = readFileSync(
+        join(process.cwd(), "lib", "admin", "actions", "applyRegistryResolvedActionClient.ts"),
+        "utf8"
+    );
+
+    /**
+     * Just this command's branch, with comment lines stripped — the chain
+     * continues with other action keys, and a comment quoting a forbidden
+     * phrase must not read as the code emitting it.
+     */
+    function branchSource(): string {
+        const start = client.indexOf('actionKey === "send_tour_invitation"');
+        const next = client.indexOf('if (actionKey === "send_email"', start);
+        return client
+            .slice(start, next > start ? next : undefined)
+            .split("\n")
+            .filter((line) => !line.trim().startsWith("//"))
+            .join("\n");
+    }
+
+    it("has a ui_intent dispatch branch", () => {
+        expect(client).toContain('actionKey === "send_tour_invitation"');
+    });
+
+    it("executes through the canonical Actions Runtime, not a bespoke endpoint", () => {
+        const branch = branchSource();
+        expect(branch).toContain("/api/admin/actions/execute");
+        expect(branch).toContain('action_key: "send_tour_invitation"');
+        expect(branch).toContain('entity_type: "opportunity"');
+    });
+
+    it("confirms explicitly before sending", () => {
+        const branch = branchSource();
+        expect(branch).toMatch(/Send this tour invitation to \$\{parentName\} by \$\{channelPhrase\}\?/);
+    });
+
+    it("reports per-channel truth, never a generic success", () => {
+        const branch = branchSource();
+        expect(branch).toContain("sent_channels");
+        expect(branch).toContain("skipped");
+        expect(branch).toContain("no eligible delivery channel");
+        // The exact phrasing the success contract forbids.
+        expect(branch).not.toContain("Invitation sent");
+    });
+
+    it("surfaces a server refusal instead of claiming success", () => {
+        const branch = branchSource();
+        expect(branch).toContain("Send tour invitation failed");
+    });
+});
