@@ -55,3 +55,57 @@ The gate is behaving correctly. The invalid configuration is real and predates t
 
 Repairing the Lead rules is Firefly outcome rewiring, which is explicitly out of scope for
 this sub-slice, so it was not attempted.
+
+---
+
+# Attempt 2 — transition repair: blocked by a SECOND pre-existing gate
+
+## Write 1 — `ensure_stage_transition` (lead → tour)
+
+| | |
+|---|---|
+| before sha256 | `6e299186a4fe19b636381d78d24bbffc630fce51936baffe7066ce1779e77826` |
+| pre-write diff | `.processes[0].stages[0].stage_operating_plan_v1.outgoing_transitions: '<absent>' -> [lead_to_tour -> tour]` — **1 change, asserted** |
+| API | `PATCH …/lifecycle-builder  action=ensure_stage_transition` |
+| response | **HTTP 422 `process_command_set_invalid`** |
+| read-back sha256 | `6e299186a4fe19b636381d78d24bbffc630fce51936baffe7066ce1779e77826` |
+| identical | **yes — no write occurred** |
+
+**The dangling-transition error is gone.** `dangling_stage_reference` no longer appears: the
+repair candidate is valid by `validateConfiguredStageReferences`. The action works.
+
+A different, pre-existing gate now refuses the save:
+
+```
+work_template_orphan  stage=lead  capability=quick_message
+work_template_orphan  stage=lead  capability=schedule_tour
+work_template_orphan  stage=lead  capability=send_form
+work_template_orphan  stage=lead  capability=add_child
+work_template_orphan  stage=lead  capability=add_family_member
+work_template_orphan  stage=lead  capability=create_task
+work_template_orphan  stage=tour  capability=schedule_tour   (x2)
+work_template_orphan  stage=tour  capability=quick_message
+work_template_orphan  stage=tour  capability=create_task
+```
+
+## The structural finding
+
+`validateProcessCommandSetsForPublish` — a **publish**-grade check — runs on **every save**
+(`route.ts:528`). Firefly's Lead and Tour work templates reference ten capabilities that are
+not in the process's selected command set, so **no lifecycle-builder save can succeed for this
+department**, regardless of what it changes.
+
+That is why two unrelated corrections have now been refused. It also blocks the product
+owner's configure → validate → publish retest.
+
+Correcting it is either:
+- a Firefly configuration change (add those capabilities to the process command set), which is
+  outside this sub-slice's scope; or
+- a platform change separating save-grade from publish-grade validation, which the instruction
+  explicitly forbade ("do not change the save-pipeline ordering, do not weaken candidate
+  validation").
+
+Neither was attempted. Write 2 (Decision grain) was not attempted, since it is gated on
+write 1. Part 5 documentation remains deferred, since it should describe the corrected state.
+
+**No operational data mutated. Nothing published.**

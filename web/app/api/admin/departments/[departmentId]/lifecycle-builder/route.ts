@@ -29,6 +29,7 @@ import {
     updateProcessDescription,
     updateStageDescription,
     updateStageGrain,
+    ensureStageTransitionInConfig,
     parseLifecycleBuilderV1,
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -45,6 +46,7 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderRouteErrors";
 import { validateConfiguredStageReferences } from "@/lib/lifecycle/validateConfiguredStageReferences";
 import { evaluateStageGrainChange } from "@/lib/lifecycle/stageGrainChangePreflight";
+import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
 import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
 import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
 
@@ -226,6 +228,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         }
 
         let config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        let ensuredTransition: { transition_ref: string; target_stage_key: string; created: boolean } | null = null;
         const action = typeof body.action === "string" ? body.action.trim() : "";
 
         switch (action) {
@@ -307,6 +310,97 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
              * Accepts stage_key OR stage_id, because the operator-facing concept is the stage, not
              * its generated identifier. Refuses anything the preflight cannot vouch for.
              */
+            /**
+             * Transitions were authorable in the stage editor's draft but had no lifecycle-builder
+             * ACTION, so a plan whose rules referenced a transition that was never persisted could
+             * not be repaired through the canonical save path at all.
+             *
+             * Grain-checked with the same resolver the runtime and the editor use: a path may only
+             * join two stages on the same journey.
+             */
+            case "ensure_stage_transition": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const sourceKey = typeof body.source_stage_key === "string" ? body.source_stage_key.trim() : "";
+                const targetKey = typeof body.target_stage_key === "string" ? body.target_stage_key.trim() : "";
+                const requestedRef = typeof body.transition_ref === "string" ? body.transition_ref.trim() : "";
+                const pid = processId || config.active_process_id;
+
+                if (!pid || !sourceKey || !targetKey) {
+                    return NextResponse.json(
+                        { error: "process_id, source_stage_key and target_stage_key are required" },
+                        { status: 400 },
+                    );
+                }
+                const proc = config.processes.find((p) => p.id === pid);
+                if (!proc) return NextResponse.json({ error: "Process not found" }, { status: 404 });
+
+                const src = proc.stages.find((s) => s.key === sourceKey);
+                const dst = proc.stages.find((s) => s.key === targetKey);
+                if (!src) return NextResponse.json({ error: "Source stage not found" }, { status: 404 });
+                if (!dst) return NextResponse.json({ error: "Target stage not found" }, { status: 404 });
+                if (src.key === dst.key) {
+                    return NextResponse.json(
+                        { error: "A stage cannot transition to itself" },
+                        { status: 400 },
+                    );
+                }
+
+                const srcGrain = resolveStageGrain({
+                    stageKey: src.key,
+                    operatingPlanJourneySegment: src.stage_operating_plan_v1?.journey_segment,
+                    configuredMetadataGrain: src.grain,
+                });
+                const dstGrain = resolveStageGrain({
+                    stageKey: dst.key,
+                    operatingPlanJourneySegment: dst.stage_operating_plan_v1?.journey_segment,
+                    configuredMetadataGrain: dst.grain,
+                });
+                if (!srcGrain.ok || !dstGrain.ok) {
+                    return NextResponse.json(
+                        { error: (srcGrain.ok ? dstGrain : srcGrain).message, code: "stage_grain_unresolved" },
+                        { status: 409 },
+                    );
+                }
+                if (srcGrain.grain !== dstGrain.grain) {
+                    return NextResponse.json(
+                        {
+                            error:
+                                `"${src.label || src.key}" belongs to `
+                                + `${srcGrain.grain === "family" ? "the family case" : "individual children"}, `
+                                + `and "${dst.label || dst.key}" belongs to `
+                                + `${dstGrain.grain === "family" ? "the family case" : "individual children"}. `
+                                + `A stage can only move records onto its own journey.`,
+                            code: "stage_grain_mismatch",
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                try {
+                    const result = ensureStageTransitionInConfig(
+                        config,
+                        pid,
+                        sourceKey,
+                        targetKey,
+                        requestedRef || undefined,
+                    );
+                    config = result.config;
+                    ensuredTransition = {
+                        transition_ref: result.transition_ref,
+                        target_stage_key: result.target_stage_key,
+                        created: result.created,
+                    };
+                } catch (cause) {
+                    return NextResponse.json(
+                        {
+                            error: cause instanceof Error ? cause.message : "Could not ensure transition",
+                            code: "transition_ref_collision",
+                        },
+                        { status: 409 },
+                    );
+                }
+                break;
+            }
             case "update_stage_grain": {
                 const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
                 const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";

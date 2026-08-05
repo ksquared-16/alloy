@@ -634,3 +634,100 @@ export function updateStageGrain(
         }),
     };
 }
+
+export type EnsureStageTransitionResult = {
+    config: LifecycleBuilderV1;
+    transition_ref: string;
+    target_stage_key: string;
+    created: boolean;
+};
+
+/**
+ * Ensure a stage has an outgoing transition to a destination, creating it only if absent.
+ *
+ * Transitions were authorable from the stage editor's draft but had no lifecycle-builder ACTION,
+ * so a plan whose rules referenced a transition that was never persisted could not be repaired
+ * through the canonical save path — which is exactly how Firefly's Lead stage came to reference
+ * `lead_to_tour` with `outgoing_transitions: null`.
+ *
+ * Find-before-create, matching the editor: an existing path to the same destination is reused
+ * rather than duplicated. A requested ref is honoured when free; a ref already pointing somewhere
+ * else is a collision and throws rather than being silently repointed.
+ */
+export function ensureStageTransitionInConfig(
+    config: LifecycleBuilderV1,
+    processId: string,
+    sourceStageKey: string,
+    targetStageKey: string,
+    requestedRef?: string
+): EnsureStageTransitionResult {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const source = process.stages.find((s) => s.key === sourceStageKey);
+    if (!source) throw new Error("Source stage not found");
+    const target = process.stages.find((s) => s.key === targetStageKey);
+    if (!target) throw new Error("Target stage not found");
+    if (source.key === target.key) throw new Error("A stage cannot transition to itself");
+
+    const plan = source.stage_operating_plan_v1;
+    const existing = plan?.outgoing_transitions ?? [];
+    const ref = requestedRef?.trim() || "";
+
+    // A ref that already exists and points elsewhere is a collision, not a repoint.
+    const refHolder = ref ? existing.find((t) => t.transition_ref === ref) : undefined;
+    if (refHolder && refHolder.target_stage_key !== target.key) {
+        throw new Error(
+            `Transition "${ref}" already moves to "${refHolder.target_stage_key}" — ` +
+                `it cannot be reused for "${target.key}".`
+        );
+    }
+
+    const reusable = refHolder ?? existing.find((t) => t.target_stage_key === target.key);
+    if (reusable) {
+        return {
+            config,
+            transition_ref: reusable.transition_ref,
+            target_stage_key: reusable.target_stage_key,
+            created: false,
+        };
+    }
+
+    const transition_ref = ref || `${source.key}_transition_${existing.length + 1}`;
+    const created = {
+        transition_ref,
+        source_stage_key: source.key,
+        target_stage_key: target.key,
+        label: `Move to ${target.label || target.key}`,
+        available: true,
+    };
+    const nextPlan = {
+        ...(plan ?? {
+            version: 1 as const,
+            lifecycle_key: process.key,
+            stage_key: source.key,
+            work_templates: [],
+            outcomes: [],
+            outcome_rules: [],
+            attention_rules: [],
+        }),
+        outgoing_transitions: [...existing, created],
+    } as NonNullable<typeof plan>;
+
+    return {
+        config: {
+            ...config,
+            processes: config.processes.map((p) => {
+                if (p.id !== processId) return p;
+                return {
+                    ...p,
+                    stages: p.stages.map((s) =>
+                        s.id === source.id ? { ...s, stage_operating_plan_v1: nextPlan } : s
+                    ),
+                };
+            }),
+        },
+        transition_ref,
+        target_stage_key: target.key,
+        created: true,
+    };
+}

@@ -16,6 +16,8 @@ export type StageReferenceViolation = {
     source_stage: string;
     /** Where in that stage the reference lives (rule/outcome/transition identifier). */
     reference: string;
+    /** Which defect this is — a transition that does not exist, or a stage that does not. */
+    defect?: "missing_transition" | "missing_destination_stage";
     /** The kind of reference (move_to_stage | transition | nested_target). */
     reference_kind: string;
     /** The stage key that does not exist in the process. */
@@ -60,16 +62,45 @@ export function validateProcessStageReferences(process: unknown): ValidateConfig
     const configuredSet = new Set(configured);
 
     const violations: StageReferenceViolation[] = [];
+    /**
+     * TWO different defects, said in two different sentences.
+     *
+     * A rule can fail here because the TRANSITION it names does not exist, or because a transition
+     * that does exist points at a STAGE that does not. Both used to produce the same message —
+     * "targets stage X, which is not configured" — followed by the configured stage list. For a
+     * missing transition that names the wrong noun and lists an irrelevant set, and it is a real
+     * cost: it sent this author to inspect a validator that was working correctly.
+     *
+     * The logic is unchanged. `defect` is carried structurally so product and tests cannot
+     * conflate the two again.
+     */
+    const flagMissingTransition = (sourceStage: string, reference: string, kind: string) => {
+        violations.push({
+            process_key: processKey,
+            source_stage: sourceStage,
+            reference,
+            reference_kind: kind,
+            defect: "missing_transition",
+            invalid_target: reference,
+            configured_stages: configured,
+            message:
+                `This outcome refers to transition "${reference}", but that transition is not ` +
+                `configured on the ${sourceStage} stage. Create or select an outgoing transition ` +
+                `before publishing.`,
+        });
+    };
+
     const flag = (sourceStage: string, reference: string, kind: string, target: string) => {
         violations.push({
             process_key: processKey,
             source_stage: sourceStage,
             reference,
             reference_kind: kind,
+            defect: "missing_destination_stage",
             invalid_target: target,
             configured_stages: configured,
             message:
-                `Stage "${sourceStage}" ${kind} "${reference}" targets stage "${target}", which is not ` +
+                `Transition "${reference}" points to stage "${target}", but that stage is not ` +
                 `configured in this Business Process. Configured stages: ${configured.join(", ") || "(none)"}.`,
         });
     };
@@ -108,9 +139,10 @@ export function validateProcessStageReferences(process: unknown): ValidateConfig
                             dest = ref.slice("move_to_stage:".length).trim() || null;
                         } else if (ref) {
                             dest = trimStr(transitionByRef.get(ref)?.target_stage_key);
-                            // A rule pointing at a missing transition_ref is also a reference error.
+                            // A rule pointing at a missing transition_ref is a MISSING TRANSITION —
+                            // not a missing stage. Same failure, different noun, different fix.
                             if (!transitionByRef.has(ref)) {
-                                flag(sourceStage, ruleKey, "move_to_stage", ref);
+                                flagMissingTransition(sourceStage, ref, "move_to_stage");
                                 continue;
                             }
                         }

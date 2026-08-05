@@ -1,0 +1,100 @@
+[
+ {
+  "rule_key": "reached_move",
+  "when_outcome_key": "reached_qualified",
+  "targets": [
+   {
+    "kind": "update_family_case_status",
+    "status_key": "open"
+   },
+   {
+    "kind": "mark_stage_work_complete"
+   }
+  ]
+ },
+ {
+  "rule_key": "left_message_repeat",
+  "when_outcome_key": "left_message",
+  "targets": [
+   {
+    "kind": "reopen_work",
+    "template_key": "contact_family",
+    "due_days": 2
+   }
+  ]
+ },
+ {
+  "rule_key": "awaiting_attention",
+  "when_outcome_key": "awaiting_response",
+  "targets": [
+   {
+    "kind": "no_movement"
+   },
+   {
+    "kind": "create_needs_attention",
+    "attention_reason": "Awaiting family response",
+    "wait_bucket": "waiting_on_family"
+   }
+  ]
+ },
+ {
+  "rule_key": "unable_repeat",
+  "when_outcome_key": "unable_to_reach",
+  "targets": [
+   {
+    "kind": "reopen_work",
+    "template_key": "contact_family",
+    "due_days": 2
+   }
+  ],
+  "when_attempt_count_lt": 3
+ },
+ {
+  "rule_key": "unable_attention",
+  "when_outcome_key": "unable_to_reach",
+  "targets": [
+   {
+    "kind": "create_needs_attention",
+    "attention_reason": "Unable to reach after 3 attempts",
+    "wait_bucket": "waiting_on_staff"
+   }
+  ],
+  "when_attempt_count_gte": 3
+ },
+ {
+  "rule_key": "contact_closed_lost",
+  "when_outcome_key": "contact_closed_lost",
+  "targets": [
+   {
+    "kind": "update_family_case_status",
+    "status_key": "closed"
+   },
+   {
+    "kind": "mark_stage_work_complete"
+   }
+  ]
+ },
+ {
+  "rule_key": "tour_scheduled_to_tour",
+  "when_outcome_key": "tour_scheduled",
+  "targets": [
+   {
+    "kind": "move_to_stage",
+    "transition_ref": "lead_to_tour"
+   }
+  ]
+ },
+ {
+  "rule_key": "domain_tour_booking_scheduled_to_tour",
+  "when_domain_signal": {
+   "domain": "tour_booking",
+   "signal": "scheduled"
+  },
+  "targets": [
+   {
+    "kind": "move_to_stage",
+    "transition_ref": "lead_to_tour"
+   }
+  ]
+ }
+]
