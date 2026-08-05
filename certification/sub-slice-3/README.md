@@ -308,3 +308,68 @@ A transient Supabase outage timed out the first `ensure_stage_transition` attemp
 dev server (`auth.session_resolve` 174s, unauthenticated). The server was restarted and the draft
 hash re-read to confirm the write had NOT landed before retrying. `ensure_stage_transition` is
 find-before-create, so the retry created exactly one transition.
+
+---
+
+# Tour operating-model cleanup — draft is publishable. Nothing published.
+
+| | |
+|---|---|
+| before sha256 | `a1bd4832c4f0c7eb0c58d4368ef9757a04c7fefc368ba751e2a93e31dcf1dd3b` |
+| read-back sha256 | `e88ad4bc4b06fea30be6994cc8954c145ffa71fd8652869d744f1ed1360ba0ef` |
+| equals candidate | **True** |
+
+```
+work_templates[0] (Schedule Tour) outcome_refs   5 -> 2   (drops outcome_3/4/5)
+work_templates[2] (Conduct Tour)  outcome_refs   <absent> -> [outcome_7, outcome_8]
+outgoing_transitions                             2 -> 1   (drops tour_transition_1)
+outcome_rules                                    8 -> 6   (drops outcome_4/5_behavior)
+```
+
+## The fourth change, and why it was required
+
+Removing `tour_transition_1` alone would have left `outcome_4_behavior` and
+`outcome_5_behavior` pointing at a transition that no longer exists — trading three
+cross-grain errors for two dangling-reference errors. The instruction's own precondition
+("after no outcome references it") could not be satisfied without removing those two rules.
+
+The outcome DEFINITIONS are untouched: all 11 remain in `outcomes[]`. Only their behaviour
+and their operator reachability were removed.
+
+## Final Tour model
+
+```
+work_1 Schedule Tour : outcome_1 Tour Scheduled, outcome_2 Awaiting Family Response
+work_2 Confirm Tour  : outcome_6 Tour Confirmed
+work_3 Conduct Tour  : outcome_7 Completed — Interested, outcome_8 Completed — Needs Follow-up
+transitions          : tour_transition_2 -> decision   (family -> family)
+outcome_7_behavior   -> move_to_stage tour_transition_2
+outcome_8_behavior   -> move_to_stage tour_transition_2
+
+preserved, not operator-reachable:
+  outcome_3 Family Declined Tour, outcome_4 Move to Waitlist, outcome_5 Closed Lost,
+  outcome_9 Tour Rescheduled, outcome_10 No Show, outcome_11 Tour Cancelled
+```
+
+## Validation
+
+```
+can_publish : true      errors: 0      warnings: 0
+cross-grain transitions anywhere in the process: NONE
+```
+
+## Prior corrections intact
+
+```
+lead_to_tour present            Lead→Tour domain signal intact
+decision grain family (both sources)
+enrolling_to_enrolled present   enrolling membership included_disposition_keys ["qualified"]
+command_set_v1  update_lead_status, add_child, add_family_member, schedule_tour, quick_message
+contact_family  primary quick_message, helpful [schedule_tour, add_child, add_family_member]
+```
+
+## Published projection
+
+```
+e3b000d12cebda825fa24c3355e69d9ffd613f0f923ed0880b8584369db8d1a8   (unchanged throughout)
+```
