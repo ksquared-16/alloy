@@ -14,6 +14,8 @@ import {
     upsertComposableOutcomeBehavior,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+import { resolveOutcomeStatusOptions } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import {
     setWorkTemplateOutcomeRefs,
     workTemplateOutcomeRefs,
@@ -28,6 +30,10 @@ type Props = {
     stageKey?: string;
     /** Every stage in the process — the destinations a new exit path may target. */
     processStages?: Array<{ key: string; label: string }>;
+    /** Case-status catalog, so a terminal outcome can resolve the canonical closed status. */
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+    /** `opportunities` for the family track, `opportunity_customer_members` for the child track. */
+    entityType?: string;
     onChange: (draft: StageOperatingPlanEditorDraft) => void;
     /** When set, only outcomes available on this Work Template are shown/edited. */
     workTemplateKey?: string;
@@ -39,6 +45,8 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
     stageLabel,
     stageKey,
     processStages,
+    configuredStatuses,
+    entityType,
     onChange,
     workTemplateKey,
 }: Props) {
@@ -74,6 +82,17 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
      */
     const transitionDestinations = (processStages ?? []).filter((stage) => stage.key !== stageKey);
     const canAuthorTransition = Boolean(stageKey?.trim()) && transitionDestinations.length > 0;
+
+    /**
+     * The closed case statuses a terminal outcome may write. RESOLVED from the configured catalog,
+     * never invented here — `opportunities.status_key` is owned by `status_definitions`, and an
+     * outcome that closes a case selects from that domain rather than minting a status of its own.
+     */
+    const closedStatusOptions = resolveOutcomeStatusOptions({
+        configuredStatuses: configuredStatuses ?? [],
+        purpose: "close_record",
+        entityType: entityType ?? "opportunities",
+    }).options;
 
     /**
      * Author an exit path from inside the outcome that needs one, and point that outcome at it.
@@ -335,6 +354,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                 transitionDestinations={
                                     canAuthorTransition ? transitionDestinations : undefined
                                 }
+                                closedStatusOptions={closedStatusOptions}
                                 onCreateTransition={
                                     canAuthorTransition ?
                                         (targetStageKey: string) =>

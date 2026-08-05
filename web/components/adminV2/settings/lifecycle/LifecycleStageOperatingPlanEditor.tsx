@@ -536,6 +536,8 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     process={process ?? null}
                                     stageDraft={draft}
                                     transitionOptions={transitionOptions}
+                                    configuredStatuses={configuredStatuses}
+                                    entityType={entityType}
                                     onStageDraftChange={setDraft}
                                     onChange={(nextWork) =>
                                         setDraft((prev) => {
