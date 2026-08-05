@@ -4,14 +4,14 @@ import SectionShell from "@/components/marketing/SectionShell";
 export default function AboutPage() {
   return (
     <>
-      <SectionShell density="spacious" className="!pt-14 md:!pt-20" innerClassName="max-w-2xl">
+      <SectionShell density="compact" className="!pt-10 md:!pt-14" innerClassName="max-w-2xl">
         <p className="marketing-eyebrow">About</p>
-        <h1 className="marketing-page-headline mt-4">Why Alloy Exists</h1>
-        <p className="mt-7 text-xl font-medium leading-relaxed tracking-[-0.015em] text-alloy-midnight-forge md:text-[1.375rem]">
+        <h1 className="marketing-page-headline mt-3">Why Alloy Exists</h1>
+        <p className="mt-5 text-lg font-medium leading-snug tracking-[-0.015em] text-alloy-midnight-forge md:text-xl">
           Organizations that serve people do not need more software. They need work that moves
           forward.
         </p>
-        <div className="marketing-body-lg mt-8 space-y-5">
+        <div className="marketing-body-lg mt-6 space-y-4">
           <p>
             Alloy was built so teams spend less time managing systems and more time doing the work —
             through Business Processes, Processing, and Operational Intelligence on one foundation.
@@ -25,10 +25,10 @@ export default function AboutPage() {
         </div>
       </SectionShell>
 
-      <SectionShell variant="muted" density="default">
+      <SectionShell variant="muted" density="compact">
         <div className="mx-auto max-w-2xl">
           <h2 className="marketing-section-headline">Built Differently</h2>
-          <div className="marketing-body-lg mt-6 space-y-5">
+          <div className="marketing-body-lg mt-4 space-y-4">
             <p>
               Most software starts with features. Alloy started with the foundation — records,
               Business Processes, Processing, permissions, documents, communications, and Operational
@@ -43,13 +43,13 @@ export default function AboutPage() {
       </SectionShell>
 
       <SectionShell density="compact">
-        <div className="mx-auto max-w-lg text-center">
-          <h2 className="marketing-section-headline">See where work happens</h2>
-          <p className="marketing-body mt-4">
+        <div className="mx-auto max-w-md text-center">
+          <h2 className="marketing-statement-headline">See where work happens</h2>
+          <p className="marketing-body mt-3">
             We would love to show you Alloy — Business Processes, Processing, and Operational
             Intelligence working together.
           </p>
-          <div className="mt-9">
+          <div className="mt-7">
             <CTAButton href="/contact">Book a Demo</CTAButton>
           </div>
         </div>

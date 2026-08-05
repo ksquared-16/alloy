@@ -14,10 +14,10 @@ export default function MarketingHeader() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-alloy-midnight-forge/[0.06] bg-white/90 backdrop-blur-md">
-      <div className="marketing-content-width flex h-[4.25rem] items-center justify-between md:h-[5.25rem]">
+      <div className="marketing-content-width flex h-16 items-center justify-between md:h-[4.5rem]">
         <Link
           href="/"
-          className="mr-6 flex shrink-0 items-center py-2 pr-2"
+          className="mr-5 flex shrink-0 items-center py-1.5 pr-1"
           onClick={() => setMobileOpen(false)}
         >
           <Image
@@ -25,7 +25,7 @@ export default function MarketingHeader() {
             alt="Alloy"
             width={168}
             height={44}
-            className="h-10 w-auto md:h-11"
+            className="h-9 w-auto md:h-10"
             priority
           />
         </Link>

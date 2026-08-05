@@ -50,28 +50,28 @@ export default function ContactPage() {
 
   return (
     <>
-      <SectionShell density="spacious" className="!pt-14 md:!pt-20" innerClassName="max-w-lg">
+      <SectionShell density="compact" className="!pt-10 md:!pt-14" innerClassName="max-w-lg">
         <p className="marketing-eyebrow">Contact</p>
-        <h1 className="marketing-page-headline mt-4">Request a Demo</h1>
-        <p className="marketing-body-lg mt-5">
+        <h1 className="marketing-page-headline mt-3">Request a Demo</h1>
+        <p className="marketing-body-lg mt-4">
           Tell us about your organization. We will schedule a walkthrough of how Alloy moves work
           forward.
         </p>
 
         {formState === "success" ? (
           <div
-            className="mt-12 rounded-2xl border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.04] px-7 py-9"
+            className="mt-8 rounded-2xl border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.04] px-6 py-7"
             role="status"
           >
             <h2 className="text-lg font-semibold tracking-[-0.01em] text-alloy-midnight-forge">
               Thank you — we received your request.
             </h2>
-            <p className="mt-2.5 text-sm leading-relaxed text-alloy-midnight-forge/65">
+            <p className="mt-2 text-sm leading-relaxed text-alloy-midnight-forge/65">
               Our team will be in touch shortly at the email you provided.
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="mt-12 space-y-6">
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {formState === "error" && errorMessage ? (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-800">
                 {errorMessage}
@@ -81,7 +81,7 @@ export default function ContactPage() {
             <div>
               <label
                 htmlFor="name"
-                className="mb-2 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
               >
                 Name
               </label>
@@ -99,7 +99,7 @@ export default function ContactPage() {
             <div>
               <label
                 htmlFor="organization"
-                className="mb-2 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
               >
                 Organization
               </label>
@@ -117,7 +117,7 @@ export default function ContactPage() {
             <div>
               <label
                 htmlFor="email"
-                className="mb-2 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
               >
                 Email
               </label>
@@ -135,7 +135,7 @@ export default function ContactPage() {
             <div>
               <label
                 htmlFor="message"
-                className="mb-2 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
               >
                 Message
               </label>
@@ -144,12 +144,12 @@ export default function ContactPage() {
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className={`${inputClass} min-h-[128px] resize-y`}
+                className={`${inputClass} min-h-[112px] resize-y`}
                 placeholder="Tell us about your operations, current tools, or what you are looking for."
               />
             </div>
 
-            <div className="pt-1">
+            <div className="pt-0.5">
               <CTAButton type="submit" disabled={formState === "submitting"} className="w-full sm:w-auto">
                 {formState === "submitting" ? "Sending…" : "Request a Demo"}
               </CTAButton>
@@ -157,7 +157,7 @@ export default function ContactPage() {
           </form>
         )}
 
-        <p className="mt-10 text-sm text-alloy-midnight-forge/45">
+        <p className="mt-8 text-sm text-alloy-midnight-forge/45">
           Prefer email?{" "}
           <a
             href="mailto:hello@workwithalloy.com"

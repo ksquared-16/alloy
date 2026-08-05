@@ -31,12 +31,18 @@ const CAPABILITIES = [
   },
 ] as const;
 
+/**
+ * Copy note (compression pass): strip titles kept as locked principle names.
+ * Bodies already avoid repetitive “connected” language.
+ * Proposed optional title rename (not applied): “Connected Work” → “Advancing Work”.
+ */
+
 function CapabilityIcon({ name }: { name: (typeof CAPABILITIES)[number]["icon"] }) {
   const common = {
-    className: "h-[1.125rem] w-[1.125rem] shrink-0",
+    className: "h-4 w-4 shrink-0",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: 1.4,
+    strokeWidth: 1.5,
     viewBox: "0 0 24 24",
     "aria-hidden": true as const,
   };
@@ -106,25 +112,25 @@ export default function HeroCapabilityStrip() {
   return (
     <section
       aria-label="Operating principles"
-      className="border-y border-alloy-midnight-forge/[0.06] bg-white"
+      className="border-y border-alloy-midnight-forge/[0.07] bg-white"
     >
-      <div className="marketing-content-width py-12 md:py-14">
-        <ul className="grid grid-cols-2 gap-x-8 gap-y-10 md:grid-cols-3 lg:grid-cols-6 lg:gap-x-0">
+      <div className="marketing-content-width py-7 md:py-8">
+        <ul className="grid grid-cols-2 gap-x-6 gap-y-7 md:grid-cols-3 lg:grid-cols-6 lg:gap-x-0">
           {CAPABILITIES.map((item, index) => (
             <li
               key={item.title}
-              className={`flex flex-col gap-3 lg:px-5 ${
-                index > 0 ? "lg:border-l lg:border-alloy-midnight-forge/[0.07]" : ""
+              className={`flex flex-col gap-2 lg:px-4 ${
+                index > 0 ? "lg:border-l lg:border-alloy-midnight-forge/[0.08]" : ""
               }`}
             >
-              <span className="text-alloy-midnight-forge/45">
+              <span className="text-alloy-bend-pine/80">
                 <CapabilityIcon name={item.icon} />
               </span>
               <div className="min-w-0">
                 <h3 className="text-[0.8125rem] font-semibold leading-snug tracking-[-0.01em] text-alloy-midnight-forge">
                   {item.title}
                 </h3>
-                <p className="mt-1.5 text-[0.8125rem] leading-snug text-alloy-midnight-forge/50">
+                <p className="mt-1 text-[0.75rem] leading-snug text-alloy-midnight-forge/60">
                   {item.body}
                 </p>
               </div>
