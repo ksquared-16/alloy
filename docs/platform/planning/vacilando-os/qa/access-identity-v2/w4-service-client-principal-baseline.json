@@ -1,0 +1,94 @@
+{
+  "generated_by": "web/scripts/checkServiceClientPrincipal.mjs",
+  "counts": {
+    "routes": 559,
+    "holds_service_client_direct": 537,
+    "reaches_service_client_transitive": 556,
+    "resolves_principal": 536,
+    "subject_resolves_principal": 520,
+    "subject_unresolved": 17,
+    "listed_exceptions": 17,
+    "listed_baseline": 0,
+    "transitive_only_unresolved": 3,
+    "listed_advisory": 3
+  },
+  "ok": true,
+  "violations": [],
+  "stale": [],
+  "unresolved": [
+    {
+      "route": "app/api/action-links/consume-accept-job/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/action-links/consume-reschedule/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/action-links/resolve/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/action/[token]/consume/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/action/[token]/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/booking-config/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/field-definitions/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/resolve/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/[submissionId]/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/forms/[token]/submissions/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/book/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/public/tour-booking/[token]/slots/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/vendor-application/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/verticals/route.ts",
+      "list": "exceptions"
+    },
+    {
+      "route": "app/api/webhooks/resend/route.ts",
+      "list": "exceptions"
+    }
+  ],
+  "transitive_only_unresolved": [
+    "app/api/leads/gutters/route.ts",
+    "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
+    "app/api/webhooks/twilio/sms-status/route.ts"
+  ],
+  "allowlist_reviewed": "2026-08-03"
+}

@@ -1,0 +1,138 @@
+{
+  "artifact": "wave1-execution-evidence",
+  "plan": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "wave": 1,
+  "workstreams_executed": ["W-1", "W-2", "W-3"],
+  "workstreams_not_executed": ["W-4"],
+  "mission": "msn_2d054741a54698fa4c",
+  "assignment": "asg_d77353d7377647",
+  "context_version": "v1",
+  "content_hash": "2c0b0b8fee88469de91e37587a3bb242",
+  "worktree": "wt6-vacilando-os-product-def",
+  "branch": "agent/claude/6-vacilando-os-product-def",
+  "commit": "41610954cdf1",
+  "executed_utc": "2026-07-31T17:52:37Z",
+
+  "method": {
+    "red_before_green_after": "The three source files' predecessors were restored from HEAD~1 with the committed tests left in place, the suites were run, and the sources were then restored from HEAD. Red counts below are measured, not asserted.",
+    "tier": "B (vitest over route handlers and pure gates, fabricated access contexts per web/tests/admin/usersRolesAuth.test.ts:6-19)",
+    "tier_d": "none — W-1..W-3 are not lockout-class (L1-L4), so §10.4 does not require browser evidence",
+    "heavy_checks": "typecheck via the validation broker (npm run typecheck -> scripts/local-dev/vac-run)"
+  },
+
+  "results": {
+    "red_before_change": 18,
+    "green_after_change": 72,
+    "suites": [
+      {
+        "path": "web/tests/access/analyticsRouteGates.test.ts",
+        "workstream": "W-1",
+        "lock": "RL-1",
+        "status": "new",
+        "tests": 31,
+        "red_before": 9,
+        "note": "9 red = 3 fixed routes x 3 denial assertions. The 3 already-gated routes contribute 9 tests that were green before and after; they are regression locks, not fixes."
+      },
+      {
+        "path": "web/tests/access/selfAuthorityMutation.test.ts",
+        "workstream": "W-2",
+        "lock": "RL-11",
+        "status": "new",
+        "tests": 14,
+        "red_before": 7
+      },
+      {
+        "path": "web/tests/admin/permissionGrid.test.ts",
+        "workstream": "W-3",
+        "lock": "RL-2",
+        "status": "extended",
+        "tests": 5,
+        "red_before": 2,
+        "note": "Before the fix the only unseeded grid keys were exactly ['workflows.read','workflows.write'] — C5 reproduced, and proof the migration parser is not vacuous."
+      },
+      {
+        "path": "web/tests/metrics/metricsResolveRoute.test.ts",
+        "workstream": "W-1",
+        "status": "updated",
+        "note": "Mock retargeted from getAdminAccessContextCached to loadAdminAccessBundleCached; portalEligible added to the fixture."
+      },
+      {
+        "path": "web/tests/metrics/metricsTrendsRoute.test.ts",
+        "workstream": "W-1",
+        "status": "updated",
+        "note": "Same retarget."
+      }
+    ],
+    "typecheck": {
+      "command": "npm run typecheck",
+      "channel": "validation broker (scripts/local-dev/vac-run)",
+      "request_id": "req_1785520236315796_29278",
+      "rc": 0,
+      "class": "ok",
+      "duration_s": 121,
+      "scope": "whole web workspace, tsconfig.build.json"
+    }
+  },
+
+  "regression_baseline": {
+    "claim": "No failing suite in this worktree touches a surface Wave 1 changed.",
+    "tests_access_dir": "0 failing files",
+    "tests_admin_dir": "96 failing files, 273 failing tests — all under drawer/, person/, opportunity/, actions/, adminV2*; none imports permissionGrid, canReadAnalytics, selfAuthorityMutation, or any route this wave touched",
+    "tests_metrics_dir": "2 failing tests in metricEngine.test.ts and metricPacks.test.ts — metric computation, no route or access surface; metricsResolveRoute and metricsTrendsRoute pass",
+    "limit": "These failures were NOT re-run against a pre-change tree, so 'pre-existing' is inferred from the absence of any import path to the changed modules, not measured. The four access-adjacent suites the plan names as extension points — permissionGrid, usersRolesAuth, adminAccessScope, accessProductUi — all pass."
+  },
+
+  "deviations_from_plan": [
+    {
+      "workstream": "W-1",
+      "kind": "finding-corrected",
+      "plan_said": "Six routes gate on access.ok alone.",
+      "reality": "Three do. analytics/metrics/[id]/{trend,preview,snapshot} gate at their first statement via requireAnalyticsV2AdminContext/Mutate (lib/metrics/platform/adminApiHelpers.ts), which resolves getAdminContextCached and returns 403 unless portalEligible. The lines the plan cited in those three are a second access resolution used only for scope dimensions, after the gate.",
+      "significance": "A C1-class false positive inside the plan that names C1 (§10.2). The same misreading would recur across W-15's ~500-route sweep.",
+      "resolution": "Gate added to the three genuinely exposed routes; the three already-gated routes covered as regression locks.",
+      "operator_decision_required": false
+    },
+    {
+      "workstream": "W-2",
+      "kind": "scope-widened-to-meet-stated-exit-criterion",
+      "plan_said": "PATCH /api/admin/users/[userId]/role applies no self-assignment guard.",
+      "reality": "Three product paths let a principal alter its own authority, all reachable from components/adminV2/settings/access/AccessUsersConfigurationPage.tsx: role PATCH, access-scope PATCH (self-widening of department/site scope — a self-elevation vector that would defeat W-8 in advance), and remove POST (self-lockout).",
+      "resolution": "All three guarded. The plan's own exit criterion is 'any product path'.",
+      "operator_decision_required": false
+    },
+    {
+      "workstream": "W-3",
+      "kind": "recommended-remedy-does-not-work",
+      "plan_said": "Point the grid row at the existing ops.workflows.read / ops.workflows.write keys.",
+      "reality": "Those keys are seeded only into permission_keys (remote_schema.sql:731-732, inside seed_default_rbac). They are absent from permissions and permission_definitions. PUT /api/admin/rbac/grants:61-67 validates against permission_definitions, so the save would still 400 and still destroy the operator's other selections; and role_permission_grants_permissions_fkey (remote_schema.sql:6508) points at permissions, so the insert would fail at the database.",
+      "resolution": "Row removed instead. Seeding the bare keys is a migration, which wave 1 excludes. No route enforces workflows.* — the only references call it explicitly insufficient — so the row granted nothing and could only destroy input. W-10 regenerates the grid from the catalog, so the row returns once W-11 seeds an enforced workflows key.",
+      "operator_decision_required": true,
+      "operator_decision": {
+        "raised_utc": "2026-07-31",
+        "resolved_utc": "2026-07-31",
+        "chosen_option": "a",
+        "chosen_label": "Confirm removal (shipped)",
+        "rejected_options": [
+          "b — keep the row and schedule a migration seeding workflows.read/write into permissions, permission_keys and permission_definitions",
+          "c — keep the row visible but disabled with an explanatory state"
+        ],
+        "consequence": "The W-3 remedy of record is removal, not the repoint the plan text recommends. No migration is owed. §11 remains a nine-migration register."
+      }
+    }
+  ],
+
+  "residual_risks": [
+    "W-2 closes the self-elevation ban only. PUT /api/admin/rbac/grants still lets a caller widen their OWN role's grants — self-elevation at role level rather than membership level. That is W-18's subset rule and is D3-dependent; it is not closed here and must not be assumed shut.",
+    "W-1's declared capability is reports.read/reports.write, granted to admin for every org by 20260505164000 but NOT to ops by that migration. Today that is inert because the portalEligible leg admits ops unconditionally — but when W-13 replaces that leg with portal.access, an ops principal without reports.read would lose analytics. W-13 must re-check this route family.",
+    "The §10.3 fixture matrix (F1-F10) was not built, though §10.3 asks for it in wave 1. Waves 2-5 cannot inherit what does not exist.",
+    "W-4 (service-client principal check) is not done; the exception baseline W-15 is sized against does not yet exist."
+  ],
+
+  "constraints_honoured": {
+    "no_migration_written_or_applied": true,
+    "no_schema_change": true,
+    "no_push_merge_or_pr": true,
+    "commits_local_only": true,
+    "wave_2_lockout_class_untouched": true
+  }
+}

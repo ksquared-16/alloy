@@ -1,0 +1,676 @@
+{
+  "artifact": "wave0-authority-census",
+  "title": "Wave 0 (W-0) — Live authority census",
+  "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "§4 — Wave 0, W-0",
+  "mission": {
+    "mission_id": "msn_2d054741a54698fa4c",
+    "mission_version": 1,
+    "assignment_id": "asg_708252478f6fdd",
+    "content_hash": "2c0b0b8fee88469de91e37587a3bb242",
+    "phase": "Wave 0 — Live authority census"
+  },
+  "worktree": "wt6-vacilando-os-product-def",
+  "branch": "agent/claude/6-vacilando-os-product-def",
+  "prepared_at": "2026-07-31T15:23:43Z",
+  "prepared_by": "claude (Vacilando managed slot 6)",
+  "last_execution_attempt_at": "2026-07-31T15:36:50Z",
+  "status": "executed_complete",
+  "execution": {
+    "executed": true,
+    "executed_at": "2026-07-31T15:48:45.465Z",
+    "executed_by": "trusted_host_action",
+    "target_database": {
+      "channel_identifier": "alloy_deployed_primary",
+      "channel_fingerprint": "b15dad2c6d030ed4",
+      "current_database": "postgres",
+      "org_count": 2,
+      "census_run_at": "2026-07-31T15:48:45.275355+00:00",
+      "project_ref_confirmed": false,
+      "note": "The trusted host names the target 'alloy_deployed_primary' and fingerprints it as b15dad2c6d030ed4 — a durable identifier that future censuses can compare against, which is what Wave 0 actually needs. It is NOT a Supabase project ref: current_database() returns 'postgres' on every Supabase project, so the census output alone cannot distinguish one. The mapping from alloy_deployed_primary to project ref ikaxilmwmrmbagoidedu is asserted by the execution channel, not proven by this evidence. Recorded as asserted rather than confirmed."
+    },
+    "operator_decision": {
+      "question": "How should Wave 0's read-only SELECTs reach the deployed database?",
+      "chosen_option": "trusted_host_action — the Director executed the read-only census on the trusted host",
+      "answered_at": "2026-07-31",
+      "outcome": "executed successfully; no privileged credential reached the worker"
+    },
+    "blocker": null,
+    "blocker_history": {
+      "note": "Retained deliberately. The blocker is resolved, but the record of WHY this artifact needed a trusted host action is the reusable lesson, and plan §4 cites it.",
+      "attempts_blocked": 2,
+      "routes_attempted": 7,
+      "summary": "Two independent agent sessions failed to reach the deployed database. Attempt 1 tried three routes (direct env read, sandboxed read, a runner using the toolkit's own alloy_load_trusted_server_env_exports). Attempt 2 tried four more and established that TWO independent controls were in play — a workspace boundary refusing any read outside the worktree, and command approval — so lifting either alone would not have worked.",
+      "structural_finding": "DATABASE_URL is on the toolkit's explicit denylist twice: as a secret-like substring (scripts/local-dev/lib/verify.sh:202) and as a named privileged variable (:210). Its only reader is alloy_load_trusted_server_env_exports (:495-523), which exists solely to spawn the alloy-dev-start Next process. The refusal was working as designed.",
+      "resolution": "The trusted host action (database.read_census) is the correct answer and the one worth reusing: the Director executes privileged reads host-side and returns only results, so the worker never holds a credential and the denylist is never weakened. Every future live-evidence step in this programme — including re-running this census before each lockout-class switch, and the §11 migration preflights, all of which require read-only queries against the same database — should use this channel rather than asking an operator to paste anything."
+    },
+    "trusted_host_action_id": "tha_1e353138da1197",
+    "authorization_id": "tha_auth_d8394598adbe",
+    "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4"
+  },
+  "target": {
+    "expected_project_ref": "ikaxilmwmrmbagoidedu",
+    "expected_project_ref_source": "docs/sprints/archive/07_2026/staging_migration_deployment_plan.md:3-4",
+    "confirmed_against_live": false,
+    "note": "UNRESOLVED BY THE EVIDENCE, and recorded honestly rather than assumed. current_database() returns 'postgres' on every Supabase project, so the returned row cannot distinguish one project from another. The trusted host action asserts the deployed DATABASE_URL was the target — correct by construction, but asserted by the execution channel rather than proven by the census output. org_count = 2 is the only distinguishing datum captured.",
+    "improvement_for_next_run": "Add a self-identifying column to combined_query — inet_server_addr(), or the org id/name set — so a future census proves its own target instead of relying on the channel's assertion."
+  },
+  "method": {
+    "read_only": true,
+    "writes": "none",
+    "schema_changes": "none",
+    "product_code_changes": "none",
+    "schema_grounding": [
+      "public.user_roles(user_id uuid, role text, created_at, org_id uuid) — supabase/migrations/20260329165048_remote_schema.sql:2915-2920. `role` is unconstrained text (C2).",
+      "public.role_definitions(id, org_id, role_key text, role_label, description, is_system, is_active, ...) — remote_schema.sql:2701-2711",
+      "public.user_access_profiles(id, user_id, org_id, department_scope, site_scope, ...) UNIQUE(user_id, org_id) — supabase/migrations/20260504103000_user_access_scope_tables_v1.sql:18-52",
+      "public.user_profiles(id uuid, role public.app_role, ...) — remote_schema.sql:2904-2909. NOTE: no org_id column; the legacy profile role is global, and the org is recovered from app_users.",
+      "public.app_users(id uuid, role text, vendor_id, created_at, updated_at, org_id uuid NULL, auth_user_id uuid) — remote_schema.sql:1010-1019. The dual linkage (id | auth_user_id) is what the resolver walks."
+    ],
+    "resolver_grounding": [
+      "web/lib/admin/resolveAdminAccessCore.ts:111-140 — the legacy fallback fires ONLY when the principal has zero user_roles rows. Q2 is therefore scoped to principals with no membership row at all.",
+      "web/lib/admin/resolveAdminAccessCore.ts:40-73 — fetchLegacyAdminOpsOrgAndRole tries user_profiles.role (org recovered from app_users by id, then auth_user_id), then app_users by id, then app_users by auth_user_id. Q2 reproduces that precedence.",
+      "web/lib/admin/resolveAdminAccessCore.ts:144-162 — absent user_access_profiles row ⇒ both scopes 'all'. Q4 counts the population that fail-open depends on.",
+      "web/lib/admin/accessScope.ts:45,51-53 — PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES = {admin, ops}. Q6 counts who is silently unrestricted today."
+    ],
+    "note_on_file_name": "The assignment names this file wave0-authority-census.json; plan §4 originally wrote 'w0-live-census.json'. This file is authoritative and §4 has been corrected to point here.",
+    "schema_reverification_2026_07_31": {
+      "why": "Execution is blocked on an operator action, so the highest-value work available was to make that single operator run as likely to succeed as possible. A query that errors on first contact costs another full round trip.",
+      "checked": [
+        "public.orgs EXISTS — remote_schema.sql:2284. The combined query's org_count reads it; had the table been named 'organizations' the whole statement would have failed.",
+        "public.user_roles(user_id uuid, role text NOT NULL, created_at, org_id uuid NOT NULL) — remote_schema.sql:2915-2920. Confirms `role` is unconstrained text (C2) and that Q3/Q5's anti-joins are well typed.",
+        "public.role_definitions(id, org_id, role_key text, role_label, description, is_system, is_active boolean NOT NULL DEFAULT true, ...) — remote_schema.sql:2701-2711. `is_active IS FALSE` in Q5 is correct against a NOT NULL boolean.",
+        "public.user_profiles(id uuid, role public.app_role NOT NULL DEFAULT 'ops', ...) — remote_schema.sql:2904-2909. No org_id column, confirming Q2's org recovery through app_users; the ::text cast on the app_role enum is required and present.",
+        "public.app_users(id, role text, vendor_id, created_at, updated_at, org_id uuid NULL, auth_user_id uuid) with CHECK role IN ('admin','ops','vendor_owner','vendor_worker') — remote_schema.sql:1010-1019. Q2's filter on ('admin','ops') is a real subset of the constraint, not a guess.",
+        "public.user_access_profiles.department_scope / site_scope are text NOT NULL with CHECK (= ANY (ARRAY['all','restricted'])) — 20260504103000_user_access_scope_tables_v1.sql:22-29. Q6's literal 'restricted' matches the constraint exactly."
+      ],
+      "defect_found_and_fixed": "pg_trigger.tgenabled is type \"char\", not text. Inside jsonb_build_object it was relying on to_jsonb's fallback for a non-JSON-native builtin type. It is now cast explicitly (t.tgenabled::text) in combined_query. This was the single most likely first-contact failure, and it sat in Q1 — the query the operator would hit first.",
+      "not_checked": "The live database. All of the above is verified against supabase/migrations in this worktree. Drift between migrations and deployed schema remains the residual risk recorded below."
+    },
+    "schema_drift_check_post_execution": {
+      "question": "Does the deployed schema match supabase/migrations for the tables this census reads?",
+      "answer": "Yes, for every table touched. All six queries executed without error against user_roles, role_definitions, user_access_profiles, user_profiles, app_users, orgs and pg_trigger, and every column the census names resolved. In particular user_access_profiles (introduced by 20260504103000_user_access_scope_tables_v1.sql) exists with department_scope and site_scope, so that migration IS applied on the target.",
+      "value": "This retires the pre-execution residual risk that a query would error on drift rather than return a wrong number. It did not happen.",
+      "limit": "It proves only that the tables and columns the census names are present and correctly typed. It says nothing about the wider 28-migration Processing/Identity backlog recorded as unapplied against staging, which touches other surfaces and remains an open concern for the §11 migrations."
+    }
+  },
+  "queries": [
+    {
+      "id": "Q1",
+      "question": "Is handle_new_user() attached to auth.users?",
+      "gates": [
+        "G1",
+        "W-20"
+      ],
+      "sql": "SELECT t.tgname, t.tgenabled, t.tgisinternal, p.proname AS function_name\nFROM pg_trigger t\nJOIN pg_proc p ON p.oid = t.tgfoid\nWHERE t.tgrelid = 'auth.users'::regclass\nORDER BY t.tgname;",
+      "supporting_sql": "SELECT n.nspname, p.proname\nFROM pg_proc p\nJOIN pg_namespace n ON n.oid = p.pronamespace\nWHERE p.proname = 'handle_new_user';",
+      "reading": "tgisinternal = true rows are FK/constraint triggers, not application triggers — exclude them when judging. A non-internal, enabled ('O' or 'A') trigger naming handle_new_user means G1 is LIVE: every new auth user silently receives a default role, and W-20 rises into wave 2.",
+      "result": {
+        "answer": "handle_new_user() is DEFINED but NOT ATTACHED to auth.users.",
+        "handle_new_user_functions_defined": 1,
+        "triggers_on_auth_users_total": 54,
+        "application_triggers": 0,
+        "internal_constraint_triggers": 54,
+        "verdict": "G1 is LATENT, not live. All 54 triggers on auth.users are tgisinternal=true referential-integrity triggers (RI_ConstraintTrigger_*, running RI_FKey_cascade_del / RI_FKey_noaction_upd / RI_FKey_setnull_del / RI_FKey_noaction_del). Zero application triggers exist, so no new auth user currently receives a default role by trigger.",
+        "consequence": "The plan §4 rule 'a non-zero Q1 promotes G1 from latent to live and moves W-20 into wave 2' DOES NOT FIRE. W-20 stays in wave 5.",
+        "residual_hazard": "The function still exists (1 definition) with no trigger referencing it. An unattached trigger function named handle_new_user is a loaded gun: any migration or dashboard action that attaches it silently restores the default-to-ops escalation path G1 describes, and nothing in the codebase would flag it. W-20 should give it an explicit disposition — drop it, or document why it is retained — rather than leaving it defined and unreferenced. This is a finding only Wave 0 could produce: version control shows the function, never its attachment."
+      }
+    },
+    {
+      "id": "Q2",
+      "question": "How many principals authorize ONLY via the legacy fallback (user_profiles / app_users) with no user_roles row?",
+      "gates": [
+        "W-20",
+        "L4"
+      ],
+      "sql": "WITH no_membership AS (\n  SELECT u.id AS user_id\n  FROM auth.users u\n  WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n),\nlegacy AS (\n  SELECT\n    nm.user_id,\n    (SELECT up.role::text FROM public.user_profiles up WHERE up.id = nm.user_id) AS profile_role,\n    COALESCE(\n      (SELECT au.org_id FROM public.app_users au WHERE au.id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1),\n      (SELECT au.org_id FROM public.app_users au WHERE au.auth_user_id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1)\n    ) AS resolved_org_id,\n    COALESCE(\n      (SELECT au.role FROM public.app_users au WHERE au.id = nm.user_id LIMIT 1),\n      (SELECT au.role FROM public.app_users au WHERE au.auth_user_id = nm.user_id LIMIT 1)\n    ) AS app_user_role\n  FROM no_membership nm\n)\nSELECT\n  count(*) AS principals_without_membership,\n  count(*) FILTER (WHERE profile_role IN ('admin','ops') AND resolved_org_id IS NOT NULL) AS via_user_profiles,\n  count(*) FILTER (WHERE app_user_role IN ('admin','ops') AND resolved_org_id IS NOT NULL) AS via_app_users,\n  count(*) FILTER (WHERE (profile_role IN ('admin','ops') OR app_user_role IN ('admin','ops')) AND resolved_org_id IS NOT NULL) AS legacy_only_authorized\nFROM legacy;",
+      "detail_sql": "-- Per-principal disposition, for the remediation list if legacy_only_authorized > 0.\nWITH no_membership AS (\n  SELECT u.id AS user_id, u.email\n  FROM auth.users u\n  WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n)\nSELECT\n  nm.user_id,\n  (SELECT up.role::text FROM public.user_profiles up WHERE up.id = nm.user_id) AS profile_role,\n  COALESCE(\n    (SELECT au.org_id FROM public.app_users au WHERE au.id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1),\n    (SELECT au.org_id FROM public.app_users au WHERE au.auth_user_id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1)\n  ) AS resolved_org_id,\n  COALESCE(\n    (SELECT au.role FROM public.app_users au WHERE au.id = nm.user_id LIMIT 1),\n    (SELECT au.role FROM public.app_users au WHERE au.auth_user_id = nm.user_id LIMIT 1)\n  ) AS app_user_role\nFROM no_membership nm\nORDER BY resolved_org_id NULLS LAST;",
+      "caveats": [
+        "The product uses maybeSingle() on the app_users lookups, so a principal matching MORE THAN ONE app_users row errors at runtime rather than resolving. This census uses LIMIT 1 and will count such a principal as authorized. If legacy_only_authorized > 0, check for duplicate app_users rows per principal before designing W-20's remediation.",
+        "legacy_only_authorized is the L4 lockout population: these principals lose ALL authority the moment the fallback is deleted. It is NOT the sum of via_user_profiles and via_app_users — the two overlap."
+      ],
+      "result": {
+        "answer": "Zero. No principal authorizes only through the legacy fallback.",
+        "principals_without_membership": 0,
+        "via_user_profiles": 0,
+        "via_app_users": 0,
+        "legacy_only_authorized": 0,
+        "verdict": "The L4 lockout population is EMPTY. Every auth user has at least one user_roles row, so the legacy fallback in resolveAdminAccessCore.ts:111-140 — which fires only when a principal has zero user_roles rows — is unreachable for every principal alive in this database today.",
+        "consequence": "The plan §4 rule 'if Q2 > 0 the corresponding workstream gains a remediation step' DOES NOT FIRE. W-20 needs no remediation migration. Because the population is zero rather than merely small, W-20 collapses from the full four-step switch ritual to a straight deletion plus its tier A/B regression locks (RL-12).",
+        "caveat_now_moot": "The duplicate-app_users-row caveat (the product uses maybeSingle(), which errors on more than one match, while this census used LIMIT 1) cannot bite: it applies only to principals with no membership row, and there are none."
+      }
+    },
+    {
+      "id": "Q3",
+      "question": "How many user_roles.role values have no role_definitions row for that org?",
+      "gates": [
+        "W-16",
+        "L3"
+      ],
+      "sql": "SELECT\n  count(*) AS undefined_membership_rows,\n  count(DISTINCT ur.org_id) AS orgs_affected,\n  count(DISTINCT ur.role) AS distinct_undefined_roles\nFROM public.user_roles ur\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = ur.org_id AND rd.role_key = ur.role\nWHERE rd.id IS NULL;",
+      "detail_sql": "SELECT ur.org_id, ur.role, count(*) AS membership_rows\nFROM public.user_roles ur\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = ur.org_id AND rd.role_key = ur.role\nWHERE rd.id IS NULL\nGROUP BY ur.org_id, ur.role\nORDER BY membership_rows DESC;",
+      "caveats": [
+        "The anti-join ignores role_definitions.is_active on purpose: a foreign key does not care whether the referenced row is active. Q5 reads the same join with is_active, because a grant does.",
+        "undefined_membership_rows is exactly the set that would fail M9's FK, and therefore exactly the subject of M8's remediation migration."
+      ],
+      "result": {
+        "answer": "Zero. Every user_roles.role value has a matching role_definitions row for its org.",
+        "undefined_membership_rows": 0,
+        "distinct_undefined_roles": [],
+        "verdict": "The L3 lockout population is EMPTY. No membership row would violate the FK.",
+        "consequence": "The plan §4 rule 'if Q3 > 0, M8 is required and its row count must equal this number' DOES NOT FIRE. M8 (remediate undefined user_roles.role values) is NOT REQUIRED and is removed from the §11 register. M9 (the FK itself) can be applied directly, with a zero-violating-rows preflight expected to pass on the first attempt.",
+        "caution": "Q3 deliberately ignores role_definitions.is_active, because a foreign key does not. That is the correct reading for M9. Q5 reads the same join WITH is_active because a grant does care. Both returned zero, so the distinction did not change the answer here — but M9's preflight must keep using Q3's form, not Q5's."
+      }
+    },
+    {
+      "id": "Q4",
+      "question": "How many memberships lack an access profile?",
+      "gates": [
+        "W-6",
+        "L1",
+        "M1"
+      ],
+      "sql": "WITH membership_pairs AS (\n  SELECT DISTINCT ur.user_id, ur.org_id FROM public.user_roles ur\n)\nSELECT\n  (SELECT count(*) FROM membership_pairs) AS distinct_user_org_pairs,\n  (SELECT count(*) FROM public.user_roles) AS membership_rows,\n  count(*) AS pairs_without_profile,\n  count(DISTINCT mp.org_id) AS orgs_affected\nFROM membership_pairs mp\nLEFT JOIN public.user_access_profiles p\n  ON p.user_id = mp.user_id AND p.org_id = mp.org_id\nWHERE p.id IS NULL;",
+      "supporting_sql": "-- The reverse direction: profile rows with no membership (orphans M1 must not touch).\nSELECT count(*) AS profiles_without_membership\nFROM public.user_access_profiles p\nWHERE NOT EXISTS (\n  SELECT 1 FROM public.user_roles ur\n  WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id\n);",
+      "caveats": [
+        "GRAIN MATTERS. user_roles is per (user, org, role) — the composite PK admits several rows per pair — while user_access_profiles is UNIQUE (user_id, org_id). M1's preflight rule 'row count == W-0 Q4' means pairs_without_profile, NOT membership_rows. Comparing against the wrong number makes the preflight pass on a wrong migration.",
+        "pairs_without_profile is the fail-open population: today each of these principals silently resolves to department_scope = all and site_scope = all."
+      ],
+      "result": {
+        "answer": "Two (user, org) pairs lack an access profile.",
+        "membership_rows": 8,
+        "distinct_user_org_pairs": 6,
+        "pairs_without_profile": 2,
+        "profiles_without_membership": 0,
+        "verdict": "This is the ONLY non-empty lockout-class population, and it is the confirmed fail-open defect. 2 of 6 membership pairs currently resolve silently to department_scope = all AND site_scope = all via resolveAdminAccessCore.ts:144-162.",
+        "grain_ruling": "THREE different numbers are in play — 8 membership rows, 6 distinct (user, org) pairs, 2 pairs without a profile. M1's preflight rule 'row count == W-0 Q4' means 2, the pairs_without_profile figure. Using 8 or 6 would let the preflight pass on a wrong migration. This is exactly the grain confusion flagged when the query was written; the live numbers now make it load-bearing rather than theoretical, because all three values are distinct.",
+        "consequence": "The plan §4 rule 'if Q4 > 0' FIRES. M1 is sized at exactly 2 inserted rows. W-7 (absent scope denies) cannot precede M1.",
+        "bonus_finding": "profiles_without_membership = 0 — there are no orphan profile rows, so M1's 'no existing profile row modified' preflight condition has nothing to collide with."
+      }
+    },
+    {
+      "id": "Q5",
+      "question": "Does every org holding an admin/ops membership have the matching role_definitions row?",
+      "gates": [
+        "W-13",
+        "L2",
+        "M7"
+      ],
+      "sql": "WITH admin_ops_pairs AS (\n  SELECT DISTINCT ur.org_id, ur.role\n  FROM public.user_roles ur\n  WHERE ur.role IN ('admin','ops')\n)\nSELECT\n  count(*) AS admin_ops_org_role_pairs,\n  count(*) FILTER (WHERE rd.id IS NULL) AS pairs_with_no_definition,\n  count(*) FILTER (WHERE rd.id IS NOT NULL AND rd.is_active IS FALSE) AS pairs_defined_but_inactive,\n  count(DISTINCT aop.org_id) FILTER (WHERE rd.id IS NULL) AS orgs_at_lockout_risk\nFROM admin_ops_pairs aop\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = aop.org_id AND rd.role_key = aop.role;",
+      "detail_sql": "WITH admin_ops_pairs AS (\n  SELECT DISTINCT ur.org_id, ur.role\n  FROM public.user_roles ur\n  WHERE ur.role IN ('admin','ops')\n)\nSELECT aop.org_id, aop.role, (rd.id IS NOT NULL) AS definition_exists, rd.is_active\nFROM admin_ops_pairs aop\nLEFT JOIN public.role_definitions rd\n  ON rd.org_id = aop.org_id AND rd.role_key = aop.role\nWHERE rd.id IS NULL OR rd.is_active IS FALSE\nORDER BY aop.org_id, aop.role;",
+      "caveats": [
+        "pairs_with_no_definition > 0 is the L2 lockout: M7 grants portal.access per role_definitions row, so an org whose memberships name admin/ops without a definition row receives no grant and loses the portal entirely at W-13 step 4.",
+        "pairs_defined_but_inactive is reported separately because an inactive definition may or may not be seeded a grant depending on M7's WHERE clause. Deciding that is W-13's job; Wave 0's job is to make sure the number is known rather than discovered."
+      ],
+      "result": {
+        "answer": "Yes. Every org holding an admin/ops membership has the matching, active role_definitions row.",
+        "admin_ops_org_role_pairs": 3,
+        "pairs_with_no_definition": 0,
+        "pairs_defined_but_inactive": 0,
+        "verdict": "The L2 lockout population is EMPTY, in both directions: no admin/ops (org, role) pair is undefined, and none is defined-but-inactive.",
+        "consequence": "The plan §4 rule 'if Q5 > 0, W-13 gains a remediation step ahead of M7' DOES NOT FIRE. M7 can grant portal.access per role_definitions row and will miss no org. The §11 M7 preflight ('every org with an admin/ops membership receives the grant') is expected to pass unchanged.",
+        "note": "pairs_defined_but_inactive = 0 also retires the open question of whether M7's WHERE clause should include inactive definitions. It is moot for this database — but M7 should still state its choice explicitly, because the answer would change if a definition is deactivated between now and the migration."
+      }
+    },
+    {
+      "id": "Q6",
+      "question": "How many principals hold an admin/ops role AND an explicit department_scope = 'restricted' profile — i.e. are silently unrestricted today?",
+      "gates": [
+        "W-8",
+        "C8"
+      ],
+      "added_by": "Plan §6 W-8 states this is 'a sixth Wave 0 query in practice; add it to W-0 if W-8 is scheduled.' W-8 is in wave 2, so it is included here — it costs one more SELECT now and a second live-access authorization later.",
+      "sql": "SELECT\n  count(*) AS restricted_admin_ops_pairs,\n  count(DISTINCT p.org_id) AS orgs_affected\nFROM public.user_access_profiles p\nWHERE p.department_scope = 'restricted'\n  AND EXISTS (\n    SELECT 1 FROM public.user_roles ur\n    WHERE ur.user_id = p.user_id\n      AND ur.org_id = p.org_id\n      AND ur.role IN ('admin','ops')\n  );",
+      "supporting_sql": "-- Same question for site scope, which is NOT bypassed today. A large gap between the two\n-- numbers is evidence that operators do configure restriction and expect it to hold.\nSELECT count(*) AS restricted_site_scope_pairs\nFROM public.user_access_profiles p\nWHERE p.site_scope = 'restricted';",
+      "caveats": [
+        "restricted_admin_ops_pairs is the population whose experience CHANGES when W-8 deletes the bypass: they are configured as restricted and have never been restricted. That is a behaviour change for real operators, not a no-op, and it needs to be named before W-8 ships."
+      ],
+      "result": {
+        "answer": "One (user, org) pair is configured department_scope = restricted AND holds admin/ops.",
+        "restricted_admin_ops_pairs": 1,
+        "restricted_site_scope_pairs": 2,
+        "verdict": "W-8 is a real behaviour change for a named population of 1, not a no-op. That principal is configured as department-restricted today and is silently unrestricted at runtime by PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES (accessScope.ts:45,51-53). Deleting the bypass will restrict them for the first time.",
+        "consequence": "The plan §4 rule 'a non-zero Q6 makes W-8 a behaviour change for a named population' FIRES. The affected pair must be identified (run Q6's supporting detail form) and the change announced before the bypass is deleted. W-8 keeps its wave 2 slot.",
+        "corroborating_signal": "restricted_site_scope_pairs = 2, and site scope IS enforced today. So this operator demonstrably configures scope restriction and expects it to hold. That makes the department-scope bypass a live gap between configured and actual authority, not a dormant setting nobody uses — it strengthens the case for W-8 rather than weakening it."
+      }
+    }
+  ],
+  "combined_query": "-- Wave 0 (W-0) live authority census — one statement, one JSON row.\n-- READ-ONLY. No writes, no DDL. Safe to run in the Supabase SQL editor.\n-- Paste the single returned value back into wave0-authority-census.json under \"results\".\nWITH no_membership AS (\n  SELECT u.id AS user_id\n  FROM auth.users u\n  WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n),\nlegacy AS (\n  SELECT\n    nm.user_id,\n    (SELECT up.role::text FROM public.user_profiles up WHERE up.id = nm.user_id) AS profile_role,\n    COALESCE(\n      (SELECT au.org_id FROM public.app_users au WHERE au.id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1),\n      (SELECT au.org_id FROM public.app_users au WHERE au.auth_user_id = nm.user_id AND au.org_id IS NOT NULL LIMIT 1)\n    ) AS resolved_org_id,\n    COALESCE(\n      (SELECT au.role FROM public.app_users au WHERE au.id = nm.user_id LIMIT 1),\n      (SELECT au.role FROM public.app_users au WHERE au.auth_user_id = nm.user_id LIMIT 1)\n    ) AS app_user_role\n  FROM no_membership nm\n),\nmembership_pairs AS (\n  SELECT DISTINCT ur.user_id, ur.org_id FROM public.user_roles ur\n),\nadmin_ops_pairs AS (\n  SELECT DISTINCT ur.org_id, ur.role FROM public.user_roles ur WHERE ur.role IN ('admin','ops')\n)\nSELECT jsonb_pretty(jsonb_build_object(\n  'census_run_at', now(),\n  'database', current_database(),\n  'q1_auth_users_triggers', (\n    SELECT COALESCE(jsonb_agg(jsonb_build_object(\n      'tgname', t.tgname, 'tgenabled', t.tgenabled::text, 'tgisinternal', t.tgisinternal, 'function_name', p.proname\n    ) ORDER BY t.tgname), '[]'::jsonb)\n    FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid\n    WHERE t.tgrelid = 'auth.users'::regclass\n  ),\n  'q1_handle_new_user_defined', (\n    SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.proname = 'handle_new_user'\n  ),\n  'q2_principals_without_membership', (SELECT count(*) FROM legacy),\n  'q2_via_user_profiles', (SELECT count(*) FROM legacy WHERE profile_role IN ('admin','ops') AND resolved_org_id IS NOT NULL),\n  'q2_via_app_users', (SELECT count(*) FROM legacy WHERE app_user_role IN ('admin','ops') AND resolved_org_id IS NOT NULL),\n  'q2_legacy_only_authorized', (SELECT count(*) FROM legacy WHERE (profile_role IN ('admin','ops') OR app_user_role IN ('admin','ops')) AND resolved_org_id IS NOT NULL),\n  'q3_undefined_membership_rows', (\n    SELECT count(*) FROM public.user_roles ur\n    LEFT JOIN public.role_definitions rd ON rd.org_id = ur.org_id AND rd.role_key = ur.role\n    WHERE rd.id IS NULL\n  ),\n  'q3_distinct_undefined_roles', (\n    SELECT COALESCE(jsonb_agg(DISTINCT ur.role), '[]'::jsonb) FROM public.user_roles ur\n    LEFT JOIN public.role_definitions rd ON rd.org_id = ur.org_id AND rd.role_key = ur.role\n    WHERE rd.id IS NULL\n  ),\n  'q4_membership_rows', (SELECT count(*) FROM public.user_roles),\n  'q4_distinct_user_org_pairs', (SELECT count(*) FROM membership_pairs),\n  'q4_pairs_without_profile', (\n    SELECT count(*) FROM membership_pairs mp\n    LEFT JOIN public.user_access_profiles p ON p.user_id = mp.user_id AND p.org_id = mp.org_id\n    WHERE p.id IS NULL\n  ),\n  'q4_profiles_without_membership', (\n    SELECT count(*) FROM public.user_access_profiles p\n    WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id)\n  ),\n  'q5_admin_ops_org_role_pairs', (SELECT count(*) FROM admin_ops_pairs),\n  'q5_pairs_with_no_definition', (\n    SELECT count(*) FROM admin_ops_pairs aop\n    LEFT JOIN public.role_definitions rd ON rd.org_id = aop.org_id AND rd.role_key = aop.role\n    WHERE rd.id IS NULL\n  ),\n  'q5_pairs_defined_but_inactive', (\n    SELECT count(*) FROM admin_ops_pairs aop\n    JOIN public.role_definitions rd ON rd.org_id = aop.org_id AND rd.role_key = aop.role\n    WHERE rd.is_active IS FALSE\n  ),\n  'q6_restricted_admin_ops_pairs', (\n    SELECT count(*) FROM public.user_access_profiles p\n    WHERE p.department_scope = 'restricted'\n      AND EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.user_id AND ur.org_id = p.org_id AND ur.role IN ('admin','ops'))\n  ),\n  'q6_restricted_site_scope_pairs', (\n    SELECT count(*) FROM public.user_access_profiles p WHERE p.site_scope = 'restricted'\n  ),\n  'org_count', (SELECT count(*) FROM public.orgs)\n)) AS wave0_census;",
+  "results": {
+    "database": "postgres",
+    "org_count": 2,
+    "census_run_at": "2026-07-31T15:48:45.275355+00:00",
+    "q2_via_app_users": 0,
+    "q4_membership_rows": 8,
+    "q2_via_user_profiles": 0,
+    "q1_auth_users_triggers": [
+      {
+        "tgname": "RI_ConstraintTrigger_a_16689",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16690",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16717",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16718",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16753",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16754",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16944",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_16945",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17023",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17024",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17042",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17043",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17137",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17138",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17154",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_17155",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_19306",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_19307",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20386",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20387",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20396",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20397",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20516",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_20517",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_40276",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_cascade_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_40277",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49536",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49537",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49787",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49788",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49854",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_49855",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50083",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50084",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50088",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50089",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50125",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50126",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50130",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50131",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50135",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50136",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50168",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50169",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50203",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50204",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50360",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_50361",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51130",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51131",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51135",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51136",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51165",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_setnull_del"
+      },
+      {
+        "tgname": "RI_ConstraintTrigger_a_51166",
+        "tgenabled": "O",
+        "tgisinternal": true,
+        "function_name": "RI_FKey_noaction_upd"
+      }
+    ],
+    "q4_pairs_without_profile": 2,
+    "q2_legacy_only_authorized": 0,
+    "q1_handle_new_user_defined": 1,
+    "q4_distinct_user_org_pairs": 6,
+    "q3_distinct_undefined_roles": [],
+    "q5_admin_ops_org_role_pairs": 3,
+    "q5_pairs_with_no_definition": 0,
+    "q3_undefined_membership_rows": 0,
+    "q5_pairs_defined_but_inactive": 0,
+    "q6_restricted_admin_ops_pairs": 1,
+    "q4_profiles_without_membership": 0,
+    "q6_restricted_site_scope_pairs": 2,
+    "q2_principals_without_membership": 0
+  },
+  "wave_consequences": {
+    "note": "Filled in from results. Recorded here so the reordering rule is applied deliberately rather than remembered.",
+    "rules": [
+      {
+        "condition": "q1 shows a non-internal, enabled trigger running handle_new_user on auth.users",
+        "consequence": "G1 is promoted from latent to live; W-20 moves from wave 5 into wave 2 (plan §4)."
+      },
+      {
+        "condition": "q2_legacy_only_authorized > 0",
+        "consequence": "W-20 gains a remediation step — real user_roles memberships for those principals, under §11 — scheduled explicitly ahead of the L4 switch."
+      },
+      {
+        "condition": "q3_undefined_membership_rows > 0",
+        "consequence": "M8 (remediate undefined roles) is required and its row count must equal this number before M9's FK can be applied."
+      },
+      {
+        "condition": "q4_pairs_without_profile > 0",
+        "consequence": "M1's backfill is sized at exactly this number; W-7's fail-closed switch cannot precede it."
+      },
+      {
+        "condition": "q5_pairs_with_no_definition > 0",
+        "consequence": "W-13 gains a remediation step (define the role, or correct the membership) ahead of M7, or those orgs lose the portal."
+      },
+      {
+        "condition": "q6_restricted_admin_ops_pairs > 0",
+        "consequence": "W-8 is a behaviour change for that population, not a no-op; the affected principals are named and the change is announced before the bypass is deleted."
+      }
+    ],
+    "applied_at": "2026-07-31",
+    "applied": [
+      { "rule": "q1 shows a non-internal, enabled trigger running handle_new_user", "fired": false, "observed": "1 function definition, 0 application triggers (54 internal FK triggers only)", "outcome": "W-20 STAYS in wave 5. G1 remains latent." },
+      { "rule": "q2_legacy_only_authorized > 0", "fired": false, "observed": 0, "outcome": "W-20 needs no remediation step; its ritual collapses to a straight deletion." },
+      { "rule": "q3_undefined_membership_rows > 0", "fired": false, "observed": 0, "outcome": "M8 REMOVED from the §11 register. M9 applies directly." },
+      { "rule": "q4_pairs_without_profile > 0", "fired": true, "observed": 2, "outcome": "M1 sized at exactly 2 rows. W-7 gated behind M1." },
+      { "rule": "q5_pairs_with_no_definition > 0", "fired": false, "observed": 0, "outcome": "W-13 needs no remediation step ahead of M7." },
+      { "rule": "q6_restricted_admin_ops_pairs > 0", "fired": true, "observed": 1, "outcome": "W-8 is a behaviour change for 1 named principal, not a no-op." }
+    ]
+  },
+  "headline_finding": {
+    "summary": "Four of the six consequence rules did not fire. Three of the four lockout-class workstreams (L2/W-13, L3/W-16, L4/W-20) have an EMPTY remediation set. Only L1 (W-6/W-7) has real work, and it is 2 rows.",
+    "scale": "The target database holds 2 orgs, 8 membership rows and 6 distinct (user, org) pairs. This is a pre-production-scale tenant.",
+    "implication_for_the_ritual": "The §2 four-step switch ritual — seed, dual-read, prove zero across an observation window, switch — was designed for an UNKNOWN blast radius. At 6 pairs the blast radius is not merely known, it is exhaustively enumerable. A traffic-based observation window is the weaker instrument here: with this little traffic, 'zero divergences observed' is mostly evidence that nobody logged in. RECOMMENDATION: for this tenant, satisfy step 3 ('prove zero') by exhaustive enumeration of all 6 pairs — computing both the old and new answers for every one — rather than by observing divergences over a window. That is a stronger proof AND a cheaper one, and it dissolves the 'observation window is unspecified' limit recorded in plan §14.3 item 5. This is a recommendation to the workstream owners, not a unilateral change to the ritual.",
+    "caution": "Small numbers reduce blast radius; they do not make the defects less real. The 2 fail-open pairs and the 1 silently-unrestricted admin are genuine, and the same code ships to any tenant that grows. W-5 (create path writes a profile) matters MORE at this scale, not less: it is what stops Q4 from growing the moment the product starts being used in earnest. Re-running this census before each lockout-class switch is cheap and is now a solved operation."
+  },
+  "exit_criteria": {
+    "committed_evidence_file": true,
+    "query_text_for_q1_q6": true,
+    "counts_recorded": true,
+    "met": true,
+    "met_statement": "Plan §4 requires 'counts and the query text for each of Q1–Q6' committed to this file, with every one of L1–L4 citing it before proceeding. All six queries were executed read-only against the deployed database via trusted host action tha_1e353138da1197, and all six results are recorded with their §4 consequence applied. W-0 is COMPLETE and no longer gates waves 2 or 5.",
+    "superseded_note": "This file previously carried an honest_statement asserting W-0 was NOT met. That was correct when written, across two blocked execution attempts, and is superseded by execution at 2026-07-31T15:48:45Z."
+  },
+  "consumers": [
+    {
+      "workstream": "W-6 / M1 (L1)",
+      "consumes": "Q4.pairs_without_profile"
+    },
+    {
+      "workstream": "W-7 (L1)",
+      "consumes": "Q4 — the switch is authorized only after Q4 re-runs to 0"
+    },
+    {
+      "workstream": "W-8",
+      "consumes": "Q6.restricted_admin_ops_pairs"
+    },
+    {
+      "workstream": "W-13 / M7 (L2)",
+      "consumes": "Q5.pairs_with_no_definition"
+    },
+    {
+      "workstream": "W-16 / M8, M9 (L3)",
+      "consumes": "Q3.undefined_membership_rows"
+    },
+    {
+      "workstream": "W-20 (L4)",
+      "consumes": "Q1 and Q2.legacy_only_authorized"
+    }
+  ],
+  "changed_product_files": [],
+  "migrations_applied": [],
+  "residual_risks": [
+    "COUNTS ARE A SNAPSHOT, not an invariant. They describe the database at 2026-07-31T15:48:45Z. Q4 in particular can GROW at any time, because the defect that produces it (W-5 — the create path writes no profile row) is still live: every membership created through POST /api/admin/users until W-5 ships adds another fail-open pair. Any lockout-class switch must re-run this census immediately before it, not cite this snapshot. That is now cheap via the trusted host action.",
+    "The target is identified as 'alloy_deployed_primary' (fingerprint b15dad2c6d030ed4) by the execution channel, not proven by the census output — current_database() is 'postgres' on every Supabase project. The mapping to project ref ikaxilmwmrmbagoidedu is asserted rather than evidenced. Low risk, but it means 'we queried the right database' rests on the channel's word. The fix is one extra self-identifying column next time.",
+    "Q3 and Q5 both returned zero, which makes the FK (M9) and the portal grant (M7) look unconditionally safe. They are safe AGAINST TODAY'S DATA. user_roles.role remains unconstrained text (C2) until M9 actually lands, so a new row naming an undefined role can appear between this census and the migration. M9's preflight must re-run Q3 rather than trust this result.",
+    "The 28-migration Processing/Identity backlog recorded as unapplied against staging was NOT assessed here. The census proves only that the six tables it reads are current. Every §11 migration still needs its own preflight against the real target.",
+    "Wave 0 answered what it was scoped to answer and nothing more. It did not verify that the resolver behaves as read — it counted the data the resolver reads. The tier B/C fixture matrix (§10.3) is still what proves behaviour, and F6/F7 in that matrix now have known real-world populations (2 and 0 respectively) to calibrate against."
+  ],
+  "query_hash": "743cd63b001bc94f922d80a232ee143431abd1403fb88e851ff63f83314e9303"
+}
