@@ -26,8 +26,8 @@ export const MARKETING_ASSETS = {
     key: "illustrations/disconnected-to-unified",
     src: "/marketing/illustrations/disconnected-to-unified.webp",
     alt: "Disconnected systems becoming one operating system",
-    aspect: "16/10" as const,
-    ready: false,
+    aspect: "3/2" as const,
+    ready: true,
   },
   businessProcesses: {
     key: "illustrations/business-processes",

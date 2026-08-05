@@ -86,7 +86,7 @@ export default function HomePage() {
       <SectionShell
         density="compact"
         className="!pt-8 md:!pt-10 lg:!pt-11 !pb-8 md:!pb-10"
-        innerClassName="grid items-center gap-6 lg:grid-cols-2 lg:gap-10 xl:gap-12"
+        innerClassName="grid items-center gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)] lg:gap-8 xl:gap-10"
       >
         <div>
           <p className="marketing-eyebrow">The modern operating system for operations</p>
@@ -115,7 +115,8 @@ export default function HomePage() {
         <MarketingAssetImage
           src={MARKETING_ASSETS.hero.src}
           alt={MARKETING_ASSETS.hero.alt}
-          aspectClassName="aspect-[5/3]"
+          aspectClassName="aspect-[8/5] lg:min-h-[22rem] xl:min-h-[24rem]"
+          className="lg:-mr-2 xl:-mr-4"
           priority
         />
       </SectionShell>
@@ -126,10 +127,10 @@ export default function HomePage() {
       {/* C. Problem */}
       <SectionShell variant="muted" density="compact">
         <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
-          <MarketingAssetPlaceholder
-            assetKey={MARKETING_ASSETS.disconnectedToUnified.key}
+          <MarketingAssetImage
+            src={MARKETING_ASSETS.disconnectedToUnified.src}
             alt={MARKETING_ASSETS.disconnectedToUnified.alt}
-            aspectClassName="aspect-[5/3]"
+            aspectClassName="aspect-[3/2]"
             className="order-2 lg:order-1"
           />
           <div className="order-1 lg:order-2">
