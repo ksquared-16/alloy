@@ -44,6 +44,8 @@ DX-0 doctrine lock → DX-1 Overview L1 → DX-2 confidence → DX-3 decisions �
 
 **DX-8 Executive Command Center evidence:** [`DX8-EVIDENCE.md`](DX8-EVIDENCE.md)
 
+**Phase 1 complete (milestone):** [`../../DIRECTOR-EXPERIENCE-V2-PHASE-1-COMPLETE.md`](../../DIRECTOR-EXPERIENCE-V2-PHASE-1-COMPLETE.md)
+
 ## Thirty-second success gate
 
 A first-time Director answers: what happened · succeed? · confidence · why · evidence · decision · next — without opening Depth.

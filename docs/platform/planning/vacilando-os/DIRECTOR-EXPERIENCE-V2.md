@@ -699,6 +699,8 @@ Presentation-only missions. No confidence/certification/evidence engine rewrites
 | **DX-10** | Mission List Convergence | Inbox / Needs You convergence with Portfolio + Command Center | DX-8…9 |
 | **DX-11** | Worker Operations | Worker ops demoted behind executive surface | DX-10 |
 
+**Phase 1 status (2026-08-05):** DX-1…DX-8 are complete on staging. See [`DIRECTOR-EXPERIENCE-V2-PHASE-1-COMPLETE.md`](DIRECTOR-EXPERIENCE-V2-PHASE-1-COMPLETE.md). DX-9+ are **deferred** — next roadmap should follow observed Director usage, not mechanical continuation of this table.
+
 **Suggested first implementation mission:** DX-1 + DX-3 (hierarchy + decisions) — highest executive impact.
 
 ---
