@@ -109,3 +109,82 @@ Neither was attempted. Write 2 (Decision grain) was not attempted, since it is g
 write 1. Part 5 documentation remains deferred, since it should describe the corrected state.
 
 **No operational data mutated. Nothing published.**
+
+---
+
+# Attempt 3 — BLOCKED at the database. `lifecycle_builder_v1` is a projection.
+
+## Write 1
+
+| | |
+|---|---|
+| before artifact | `W1-before.json` |
+| before sha256 | `6e299186a4fe19b636381d78d24bbffc630fce51936baffe7066ce1779e77826` |
+| local candidate | `W1-candidate.json` — **2 permitted changes, asserted** |
+| request | `W1-request.json` |
+| response | `W1-response.json` — **HTTP 400** |
+| read-back | `W1-readback.json` |
+| read-back sha256 | `6e299186a4fe19b636381d78d24bbffc630fce51936baffe7066ce1779e77826` |
+| identical | **yes — no write occurred** |
+
+Pre-write assertions ALL passed:
+
+```
+.processes[0].command_set_v1:
+   '<absent>' -> {"version":1,"commands":[{"capability_key":"update_lead_status","enabled":true}]}
+.processes[0].stages[0].stage_operating_plan_v1.outgoing_transitions:
+   '<absent>' -> [{"transition_ref":"lead_to_tour","source_stage_key":"lead",
+                   "target_stage_key":"tour","label":"Move to Tour","available":true}]
+Tour movement rules byte-identical: True (2 rules)
+```
+
+## Why it was refused
+
+```
+HTTP 400
+lifecycle_builder_v1 is publication-owned; direct writes are not permitted
+(department=3933ac47-077a-4de8-aaac-8aed48d80413)
+```
+
+Raised by a POSTGRES TRIGGER, not application code:
+
+`supabase/migrations/20260730130000_business_process_projection_write_guard.sql`
+→ `trg_departments_lifecycle_projection_guard` BEFORE INSERT OR UPDATE ON `departments`
+
+Its hint names the only two sanctioned writers:
+
+> Publish through `publish_business_process_revision_v1`, or for an exceptional repair call
+> `begin_lifecycle_projection_write('migration')` in the same transaction.
+
+## The architectural finding
+
+`departments.metadata.lifecycle_builder_v1` is a **published projection**, not the authoring
+surface. The lifecycle-builder PATCH route's `saveConfig` writes it directly (`route.ts:91-118`),
+which the database now forbids.
+
+**That route cannot save at all** — for any action, on any department that already has
+`lifecycle_builder_v1`. Not `ensure_stage_transition`, not `update_stage_grain`, not
+`rename_stage`. The guard's own comment says the editor was expected to converge onto DRAFT
+persistence; that convergence has not been completed.
+
+Firefly's draft state confirms the split:
+
+```
+draft_id:               67879abb-bca4-4cf3-a835-0970229d86e5
+draft_revision:         1
+published_revision_id:  null   ← never published
+unpublished_changes:    false
+```
+
+The app has no draft-write endpoint: `app/api/admin/business-process/configuration/route.ts`
+is GET-only, and no `saveBusinessProcessDraft`-style function exists in `lib/`.
+
+## Why I did not use the escape hatch
+
+`begin_lifecycle_projection_write('migration')` would have let the write through. It is
+explicitly a direct projection write, which the standing controls forbid, and it would bypass
+the draft/publication governance the guard exists to enforce. Stopping is the correct outcome.
+
+Writes 2–5 not attempted: each is gated on Write 1.
+
+**No operational data mutated. Nothing published. No direct metadata or service-role write.**
