@@ -50,9 +50,29 @@ export type ReasoningProposalV1 = {
     readonly remaining_uncertainty: readonly string[];
 };
 
+/**
+ * What one execution cost, as MEASURED by the strategy.
+ *
+ * Present on both branches: a provider call that ultimately failed still spent
+ * something, and reporting only successful cost would understate what reasoning
+ * actually consumed.
+ *
+ * Optional, and omission means zero — a deterministic strategy spends nothing
+ * and says nothing. The runtime validates whatever is reported; it never
+ * derives a cost, prices a token or consults a rate table.
+ */
+export type ReasoningCostReport = {
+    /** Finite, non-negative units. Validated by `parseProviderCostUnits`. */
+    readonly cost_units?: number;
+};
+
 export type ReasoningOutcome =
-    | { readonly ok: true; readonly proposal: ReasoningProposalV1 }
-    | { readonly ok: false; readonly refusal_code: "REASONING_UNABLE"; readonly detail: string };
+    | ({ readonly ok: true; readonly proposal: ReasoningProposalV1 } & ReasoningCostReport)
+    | ({
+          readonly ok: false;
+          readonly refusal_code: "REASONING_UNABLE";
+          readonly detail: string;
+      } & ReasoningCostReport);
 
 /**
  * What {@link ReasoningStrategyV1.reason} may return.
