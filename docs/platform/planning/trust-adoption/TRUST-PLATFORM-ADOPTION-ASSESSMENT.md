@@ -789,13 +789,40 @@ re-litigated by anyone who reads only the code:
 
 ---
 
-## 15. What this document did not do
+## 15. Implementation status
 
-No production code changed. No capability migrated. No provider wired. No migration
-authored. No registry extended. No doctrine document amended. No existing behaviour
-altered. The Trust Runtime is exactly as certified and merged at `e10d5af60`.
+**Phase 0 is complete.** All seven slices are implemented and certified — see
+[`PHASE-0-CLOSEOUT.md`](./PHASE-0-CLOSEOUT.md) for the certification evidence,
+commit register, deferrals and known debt.
 
-The only changed file on this branch is this document.
+| Slice | Status | Commit |
+|---|---|---|
+| 0.1 async reasoning and validation seam | Complete | `0545f946d` |
+| 0.2 registry composition and collision safety | Complete | `818569089` |
+| 0.3 authorization resolution seam | Complete | `14c540a58` |
+| 0.4 lifecycle observations and projection | Complete | `106620b2b` / `cf1eb311c` |
+| 0.5 execution binding contract | Complete | `98cfcf3bc` |
+| 0.6 OI execution measurement | Complete | `2c62ae83e` |
+| 0.7 non-zero cost representability | Complete | `1968fe475` |
+
+Two things this plan predicted have been corrected by implementation evidence and
+are recorded here so the plan does not mislead a later reader:
+
+- **§7 Slice 0.7 was expected to require no migration and it did not** — but the
+  reason recorded in §2.3 (B-2) understated the work. The database column was
+  already `numeric`; the gate was the package TYPE, and closing it also required
+  a reporting seam on `ReasoningOutcome` and a validator, because a strategy had
+  no way to report cost at all.
+- **§7 Slice 0.4 was expected to need a migration and did** — `chk_tdo_kind`
+  admitted eight observation kinds and needed `expired` and `superseded`. That is
+  the only migration in Phase 0.
+
+**As originally written, this document changed no production code.** That statement
+described the assessment at the time it was accepted; the sections above it remain
+the accepted plan, and the implementation that followed is recorded in the closeout.
+
+**No capability adopted the Trust Platform in Phase 0.** The registry still holds
+exactly one Decision Class — the one Trust Runtime V1 shipped.
 
 ---
 
