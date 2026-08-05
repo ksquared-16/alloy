@@ -38,6 +38,18 @@ import {
     resolveOpsNeedsAttentionCount,
     resolveOpsReadinessGapCount,
 } from "@/lib/metrics/resolvers/operationalHealthMetrics";
+import {
+    resolveTrustDeterministicResolutionRate,
+    resolveTrustEscalatedDecisionCount,
+    resolveTrustExecutionsCommittedCount,
+    resolveTrustGovernedDecisionsCompleted,
+    resolveTrustGovernedDecisionsCreated,
+    resolveTrustGovernedRefusalRate,
+    resolveTrustProviderCostUnits,
+    resolveTrustReasoningFailureRate,
+    resolveTrustReasoningLatencyP50,
+    resolveTrustRecommendationRate,
+} from "@/lib/metrics/resolvers/trustMetrics";
 
 async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): Promise<ResolvedMetricValue> {
     switch (key) {
@@ -75,6 +87,26 @@ async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): 
             return resolveOpsNeedsAttentionCount(ctx);
         case "ops.readiness_gap_count":
             return resolveOpsReadinessGapCount(ctx);
+        case "trust.governed_decisions_created":
+            return resolveTrustGovernedDecisionsCreated(ctx);
+        case "trust.governed_decisions_completed":
+            return resolveTrustGovernedDecisionsCompleted(ctx);
+        case "trust.recommendation_rate":
+            return resolveTrustRecommendationRate(ctx);
+        case "trust.governed_refusal_rate":
+            return resolveTrustGovernedRefusalRate(ctx);
+        case "trust.reasoning_failure_rate":
+            return resolveTrustReasoningFailureRate(ctx);
+        case "trust.deterministic_resolution_rate":
+            return resolveTrustDeterministicResolutionRate(ctx);
+        case "trust.escalated_decision_count":
+            return resolveTrustEscalatedDecisionCount(ctx);
+        case "trust.reasoning_latency_p50":
+            return resolveTrustReasoningLatencyP50(ctx);
+        case "trust.provider_cost_units":
+            return resolveTrustProviderCostUnits(ctx);
+        case "trust.executions_committed_count":
+            return resolveTrustExecutionsCommittedCount(ctx);
         default: {
             const _exhaustive: never = key;
             throw new Error(`Unhandled metric key: ${_exhaustive}`);

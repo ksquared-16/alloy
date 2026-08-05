@@ -12,6 +12,7 @@
  */
 
 import type { InformationClass } from "@/lib/trust/classification/informationClasses";
+import type { ProviderCostUnits } from "@/lib/trust/economics/providerCostUnits";
 import type { KnowledgeReference } from "@/lib/trust/privacy/privacyEngine";
 import type { ReasoningEvidenceItem } from "@/lib/trust/reasoning/reasoningStrategy";
 import type { TrustReviewRequirement } from "@/lib/trust/decisionClasses/decisionClassRegistry";
@@ -46,8 +47,18 @@ export type DecisionPackageEconomics = {
     readonly escalation_level: number;
     readonly latency_ms: number;
     readonly cache_utilized: boolean;
-    /** V1 runs no provider, so cost is structurally zero rather than unmeasured. */
-    readonly provider_cost_units: 0;
+    /**
+     * Measured cost of this execution, in units. Zero when no provider ran.
+     *
+     * A COUNT, not money — and provider-independent, which is why it may sit on
+     * the package at all: a number of units says nothing about which provider
+     * produced it. Provider and model IDENTITY remain absent from this type by
+     * design (ADR-2); they live only in usage/economics telemetry.
+     *
+     * Validated by `parseProviderCostUnits` before construction: finite,
+     * non-negative, never NaN or Infinity.
+     */
+    readonly provider_cost_units: ProviderCostUnits;
 };
 
 export type DecisionPackagePrivacyReport = {

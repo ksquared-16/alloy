@@ -8,12 +8,14 @@
  * @see docs/platform/trust/trust-platform-decisions.md — Decision 019
  */
 
-import { ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY } from "@/lib/trust/decisionClasses/decisionClassRegistry";
+import {
+    ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY,
+    ATTENTION_SUGGESTION_ENRICHMENT_DETERMINISTIC_STRATEGY_KEY,
+} from "@/lib/trust/capabilities/attentionSuggestionEnrichment/keys";
 import type { ReasoningOutcome, ReasoningStrategyV1 } from "@/lib/trust/reasoning/reasoningStrategy";
 import { buildAttentionEnrichmentFromRedactedPayload } from "@/lib/trust/reasoning/strategies/attentionEnrichmentProposal";
 
-export const ATTENTION_SUGGESTION_ENRICHMENT_DETERMINISTIC_STRATEGY_KEY =
-    "attention_suggestion_enrichment_deterministic" as const;
+export { ATTENTION_SUGGESTION_ENRICHMENT_DETERMINISTIC_STRATEGY_KEY };
 
 export const attentionSuggestionEnrichmentDeterministicStrategy: ReasoningStrategyV1 = {
     key: ATTENTION_SUGGESTION_ENRICHMENT_DETERMINISTIC_STRATEGY_KEY,

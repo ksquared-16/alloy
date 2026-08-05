@@ -50,9 +50,42 @@ export type ReasoningProposalV1 = {
     readonly remaining_uncertainty: readonly string[];
 };
 
+/**
+ * What one execution cost, as MEASURED by the strategy.
+ *
+ * Present on both branches: a provider call that ultimately failed still spent
+ * something, and reporting only successful cost would understate what reasoning
+ * actually consumed.
+ *
+ * Optional, and omission means zero — a deterministic strategy spends nothing
+ * and says nothing. The runtime validates whatever is reported; it never
+ * derives a cost, prices a token or consults a rate table.
+ */
+export type ReasoningCostReport = {
+    /** Finite, non-negative units. Validated by `parseProviderCostUnits`. */
+    readonly cost_units?: number;
+};
+
 export type ReasoningOutcome =
-    | { readonly ok: true; readonly proposal: ReasoningProposalV1 }
-    | { readonly ok: false; readonly refusal_code: "REASONING_UNABLE"; readonly detail: string };
+    | ({ readonly ok: true; readonly proposal: ReasoningProposalV1 } & ReasoningCostReport)
+    | ({
+          readonly ok: false;
+          readonly refusal_code: "REASONING_UNABLE";
+          readonly detail: string;
+      } & ReasoningCostReport);
+
+/**
+ * What {@link ReasoningStrategyV1.reason} may return.
+ *
+ * A strategy that needs no I/O returns the outcome directly; a strategy that
+ * must await something returns a promise. The runtime awaits either, so both
+ * travel exactly ONE path — there is no second execution route for
+ * asynchronous strategies, and none may be introduced.
+ *
+ * The union is deliberately a widening rather than a replacement: every
+ * existing synchronous strategy remains assignable and behaves identically.
+ */
+export type ReasoningExecution = ReasoningOutcome | Promise<ReasoningOutcome>;
 
 export type ReasoningStrategyV1 = {
     readonly key: string;
@@ -62,8 +95,14 @@ export type ReasoningStrategyV1 = {
     /** The Decision Class this strategy can satisfy. */
     readonly decision_class_key: string;
     /**
-     * Produces a proposal from prepared context. Pure with respect to the
-     * context and the supplied clock — no I/O, no retrieval, no provider.
+     * Produces a proposal from prepared context, synchronously or
+     * asynchronously. The strategy still retrieves nothing: the context is all
+     * it sees, and privacy preparation has already happened.
+     *
+     * Returning a promise permits a strategy to await work it owns — that is
+     * the whole of the seam. It does NOT permit the strategy to reach past the
+     * context, and it introduces no timeout, retry or cancellation semantics;
+     * those belong to execution control, which is not part of this contract.
      */
-    reason(input: { context: ReasoningContextV1; nowIso: string }): ReasoningOutcome;
+    reason(input: { context: ReasoningContextV1; nowIso: string }): ReasoningExecution;
 };

@@ -17,6 +17,7 @@ import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/
 import type { AiEnrichmentEnvelopeV1, AiTelemetryOutcome, AiUsageTelemetryPayloadV1 } from "@/lib/ai/enrichmentContracts";
 import { maybeEmitAiEnrichmentTelemetryEvent } from "@/lib/ai/enrichmentTelemetry";
 import { NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE } from "@/lib/ai/enrichAttentionSuggestionStub";
+import type { TrustAuthorizationDecision } from "@/lib/trust/authorization/trustAuthorizationDecision";
 import { captureOutcome } from "@/lib/trust/observation/captureOutcome";
 import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
@@ -30,6 +31,12 @@ export type TrustAttentionEnrichmentInput = {
     readonly correlation_id: string;
     readonly request_id?: string | null;
     readonly operator_id?: string | null;
+    /**
+     * Resolved by the authorization authority before this seam is reached.
+     * Trust records the verdict; it never re-decides authorization, and it no
+     * longer re-derives feature policy from org metadata.
+     */
+    readonly authorization: TrustAuthorizationDecision;
     readonly repository?: TrustRepository;
     readonly nowIso?: string;
     readonly clock?: () => number;
@@ -81,8 +88,6 @@ export async function enrichAttentionSuggestionViaTrustRuntime(
     const repository = input.repository ?? createSupabaseTrustRepository();
     const requestId = (input.request_id ?? randomUUID()).trim() || randomUUID();
 
-    const featureAllowed = policy.enabled && policy.allowed_features.includes("draft_enrichment");
-
     const decision = await decideAttentionSuggestionEnrichment({
         org_id: input.org_id,
         deterministic: input.deterministic,
@@ -91,10 +96,7 @@ export async function enrichAttentionSuggestionViaTrustRuntime(
             ? { actor_type: "operator", actor_id: input.operator_id }
             : { actor_type: "system", actor_id: null },
         channel: "operator",
-        policy_permits: featureAllowed,
-        policy_denial_reason: policy.enabled
-            ? "draft_enrichment is not in org ai_policy.allowed_features."
-            : "Organization ai_policy.enabled is false.",
+        authorization: input.authorization,
         repository,
         nowIso: input.nowIso,
         clock: input.clock,

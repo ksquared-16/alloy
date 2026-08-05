@@ -19,7 +19,20 @@ export type OipMetricKey =
     | "ops.work_overdue_count"
     | "ops.workflow_failure_rate"
     | "ops.needs_attention_count"
-    | "ops.readiness_gap_count";
+    | "ops.readiness_gap_count"
+    // Trust — governed reasoning execution. Every source is a Trust Runtime
+    // append-only record. Nothing here reads provider identity or recommendation
+    // content from a Decision Package (ADR-2).
+    | "trust.governed_decisions_created"
+    | "trust.governed_decisions_completed"
+    | "trust.recommendation_rate"
+    | "trust.governed_refusal_rate"
+    | "trust.reasoning_failure_rate"
+    | "trust.deterministic_resolution_rate"
+    | "trust.escalated_decision_count"
+    | "trust.reasoning_latency_p50"
+    | "trust.provider_cost_units"
+    | "trust.executions_committed_count";
 
 export type OipKpiKey =
     | "enrollment.time_to_schedule_tour"
@@ -45,7 +58,14 @@ export type MetricPackKey =
     | "communications"
     | "forms"
     | "operational_health"
-    | "capacity";
+    | "capacity"
+    /**
+     * Governed reasoning execution. A presentation grouping, not a Business
+     * Process — Trust is platform infrastructure every capability consumes, so
+     * `PACK_TO_BUSINESS_PROCESS` maps it onto operational health rather than
+     * inventing a Trust business process.
+     */
+    | "trust";
 
 export type MetricDimensionKey = "lifecycle_stage" | "status_key";
 
@@ -63,6 +83,16 @@ export type MetricDefinition = {
     /** When true, value is a bounded point-in-time or capped scan — not exhaustive org truth. */
     snapshotSemantics?: boolean;
     supportsDimensions?: readonly MetricDimensionKey[];
+    /**
+     * When true, the metric's source data carries no site or work-unit linkage,
+     * so it can only ever be answered org-wide.
+     *
+     * A narrowed scope must then be REPORTED as unsupported — never silently
+     * answered with the org-wide number, which would read as a site figure. The
+     * snapshot writer also skips site targets for these, so no misleading
+     * site-scoped row is ever persisted.
+     */
+    orgScopeOnly?: boolean;
 };
 
 export type KpiHealthStatus = "healthy" | "warning" | "critical" | "unknown";

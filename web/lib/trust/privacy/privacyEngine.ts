@@ -13,6 +13,7 @@
 import type { ClassificationResult, InformationClass } from "@/lib/trust/classification/informationClasses";
 import type { PiiMode, RedactionStep } from "@/lib/privacy/redactObject";
 import { redactObjectForAi } from "@/lib/privacy/redactObject";
+import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
 
 export type PrivacyPolicyV1 = {
     readonly key: string;
@@ -21,18 +22,23 @@ export type PrivacyPolicyV1 = {
     readonly prohibited_classes: readonly InformationClass[];
 };
 
-export const ATTENTION_SUGGESTION_MINIMIZATION_V1: PrivacyPolicyV1 = {
-    key: "attention_suggestion_minimization_v1",
-    pii_mode: "strict",
-    prohibited_classes: ["financial"],
-};
+/**
+ * Re-exported from its platform-owned home. Doctrine places policy ownership
+ * with the platform (`privacy-runtime.md` §Privacy Policies), so the definition
+ * lives in `lib/trust/platform/` and capabilities reference it by key.
+ */
+export { ATTENTION_SUGGESTION_MINIMIZATION_V1 } from "@/lib/trust/platform/platformPrivacyPolicies";
 
-const PRIVACY_POLICIES: ReadonlyMap<string, PrivacyPolicyV1> = new Map([
-    [ATTENTION_SUGGESTION_MINIMIZATION_V1.key, ATTENTION_SUGGESTION_MINIMIZATION_V1],
-]);
-
+/**
+ * Absent returns `null`. The runtime turns a missing policy into a
+ * `refused_policy` Decision Package rather than throwing — reasoning may not
+ * proceed without a policy, and that refusal is auditable.
+ *
+ * A policy that a registered Decision Class *references* can never be missing
+ * in practice: composition refuses a dangling reference at startup.
+ */
 export function resolvePrivacyPolicy(key: string): PrivacyPolicyV1 | null {
-    return PRIVACY_POLICIES.get(key) ?? null;
+    return TRUST_REGISTRY.getPrivacyPolicy(key);
 }
 
 /**

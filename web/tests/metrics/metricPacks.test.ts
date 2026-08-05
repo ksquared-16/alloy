@@ -12,13 +12,16 @@ describe("metric packs registry", () => {
         expect(validateMetricPackRegistry()).toEqual([]);
     });
 
-    it("lists four available packs with metrics", () => {
+    it("lists five available packs with metrics", () => {
         const available = listAvailableMetricPacks();
         expect(available.map((p) => p.key)).toEqual([
             "operational_health",
             "enrollment",
             "communications",
             "forms",
+            // Governed reasoning execution. A presentation grouping, not a
+            // Business Process — see PACK_TO_BUSINESS_PROCESS.
+            "trust",
         ]);
     });
 

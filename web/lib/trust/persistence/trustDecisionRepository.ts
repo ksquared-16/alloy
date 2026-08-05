@@ -14,6 +14,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { DecisionContractV1, DecisionContractLifecycleState } from "@/lib/trust/contract/decisionContractTypes";
 import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
 
+/**
+ * The append-only lifecycle vocabulary. Must stay in step with the
+ * `chk_tdo_kind` CHECK constraint — extended additively by
+ * `20260804210000_trust_lifecycle_observation_kinds.sql`.
+ */
 export const TRUST_OBSERVATION_KINDS = [
     "presented",
     "accepted",
@@ -23,6 +28,10 @@ export const TRUST_OBSERVATION_KINDS = [
     "deferred",
     "executed",
     "outcome",
+    /** The recommendation's window closed before it was acted on. */
+    "expired",
+    /** A newer Decision Package replaced this one. The predecessor is never edited. */
+    "superseded",
 ] as const;
 
 export type TrustObservationKind = (typeof TRUST_OBSERVATION_KINDS)[number];

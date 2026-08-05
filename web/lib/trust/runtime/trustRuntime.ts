@@ -23,6 +23,7 @@
 
 import { randomUUID } from "crypto";
 
+import type { TrustRuntimeAuthorization } from "@/lib/trust/authorization/trustAuthorizationDecision";
 import type { InformationClass } from "@/lib/trust/classification/informationClasses";
 import { classifyElements } from "@/lib/trust/classification/informationClasses";
 import type { DecisionContractV1 } from "@/lib/trust/contract/decisionContractTypes";
@@ -32,6 +33,7 @@ import { emitTrustEvent } from "@/lib/trust/events/trustEvents";
 import { assembleTrustEvidence } from "@/lib/trust/governance/trustEvidence";
 import type { KnowledgeProviderV1 } from "@/lib/trust/knowledge/knowledgeProvider";
 import { createEmptyKnowledgeProvider } from "@/lib/trust/knowledge/knowledgeProvider";
+import { parseProviderCostUnits, ZERO_COST_UNITS } from "@/lib/trust/economics/providerCostUnits";
 import type { DecisionPackageOutcome, DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { resolvePrivacyPolicy, transformForReasoning } from "@/lib/trust/privacy/privacyEngine";
@@ -81,16 +83,8 @@ export type TrustRuntimeInput = {
      * that refusal as a Decision Package; it never re-decides authorization,
      * because authorization is not reasoning (Decision 019).
      */
-    readonly authorization?: TrustAuthorizationDecision;
+    readonly authorization?: TrustRuntimeAuthorization;
 };
-
-export type TrustAuthorizationDecision =
-    | { readonly permitted: true }
-    | {
-          readonly permitted: false;
-          readonly outcome: "refused_policy" | "refused_permission";
-          readonly detail: string;
-      };
 
 type PackageDraft = {
     outcome: DecisionPackageOutcome;
@@ -231,12 +225,44 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     });
 
     // ---- 6. execute reasoning ----------------------------------------------
+    // Awaited, so a synchronous and an asynchronous strategy travel the same
+    // path. `await` on a non-promise is a no-op beyond one microtask, so an
+    // existing deterministic strategy behaves exactly as before.
     trace.push("execute_reasoning");
-    const reasoning = selection.strategy.reason({ context, nowIso });
+    const reasoning = await selection.strategy.reason({ context, nowIso });
+    // A strategy reports what it spent; the runtime never derives a cost. An
+    // unusable report is refused rather than repaired — silently recording 0
+    // for a NaN would report a provider-backed execution as free.
+    const reportedCost = parseProviderCostUnits(reasoning.cost_units);
+    if (!reportedCost.ok) {
+        return finish(
+            {
+                outcome: "failed_reasoning",
+                explanation:
+                    `Strategy ${selection.strategy.key} reported an unusable provider cost: ${reportedCost.detail}` +
+                    // Keep the strategy's own reason when it also declined, so a
+                    // cost defect never hides an operational one.
+                    (reasoning.ok ? "" : ` The strategy also declined: ${reasoning.detail}`),
+            },
+            {
+                strategy: selection.strategy.key,
+                strategyKind: selection.strategy.kind,
+                level: selection.escalation_level,
+                strategyVersion: selection.strategy.version,
+            },
+        );
+    }
+    const costUnits = reportedCost.value;
+
     if (!reasoning.ok) {
         return finish(
             { outcome: "failed_reasoning", explanation: reasoning.detail },
-            { strategy: selection.strategy.key, strategyKind: selection.strategy.kind, level: selection.escalation_level },
+            {
+                strategy: selection.strategy.key,
+                strategyKind: selection.strategy.kind,
+                level: selection.escalation_level,
+                costUnits,
+            },
         );
     }
     await emitTrustEvent({
@@ -249,7 +275,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
 
     // ---- 7. deterministic validation ---------------------------------------
     trace.push("deterministic_validation");
-    const validation = orchestrateValidation({
+    const validation = await orchestrateValidation({
         policy_key: decisionClass.validation_policy_key,
         recommendation: reasoning.proposal.recommendation,
     });
@@ -332,7 +358,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             escalation_level: selection.escalation_level,
             latency_ms: latency,
             cache_utilized: false,
-            provider_cost_units: 0,
+            provider_cost_units: costUnits,
         },
         knowledge_versions: knowledge,
         learning_metadata: {
@@ -372,7 +398,10 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             escalation_level: econ.level,
             latency_ms: p.economics.latency_ms,
             cache_utilized: false,
-            provider_cost_units: 0,
+            // The package and the usage row carry the SAME measured cost. The
+            // package holds it because a unit count is provider-independent;
+            // the usage row is where provider economics are aggregated (ADR-2).
+            provider_cost_units: p.economics.provider_cost_units,
             outcome: p.outcome,
         });
         await repository.advanceContractLifecycle({
@@ -396,7 +425,14 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
      */
     async function finish(
         draft: PackageDraft,
-        econ?: { strategy: string | null; strategyKind: string | null; level: number; strategyVersion?: string },
+        econ?: {
+            strategy: string | null;
+            strategyKind: string | null;
+            level: number;
+            strategyVersion?: string;
+            /** Already validated by the caller; a refusal may still have cost. */
+            costUnits?: number;
+        },
     ): Promise<TrustRuntimeExecution> {
         const latency = clock() - startedAt;
         const refusal: DecisionPackageV1 = {
@@ -425,7 +461,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
                 escalation_level: econ?.level ?? 0,
                 latency_ms: latency,
                 cache_utilized: false,
-                provider_cost_units: 0,
+                provider_cost_units: econ?.costUnits ?? ZERO_COST_UNITS,
             },
             knowledge_versions: [],
             learning_metadata: {
