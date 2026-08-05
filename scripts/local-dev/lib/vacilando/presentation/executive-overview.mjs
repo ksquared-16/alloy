@@ -13,7 +13,6 @@ import {
   getOpenDeliverableReview,
   deliverableReviewVm,
 } from "../deliverable-review.mjs";
-import { listEvidence } from "../evidence.mjs";
 import { buildDirectorSummary } from "../director-summary.mjs";
 import { listDecisions } from "../decisions.mjs";
 import {
@@ -21,8 +20,9 @@ import {
   confidenceGlanceVm,
 } from "./explained-confidence.mjs";
 import { missionJourneyVm, missionJourneyStripVm } from "./mission-journey.mjs";
+import { executiveEvidenceStripVm } from "./evidence-experience.mjs";
 
-export { explainedConfidenceVm, confidenceGlanceVm, missionJourneyVm, missionJourneyStripVm };
+export { explainedConfidenceVm, confidenceGlanceVm, missionJourneyVm, missionJourneyStripVm, executiveEvidenceStripVm };
 
 /** @typedef {{ id: string, kind: string, label: string, explanation?: string, missionId?: string }} PostureChoice */
 
@@ -424,21 +424,9 @@ export function executiveOverviewVm(missionId, {
   };
 }
 
-/** Compact evidence preview for L1 (full gallery remains a later slice). */
+/** Compact evidence preview for L1 — DX-5 executive evidence strip. */
 export function evidenceStripVm(missionId, { limit = 3 } = {}) {
-  const artifacts = listEvidence(missionId).slice(0, limit).map((a) => ({
-    id: a.evidenceId || a.id,
-    title: a.title || "Evidence",
-    proves: a.description || a.proves || "",
-    type: a.type || "artifact",
-  }));
-  return {
-    kind: "evidence_strip",
-    missionId,
-    artifacts,
-    empty: artifacts.length === 0,
-    galleryHref: `evidence/${missionId}`,
-  };
+  return executiveEvidenceStripVm(missionId, { previewLimit: limit });
 }
 
 /**

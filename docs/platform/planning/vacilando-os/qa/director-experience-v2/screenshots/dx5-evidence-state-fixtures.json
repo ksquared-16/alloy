@@ -1,0 +1,512 @@
+{
+  "with_screenshots_tests": {
+    "strip": {
+      "kind": "executive_evidence_strip",
+      "missionId": "msn_679d476af20d561a86",
+      "empty": false,
+      "totalCount": 2,
+      "kinds": [
+        {
+          "kind": "screenshots",
+          "count": 1,
+          "label": "1 screenshot"
+        },
+        {
+          "kind": "tests",
+          "count": 1,
+          "label": "1 automated check"
+        }
+      ],
+      "counts": {
+        "product": 1,
+        "browser": 0,
+        "certification": 0,
+        "tests": 1,
+        "technical": 0,
+        "supporting": 0,
+        "unclassified": 0
+      },
+      "hasVisualProof": true,
+      "primaryProof": {
+        "evidenceId": "ev_088ae2335645604d",
+        "title": "After: Overview",
+        "proves": "UI validated",
+        "typeLabel": "Screenshot",
+        "category": "product",
+        "previewHref": "/api/v2/evidence/file?missionId=msn_679d476af20d561a86&evidenceId=ev_088ae2335645604d"
+      },
+      "preview": [
+        {
+          "kind": "evidence_card",
+          "evidenceId": "ev_088ae2335645604d",
+          "missionId": "msn_679d476af20d561a86",
+          "type": "screenshot",
+          "typeLabel": "Screenshot",
+          "category": "product",
+          "categoryLabel": "Product",
+          "title": "After: Overview",
+          "proves": "UI validated",
+          "result": "informational",
+          "resultLabel": "Informational",
+          "acceptanceCriteriaIds": [],
+          "producedBy": "Fixture",
+          "when": "2026-08-05T15:13:33.943Z",
+          "whenLabel": "Just now",
+          "environment": "fixture",
+          "commit": null,
+          "comparisonRole": "after",
+          "fixtureOnly": true,
+          "presentation": "media",
+          "previewAvailable": true,
+          "previewHref": "/api/v2/evidence/file?missionId=msn_679d476af20d561a86&evidenceId=ev_088ae2335645604d",
+          "technicalPath": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/after.png",
+          "command": null,
+          "exitCode": null,
+          "hierarchyRank": 0,
+          "provenance": {
+            "evidenceId": "ev_088ae2335645604d",
+            "type": "screenshot",
+            "createdBy": "fixture",
+            "createdAt": "2026-08-05T15:13:33.943Z",
+            "fileUri": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/after.png",
+            "externalUri": null,
+            "assignmentId": null
+          }
+        }
+      ],
+      "sufficiency": [
+        {
+          "id": "visual_proof",
+          "tone": "ok",
+          "text": "Visual proof available"
+        },
+        {
+          "id": "behavior",
+          "tone": "ok",
+          "text": "Behavior verified"
+        },
+        {
+          "id": "fixture_only",
+          "tone": "warn",
+          "text": "Fixture-only evidence"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "galleryHref": "evidence/msn_679d476af20d561a86",
+      "reviewLabel": "Review evidence"
+    },
+    "gallery": {
+      "primary": "After: Overview",
+      "kinds": [
+        {
+          "kind": "screenshots",
+          "count": 1,
+          "label": "1 screenshot"
+        },
+        {
+          "kind": "tests",
+          "count": 1,
+          "label": "1 automated check"
+        }
+      ],
+      "pairs": 0,
+      "groups": [
+        "product:1",
+        "tests:1"
+      ],
+      "sufficiency": [
+        {
+          "id": "visual_proof",
+          "tone": "ok",
+          "text": "Visual proof available"
+        },
+        {
+          "id": "behavior",
+          "tone": "ok",
+          "text": "Behavior verified"
+        },
+        {
+          "id": "fixture_only",
+          "tone": "warn",
+          "text": "Fixture-only evidence"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "hasVisual": true
+    }
+  },
+  "tech_only": {
+    "strip": {
+      "kind": "executive_evidence_strip",
+      "missionId": "msn_6bd9c756cb357a0c9d",
+      "empty": false,
+      "totalCount": 1,
+      "kinds": [
+        {
+          "kind": "technical",
+          "count": 1,
+          "label": "1 technical record"
+        }
+      ],
+      "counts": {
+        "product": 0,
+        "browser": 0,
+        "certification": 0,
+        "tests": 0,
+        "technical": 1,
+        "supporting": 0,
+        "unclassified": 0
+      },
+      "hasVisualProof": false,
+      "primaryProof": {
+        "evidenceId": "ev_a4246169216df6e1",
+        "title": "Code diff",
+        "proves": "adapter",
+        "typeLabel": "Change summary",
+        "category": "technical",
+        "previewHref": null
+      },
+      "preview": [],
+      "sufficiency": [
+        {
+          "id": "no_screenshot",
+          "tone": "warn",
+          "text": "No screenshot evidence"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "galleryHref": "evidence/msn_6bd9c756cb357a0c9d",
+      "reviewLabel": "Review evidence"
+    },
+    "gallery": {
+      "primary": "Code diff",
+      "kinds": [
+        {
+          "kind": "technical",
+          "count": 1,
+          "label": "1 technical record"
+        }
+      ],
+      "pairs": 0,
+      "groups": [
+        "technical:1"
+      ],
+      "sufficiency": [
+        {
+          "id": "no_screenshot",
+          "tone": "warn",
+          "text": "No screenshot evidence"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "hasVisual": false
+    }
+  },
+  "screenshots_only": {
+    "strip": {
+      "kind": "executive_evidence_strip",
+      "missionId": "msn_3cf1f0c9922947c0a0",
+      "empty": false,
+      "totalCount": 1,
+      "kinds": [
+        {
+          "kind": "screenshots",
+          "count": 1,
+          "label": "1 screenshot"
+        }
+      ],
+      "counts": {
+        "product": 1,
+        "browser": 0,
+        "certification": 0,
+        "tests": 0,
+        "technical": 0,
+        "supporting": 0,
+        "unclassified": 0
+      },
+      "hasVisualProof": true,
+      "primaryProof": {
+        "evidenceId": "ev_90ca893797c4f307",
+        "title": "Mission Control",
+        "proves": "Product proof",
+        "typeLabel": "Screenshot",
+        "category": "product",
+        "previewHref": "/api/v2/evidence/file?missionId=msn_3cf1f0c9922947c0a0&evidenceId=ev_90ca893797c4f307"
+      },
+      "preview": [
+        {
+          "kind": "evidence_card",
+          "evidenceId": "ev_90ca893797c4f307",
+          "missionId": "msn_3cf1f0c9922947c0a0",
+          "type": "screenshot",
+          "typeLabel": "Screenshot",
+          "category": "product",
+          "categoryLabel": "Product",
+          "title": "Mission Control",
+          "proves": "Product proof",
+          "result": "informational",
+          "resultLabel": "Informational",
+          "acceptanceCriteriaIds": [],
+          "producedBy": "worker",
+          "when": "2026-08-05T15:13:33.960Z",
+          "whenLabel": "Just now",
+          "environment": null,
+          "commit": null,
+          "comparisonRole": null,
+          "fixtureOnly": false,
+          "presentation": "media",
+          "previewAvailable": true,
+          "previewHref": "/api/v2/evidence/file?missionId=msn_3cf1f0c9922947c0a0&evidenceId=ev_90ca893797c4f307",
+          "technicalPath": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/after.png",
+          "command": null,
+          "exitCode": null,
+          "hierarchyRank": 0,
+          "provenance": {
+            "evidenceId": "ev_90ca893797c4f307",
+            "type": "screenshot",
+            "createdBy": "worker",
+            "createdAt": "2026-08-05T15:13:33.960Z",
+            "fileUri": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/after.png",
+            "externalUri": null,
+            "assignmentId": null
+          }
+        }
+      ],
+      "sufficiency": [
+        {
+          "id": "visual_proof",
+          "tone": "ok",
+          "text": "Visual proof available"
+        },
+        {
+          "id": "env_unverified",
+          "tone": "info",
+          "text": "Production environment not verified"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "galleryHref": "evidence/msn_3cf1f0c9922947c0a0",
+      "reviewLabel": "Review evidence"
+    },
+    "gallery": {
+      "primary": "Mission Control",
+      "kinds": [
+        {
+          "kind": "screenshots",
+          "count": 1,
+          "label": "1 screenshot"
+        }
+      ],
+      "pairs": 0,
+      "groups": [
+        "product:1"
+      ],
+      "sufficiency": [
+        {
+          "id": "visual_proof",
+          "tone": "ok",
+          "text": "Visual proof available"
+        },
+        {
+          "id": "env_unverified",
+          "tone": "info",
+          "text": "Production environment not verified"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "hasVisual": true
+    }
+  },
+  "before_after": {
+    "strip": {
+      "kind": "executive_evidence_strip",
+      "missionId": "msn_b4b789330f057e7ec8",
+      "empty": false,
+      "totalCount": 2,
+      "kinds": [
+        {
+          "kind": "screenshots",
+          "count": 2,
+          "label": "2 screenshots"
+        },
+        {
+          "kind": "comparisons",
+          "count": 1,
+          "label": "1 before/after pair"
+        }
+      ],
+      "counts": {
+        "product": 2,
+        "browser": 0,
+        "certification": 0,
+        "tests": 0,
+        "technical": 0,
+        "supporting": 0,
+        "unclassified": 0
+      },
+      "hasVisualProof": true,
+      "primaryProof": {
+        "evidenceId": "ev_a81ed3a428f53c95",
+        "title": "After: Overview",
+        "proves": "Journey strip",
+        "typeLabel": "Screenshot",
+        "category": "product",
+        "previewHref": "/api/v2/evidence/file?missionId=msn_b4b789330f057e7ec8&evidenceId=ev_a81ed3a428f53c95"
+      },
+      "preview": [
+        {
+          "kind": "evidence_card",
+          "evidenceId": "ev_a81ed3a428f53c95",
+          "missionId": "msn_b4b789330f057e7ec8",
+          "type": "screenshot",
+          "typeLabel": "Screenshot",
+          "category": "product",
+          "categoryLabel": "Product",
+          "title": "After: Overview",
+          "proves": "Journey strip",
+          "result": "informational",
+          "resultLabel": "Informational",
+          "acceptanceCriteriaIds": [],
+          "producedBy": "Fixture",
+          "when": "2026-08-05T15:13:33.964Z",
+          "whenLabel": "Just now",
+          "environment": "fixture",
+          "commit": null,
+          "comparisonRole": "after",
+          "fixtureOnly": true,
+          "presentation": "media",
+          "previewAvailable": true,
+          "previewHref": "/api/v2/evidence/file?missionId=msn_b4b789330f057e7ec8&evidenceId=ev_a81ed3a428f53c95",
+          "technicalPath": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/after.png",
+          "command": null,
+          "exitCode": null,
+          "hierarchyRank": 0,
+          "provenance": {
+            "evidenceId": "ev_a81ed3a428f53c95",
+            "type": "screenshot",
+            "createdBy": "fixture",
+            "createdAt": "2026-08-05T15:13:33.964Z",
+            "fileUri": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/after.png",
+            "externalUri": null,
+            "assignmentId": null
+          }
+        },
+        {
+          "kind": "evidence_card",
+          "evidenceId": "ev_8701a6baa8e2bf33",
+          "missionId": "msn_b4b789330f057e7ec8",
+          "type": "screenshot",
+          "typeLabel": "Screenshot",
+          "category": "product",
+          "categoryLabel": "Product",
+          "title": "Before: Overview",
+          "proves": "Prior",
+          "result": "informational",
+          "resultLabel": "Informational",
+          "acceptanceCriteriaIds": [],
+          "producedBy": "Fixture",
+          "when": "2026-08-05T15:13:33.963Z",
+          "whenLabel": "Just now",
+          "environment": "fixture",
+          "commit": null,
+          "comparisonRole": "before",
+          "fixtureOnly": true,
+          "presentation": "media",
+          "previewAvailable": true,
+          "previewHref": "/api/v2/evidence/file?missionId=msn_b4b789330f057e7ec8&evidenceId=ev_8701a6baa8e2bf33",
+          "technicalPath": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/before.png",
+          "command": null,
+          "exitCode": null,
+          "hierarchyRank": 1,
+          "provenance": {
+            "evidenceId": "ev_8701a6baa8e2bf33",
+            "type": "screenshot",
+            "createdBy": "fixture",
+            "createdAt": "2026-08-05T15:13:33.963Z",
+            "fileUri": "/var/folders/p3/q2rsnthn35b15qrj95m15b480000gp/T/vac-dx5-fix-UMBEa8/shots/before.png",
+            "externalUri": null,
+            "assignmentId": null
+          }
+        }
+      ],
+      "sufficiency": [
+        {
+          "id": "visual_proof",
+          "tone": "ok",
+          "text": "Visual proof available"
+        },
+        {
+          "id": "fixture_only",
+          "tone": "warn",
+          "text": "Fixture-only evidence"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "galleryHref": "evidence/msn_b4b789330f057e7ec8",
+      "reviewLabel": "Review evidence"
+    },
+    "gallery": {
+      "primary": "After: Overview",
+      "kinds": [
+        {
+          "kind": "screenshots",
+          "count": 2,
+          "label": "2 screenshots"
+        },
+        {
+          "kind": "comparisons",
+          "count": 1,
+          "label": "1 before/after pair"
+        }
+      ],
+      "pairs": 1,
+      "groups": [],
+      "sufficiency": [
+        {
+          "id": "visual_proof",
+          "tone": "ok",
+          "text": "Visual proof available"
+        },
+        {
+          "id": "fixture_only",
+          "tone": "warn",
+          "text": "Fixture-only evidence"
+        },
+        {
+          "id": "ac_gap",
+          "tone": "warn",
+          "text": "1 acceptance criterion area still unverified"
+        }
+      ],
+      "hasVisual": true
+    }
+  }
+}

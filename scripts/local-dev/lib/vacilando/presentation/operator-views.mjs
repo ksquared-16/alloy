@@ -57,6 +57,10 @@ import {
 } from "../deliverable-review.mjs";
 import { composeExecutiveL1 } from "./executive-overview.mjs";
 import { missionJourneyVm } from "./mission-journey.mjs";
+import {
+  evidenceExperienceGalleryVm,
+  evidenceExperienceCardVm,
+} from "./evidence-experience.mjs";
 
 
 const STATUS_COPY = {
@@ -626,56 +630,17 @@ export function decisionDetailVm(missionId, decisionId) {
   };
 }
 
-/** Evidence card */
+/** Evidence card — DX-5 presentation fields; preserves provenance. */
 export function evidenceCardVm(artifact, coverageMap = null) {
-  const typeLabels = {
-    screenshot: "Screenshot",
-    video: "Recording",
-    test: "Test results",
-    build: "Build",
-    typecheck: "Typecheck",
-    browser: "Browser QA",
-    database: "Database",
-    migration: "Migration",
-    diff: "Change summary",
-    log: "Log",
-    performance: "Performance",
-    security: "Security check",
-    commit: "Commit",
-    document: "Document",
-  };
-  const proves = artifact.description
-    || (artifact.acceptanceCriteriaIds?.length
-      ? `Supports ${artifact.acceptanceCriteriaIds.join(", ")}`
-      : `Documents ${typeLabels[artifact.type] || artifact.type}`);
-  const path = artifact.fileUri || artifact.externalUri || "";
-  const fileName = path.split("/").pop() || null;
+  const card = evidenceExperienceCardVm(artifact);
+  // coverageMap unused historically; keep signature for callers
+  void coverageMap;
+  return card;
+}
 
-  return {
-    kind: "evidence_card",
-    evidenceId: artifact.evidenceId,
-    type: artifact.type,
-    typeLabel: typeLabels[artifact.type] || artifact.type,
-    title: artifact.title || typeLabels[artifact.type] || "Evidence",
-    proves,
-    acceptanceCriteriaIds: artifact.acceptanceCriteriaIds || [],
-    producedBy: artifact.createdBy === "operator" ? "You"
-      : artifact.createdBy === "director" ? "Director"
-        : artifact.createdBy || "Worker",
-    when: artifact.createdAt,
-    whenLabel: relTime(artifact.createdAt),
-    environment: artifact.environment || artifact.branch || null,
-    commit: artifact.repositorySha ? String(artifact.repositorySha).slice(0, 8) : null,
-    previewLabel: fileName ? `Open ${fileName}` : (artifact.command ? `Command: ${artifact.command}` : "View details"),
-    technicalPath: path || null,
-    command: artifact.command || null,
-    exitCode: artifact.exitCode,
-    presentation: artifact.type === "screenshot" || artifact.type === "video" ? "media"
-      : artifact.type === "test" || artifact.type === "typecheck" || artifact.type === "build" ? "result"
-        : artifact.type === "diff" ? "diff"
-          : artifact.type === "migration" ? "migration"
-            : "document",
-  };
+/** @deprecated Prefer evidenceExperienceGalleryVm — kept as thin wrapper. */
+export function evidenceGalleryVm(missionId) {
+  return evidenceExperienceGalleryVm(missionId);
 }
 
 /** Worker card / detail */
@@ -1568,21 +1533,6 @@ export function timelinePageVm(missionId) {
     milestones,
     events,
     empty: events.length === 0 && !(journey?.stages?.length),
-  };
-}
-
-export function evidenceGalleryVm(missionId) {
-  return {
-    kind: "evidence_gallery",
-    missionId,
-    title: getBrief(missionId)?.title || missionId,
-    artifacts: listEvidence(missionId).map((a) => evidenceCardVm(a)),
-    coverage: acceptanceEvidenceCoverage(missionId).map((c) => ({
-      id: c.id,
-      statement: c.statement,
-      statusLabel: c.status === "passed" ? "Covered" : "Outstanding",
-    })),
-    certification: canCertifyMission(missionId),
   };
 }
 
