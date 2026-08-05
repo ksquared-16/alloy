@@ -14,6 +14,10 @@ import {
     isPlausibleCandidate,
 } from "../operator/identityResolutionEligibility";
 import type { IdentityCandidate } from "@/lib/identity";
+import {
+    supersedeForOperatorDecision,
+    type IdentityLineageDeps,
+} from "../trustAdapter/identityLineageService";
 
 function decisionForRecord(record: CreateLeadCommitRecord): { action: string; selectedId: string | null } | null {
     if (!record.include_in_commit) return null;
@@ -42,6 +46,13 @@ export async function applyCommitSelectionToResolutions(
         caseId: string;
         selection: CreateLeadCommitSelection;
         operatorId: string;
+        /**
+         * Trust supersession lineage (Phase 1.6). Defaults ON in production.
+         * This adapter is the SECOND path that stamps `decided_by = "operator"`,
+         * so it goes through the same canonical lineage service rather than
+         * leaving its corrections ungoverned.
+         */
+        trustLineage?: false | IdentityLineageDeps;
     },
 ): Promise<void> {
     const updates: { subjectRef: string; action: string; selectedId: string | null }[] = [];
@@ -68,7 +79,7 @@ export async function applyCommitSelectionToResolutions(
 
         const { data: existing } = await supabase
             .from("processing_resolutions")
-            .select("candidates, provisional, decision_action")
+            .select("id, candidates, provisional, decision_action")
             .eq("org_id", input.orgId)
             .eq("case_id", input.caseId)
             .eq("subject_ref", u.subjectRef)
@@ -106,5 +117,19 @@ export async function applyCommitSelectionToResolutions(
             .eq("org_id", input.orgId)
             .eq("case_id", input.caseId)
             .eq("subject_ref", u.subjectRef);
+
+        // The decision is durable. Record its lifecycle consequence through the
+        // ONE canonical lineage service — never by constructing an observation
+        // here. Non-blocking: it cannot fail this commit selection.
+        const resolutionId = (existing as { id?: string } | null)?.id;
+        if (input.trustLineage !== false && resolutionId) {
+            await supersedeForOperatorDecision(supabase, {
+                orgId: input.orgId,
+                caseId: input.caseId,
+                resolutionId,
+                actorId: input.operatorId,
+                deps: typeof input.trustLineage === "object" ? input.trustLineage : undefined,
+            });
+        }
     }
 }

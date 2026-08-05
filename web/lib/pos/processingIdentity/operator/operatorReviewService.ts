@@ -62,6 +62,11 @@ import {
 } from "./identityResolutionEligibility";
 import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
 import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES } from "@/lib/pos/trustGovernance/gapExceptionTypes";
+import {
+    supersedeForOperatorDecision,
+    type IdentityLineageDeps,
+    type IdentityLineageOutcome,
+} from "../trustAdapter/identityLineageService";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -80,6 +85,13 @@ export type OperatorReviewDeps = {
     actorAuthorized: boolean;
     executorPorts: ExecutorPorts;
     now?: () => string;
+    /**
+     * Trust supersession lineage (Phase 1.6). Defaults ON in production.
+     * `false` suppresses it entirely — the control arm proving the operator
+     * decision behaves identically with and without Trust. An object injects
+     * certification seams.
+     */
+    trustLineage?: false | IdentityLineageDeps;
 };
 
 export type CaseReviewState = {
@@ -234,7 +246,7 @@ export async function recordResolutionDecision(
         createNewOverrideReason?: string | null;
         createNewOverrideReasonCode?: string | null;
     },
-): Promise<void> {
+): Promise<{ trustLineage: IdentityLineageOutcome | null }> {
     const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
     const existing = rows.find((r) => r.id === input.resolutionId);
     if (!existing) throw new OperatorServiceError("resolution_not_found", "Resolution not found in this case/org");
@@ -293,6 +305,28 @@ export async function recordResolutionDecision(
     if (!data || (Array.isArray(data) && data.length === 0)) {
         throw new OperatorServiceError("resolution_not_found", "Resolution not found in this case/org");
     }
+
+    // ---- Trust adoption Phase 1.6 -------------------------------------------
+    // The operator decision is now DURABLE and authoritative. Only here may the
+    // prior engine judgment be declared non-current — and the decision itself
+    // never becomes a Decision Package, because a human decision is a Processing
+    // act, not deterministic reasoning.
+    //
+    // Additive and non-blocking by construction: it never throws, it cannot
+    // change a resolution row, and a Trust outage produces a durable,
+    // readiness-neutral lineage gap rather than failing this correction.
+    let trustLineage: IdentityLineageOutcome | null = null;
+    if (deps.trustLineage !== false) {
+        trustLineage = await supersedeForOperatorDecision(deps.supabase, {
+            orgId: deps.orgId,
+            caseId: input.caseId,
+            resolutionId: input.resolutionId,
+            // Authoritative server context, never the request body.
+            actorId: deps.actorId,
+            deps: typeof deps.trustLineage === "object" ? deps.trustLineage : undefined,
+        });
+    }
+    return { trustLineage };
 }
 
 // ---------------------------------------------------------------------------

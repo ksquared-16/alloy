@@ -24,12 +24,24 @@ export const TRUST_SOURCE_CLASSIFICATION_GAP_TYPE = "trust_governance_gap" as co
 export const TRUST_IDENTITY_RESOLUTION_GAP_TYPE = "trust_identity_resolution_governance_gap" as const;
 
 /**
+ * Phase 1.6 — a prior governed identity judgment could not be marked superseded.
+ *
+ * DISTINCT from the capture gap rather than a flag on it. The two carry
+ * materially different replay material (a governed recommendation versus a
+ * lineage claim) and reconcile through materially different paths (run the
+ * capture seam versus append one observation). Overloading the capture parser
+ * with lineage data is what the shared-infrastructure boundary forbids.
+ */
+export const TRUST_IDENTITY_LINEAGE_GAP_TYPE = "trust_identity_lineage_governance_gap" as const;
+
+/**
  * Every gap type. Exclude all of these from any exception count that feeds an
  * operator-visible projection.
  */
 export const TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES: readonly string[] = [
     TRUST_SOURCE_CLASSIFICATION_GAP_TYPE,
     TRUST_IDENTITY_RESOLUTION_GAP_TYPE,
+    TRUST_IDENTITY_LINEAGE_GAP_TYPE,
 ];
 
 export function isTrustGovernanceGapExceptionType(exceptionType: string): boolean {

@@ -37,13 +37,29 @@ import { buildProcessingIdentityTrustDecisionMaterial } from "./identityTrustDec
 import { processingIdentitySubjectAdoptionId } from "./identityAdoptionIdentity";
 import { toGovernedIdentitySubjectRecommendation } from "./governedIdentitySchema";
 import { recordIdentityGovernanceGap } from "./identityGovernanceGapDb";
+import {
+    supersedeForReplacementPackage,
+    type IdentityLineageDeps,
+    type IdentityLineageOutcome,
+} from "./identityLineageService";
 
 /** The distinct marker for an identity judgment that was not governed. */
 export const IDENTITY_GOVERNANCE_GAP_MARKER = "[trust.identity_governance_gap]";
 
 export type SubjectCaptureStatus =
-    | { readonly status: "governed"; readonly subjectRef: string; readonly packageId: string }
-    | { readonly status: "already_governed"; readonly subjectRef: string; readonly packageId: string }
+    | {
+          readonly status: "governed";
+          readonly subjectRef: string;
+          readonly packageId: string;
+          /** What this package did to an older judgment for the same subject. */
+          readonly lineage?: IdentityLineageOutcome;
+      }
+    | {
+          readonly status: "already_governed";
+          readonly subjectRef: string;
+          readonly packageId: string;
+          readonly lineage?: IdentityLineageOutcome;
+      }
     | { readonly status: "not_governed"; readonly subjectRef: string; readonly reason: string; readonly gapId: string }
     /** Both the governed record AND its recovery record were lost. */
     | { readonly status: "gap_unrecordable"; readonly subjectRef: string; readonly reason: string; readonly gapError: string }
@@ -58,6 +74,12 @@ export type GenerationCaptureResult = {
 export type CaptureGenerationDeps = IdentityCaptureDeps & {
     readonly capture?: typeof captureProcessingIdentitySubjectResolution;
     readonly now?: () => string;
+    /**
+     * Supersession lineage for a REPLACEMENT generation (Phase 1.6). Defaults ON.
+     * `false` suppresses it — the control arm proving capture behaves identically
+     * with and without lineage.
+     */
+    readonly lineage?: false | IdentityLineageDeps;
 };
 
 /**
@@ -153,10 +175,27 @@ export async function captureIdentityGenerationJudgments(
         );
 
         if (result.status === "governed" || result.status === "already_governed") {
+            // ---- Phase 1.6 lineage ------------------------------------------
+            // The replacement package now EXISTS. Only here may an older
+            // judgment for THIS subject be declared non-current — a capture that
+            // failed and left a gap supersedes nothing, and one subject's
+            // replacement never touches another's package.
+            const lineage =
+                deps.lineage === false
+                    ? undefined
+                    : await supersedeForReplacementPackage(supabase, {
+                          orgId: input.orgId,
+                          caseId: input.caseId,
+                          subjectRef: row.subject_ref,
+                          replacementGenerationId: input.generationId,
+                          replacementPackageId: result.packageId,
+                          deps: typeof deps.lineage === "object" ? deps.lineage : undefined,
+                      });
             subjects.push({
                 status: result.status,
                 subjectRef: row.subject_ref,
                 packageId: result.packageId,
+                ...(lineage ? { lineage } : {}),
             });
             continue;
         }
