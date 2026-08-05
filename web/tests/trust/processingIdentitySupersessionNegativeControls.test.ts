@@ -511,30 +511,42 @@ describe("P16-NC-6 — unsafe reason text entering Trust would be caught", () =>
 });
 
 describe("P16-NC-7 — a Trust failure rolling back the correction would be caught", () => {
-    it("the correction survives every failure mode the lineage path has", async () => {
-        for (const failure of ["observation", "gap_store"] as const) {
+    it("the correction survives a Trust failure at every stage of the lineage path", async () => {
+        const stages: { name: string; deps: Record<string, unknown> }[] = [
+            {
+                name: "prior_package_lookup",
+                deps: {
+                    lookup: async () => {
+                        throw new Error("trust db down");
+                    },
+                },
+            },
+            {
+                name: "existing_supersession_lookup",
+                deps: {
+                    observationLookup: (async () => {
+                        throw new Error("trust db down");
+                    }) as SupersessionObservationLookup,
+                },
+            },
+        ];
+
+        for (const stage of stages) {
             const trust = makeTrust();
             const store = makeStore([row()]);
             const spies = silence();
-
             const before = JSON.stringify(store.resolutions);
+
             const outcome = await supersedeForOperatorDecision(store.client(), {
                 orgId: ORG, caseId: CASE, resolutionId: "res-1", actorId: "user-1",
-                deps: {
-                    ...lineageDeps(trust, { [adoptionIdFor()]: PRIOR_PKG }),
-                    repository: {
-                        ...trust.repository,
-                        async insertObservation() { throw new Error("trust db down"); },
-                    } as TrustRepository,
-                    ...(failure === "gap_store"
-                        ? {}
-                        : {}),
-                },
+                deps: { ...lineageDeps(trust, { [adoptionIdFor()]: PRIOR_PKG }), ...stage.deps },
             });
 
-            expect(["deferred", "gap_unrecordable"]).toContain(outcome.status);
-            expect(JSON.stringify(store.resolutions)).toBe(before);
-            expect(store.resolutionWrites).toEqual([]);
+            expect(outcome.status, stage.name).toBe("deferred");
+            expect(trust.observations, stage.name).toHaveLength(0);
+            // The correction is untouched, at every stage.
+            expect(JSON.stringify(store.resolutions), stage.name).toBe(before);
+            expect(store.resolutionWrites, stage.name).toEqual([]);
             spies.warn.mockRestore();
             spies.error.mockRestore();
         }
