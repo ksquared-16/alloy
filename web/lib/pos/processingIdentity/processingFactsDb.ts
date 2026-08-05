@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash, randomUUID } from "node:crypto";
 import type { IntakeFact } from "@/lib/intake/types";
+import { hashIdentityFactMaterial } from "./factMaterialProjection";
 
 export type ProcessingFactRow = {
     id: string;
@@ -164,12 +165,24 @@ export async function listProcessingFactsByCase(
     return (data ?? []) as ProcessingFactRow[];
 }
 
+/**
+ * Content-deterministic hash of the fact cohort backing a resolution generation.
+ *
+ * Previously this hashed `f.id` — a `gen_random_uuid()` primary key — so
+ * semantically identical facts stored as different rows produced different
+ * hashes (defect D-1). It now delegates to the versioned material projection,
+ * which admits only fields that carry semantic content, evidentiary provenance
+ * or a version pin.
+ *
+ * The projection version is pinned inside the hashed payload. The resolver
+ * version stays a SEPARATE dimension, already persisted on
+ * `processing_resolutions.resolver_version`, so an algorithm change remains
+ * distinguishable without invalidating material hashes.
+ *
+ * @see ./factMaterialProjection.ts — the admitted/excluded field decisions
+ */
 export function hashFactsForResolution(facts: ProcessingFactRow[]): string {
-    const payload = facts
-        .map((f) => `${f.id}:${f.fact_type}:${f.normalized_value ?? f.raw_value ?? ""}`)
-        .sort()
-        .join("|");
-    return createHash("sha256").update(payload).digest("hex");
+    return hashIdentityFactMaterial(facts);
 }
 
 export function newGenerationId(): string {
