@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: accepted
+status: proposed
 last_reviewed: 2026-08-05
 audience: product · directors · implementation leadership
 constraint: milestone record only — no new implementation charter
@@ -11,7 +11,7 @@ constraint: milestone record only — no new implementation charter
 **Closed:** 2026-08-05  
 **Staging merge tip:** `374fad991` (DX-8 via PR #344)  
 **Certified source tip (unchanged history):** `4ee73d7bd` on `agent/cursor/6-director-experience-dx8-command-center`  
-**Canonical spec:** [`DIRECTOR-EXPERIENCE-V2.md`](../DIRECTOR-EXPERIENCE-V2.md)  
+**Canonical spec:** [`DIRECTOR-EXPERIENCE-V2.md`](DIRECTOR-EXPERIENCE-V2.md)  
 **Evidence index:** [`qa/director-experience-v2/README.md`](qa/director-experience-v2/README.md)
 
 Phase 1 is the presentation-layer arc that made Vacilando Mission Control readable and operable for a Director across **one mission** and then **many missions** — without redesigning lifecycle, workers, certification, confidence math, or evidence storage.
