@@ -13,12 +13,15 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Alloy | A Platform For Operational Workflows",
+  title: {
+    default: "Where Work Happens",
+    template: "%s | Alloy",
+  },
   description:
-    "Alloy connects people, processes, communications, documents, and actions into a single operating system for childcare.",
+    "Most software stores information. Alloy moves work forward — Business Processes, Processing, and Operational Intelligence in one operating system.",
   icons: {
-    icon: "/brand/alloy-brandmark-blue.svg",
-    apple: "/brand/alloy-brandmark-blue.svg",
+    icon: "/marketing/favicon/alloy-gradient-brandmark.svg",
+    apple: "/marketing/favicon/alloy-gradient-brandmark.svg",
   },
 };
 

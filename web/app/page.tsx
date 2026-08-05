@@ -1,254 +1,234 @@
-import ArtifactCard from "@/components/marketing/ArtifactCard";
 import CTAButton from "@/components/marketing/CTAButton";
+import HeroCapabilityStrip from "@/components/marketing/HeroCapabilityStrip";
+import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
 import SectionShell from "@/components/marketing/SectionShell";
-import { MARKETING_ARTIFACTS } from "@/lib/marketing/artifactPaths";
+import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
 import Link from "next/link";
+import type { Metadata } from "next";
 
-const ENROLLMENT_STAGES: { label: string; active?: boolean }[] = [
-  { label: "Lead", active: true },
-  { label: "Qualification" },
-  { label: "Tour" },
-  { label: "Enrollment" },
-  { label: "Enrolled", active: true },
-];
-
-const WORKFLOW_AREAS = [
-  "Enrollment",
-  "Billing",
-  "Payments",
-  "Attendance",
-  "Scheduling",
-  "Staffing",
-  "Parent Experience",
-] as const;
-
-const VISION_TODAY = [
-  "Enrollment",
-  "Tours",
-  "Communications",
-  "Documents",
-  "Tasks",
-  "Operational Intelligence",
-] as const;
-
-const VISION_TOMORROW = [
-  "Billing",
-  "Payments",
-  "Attendance",
-  "Scheduling",
-  "Staffing",
-  "Parent Experience",
-  "Reporting & Analytics",
-] as const;
+export const metadata: Metadata = {
+  title: {
+    absolute: "Where Work Happens",
+  },
+  description:
+    "Most software stores information. Alloy moves work forward — Business Processes, Processing, and Operational Intelligence in one operating system.",
+};
 
 function SectionHeading({
   title,
   subtitle,
   align = "left",
+  eyebrow,
 }: {
   title: string;
   subtitle?: string;
   align?: "left" | "center";
+  eyebrow?: string;
 }) {
   const alignClass = align === "center" ? "text-center mx-auto" : "";
   return (
     <div className={`max-w-2xl ${alignClass}`}>
-      <h2 className="text-3xl font-bold tracking-tight text-alloy-forge md:text-4xl">{title}</h2>
-      {subtitle ? (
-        <p className="mt-4 text-lg leading-relaxed text-alloy-forge/70">{subtitle}</p>
-      ) : null}
+      {eyebrow ? <p className="marketing-eyebrow mb-4">{eyebrow}</p> : null}
+      <h2 className="marketing-section-headline">{title}</h2>
+      {subtitle ? <p className="marketing-body-lg mt-5">{subtitle}</p> : null}
     </div>
-  );
-}
-
-function WorkflowPill({ label, active }: { label: string; active?: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-medium ${
-        active
-          ? "bg-alloy-juniper/12 text-alloy-juniper ring-1 ring-alloy-juniper/25"
-          : "bg-alloy-stone text-alloy-forge/75 ring-1 ring-alloy-forge/8"
-      }`}
-    >
-      {label}
-    </span>
   );
 }
 
 export default function HomePage() {
   return (
     <>
-      {/* Hero */}
-      <SectionShell className="!pt-12 md:!pt-16 lg:!pt-20" innerClassName="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      {/* Hero — native copy + isolated illustration slot */}
+      <SectionShell
+        className="!pt-12 md:!pt-16 lg:!pt-20"
+        innerClassName="grid items-center gap-12 lg:grid-cols-[42%_1fr] lg:gap-14"
+      >
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-alloy-juniper">Alloy</p>
-          <h1 className="mt-3 text-4xl font-bold tracking-tight text-alloy-forge md:text-5xl lg:text-6xl">
-            A Platform For Operational Workflows
+          <p className="marketing-eyebrow">The modern operating system for operations</p>
+          <h1 className="marketing-display-headline mt-5">
+            <span className="block text-alloy-midnight-forge">Most software stores information.</span>
+            <span className="mt-2 block text-alloy-bend-pine">Alloy moves work forward.</span>
           </h1>
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-alloy-forge/70">
-            Connecting people, processes, communications, documents, and actions into a single
-            operating system.
-          </p>
+          <div className="marketing-body-lg mt-6 max-w-lg space-y-4">
+            <p>Work doesn&apos;t happen inside one application.</p>
+            <p>
+              It moves between people, decisions, communications, documents, approvals, and Business
+              Processes.
+            </p>
+            <p>
+              Alloy connects them into one operating system so your team can focus on the work—not
+              the software.
+            </p>
+          </div>
           <div className="mt-8 flex flex-wrap gap-3">
             <CTAButton href="/contact">Book a Demo</CTAButton>
-            <CTAButton href="/login" variant="secondary">
-              Sign In
+            <CTAButton href="/platform" variant="secondary">
+              Explore the Platform
             </CTAButton>
           </div>
         </div>
-        <ArtifactCard
-          src={MARKETING_ARTIFACTS.title}
-          alt="Abstract Alloy platform visual"
+        <MarketingAssetPlaceholder
+          assetKey={MARKETING_ASSETS.hero.key}
+          alt={MARKETING_ASSETS.hero.alt}
+          aspectClassName="aspect-[4/3]"
           priority
         />
       </SectionShell>
 
-      {/* Problem */}
+      <HeroCapabilityStrip />
+
+      {/* Stop stitching */}
       <SectionShell variant="muted">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          <ArtifactCard
-            src={MARKETING_ARTIFACTS.problem}
-            alt="Disconnected systems visualization"
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.disconnectedToUnified.key}
+            alt={MARKETING_ASSETS.disconnectedToUnified.alt}
             className="order-2 lg:order-1"
           />
           <div className="order-1 lg:order-2">
             <SectionHeading
-              title="Most childcare organizations operate across disconnected systems."
-              subtitle="CRM, email, forms, tasks, documents, and reports often live in separate places. People become the integration layer."
+              title="Stop stitching software together"
+              subtitle="CRM, email, forms, tasks, documents, and reports often live in separate places. People become the integration layer. Alloy replaces that patchwork with one operating system that moves work forward."
             />
           </div>
         </div>
       </SectionShell>
 
-      {/* Platform Foundation */}
+      {/* Business Processes — pillar */}
       <SectionShell>
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           <div>
             <SectionHeading
-              title="Built on a unified platform foundation."
-              subtitle="Entities, workflows, lifecycle, layouts, forms, permissions, documents, messaging, and tasks — powered by the BOS Intelligence Layer."
+              eyebrow="Business Processes"
+              title="Built around Business Processes"
+              subtitle="Business Processes organize how work advances — stages, decisions, requirements, and outcomes — so every action has a place to land and a next step to take."
             />
             <p className="mt-6">
-              <Link href="/platform" className="text-sm font-semibold text-alloy-juniper hover:underline">
-                Explore the platform →
+              <Link href="/platform" className="text-sm font-semibold text-alloy-bend-pine hover:underline">
+                Explore Business Processes →
               </Link>
             </p>
           </div>
-          <ArtifactCard
-            src={MARKETING_ARTIFACTS.platformFoundation}
-            alt="Unified platform foundation diagram"
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.businessProcesses.key}
+            alt={MARKETING_ASSETS.businessProcesses.alt}
           />
         </div>
       </SectionShell>
 
-      {/* First Operational Workflow */}
+      {/* Processing — pillar */}
       <SectionShell variant="muted">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-          <ArtifactCard
-            src={MARKETING_ARTIFACTS.enrollmentWorkflow}
-            alt="Enrollment workflow stages"
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.processing.key}
+            alt={MARKETING_ASSETS.processing.alt}
             className="order-2 lg:order-1"
           />
           <div className="order-1 lg:order-2">
             <SectionHeading
-              title="Enrollment & Family Operations"
-              subtitle="The first operational workflow running on Alloy."
+              eyebrow="Processing"
+              title="Processing turns information into action"
+              subtitle="Intake, documents, and operational inputs should not sit idle. Processing converts information into structured progress inside the Business Process."
             />
-            <div className="mt-8 flex flex-wrap gap-2">
-              {ENROLLMENT_STAGES.map((stage) => (
-                <WorkflowPill key={stage.label} label={stage.label} active={stage.active} />
-              ))}
-            </div>
-            <p className="mt-4 text-sm text-alloy-forge/55">
-              <span className="font-medium text-alloy-forge/70">Waitlist</span> — a parking spot
-              within the workflow, not a dead end.
-            </p>
           </div>
         </div>
       </SectionShell>
 
-      {/* Built Differently */}
+      {/* Operational Intelligence — pillar */}
       <SectionShell>
+        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <SectionHeading
+              eyebrow="Operational Intelligence"
+              title="Operational Intelligence tells you what needs attention"
+              subtitle="Know what matters, what is waiting, and what requires a decision — without hunting across inboxes and spreadsheets."
+            />
+          </div>
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.operationalIntelligence.key}
+            alt={MARKETING_ASSETS.operationalIntelligence.alt}
+          />
+        </div>
+      </SectionShell>
+
+      {/* Communications */}
+      <SectionShell variant="muted">
+        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.communications.key}
+            alt={MARKETING_ASSETS.communications.alt}
+            className="order-2 lg:order-1"
+          />
+          <div className="order-1 lg:order-2">
+            <SectionHeading
+              title="Every conversation stays connected"
+              subtitle="Messages stay attached to the people and work they belong to — so context does not disappear when the thread closes."
+            />
+          </div>
+        </div>
+      </SectionShell>
+
+      {/* AI / BOS */}
+      <SectionShell>
+        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <SectionHeading
+              title="AI that understands your business"
+              subtitle="BOS operates through your records, Business Processes, permissions, and audit paths — helping teams move work forward without inventing a parallel system."
+            />
+          </div>
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.bos.key}
+            alt={MARKETING_ASSETS.bos.alt}
+          />
+        </div>
+      </SectionShell>
+
+      {/* One OS */}
+      <SectionShell variant="muted">
         <div className="mx-auto max-w-3xl text-center">
           <SectionHeading
             align="center"
-            title="Most software starts with features. Alloy started with the foundation."
-            subtitle="The platform foundation allows new operational workflows to be added without creating disconnected systems."
+            title="One operating system, endless possibilities"
+            subtitle="Most software starts with features. Alloy started with the foundation — so new operational areas can expand without creating another disconnected system."
           />
         </div>
       </SectionShell>
 
-      {/* Bigger Picture */}
-      <SectionShell variant="accent">
+      {/* Built to expand */}
+      <SectionShell>
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           <div>
-            <SectionHeading title="Build the foundation once. Add workflows forever." />
-            <div className="mt-8 flex flex-wrap gap-2">
-              {WORKFLOW_AREAS.map((area, i) => (
-                <WorkflowPill key={area} label={area} active={i === 0} />
-              ))}
-            </div>
-          </div>
-          <ArtifactCard
-            src={MARKETING_ARTIFACTS.biggerPicture}
-            alt="Workflow areas on unified platform"
-          />
-        </div>
-      </SectionShell>
-
-      {/* Vision */}
-      <SectionShell>
-        <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
-          <div>
-            <SectionHeading title="From Enrollment Operations to the Operating System for Childcare" />
-            <div className="mt-10 grid gap-8 sm:grid-cols-2">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-alloy-juniper">
-                  Today
-                </h3>
-                <ul className="mt-3 space-y-2">
-                  {VISION_TODAY.map((item) => (
-                    <li key={item} className="text-sm text-alloy-forge/75">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-alloy-forge/45">
-                  Tomorrow
-                </h3>
-                <ul className="mt-3 space-y-2">
-                  {VISION_TOMORROW.map((item) => (
-                    <li key={item} className="text-sm text-alloy-forge/55">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <p className="mt-8 text-lg font-medium text-alloy-forge">
-              One platform. One source of truth. One operating system for childcare.
-            </p>
-            <p className="mt-4">
-              <Link href="/vision" className="text-sm font-semibold text-alloy-juniper hover:underline">
-                See the full roadmap →
+            <SectionHeading
+              title="Built to expand"
+              subtitle="Start where work is hardest today. Add the next Business Process on the same foundation — records, permissions, communications, Processing, and Operational Intelligence already in place."
+            />
+            <p className="mt-6">
+              <Link href="/vision" className="text-sm font-semibold text-alloy-bend-pine hover:underline">
+                See the vision →
               </Link>
             </p>
           </div>
-          <ArtifactCard src={MARKETING_ARTIFACTS.vision} alt="Platform vision timeline" />
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.platformExpansion.key}
+            alt={MARKETING_ASSETS.platformExpansion.alt}
+          />
         </div>
       </SectionShell>
 
-      {/* Final CTA */}
+      {/* Where Work Happens CTA */}
       <SectionShell variant="muted" className="!pb-20 md:!pb-28">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-alloy-forge md:text-4xl">
-            See Alloy in action.
-          </h2>
-          <p className="mt-4 text-lg text-alloy-forge/65">
-            Walk through enrollment operations on a platform built for how childcare teams actually
-            work.
+          <MarketingAssetPlaceholder
+            assetKey={MARKETING_ASSETS.finalCta.key}
+            alt={MARKETING_ASSETS.finalCta.alt}
+            className="mx-auto mb-10 max-w-lg"
+            aspectClassName="aspect-[16/9]"
+          />
+          <h2 className="marketing-section-headline">Where Work Happens</h2>
+          <p className="marketing-body-lg mt-4">
+            See how Alloy moves work forward — from Business Processes to Processing to Operational
+            Intelligence.
           </p>
           <div className="mt-8">
             <CTAButton href="/contact">Book a Demo</CTAButton>

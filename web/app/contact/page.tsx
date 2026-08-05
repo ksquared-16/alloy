@@ -46,26 +46,27 @@ export default function ContactPage() {
   };
 
   const inputClass =
-    "w-full rounded-lg border border-alloy-forge/15 bg-white px-4 py-3 text-sm text-alloy-forge placeholder:text-alloy-forge/40 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20";
+    "w-full rounded-[10px] border border-alloy-midnight-forge/15 bg-white px-4 py-3 text-sm text-alloy-midnight-forge placeholder:text-alloy-midnight-forge/40 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/20";
 
   return (
     <>
       <SectionShell className="!pt-12 md:!pt-16" innerClassName="max-w-xl">
-        <p className="text-sm font-semibold uppercase tracking-widest text-alloy-juniper">Contact</p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight text-alloy-forge md:text-5xl">
-          Request a Demo
-        </h1>
-        <p className="mt-6 text-lg text-alloy-forge/70">
-          Tell us about your organization and we will reach out to schedule a walkthrough of Alloy.
+        <p className="marketing-eyebrow">Contact</p>
+        <h1 className="marketing-section-headline mt-3">Request a Demo</h1>
+        <p className="marketing-body-lg mt-6">
+          Tell us about your organization and we will reach out to schedule a walkthrough of Alloy —
+          and how it moves work forward.
         </p>
 
         {formState === "success" ? (
           <div
-            className="mt-10 rounded-xl border border-alloy-juniper/25 bg-alloy-juniper/5 px-6 py-8"
+            className="mt-10 rounded-2xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/5 px-6 py-8"
             role="status"
           >
-            <h2 className="text-lg font-semibold text-alloy-forge">Thank you — we received your request.</h2>
-            <p className="mt-2 text-sm text-alloy-forge/70">
+            <h2 className="text-lg font-semibold text-alloy-midnight-forge">
+              Thank you — we received your request.
+            </h2>
+            <p className="mt-2 text-sm text-alloy-midnight-forge/70">
               Our team will be in touch shortly at the email you provided.
             </p>
           </div>
@@ -78,7 +79,10 @@ export default function ContactPage() {
             ) : null}
 
             <div>
-              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+              <label
+                htmlFor="name"
+                className="mb-1.5 block text-sm font-medium text-alloy-midnight-forge/80"
+              >
                 Name
               </label>
               <input
@@ -95,7 +99,7 @@ export default function ContactPage() {
             <div>
               <label
                 htmlFor="organization"
-                className="mb-1.5 block text-sm font-medium text-alloy-forge/80"
+                className="mb-1.5 block text-sm font-medium text-alloy-midnight-forge/80"
               >
                 Organization
               </label>
@@ -111,7 +115,10 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-sm font-medium text-alloy-midnight-forge/80"
+              >
                 Email
               </label>
               <input
@@ -126,7 +133,10 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label htmlFor="message" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+              <label
+                htmlFor="message"
+                className="mb-1.5 block text-sm font-medium text-alloy-midnight-forge/80"
+              >
                 Message
               </label>
               <textarea
@@ -134,8 +144,8 @@ export default function ContactPage() {
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className={`${inputClass} resize-y min-h-[120px]`}
-                placeholder="Tell us about your centers, current tools, or what you are looking for."
+                className={`${inputClass} min-h-[120px] resize-y`}
+                placeholder="Tell us about your operations, current tools, or what you are looking for."
               />
             </div>
 
@@ -145,9 +155,9 @@ export default function ContactPage() {
           </form>
         )}
 
-        <p className="mt-8 text-sm text-alloy-forge/50">
+        <p className="mt-8 text-sm text-alloy-midnight-forge/50">
           Prefer email?{" "}
-          <a href="mailto:hello@workwithalloy.com" className="text-alloy-juniper hover:underline">
+          <a href="mailto:hello@workwithalloy.com" className="font-semibold text-alloy-bend-pine hover:underline">
             hello@workwithalloy.com
           </a>
         </p>

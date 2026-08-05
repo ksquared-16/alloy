@@ -15,14 +15,14 @@ interface CTAButtonProps {
 
 const variantClasses: Record<CTAButtonVariant, string> = {
   primary:
-    "bg-alloy-juniper text-white hover:bg-alloy-juniper/90 shadow-sm hover:shadow-md",
+    "bg-alloy-bend-pine text-white border border-alloy-bend-pine shadow-[0_8px_22px_rgba(39,63,82,0.10)] hover:bg-[#008f74] hover:border-[#008f74]",
   secondary:
-    "bg-white text-alloy-forge border border-alloy-forge/15 hover:border-alloy-juniper/40 hover:text-alloy-juniper",
-  ghost: "text-alloy-forge/80 hover:text-alloy-juniper hover:bg-alloy-stone/60",
+    "bg-white text-alloy-blue border border-alloy-blue/70 hover:border-alloy-blue hover:bg-alloy-stone/60",
+  ghost: "text-alloy-midnight-forge/80 hover:text-alloy-bend-pine hover:bg-alloy-stone/60 border border-transparent",
 };
 
 const baseClasses =
-  "inline-flex items-center justify-center rounded-lg px-6 py-3 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-alloy-juniper focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  "inline-flex min-h-12 items-center justify-center rounded-[10px] px-[22px] py-3 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function CTAButton({
   children,

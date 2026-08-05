@@ -1,32 +1,38 @@
-import ArtifactCard from "@/components/marketing/ArtifactCard";
 import CTAButton from "@/components/marketing/CTAButton";
+import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
 import SectionShell from "@/components/marketing/SectionShell";
-import { MARKETING_ARTIFACTS } from "@/lib/marketing/artifactPaths";
+import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
 
 const FOUNDATION_CAPABILITIES = [
   {
-    title: "Entities & Records",
-    description: "People, families, opportunities, and operational records — structured and connected.",
+    title: "Business Processes",
+    description:
+      "Stages, transitions, and requirements that organize how work advances — the primary structure of operations.",
   },
   {
-    title: "Workflows & Lifecycle",
-    description: "Configurable stages, transitions, and requirements that mirror how work actually flows.",
+    title: "Processing",
+    description:
+      "Turn intake, documents, and operational inputs into structured action inside the Business Process.",
   },
   {
-    title: "Layouts & Forms",
-    description: "Operator-facing layouts and family-facing forms, driven by the same field model.",
+    title: "Operational Intelligence",
+    description:
+      "Surface what matters, what is waiting, and what requires attention where teams already work.",
   },
   {
-    title: "Permissions",
-    description: "Role-based access scoped to org, department, and site — without bolt-on security layers.",
+    title: "Records & Permissions",
+    description:
+      "People, opportunities, and operational records — scoped by org, department, and site without bolt-on security.",
   },
   {
-    title: "Documents & Messaging",
-    description: "Documents, communications, and tasks tied to the record — not scattered across inboxes.",
+    title: "Documents & Communications",
+    description:
+      "Documents, messages, and tasks tied to the work — not scattered across inboxes and drives.",
   },
   {
-    title: "BOS Intelligence Layer",
-    description: "Operational intelligence that surfaces context, urgency, and next actions where teams work.",
+    title: "Automation",
+    description:
+      "Registered events and configured automation that move Business Processes forward with auditability.",
   },
 ] as const;
 
@@ -34,27 +40,25 @@ export default function PlatformPage() {
   return (
     <>
       <SectionShell className="!pt-12 md:!pt-16" innerClassName="max-w-3xl">
-        <p className="text-sm font-semibold uppercase tracking-widest text-alloy-juniper">Platform</p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight text-alloy-forge md:text-5xl">
-          Built on a unified platform foundation
-        </h1>
-        <p className="mt-6 text-lg leading-relaxed text-alloy-forge/70">
-          Alloy is not a collection of point solutions stitched together. It is a platform where
-          operational workflows share entities, permissions, communications, and intelligence —
-          so teams work from one source of truth.
+        <p className="marketing-eyebrow">Platform</p>
+        <h1 className="marketing-section-headline mt-3">Built to move work forward</h1>
+        <p className="marketing-body-lg mt-6">
+          Alloy is not a collection of point solutions stitched together. It is an operating system
+          where Business Processes, Processing, and Operational Intelligence share one foundation —
+          so teams stop being the integration layer.
         </p>
       </SectionShell>
 
       <SectionShell variant="muted" innerClassName="grid items-center gap-12 lg:grid-cols-2">
-        <ArtifactCard
-          src={MARKETING_ARTIFACTS.platformFoundation}
-          alt="Platform foundation architecture"
+        <MarketingAssetPlaceholder
+          assetKey={MARKETING_ASSETS.businessProcesses.key}
+          alt={MARKETING_ASSETS.businessProcesses.alt}
         />
         <div>
-          <h2 className="text-2xl font-bold text-alloy-forge">What the foundation includes</h2>
-          <p className="mt-4 text-alloy-forge/70">
-            Every operational workflow on Alloy runs on the same core capabilities — configured for
-            your organization, not rebuilt from scratch.
+          <h2 className="text-2xl font-bold text-alloy-midnight-forge">What the foundation includes</h2>
+          <p className="mt-4 text-alloy-midnight-forge/70">
+            Every operational area on Alloy runs on the same core capabilities — configured for your
+            organization, not rebuilt from scratch.
           </p>
         </div>
       </SectionShell>
@@ -64,10 +68,10 @@ export default function PlatformPage() {
           {FOUNDATION_CAPABILITIES.map((cap) => (
             <div
               key={cap.title}
-              className="rounded-xl border border-alloy-forge/8 bg-white p-6 shadow-sm"
+              className="rounded-2xl border border-alloy-midnight-forge/10 bg-white p-6 shadow-[0_18px_50px_rgba(39,63,82,0.08)]"
             >
-              <h3 className="text-lg font-semibold text-alloy-forge">{cap.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-alloy-forge/65">{cap.description}</p>
+              <h3 className="text-lg font-semibold text-alloy-midnight-forge">{cap.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-alloy-midnight-forge/65">{cap.description}</p>
             </div>
           ))}
         </div>
@@ -75,12 +79,12 @@ export default function PlatformPage() {
 
       <SectionShell variant="muted">
         <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-2xl font-bold text-alloy-forge md:text-3xl">
-            Enrollment is the first workflow. The foundation is forever.
+          <h2 className="text-2xl font-bold text-alloy-midnight-forge md:text-3xl">
+            Build the foundation once. Expand forever.
           </h2>
-          <p className="mt-4 text-lg text-alloy-forge/70">
-            New operational areas — billing, attendance, scheduling, and more — plug into the same
-            platform instead of adding another disconnected system.
+          <p className="mt-4 text-lg text-alloy-midnight-forge/70">
+            New Business Processes plug into the same records, permissions, communications,
+            Processing, and Operational Intelligence — instead of adding another disconnected system.
           </p>
           <div className="mt-8">
             <CTAButton href="/contact">Book a Demo</CTAButton>

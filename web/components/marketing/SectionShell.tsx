@@ -11,8 +11,8 @@ interface SectionShellProps {
 
 const variantClasses = {
   default: "bg-white",
-  muted: "bg-alloy-stone/50",
-  accent: "bg-gradient-to-b from-alloy-stone/30 to-white",
+  muted: "bg-alloy-stone",
+  accent: "bg-gradient-to-b from-alloy-stone to-white",
 };
 
 export default function SectionShell({
@@ -23,12 +23,11 @@ export default function SectionShell({
   variant = "default",
 }: SectionShellProps) {
   return (
-    <section id={id} className={`py-16 md:py-24 lg:py-28 ${variantClasses[variant]} ${className}`.trim()}>
-      <div
-        className={`mx-auto w-full max-w-screen-xl px-4 sm:px-6 lg:px-8 ${innerClassName}`.trim()}
-      >
-        {children}
-      </div>
+    <section
+      id={id}
+      className={`marketing-section-pad ${variantClasses[variant]} ${className}`.trim()}
+    >
+      <div className={`marketing-content-width ${innerClassName}`.trim()}>{children}</div>
     </section>
   );
 }
