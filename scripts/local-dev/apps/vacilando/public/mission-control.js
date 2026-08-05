@@ -483,7 +483,7 @@ We'll capture the context automatically.</p>
       return `<button class="btn ghost" data-mc-reject-completion="${esc(action.missionId)}">${esc(action.label || "Not complete — send back")}</button>`;
     }
     if (action.kind === "reopen_work" && action.missionId) {
-      return `<button class="btn" data-mc-reopen-work="${esc(action.missionId)}">${esc(action.label || "Send back for more work")}</button>`;
+      return `<button class="btn" data-mc-reopen-work="${esc(action.missionId)}">${esc(action.label || "Request More Discovery")}</button>`;
     }
     if ((action.kind === "review_outcome" || action.kind === "review_deliverable") && action.missionId) {
       return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review deliverable")}</button>`;
@@ -495,10 +495,16 @@ We'll capture the context automatically.</p>
       return `<button class="btn ghost" type="button" data-drev-ask="${esc(action.reviewId || "")}" data-mission="${esc(action.missionId)}">${esc(action.label || "Ask Director")}</button>`;
     }
     if (action.kind === "advance_implementation" && action.missionId) {
-      return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Begin implementation")}</button>`;
+      return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Begin Implementation")}</button>`;
     }
     if (action.kind === "park_outcome" && action.missionId) {
-      return `<button class="btn ghost" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park mission")}</button>`;
+      return `<button class="btn ghost" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park Mission")}</button>`;
+    }
+    if (action.kind === "review_findings") {
+      return `<button class="btn ghost" type="button" data-mc-review-findings="${esc(action.missionId || "")}">${esc(action.label || "Review Findings")}</button>`;
+    }
+    if (action.kind === "provide_feedback") {
+      return `<button class="btn ghost" type="button" data-mc-provide-feedback="${esc(action.missionId || "")}">${esc(action.label || "Provide Feedback")}</button>`;
     }
     if (action.kind === "dispatch_ready" && action.missionId) {
       return `<button class="btn" data-mc-dispatch="${esc(action.missionId)}">${esc(action.label || "Start work")}</button>`;
@@ -846,36 +852,83 @@ We'll capture the context automatically.</p>
         : card.kind === "reopen_work" ? "data-mc-reopen-work"
           : card.kind === "park_outcome" ? "data-mc-park-outcome"
             : card.kind === "advance_implementation" ? "data-mc-advance"
-              : null;
-      if (!kindAttr) return "";
+              : card.kind === "resume_stalled" ? "data-mc-resume-stalled"
+              : card.kind === "review_findings" ? "data-mc-review-findings"
+                : card.kind === "provide_feedback" ? "data-mc-provide-feedback"
+                  : card.action?.kind === "open_mission" || card.action?.kind === "open_missions" || card.action?.href
+                    ? "data-nav"
+                    : null;
+      if (!kindAttr && !card.presentationOnly) return "";
       const btnClass = primary ? "btn" : "btn ghost";
-      return `<article class="mc-card mc-decision-card${primary ? " recommended" : ""}">
+      const expected = card.expectedOutcome || card.expectedOutput || "";
+      const rel = (card.pathRelationNote || card.relationshipHint)
+        ? `<li><span class="muted">Relation to recommended</span> ${esc(card.pathRelationNote || card.relationshipHint)}</li>`
+        : "";
+      const tech = card.technicalConsequence
+        ? `<li><span class="muted">Technical consequence</span> ${esc(card.technicalConsequence)}</li>`
+        : "";
+      const workers = card.workersAssignedLabel
+        ? `<li><span class="muted">Workers</span> ${esc(card.workersAssignedLabel)}</li>`
+        : "";
+      let btn;
+      if (card.kind === "review_findings") {
+        btn = `<button class="${btnClass}" type="button" data-mc-review-findings="${esc(card.missionId || id)}">${esc(card.buttonLabel || card.title)}</button>`;
+      } else if (card.kind === "provide_feedback") {
+        btn = `<button class="${btnClass}" type="button" data-mc-provide-feedback="${esc(card.missionId || id)}">${esc(card.buttonLabel || card.title)}</button>`;
+      } else if (kindAttr === "data-nav" && card.action?.href) {
+        btn = `<button class="${btnClass}" type="button" data-nav="${esc(card.action.href)}">${esc(card.buttonLabel || card.title)}</button>`;
+      } else if (kindAttr) {
+        btn = `<button class="${btnClass}" type="button" ${kindAttr}="${esc(card.missionId || id)}">${esc(card.buttonLabel || card.title)}</button>`;
+      } else {
+        btn = "";
+      }
+      return `<article class="mc-card mc-decision-card${primary ? " recommended" : ""}" data-continuation-kind="${esc(card.kind || "")}">
         <div class="mc-card-h">
           <b>${esc(card.title)}</b>
           ${primary ? `<span class="mc-pill ok">Recommended</span>` : ""}
         </div>
-        <p>${esc(card.consequence || "")}</p>
         <ul class="mc-decision-meta">
-          <li><span class="muted">Why choose this</span> ${esc(card.whyChoose || "")}</li>
-          <li><span class="muted">What happens next</span> ${esc(card.whatHappensNext || "")}</li>
+          <li><span class="muted">Why</span> ${esc(card.whyChoose || "")}</li>
+          <li><span class="muted">Expected outcome</span> ${esc(expected || card.whatHappensNext || "")}</li>
           <li><span class="muted">Work</span> ${esc(card.workLaunchesLabel || "")}</li>
-          ${card.expectedOutput ? `<li><span class="muted">Expected output</span> ${esc(card.expectedOutput)}</li>` : ""}
+          ${workers}
+          ${rel}
+          ${tech}
         </ul>
-        <button class="${btnClass}" type="button" ${kindAttr}="${esc(card.missionId || id)}">${esc(card.buttonLabel || card.title)}</button>
+        ${card.unavailableNote ? `<p class="muted">${esc(card.unavailableNote)}</p>` : ""}
+        ${btn}
       </article>`;
     }
 
-    const decisionSec = (decisionPack.cards || []).length ? `<section class="mc-sec mc-decisions" id="mc-decisions">
-      <h3>Your decision</h3>
+    const feedbackSurface = decisionPack.feedbackSurface || {};
+    const feedbackPanel = `<section class="mc-sec mc-feedback-panel" id="mc-feedback-panel" hidden>
+      <h3>${esc(feedbackSurface.title || "Provide Feedback")}</h3>
+      <p>${esc(feedbackSurface.blurb || "")}</p>
+      <label class="muted" for="mc-feedback-text">Refinement notes</label>
+      <textarea id="mc-feedback-text" class="mc-feedback-text" rows="4" placeholder="${esc(feedbackSurface.placeholder || "")}"></textarea>
+      <p class="muted">${esc(feedbackSurface.captureNote || "Feedback capture is prepared on this surface only.")}</p>
+      <div class="mc-actions">
+        <button class="btn ghost" type="button" data-mc-feedback-dismiss>Close</button>
+        <button class="btn" type="button" data-mc-feedback-ack disabled title="Threaded capture ships later">Save feedback (later)</button>
+      </div>
+    </section>`;
+
+    const decisionSec = (decisionPack.cards || []).length ? `<section class="mc-sec mc-decisions mc-continuation" id="mc-decisions">
+      <h3>${esc(decisionPack.sectionTitle || "Recommended Next Action")}</h3>
       ${decisionPack.recommended
-        ? `<div class="mc-decision-primary">${decisionCardHtml(decisionPack.recommended, { primary: true })}</div>`
+        ? `<div class="mc-decision-primary">
+            ${decisionCardHtml(decisionPack.recommended, { primary: true })}
+            ${decisionPack.whyRecommended ? `<p class="mc-cont-why"><b>Why this is recommended</b> — ${esc(decisionPack.whyRecommended)}</p>` : ""}
+            ${decisionPack.expectedOutcome ? `<p class="mc-cont-outcome"><b>Expected outcome</b> — ${esc(decisionPack.expectedOutcome)}</p>` : ""}
+          </div>`
         : `<p class="muted">Choose deliberately — reviewing alone does not change anything.</p>`}
       ${(decisionPack.alternatives || []).length
         ? `<details class="mc-decision-alts" ${decisionPack.recommended ? "" : "open"}>
-            <summary>${decisionPack.recommended ? "Other options" : "Available options"}</summary>
+            <summary>${esc(decisionPack.alternativesTitle || (decisionPack.recommended ? "Alternative decisions" : "Available options"))}</summary>
             ${decisionPack.alternatives.map((c) => decisionCardHtml(c)).join("")}
           </details>`
         : ""}
+      ${feedbackPanel}
     </section>` : "";
 
     const confGlanceSec = (() => {
@@ -1360,9 +1413,9 @@ We'll capture the context automatically.</p>
       </div>
     </details>`;
 
+    // DX-5.5 IA: Outcome → Summary → Confidence → Journey → Evidence → Recommended Next Action → Alternatives → Technical Depth
     // When deliverable certification is open, L1 still leads; DREV remains the cert briefing.
-    // Suppress a second mission-level decision strip duplicate inside DREV (missionChoices cleared).
-    const l1 = outcomeHeroSec + execSummarySec + decisionSec + confGlanceSec + journeyStripSec + evidenceStripSec;
+    const l1 = outcomeHeroSec + execSummarySec + confGlanceSec + journeyStripSec + evidenceStripSec + decisionSec;
     const certOrOutcome = showOutcome ? outcomeSec : "";
 
     return shell(s.title || "Mission Dashboard", {
@@ -2763,12 +2816,39 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss]");
     if (!t) return;
+
+    if (t.hasAttribute("data-mc-review-findings")) {
+      const el = document.getElementById("mc-exec-summary");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.add("mc-findings-focus");
+        setTimeout(() => el.classList.remove("mc-findings-focus"), 1600);
+      } else if (t.getAttribute("data-mc-review-findings")) {
+        V2.nav(`evidence/${t.getAttribute("data-mc-review-findings")}`);
+      }
+      return;
+    }
+    if (t.hasAttribute("data-mc-provide-feedback")) {
+      const panel = document.getElementById("mc-feedback-panel");
+      if (panel) {
+        panel.hidden = false;
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        const ta = document.getElementById("mc-feedback-text");
+        if (ta) ta.focus();
+      }
+      return;
+    }
+    if (t.hasAttribute("data-mc-feedback-dismiss")) {
+      const panel = document.getElementById("mc-feedback-panel");
+      if (panel) panel.hidden = true;
+      return;
+    }
 
     if (t.dataset.mcCertify) {
       const ok = window.confirm(
-        "Close this mission without continuing implementation here?\n\nPrefer Advance to implementation if you want the work to continue on this same mission."
+        "Close Without Continuing?\n\nThis abandons further work on this mission — no implementation or follow-on here.\n\nPrefer Begin Implementation if you want the work to continue on this same mission."
       );
       if (!ok) return;
       certifyCompletion(t.dataset.mcCertify);

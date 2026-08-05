@@ -1,9 +1,11 @@
 /**
- * Director Experience V2 — Executive Overview presentation adapters (DX-1 + DX-3).
+ * Director Experience V2 — Executive Overview presentation adapters (DX-1 + DX-3 + DX-5.5).
  *
  * Presentation only. Does not change posture, confidence math, certification,
  * evidence storage, or mission lifecycle. Maps existing authoritative state into
- * L1 Outcome / Executive Summary / Decision cards / Evidence strip shapes.
+ * L1 Outcome / Executive Summary / Continuation / Evidence strip shapes.
+ *
+ * Recommended Next Action copy lives in mission-continuation.mjs (DX-5.5).
  */
 import { getBrief } from "../mission-brief.mjs";
 import { getMission } from "../commands/missions.mjs";
@@ -21,8 +23,20 @@ import {
 } from "./explained-confidence.mjs";
 import { missionJourneyVm, missionJourneyStripVm } from "./mission-journey.mjs";
 import { executiveEvidenceStripVm } from "./evidence-experience.mjs";
+import {
+  missionContinuationVm,
+  missionDecisionCardsVm,
+} from "./mission-continuation.mjs";
 
-export { explainedConfidenceVm, confidenceGlanceVm, missionJourneyVm, missionJourneyStripVm, executiveEvidenceStripVm };
+export {
+  explainedConfidenceVm,
+  confidenceGlanceVm,
+  missionJourneyVm,
+  missionJourneyStripVm,
+  executiveEvidenceStripVm,
+  missionContinuationVm,
+  missionDecisionCardsVm,
+};
 
 /** @typedef {{ id: string, kind: string, label: string, explanation?: string, missionId?: string }} PostureChoice */
 
@@ -41,70 +55,6 @@ const OUTCOME_TONES = {
   waiting: "attention",
   unknown: "neutral",
 };
-
-/**
- * Coarse, honest presentation copy for known posture choice kinds.
- * Effort/outputs only when known from the kind — never invent estimates.
- */
-const CHOICE_PRESENTATION = {
-  advance_implementation: {
-    title: "Begin implementation",
-    buttonLabel: "Begin implementation",
-    whyChoose: "Discovery is complete enough to open implementation on this same mission.",
-    whatHappensNext: "Implementation phases unlock on this mission. Nothing closes.",
-    workLaunches: true,
-    expectedOutput: "Next implementation work opens (Wave 0 first when the package defines it).",
-  },
-  reopen_work: {
-    title: "Continue discovery",
-    buttonLabel: "Continue discovery",
-    whyChoose: "The package is incomplete, wrong, or needs more discovery before you proceed.",
-    whatHappensNext: "Discovery reopens. Implementation does not start.",
-    workLaunches: true,
-    expectedOutput: "Workers resume discovery assignments.",
-  },
-  park_outcome: {
-    title: "Park mission",
-    buttonLabel: "Park mission",
-    whyChoose: "You want to keep the mission open without launching more work right now.",
-    whatHappensNext: "Mission stays open and idle. No worker launches.",
-    workLaunches: false,
-    expectedOutput: "No new outputs until you return and choose again.",
-  },
-  certify_completion: {
-    title: "Close without implementation",
-    buttonLabel: "Close without implementation",
-    whyChoose: "You do not want continuation on this mission.",
-    whatHappensNext: "Mission closes. No implementation starts here.",
-    workLaunches: false,
-    expectedOutput: "Closed mission record; no further assignments.",
-    /** When label already says Accept and close, override titles below. */
-  },
-};
-
-function actionFromChoice(choice) {
-  if (!choice?.kind) return null;
-  const kind = choice.kind;
-  const missionId = choice.missionId;
-  if (kind === "advance_implementation") {
-    return { kind, label: CHOICE_PRESENTATION.advance_implementation.buttonLabel, missionId };
-  }
-  if (kind === "reopen_work") {
-    return { kind, label: CHOICE_PRESENTATION.reopen_work.buttonLabel, missionId };
-  }
-  if (kind === "park_outcome") {
-    return { kind, label: CHOICE_PRESENTATION.park_outcome.buttonLabel, missionId };
-  }
-  if (kind === "certify_completion") {
-    const acceptClose = /accept and close/i.test(choice.label || "");
-    return {
-      kind,
-      label: acceptClose ? "Accept and close" : CHOICE_PRESENTATION.certify_completion.buttonLabel,
-      missionId,
-    };
-  }
-  return { kind, label: choice.label, missionId };
-}
 
 /**
  * Map posture + review + advance gate → presentation Outcome (no new runtime states).
@@ -266,83 +216,6 @@ export function missionOutcomeHeroVm(missionId, {
 }
 
 /**
- * Build decision cards from existing posture choices (same kinds / missionIds).
- * @param {string} missionId
- * @param {{ choices?: PostureChoice[], posture?: object, advance?: object }} [opts]
- */
-export function missionDecisionCardsVm(missionId, {
-  choices = null,
-  posture = null,
-  advance = null,
-} = {}) {
-  const p = posture || deriveMissionPosture(missionId);
-  const adv = advance ?? canAdvanceToImplementation(missionId);
-  const raw = Array.isArray(choices) ? choices : (p.choices || []);
-  const recommendedKind = (() => {
-    if (adv?.ok && raw.some((c) => c.kind === "advance_implementation")) {
-      return "advance_implementation";
-    }
-    if (p.secondaryAction?.kind && raw.some((c) => c.kind === p.secondaryAction.kind)) {
-      return p.secondaryAction.kind;
-    }
-    if (/Recommended:\s*Advance/i.test(p.next || "")) return "advance_implementation";
-    return null;
-  })();
-
-  const cards = raw.filter(Boolean).map((c) => {
-    const base = CHOICE_PRESENTATION[c.kind] || null;
-    const acceptClose = c.kind === "certify_completion" && /accept and close/i.test(c.label || "");
-    const title = acceptClose
-      ? "Accept and close"
-      : (base?.title || c.label);
-    const buttonLabel = acceptClose
-      ? "Accept and close"
-      : (base?.buttonLabel || c.label);
-    const whyChoose = acceptClose
-      ? "Results are good enough to close the mission."
-      : (base?.whyChoose || c.explanation || "Available option from Director.");
-    const whatHappensNext = acceptClose
-      ? "Mission certifies completion and closes."
-      : (base?.whatHappensNext || c.explanation || "");
-    const workLaunches = base ? base.workLaunches : null;
-    const expectedOutput = acceptClose
-      ? "Closed mission; no further work here."
-      : (base?.expectedOutput || null);
-    const recommended = recommendedKind != null && c.kind === recommendedKind;
-    return {
-      id: c.id,
-      kind: c.kind,
-      missionId: c.missionId || missionId,
-      title,
-      buttonLabel,
-      consequence: c.explanation || whatHappensNext,
-      whyChoose,
-      whatHappensNext,
-      workLaunches,
-      workLaunchesLabel: workLaunches === true
-        ? "Work launches"
-        : workLaunches === false
-          ? "No work launches"
-          : "Launch behavior unchanged",
-      expectedOutput,
-      recommended,
-      action: actionFromChoice({ ...c, label: buttonLabel, missionId: c.missionId || missionId }),
-    };
-  });
-
-  const recommended = cards.find((c) => c.recommended) || null;
-  return {
-    kind: "mission_decision_cards",
-    missionId,
-    recommended,
-    alternatives: cards.filter((c) => !c.recommended),
-    cards,
-    primaryAction: recommended?.action || null,
-    hasRecommendation: Boolean(recommended),
-  };
-}
-
-/**
  * L1 executive summary blocks — deterministic from existing sources (no LLM).
  */
 export function executiveOverviewVm(missionId, {
@@ -418,7 +291,7 @@ export function executiveOverviewVm(missionId, {
       { id: "outcome", label: "Outcome", text: `${hero.label}. ${hero.sentence}` },
       { id: "discovered", label: "Discovered / delivered", text: discovered.slice(0, 3).join(" · ") },
       { id: "risks", label: "Risks remaining", text: risks.slice(0, 3).join(" · ") },
-      { id: "decision", label: "Your decision", text: decisionSentence },
+      { id: "decision", label: "Recommended next", text: decisionSentence },
       { id: "next", label: "Do next", text: doNext },
     ],
   };
@@ -442,10 +315,11 @@ export function composeExecutiveL1(missionId, {
   const advance = canAdvanceToImplementation(missionId);
   const reviewVm = getOpenDeliverableReview(missionId) ? deliverableReviewVm(missionId) : null;
   const outcome = missionOutcomeHeroVm(missionId, { posture: p, advance, reviewVm, progress });
-  const decisions = missionDecisionCardsVm(missionId, {
+  const decisions = missionContinuationVm(missionId, {
     choices: p.choices || [],
     posture: p,
     advance,
+    reviewVm,
   });
   const overview = executiveOverviewVm(missionId, {
     posture: p,
@@ -465,7 +339,7 @@ export function composeExecutiveL1(missionId, {
     || explainedConfidenceVm(missionId, { reviewVm, missionConfidence, decisions });
   const journey = missionJourneyStripVm(missionId);
 
-  // Prefer recommended decision action over vague "Review outcome"
+  // Prefer recommended continuation action over vague "Review outcome"
   let primaryAction = decisions.primaryAction;
   if (!primaryAction && reviewVm?.operatorMayApprove && reviewVm?.actions?.approve) {
     primaryAction = {
@@ -477,10 +351,11 @@ export function composeExecutiveL1(missionId, {
     };
   }
   // When mission choices exist but none is recommended, still avoid "Review outcome"
-  // as the only primary — surface Continue discovery / first card instead.
+  // as the only primary — surface Request More Discovery / first lifecycle card instead.
   if (!primaryAction && decisions.cards.length) {
     const prefer = decisions.cards.find((c) => c.kind === "reopen_work")
       || decisions.cards.find((c) => c.kind === "advance_implementation")
+      || decisions.cards.find((c) => !c.presentationOnly)
       || decisions.cards[0];
     primaryAction = prefer?.action || null;
   }
@@ -497,6 +372,7 @@ export function composeExecutiveL1(missionId, {
     outcome,
     overview,
     decisions,
+    continuation: decisions,
     evidence,
     confidence: explained,
     journey,

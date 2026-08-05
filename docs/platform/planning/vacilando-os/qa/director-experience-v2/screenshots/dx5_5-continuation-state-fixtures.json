@@ -1,0 +1,43 @@
+{
+  "discovery_complete": {
+    "continuationState": "discovery_complete",
+    "recommended": "Begin Implementation",
+    "alts": [
+      "Request More Discovery",
+      "Park Mission",
+      "Close Without Continuing",
+      "Review Findings",
+      "Provide Feedback"
+    ],
+    "hasFeedback": true,
+    "hasFindings": true,
+    "closeLabel": "Close Without Continuing"
+  },
+  "blocked": {
+    "continuationState": "blocked",
+    "recommended": "Resolve Blockers",
+    "alts": [],
+    "hasFeedback": false,
+    "hasFindings": false
+  },
+  "parked": {
+    "continuationState": "parked",
+    "recommended": "Resume Mission",
+    "alts": [],
+    "hasFeedback": false,
+    "hasFindings": false
+  },
+  "certification_complete": {
+    "continuationState": "certification_ready",
+    "recommended": "Accept and close",
+    "alts": [
+      "Request More Discovery",
+      "Park Mission",
+      "Review Findings",
+      "Provide Feedback"
+    ],
+    "hasFeedback": true,
+    "hasFindings": true,
+    "closeLabel": "Accept and close"
+  }
+}
