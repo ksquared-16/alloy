@@ -28,6 +28,7 @@ import {
     updateProcessName,
     updateProcessDescription,
     updateStageDescription,
+    updateStageGrain,
     parseLifecycleBuilderV1,
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -43,6 +44,7 @@ import {
     lifecycleBuilderV1MissingError,
 } from "@/lib/lifecycle/lifecycleBuilderRouteErrors";
 import { validateConfiguredStageReferences } from "@/lib/lifecycle/validateConfiguredStageReferences";
+import { evaluateStageGrainChange } from "@/lib/lifecycle/stageGrainChangePreflight";
 import { ensureBuilderCommandSetsOnSave } from "@/lib/lifecycle/ensureProcessCommandSetV1OnSave";
 import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
 
@@ -294,6 +296,74 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     return NextResponse.json({ error: "process_id and stage_id are required" }, { status: 400 });
                 }
                 config = renameStage(config, pid, stageId, label);
+                break;
+            }
+            /**
+             * `grain` was persisted authored configuration with no authoring path: the enrollment
+             * template seeded it, `add_stage` wrote it once, and nothing could correct it. That is
+             * how a stage came to declare one journey while its own operating plan declared the
+             * other, with no way for an operator to reconcile them.
+             *
+             * Accepts stage_key OR stage_id, because the operator-facing concept is the stage, not
+             * its generated identifier. Refuses anything the preflight cannot vouch for.
+             */
+            case "update_stage_grain": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const stageIdInput = typeof body.stage_id === "string" ? body.stage_id.trim() : "";
+                const grainInput = typeof body.grain === "string" ? body.grain.trim() : "";
+                const pid = processId || config.active_process_id;
+
+                if (grainInput !== "family" && grainInput !== "child") {
+                    return NextResponse.json(
+                        { error: 'grain must be "family" or "child"' },
+                        { status: 400 },
+                    );
+                }
+                if (!pid || (!stageKey && !stageIdInput)) {
+                    return NextResponse.json(
+                        { error: "process_id and stage_key (or stage_id) are required" },
+                        { status: 400 },
+                    );
+                }
+                const proc = config.processes.find((p) => p.id === pid);
+                if (!proc) {
+                    return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                }
+                const stage = proc.stages.find(
+                    (s) => (stageIdInput && s.id === stageIdInput) || (stageKey && s.key === stageKey),
+                );
+                if (!stage) {
+                    return NextResponse.json({ error: "Stage not found" }, { status: 404 });
+                }
+
+                const decision = evaluateStageGrainChange({
+                    stageKey: stage.key,
+                    requestedGrain: grainInput,
+                    currentConfiguredGrain: stage.grain,
+                    operatingPlan: stage.stage_operating_plan_v1 ?? null,
+                    processStages: proc.stages.map((s) => ({
+                        key: s.key,
+                        label: s.label,
+                        grain: s.grain,
+                    })),
+                    otherStagePlans: proc.stages
+                        .filter((s) => s.id !== stage.id)
+                        .map((s) => s.stage_operating_plan_v1)
+                        .filter((plan): plan is NonNullable<typeof plan> => Boolean(plan)),
+                });
+                if (!decision.allowed) {
+                    // Nothing is written when the change cannot be vouched for.
+                    return NextResponse.json(
+                        {
+                            error: decision.blockers.map((b) => b.message).join(" "),
+                            blockers: decision.blockers,
+                        },
+                        { status: 409 },
+                    );
+                }
+
+                config = updateStageGrain(config, pid, stage.id, grainInput);
                 break;
             }
             case "reorder_stage": {

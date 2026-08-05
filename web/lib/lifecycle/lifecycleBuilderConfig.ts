@@ -585,3 +585,52 @@ export function configuredStageKeysForMetadata(metadata: unknown): string[] {
 export function isConfiguredStageKey(metadata: unknown, stageKey: string): boolean {
     return configuredStageKeysForMetadata(metadata).includes(stageKey);
 }
+
+/**
+ * Set a stage's configured journey grain.
+ *
+ * `grain` was persisted authored configuration with NO authoring path: the enrollment template
+ * seeded it from `track_key`, `add_stage` wrote it once, and nothing in the product could correct
+ * it afterwards. That is how Firefly's Decision stage came to declare `child` while its own
+ * operating plan and the canonical vocabulary both say `family` — a disagreement an operator could
+ * see (once the editor surfaced it) but not fix.
+ *
+ * Idempotent by construction: requesting the grain a stage already has returns the SAME config
+ * object, so a no-op save cannot produce an unrelated diff.
+ */
+export function updateStageGrain(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageId: string,
+    grain: StageGrain
+): LifecycleBuilderV1 {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const stage = process.stages.find((s) => s.id === stageId);
+    if (!stage) throw new Error("Stage not found");
+    const planSegment = stage.stage_operating_plan_v1?.journey_segment;
+    const alreadyAligned = stage.grain === grain && (planSegment == null || planSegment === grain);
+    if (alreadyAligned) return config;
+
+    return {
+        ...config,
+        processes: config.processes.map((p) => {
+            if (p.id !== processId) return p;
+            return {
+                ...p,
+                stages: p.stages.map((s) => {
+                    if (s.id !== stageId) return s;
+                    // ONE governed save keeps both declarations of the same fact in step. The
+                    // product must expose one concept; leaving `journey_segment` authorable while
+                    // `grain` was immutable is what let them drift apart in the first place.
+                    const plan = s.stage_operating_plan_v1;
+                    return {
+                        ...s,
+                        grain,
+                        ...(plan ? { stage_operating_plan_v1: { ...plan, journey_segment: grain } } : {}),
+                    };
+                }),
+            };
+        }),
+    };
+}
