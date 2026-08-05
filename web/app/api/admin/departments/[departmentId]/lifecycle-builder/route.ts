@@ -26,6 +26,7 @@ import {
     updateStageDescription,
     updateStageGrain,
     ensureStageTransitionInConfig,
+    updateProcessCommandSet,
     parseLifecycleBuilderV1,
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -230,6 +231,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         const loadedDraftRevision = draft.draftRevision;
         let config = draftBuilder(draft) ?? lifecycleBuilderFromDepartmentMetadata(row.metadata);
         let ensuredTransition: { transition_ref: string; target_stage_key: string; created: boolean } | null = null;
+        let commandSetChange: { added: string[]; removed: string[]; commands: string[] } | null = null;
         const action = typeof body.action === "string" ? body.action.trim() : "";
 
         switch (action) {
@@ -400,6 +402,67 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                         { status: 409 },
                     );
                 }
+                break;
+            }
+            /**
+             * `command_set_v1` was authored configuration with no authoring path: only the
+             * automatic stamp ever wrote it. A Work Template could reference a capability the
+             * process had not selected, publication would refuse it, and no operator surface could
+             * resolve the disagreement.
+             *
+             * Additions must resolve through the canonical registry, and the CANONICAL key is what
+             * is stored. An unregistered key is rejected with a structured blocker rather than
+             * written through raw-key fallback — which is how an unimplemented command would
+             * otherwise be authorized by accident.
+             */
+            case "update_process_command_set": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const pid = processId || config.active_process_id;
+                const addKeys = Array.isArray(body.add_capability_keys)
+                    ? body.add_capability_keys.filter((k): k is string => typeof k === "string")
+                    : [];
+                const removeKeys = Array.isArray(body.remove_capability_keys)
+                    ? body.remove_capability_keys.filter((k): k is string => typeof k === "string")
+                    : [];
+
+                if (!pid) {
+                    return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                }
+                if (!addKeys.length && !removeKeys.length) {
+                    return NextResponse.json(
+                        { error: "add_capability_keys or remove_capability_keys is required" },
+                        { status: 400 },
+                    );
+                }
+                if (!config.processes.some((p) => p.id === pid)) {
+                    return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                }
+
+                const result = updateProcessCommandSet(config, pid, {
+                    addCapabilityKeys: addKeys,
+                    removeCapabilityKeys: removeKeys,
+                });
+                if (result.rejected.length) {
+                    // Nothing is written when any requested capability cannot be vouched for.
+                    return NextResponse.json(
+                        {
+                            error:
+                                `These commands are not registered in the platform capability `
+                                + `registry and cannot be enabled: `
+                                + result.rejected.map((r) => r.requested).join(", ")
+                                + `.`,
+                            code: "capability_unregistered",
+                            rejected: result.rejected,
+                        },
+                        { status: 409 },
+                    );
+                }
+                config = result.config;
+                commandSetChange = {
+                    added: result.added,
+                    removed: result.removed,
+                    commands: result.commandSet.commands.map((c) => c.capability_key),
+                };
                 break;
             }
             case "update_stage_grain": {
@@ -575,6 +638,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             },
             draft_revision: savedDraft.draftRevision,
             ...(ensuredTransition ? { ensured_transition: ensuredTransition } : {}),
+            ...(commandSetChange ? { command_set_change: commandSetChange } : {}),
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed" }, { status: 400 });

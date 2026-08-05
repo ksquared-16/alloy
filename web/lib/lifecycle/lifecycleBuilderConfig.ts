@@ -27,9 +27,11 @@ import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentSta
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
+    emptyProcessCommandSetV1,
     parseProcessCommandSetV1OrNull,
     type BusinessProcessCommandSetV1,
 } from "@/lib/lifecycle/processCommandSetV1";
+import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
 import {
     parseStageGrain,
@@ -729,5 +731,98 @@ export function ensureStageTransitionInConfig(
         transition_ref,
         target_stage_key: target.key,
         created: true,
+    };
+}
+
+export type UpdateProcessCommandSetResult = {
+    config: LifecycleBuilderV1;
+    commandSet: BusinessProcessCommandSetV1;
+    added: string[];
+    removed: string[];
+    /** Requested keys the canonical registry could not vouch for — nothing was written for these. */
+    rejected: Array<{ requested: string; reason: "unregistered" }>;
+};
+
+/**
+ * Add or remove capabilities in a process's command set.
+ *
+ * `command_set_v1` was authored configuration with no authoring path: only
+ * `ensureBuilderCommandSetsOnSave` ever wrote it, deriving membership automatically from stage
+ * action catalogs. A Work Template could therefore reference a capability the process had not
+ * selected, publication would refuse it, and no operator surface could resolve the disagreement.
+ *
+ * Every ADDED key must resolve through `tryResolvePlatformCapability`, and the CANONICAL key is
+ * what gets persisted — an alias in, its canonical form stored. A key the registry does not know is
+ * rejected with a structured reason rather than written through raw-key fallback, which is exactly
+ * how an unimplemented command would otherwise be authorized by accident.
+ *
+ * Removal is not symmetric: it takes the requested key as given and drops any entry whose canonical
+ * form matches, so a capability that has since been de-registered can still be cleaned up.
+ */
+export function updateProcessCommandSet(
+    config: LifecycleBuilderV1,
+    processId: string,
+    input: { addCapabilityKeys?: readonly string[]; removeCapabilityKeys?: readonly string[] }
+): UpdateProcessCommandSetResult {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+
+    const current = process.command_set_v1 ?? emptyProcessCommandSetV1();
+    const commands = [...current.commands];
+    const canonicalOf = (key: string): string | null => {
+        const resolved = tryResolvePlatformCapability(key);
+        return resolved.status === "known" ? resolved.capability.canonicalCommandKey : null;
+    };
+    const entryCanonical = (key: string) => canonicalOf(key) ?? key.trim();
+
+    const rejected: Array<{ requested: string; reason: "unregistered" }> = [];
+    const added: string[] = [];
+    const removed: string[] = [];
+
+    for (const requested of input.addCapabilityKeys ?? []) {
+        const key = requested.trim();
+        if (!key) continue;
+        const canonical = canonicalOf(key);
+        if (!canonical) {
+            rejected.push({ requested: key, reason: "unregistered" });
+            continue;
+        }
+        const existing = commands.find((c) => entryCanonical(c.capability_key) === canonical);
+        if (existing) {
+            // Idempotent. An explicitly disabled command is NOT silently re-enabled here — that is
+            // a different operator intent than "this process uses this capability".
+            continue;
+        }
+        // Appended, so existing ordering is untouched and the result is deterministic.
+        commands.push({ capability_key: canonical, enabled: true });
+        added.push(canonical);
+    }
+
+    for (const requested of input.removeCapabilityKeys ?? []) {
+        const key = requested.trim();
+        if (!key) continue;
+        const target = canonicalOf(key) ?? key;
+        const index = commands.findIndex((c) => entryCanonical(c.capability_key) === target);
+        if (index < 0) continue; // idempotent no-op
+        removed.push(commands[index]!.capability_key);
+        commands.splice(index, 1);
+    }
+
+    if (!added.length && !removed.length) {
+        return { config, commandSet: current, added, removed, rejected };
+    }
+
+    const commandSet: BusinessProcessCommandSetV1 = { ...current, version: 1, commands };
+    return {
+        config: {
+            ...config,
+            processes: config.processes.map((p) =>
+                p.id === processId ? { ...p, command_set_v1: commandSet } : p
+            ),
+        },
+        commandSet,
+        added,
+        removed,
+        rejected,
     };
 }

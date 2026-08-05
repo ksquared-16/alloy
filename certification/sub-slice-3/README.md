@@ -188,3 +188,58 @@ the draft/publication governance the guard exists to enforce. Stopping is the co
 Writes 2–5 not attempted: each is gated on Write 1.
 
 **No operational data mutated. Nothing published. No direct metadata or service-role write.**
+
+---
+
+# Command-set reconciliation — COMPLETE. Draft is publishable; nothing published.
+
+| | |
+|---|---|
+| before sha256 | `c6fa455aee02fb8f8de414732b67f5be9be0605bac2e9b72e3a8a9ef3f6cc5e8` |
+| read-back sha256 | `bdf9023cbb812d5f7ba72b3e83c6d6682d8fad18a47d68c57f569b3a24bf74cc` |
+| equals precomputed candidate | **True** |
+| persisted diff | 3 changes, all authorized |
+
+```
+.processes[0].command_set_v1.commands                                     1 -> 5
+.processes[0].stages[0]…work_templates[0].helpful_actions (Lead/contact_family)  5 -> 3
+.processes[0].stages[1]…work_templates[0].helpful_actions (Tour/work_1)          3 -> 1
+```
+
+## Negative control
+
+```
+POST update_process_command_set  add_capability_keys: ["create_task"]
+→ HTTP 409  capability_unregistered
+   rejected: [{"requested":"create_task","reason":"unregistered"}]
+```
+
+Structurally refused by `tryResolvePlatformCapability`, not by a list.
+
+## Final state
+
+```
+command set : update_lead_status, add_child, add_family_member, schedule_tour, quick_message
+lead/contact_family : primary=quick_message  helpful=[schedule_tour, add_child, add_family_member]
+tour/work_1         : primary=schedule_tour  helpful=[quick_message]
+lead_to_tour        : present, once
+decision grain      : family
+```
+
+## Validate
+
+```
+can_publish : true
+errors      : NONE
+warnings    : movement_without_transition   (non-blocking by design)
+```
+
+## Published projection — byte-identical throughout
+
+```
+before all writes : e3b000d12cebda825fa24c3355e69d9ffd613f0f923ed0880b8584369db8d1a8
+now               : e3b000d12cebda825fa24c3355e69d9ffd613f0f923ed0880b8584369db8d1a8
+runtime still sees: lead transitions=None, decision grain=child, command_set_v1=None
+```
+
+Runtime remains on the previous publication. No operational records changed. Nothing published.
