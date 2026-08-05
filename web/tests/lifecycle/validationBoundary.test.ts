@@ -115,11 +115,63 @@ describe("Validate and Publish block on it", () => {
     });
 
     /**
-     * NOT ASSERTED HERE. Structural blocking is proven in ensureStageTransition.test.ts
-     * ("leaves an UNRELATED invalid candidate still blocked", plus the two defect-shape tests).
-     * A fixture that reliably trips `dangling_stage_reference` through THIS entry point was not
-     * landed in the time available, and a passing-but-wrong assertion would be worse than none.
+     * Structural failure must reach THIS entry point, not merely the mutator underneath it.
+     *
+     * An earlier version of this test asserted `dangling_stage_reference` and failed — not because
+     * publication was permissive, but because the assertion named the wrong code. The execution
+     * graph validator reaches these first and reports them MORE precisely, distinguishing the same
+     * two defects the reference copy now distinguishes:
+     *
+     *   missing transition        -> movement_transition_not_found
+     *   missing destination stage -> transition_destination_unknown
      */
+    it("blocks a movement whose transition does not exist", () => {
+        const broken = draftWithCommandGap();
+        const plan = broken.processes[0]!.stages[0]!.stage_operating_plan_v1!;
+        plan.outcomes = [{ outcome_key: "x", label: "X" }] as never;
+        plan.outcome_rules = [
+            { rule_key: "r", when_outcome_key: "x", targets: [{ kind: "move_to_stage", transition_ref: "ghost" }] },
+        ] as never;
+
+        const result = validateBusinessProcessForPublish(broken);
+        expect(result.errors.some((e) => e.code === "movement_transition_not_found")).toBe(true);
+        // Blocking, never downgraded — `warnings` are documented as never blocking.
+        expect(result.warnings.some((w) => w.code === "movement_transition_not_found")).toBe(false);
+    });
+
+    it("blocks a transition whose destination stage is not configured", () => {
+        const broken = draftWithCommandGap();
+        broken.processes[0]!.stages[0]!.stage_operating_plan_v1!.outgoing_transitions = [
+            {
+                transition_ref: "lead_to_nowhere",
+                source_stage_key: "lead",
+                target_stage_key: "atlantis",
+                label: "x",
+                available: true,
+            },
+        ] as never;
+
+        const result = validateBusinessProcessForPublish(broken);
+        expect(result.errors.some((e) => e.code === "transition_destination_unknown")).toBe(true);
+        expect(result.warnings.some((w) => w.code === "transition_destination_unknown")).toBe(false);
+    });
+
+    it("keeps structural and completeness blockers distinct", () => {
+        // Both reach publish, under their own codes — neither masks the other.
+        const broken = draftWithCommandGap();
+        broken.processes[0]!.stages[0]!.stage_operating_plan_v1!.outgoing_transitions = [
+            {
+                transition_ref: "lead_to_nowhere",
+                source_stage_key: "lead",
+                target_stage_key: "atlantis",
+                label: "x",
+                available: true,
+            },
+        ] as never;
+        const codes = validateBusinessProcessForPublish(broken).errors.map((e) => e.code);
+        expect(codes).toContain("transition_destination_unknown");
+        expect(codes).toContain("process_command_set_incomplete");
+    });
 });
 
 describe("the save path no longer refuses on completeness", () => {
