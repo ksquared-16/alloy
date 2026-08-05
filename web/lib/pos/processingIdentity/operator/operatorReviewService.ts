@@ -61,7 +61,7 @@ import {
     type IdentityResolutionEligibility,
 } from "./identityResolutionEligibility";
 import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
-import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE } from "@/lib/pos/processingCase/classification/trustGovernanceGapDb";
+import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES } from "@/lib/pos/trustGovernance/gapExceptionTypes";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -148,16 +148,22 @@ export async function loadCaseReview(
     }
 
     // A Trust governance gap is NOT an identity exception. It records that a
-    // Decision Package could not be captured; the Processing classification
-    // committed and is authoritative, and nothing about identity review changed.
-    // Counting it here would flip the review lane to `exception` purely because
-    // Trust was unavailable — exactly the coupling AD-P1-8 forbids.
-    const { count: openExceptionCount } = await deps.supabase
-        .from("processing_exceptions")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", deps.orgId)
-        .eq("case_id", caseId)
-        .neq("exception_type", TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE);
+    // Decision Package could not be captured; the Processing work committed and
+    // is authoritative, and nothing about identity review changed. Counting one
+    // here would flip the review lane to `exception` purely because Trust was
+    // unavailable — exactly the coupling AD-P1-8 forbids.
+    //
+    // Excluded by SHARED LIST, so a new capability's gap type is isolated here
+    // the moment it is registered rather than the next time someone remembers.
+    const openExceptionQuery = TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES.reduce(
+        (query, gapType) => query.neq("exception_type", gapType),
+        deps.supabase
+            .from("processing_exceptions")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", deps.orgId)
+            .eq("case_id", caseId),
+    );
+    const { count: openExceptionCount } = await openExceptionQuery;
 
     const blockingConflictCount = countBlockingConflicts(resolutions);
     const caseEligibility = evaluateCasePlanEligibility(resolutions);

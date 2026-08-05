@@ -39,11 +39,17 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { TRUST_SOURCE_CLASSIFICATION_GAP_TYPE } from "@/lib/pos/trustGovernance/gapExceptionTypes";
 import { processingSourceClassificationContractId } from "@/lib/trust/capabilities/processingSourceClassification/adoptionIdentity";
 import type { GovernedSourceClassificationV1 } from "./governedClassificationSchema";
 
-/** The discriminator that separates a governance gap from an identity exception. */
-export const TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE = "trust_governance_gap" as const;
+/**
+ * The discriminator that separates a governance gap from a Processing exception.
+ *
+ * Delegated to the shared registry so every readiness projection can exclude
+ * ALL gap types by list. The export name is unchanged for existing consumers.
+ */
+export const TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE = TRUST_SOURCE_CLASSIFICATION_GAP_TYPE;
 
 /**
  * `warning`, never `blocker`. The gap does not block Processing — the
