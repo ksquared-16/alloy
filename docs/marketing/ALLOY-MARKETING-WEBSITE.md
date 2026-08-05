@@ -279,7 +279,7 @@ For images not yet approved, use intentional aspect-ratio placeholders labeled i
 | Official gradient wordmark        | Brand              | Supplied                                      |
 | Official gradient brandmark       | Brand              | Supplied                                      |
 | Gradient favicon                  | Brand              | Supplied                                      |
-| Hero illustration                 | Generated          | Direction approved (operational flow); production asset required |
+| Hero illustration                 | Generated          | Supplied — `/marketing/hero/alloy-work-forward-hero.webp` |
 | Disconnected systems illustration | Generated          | Pending                                       |
 | Business Processes illustration   | Generated          | Pending                                       |
 | Processing image                  | Product screenshot | Pending selection                             |

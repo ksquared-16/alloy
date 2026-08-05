@@ -1,5 +1,6 @@
 import CTAButton from "@/components/marketing/CTAButton";
 import HeroCapabilityStrip from "@/components/marketing/HeroCapabilityStrip";
+import MarketingAssetImage from "@/components/marketing/MarketingAssetImage";
 import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
 import SectionShell from "@/components/marketing/SectionShell";
 import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
@@ -111,8 +112,8 @@ export default function HomePage() {
             </CTAButton>
           </div>
         </div>
-        <MarketingAssetPlaceholder
-          assetKey={MARKETING_ASSETS.hero.key}
+        <MarketingAssetImage
+          src={MARKETING_ASSETS.hero.src}
           alt={MARKETING_ASSETS.hero.alt}
           aspectClassName="aspect-[5/3]"
           priority
