@@ -410,6 +410,11 @@ export async function POST(request: NextRequest) {
             const classified = await maybeClassifyProcessingCaseFromDocumentSafe(supabase, {
                 orgId: ctx.orgId,
                 caseId: processingCaseId,
+                // Trust adoption Phase 1.1: the deterministic classification is
+                // also recorded as an immutable Decision Package. Additive — it
+                // cannot change or withhold what Processing stores, so
+                // `classificationKey` below is unaffected either way.
+                governance: {},
                 document: {
                     sourceKind: "document",
                     fileName: docRow.original_filename ?? origName,
