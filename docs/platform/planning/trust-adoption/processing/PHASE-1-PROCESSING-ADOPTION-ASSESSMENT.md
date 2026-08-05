@@ -672,8 +672,55 @@ Everything before it is certified by test and module graph.
 
 | Slice | Status |
 |---|---|
-| **1.1** `processing_source_classification` | **Implemented.** Commits `373e0526b` (Processing-owned contract) and `e0d500de0` (Trust adoption). No migration. |
-| 1.2 – 1.7 | Not started. |
+| **1.1** `processing_source_classification` | **Merged** — `ab76c6cb6` (PR #346). Source-classification adoption, durable gaps, idempotency. No migration. |
+| **1.2** identity fact hashing | **Merged** — `9cb791ee3` (PR #347). Content-deterministic identity fact hash. No migration. |
+| **1.3** identity adapter contracts | **Merged** — `cd34be872` (PR #348). Pure and dormant. No migration. |
+| **1.4** dormant identity decision class | **Merged** — `942d078dd` (PR #349). Registered, no production caller. No migration. |
+| **1.5** live identity capture | **Merged** — `c933ea15b` (PR #351). First live identity persistence. No migration. |
+| **1.6** operator-correction lineage | **Implemented, this branch.** Supersession of a prior governed judgment by an operator correction or a replacement generation. No migration. |
+| 1.7 | Not started. |
+
+### What 1.6 confirmed, refined, or corrected
+
+- **AD-P1-1 and AD-P1-2 hold.** No plan, approval or executor module is imported by any lineage
+  module, and a structural control asserts it. Commit Plan lineage is untouched.
+- **§16's own premise is now realised.** The assessment's governing finding was that the engine's
+  record "is destroyed at the moment an operator acts." It no longer is: the record survives as an
+  immutable package, and the operator's act is recorded as its lifecycle consequence.
+- **New finding, D-5 — Phase 0 could not represent operator supersession.**
+  `projectDecisionPackageLifecycle` hard-failed `MISSING_SUPERSEDING_PACKAGE_ID` on any `superseded`
+  observation without a successor id, because Phase 0 assumed supersession always came from a newer
+  package. A direct operator correction has no replacement package and must not invent one — minting
+  a package for a human decision would label it deterministic reasoning. The observation now declares
+  its **source**: a replacement package names the successor, an external authority names a durable
+  reference into its own record instead. Disposition **precedence is unchanged**; the relaxed rule is
+  a required-field rule, and the missing-reference case became its own error rather than a silent pass.
+- **New finding, D-6 — exactly-once needed no migration.**
+  `trust_decision_observations.id` is `uuid PRIMARY KEY DEFAULT gen_random_uuid()`. A supplied value
+  is equally legal, so a deterministic observation id derived from the supersession identity makes the
+  existing primary key the exactly-once authority — the same mechanism 1.5 used for the contract id.
+  Certified against a real database (`trust-lifecycle-observations`, assertions 13 and 14), not
+  inferred from the DDL: a future `GENERATED ALWAYS` would otherwise break idempotency silently.
+- **New finding, D-7 — there are TWO operator-decision writers, not one.**
+  `recordResolutionDecision` is the canonical service, but `applyCommitSelectionToResolutions` (the
+  Create Lead adapter) also stamps `decided_by = "operator"` by `subject_ref`. Both now call the one
+  lineage service; wiring only the first would have left Create Lead corrections ungoverned.
+- **New finding, D-8 — a fact correction alone supersedes nothing.**
+  `recordCorrection` appends a new fact version and does **not** re-run resolution, so no resolution
+  row changes and the prior engine judgment is still the authoritative result. Superseding on fact
+  correction would have declared a judgment non-current while it was still in force.
+- **New finding, D-9 — cross-generation Processing lineage does not exist.**
+  `markResolutionSuperseded` is only called for a replay **within** one generation; rows from an
+  earlier generation keep `superseded_by = null`. Replacement lineage therefore orders by `created_at`
+  per `subject_ref`, the same convention `pickLatestResolutionPerSubject` uses.
+- **New finding, D-10 — there is no production recomputation path today.**
+  Every caller of `runCanonicalIdentityResolution` is an intake adapter; nothing re-runs resolution
+  after an operator correction. Replacement-generation lineage is wired at the canonical
+  successful-capture path and is correct for any future recompute, but it is **unexercised in
+  production** as of this slice. Direct operator-correction lineage is the live path.
+- **Gotcha, recorded.** The Phase 0 `lib/trust` boundary control matches **source text**, so
+  `createHash().update()` fails it — including inside a comment that mentions it. The one-shot
+  `hash()` produces an identical digest and keeps the control's principle intact.
 
 ### What 1.1 confirmed, refined, or corrected
 

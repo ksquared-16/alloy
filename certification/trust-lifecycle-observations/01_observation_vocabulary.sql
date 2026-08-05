@@ -178,12 +178,46 @@ BEGIN
     v_pass := v_pass + 1;
     RAISE NOTICE 'PASS 12 — row level security is still enabled on the observation store';
 
+    -- ---- 13. a SUPPLIED observation id is accepted verbatim ------------------
+    -- Phase 1.6 makes the primary key the exactly-once authority for an
+    -- observation whose identity is derivable, by supplying `id` instead of
+    -- letting the default generate one. That only works if the column accepts a
+    -- caller's value: `DEFAULT gen_random_uuid()` does, `GENERATED ALWAYS` would
+    -- not. Asserted against a real database rather than inferred from the DDL,
+    -- because the whole idempotency design rests on it.
+    v_obs := 'dddddddd-dddd-4ddd-addd-dddddddddddd'::uuid;
+    INSERT INTO public.trust_decision_observations
+        (id, org_id, package_id, observation_kind, observed_by_actor_type, channel, detail)
+    VALUES (v_obs, v_org, v_package, 'superseded', 'operator', 'system',
+            '{"supersession_source":"external_authority_decision","superseding_reference":"processing_resolution:res-1"}'::jsonb);
+
+    SELECT count(*) INTO v_count FROM public.trust_decision_observations WHERE id = v_obs;
+    IF v_count <> 1 THEN
+        RAISE EXCEPTION 'CERT FAIL 13: a supplied observation id was not persisted verbatim (found % row(s))', v_count;
+    END IF;
+    v_pass := v_pass + 1;
+    RAISE NOTICE 'PASS 13 — a deterministic observation id is accepted verbatim by the primary key';
+
+    -- ---- 14. a DUPLICATE supplied id is refused ------------------------------
+    -- The other half. Without it the deterministic id would be decoration.
+    BEGIN
+        INSERT INTO public.trust_decision_observations
+            (id, org_id, package_id, observation_kind, observed_by_actor_type, channel, detail)
+        VALUES (v_obs, v_org, v_package, 'superseded', 'operator', 'system',
+                '{"supersession_source":"external_authority_decision","superseding_reference":"processing_resolution:res-1"}'::jsonb);
+        RAISE EXCEPTION 'CERT FAIL 14: a duplicate observation id was ACCEPTED; exactly-once is not enforced';
+    EXCEPTION
+        WHEN unique_violation THEN
+            v_pass := v_pass + 1;
+            RAISE NOTICE 'PASS 14 — a duplicate deterministic observation id is refused by the primary key';
+    END;
+
     RAISE NOTICE '=============================================';
-    RAISE NOTICE 'TRUST LIFECYCLE OBSERVATION VOCABULARY — % / 12 assertions passed', v_pass;
+    RAISE NOTICE 'TRUST LIFECYCLE OBSERVATION VOCABULARY — % / 14 assertions passed', v_pass;
     RAISE NOTICE '=============================================';
 
-    IF v_pass <> 12 THEN
-        RAISE EXCEPTION 'CERT FAIL: expected 12 assertions, counted %', v_pass;
+    IF v_pass <> 14 THEN
+        RAISE EXCEPTION 'CERT FAIL: expected 14 assertions, counted %', v_pass;
     END IF;
 END;
 $$;

@@ -14,6 +14,12 @@ import type { TrustObservationKind, TrustRepository } from "@/lib/trust/persiste
 
 export type CaptureOutcomeInput = {
     readonly repository: TrustRepository;
+    /**
+     * Optional deterministic observation id. Supplied by callers whose
+     * observation has a derivable identity, so the primary key refuses an
+     * equivalent second append.
+     */
+    readonly id?: string;
     readonly org_id: string;
     readonly package_id: string;
     readonly contract_id: string;
@@ -37,6 +43,7 @@ const OBSERVATION_EVENT: Partial<
 
 export async function captureOutcome(input: CaptureOutcomeInput): Promise<void> {
     await input.repository.insertObservation({
+        ...(input.id ? { id: input.id } : {}),
         org_id: input.org_id,
         package_id: input.package_id,
         observation_kind: input.observation_kind,
