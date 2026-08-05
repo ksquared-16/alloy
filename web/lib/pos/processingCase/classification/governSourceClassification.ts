@@ -25,10 +25,13 @@
  * while a Processing classification that is missing is a gap in the product.
  * Processing therefore writes FIRST and is never blocked by Trust.
  *
- * The residual state — classified but ungoverned — is real. It is made explicit
- * rather than silent: {@link SourceClassificationGovernanceResult} names it, the
- * caller receives it, and it is logged under a single greppable marker. It is
- * never reported as success.
+ * The residual state — classified but ungoverned — is real. It is made
+ * **durably recoverable** (AD-P1-8): the gap is written to
+ * `processing_exceptions` with a bounded replay snapshot, and reconciliation
+ * turns it into a governed decision later. A log line is not a recovery record.
+ *
+ * @see ./trustGovernanceGapDb.ts — why `processing_exceptions` and not a new table
+ * @see ./reconcileTrustGovernanceGaps.ts — the one canonical recovery path
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -36,11 +39,13 @@ import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes
 import type { TrustChannel, TrustInitiatingActor } from "@/lib/trust/contract/decisionContractTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { decideProcessingSourceClassification } from "@/lib/trust/consumers/processingSourceClassification";
+import { PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY } from "@/lib/trust/capabilities/processingSourceClassification/keys";
 import {
     CLASSIFICATION_MATERIAL_INPUT_VERSION,
     classificationMaterialFingerprint,
 } from "./classificationMaterialInput";
 import { toGovernedSourceClassification } from "./governedClassificationSchema";
+import { adoptionKey, recordTrustGovernanceGap } from "./trustGovernanceGapDb";
 import type { ClassifyNonFormSourceInput, ProcessingClassificationResult } from "./types";
 
 /** The distinct log marker for a classification that was stored but not governed. */
@@ -62,10 +67,17 @@ export type SourceClassificationGovernanceResult =
     /** One contract, one immutable package. */
     | { readonly status: "governed"; readonly package: DecisionPackageV1 }
     /**
-     * Processing classified and stored; Trust did not record it. An evidence
-     * gap, surfaced deliberately.
+     * Processing classified and stored; Trust did not. The gap is **durably
+     * recorded** and recoverable by reconciliation. Not a success.
      */
-    | { readonly status: "not_governed"; readonly reason: string };
+    | { readonly status: "not_governed"; readonly reason: string; readonly gapId: string }
+    /**
+     * The loud one: Trust capture failed AND the durable gap could not be
+     * written. Both the governed record and its recovery record are lost, so
+     * this is the only branch that is recoverable by nothing but the log and a
+     * later sweep. Processing's classification is still committed and correct.
+     */
+    | { readonly status: "gap_unrecordable"; readonly reason: string; readonly gapError: string };
 
 export type SourceClassificationGovernanceDeps = {
     /** Injectable so certification can drive the runtime without a database. */
@@ -79,14 +91,15 @@ export type SourceClassificationGovernanceDeps = {
 };
 
 /**
- * Submits an already-final classification for governance.
+ * Submits an already-final classification for governance, and durably records
+ * the gap if that fails.
  *
- * Never throws. Never mutates a Processing record — it has a Supabase client
- * only so a future slice can widen the evidence it references, and it does not
- * write with it today.
+ * Never throws, and never mutates a Processing record other than appending a
+ * governance-gap row to `processing_exceptions`. The classification itself has
+ * already committed and is untouched here.
  */
 export async function governSourceClassification(
-    _supabase: SupabaseClient | null,
+    supabase: SupabaseClient | null,
     args: {
         orgId: string;
         caseId: string;
@@ -96,11 +109,15 @@ export async function governSourceClassification(
     },
 ): Promise<SourceClassificationGovernanceResult> {
     const governed = toGovernedSourceClassification(args.result);
-    // `unsupported` never reaches the Trust Runtime (accepted decision 10).
+    // `unsupported` never reaches the Trust Runtime, and never produces a gap
+    // either — the absence of a decision is not a decision that went missing.
     if (!governed) return { status: "skipped_unsupported" };
 
     const deps = args.deps ?? {};
     const decide = deps.decide ?? decideProcessingSourceClassification;
+    const now = () => deps.nowIso ?? new Date().toISOString();
+
+    const fingerprint = classificationMaterialFingerprint(args.input);
 
     try {
         const decision = await decide({
@@ -108,7 +125,7 @@ export async function governSourceClassification(
             processing_case_id: args.caseId,
             source_kind: args.input.sourceKind,
             classification: governed as unknown as Readonly<Record<string, unknown>>,
-            material_input_fingerprint: classificationMaterialFingerprint(args.input),
+            material_input_fingerprint: fingerprint,
             material_input_version: CLASSIFICATION_MATERIAL_INPUT_VERSION,
             classifier_version: args.result.classifier_version,
             initiating_actor: deps.initiating_actor ?? { actor_type: "system", actor_id: null },
@@ -120,12 +137,57 @@ export async function governSourceClassification(
         return { status: "governed", package: decision.package };
     } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
-        // Loud, greppable, and distinct from the classifier's own warning, so a
-        // governance gap can never be mistaken for a classification failure.
-        console.warn(
-            `${TRUST_GOVERNANCE_GAP_MARKER} case=${args.caseId} org=${args.orgId}`,
-            `classification stored but NOT governed: ${reason}`,
-        );
-        return { status: "not_governed", reason };
+
+        // ---- durable recovery record (AD-P1-8) ------------------------------
+        if (!supabase) {
+            console.error(
+                `${TRUST_GOVERNANCE_GAP_MARKER} case=${args.caseId} org=${args.orgId}`,
+                `classification stored but NOT governed and NO durable gap written (no client): ${reason}`,
+            );
+            return { status: "gap_unrecordable", reason, gapError: "no_supabase_client" };
+        }
+
+        try {
+            const gap = await recordTrustGovernanceGap(supabase, {
+                orgId: args.orgId,
+                caseId: args.caseId,
+                nowIso: now(),
+                snapshot: {
+                    adoption_key: adoptionKey({
+                        orgId: args.orgId,
+                        caseId: args.caseId,
+                        decisionClassKey: PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY,
+                        materialInputFingerprint: fingerprint,
+                        classifierVersion: args.result.classifier_version,
+                    }),
+                    decision_class_key: PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY,
+                    source_kind: args.input.sourceKind,
+                    material_input_fingerprint: fingerprint,
+                    material_input_version: CLASSIFICATION_MATERIAL_INPUT_VERSION,
+                    classifier_version: args.result.classifier_version,
+                    classification: governed,
+                    failure_class: "trust_capture_failed",
+                    failure_reason: reason,
+                },
+            });
+            // Loud, greppable, and distinct from the classifier's own warning, so
+            // a governance gap can never be mistaken for a classification failure.
+            console.warn(
+                `${TRUST_GOVERNANCE_GAP_MARKER} case=${args.caseId} org=${args.orgId} gap=${gap.id}`,
+                `classification stored but NOT governed; durable gap recorded: ${reason}`,
+            );
+            return { status: "not_governed", reason, gapId: gap.id };
+        } catch (gapError) {
+            const gapReason = gapError instanceof Error ? gapError.message : String(gapError);
+            // The one branch where BOTH the governed record and its recovery
+            // record are lost. `error`, not `warn` — this is the loudest signal
+            // this path has, and it is deliberately distinguishable.
+            console.error(
+                `${TRUST_GOVERNANCE_GAP_MARKER} case=${args.caseId} org=${args.orgId}`,
+                `classification stored but NOT governed and the durable gap FAILED to persist.`,
+                `trust=${reason} gap_store=${gapReason}`,
+            );
+            return { status: "gap_unrecordable", reason, gapError: gapReason };
+        }
     }
 }

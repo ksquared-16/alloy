@@ -61,6 +61,7 @@ import {
     type IdentityResolutionEligibility,
 } from "./identityResolutionEligibility";
 import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
+import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE } from "@/lib/pos/processingCase/classification/trustGovernanceGapDb";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -146,11 +147,17 @@ export async function loadCaseReview(
         latestAttempt = await loadLatestAttemptForPlan(deps.supabase, { orgId: deps.orgId, planId: plan.planId });
     }
 
+    // A Trust governance gap is NOT an identity exception. It records that a
+    // Decision Package could not be captured; the Processing classification
+    // committed and is authoritative, and nothing about identity review changed.
+    // Counting it here would flip the review lane to `exception` purely because
+    // Trust was unavailable — exactly the coupling AD-P1-8 forbids.
     const { count: openExceptionCount } = await deps.supabase
         .from("processing_exceptions")
         .select("id", { count: "exact", head: true })
         .eq("org_id", deps.orgId)
-        .eq("case_id", caseId);
+        .eq("case_id", caseId)
+        .neq("exception_type", TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE);
 
     const blockingConflictCount = countBlockingConflicts(resolutions);
     const caseEligibility = evaluateCasePlanEligibility(resolutions);

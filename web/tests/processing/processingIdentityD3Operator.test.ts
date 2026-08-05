@@ -49,6 +49,7 @@ class FakeBuilder {
     private op: "select" | "insert" | "update" | null = null;
     private payload: Row | Row[] | null = null;
     private filters: [string, unknown][] = [];
+    private negFilters: [string, unknown][] = [];
     private sortSpec: { col: string; asc: boolean } | null = null;
     private limitN: number | null = null;
     constructor(private rows: Row[], private name: string, private mkId: () => string) {}
@@ -56,10 +57,21 @@ class FakeBuilder {
     update(patch: Row) { this.op = "update"; this.payload = patch; return this; }
     select() { if (this.op == null) this.op = "select"; return this; }
     eq(c: string, v: unknown) { this.filters.push([c, v]); return this; }
+    /**
+     * The identity readiness count now excludes Trust governance gaps, which are
+     * not identity exceptions (see `operatorReviewService`). The fake needs the
+     * operator so it keeps modelling the real query.
+     */
+    neq(c: string, v: unknown) { this.negFilters.push([c, v]); return this; }
     is(c: string, v: unknown) { this.filters.push([c, v]); return this; }
     order(col: string, opts?: { ascending?: boolean }) { this.sortSpec = { col, asc: opts?.ascending ?? true }; return this; }
     limit(n: number) { this.limitN = n; return this; }
-    private match(r: Row) { return this.filters.every(([c, v]) => (v === null ? r[c] == null : r[c] === v)); }
+    private match(r: Row) {
+        return (
+            this.filters.every(([c, v]) => (v === null ? r[c] == null : r[c] === v)) &&
+            this.negFilters.every(([c, v]) => r[c] !== v)
+        );
+    }
     private apply(): Row[] {
         if (this.op === "insert") {
             const list = Array.isArray(this.payload) ? this.payload : [this.payload as Row];

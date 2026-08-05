@@ -13,6 +13,7 @@
  * @see docs/platform/planning/trust-adoption/processing/PHASE-1-PROCESSING-ADOPTION-ASSESSMENT.md
  */
 
+import { createAdminClient } from "@/lib/supabaseAdmin";
 import { createDecisionContract } from "@/lib/trust/contract/createDecisionContract";
 import type { TrustChannel, TrustInitiatingActor } from "@/lib/trust/contract/decisionContractTypes";
 import type { InformationClass } from "@/lib/trust/classification/informationClasses";
@@ -75,6 +76,70 @@ export type ProcessingSourceClassificationDecision = {
     readonly package: DecisionPackageV1;
     readonly step_trace: readonly TrustRuntimeStep[];
 };
+
+/** The identity that answers "has this exact judgment already been governed?". */
+export type GovernedDecisionIdentity = {
+    readonly org_id: string;
+    readonly processing_case_id: string;
+    readonly material_input_fingerprint: string;
+    readonly classifier_version: string;
+};
+
+export type GovernedDecisionReference = {
+    readonly contract_id: string;
+    readonly package_id: string;
+};
+
+/**
+ * Looks up an already-governed decision by adoption identity.
+ *
+ * This is the IDEMPOTENCY seam, and it deliberately lives in `lib/trust`:
+ * Processing must never query a `trust_` table, and a structural control
+ * asserts it does not. It is also NOT a way for Processing to read its
+ * operational classification — that remains `processing_cases.metadata`. This
+ * answers one question only: was a package already produced for this identity?
+ */
+export type GovernedDecisionLookup = (
+    identity: GovernedDecisionIdentity,
+) => Promise<GovernedDecisionReference | null>;
+
+/**
+ * The production lookup, over existing Trust records.
+ *
+ * No new idempotency store: `trust_decision_packages.contract_id` is already
+ * UNIQUE, so one contract can carry at most one package. The contract's own
+ * declared context carries the fingerprint and classifier version, and
+ * `correlation_id` is the Processing Case id (indexed by `idx_tdc_correlation`).
+ * Together those are the adoption identity, already persisted.
+ */
+export function createSupabaseGovernedDecisionLookup(): GovernedDecisionLookup {
+    return async (identity) => {
+        const admin = createAdminClient();
+        const { data: contracts, error: contractError } = await admin
+            .from("trust_decision_contracts")
+            .select("id")
+            .eq("org_id", identity.org_id)
+            .eq("decision_class_key", PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY)
+            .eq("correlation_id", identity.processing_case_id)
+            .eq("context->>material_input_fingerprint", identity.material_input_fingerprint)
+            .eq("context->>classifier_version", identity.classifier_version);
+        if (contractError) throw new Error(`trust.governedDecisionLookup: ${contractError.message}`);
+
+        const contractIds = ((contracts ?? []) as { id: string }[]).map((c) => c.id);
+        if (contractIds.length === 0) return null;
+
+        const { data: packages, error: packageError } = await admin
+            .from("trust_decision_packages")
+            .select("id, contract_id")
+            .eq("org_id", identity.org_id)
+            .in("contract_id", contractIds)
+            .limit(1);
+        if (packageError) throw new Error(`trust.governedDecisionLookup: ${packageError.message}`);
+
+        const found = ((packages ?? []) as { id: string; contract_id: string }[])[0];
+        return found ? { contract_id: found.contract_id, package_id: found.id } : null;
+    };
+}
 
 /**
  * Runs one source-classification decision through the Trust Runtime.

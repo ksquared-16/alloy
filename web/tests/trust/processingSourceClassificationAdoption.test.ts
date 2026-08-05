@@ -561,9 +561,18 @@ describe("P1.1-G — the classifier's real confidence contract is enforced, fail
 // ---------------------------------------------------------------------------
 
 describe("P1.1-H — a Trust persistence failure is explicit and never blocks Processing", () => {
-    it("Processing still stores the classification, and the gap is reported and logged", async () => {
+    /**
+     * This fake permits only `processing_cases`, so the durable governance-gap
+     * store is unreachable. That is the `gap_unrecordable` branch — the loudest
+     * one — and it is asserted here deliberately. The durable-capture path and
+     * its reconciliation are certified in
+     * `processingSourceClassificationGovernanceGap.test.ts`, which models
+     * `processing_exceptions`.
+     */
+    it("Processing still stores the classification, and the loss is reported and logged", async () => {
         const fake = makeFakeSupabase();
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
         const results: string[] = [];
 
         const stored = await maybeClassifyProcessingCaseFromDocumentSafe(fake.supabase, {
@@ -589,11 +598,13 @@ describe("P1.1-H — a Trust persistence failure is explicit and never blocks Pr
         // Processing authority is preserved: the classification is stored.
         expect(stored?.classification_key).toBe("subsidy_contract");
         expect(fake.updates).toHaveLength(1);
-        // The evidence gap is named, returned and logged distinctly.
-        expect(results).toEqual(["not_governed"]);
-        expect(warn).toHaveBeenCalled();
-        expect(warn.mock.calls.flat().join(" ")).toContain(TRUST_GOVERNANCE_GAP_MARKER);
+        // Neither the governed record nor its recovery record could be written,
+        // so the result says exactly that and the log is at `error`, not `warn`.
+        expect(results).toEqual(["gap_unrecordable"]);
+        expect(errorSpy).toHaveBeenCalled();
+        expect(errorSpy.mock.calls.flat().join(" ")).toContain(TRUST_GOVERNANCE_GAP_MARKER);
         warn.mockRestore();
+        errorSpy.mockRestore();
     });
 
     it("a Processing persistence failure yields no package — governance never runs alone", async () => {
