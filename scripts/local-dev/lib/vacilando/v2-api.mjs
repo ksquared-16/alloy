@@ -556,6 +556,20 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
   }
+  if (path === "/api/v2/workspace/reply" || path === "/api/v2/views/workspace/reply") {
+    const { postWorkspaceReply } = await import("./presentation/workspace-runtime.mjs");
+    const workspaceId = v.workspace_id || v.workspaceId || v.id || "ws_identity";
+    const text = v.text || v.message || v.body || "";
+    const out = postWorkspaceReply(workspaceId, { text, actor: actorDefault });
+    if (!out.ok) {
+      const status = out.error === "workspace_not_found" ? 404
+        : out.error === "empty_message" ? 400
+          : out.error === "message_too_long" ? 400
+            : 400;
+      return { status, body: out };
+    }
+    return { status: 200, body: out };
+  }
   if (path === "/api/v2/director/message") {
     try {
       const out = submitOperatorDirectorMessage({
@@ -872,6 +886,20 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     const vm = improvementDetailVm(id);
     if (!vm) return { status: 404, body: { ok: false, error: "not_found" } };
     return { status: 200, body: { ok: true, improvement: vm } };
+  }
+  if (
+    path === "/api/v2/views/workspace-runtime"
+    || path === "/api/v2/views/workspace"
+    || path === "/api/v2/workspace"
+  ) {
+    const { workspaceRuntimeVm, listV31Workspaces } = await import("./presentation/workspace-runtime.mjs");
+    const id = q("id") || q("workspace_id") || q("workspaceId") || "ws_identity";
+    if (q("list") === "1") {
+      return { status: 200, body: { ok: true, workspaces: listV31Workspaces() } };
+    }
+    const runtime = workspaceRuntimeVm(id);
+    if (!runtime) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    return { status: 200, body: { ok: true, runtime, workspaces: listV31Workspaces() } };
   }
   if (path === "/api/v2/views/mission/timeline") {
     const id = q("id") || q("mission_id");

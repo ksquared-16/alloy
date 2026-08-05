@@ -211,7 +211,7 @@ document.addEventListener("input", (e) => {
 });
 
 // -------- routing (Mission Control primary; legacy board is compatibility-only) --------
-const MC_ROUTES = new Set(["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"]);
+const MC_ROUTES = new Set(["workspaces", "workspace", "missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"]);
 const LEGACY_ROUTES = new Set(["command", "director", "history", "policies", "trust"]);
 
 function legacyMode() {
@@ -228,6 +228,7 @@ function parseRoute() {
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
 const CRUMBS = {
+  workspaces: "Workspaces", workspace: "Workspaces",
   missions: "Missions", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
   decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", improvements: "Improvements",
   settings: "Settings",
@@ -238,8 +239,8 @@ function setActiveNav(name) {
   const active = (name === "kickoff" || name === "timeline" || name === "decisions" || name === "evidence")
     ? (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name)
     : name;
-  const navActive = ["missions", "needs-you", "workers", "improvements", "settings"].includes(name)
-    ? name
+  const navActive = ["workspaces", "workspace", "missions", "needs-you", "workers", "improvements", "settings"].includes(name)
+    ? (name === "workspace" ? "workspaces" : name)
     : (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name === "timeline" || name === "evidence" ? "missions" : name);
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === navActive));
   $("#crumb").textContent = CRUMBS[name] || "Missions";
@@ -278,6 +279,11 @@ function renderMcView(r, V2) {
   let html = "";
   const missionQ = r.query?.get("mission") || null;
   if (r.name === "settings") html = V2.viewSettings ? V2.viewSettings() : `<div class="mc-wrap"><h2>Settings</h2></div>`;
+  else if (r.name === "workspaces" || r.name === "workspace") {
+    html = V2.viewWorkspace
+      ? V2.viewWorkspace(r.sub || r.query?.get("id") || "ws_identity")
+      : `<div class="mc-wrap empty">Workspace Runtime unavailable</div>`;
+  }
   else if (r.name === "needs-you") html = V2.viewNeedsYou();
   else if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
   else if (r.name === "missions") html = V2.viewMissions();
@@ -288,6 +294,9 @@ function renderMcView(r, V2) {
   else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
   else if (r.name === "improvements") html = r.sub ? V2.viewImprovementDetail(r.sub) : V2.viewImprovements();
   V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
+  if ((r.name === "workspaces" || r.name === "workspace") && typeof V2.afterWorkspacePaint === "function") {
+    requestAnimationFrame(() => V2.afterWorkspacePaint());
+  }
   try {
     // Mission Control badge is V2 Needs You only — never fall back to legacy board counts.
     const items = window.VacilandoV2?.state?.needsYou?.items;

@@ -195,6 +195,8 @@
     V2.state.trustedHostDiagnostics = null;
     V2.state.improvementsHome = null;
     V2.state.improvementDetail = null;
+    V2.state.workspaceRuntime = null;
+    V2.state.workspaceId = null;
     V2.state._fetchedAt = {};
     V2.state._inflight = {};
     V2.state._paintFp = {};
@@ -214,6 +216,7 @@
       missionQ = new URLSearchParams(queryPart || "").get("mission");
     } catch { /* */ }
     if (name === "needs-you") V2.fetchNeedsYou();
+    else if (name === "workspaces" || name === "workspace") V2.fetchWorkspace(sub || "ws_identity");
     else if (name === "missions" && sub) V2.fetchDashboard(sub);
     else if (name === "missions") V2.fetchMissions(V2.state.missionsFilter || "active");
     else if (name === "timeline") V2.fetchTimeline(sub || missionQ || V2.state.selectedMissionId);
@@ -335,7 +338,7 @@
   };
 
   V2.isPrimaryRoute = function (name) {
-    return ["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"].includes(name);
+    return ["workspaces", "workspace", "missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"].includes(name);
   };
 
   function currentOperatorContext() {
@@ -356,6 +359,8 @@
       || (r.name === "evidence" && r.sub ? r.sub : null)
       || null;
     const screenMap = {
+      workspaces: "Workspaces",
+      workspace: "Workspaces",
       missions: r.sub ? "Mission Dashboard" : "Missions",
       "needs-you": "Needs You",
       workers: "Workers",
@@ -631,6 +636,154 @@ We'll capture the context automatically.</p>
       V2.state.kickoffError = e;
       bump(); schedulePaint();
     }
+  };
+
+  /** V3-1 Workspace Runtime — conversation projection over one workspace. */
+  V2.fetchWorkspace = async function (workspaceId) {
+    const id = workspaceId || V2.state.workspaceId || "ws_identity";
+    V2.state.workspaceId = id;
+    const seq = (V2.state._wsFetchSeq = (V2.state._wsFetchSeq || 0) + 1);
+    try {
+      const j = await get("/api/v2/views/workspace-runtime?id=" + encodeURIComponent(id));
+      if (seq !== V2.state._wsFetchSeq) return; // stale
+      V2.state.workspaceRuntime = j.runtime || j;
+      V2.state.workspaceList = j.workspaces || [];
+      V2.state.workspaceError = null;
+      if (j.runtime?.missionId) V2.state.selectedMissionId = j.runtime.missionId;
+      markFetched(`workspace:${id}`);
+    } catch (e) {
+      if (seq !== V2.state._wsFetchSeq) return;
+      V2.state.workspaceError = String(e.message || e);
+    }
+    bump(); schedulePaint();
+  };
+
+  V2.afterWorkspacePaint = function () {
+    const thread = document.getElementById("ws-thread");
+    if (thread) {
+      const stick = V2.state._wsStickBottom !== false;
+      if (stick) thread.scrollTop = thread.scrollHeight;
+    }
+    const ta = document.getElementById("ws-composer");
+    if (ta && V2.state._wsComposer != null) {
+      ta.value = V2.state._wsComposer;
+      try { ta.focus({ preventScroll: true }); } catch { /* */ }
+    }
+  };
+
+  V2.viewWorkspace = function (workspaceId) {
+    const id = workspaceId || V2.state.workspaceId || "ws_identity";
+    if (!V2.state._wsSending) {
+      V2.revalidate(`workspace:${id}`, () => V2.fetchWorkspace(id));
+    }
+    if (!V2.state.workspaceRuntime || V2.state.workspaceId !== id) {
+      if (!V2.state._wsSending) V2.fetchWorkspace(id);
+      return `<div class="ws-shell"><div class="ws-loading"><span class="spin"></span> Opening workspace…</div></div>`;
+    }
+    if (V2.state.workspaceError && !V2.state.workspaceRuntime) {
+      return `<div class="ws-shell"><div class="rempty">Could not load workspace: ${esc(V2.state.workspaceError)}</div>
+        <button class="btn" type="button" data-ws-retry="${esc(id)}">Retry</button></div>`;
+    }
+    const rt = V2.state.workspaceRuntime;
+    if (rt.missing) {
+      return `<div class="ws-shell"><div class="rempty">Workspace mission not found on this host.</div></div>`;
+    }
+    const ws = rt.workspace || {};
+    const list = V2.state.workspaceList?.length ? V2.state.workspaceList : [ws];
+    const cs = rt.currentState || {};
+    const ctx = rt.context || {};
+    const worker = ctx.worker || {};
+    const msgs = rt.messages || [];
+
+    const nav = list.map((w) => {
+      const active = (w.workspaceId || w.id) === (ws.workspaceId || id);
+      return `<button type="button" class="ws-nav-item${active ? " on" : ""}" data-nav="workspaces/${esc(w.workspaceId || w.id)}">
+        <span class="ws-nav-title">${esc(w.title || "Workspace")}</span>
+        <span class="ws-nav-blurb">${esc(w.blurb || "")}</span>
+      </button>`;
+    }).join("");
+
+    const thread = msgs.map((m) => {
+      const from = m.from || {};
+      const when = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
+      const prov = m.provenance?.type ? `<span class="ws-msg-prov" title="Projected from ${esc(m.provenance.type)}">${esc(m.provenance.type)}</span>` : "";
+      const actions = (m.actions || []).map((a) => actionBtn(a)).join("");
+      return `<article class="ws-msg role-${esc(from.role || "system")} kind-${esc(m.kind || "system")}" data-event="${esc(m.messageId || "")}">
+        <header class="ws-msg-h">
+          <span class="ws-msg-from">${esc(from.label || "System")}</span>
+          <span class="ws-msg-when">${esc(when)}</span>
+          ${prov}
+        </header>
+        <div class="ws-msg-body">${esc(m.body || "")}</div>
+        ${m.detail && m.detail !== m.body ? `<div class="ws-msg-detail">${esc(m.detail)}</div>` : ""}
+        ${actions ? `<div class="ws-msg-actions mc-actions">${actions}</div>` : ""}
+      </article>`;
+    }).join("") || `<div class="ws-empty">No projected messages yet.</div>`;
+
+    const stateDl = `<dl class="ws-state-dl">
+      <div><dt>Working on</dt><dd>${esc(cs.workingOn || "—")}</dd></div>
+      <div><dt>Current phase</dt><dd>${esc(cs.currentPhase || "—")}</dd></div>
+      <div><dt>Current goal</dt><dd>${esc(cs.currentGoal || "—")}</dd></div>
+      <div><dt>Blocked by</dt><dd>${esc(cs.blockedBy || "Nothing")}</dd></div>
+      <div><dt>Next checkpoint</dt><dd>${esc(cs.nextExpectedCheckpoint || "—")}</dd></div>
+      <div><dt>Recommendation</dt><dd>${esc(cs.recommendation || "—")}</dd></div>
+    </dl>`;
+
+    const ctxBits = `<div class="ws-ctx-block">
+      <div class="ws-ctx-k">Worker</div>
+      <div class="ws-ctx-v">${esc(worker.provider || "—")}${worker.slot != null ? ` · slot ${esc(worker.slot)}` : ""}</div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">Branch</div>
+      <div class="ws-ctx-v mono">${esc(ctx.branch || worker.branch || "—")}</div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">PR</div>
+      <div class="ws-ctx-v">${ctx.pr ? esc(String(ctx.pr)) : "—"}</div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">Evidence</div>
+      <div class="ws-ctx-v"><button type="button" class="btn link sm" data-nav="evidence/${esc(rt.missionId || "")}">${esc(ctx.evidence?.jumpLabel || "Open")}</button></div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">Actions</div>
+      <div class="ws-ctx-v ws-ctx-actions">${actionBtn(cs.primaryAction)}${cs.secondaryAction ? actionBtn(cs.secondaryAction) : ""}
+        <button type="button" class="btn ghost sm" data-nav="missions/${esc(rt.missionId || "")}">Mission Control</button>
+      </div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">Settings</div>
+      <div class="ws-ctx-v muted">${esc(ws.workspaceId || id)} · derived Current State</div>
+    </div>`;
+
+    const draft = V2.state._wsComposer || "";
+    const busy = V2.state._wsSending ? " disabled" : "";
+
+    return `<div class="ws-shell" data-workspace="${esc(ws.workspaceId || id)}">
+      <aside class="ws-nav" aria-label="Workspaces">
+        <div class="ws-nav-label">Workspaces</div>
+        ${nav}
+        <p class="ws-nav-note">V3-1 slice — one workspace proving Conversation as the product.</p>
+      </aside>
+      <section class="ws-main" aria-label="Conversation">
+        <header class="ws-main-h">
+          <h1>${esc(ws.title || "Workspace")}</h1>
+          <p class="ws-main-sub">${esc(ws.missionTitle || "")}</p>
+        </header>
+        <div class="ws-thread" id="ws-thread">${thread}</div>
+        <footer class="ws-composer-wrap">
+          <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="${esc(rt.composer?.placeholder || "Message…")}"${busy}>${esc(draft)}</textarea>
+          <button type="button" class="btn ws-send" data-ws-send="${esc(ws.workspaceId || id)}"${busy}>Send</button>
+        </footer>
+      </section>
+      <aside class="ws-context" aria-label="Context">
+        <div class="ws-ctx-label">Current State</div>
+        <p class="ws-ctx-derived">Derived · not editable</p>
+        ${stateDl}
+        <div class="ws-ctx-label">Context</div>
+        ${ctxBits}
+      </aside>
+    </div>`;
   };
 
   // ---- views ----
@@ -2840,6 +2993,54 @@ We'll capture the context automatically.</p>
       openImproveDialog();
       return;
     }
+    const wsRetry = ev.target.closest("[data-ws-retry]");
+    if (wsRetry) {
+      ev.preventDefault();
+      V2.state.workspaceRuntime = null;
+      V2.fetchWorkspace(wsRetry.dataset.wsRetry || "ws_identity");
+      return;
+    }
+    const wsSend = ev.target.closest("[data-ws-send]");
+    if (wsSend) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (V2.state._wsSending) return;
+      const workspaceId = wsSend.dataset.wsSend || V2.state.workspaceId || "ws_identity";
+      const ta = document.getElementById("ws-composer");
+      const text = (ta?.value || V2.state._wsComposer || "").trim();
+      if (!text) {
+        toast("Type a message first.", "err");
+        return;
+      }
+      V2.state._wsSending = true;
+      bump(); schedulePaint();
+      try {
+        const out = await post("/api/v2/workspace/reply", {
+          workspace_id: workspaceId,
+          text,
+          actor: "operator",
+        });
+        V2.state._wsComposer = "";
+        V2.state._wsStickBottom = true;
+        // Invalidate in-flight GETs so they cannot overwrite this reply projection.
+        V2.state._wsFetchSeq = (V2.state._wsFetchSeq || 0) + 1;
+        if (out.runtime) {
+          V2.state.workspaceRuntime = out.runtime;
+          V2.state.workspaceId = out.runtime.workspace?.workspaceId || workspaceId;
+          markFetched(`workspace:${V2.state.workspaceId}`);
+        } else {
+          V2.state.workspaceRuntime = null;
+          await V2.fetchWorkspace(workspaceId);
+        }
+        toast("Sent.");
+      } catch (e) {
+        toast(String(e.message || e), "err");
+      } finally {
+        V2.state._wsSending = false;
+        bump(); schedulePaint();
+      }
+      return;
+    }
     if (ev.target.closest("[data-notify-enable]")) {
       if (typeof Notification === "undefined") {
         toast("Notifications are unavailable in this environment.", "err");
@@ -3304,6 +3505,22 @@ We'll capture the context automatically.</p>
           bump(); schedulePaint();
         });
     }
+  });
+
+  document.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (t && t.id === "ws-composer") {
+      V2.state._wsComposer = t.value;
+      V2.state._wsStickBottom = false;
+    }
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || ev.shiftKey) return;
+    const t = ev.target;
+    if (!t || t.id !== "ws-composer") return;
+    ev.preventDefault();
+    document.querySelector("[data-ws-send]")?.click();
   });
 
   if (typeof requestIdleCallback === "function") {
