@@ -668,6 +668,57 @@ Everything before it is certified by test and module graph.
 
 ---
 
+## 16. Implementation status
+
+| Slice | Status |
+|---|---|
+| **1.1** `processing_source_classification` | **Implemented.** Commits `373e0526b` (Processing-owned contract) and `e0d500de0` (Trust adoption). No migration. |
+| 1.2 – 1.7 | Not started. |
+
+### What 1.1 confirmed, refined, or corrected
+
+- **AD-P1-5 holds.** Classification was the right first class: one pure function, no
+  Commit Plan coupling, and the byte-identical diff is provable without a database.
+- **AD-P1-1 and AD-P1-2 are untouched by 1.1** — no plan, approval or executor code was read or
+  written, and the identity class was not registered.
+- **AD-P1-6 holds.** `processing_source_minimization_v1` is registered in
+  `lib/trust/platform/platformPrivacyPolicies.ts` and referenced by key.
+- **AD-P1-7 holds and is now structural.** `toGovernedSourceClassification` returns `null` for
+  `unsupported`, so the absence of a contract is a property of the projection rather than a rule a
+  caller must remember.
+- **§6.2 refined.** The assessment was cautious about `ClassificationSignal.value`. It is in fact a
+  token from the classifier's own fixed `RULES` table, never source content, so it is carried
+  verbatim. What does not enter Trust is the filename, title and doc-type — replaced by a SHA-256
+  material fingerprint.
+- **New finding, D-3.** `mimeType` is declared on `ClassifyNonFormSourceInput` but **never read** by
+  the classifier: the haystack is `fileName`, `title`, `docType` and the scalar values of `metadata`.
+  It is therefore excluded from the material fingerprint; including it would make two inputs that
+  classify identically fingerprint differently.
+- **New finding, D-4 — the transaction boundary cannot be closed.** The Processing write and the
+  Trust writes are separate auto-committed PostgREST calls through different clients, and the Trust
+  Runtime already spans four of its own (contract, lifecycle, package, usage). `supabase-js` exposes
+  no transaction API. Atomicity would need a cross-domain `SECURITY DEFINER` function holding write
+  authority over both domains — which contradicts §2. **Resolution:** Processing writes first and is
+  never blocked by Trust; the residual "classified but ungoverned" state is named in the return type,
+  returned to the caller, and logged under `[trust.governance_gap]`. It is never reported as success.
+  **This needs ratification as AD-P1-8.**
+- **Two Phase 0 assertions updated, not weakened.** "Registers exactly one Decision Class" was Phase
+  0's proof of non-adoption; 1.1 is the adoption. Both were replaced with sharper assertions: the
+  registry holds exactly the declared set in the declared order, V1's class is still first, and V1's
+  own governance is asserted field by field to be unchanged.
+
+### Evidence
+
+`tests/trust` **347/347** (Phase 0's 292 plus 55 new) · Trust DB certifications **21/21**, **12/12**,
+**9/9** on disposable containers · `verify:module-imports` **ok (8940 files)** · `tsc` over
+`lib/trust/**` + `lib/pos/processingCase/classification/**` **clean**. Larger `tsc` scopes are
+SIGTERM-killed on this host (exit 144, a known limitation); **CI is the authority** for the full
+production and test typechecks. Three failures in `tests/pos` and `tests/processing` are inherited,
+proven by running identical commands against a worktree at base `47cc9eb0c`: failing sets
+byte-identical.
+
+---
+
 ## Related documents
 
 - [`Trust Platform Adoption — Assessment and Program Plan`](../TRUST-PLATFORM-ADOPTION-ASSESSMENT.md)
