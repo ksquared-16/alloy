@@ -471,3 +471,10 @@ alloy-initiative-package settings-fields-v2
 Guides: `ENGINEERING-MANAGER.md`, `INITIATIVE-CONTRACT.md`, `WORKER-PACKAGE.md`, `REVIEW-PIPELINE.md`
 
 Tests: `npm run local-dev:test:phase4` (includes Phase 1–3 regression)
+
+## Certification database ownership
+
+`exclusive-certification-db` is **enforced**, not advisory: destructive commands refuse
+to run while another worker owns the certification database. See
+[CERTIFICATION-OWNERSHIP.md](CERTIFICATION-OWNERSHIP.md) for the contract, the
+compatibility policy, and the evidence-based recovery procedure.

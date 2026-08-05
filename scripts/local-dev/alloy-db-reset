@@ -9,6 +9,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/verify.sh"
 # shellcheck source=lib/docker-ops.sh
 source "${SCRIPT_DIR}/lib/docker-ops.sh"
+# shellcheck source=lib/cert-ownership.sh
+source "${SCRIPT_DIR}/lib/cert-ownership.sh"
 
 usage() {
   cat <<'EOF'
@@ -38,7 +40,12 @@ main() {
     usage
     exit 0
   fi
-  alloy_supabase_db_reset "$@"
+  # BEFORE any side effect. This entry point previously had no ownership check of
+  # any kind, so any worker could wipe a certification tenant another worker was
+  # mid-run against — which is exactly what happened, three times.
+  alloy_cert_guard destroy-db "database reset" || exit 1
+  # Tell the library-level guard it has already been satisfied for this process.
+  ALLOY_CERT_GUARD_APPLIED=1 alloy_supabase_db_reset "$@"
 }
 
 main "$@"
