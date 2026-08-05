@@ -4,12 +4,31 @@ import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 
 type Window = { max: number; windowMs: number };
 
-/** Best-effort per-process limits (serverless: not global across instances). */
-export const TOUR_PUBLIC_RATE_LIMIT: Record<"resolve" | "slots" | "book", Window> = {
+/**
+ * Best-effort per-process limits (serverless: not global across instances).
+ *
+ * EVERY public tour route must appear here. A route passing a kind that is
+ * absent resolves to `undefined` config and throws on `cfg.windowMs` — a 500 on
+ * a parent-facing endpoint, not merely a missing limit. `TourPublicRateLimitKind`
+ * is exported so the route guard is typed against this table and a new route
+ * cannot be added without a budget.
+ */
+export const TOUR_PUBLIC_RATE_LIMIT = {
+    // Read-only.
     resolve: { max: 120, windowMs: 60_000 },
     slots: { max: 120, windowMs: 60_000 },
+    // State-changing. A parent needs a handful of attempts, never dozens.
     book: { max: 30, windowMs: 60_000 },
-};
+    decline: { max: 30, windowMs: 60_000 },
+    confirm: { max: 30, windowMs: 60_000 },
+    reschedule: { max: 30, windowMs: 60_000 },
+    cancel: { max: 30, windowMs: 60_000 },
+    // Authorises the bounded cancellation step; mints a credential, so it is
+    // budgeted like a mutation even though it changes no booking state.
+    cancel_intent: { max: 30, windowMs: 60_000 },
+} satisfies Record<string, Window>;
+
+export type TourPublicRateLimitKind = keyof typeof TOUR_PUBLIC_RATE_LIMIT;
 
 const hits = new Map<string, number[]>();
 

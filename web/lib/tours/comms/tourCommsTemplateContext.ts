@@ -30,6 +30,12 @@ export type TourCommsTemplateContext = {
     publicBookingUrl?: string | null;
     ctaText?: string | null;
     ctaUrl?: string | null;
+    /** Pre-rendered list of offered tour times, one line per option, each with its own secure link. */
+    tourOptionsBlock?: string | null;
+    /** No-login fallback URL for the invitation as a whole. */
+    invitationActionUrl?: string | null;
+    /** Single-use decline link. */
+    declineUrl?: string | null;
     /** Pre-formatted labels (optional); computed via {@link formatTourCommsDateTimeLabels} when omitted. */
     tourDateLabel?: string | null;
     tourTimeLabel?: string | null;
@@ -66,14 +72,26 @@ export function formatTourCommsDateTimeLabels(input: {
         return { tourDateLabel: "", tourTimeLabel: "", tourDisplayLabel: "" };
     }
     try {
-        const mirror = deriveTourMetadataMirrorFromBooking(start, tz);
-        const formatted = formatTourDateTime(mirror.tour_date, mirror.tour_time, { displayTimeZoneIana: tz });
-        const dateOnly = formatTourDateTime(mirror.tour_date, null, { displayTimeZoneIana: tz });
-        const tourTimeLabel = mirror.tour_time ? formatInTimeZone(new Date(start), tz, "h:mm a") : "";
+        // Format the INSTANT directly in the tour's timezone.
+        //
+        // This used to derive a wall-clock mirror (`2026-08-05` + `11:00`) and hand it
+        // back to `formatTourDateTime`, which packs those fields with `Date.UTC` and
+        // re-interprets them — correct only when the SERVER process runs in UTC. On a
+        // Pacific host an 11:00 AM Pacific tour rendered as "4:00 AM" in the parent's
+        // confirmation: the local wall time was converted a second time.
+        //
+        // The instant and the zone are both already here, so no round trip is needed
+        // and no server-local state can influence the result.
+        const at = new Date(start);
+        if (Number.isNaN(at.getTime())) {
+            return { tourDateLabel: "", tourTimeLabel: "", tourDisplayLabel: "" };
+        }
+        const tourDateLabel = formatInTimeZone(at, tz, "MM/dd/yyyy");
+        const tourTimeLabel = formatInTimeZone(at, tz, "h:mm a");
         return {
-            tourDateLabel: dateOnly.hasDate ? dateOnly.display : "",
+            tourDateLabel,
             tourTimeLabel,
-            tourDisplayLabel: formatted.hasDate ? formatted.display : "",
+            tourDisplayLabel: `${tourDateLabel}, ${tourTimeLabel}`,
         };
     } catch {
         return { tourDateLabel: "", tourTimeLabel: "", tourDisplayLabel: "" };
@@ -124,5 +142,10 @@ export function buildTourCommsMergeFields(ctx: TourCommsTemplateContext): Record
         public_booking_url: String(ctx.publicBookingUrl ?? "").trim(),
         cta_text: String(ctx.ctaText ?? "").trim(),
         cta_url: String(ctx.ctaUrl ?? "").trim(),
+        // Invitation-only tokens. Empty for every post-booking event key, which is why
+        // the invitation templates are the only ones that reference them.
+        tour_options_block: String(ctx.tourOptionsBlock ?? "").trim(),
+        invitation_action_url: String(ctx.invitationActionUrl ?? "").trim(),
+        decline_url: String(ctx.declineUrl ?? "").trim(),
     };
 }

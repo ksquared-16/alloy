@@ -204,8 +204,7 @@ def process_communication_messages(
             )
             emit_for_communication_message(
                 org_id=org_id,
-                entity_type=str(entity_type),
-                entity_id=org_id,
+                thread=thr,
                 event_type="message_blocked" if decision.outcome == "blocked" else "message_deferred",
                 message_id=str(msg_id),
                 thread_id=thread_id,
@@ -230,8 +229,7 @@ def process_communication_messages(
             errors.append(err)
             emit_for_communication_message(
                 org_id=org_id,
-                entity_type=str(entity_type),
-                entity_id=org_id,
+                thread=thr,
                 event_type="message_failed",
                 message_id=str(msg_id),
                 thread_id=thread_id,
@@ -265,8 +263,7 @@ def process_communication_messages(
                 errors.append(err)
                 emit_for_communication_message(
                     org_id=org_id,
-                    entity_type=str(entity_type),
-                    entity_id=entity_id,
+                    thread=thr,
                     event_type="message_failed",
                     message_id=str(msg_id),
                     thread_id=thread_id,
@@ -351,8 +348,7 @@ def process_communication_messages(
                 mids.append(str(msg_id))
                 emit_for_communication_message(
                     org_id=org_id,
-                    entity_type=str(entity_type),
-                    entity_id=entity_id,
+                    thread=thr,
                     event_type="message_sent",
                     message_id=str(msg_id),
                     thread_id=thread_id,
@@ -363,8 +359,7 @@ def process_communication_messages(
                 )
                 emit_for_communication_message(
                     org_id=org_id,
-                    entity_type=str(entity_type),
-                    entity_id=entity_id,
+                    thread=thr,
                     event_type="message_delivered",
                     message_id=str(msg_id),
                     thread_id=thread_id,
@@ -423,8 +418,7 @@ def process_communication_messages(
                 mids.append(str(msg_id))
                 emit_for_communication_message(
                     org_id=org_id,
-                    entity_type=str(entity_type),
-                    entity_id=entity_id,
+                    thread=thr,
                     event_type="message_sent",
                     message_id=str(msg_id),
                     thread_id=thread_id,
@@ -444,8 +438,7 @@ def process_communication_messages(
                 mids.append(str(msg_id))
                 emit_for_communication_message(
                     org_id=org_id,
-                    entity_type=str(entity_type),
-                    entity_id=entity_id,
+                    thread=thr,
                     event_type="message_sent",
                     message_id=str(msg_id),
                     thread_id=thread_id,
@@ -471,8 +464,7 @@ def process_communication_messages(
             errors.append(err_msg)
             emit_for_communication_message(
                 org_id=org_id,
-                entity_type=str(entity_type),
-                entity_id=entity_id,
+                thread=thr,
                 event_type="message_failed",
                 message_id=str(msg_id),
                 thread_id=thread_id,

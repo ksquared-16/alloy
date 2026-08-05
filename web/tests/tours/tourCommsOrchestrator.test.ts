@@ -272,9 +272,9 @@ describe("tourCommsOrchestrator", () => {
         expect(deps.enqueueImmediate).toHaveBeenCalledTimes(1);
     });
 
-    it("buildTourCommsImmediateIdempotencyKey is stable per booking/event/channel/generation", () => {
+    it("buildTourCommsImmediateIdempotencyKey is stable per subject/event/channel/generation", () => {
         const key = buildTourCommsImmediateIdempotencyKey({
-            bookingId: BOOKING,
+            subjectId: BOOKING,
             eventKey: "tour_confirmation",
             channel: "email",
             generationToken: "confirmed",

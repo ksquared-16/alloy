@@ -2,9 +2,14 @@
  * Phase 0 / P0-1 (2b) — eligibility enforced at the canonical enqueue choke point.
  *
  * `enqueueCanonicalOutboundMessage` is the only TypeScript path that inserts an
- * outbound communication_messages row. These tests prove that a blocked send
- * creates NO row — there is nothing for the worker to pick up — and that the
- * decision is recorded on rows that do get created.
+ * outbound communication_messages row.
+ *
+ * The safety property is NOT "a blocked send writes nothing" — that is what made
+ * a refusal indistinguishable from silence. It is "a blocked send writes nothing
+ * the dispatcher can pick up": the poller selects `status in.(queued,deferred)`,
+ * so a `blocked` row is durable and unsendable at the same time. These tests
+ * assert that property directly, and that a refusal is never reported to a
+ * caller as a message going out.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -18,8 +23,11 @@ let messageInserts: Array<Record<string, unknown>> = [];
 let preferenceState: string | null = null;
 /** Whether the suppression probe reports a bounce/complaint. */
 let suppressionHit = false;
+/** Forces the communication_messages insert to fail, for the dangling-event case. */
+let messageInsertFails = false;
 
-vi.mock("@/lib/emitEvent", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined) }));
+const emitEventMock = vi.fn().mockResolvedValue("event-1");
+vi.mock("@/lib/emitEvent", () => ({ emitEvent: (...args: unknown[]) => emitEventMock(...args) }));
 
 function fakeSupabase() {
     return {
@@ -40,11 +48,17 @@ function fakeSupabase() {
                 },
                 upsert: () => builder,
                 insert: (rows: unknown) => {
+                    const failing = table === "communication_messages" && messageInsertFails;
                     if (table === "communication_messages") {
                         messageInserts.push(rows as Record<string, unknown>);
                     }
                     return {
-                        select: () => ({ maybeSingle: async () => ({ data: { id: "msg-1" }, error: null }) }),
+                        select: () => ({
+                            maybeSingle: async () =>
+                                failing
+                                    ? { data: null, error: { message: "insert exploded", code: "XX000" } }
+                                    : { data: { id: "msg-1" }, error: null },
+                        }),
                     };
                 },
             };
@@ -74,60 +88,140 @@ function enqueue(over: Record<string, unknown> = {}) {
     });
 }
 
-describe("enqueue gate — blocked sends create no row", () => {
+describe("enqueue gate — blocked sends create no SENDABLE row", () => {
     beforeEach(() => {
         messageInserts = [];
         preferenceState = null;
         suppressionHit = false;
+        messageInsertFails = false;
         resetCategoryFallbackReport();
         vi.clearAllMocks();
     });
 
-    it("blocks an opted-out operational send and inserts nothing", async () => {
+    /** Every refusal must land as exactly one terminal row the poller cannot reach. */
+    function expectSingleBlockedRow(code: string) {
+        expect(messageInserts).toHaveLength(1);
+        const row = messageInserts[0];
+        expect(row.status).toBe("blocked");
+        expect(row.status).not.toBe("queued");
+        expect(row.error).toBe(`policy:${code}`);
+        const audit = row.eligibility_decision as Record<string, unknown>;
+        expect(audit.outcome).toBe("blocked");
+        expect(audit.reason).toBe(code);
+        expect(audit.stage).toBe("enqueue");
+        expect(audit.defer_until).toBeNull();
+        expect(typeof audit.operator_message).toBe("string");
+        return row;
+    }
+
+    it("blocks an opted-out operational send and records it as blocked", async () => {
         preferenceState = "opted_out";
 
         const res = await enqueue();
 
         expect(res.communicationMessageId).toBeNull();
         expect(res.skippedReason).toBe("eligibility_blocked:OPTED_OUT");
-        expect(messageInserts).toHaveLength(0);
+        expect(res.blockedCommunicationMessageId).toBe("msg-1");
+        expectSingleBlockedRow("OPTED_OUT");
     });
 
     it("blocks when the recipient cannot be resolved — the old total bypass", async () => {
         const res = await enqueue({ recipientPersonId: null });
 
         expect(res.skippedReason).toBe("eligibility_blocked:RECIPIENT_UNRESOLVED");
-        expect(messageInserts).toHaveLength(0);
+        expectSingleBlockedRow("RECIPIENT_UNRESOLVED");
     });
 
     it("blocks a marketing send without opt-in", async () => {
         const res = await enqueue({ category: "marketing" });
 
         expect(res.skippedReason).toBe("eligibility_blocked:MARKETING_REQUIRES_OPT_IN");
-        expect(messageInserts).toHaveLength(0);
+        expectSingleBlockedRow("MARKETING_REQUIRES_OPT_IN");
     });
 
     it("blocks emergency without the permission", async () => {
         const res = await enqueue({ category: "emergency", emergencyPermitted: false });
 
         expect(res.skippedReason).toBe("eligibility_blocked:EMERGENCY_NOT_PERMITTED");
-        expect(messageInserts).toHaveLength(0);
+        expectSingleBlockedRow("EMERGENCY_NOT_PERMITTED");
     });
 
-    it("blocks a suppressed address", async () => {
+    it("blocks a suppressed address — the live Tour failure", async () => {
         suppressionHit = true;
 
         const res = await enqueue();
 
         expect(res.skippedReason).toBe("eligibility_blocked:SUPPRESSED");
-        expect(messageInserts).toHaveLength(0);
+        const row = expectSingleBlockedRow("SUPPRESSED");
+        // The refusal is explainable: classification, recipient and the rendered
+        // body an operator needs to judge it are all on the row.
+        expect(row.category).toBe("operational");
+        expect(row.to_address).toBe("parent@example.invalid");
+        expect(row.body).toBe("Hello");
+        expect((row.eligibility_snapshot as { decision: { allowed: boolean } }).decision.allowed).toBe(false);
     });
 
     it("blocks an internal-audience message on a provider channel", async () => {
         const res = await enqueue({ audience: "internal", channelRaw: "email" });
 
         expect(res.skippedReason).toBe("eligibility_blocked:INTERNAL_TO_PROVIDER");
-        expect(messageInserts).toHaveLength(0);
+        expectSingleBlockedRow("INTERNAL_TO_PROVIDER");
+    });
+
+    it("never reports a blocked message as one that is going out", async () => {
+        preferenceState = "opted_out";
+
+        const res = await enqueue();
+
+        // Callers test `!res.communicationMessageId` to decide a send failed to
+        // enqueue. Persisting the decision must not flip that judgement.
+        expect(res.communicationMessageId).toBeNull();
+        expect(res.blockedMessage).toBeTruthy();
+    });
+});
+
+describe("enqueue gate — a refusal reaches the operator's activity feed", () => {
+    beforeEach(() => {
+        messageInserts = [];
+        preferenceState = null;
+        suppressionHit = false;
+        messageInsertFails = false;
+        resetCategoryFallbackReport();
+        vi.clearAllMocks();
+    });
+
+    it("emits message_blocked against the caller's entity, not the org", async () => {
+        preferenceState = "opted_out";
+
+        await enqueue({ emitMessageQueued: true, primaryEntityType: "opportunities", primaryEntityId: THREAD });
+
+        expect(emitEventMock).toHaveBeenCalledTimes(1);
+        const arg = emitEventMock.mock.calls[0][0] as Record<string, unknown>;
+        expect(arg.event_type).toBe("message_blocked");
+        // loadOpportunityActivityEvents filters entity_type="opportunities" on the
+        // opportunity id. Emitting against the org id — as the dispatcher does —
+        // produces a durable event no operator surface can reach.
+        expect(arg.entity_type).toBe("opportunities");
+        expect(arg.entity_id).toBe(THREAD);
+
+        const payload = arg.payload as Record<string, unknown>;
+        expect(payload.communication_message_id).toBe("msg-1");
+        expect(payload.channel).toBe("email");
+        expect(payload.direction).toBe("outbound");
+        expect(payload.reason).toBe("OPTED_OUT");
+        expect(typeof payload.operator_message).toBe("string");
+    });
+
+    it("emits nothing when the durable row could not be written", async () => {
+        preferenceState = "opted_out";
+        messageInsertFails = true;
+
+        const res = await enqueue({ emitMessageQueued: true });
+
+        // An event pointing at a message row that does not exist is worse than
+        // no event: it is a dangling reference on an operator surface.
+        expect(res.blockedCommunicationMessageId).toBeNull();
+        expect(emitEventMock).not.toHaveBeenCalled();
     });
 });
 
@@ -136,6 +230,7 @@ describe("enqueue gate — permitted sends record their decision", () => {
         messageInserts = [];
         preferenceState = null;
         suppressionHit = false;
+        messageInsertFails = false;
         resetCategoryFallbackReport();
         vi.clearAllMocks();
     });
@@ -182,6 +277,7 @@ describe("enqueue gate — the category fallback is bounded and observable", () 
         messageInserts = [];
         preferenceState = null;
         suppressionHit = false;
+        messageInsertFails = false;
         resetCategoryFallbackReport();
         vi.clearAllMocks();
     });

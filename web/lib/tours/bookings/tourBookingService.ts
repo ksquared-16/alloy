@@ -10,6 +10,8 @@ import type {
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS, type TourLifecycleEventType } from "@/lib/tours/constants";
 import { emitTourBookingLifecycleEvent } from "@/lib/tours/events/tourLifecycleEvents";
 import { applyTourBookingOpportunityIntegration } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+import { recordTourStageSyncFollowUp } from "@/lib/tours/opportunity/tourStageSyncFollowUp";
+import type { TourStageSyncFailure } from "@/lib/tours/opportunity/tourStageSyncFollowUp";
 import { associateTourBookingToStageWork } from "@/lib/lifecycle/associateTourBookingToStageWork";
 import {
     orchestrateTourBookingCanceled,
@@ -138,8 +140,19 @@ export class TourBookingTransactionError extends Error {
 /**
  * Every tour lifecycle change runs through the Platform Transaction Contract, so none of them
  * re-implement abort/compensation. Preconditions live in `validate` (nothing has been written
- * when they fail); the booking write, the opportunity integration and the lifecycle event are
- * INSIDE the boundary; comms are declared OUTSIDE it and degrade rather than roll back.
+ * when they fail); the booking write, the opportunity metadata mirror and the lifecycle event
+ * are INSIDE the boundary.
+ *
+ * Declared OUTSIDE it, degrading rather than rolling back:
+ *   - communications
+ *   - stage/work sufficiency
+ *   - stage synchronization follow-up
+ *
+ * The canonical `tour_bookings` row is domain truth. Business Process stage movement and
+ * messaging are downstream consequences: observable and retryable, but never part of the
+ * transaction that decides whether the parent successfully booked. A tenant with no
+ * configured transition for a tour signal still gets a real booking — and an operator-visible
+ * follow-up saying the process did not advance.
  */
 async function commitTourBookingTransaction(params: {
     capability: string;
@@ -204,6 +217,7 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
 
     let row: TourBookingRow | null = null;
     let mirrorUndo: (() => Promise<void>) | undefined;
+    let stageSyncFailure: TourStageSyncFailure | undefined;
 
     return commitTourBookingTransaction({
         capability: "schedule_tour",
@@ -282,10 +296,31 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                         correlationId: input.correlationId ?? null,
                     });
                     mirrorUndo = applied?.undo;
+                    stageSyncFailure = applied?.stageSyncFailure;
                     return applied;
                 },
                 compensate: async () => {
                     await mirrorUndo?.();
+                },
+            },
+            {
+                // The booking is domain truth; an unapplied stage rule is a downstream
+                // consequence. Declared OUTSIDE so it can never revoke the booking, and
+                // recorded so the operator sees follow-up rather than silence.
+                name: "stage_sync_follow_up",
+                stage: "business_process",
+                boundary: "outside",
+                run: async () => {
+                    if (!row || !stageSyncFailure) return null;
+                    return recordTourStageSyncFollowUp({
+                        supabase,
+                        orgId,
+                        opportunityId: row.opportunity_id,
+                        bookingId: row.id,
+                        failure: stageSyncFailure,
+                        actorUserId: input.requestedByUserId ?? null,
+                        correlationId: input.correlationId ?? null,
+                    });
                 },
             },
             {
@@ -328,6 +363,9 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                 boundary: "outside",
                 run: async () => {
                     if (!row || status === "requested" || status === "pending_approval") return null;
+                    // The caller owns the send. It has post-booking credentials to mint
+                    // first, and a confirmation without them is a dead end for the parent.
+                    if (input.deferConfirmationComms) return null;
                     const booking = row;
                     await afterTourBookingComms("create_confirmed", () =>
                         orchestrateTourBookingConfirmed(supabase, {
@@ -382,6 +420,7 @@ async function runTourBookingLifecycleTransition(params: {
     let snapshot: BookingSnapshot = {};
     let row: TourBookingRow | null = null;
     let mirrorUndo: (() => Promise<void>) | undefined;
+    let stageSyncFailure: TourStageSyncFailure | undefined;
 
     return commitTourBookingTransaction({
         capability: params.capability,
@@ -428,10 +467,30 @@ async function runTourBookingLifecycleTransition(params: {
                     if (!args) return null;
                     const applied = await applyTourBookingOpportunityIntegration(supabase, args);
                     mirrorUndo = applied?.undo;
+                    stageSyncFailure = applied?.stageSyncFailure;
                     return applied;
                 },
                 compensate: async () => {
                     await mirrorUndo?.();
+                },
+            },
+            {
+                // Same boundary as the create path: an unapplied stage rule is reported,
+                // never allowed to revoke a lifecycle change the parent or operator made.
+                name: "stage_sync_follow_up",
+                stage: "business_process",
+                boundary: "outside",
+                run: async () => {
+                    if (!row || !stageSyncFailure) return null;
+                    return recordTourStageSyncFollowUp({
+                        supabase,
+                        orgId,
+                        opportunityId: row.opportunity_id,
+                        bookingId: row.id,
+                        failure: stageSyncFailure,
+                        actorUserId: params.actorUserId ?? null,
+                        correlationId: params.correlationId ?? null,
+                    });
                 },
             },
             {
@@ -584,10 +643,13 @@ export async function rescheduleTourBooking(
                 previous_location_id: existing.location_id,
             },
         }),
-        comms: (row) => ({
-            label: "reschedule",
-            run: () => orchestrateTourBookingRescheduled(supabase, { orgId, booking: row }),
-        }),
+        comms: (row) =>
+            input.deferLifecycleComms
+                ? null
+                : {
+                      label: "reschedule",
+                      run: () => orchestrateTourBookingRescheduled(supabase, { orgId, booking: row }),
+                  },
     });
 }
 
@@ -637,10 +699,13 @@ export async function cancelTourBooking(
                 previous_end_at: prior.end_at,
             },
         }),
-        comms: (row) => ({
-            label: "cancel",
-            run: () => orchestrateTourBookingCanceled(supabase, { orgId, booking: row, actorUserId: input.canceledBy }),
-        }),
+        comms: (row) =>
+            input.deferLifecycleComms
+                ? null
+                : {
+                      label: "cancel",
+                      run: () => orchestrateTourBookingCanceled(supabase, { orgId, booking: row, actorUserId: input.canceledBy }),
+                  },
     });
 }
 

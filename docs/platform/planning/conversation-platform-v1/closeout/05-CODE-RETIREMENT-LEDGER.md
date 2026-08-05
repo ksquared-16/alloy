@@ -163,6 +163,25 @@ arbitrary object traversal from the render path.
 > "Yes" is a common reply to an unrelated question; treating it as consent
 > restoration manufactures consent.
 
+### A-13 · The unscoped tour public-booking-link creator (Interactive Tour, Slice C)
+
+| | |
+| --- | --- |
+| **Old** | `POST /api/admin/tours/public-booking-links` minted a tour link scoped to org + opportunity + location only. It bound no recipient, carried no action kind, and was neither single-use nor use-counted — so possession of the token was the entire authority, and one token could view, book, reschedule, confirm and cancel |
+| **New** | `mintTourInvitation` — the single creator. Every link it issues carries `invitation_id`, `recipient_person_id` and one `action_kind` from a closed 7-kind vocabulary, with `consumed_at` for single-use kinds and `max_uses`/`use_count` for reusable ones |
+| **Reason** | An unscoped minter makes the scoping guarantee a convention rather than a property. While it existed, a scoped authorizer could be bypassed simply by minting through the old door — so the authorizer could not be relied upon. Deleted outright rather than deprecated: it had zero callers, so no tombstone was warranted |
+| **Commit** | `fc7e9aa84` (was `6ca61e346` before the 2026-08-03 rebase onto `db212fe1c`) |
+| **Evidence** | 78 lines deleted, whole file. **Zero callers** — `grep -rn 'public-booking-links' web/ --include='*.ts*'` returns nothing. **Exactly one INSERT** into `tour_public_booking_links` remains platform-wide, at `web/lib/tours/invitation/mintTourInvitation.ts:256`; the other three readers of the table (`authorizeTourAction`, `resolveTourPublicBookingLink`, `deleteOpportunityLead`) never insert. Unscoped links are refused by the **database**, not by convention: CHECK `tour_public_booking_links_scoped_complete_chk` in `supabase/migrations/20260801120000_tour_invitation_and_scoped_public_actions.sql`. Behaviour covered by `web/tests/tours/mintTourInvitation.test.ts` and `web/tests/tours/authorizeTourAction.test.ts` |
+
+> **Certification note — CLOSED 2026-08-03.** The DB-level assertions behind this
+> entry were re-run after the rebase, under an exclusive lease on the sanctioned
+> shared stack: 307 migrations replayed clean in full chain, the migration
+> re-applied twice on a live database without error, and 11/11 assertions passed
+> against real FK-backed fixtures both before and after the re-apply. Every
+> rejection names the constraint that fired, so the CHECK — not a foreign key —
+> is what refused each incomplete scoped link. Script and evidence:
+> `certification/interactive-tour/`.
+
 ---
 
 # Part B — Retained compatibility adapters

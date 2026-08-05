@@ -129,6 +129,12 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                         resolvedIntent === "quick_message" ||
                         actionKey === "quick_message" ||
                         actionKey === "review_enrollment_packet" ||
+                        // Owns its own per-channel result copy ("Email queued ·
+                        // SMS not sent — suppressed"). A generic "completed" toast
+                        // on top would contradict it and re-introduce the very
+                        // claim the success contract forbids.
+                        resolvedIntent === "send_tour_invitation" ||
+                        actionKey === "send_tour_invitation" ||
                         // Opens ChangeLeadLocationModal — success belongs to the modal save path.
                         actionKey === "change_lead_location"
                     ) {

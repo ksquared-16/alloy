@@ -103,6 +103,42 @@ function metaChannel(ch: string): "sms" | "email" | "in_app" {
     return "sms";
 }
 
+/**
+ * The only two states this module may write.
+ *
+ * The dispatch poller selects `status in.(queued,deferred)`
+ * (backend/app/services/communication_message_sender.py). `blocked` is terminal
+ * and unreachable by it, which is what lets a refused send be recorded as a row
+ * without becoming sendable. `deferred` is written only by dispatch, which owns
+ * the clock; enqueue never defers.
+ */
+type OutboundInsertStatus = "queued" | "blocked";
+
+/**
+ * Audit shape written to `communication_messages.eligibility_decision`.
+ *
+ * Deliberately identical to the dispatcher's `DispatchDecision.to_audit()`
+ * (backend/app/services/dispatch_eligibility.py) so an operator surface reads ONE
+ * shape regardless of which boundary refused the send, plus `stage` to say which
+ * boundary that was. Rows written by the dispatcher carry no `stage`; absent
+ * means dispatch.
+ */
+function buildEnqueueBlockAudit(params: {
+    code: string;
+    operatorMessage: string;
+    evaluatedAt: string;
+}): Record<string, unknown> {
+    return {
+        outcome: "blocked",
+        reason: params.code,
+        operator_message: params.operatorMessage,
+        defer_until: null,
+        contract_version: ELIGIBILITY_POLICY_VERSION,
+        evaluated_at: params.evaluatedAt,
+        stage: "enqueue",
+    };
+}
+
 async function insertCommunicationMessageRow(params: {
     supabase: SupabaseClient;
     org_id: string;
@@ -123,18 +159,29 @@ async function insertCommunicationMessageRow(params: {
     purpose?: string | null;
     eligibility_snapshot?: unknown;
     rendered_snapshot?: unknown;
+    /**
+     * Lifecycle state at insert. `queued` is the only value the dispatch poller
+     * picks up — it reads `status in.(queued,deferred)` — so `blocked` records a
+     * refused send without ever making it sendable.
+     */
+    status?: OutboundInsertStatus;
+    /** Terminal explanation for a non-queued row. Mirrors the dispatcher's `policy:<CODE>`. */
+    error?: string | null;
+    eligibility_decision?: unknown;
 }): Promise<{ messageId?: string | null; error?: { message?: string; code?: string } }> {
     const insertPayload: Record<string, unknown> = {
         org_id: params.org_id,
         thread_id: params.thread_id,
         channel: params.channel,
         direction: params.direction,
-        status: "queued",
+        status: params.status ?? "queued",
         body: params.body,
         workflow_run_id: params.workflow_run_id,
         metadata: params.metadata,
         to_address: params.to_address,
     };
+    if (params.error != null) insertPayload.error = params.error;
+    if (params.eligibility_decision != null) insertPayload.eligibility_decision = params.eligibility_decision;
     if (params.audience) insertPayload.audience = params.audience;
     if (params.category) insertPayload.category = params.category;
     if (params.purpose != null) insertPayload.purpose = params.purpose;
@@ -168,10 +215,21 @@ export type CanonicalEnqueueResult = {
     skippedReason?: string;
     /** Operator-safe explanation when a render or policy check refused the send. */
     blockedMessage?: string;
+    /**
+     * The durable `blocked` row recording a refused send.
+     *
+     * Kept OFF `communicationMessageId` on purpose: callers read that field as
+     * "this message is going out" (`!res.communicationMessageId` is their failure
+     * test), and a blocked message is not going out. Persisting the decision must
+     * not change what any caller believes was sent.
+     */
+    blockedCommunicationMessageId?: string | null;
 };
 
 /**
- * Upsert thread, insert outbound queued communication_message, emit message_queued.
+ * Upsert thread, then record the send's outcome durably either way:
+ * permitted → queued communication_message + `message_queued`;
+ * refused   → blocked communication_message + `message_blocked`.
  */
 export async function enqueueCanonicalOutboundMessage(params: {
     supabase: SupabaseClient;
@@ -192,7 +250,11 @@ export async function enqueueCanonicalOutboundMessage(params: {
     communicationIdentityId?: string | null;
     communicationProviderAccountId?: string | null;
     fromAddress?: string | null;
-    /** When false, skips workflow_events emit (testing only — default true) */
+    /**
+     * When false, skips the workflow_events emit for every lifecycle outcome
+     * this function produces — `message_queued` and `message_blocked` alike
+     * (testing only — default true).
+     */
     emitMessageQueued?: boolean;
 
     // ---- Phase 0 classification + eligibility -------------------------------
@@ -307,8 +369,10 @@ export async function enqueueCanonicalOutboundMessage(params: {
 
     // ---- ELIGIBILITY GATE ---------------------------------------------------
     // Evaluated immediately before the insert, so no TypeScript path can create
-    // an outbound row without a decision. Blocking here means no queued row is
-    // created at all — there is nothing for the worker to pick up.
+    // an outbound row without a decision. Blocking here creates no QUEUED row —
+    // there is nothing for the worker to pick up — but it does create a durable
+    // `blocked` row, so the refusal is a fact an operator can see rather than a
+    // silence (see the block branch below).
     const audience: MessageAudience = params.audience ?? "external";
     const category: MessageCategory =
         params.category ?? recordCategoryFallback(params.callSite ?? "canonicalOutboundEnqueue:unspecified");
@@ -367,17 +431,113 @@ export async function enqueueCanonicalOutboundMessage(params: {
     };
 
     if (!decision.allowed) {
+        // A refused send is a DECISION, not an absence.
+        //
+        // This branch used to warn to the server log and return, persisting
+        // nothing — no message row, no workflow event. The Interactive Tour
+        // certification proved the cost: a live provider bounce suppressed the
+        // SMS channel, the booking committed, the email queued, and the SMS
+        // simply never existed anywhere an operator could look. "We refused to
+        // send" was indistinguishable from "nobody ever tried".
+        //
+        // The dispatcher already records its own refusals this way — status
+        // 'blocked' + eligibility_decision + a message_blocked workflow_event
+        // (communication_message_sender.py). Enqueue was the one boundary that
+        // dropped the decision on the floor. It now writes the same three
+        // things, so the operator sees one vocabulary no matter which boundary
+        // refused.
+        //
+        // Durability must not resurrect the send: the row is written 'blocked',
+        // which the poller's status filter cannot reach.
+        const blockAudit = buildEnqueueBlockAudit({
+            code: String(decision.code),
+            operatorMessage: decision.reason,
+            evaluatedAt: snapshot.evaluatedAt,
+        });
+
+        const blockedInsert = await insertCommunicationMessageRow({
+            supabase: params.supabase,
+            org_id: orgIdTrim,
+            thread_id: threadId,
+            channel: mc,
+            direction: "outbound",
+            status: "blocked",
+            // The rendered body is retained: an operator judging a refusal needs
+            // to see what would have gone out, not just that something didn't.
+            body: rendered.text,
+            subject: rendered.subject,
+            workflow_run_id: workflowRunUuid,
+            metadata: meta,
+            to_address: toAddress,
+            communication_provider_binding_id: bindingUuid,
+            communication_identity_id: identityUuid,
+            communication_provider_account_id: accountUuid,
+            from_address: params.fromAddress?.trim() || null,
+            audience,
+            category,
+            purpose: params.purpose ?? null,
+            eligibility_snapshot: snapshot,
+            rendered_snapshot: renderResult.snapshot,
+            eligibility_decision: blockAudit,
+            error: `policy:${decision.code}`,
+        });
+
+        const blockedId = blockedInsert.messageId ?? null;
+        if (blockedInsert.error?.message) {
+            // Losing the trace is worse than the block itself is surprising, so
+            // it is logged loudly rather than folded into the normal warn.
+            console.error("[communications] blocked-send row insert failed", {
+                org_id: orgIdTrim,
+                channel: mc,
+                code: decision.code,
+                error: blockedInsert.error.message,
+            });
+        }
+
         console.warn("[communications] send blocked by eligibility gate", {
             org_id: orgIdTrim,
             channel: mc,
             audience,
             category,
             code: decision.code,
+            communication_message_id: blockedId,
         });
+
+        if (blockedId && params.emitMessageQueued !== false) {
+            // entity_type/entity_id are the CALLER's canonical entity, not the
+            // org — that is what makes the event render in the operator's
+            // activity feed for the thing the send was about
+            // (loadOpportunityActivityEvents filters entity_type="opportunities"
+            // on the opportunity id). Emitting against the org id, as the
+            // dispatcher does, produces a durable but unreachable event.
+            try {
+                await emitEvent({
+                    org_id: orgIdTrim,
+                    event_type: "message_blocked",
+                    entity_type: params.primaryEntityType,
+                    entity_id: params.primaryEntityId,
+                    action_type: null,
+                    occurred_at: snapshot.evaluatedAt,
+                    payload: {
+                        communication_message_id: blockedId,
+                        thread_id: threadId,
+                        channel: mc,
+                        direction: "outbound" as const,
+                        workflow_run_id: workflowRunUuid,
+                        ...blockAudit,
+                    },
+                });
+            } catch (e) {
+                console.warn("[communications] message_blocked emit failed", e instanceof Error ? e.message : e);
+            }
+        }
+
         return {
             communicationMessageId: null,
             threadId,
             skippedReason: `eligibility_blocked:${decision.code}`,
+            blockedMessage: decision.reason,
+            blockedCommunicationMessageId: blockedId,
         };
     }
 

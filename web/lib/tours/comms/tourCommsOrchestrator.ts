@@ -16,6 +16,7 @@ import { resolveTourCommsConfig } from "@/lib/tours/comms/resolveTourCommsConfig
 import {
     resolveTourCommsParentRecipient,
     tourCommsRecipientHasChannel,
+    type TourCommsParentRecipient,
 } from "@/lib/tours/comms/resolveTourCommsRecipient";
 import {
     buildTourAddToCalendarLinksFromContext,
@@ -81,6 +82,12 @@ export type TourCommsOrchestrateInput = {
     lifecycleAction?: string | null;
     reminderAction?: "schedule" | "replace" | "cancel" | "none";
     scheduleGeneration?: number;
+    /**
+     * Parent-safe action URLs for THIS booking's current state, minted by the caller
+     * after the booking committed. Only URLs cross this boundary — never an action
+     * kind, id, or status.
+     */
+    actionModel?: { rescheduleUrl?: string | null; manageUrl?: string | null; confirmUrl?: string | null } | null;
     deps?: TourCommsOrchestratorDeps;
 };
 
@@ -111,19 +118,42 @@ export function resolveTourCommsScheduleGeneration(
     return Number.isNaN(t) ? 1 : Math.max(1, Math.floor(t / 1000));
 }
 
+/**
+ * What a tour message is *about*. A booking and an invitation are both subjects —
+ * an invitation precedes any booking, which is why the send path cannot be keyed on
+ * a `TourBookingRow`. Generalizing here is what keeps one sender instead of two.
+ */
+export type TourCommsSubject = {
+    kind: "booking" | "invitation";
+    id: string;
+    opportunityId: string;
+    locationId: string | null;
+};
+
+export function tourCommsSubjectFromBooking(
+    booking: Pick<TourBookingRow, "id" | "opportunity_id" | "location_id">
+): TourCommsSubject {
+    return {
+        kind: "booking",
+        id: booking.id,
+        opportunityId: booking.opportunity_id,
+        locationId: booking.location_id ?? null,
+    };
+}
+
 export function buildTourCommsImmediateIdempotencyKey(input: {
-    bookingId: string;
+    subjectId: string;
     eventKey: TourCommsEventKey;
     channel: TourCommsChannel;
     generationToken: string;
 }): string {
     const token = String(input.generationToken ?? "").trim() || "v1";
-    return `tour_scheduling:immediate:${input.bookingId}:${input.eventKey}:${input.channel}:${token}`;
+    return `tour_scheduling:immediate:${input.subjectId}:${input.eventKey}:${input.channel}:${token}`;
 }
 
 /** Standard outbound metadata for immediate tour comms (Batch 6 telemetry). */
 export function buildTourCommsImmediateOutboundMetadata(input: {
-    booking: Pick<TourBookingRow, "id" | "opportunity_id">;
+    subject: TourCommsSubject;
     eventKey: TourCommsEventKey;
     channel: TourCommsChannel;
     idempotencyKey: string;
@@ -131,10 +161,14 @@ export function buildTourCommsImmediateOutboundMetadata(input: {
     recipientPersonId: string;
     lifecycleAction?: string | null;
 }): Record<string, unknown> {
+    const subjectKey =
+        input.subject.kind === "invitation"
+            ? TOUR_COMMS_OUTBOUND_METADATA.tourInvitationId
+            : TOUR_COMMS_OUTBOUND_METADATA.tourBookingId;
     const metadata: Record<string, unknown> = {
         [TOUR_COMMS_OUTBOUND_METADATA.source]: TOUR_COMMS_OUTBOUND_SOURCE,
-        [TOUR_COMMS_OUTBOUND_METADATA.tourBookingId]: input.booking.id,
-        [TOUR_COMMS_OUTBOUND_METADATA.opportunityId]: input.booking.opportunity_id,
+        [subjectKey]: input.subject.id,
+        [TOUR_COMMS_OUTBOUND_METADATA.opportunityId]: input.subject.opportunityId,
         [TOUR_COMMS_OUTBOUND_METADATA.eventKey]: input.eventKey,
         [TOUR_COMMS_OUTBOUND_METADATA.channel]: input.channel,
         [TOUR_COMMS_OUTBOUND_METADATA.idempotencyKey]: input.idempotencyKey,
@@ -224,7 +258,7 @@ function renderReminderSnapshots(
 async function sendImmediateTourComms(params: {
     supabase: SupabaseClient;
     orgId: string;
-    booking: TourBookingRow;
+    subject: TourCommsSubject;
     config: TourCommsConfig;
     context: TourCommsTemplateContext;
     recipientPersonId: string;
@@ -237,7 +271,7 @@ async function sendImmediateTourComms(params: {
     deps: Required<Pick<TourCommsOrchestratorDeps, "enqueueImmediate" | "triggerQueue" | "hasExistingImmediateSend">>;
 }): Promise<TourCommsImmediateSendResult> {
     const idempotencyKey = buildTourCommsImmediateIdempotencyKey({
-        bookingId: params.booking.id,
+        subjectId: params.subject.id,
         eventKey: params.eventKey,
         channel: params.channel,
         generationToken: params.generationToken,
@@ -270,7 +304,7 @@ async function sendImmediateTourComms(params: {
     }
 
     const metadata = buildTourCommsImmediateOutboundMetadata({
-        booking: params.booking,
+        subject: params.subject,
         eventKey: params.eventKey,
         channel: params.channel,
         idempotencyKey,
@@ -283,14 +317,21 @@ async function sendImmediateTourComms(params: {
         supabase: params.supabase,
         orgId: params.orgId,
         primaryEntityType: "opportunities",
-        primaryEntityId: params.booking.opportunity_id,
+        primaryEntityId: params.subject.opportunityId,
+        // THE recipient identity, carried as a typed canonical field — not merely
+        // telemetry. It was previously recorded in `metadata` only, so canonical
+        // eligibility received `null` and correctly failed closed with
+        // RECIPIENT_UNRESOLVED: an external send with no resolved identity cannot be
+        // evaluated for opt-out, suppression or channel usability. The identity was
+        // already resolved here; it just never crossed the boundary.
+        recipientPersonId: params.recipientPersonId,
         channelRaw: params.channel,
         toRaw: params.recipientTo,
         bodyRaw: body,
         emailSubjectRaw: params.channel === "email" ? subject ?? undefined : undefined,
         workflowRunId: null,
         metadata,
-        contextLocationId: params.booking.location_id,
+        contextLocationId: params.subject.locationId,
     });
 
     if (!enqueued.communicationMessageId) {
@@ -441,7 +482,21 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
     const scheduleGeneration = input.scheduleGeneration ?? resolveTourCommsScheduleGeneration(input.booking);
     const generationToken = String(input.immediateGenerationToken ?? scheduleGeneration).trim() || String(scheduleGeneration);
 
-    const templateContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, input.booking);
+    const baseContext = enrichTemplateContextWithCalendarLinks(loaded.templateContext, input.booking);
+    // Caller-supplied action URLs win: they were minted for the state the booking is
+    // actually in now. Without them the templates render their optional action lines
+    // empty and the lines are stripped, which is how a confirmation ended up offering
+    // the parent nothing to do.
+    const templateContext = input.actionModel
+        ? {
+              ...baseContext,
+              rescheduleUrl: input.actionModel.rescheduleUrl ?? baseContext.rescheduleUrl ?? null,
+              // `cancelUrl` in the template context is the MANAGE surface, never a
+              // direct destructive link — cancellation is a bounded flow.
+              cancelUrl: input.actionModel.manageUrl ?? baseContext.cancelUrl ?? null,
+              ctaUrl: input.actionModel.confirmUrl ?? baseContext.ctaUrl ?? null,
+          }
+        : baseContext;
     const reminderSnapshots = renderReminderSnapshots(templateContext, config);
 
     const reminderAction = input.reminderAction ?? "none";
@@ -465,7 +520,7 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
                 await sendImmediateTourComms({
                     supabase: input.supabase,
                     orgId: input.orgId,
-                    booking: input.booking,
+                    subject: tourCommsSubjectFromBooking(input.booking),
                     config,
                     context: templateContext,
                     recipientPersonId: recipient.personId,
@@ -515,15 +570,94 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
     return { ok: true, disabled: false, skippedReasons, immediate, reminders };
 }
 
+/**
+ * Send a tour **invitation** over every enabled channel the recipient can receive on.
+ *
+ * This is the invitation half of the same sender: it reuses the identical dedupe →
+ * render → enqueue → dispatch path as booking lifecycle comms. It schedules no
+ * reminders — there is no booking to remind anyone about yet.
+ *
+ * The caller owns the invitation itself (`mintTourInvitation`) and passes the already
+ * minted subject. This function never mints, so a retry here cannot create a second
+ * invitation.
+ */
+export async function orchestrateTourInvitationComms(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    invitationId: string;
+    opportunityId: string;
+    locationId: string | null;
+    config: TourCommsConfig;
+    context: TourCommsTemplateContext;
+    recipient: TourCommsParentRecipient;
+    /** Changes only when the offered times change, so a resend of the same offer dedupes. */
+    generationToken: string;
+    deps?: TourCommsOrchestratorDeps;
+}): Promise<TourCommsOrchestrationResult> {
+    const deps = {
+        enqueueImmediate: input.deps?.enqueueImmediate ?? enqueueCanonicalOutboundMessage,
+        triggerQueue: input.deps?.triggerQueue ?? triggerBackendMessagesQueue,
+        hasExistingImmediateSend: input.deps?.hasExistingImmediateSend ?? hasExistingTourCommsImmediateSend,
+    };
+
+    const subject: TourCommsSubject = {
+        kind: "invitation",
+        id: input.invitationId,
+        opportunityId: input.opportunityId,
+        locationId: input.locationId,
+    };
+
+    const skippedReasons: string[] = [];
+    const immediate: TourCommsImmediateSendResult[] = [];
+
+    for (const channel of TOUR_COMMS_CHANNELS) {
+        if (!input.config.channels[channel]) {
+            skippedReasons.push(`channel_disabled:${channel}`);
+            continue;
+        }
+        if (!tourCommsRecipientHasChannel(input.recipient, channel)) {
+            skippedReasons.push(`missing_${channel}`);
+            continue;
+        }
+        const to = channel === "email" ? input.recipient.email! : input.recipient.smsTo!;
+        immediate.push(
+            await sendImmediateTourComms({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                subject,
+                config: input.config,
+                context: input.context,
+                recipientPersonId: input.recipient.personId,
+                recipientTo: to,
+                channel,
+                eventKey: "tour_invitation",
+                generationToken: input.generationToken,
+                scheduleGeneration: 1,
+                lifecycleAction: "invite",
+                deps,
+            })
+        );
+    }
+
+    return { ok: true, disabled: false, skippedReasons, immediate, reminders: { action: "none" } };
+}
+
 export async function orchestrateTourBookingConfirmed(
     supabase: SupabaseClient,
-    params: { orgId: string; booking: TourBookingRow; actorUserId?: string | null; deps?: TourCommsOrchestratorDeps }
+    params: {
+        orgId: string;
+        booking: TourBookingRow;
+        actorUserId?: string | null;
+        actionModel?: TourCommsOrchestrateInput["actionModel"];
+        deps?: TourCommsOrchestratorDeps;
+    }
 ): Promise<TourCommsOrchestrationResult> {
     return orchestrateTourCommsForBooking({
         supabase,
         orgId: params.orgId,
         booking: params.booking,
         actorUserId: params.actorUserId,
+        actionModel: params.actionModel ?? null,
         immediateEventKey: "tour_confirmation",
         immediateGenerationToken: "confirmed",
         lifecycleAction: "confirm",
@@ -534,12 +668,19 @@ export async function orchestrateTourBookingConfirmed(
 
 export async function orchestrateTourBookingRescheduled(
     supabase: SupabaseClient,
-    params: { orgId: string; booking: TourBookingRow; actorUserId?: string | null; deps?: TourCommsOrchestratorDeps }
+    params: {
+        orgId: string;
+        booking: TourBookingRow;
+        actorUserId?: string | null;
+        actionModel?: TourCommsOrchestrateInput["actionModel"];
+        deps?: TourCommsOrchestratorDeps;
+    }
 ): Promise<TourCommsOrchestrationResult> {
     return orchestrateTourCommsForBooking({
         supabase,
         orgId: params.orgId,
         booking: params.booking,
+        actionModel: params.actionModel ?? null,
         actorUserId: params.actorUserId,
         immediateEventKey: "tour_reschedule",
         immediateGenerationToken: `rescheduled:${params.booking.start_at}`,
@@ -551,12 +692,19 @@ export async function orchestrateTourBookingRescheduled(
 
 export async function orchestrateTourBookingCanceled(
     supabase: SupabaseClient,
-    params: { orgId: string; booking: TourBookingRow; actorUserId?: string | null; deps?: TourCommsOrchestratorDeps }
+    params: {
+        orgId: string;
+        booking: TourBookingRow;
+        actorUserId?: string | null;
+        actionModel?: TourCommsOrchestrateInput["actionModel"];
+        deps?: TourCommsOrchestratorDeps;
+    }
 ): Promise<TourCommsOrchestrationResult> {
     return orchestrateTourCommsForBooking({
         supabase,
         orgId: params.orgId,
         booking: params.booking,
+        actionModel: params.actionModel ?? null,
         actorUserId: params.actorUserId,
         immediateEventKey: "tour_cancel",
         immediateGenerationToken: "canceled",
