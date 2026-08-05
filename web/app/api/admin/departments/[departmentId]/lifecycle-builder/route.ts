@@ -523,21 +523,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             );
         }
 
-        // Stamp command_set_v1 before publish validation so orphan checks see selection.
+        // Stamp command_set_v1 before the readiness read so orphan checks see selection.
         config = ensureBuilderCommandSetsOnSave(config);
+
+        /**
+         * PUBLICATION READINESS — reported, never blocking.
+         *
+         * This check used to refuse the save with a 422, which made an incomplete draft impossible
+         * to repair: every save was rejected, including the save that would have fixed the thing
+         * being complained about. A draft is allowed to be mid-build; completeness is a question
+         * asked at Validate and Publish, where `validateBusinessProcessForPublish` now asks it and
+         * blocks on the answer.
+         *
+         * Structural and referential gates above stay blocking. Nothing is hidden: the issues ride
+         * out on the save response so the editor can say "saved, not ready to publish" and name the
+         * stages and Work Templates involved.
+         */
         const commandSetCheck = validateProcessCommandSetsForPublish(config);
-        if (!commandSetCheck.ok) {
-            return NextResponse.json(
-                {
-                    error:
-                        "Business Process Command selection is invalid or stage/Work Template " +
-                        "references Commands that are not process-selected.",
-                    code: "process_command_set_invalid",
-                    issues: commandSetCheck.issues,
-                },
-                { status: 422 },
-            );
-        }
 
         await saveConfig(ctx.orgId, departmentId, config);
         if (actionName === "reorder_stage") {
@@ -556,7 +558,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             await syncWorkUnitSortOrderFromBuilderStages(supabase, ctx.orgId, departmentId, metadata);
         }
         logLifecycleBuilderSaveTiming("lifecycle-builder-patch", saveStartedAt, { action: actionName });
-        return NextResponse.json(payloadFromConfig(config));
+        return NextResponse.json({
+            ...payloadFromConfig(config),
+            publication_readiness: {
+                ready: commandSetCheck.ok,
+                issues: commandSetCheck.issues,
+            },
+            ...(ensuredTransition ? { ensured_transition: ensuredTransition } : {}),
+        });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed" }, { status: 400 });
     }

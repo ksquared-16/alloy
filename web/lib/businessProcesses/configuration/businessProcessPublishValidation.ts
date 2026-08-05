@@ -29,12 +29,15 @@ import {
     type StageReferenceViolation,
 } from "@/lib/lifecycle/validateConfiguredStageReferences";
 import { validateProcessExecutionGraph } from "@/lib/businessProcesses/configuration/executionGraphValidation";
+import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
 
 export const PUBLISH_UNREADABLE_PAYLOAD = "configuration_unreadable" as const;
 export const PUBLISH_DANGLING_REFERENCE = "dangling_stage_reference" as const;
 export const PUBLISH_NO_ACTIVE_PROCESS = "no_active_process" as const;
 export const PUBLISH_DUPLICATE_STAGE_KEY = "duplicate_stage_key" as const;
 export const PUBLISH_EMPTY_PROCESS = "process_has_no_stages" as const;
+/** A Work Template uses a capability the process has not selected. Blocking at publish. */
+export const PUBLISH_COMMAND_SET_INCOMPLETE = "process_command_set_incomplete" as const;
 
 export type PublishValidationResult = {
     /** Publication is refused while this is non-empty. */
@@ -179,6 +182,33 @@ export function validateParsedBusinessProcessForPublish(
                 });
             }
             seen.add(stage.key);
+        }
+    }
+
+    /**
+     * COMMAND-SET COMPLETENESS — blocking here, and only here.
+     *
+     * This check previously ran on every lifecycle-builder SAVE and nowhere else, which was the
+     * boundary exactly inverted: an incomplete draft could not be saved, while a process with
+     * orphaned capabilities could be published, because publication never asked. Draft saves now
+     * report it as readiness; Validate and Publish block on it, both through this one function so
+     * neither route carries its own copy.
+     *
+     * `errors`, deliberately — `warnings` are documented as never blocking, and a Work Template
+     * that invokes a capability the process has not selected is not executable at runtime.
+     */
+    {
+        const commandSets = validateProcessCommandSetsForPublish(builder);
+        for (const issue of commandSets.issues ?? []) {
+            errors.push({
+                code: PUBLISH_COMMAND_SET_INCOMPLETE,
+                stage_key: issue.stageKey ?? null,
+                path:
+                    `processes[${issue.processKey ?? "?"}]`
+                    + (issue.stageKey ? `.stages[${issue.stageKey}]` : "")
+                    + `.command_set_v1`,
+                message: issue.message,
+            } as ConfigurationError);
         }
     }
 
