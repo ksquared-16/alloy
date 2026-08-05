@@ -6,37 +6,37 @@ const CAPABILITIES = [
   },
   {
     title: "Secure by Design",
-    body: "Permissions, security, and audit are built in.",
+    body: "Permissions, security, and audit built in.",
     icon: "shield",
   },
   {
     title: "Connected Work",
-    body: "Every action moves the Business Process forward.",
+    body: "Every action advances the Business Process.",
     icon: "bolt",
   },
   {
     title: "Clear Communication",
-    body: "Every conversation stays connected to the work.",
+    body: "Conversation stays with the work.",
     icon: "chat",
   },
   {
     title: "Operational Intelligence",
-    body: "Know what matters and what requires attention.",
+    body: "Know what needs attention.",
     icon: "chart",
   },
   {
     title: "Open and Configurable",
-    body: "Built to adapt without creating disconnected systems.",
+    body: "Adapt without fracturing the system.",
     icon: "gear",
   },
 ] as const;
 
 function CapabilityIcon({ name }: { name: (typeof CAPABILITIES)[number]["icon"] }) {
   const common = {
-    className: "h-5 w-5 shrink-0",
+    className: "h-[1.125rem] w-[1.125rem] shrink-0",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: 1.5,
+    strokeWidth: 1.4,
     viewBox: "0 0 24 24",
     "aria-hidden": true as const,
   };
@@ -104,24 +104,29 @@ function CapabilityIcon({ name }: { name: (typeof CAPABILITIES)[number]["icon"] 
 
 export default function HeroCapabilityStrip() {
   return (
-    <section aria-label="Supporting capabilities" className="border-t border-alloy-midnight-forge/8 bg-white">
-      <div className="marketing-content-width py-10 md:py-12">
-        <ul className="grid grid-cols-2 gap-x-6 gap-y-8 md:grid-cols-3 lg:grid-cols-6 lg:gap-0">
+    <section
+      aria-label="Operating principles"
+      className="border-y border-alloy-midnight-forge/[0.06] bg-white"
+    >
+      <div className="marketing-content-width py-12 md:py-14">
+        <ul className="grid grid-cols-2 gap-x-8 gap-y-10 md:grid-cols-3 lg:grid-cols-6 lg:gap-x-0">
           {CAPABILITIES.map((item, index) => (
             <li
               key={item.title}
-              className={`flex gap-3 lg:px-4 ${
-                index > 0 ? "lg:border-l lg:border-alloy-midnight-forge/10" : ""
+              className={`flex flex-col gap-3 lg:px-5 ${
+                index > 0 ? "lg:border-l lg:border-alloy-midnight-forge/[0.07]" : ""
               }`}
             >
-              <span className="mt-0.5 text-alloy-bend-pine">
+              <span className="text-alloy-midnight-forge/45">
                 <CapabilityIcon name={item.icon} />
               </span>
               <div className="min-w-0">
-                <h3 className="text-[0.95rem] font-semibold leading-snug text-alloy-midnight-forge">
+                <h3 className="text-[0.8125rem] font-semibold leading-snug tracking-[-0.01em] text-alloy-midnight-forge">
                   {item.title}
                 </h3>
-                <p className="mt-1 text-sm leading-snug text-alloy-midnight-forge/55">{item.body}</p>
+                <p className="mt-1.5 text-[0.8125rem] leading-snug text-alloy-midnight-forge/50">
+                  {item.body}
+                </p>
               </div>
             </li>
           ))}

@@ -1309,54 +1309,91 @@ body {
 /* ==========================================================================
    Marketing site primitives (docs/marketing/ALLOY-BRAND-DOCTRINE.md)
    Scoped helpers — do not invent a second design system.
+   Refinement: calm hierarchy, chapter rhythm, premium spacing.
    ========================================================================== */
 .marketing-content-width {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1200px;
   margin-inline: auto;
-  padding-inline: clamp(24px, 5vw, 72px);
+  padding-inline: clamp(24px, 5vw, 64px);
 }
 
 .marketing-section-pad {
   padding-block: 72px;
 }
 
+.marketing-section-pad-compact {
+  padding-block: 56px;
+}
+
+.marketing-section-pad-spacious {
+  padding-block: 88px;
+}
+
 @media (min-width: 768px) {
   .marketing-section-pad {
-    padding-block: clamp(96px, 10vw, 160px);
+    padding-block: clamp(88px, 8vw, 128px);
+  }
+
+  .marketing-section-pad-compact {
+    padding-block: clamp(64px, 6vw, 88px);
+  }
+
+  .marketing-section-pad-spacious {
+    padding-block: clamp(112px, 10vw, 168px);
   }
 }
 
 .marketing-eyebrow {
-  font-size: 0.75rem;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-alloy-bend-pine);
 }
 
 .marketing-display-headline {
-  font-size: clamp(2.75rem, 5.4vw, 5.75rem);
-  line-height: 0.98;
+  /* ~18% smaller than first-pass clamp(2.75rem … 5.75rem) */
+  font-size: clamp(2.25rem, 4.2vw, 4.625rem);
+  line-height: 1.08;
   font-weight: 700;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.038em;
   color: var(--color-alloy-midnight-forge);
 }
 
 .marketing-section-headline {
-  font-size: clamp(2.25rem, 3.5vw, 4rem);
-  line-height: 1.05;
+  font-size: clamp(1.75rem, 2.6vw, 2.875rem);
+  line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.028em;
+  color: var(--color-alloy-midnight-forge);
+}
+
+.marketing-page-headline {
+  font-size: clamp(2rem, 3.2vw, 3.25rem);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   color: var(--color-alloy-midnight-forge);
 }
 
 .marketing-body-lg {
-  font-size: clamp(1.125rem, 1.4vw, 1.35rem);
-  line-height: 1.65;
+  font-size: clamp(1.0625rem, 1.15vw, 1.1875rem);
+  line-height: 1.7;
   font-weight: 400;
-  color: rgba(39, 63, 82, 0.76);
+  color: rgba(39, 63, 82, 0.72);
+}
+
+.marketing-body {
+  font-size: 1rem;
+  line-height: 1.7;
+  font-weight: 400;
+  color: rgba(39, 63, 82, 0.68);
+}
+
+.marketing-asset-frame {
+  padding: clamp(8px, 1.5vw, 16px);
 }
 
 @media (prefers-reduced-motion: reduce) {

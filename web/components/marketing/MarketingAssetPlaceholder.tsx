@@ -17,19 +17,21 @@ export default function MarketingAssetPlaceholder({
   priority?: boolean;
 }) {
   return (
-    <figure className={`flex flex-col ${className}`.trim()}>
+    <figure className={`marketing-asset-frame flex flex-col ${className}`.trim()}>
       <div
         role="img"
         aria-label={alt}
         data-marketing-asset-key={assetKey}
-        className={`relative w-full overflow-hidden rounded-2xl border border-alloy-midnight-forge/10 bg-alloy-stone ${aspectClassName}`}
+        className={`relative w-full overflow-hidden rounded-[1.25rem] border border-alloy-midnight-forge/[0.08] bg-alloy-stone/70 ${aspectClassName}`}
       >
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
-          <span className="font-mono text-[11px] font-medium tracking-wide text-alloy-bend-pine">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-8 text-center">
+          <span className="font-mono text-[10px] font-medium tracking-wide text-alloy-bend-pine/90">
             {assetKey}
           </span>
-          <span className="text-sm font-medium text-alloy-midnight-forge/55">Asset pending approval</span>
-          <span className="max-w-xs text-xs leading-relaxed text-alloy-midnight-forge/40">{alt}</span>
+          <span className="text-sm font-medium text-alloy-midnight-forge/45">Pending</span>
+          <span className="max-w-[16rem] text-xs leading-relaxed text-alloy-midnight-forge/35">
+            {alt}
+          </span>
         </div>
       </div>
     </figure>

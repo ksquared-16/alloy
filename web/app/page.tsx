@@ -27,10 +27,10 @@ function SectionHeading({
 }) {
   const alignClass = align === "center" ? "text-center mx-auto" : "";
   return (
-    <div className={`max-w-2xl ${alignClass}`}>
-      {eyebrow ? <p className="marketing-eyebrow mb-4">{eyebrow}</p> : null}
+    <div className={`max-w-xl ${alignClass}`}>
+      {eyebrow ? <p className="marketing-eyebrow mb-3">{eyebrow}</p> : null}
       <h2 className="marketing-section-headline">{title}</h2>
-      {subtitle ? <p className="marketing-body-lg mt-5">{subtitle}</p> : null}
+      {subtitle ? <p className="marketing-body-lg mt-4">{subtitle}</p> : null}
     </div>
   );
 }
@@ -38,29 +38,30 @@ function SectionHeading({
 export default function HomePage() {
   return (
     <>
-      {/* Hero — native copy + isolated illustration slot */}
+      {/* Chapter: Hero */}
       <SectionShell
-        className="!pt-12 md:!pt-16 lg:!pt-20"
-        innerClassName="grid items-center gap-12 lg:grid-cols-[42%_1fr] lg:gap-14"
+        density="spacious"
+        className="!pt-14 md:!pt-20 lg:!pt-24"
+        innerClassName="grid items-center gap-14 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-16 xl:gap-20"
       >
         <div>
           <p className="marketing-eyebrow">The modern operating system for operations</p>
-          <h1 className="marketing-display-headline mt-5">
+          <h1 className="marketing-display-headline mt-6">
             <span className="block text-alloy-midnight-forge">Most software stores information.</span>
-            <span className="mt-2 block text-alloy-bend-pine">Alloy moves work forward.</span>
+            <span className="mt-3 block text-alloy-bend-pine">Alloy moves work forward.</span>
           </h1>
-          <div className="marketing-body-lg mt-6 max-w-lg space-y-4">
+          <div className="marketing-body-lg mt-7 max-w-md space-y-3.5">
             <p>Work doesn&apos;t happen inside one application.</p>
             <p>
               It moves between people, decisions, communications, documents, approvals, and Business
               Processes.
             </p>
             <p>
-              Alloy connects them into one operating system so your team can focus on the work—not
-              the software.
+              Alloy brings them into one operating system — so your team focuses on the work, not the
+              software.
             </p>
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-9 flex flex-wrap gap-3">
             <CTAButton href="/contact">Book a Demo</CTAButton>
             <CTAButton href="/platform" variant="secondary">
               Explore the Platform
@@ -77,9 +78,9 @@ export default function HomePage() {
 
       <HeroCapabilityStrip />
 
-      {/* Stop stitching */}
-      <SectionShell variant="muted">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      {/* Chapter: The problem */}
+      <SectionShell variant="muted" density="spacious">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <MarketingAssetPlaceholder
             assetKey={MARKETING_ASSETS.disconnectedToUnified.key}
             alt={MARKETING_ASSETS.disconnectedToUnified.alt}
@@ -88,23 +89,26 @@ export default function HomePage() {
           <div className="order-1 lg:order-2">
             <SectionHeading
               title="Stop stitching software together"
-              subtitle="CRM, email, forms, tasks, documents, and reports often live in separate places. People become the integration layer. Alloy replaces that patchwork with one operating system that moves work forward."
+              subtitle="CRM, email, forms, tasks, documents, and reports often live apart. People become the integration layer. Alloy replaces that patchwork with one operating system that moves work forward."
             />
           </div>
         </div>
       </SectionShell>
 
-      {/* Business Processes — pillar */}
-      <SectionShell>
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      {/* Chapter: Three pillars — continuous white band */}
+      <SectionShell density="default">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <div>
             <SectionHeading
               eyebrow="Business Processes"
               title="Built around Business Processes"
               subtitle="Business Processes organize how work advances — stages, decisions, requirements, and outcomes — so every action has a place to land and a next step to take."
             />
-            <p className="mt-6">
-              <Link href="/platform" className="text-sm font-semibold text-alloy-bend-pine hover:underline">
+            <p className="mt-7">
+              <Link
+                href="/platform"
+                className="text-sm font-semibold text-alloy-bend-pine hover:underline"
+              >
                 Explore Business Processes →
               </Link>
             </p>
@@ -116,9 +120,8 @@ export default function HomePage() {
         </div>
       </SectionShell>
 
-      {/* Processing — pillar */}
-      <SectionShell variant="muted">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <SectionShell density="compact">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <MarketingAssetPlaceholder
             assetKey={MARKETING_ASSETS.processing.key}
             alt={MARKETING_ASSETS.processing.alt}
@@ -128,15 +131,14 @@ export default function HomePage() {
             <SectionHeading
               eyebrow="Processing"
               title="Processing turns information into action"
-              subtitle="Intake, documents, and operational inputs should not sit idle. Processing converts information into structured progress inside the Business Process."
+              subtitle="Intake, documents, and operational inputs should not sit idle. Processing turns them into structured progress inside the Business Process."
             />
           </div>
         </div>
       </SectionShell>
 
-      {/* Operational Intelligence — pillar */}
-      <SectionShell>
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <SectionShell density="default">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <div>
             <SectionHeading
               eyebrow="Operational Intelligence"
@@ -151,9 +153,9 @@ export default function HomePage() {
         </div>
       </SectionShell>
 
-      {/* Communications */}
-      <SectionShell variant="muted">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      {/* Chapter: How work stays whole */}
+      <SectionShell variant="muted" density="default">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <MarketingAssetPlaceholder
             assetKey={MARKETING_ASSETS.communications.key}
             alt={MARKETING_ASSETS.communications.alt}
@@ -162,19 +164,18 @@ export default function HomePage() {
           <div className="order-1 lg:order-2">
             <SectionHeading
               title="Every conversation stays connected"
-              subtitle="Messages stay attached to the people and work they belong to — so context does not disappear when the thread closes."
+              subtitle="Messages stay attached to the people and work they belong to — so context does not vanish when the thread closes."
             />
           </div>
         </div>
       </SectionShell>
 
-      {/* AI / BOS */}
-      <SectionShell>
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <SectionShell density="default">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <div>
             <SectionHeading
               title="AI that understands your business"
-              subtitle="BOS operates through your records, Business Processes, permissions, and audit paths — helping teams move work forward without inventing a parallel system."
+              subtitle="BOS works through your records, Business Processes, permissions, and audit paths — helping teams move work forward without inventing a parallel system."
             />
           </div>
           <MarketingAssetPlaceholder
@@ -184,26 +185,25 @@ export default function HomePage() {
         </div>
       </SectionShell>
 
-      {/* One OS */}
-      <SectionShell variant="muted">
-        <div className="mx-auto max-w-3xl text-center">
+      {/* Chapter: Expansion */}
+      <SectionShell density="compact">
+        <div className="mx-auto max-w-2xl text-center">
           <SectionHeading
             align="center"
             title="One operating system, endless possibilities"
-            subtitle="Most software starts with features. Alloy started with the foundation — so new operational areas can expand without creating another disconnected system."
+            subtitle="Most software starts with features. Alloy started with the foundation — so new operational areas expand without creating another disconnected system."
           />
         </div>
       </SectionShell>
 
-      {/* Built to expand */}
-      <SectionShell>
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+      <SectionShell density="default">
+        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
           <div>
             <SectionHeading
               title="Built to expand"
               subtitle="Start where work is hardest today. Add the next Business Process on the same foundation — records, permissions, communications, Processing, and Operational Intelligence already in place."
             />
-            <p className="mt-6">
+            <p className="mt-7">
               <Link href="/vision" className="text-sm font-semibold text-alloy-bend-pine hover:underline">
                 See the vision →
               </Link>
@@ -216,21 +216,21 @@ export default function HomePage() {
         </div>
       </SectionShell>
 
-      {/* Where Work Happens CTA */}
-      <SectionShell variant="muted" className="!pb-20 md:!pb-28">
-        <div className="mx-auto max-w-2xl text-center">
+      {/* Chapter: Close */}
+      <SectionShell variant="muted" density="spacious" className="!pb-24 md:!pb-32">
+        <div className="mx-auto max-w-xl text-center">
           <MarketingAssetPlaceholder
             assetKey={MARKETING_ASSETS.finalCta.key}
             alt={MARKETING_ASSETS.finalCta.alt}
-            className="mx-auto mb-10 max-w-lg"
+            className="mx-auto mb-12 max-w-md"
             aspectClassName="aspect-[16/9]"
           />
           <h2 className="marketing-section-headline">Where Work Happens</h2>
-          <p className="marketing-body-lg mt-4">
+          <p className="marketing-body-lg mt-5">
             See how Alloy moves work forward — from Business Processes to Processing to Operational
             Intelligence.
           </p>
-          <div className="mt-8">
+          <div className="mt-9">
             <CTAButton href="/contact">Book a Demo</CTAButton>
           </div>
         </div>

@@ -5,8 +5,10 @@ interface SectionShellProps {
   id?: string;
   className?: string;
   innerClassName?: string;
-  /** Alternate background for rhythm between sections */
+  /** Surface color — prefer sparse muted chapters, not strict alternation */
   variant?: "default" | "muted" | "accent";
+  /** Vertical rhythm for chapter pacing */
+  density?: "default" | "compact" | "spacious";
 }
 
 const variantClasses = {
@@ -15,17 +17,24 @@ const variantClasses = {
   accent: "bg-gradient-to-b from-alloy-stone to-white",
 };
 
+const densityClasses = {
+  default: "marketing-section-pad",
+  compact: "marketing-section-pad-compact",
+  spacious: "marketing-section-pad-spacious",
+};
+
 export default function SectionShell({
   children,
   id,
   className = "",
   innerClassName = "",
   variant = "default",
+  density = "default",
 }: SectionShellProps) {
   return (
     <section
       id={id}
-      className={`marketing-section-pad ${variantClasses[variant]} ${className}`.trim()}
+      className={`${densityClasses[density]} ${variantClasses[variant]} ${className}`.trim()}
     >
       <div className={`marketing-content-width ${innerClassName}`.trim()}>{children}</div>
     </section>

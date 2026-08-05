@@ -10,26 +10,28 @@ export default function MarketingFooter() {
   ];
 
   return (
-    <footer className="border-t border-alloy-midnight-forge/8 bg-white">
-      <div className="marketing-content-width py-12 lg:py-16">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-12">
+    <footer className="border-t border-alloy-midnight-forge/[0.06] bg-white">
+      <div className="marketing-content-width py-14 lg:py-16">
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-12 md:gap-10">
           <div className="md:col-span-5">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3.5">
               <Image
                 src={MARKETING_BRAND.brandmark}
                 alt=""
-                width={32}
-                height={32}
-                className="h-8 w-8"
+                width={36}
+                height={36}
+                className="h-9 w-9"
                 aria-hidden
               />
-              <span className="text-sm font-semibold text-alloy-midnight-forge">Alloy</span>
+              <span className="text-sm font-semibold tracking-[-0.01em] text-alloy-midnight-forge">
+                Alloy
+              </span>
             </div>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-alloy-midnight-forge/65">
+            <p className="mt-5 max-w-sm text-sm leading-relaxed text-alloy-midnight-forge/55">
               Alloy moves work forward. The modern operating system for organizations that serve
               people.
             </p>
-            <p className="mt-4 text-sm text-alloy-midnight-forge/55">
+            <p className="mt-5 text-sm text-alloy-midnight-forge/45">
               <a href="mailto:hello@workwithalloy.com" className="hover:text-alloy-bend-pine">
                 hello@workwithalloy.com
               </a>

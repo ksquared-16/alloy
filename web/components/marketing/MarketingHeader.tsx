@@ -13,30 +13,34 @@ export default function MarketingHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-alloy-midnight-forge/8 bg-white/95 backdrop-blur-sm">
-      <div className="marketing-content-width flex h-16 items-center justify-between md:h-20">
-        <Link href="/" className="flex shrink-0 items-center" onClick={() => setMobileOpen(false)}>
+    <header className="sticky top-0 z-50 border-b border-alloy-midnight-forge/[0.06] bg-white/90 backdrop-blur-md">
+      <div className="marketing-content-width flex h-[4.25rem] items-center justify-between md:h-[5.25rem]">
+        <Link
+          href="/"
+          className="mr-6 flex shrink-0 items-center py-2 pr-2"
+          onClick={() => setMobileOpen(false)}
+        >
           <Image
             src={MARKETING_BRAND.wordmark}
             alt="Alloy"
-            width={140}
-            height={36}
-            className="h-8 w-auto md:h-9"
+            width={168}
+            height={44}
+            className="h-10 w-auto md:h-11"
             priority
           />
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex" aria-label="Main">
+        <nav className="hidden items-center gap-9 md:flex" aria-label="Main">
           {MARKETING_NAV_LINKS.map((link) => {
             const isActive = pathname === link.href || pathname?.startsWith(`${link.href}/`);
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm font-medium transition-colors ${
+                className={`text-[0.9375rem] font-medium tracking-[-0.01em] transition-colors ${
                   isActive
                     ? "text-alloy-bend-pine"
-                    : "text-alloy-midnight-forge/75 hover:text-alloy-midnight-forge"
+                    : "text-alloy-midnight-forge/65 hover:text-alloy-midnight-forge"
                 }`}
               >
                 {link.label}
@@ -45,18 +49,18 @@ export default function MarketingHeader() {
           })}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
           <CTAButton href="/login" variant="ghost" className="!min-h-10 !px-4 !py-2">
             Sign In
           </CTAButton>
-          <CTAButton href="/contact" className="!min-h-10 !px-5 !py-2.5">
+          <CTAButton href="/contact" className="!min-h-10 !px-5 !py-2">
             Book a Demo
           </CTAButton>
         </div>
 
         <button
           type="button"
-          className="rounded-lg p-2 text-alloy-midnight-forge/80 hover:bg-alloy-stone md:hidden"
+          className="rounded-lg p-2.5 text-alloy-midnight-forge/70 hover:bg-alloy-stone md:hidden"
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
           aria-expanded={mobileOpen}
           onClick={() => setMobileOpen((v) => !v)}
@@ -72,7 +76,7 @@ export default function MarketingHeader() {
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-alloy-midnight-forge/8 bg-white px-4 py-4 md:hidden">
+        <div className="border-t border-alloy-midnight-forge/[0.06] bg-white px-4 py-5 md:hidden">
           <nav className="flex flex-col gap-1" aria-label="Mobile">
             {MARKETING_NAV_LINKS.map((link) => {
               const isActive = pathname === link.href;
@@ -80,10 +84,10 @@ export default function MarketingHeader() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`rounded-lg px-3 py-2.5 text-sm font-medium ${
+                  className={`rounded-lg px-3 py-3 text-[0.9375rem] font-medium ${
                     isActive
                       ? "bg-alloy-stone text-alloy-bend-pine"
-                      : "text-alloy-midnight-forge/80"
+                      : "text-alloy-midnight-forge/75"
                   }`}
                   onClick={() => setMobileOpen(false)}
                 >
@@ -91,7 +95,7 @@ export default function MarketingHeader() {
                 </Link>
               );
             })}
-            <div className="mt-3 flex flex-col gap-2 border-t border-alloy-midnight-forge/8 pt-3">
+            <div className="mt-4 flex flex-col gap-2.5 border-t border-alloy-midnight-forge/[0.06] pt-4">
               <CTAButton href="/login" variant="secondary" className="w-full">
                 Sign In
               </CTAButton>
