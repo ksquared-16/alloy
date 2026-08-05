@@ -28,6 +28,11 @@ import {
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
 import { assertStageConfigured, loadConfiguredStageInventory } from "@/lib/lifecycle/configuredStageInventory";
+import {
+    assertStageMoveGrainCompatible,
+    resolveStageGrain,
+    type StageMoveGrainError,
+} from "@/lib/lifecycle/stageGrainResolution";
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
@@ -104,6 +109,8 @@ export type ApplyStageOutcomeRuleTargetResult = {
     error?: string;
     /** Why a guarded target refused, structured for a command preview to translate. */
     blocked_reasons?: FamilyCloseBlockedReason[];
+    /** Why a stage move was refused on grain grounds — structured for the same reason. */
+    stage_grain_error?: StageMoveGrainError;
     needs_attention?: boolean;
     status_updated?: boolean;
     /**
@@ -521,6 +528,29 @@ export async function applyStageOutcomeRuleTarget(
             const membership = assertStageConfigured(inventory, targetStageKey);
             if (!membership.ok) {
                 return { error: membership.error.message };
+            }
+
+            /**
+             * GRAIN GUARD. Configured-and-existing is not the same as configured-and-compatible:
+             * the family case and each child's enrollment move on their own tracks, and until now
+             * nothing stopped a child outcome writing a family stage or the reverse.
+             *
+             * Placed here, above every branch below, so it covers both writers. The destination's
+             * own operating plan is not loaded on this path — `plan` is the SOURCE stage's — so
+             * the resolver weighs the canonical vocabulary against the configured metadata and
+             * refuses when they disagree rather than picking one.
+             */
+            const destinationGrain = resolveStageGrain({
+                stageKey: targetStageKey,
+                configuredMetadataGrain: inventory.stageGrainsByKey[targetStageKey],
+            });
+            const grainCheck = assertStageMoveGrainCompatible({
+                subjectGrain: subject.journey_segment,
+                destination: destinationGrain,
+            });
+            if (!grainCheck.ok) {
+                // No write has happened, so the transaction aborts with nothing to compensate.
+                return { error: grainCheck.error.message, stage_grain_error: grainCheck.error };
             }
 
             const nowIso = new Date().toISOString();

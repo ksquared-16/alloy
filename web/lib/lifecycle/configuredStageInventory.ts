@@ -18,6 +18,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     activeLifecycleProcess,
+    activeStagesForProcess,
     configuredStageKeysForMetadata,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -29,6 +30,15 @@ export type ConfiguredStageInventory = {
     processKey: string | null;
     /** The ONLY stage keys valid at runtime for this department. */
     stageKeys: string[];
+    /**
+     * Declared journey grain per configured stage, as the department metadata states it.
+     *
+     * Carried here — rather than resolved here — because this metadata is only ONE of the three
+     * sources that answer "what grain is this stage", and on Firefly's Decision stage it is the
+     * one that disagrees. `resolveStageGrain` weighs it against the others; this module's job is
+     * to hand it over unedited.
+     */
+    stageGrainsByKey: Record<string, string>;
 };
 
 /**
@@ -47,10 +57,18 @@ export type StageConfigurationError = {
 
 export function configuredStageInventoryFromMetadata(metadata: unknown): ConfiguredStageInventory {
     const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata));
+    const stageGrainsByKey: Record<string, string> = {};
+    if (process) {
+        for (const stage of activeStagesForProcess(process)) {
+            const grain = (stage as { grain?: unknown }).grain;
+            if (typeof grain === "string" && grain.trim()) stageGrainsByKey[stage.key] = grain.trim();
+        }
+    }
     return {
         hasConfiguredProcess: process != null,
         processKey: process?.key ?? null,
         stageKeys: configuredStageKeysForMetadata(metadata),
+        stageGrainsByKey,
     };
 }
 

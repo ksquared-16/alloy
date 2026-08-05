@@ -46,12 +46,15 @@ function enrollmentDepartmentMetadata(): Record<string, unknown> {
                     primary_entity: "opportunity",
                     sort_order: 0,
                     is_active: true,
+                    // Real department metadata declares a grain per stage; these fixtures
+                    // did not, so the grain guard correctly refused to validate a move onto a
+                    // stage that says nothing about which journey it belongs to.
                     stages: [
-                        { id: "s1", key: "lead", label: "Lead", sort_order: 0, is_active: true },
-                        { id: "s2", key: "qualification", label: "Qualification", sort_order: 1, is_active: true },
-                        { id: "s3", key: "tour_scheduled", label: "Tour Scheduled", sort_order: 2, is_active: true },
-                        { id: "s4", key: "tour_completed", label: "Tour Completed", sort_order: 3, is_active: true },
-                        { id: "s5", key: "decision_pending", label: "Decision Pending", sort_order: 4, is_active: true },
+                        { id: "s1", key: "lead", label: "Lead", sort_order: 0, is_active: true, grain: "family" },
+                        { id: "s2", key: "qualification", label: "Qualification", sort_order: 1, is_active: true, grain: "family" },
+                        { id: "s3", key: "tour_scheduled", label: "Tour Scheduled", sort_order: 2, is_active: true, grain: "family" },
+                        { id: "s4", key: "tour_completed", label: "Tour Completed", sort_order: 3, is_active: true, grain: "family" },
+                        { id: "s5", key: "decision_pending", label: "Decision Pending", sort_order: 4, is_active: true, grain: "family" },
                     ],
                 },
             ],

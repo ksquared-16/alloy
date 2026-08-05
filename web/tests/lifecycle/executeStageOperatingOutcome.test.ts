@@ -41,6 +41,14 @@ function configuredDeptMetadata(stageKeys: string[] = MOVE_TARGET_STAGES): Recor
                         label: key,
                         sort_order: index,
                         is_active: true,
+                        // Real department metadata declares a grain on every stage; these
+                        // fixtures did not, so the grain guard correctly refused to validate a
+                        // move onto a stage that says nothing about which journey it belongs to.
+                        // Child-track keys are named explicitly, everything else is family.
+                        grain:
+                            ["waitlist", "enrolling", "enrolled", "closed_withdrawn"].includes(key)
+                                ? "child"
+                                : "family",
                     })),
                 },
             ],
