@@ -373,3 +373,58 @@ contact_family  primary quick_message, helpful [schedule_tour, add_child, add_fa
 ```
 e3b000d12cebda825fa24c3355e69d9ffd613f0f923ed0880b8584369db8d1a8   (unchanged throughout)
 ```
+
+---
+
+# Canonical terminal stages configured. Draft still publishable; nothing published.
+
+| | |
+|---|---|
+| before sha256 | `e88ad4bc4b06fea30be6994cc8954c145ffa71fd8652869d744f1ed1360ba0ef` |
+| read-back sha256 | `34499d7dd62c025dab4c246bb800ae3319c05aab98262639ceb4016bc5d8de74` |
+| structural diff | `processes[0].stages` **6 → 8**, nothing else |
+| existing stages | byte-identical |
+
+## API calls (canonical draft actions only)
+
+```
+add_stage            label "Closed"              -> key closed             sort_order 8
+add_stage            label "Closed / Withdrawn"  -> key closed_withdrawn   sort_order 9
+update_stage_grain   closed            -> family
+update_stage_grain   closed_withdrawn  -> child
+```
+
+The labels slug to the canonical keys via `slugifyLifecycleKey`, so no tenant-specific terminal
+key was invented. Negative control: `update_stage_grain closed_withdrawn -> family` returns
+**HTTP 409** — *"defined by the platform as belonging to individual children"*.
+
+## Final stage order
+
+```
+0  lead              family   1 work templates
+2  tour              family   3
+3  decision          family   1
+4  waitlist          child    2
+6  enrolling         child    2
+7  enrolled          child    0
+8  closed            family   0 work templates, 0 outcomes, 0 transitions
+9  closed_withdrawn  child    0 work templates, 0 outcomes, 0 transitions
+```
+
+`closed` is APPENDED at 8 rather than inserted after Decision at 4. `reorder_stage` moves one
+position per call, rewrites `sort_order` across stages, and triggers the Work Unit sort sync that
+reads the PUBLISHED projection — stale for an unpublished draft. Appending disturbed nothing;
+insertion would have touched four unrelated stages to satisfy display order.
+
+## Terminal by construction
+
+Neither stage has a `stage_operating_plan_v1` at all — so zero work templates, zero outcomes,
+zero rules, zero transitions, and nothing that can provision Current Work. No outcome anywhere
+targets either terminal yet; wiring Closed Lost is separately certified.
+
+## Validation
+
+```
+can_publish : true      errors: 0      warnings: 0
+PROJECTION  : e3b000d12cebda825fa24c3355e69d9ffd613f0f923ed0880b8584369db8d1a8   (unchanged)
+```
