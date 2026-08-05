@@ -37,9 +37,13 @@ function brief(title) {
   };
 }
 
-// ---- Single workspace registry ----
-assert.equal(listV31Workspaces().length, 1);
-assert.equal(listV31Workspaces()[0].workspaceId, "ws_identity");
+// ---- Mission conversation list (V3-3: portfolio-backed; Identity always resolvable) ----
+const listed = listV31Workspaces();
+assert.ok(listed.length >= 1, "at least one mission in left rail");
+assert.ok(
+  listed.some((w) => w.missionId === V3_1_WORKSPACE.missionId || /Identity/i.test(w.title || "")),
+  "Identity Platform present in mission list",
+);
 assert.equal(resolveV31Workspace("identity")?.missionId, V3_1_WORKSPACE.missionId);
 assert.equal(resolveV31Workspace("ws_other"), null);
 
@@ -114,7 +118,8 @@ assert.ok(kelly.some((m) => m.body === "Continue." || m.body.startsWith("Continu
 // Full runtime for bound Identity workspace — missing in isolated temp root is OK
 const live = workspaceRuntimeVm("ws_identity");
 assert.equal(live.kind, "workspace_runtime");
-assert.equal(live.workspace.workspaceId, "ws_identity");
+assert.equal(live.workspace.missionId, V3_1_WORKSPACE.missionId);
+assert.equal(live.workspace.workspaceId, V3_1_WORKSPACE.missionId);
 if (live.missing) {
   assert.equal(live.error, "mission_not_found");
   assert.deepEqual(live.messages, []);
@@ -142,3 +147,4 @@ assert.ok(decisionMsg, "decision_requested projected");
 assert.equal(decisionMsg.from.label, "Director");
 
 console.log("workspace-runtime-v3-1.test.mjs: ok");
+process.exit(0);

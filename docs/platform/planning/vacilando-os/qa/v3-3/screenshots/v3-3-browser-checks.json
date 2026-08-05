@@ -1,0 +1,65 @@
+{
+  "at": "2026-08-05T23:50:14.557Z",
+  "base": "http://127.0.0.1:3026",
+  "missionId": "msn_f74ed02c126c88d7ff",
+  "checks": {
+    "shellOk": true,
+    "missionsList": true,
+    "missionsLabeled": true,
+    "compactState": true,
+    "operational": true,
+    "noBothPauseResume": true,
+    "messagesOk": true,
+    "inlineReviewExpandAction": true,
+    "noReviewOutcomeNav": true,
+    "identityTitle": true,
+    "uiMissionsLabel": true,
+    "uiNoWorkspacesLabel": true,
+    "uiCompact": true,
+    "uiOps": true,
+    "uiComposer": true,
+    "inlineReviewButtonPresent": true,
+    "inlineReviewOpened": true,
+    "hasApprove": null,
+    "hasRework": true,
+    "hasFeedback": true,
+    "shotsExpanded": null,
+    "feedbackDialog": true,
+    "feedbackNoNav": true,
+    "artifactModal": true,
+    "artifactNoNav": true,
+    "hasServerActions": true,
+    "hasWorkerCmd": true,
+    "stayedOnWorkspaces": true
+  },
+  "shots": {
+    "identity": "v3-3-identity-conversation.png",
+    "inlineReview": "v3-3-inline-review.png",
+    "artifact": "v3-3-artifact-modal.png",
+    "opsRail": "v3-3-ops-rail.png"
+  },
+  "shell": {
+    "title": "Identity Platform",
+    "missions": [
+      "Identity Platform",
+      "DX7 Fixture — Ready Implementation",
+      "DX7 Fixture — Ready Promotion",
+      "DX7 Fixture — Needs Director",
+      "DX7 Fixture — Waiting Comms",
+      "DX7 Fixture — Blocked Trust"
+    ],
+    "compact": [
+      "Waiting on you",
+      "cursor · Slot 6",
+      "Server Stopped"
+    ],
+    "server": "Stopped",
+    "workerActions": [
+      "Pause",
+      "Diagnose",
+      "Finish Sprint",
+      "Open PR"
+    ],
+    "inlineReview": true
+  }
+}

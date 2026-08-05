@@ -140,3 +140,4 @@ void quiet;
 void workspaceRuntimeVm;
 
 console.log("workspace-runtime-v3-2.test.mjs: ok");
+process.exit(0);

@@ -21,13 +21,22 @@ import { resolveSlotIdentity } from "../identity.mjs";
 import { getMissionConfidence } from "../mission-confidence.mjs";
 import { composeSinceLastVisit } from "./workspace-compression.mjs";
 import { getWorkspaceLastSeen, setWorkspaceLastSeen } from "./workspace-last-seen.mjs";
+import {
+  missionConversationListVm,
+  compressCurrentState,
+  operationalRailVm,
+  inlineReviewCardVm,
+  enrichConversationMessages,
+  resolveMissionConversationId,
+  displayMissionTitle,
+} from "./mission-conversation.mjs";
 
-/** V3-1 single workspace — Identity Platform (richest live timeline). */
+/** V3-1 single workspace seed — Identity Platform (still the primary conversation). */
 export const V3_1_WORKSPACE = Object.freeze({
   workspaceId: "ws_identity",
   title: "Identity Platform",
   missionId: "msn_f74ed02c126c88d7ff",
-  blurb: "Access & Identity — long-lived workspace",
+  blurb: "Access & Identity — long-lived mission",
 });
 
 /** Bounded first page — keep cold open fast; older history via beforeEventId. */
@@ -35,15 +44,30 @@ export const WORKSPACE_FIRST_PAGE = 40;
 export const WORKSPACE_PAGE_SIZE = 40;
 
 export function listV31Workspaces() {
-  return [V3_1_WORKSPACE];
+  const list = missionConversationListVm({ filter: "active" });
+  return (list.missions || []).map((m) => ({
+    workspaceId: m.missionId,
+    title: m.title,
+    missionId: m.missionId,
+    blurb: m.phase || "",
+    needsYou: m.needsYou,
+    needsCount: m.needsCount,
+    provider: m.provider,
+    slot: m.slot,
+    phase: m.phase,
+  }));
 }
 
 export function resolveV31Workspace(workspaceId) {
-  const id = String(workspaceId || "").trim();
-  if (!id || id === V3_1_WORKSPACE.workspaceId || id === "identity" || id === V3_1_WORKSPACE.missionId) {
-    return { ...V3_1_WORKSPACE };
-  }
-  return null;
+  const missionId = resolveMissionConversationId(workspaceId);
+  if (!missionId) return null;
+  const title = displayMissionTitle(missionId);
+  return {
+    workspaceId: missionId,
+    title,
+    missionId,
+    blurb: title,
+  };
 }
 
 function participantFromActor(actor, type) {
@@ -235,50 +259,39 @@ export function deriveCurrentState(missionId) {
 }
 
 /**
- * Context rail — lightweight (no local port probe on open path).
+ * Context rail — superseded by operationalRailVm on shell; kept for compat.
  */
 export function deriveContextRail(missionId) {
-  const mission = getMission(missionId);
-  const slot = Number(mission?.worker_slot ?? mission?.slot) || null;
-  const identity = slot ? resolveSlotIdentity(slot) : null;
-  const evidence = listEvidence(missionId);
-  const openDecisions = listDecisions(missionId, { status: "open" });
-  const confidence = getMissionConfidence(missionId);
-
+  const ops = operationalRailVm(missionId);
   return {
     kind: "context_rail",
-    worker: {
-      slot,
-      provider: identity?.provider || mission?.provider || null,
-      worktree: identity?.worktree_name || null,
-      branch: identity?.branch || null,
-      health: identity?.ok === false ? "conflict" : "ok",
-    },
-    branch: identity?.branch || null,
+    worker: ops.worker,
+    branch: ops.worker?.branch || null,
     server: {
-      port: identity?.port || null,
-      status: null,
-      running: false,
+      port: ops.server?.port || null,
+      status: ops.server?.status || null,
+      running: Boolean(ops.server?.running),
+      url: ops.server?.url || null,
+      statusLabel: ops.server?.statusLabel || null,
     },
-    pr: null,
-    evidence: {
-      count: evidence.length,
-      jumpLabel: evidence.length ? `${evidence.length} artifact${evidence.length === 1 ? "" : "s"}` : "None yet",
-    },
-    openDecisions: openDecisions.length,
+    pr: ops.pr,
+    evidence: { count: listEvidence(missionId).length, jumpLabel: null },
+    openDecisions: listDecisions(missionId, { status: "open" }).length,
     confidence: {
-      percent: confidence?.percent ?? null,
-      bandLabel: confidence?.bandLabel || null,
+      percent: getMissionConfidence(missionId)?.percent ?? null,
+      bandLabel: getMissionConfidence(missionId)?.bandLabel || null,
     },
-    settings: { workspaceId: V3_1_WORKSPACE.workspaceId },
+    settings: { workspaceId: missionId },
+    operational: ops,
   };
 }
 
 function workspaceMeta(ws, brief, mission) {
+  const title = displayMissionTitle(ws.missionId, ws.title);
   return {
     ...ws,
-    title: brief?.title?.startsWith("Mission 2") ? ws.title : (ws.title),
-    missionTitle: brief?.title || mission?.title || ws.title,
+    title,
+    missionTitle: brief?.title || mission?.title || title,
   };
 }
 
@@ -293,6 +306,7 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
   const missionId = ws.missionId;
   const brief = getBrief(missionId);
   const mission = getMission(missionId);
+  const missions = listV31Workspaces();
   if (!brief && !mission) {
     return {
       kind: "workspace_shell",
@@ -301,17 +315,30 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
       missing: true,
       error: "mission_not_found",
       currentState: null,
+      currentStateCompact: null,
       context: null,
+      operational: null,
+      inlineReview: null,
       sinceLastVisit: null,
+      missions,
       messagesStatus: "unavailable",
       composer: { placeholder: `Message ${ws.title}…`, enabled: false },
     };
   }
 
   const currentState = deriveCurrentState(missionId);
+  // Patch workspace title into derived state
+  currentState.workspaceTitle = displayMissionTitle(missionId);
+  const operational = operationalRailVm(missionId);
   const context = deriveContextRail(missionId);
+  const currentStateCompact = compressCurrentState(currentState, {
+    provider: operational.worker?.provider,
+    slot: operational.worker?.slot,
+    serverStatus: operational.server?.statusLabel || operational.server?.status,
+  });
+  const inlineReview = inlineReviewCardVm(missionId);
   const sinceLastVisit = composeSinceLastVisit(missionId, {
-    workspaceId: ws.workspaceId,
+    workspaceId: missionId,
     operatorId,
     currentState,
   });
@@ -321,14 +348,18 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     workspace: workspaceMeta(ws, brief, mission),
     missionId,
     currentState,
+    currentStateCompact,
     context,
+    operational,
+    inlineReview,
     sinceLastVisit,
+    missions,
     messagesStatus: "loading",
     composer: {
-      placeholder: `Message ${ws.title}…`,
+      placeholder: `Message ${displayMissionTitle(missionId)}…`,
       enabled: true,
     },
-    lastSeen: getWorkspaceLastSeen(ws.workspaceId, { operatorId }),
+    lastSeen: getWorkspaceLastSeen(missionId, { operatorId }),
   };
 }
 
@@ -358,20 +389,26 @@ export function workspaceMessagesVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
   }
 
   const projected = projectTimelineToMessages(missionId, { limit, beforeEventId });
-  const messages = projected.messages;
   const cs = currentState || deriveCurrentState(missionId);
+  const inlineReview = beforeEventId ? null : inlineReviewCardVm(missionId);
+  let messages = projected.messages;
   if (!beforeEventId && cs.primaryAction && messages.length) {
     const last = messages[messages.length - 1];
     if (cs.postureId && ["decision_required", "operator_review", "deliverable_review", "awaiting_completion"].includes(cs.postureId)) {
       last.actions = [cs.primaryAction].filter(Boolean);
     }
   }
+  messages = enrichConversationMessages(missionId, messages, {
+    currentState: cs,
+    inlineReview,
+  });
 
   return {
     kind: "workspace_messages",
     workspaceId: ws.workspaceId,
     missionId,
     messages,
+    inlineReview,
     page: projected.page,
     messagesStatus: messages.length ? "ready" : (projected.page.hasEarlier ? "ready" : "empty_known"),
     empty: messages.length === 0 && !beforeEventId && !projected.page.hasEarlier,
@@ -409,8 +446,12 @@ export function workspaceRuntimeVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     workspace: shell.workspace,
     missionId: shell.missionId,
     currentState: shell.currentState,
+    currentStateCompact: shell.currentStateCompact,
     context: shell.context,
+    operational: shell.operational,
+    inlineReview: page.inlineReview || shell.inlineReview,
     sinceLastVisit: shell.sinceLastVisit,
+    missions: shell.missions,
     messages: page.messages,
     page: page.page,
     messagesStatus: page.messagesStatus,

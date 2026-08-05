@@ -228,8 +228,8 @@ function parseRoute() {
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
 const CRUMBS = {
-  workspaces: "Workspaces", workspace: "Workspaces",
-  missions: "Missions", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
+  workspaces: "Missions", workspace: "Missions",
+  missions: "Mission Control", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
   decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", improvements: "Improvements",
   settings: "Settings",
   director: "Legacy Director", command: "Legacy Board", history: "Work History",

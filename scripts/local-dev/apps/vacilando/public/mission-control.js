@@ -376,8 +376,8 @@
       || (r.name === "evidence" && r.sub ? r.sub : null)
       || null;
     const screenMap = {
-      workspaces: "Workspaces",
-      workspace: "Workspaces",
+      workspaces: "Missions",
+      workspace: "Missions",
       missions: r.sub ? "Mission Dashboard" : "Missions",
       "needs-you": "Needs You",
       workers: "Workers",
@@ -403,6 +403,23 @@
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => { try { el.remove(); } catch { /* */ } }, 2800);
+  }
+
+  /** True when Mission Conversation Runtime is the active surface. */
+  function onMissionConversation() {
+    const h = location.hash || "";
+    return h.startsWith("#/workspaces") || h.startsWith("#/workspace");
+  }
+
+  /** Stay on conversation — refresh shell + messages instead of Mission Dashboard. */
+  async function refreshMissionConversation(missionId) {
+    const id = missionId || V2.state.workspaceId || V2.state.selectedMissionId;
+    if (!id) return;
+    V2.state.workspaceShell = null;
+    V2.state._wsInlineReviewOpen = false;
+    V2.state._wsShowShots = false;
+    await V2.fetchWorkspaceShell(id);
+    await V2.fetchWorkspaceMessages(id);
   }
 
   function openImproveDialog() {
@@ -498,6 +515,36 @@ We'll capture the context automatically.</p>
 
   function actionBtn(action) {
     if (!action) return "";
+    if (action.kind === "inline_review_expand") {
+      return `<button class="btn" type="button" data-ws-inline-review="${esc(action.missionId || "")}" data-review="${esc(action.reviewId || "")}">${esc(action.label || "Review Outcome")}</button>`;
+    }
+    if (action.kind === "drev_approve" && action.reviewId) {
+      return `<button class="btn" type="button" data-drev-approve="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Approve")}</button>`;
+    }
+    if (action.kind === "drev_changes" && action.reviewId) {
+      return `<button class="btn ghost" type="button" data-drev-changes="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Request Rework")}</button>`;
+    }
+    if (action.kind === "drev_recheck" && action.reviewId) {
+      return `<button class="btn ghost" type="button" data-drev-recheck="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Recheck")}</button>`;
+    }
+    if (action.kind === "toggle_screenshots") {
+      return `<button class="btn ghost" type="button" data-ws-toggle-shots="${esc(action.missionId || "")}">${esc(action.label || "View Screenshots")}</button>`;
+    }
+    if (action.kind === "server_start" && action.missionId) {
+      return `<button class="btn" type="button" data-mc-server-start="${esc(action.missionId)}" data-worktree="${esc(action.worktree || "")}">${esc(action.label || "Start Server")}</button>`;
+    }
+    if (action.kind === "server_stop" && action.missionId) {
+      return `<button class="btn ghost" type="button" data-mc-server-stop="${esc(action.missionId)}" data-worktree="${esc(action.worktree || "")}">${esc(action.label || "Stop")}</button>`;
+    }
+    if (action.kind === "server_restart" && action.missionId) {
+      return `<button class="btn ghost" type="button" data-ws-server-restart="${esc(action.missionId)}" data-worktree="${esc(action.worktree || "")}">${esc(action.label || "Restart")}</button>`;
+    }
+    if (action.kind === "open_url" && action.href) {
+      return `<a class="btn" href="${esc(action.href)}" target="_blank" rel="noopener">${esc(action.label || "Open")}</a>`;
+    }
+    if (action.kind === "worker_pause" || action.kind === "worker_resume" || action.kind === "worker_doctor" || action.kind === "sprint_finish" || action.kind === "open_pr") {
+      return `<button class="btn ghost sm" type="button" data-ws-cmd="${esc(action.command || "")}" data-slot="${esc(action.slot)}" data-worktree="${esc(action.worktree || "")}" data-branch="${esc(action.branch || "")}">${esc(action.label)}</button>`;
+    }
     if (action.kind === "certify_completion" && action.missionId) {
       return `<button class="btn" data-mc-certify="${esc(action.missionId)}">${esc(action.label || "Certify completion")}</button>`;
     }
@@ -671,7 +718,7 @@ We'll capture the context automatically.</p>
       const j = await get("/api/v2/views/workspace-shell?id=" + encodeURIComponent(id));
       if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
       V2.state.workspaceShell = j.shell || j;
-      V2.state.workspaceList = j.workspaces || V2.state.workspaceList || [];
+      V2.state.workspaceList = j.shell?.missions || j.workspaces || V2.state.workspaceList || [];
       V2.state.workspaceError = null;
       // Compat shape for reply/actions that still read workspaceRuntime
       V2.state.workspaceRuntime = {
@@ -680,7 +727,10 @@ We'll capture the context automatically.</p>
         workspace: V2.state.workspaceShell.workspace,
         missionId: V2.state.workspaceShell.missionId,
         currentState: V2.state.workspaceShell.currentState,
+        currentStateCompact: V2.state.workspaceShell.currentStateCompact,
         context: V2.state.workspaceShell.context,
+        operational: V2.state.workspaceShell.operational,
+        inlineReview: V2.state.workspaceShell.inlineReview,
         sinceLastVisit: V2.state.workspaceShell.sinceLastVisit,
         composer: V2.state.workspaceShell.composer,
         messages: V2.state.workspaceMessages || [],
@@ -689,6 +739,19 @@ We'll capture the context automatically.</p>
       };
       if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
       markFetched(`workspace-shell:${id}`);
+      // Best-effort PR lookup — does not block shell paint
+      const wt = j.shell?.operational?.worker?.worktree;
+      const br = j.shell?.operational?.worker?.branch;
+      if (wt) {
+        fetch(`/api/pr?worktree=${encodeURIComponent(wt)}&branch=${encodeURIComponent(br || "")}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((pr) => {
+            if (V2.state.workspaceId !== id) return;
+            V2.state._wsPr = pr;
+            bump(); schedulePaint();
+          })
+          .catch(() => {});
+      }
     } catch (e) {
       if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
       V2.state.workspaceError = String(e.message || e);
@@ -722,10 +785,12 @@ We'll capture the context automatically.</p>
       }
       V2.state.workspacePage = j.page || null;
       V2.state.workspaceMessagesStatus = j.messagesStatus || (incoming.length ? "ready" : "empty_known");
+      V2.state.workspaceMessagesInlineReview = j.inlineReview || null;
       if (V2.state.workspaceRuntime) {
         V2.state.workspaceRuntime.messages = V2.state.workspaceMessages;
         V2.state.workspaceRuntime.page = V2.state.workspacePage;
         V2.state.workspaceRuntime.messagesStatus = V2.state.workspaceMessagesStatus;
+        V2.state.workspaceRuntime.inlineReview = j.inlineReview || null;
         V2.state.workspaceRuntime.empty = j.empty;
       }
       markFetched(`workspace-messages:${id}`);
@@ -781,50 +846,63 @@ We'll capture the context automatically.</p>
       if (!V2.state._wsSending) V2.fetchWorkspaceShell(id);
       // Instant frame — never blank the whole app on cold open
       return `<div class="ws-shell ws-shell-boot" data-workspace="${esc(id)}">
-        <aside class="ws-nav" aria-label="Workspaces">
-          <div class="ws-nav-label">Workspaces</div>
+        <aside class="ws-nav" aria-label="Missions">
+          <div class="ws-nav-label">Missions</div>
           <button type="button" class="ws-nav-item on" data-nav="workspaces/${esc(id)}">
-            <span class="ws-nav-title">Identity Platform</span>
-            <span class="ws-nav-blurb">Opening…</span>
+            <span class="ws-nav-title">Opening…</span>
+            <span class="ws-nav-blurb">Loading mission…</span>
           </button>
         </aside>
         <section class="ws-main" aria-label="Conversation">
-          <header class="ws-main-h"><h1>Identity Platform</h1><p class="ws-main-sub">Loading workspace…</p></header>
+          <header class="ws-main-h"><h1>Mission</h1><p class="ws-main-sub">Opening conversation…</p></header>
           <div class="ws-thread" id="ws-thread"><div class="ws-loading"><span class="spin"></span> Loading conversation…</div></div>
           <footer class="ws-composer-wrap">
-            <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="Message Identity Platform…" disabled></textarea>
+            <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="Message…" disabled></textarea>
             <button type="button" class="btn ws-send" disabled>Send</button>
           </footer>
         </section>
-        <aside class="ws-context" aria-label="Context">
+        <aside class="ws-context" aria-label="Runtime">
           <div class="ws-ctx-label">Current State</div>
-          <p class="ws-ctx-derived">Loading derived state…</p>
+          <p class="ws-ctx-derived">Loading…</p>
         </aside>
       </div>`;
     }
     if (V2.state.workspaceError && !V2.state.workspaceShell) {
-      return `<div class="ws-shell"><div class="rempty">Could not load workspace: ${esc(V2.state.workspaceError)}</div>
+      return `<div class="ws-shell"><div class="rempty">Could not load mission: ${esc(V2.state.workspaceError)}</div>
         <button class="btn" type="button" data-ws-retry="${esc(id)}">Retry</button></div>`;
     }
     const rt = V2.state.workspaceShell;
     if (rt.missing) {
-      return `<div class="ws-shell"><div class="rempty">Workspace mission not found on this host.</div></div>`;
+      return `<div class="ws-shell"><div class="rempty">Mission not found on this host.</div></div>`;
     }
     const ws = rt.workspace || {};
-    const list = V2.state.workspaceList?.length ? V2.state.workspaceList : [ws];
-    const cs = rt.currentState || {};
-    const ctx = rt.context || {};
-    const worker = ctx.worker || {};
+    const list = (rt.missions?.length ? rt.missions : null)
+      || (V2.state.workspaceList?.length ? V2.state.workspaceList : [ws]);
+    const compact = rt.currentStateCompact || {};
+    const ops = rt.operational || rt.context?.operational || {};
+    const worker = ops.worker || rt.context?.worker || {};
+    const server = ops.server || rt.context?.server || {};
     const msgs = V2.state.workspaceMessages || [];
     const msgStatus = V2.state.workspaceMessagesStatus || rt.messagesStatus || "loading";
     const page = V2.state.workspacePage || {};
     const since = rt.sinceLastVisit;
+    const inlineReview = V2.state._wsInlineReviewOpen
+      ? (V2.state.workspaceMessagesInlineReview || rt.inlineReview)
+      : null;
+    const showShots = Boolean(V2.state._wsShowShots);
 
+    const activeId = ws.workspaceId || ws.missionId || id;
     const nav = list.map((w) => {
-      const active = (w.workspaceId || w.id) === (ws.workspaceId || id);
-      return `<button type="button" class="ws-nav-item${active ? " on" : ""}" data-nav="workspaces/${esc(w.workspaceId || w.id)}">
-        <span class="ws-nav-title">${esc(w.title || "Workspace")}</span>
-        <span class="ws-nav-blurb">${esc(w.blurb || "")}</span>
+      const mid = w.missionId || w.workspaceId || w.id;
+      const active = mid === activeId || mid === id;
+      const badge = w.needsYou || w.needsCount
+        ? `<span class="ws-nav-badge">${esc(String(w.needsCount || "!"))}</span>`
+        : "";
+      const meta = [w.provider, w.slot != null ? `slot ${w.slot}` : null, w.phase]
+        .filter(Boolean).join(" · ");
+      return `<button type="button" class="ws-nav-item${active ? " on" : ""}" data-nav="workspaces/${esc(mid)}">
+        <span class="ws-nav-row"><span class="ws-nav-title">${esc(w.title || "Mission")}</span>${badge}</span>
+        ${meta ? `<span class="ws-nav-blurb">${esc(meta)}</span>` : ""}
       </button>`;
     }).join("");
 
@@ -833,6 +911,27 @@ We'll capture the context automatically.</p>
       <ul class="ws-since-list">
         ${(since.lines || []).map((l) => `<li title="${esc(l.provenance?.type || l.provenance?.source || "")}">${esc(l.text)}</li>`).join("")}
       </ul>
+    </section>` : "";
+
+    const reviewHtml = inlineReview ? `<section class="ws-inline-review" id="ws-inline-review">
+      <header class="ws-inline-review-h">
+        <h2>${esc(inlineReview.headline || "Review Outcome")}</h2>
+        <button type="button" class="btn ghost sm" data-ws-inline-review-close>Close</button>
+      </header>
+      ${inlineReview.waveLabel ? `<p class="ws-inline-wave">${esc(inlineReview.waveLabel)}</p>` : ""}
+      ${inlineReview.summary ? `<div class="ws-inline-block"><div class="ws-inline-k">Summary</div><p>${esc(inlineReview.summary)}</p></div>` : ""}
+      ${inlineReview.recommendation ? `<div class="ws-inline-block"><div class="ws-inline-k">Recommendation</div><p>${esc(inlineReview.recommendation)}${inlineReview.confidencePct != null ? ` · ${esc(inlineReview.confidencePct)}%` : ""}</p></div>` : ""}
+      ${(inlineReview.evidence || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Evidence</div>
+        <ul class="ws-artifact-list">${inlineReview.evidence.map((e) =>
+          `<li>${e.previewHref
+            ? `<button type="button" class="btn link sm" data-ws-artifact="${esc(e.previewHref)}" data-title="${esc(e.title || "")}">${esc(e.title || e.type || "Artifact")}</button>`
+            : esc(e.title || e.type || "Artifact")}</li>`).join("")}</ul>
+      </div>` : ""}
+      ${showShots && (inlineReview.evidence || []).some((e) => e.previewHref)
+        ? `<div class="ws-shot-grid">${inlineReview.evidence.filter((e) => e.previewHref).map((e) =>
+          `<figure class="ws-shot"><img src="${esc(e.previewHref)}" alt="${esc(e.title || "")}" loading="lazy"/><figcaption>${esc(e.title || "")}</figcaption></figure>`).join("")}</div>`
+        : ""}
+      <div class="ws-msg-actions mc-actions">${(inlineReview.buttons || []).map((b) => actionBtn(b)).join("")}</div>
     </section>` : "";
 
     let threadBody = "";
@@ -850,6 +949,11 @@ We'll capture the context automatically.</p>
         const when = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
         const prov = m.provenance?.type ? `<span class="ws-msg-prov" title="Projected from ${esc(m.provenance.type)}">${esc(m.provenance.type)}</span>` : "";
         const actions = (m.actions || []).map((a) => actionBtn(a)).join("");
+        const arts = (m.artifacts || []).filter((a) => a.previewHref || a.title).map((a) =>
+          a.previewHref
+            ? `<button type="button" class="ws-art-chip" data-ws-artifact="${esc(a.previewHref)}" data-title="${esc(a.title || "")}">${esc(a.title || a.type || "Artifact")}</button>`
+            : `<span class="ws-art-chip">${esc(a.title || a.type || "")}</span>`
+        ).join("");
         return `<article class="ws-msg role-${esc(from.role || "system")} kind-${esc(m.kind || "system")}" data-event="${esc(m.messageId || "")}">
           <header class="ws-msg-h">
             <span class="ws-msg-from">${esc(from.label || "System")}</span>
@@ -858,77 +962,83 @@ We'll capture the context automatically.</p>
           </header>
           <div class="ws-msg-body">${esc(m.body || "")}</div>
           ${m.detail && m.detail !== m.body ? `<div class="ws-msg-detail">${esc(m.detail)}</div>` : ""}
+          ${arts ? `<div class="ws-msg-arts">${arts}</div>` : ""}
           ${actions ? `<div class="ws-msg-actions mc-actions">${actions}</div>` : ""}
         </article>`;
       }).join("");
       threadBody = loadEarlier + (msgHtml || `<div class="ws-empty">No projected messages yet.</div>`);
     }
 
-    const stateDl = `<dl class="ws-state-dl">
-      <div><dt>Working on</dt><dd>${esc(cs.workingOn || "—")}</dd></div>
-      <div><dt>Current phase</dt><dd>${esc(cs.currentPhase || "—")}</dd></div>
-      <div><dt>Current goal</dt><dd>${esc(cs.currentGoal || "—")}</dd></div>
-      <div><dt>Last completed</dt><dd>${esc(cs.lastCompleted || "—")}</dd></div>
-      <div><dt>Blocked by</dt><dd>${esc(cs.blockedBy || "Nothing")}</dd></div>
-      <div><dt>Next checkpoint</dt><dd>${esc(cs.nextExpectedCheckpoint || "—")}</dd></div>
-      <div><dt>Recommendation</dt><dd>${esc(cs.recommendation || "—")}</dd></div>
-    </dl>`;
+    const stateCompact = `<div class="ws-state-compact">
+      ${(compact.summaryLines || []).map((l) => `<div class="ws-state-line">${esc(l)}</div>`).join("") || `<div class="ws-state-line">${esc(compact.phase || "—")}</div>`}
+      <dl class="ws-state-mini">
+        <div><dt>Goal</dt><dd>${esc(compact.goal || "—")}</dd></div>
+        <div><dt>Next</dt><dd>${esc(compact.next || "—")}</dd></div>
+        ${compact.blockedBy ? `<div><dt>Blocked</dt><dd>${esc(compact.blockedBy)}</dd></div>` : ""}
+      </dl>
+    </div>`;
+
+    const serverActions = (server.actions || []).map((a) => actionBtn(a)).join("");
+    const workerActions = (ops.workerActions || []).map((a) => actionBtn(a)).join("");
+    const prHref = V2.state._wsPr?.pr?.url || null;
+    const prLabel = V2.state._wsPr?.pr?.number ? `PR #${V2.state._wsPr.pr.number}` : (prHref ? "Open PR" : "—");
 
     const ctxBits = `<div class="ws-ctx-block">
-      <div class="ws-ctx-k">Worker</div>
+      <div class="ws-ctx-k">Runtime</div>
       <div class="ws-ctx-v">${esc(worker.provider || "—")}${worker.slot != null ? ` · slot ${esc(worker.slot)}` : ""}</div>
+      <div class="ws-ctx-v mono muted">${esc(worker.worktree || "—")}</div>
+      <div class="ws-ctx-v mono">${esc(worker.branch || "—")}</div>
     </div>
     <div class="ws-ctx-block">
-      <div class="ws-ctx-k">Branch</div>
-      <div class="ws-ctx-v mono">${esc(ctx.branch || worker.branch || "—")}</div>
+      <div class="ws-ctx-k">Server</div>
+      <div class="ws-ctx-v">${esc(server.statusLabel || server.status || "—")}${server.port ? ` · :${esc(server.port)}` : ""}</div>
+      ${server.url ? `<div class="ws-ctx-v"><a href="${esc(server.url)}" target="_blank" rel="noopener">${esc(server.url)}</a></div>` : ""}
+      <div class="ws-ctx-actions">${serverActions}</div>
     </div>
     <div class="ws-ctx-block">
       <div class="ws-ctx-k">PR</div>
-      <div class="ws-ctx-v">${ctx.pr ? esc(String(ctx.pr)) : "—"}</div>
+      <div class="ws-ctx-v">${prHref ? `<a href="${esc(prHref)}" target="_blank" rel="noopener">${esc(prLabel)}</a>` : esc(prLabel)}</div>
     </div>
     <div class="ws-ctx-block">
-      <div class="ws-ctx-k">Evidence</div>
-      <div class="ws-ctx-v"><button type="button" class="btn link sm" data-nav="evidence/${esc(rt.missionId || "")}">${esc(ctx.evidence?.jumpLabel || "Open")}</button></div>
-    </div>
-    <div class="ws-ctx-block">
-      <div class="ws-ctx-k">Actions</div>
-      <div class="ws-ctx-v ws-ctx-actions">${actionBtn(cs.primaryAction)}${cs.secondaryAction ? actionBtn(cs.secondaryAction) : ""}
-        <button type="button" class="btn ghost sm" data-nav="missions/${esc(rt.missionId || "")}">Mission Control</button>
-      </div>
-    </div>
-    <div class="ws-ctx-block">
-      <div class="ws-ctx-k">Settings</div>
-      <div class="ws-ctx-v muted">${esc(ws.workspaceId || id)} · derived Current State</div>
+      <div class="ws-ctx-k">Worker</div>
+      <div class="ws-ctx-actions">${workerActions}</div>
     </div>`;
 
     const draft = V2.state._wsComposer || "";
     const busy = V2.state._wsSending ? " disabled" : "";
     const composerEnabled = rt.composer?.enabled !== false && !V2.state._wsSending;
+    const artifactModal = V2.state._wsArtifact
+      ? `<div class="ws-artifact-ov" data-ws-artifact-backdrop>
+          <div class="ws-artifact-card" role="dialog">
+            <header><b>${esc(V2.state._wsArtifact.title || "Artifact")}</b>
+              <button type="button" class="btn ghost sm" data-ws-artifact-close>Close</button></header>
+            <iframe src="${esc(V2.state._wsArtifact.href)}" title="Artifact"></iframe>
+          </div>
+        </div>`
+      : "";
 
-    return `<div class="ws-shell" data-workspace="${esc(ws.workspaceId || id)}">
-      <aside class="ws-nav" aria-label="Workspaces">
-        <div class="ws-nav-label">Workspaces</div>
+    return `<div class="ws-shell" data-workspace="${esc(activeId)}">
+      <aside class="ws-nav" aria-label="Missions">
+        <div class="ws-nav-label">Missions</div>
         ${nav}
-        <p class="ws-nav-note">V3-2 — fast resume + context compression. One workspace.</p>
       </aside>
       <section class="ws-main" aria-label="Conversation">
         <header class="ws-main-h">
-          <h1>${esc(ws.title || "Workspace")}</h1>
-          <p class="ws-main-sub">${esc(ws.missionTitle || "")}</p>
+          <h1>${esc(ws.title || "Mission")}</h1>
         </header>
-        <div class="ws-thread" id="ws-thread">${sinceHtml}${threadBody}</div>
+        <div class="ws-thread" id="ws-thread">${sinceHtml}${reviewHtml}${threadBody}</div>
         <footer class="ws-composer-wrap">
           <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="${esc(rt.composer?.placeholder || "Message…")}"${composerEnabled ? "" : " disabled"}>${esc(draft)}</textarea>
-          <button type="button" class="btn ws-send" data-ws-send="${esc(ws.workspaceId || id)}"${busy}>Send</button>
+          <button type="button" class="btn ws-send" data-ws-send="${esc(activeId)}"${busy}>Send</button>
         </footer>
       </section>
-      <aside class="ws-context" aria-label="Context">
+      <aside class="ws-context" aria-label="Runtime">
         <div class="ws-ctx-label">Current State</div>
-        <p class="ws-ctx-derived">Derived · not editable</p>
-        ${stateDl}
-        <div class="ws-ctx-label">Context</div>
+        ${stateCompact}
+        <div class="ws-ctx-label">Operations</div>
         ${ctxBits}
       </aside>
+      ${artifactModal}
     </div>`;
   };
 
@@ -2807,9 +2917,13 @@ We'll capture the context automatically.</p>
       await refreshNeedsBadge();
       toast("Certified. Director will unlock the next work.", "ok");
       bump(); schedulePaint();
-      await V2.fetchDashboard(missionId);
-      bump(); schedulePaint();
-      scrollToOutcomeThread();
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+      } else {
+        await V2.fetchDashboard(missionId);
+        bump(); schedulePaint();
+        scrollToOutcomeThread();
+      }
       return true;
     } catch (e) {
       V2.state.kickoffBusy = null;
@@ -2848,6 +2962,10 @@ We'll capture the context automatically.</p>
       await V2.fetchDashboard(missionId);
       V2.state.showOutcome = true;
       bump(); schedulePaint();
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+        return;
+      }
       requestAnimationFrame(() => {
         const el = document.getElementById("mc-outcome")
           || document.querySelector(".drev-stuck-here")
@@ -2957,7 +3075,10 @@ We'll capture the context automatically.</p>
       V2.state._paintFp = {};
       bump(); schedulePaint();
       toast(out.message || (action === "start" ? "Server starting…" : "Server stopped"), "ok");
-      if (action === "start") {
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+        if (action === "start") watchMissionServerReady(missionId, out.localServer?.port);
+      } else if (action === "start") {
         watchMissionServerReady(missionId, out.localServer?.port);
       } else if (missionId) {
         setTimeout(() => V2.fetchDashboard(missionId), 800);
@@ -2977,6 +3098,15 @@ We'll capture the context automatically.</p>
       }
       try {
         if (!missionId) { clearInterval(iv); return; }
+        if (onMissionConversation()) {
+          await V2.fetchWorkspaceShell(missionId);
+          const local = V2.state.workspaceShell?.operational?.server;
+          if (local?.running || local?.status === "running") {
+            clearInterval(iv);
+            toast(`App is up on :${local.port}`, "ok");
+          }
+          return;
+        }
         const dash = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(missionId));
         V2.state.overview = dash;
         if (!paintIfChanged(`overview:${missionId}`, dash)) patchLiveActivity(dash);
@@ -3154,6 +3284,96 @@ We'll capture the context automatically.</p>
       V2.fetchWorkspaceMessages(wsRetryMsgs.dataset.wsRetryMsgs || "ws_identity");
       return;
     }
+    const inlineOpen = ev.target.closest("[data-ws-inline-review]");
+    if (inlineOpen) {
+      ev.preventDefault();
+      V2.state._wsInlineReviewOpen = true;
+      V2.state._wsStickBottom = true;
+      bump(); schedulePaint();
+      requestAnimationFrame(() => {
+        document.getElementById("ws-inline-review")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return;
+    }
+    if (ev.target.closest("[data-ws-inline-review-close]")) {
+      ev.preventDefault();
+      V2.state._wsInlineReviewOpen = false;
+      bump(); schedulePaint();
+      return;
+    }
+    if (ev.target.closest("[data-ws-toggle-shots]")) {
+      ev.preventDefault();
+      V2.state._wsShowShots = !V2.state._wsShowShots;
+      V2.state._wsInlineReviewOpen = true;
+      bump(); schedulePaint();
+      return;
+    }
+    const art = ev.target.closest("[data-ws-artifact]");
+    if (art) {
+      ev.preventDefault();
+      V2.state._wsArtifact = { href: art.dataset.wsArtifact, title: art.dataset.title || "Artifact" };
+      bump(); schedulePaint();
+      return;
+    }
+    if (ev.target.closest("[data-ws-artifact-close]") || ev.target.closest("[data-ws-artifact-backdrop]") === ev.target) {
+      ev.preventDefault();
+      V2.state._wsArtifact = null;
+      bump(); schedulePaint();
+      return;
+    }
+    const restart = ev.target.closest("[data-ws-server-restart]");
+    if (restart) {
+      ev.preventDefault();
+      const mid = restart.dataset.wsServerRestart;
+      toast("Restarting local server…");
+      post("/api/v2/missions/local-server", { mission_id: mid, action: "stop" })
+        .then(() => post("/api/v2/missions/local-server", { mission_id: mid, action: "start" }))
+        .then(() => {
+          toast("Local server restarted.");
+          V2.state.workspaceShell = null;
+          V2.fetchWorkspaceShell(mid);
+        })
+        .catch((e) => toast(String(e.message || e), "err"));
+      return;
+    }
+    const cmdBtn = ev.target.closest("[data-ws-cmd]");
+    if (cmdBtn) {
+      ev.preventDefault();
+      const command = cmdBtn.dataset.wsCmd;
+      const slot = Number(cmdBtn.dataset.slot);
+      if (!command || !slot) return;
+      const input = { slot };
+      if (command === "promotion.open_pr") {
+        input.title = `Vacilando · slot ${slot}`;
+      }
+      toast(`Running ${command}…`);
+      fetch("/api/commands", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ command, input, confirm: true, actor: "operator" }),
+      })
+        .then(async (r) => {
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(j.error || j.detail || `http_${r.status}`);
+          toast(`${command} ok`);
+          if (command === "promotion.open_pr") {
+            const wt = cmdBtn.dataset.worktree;
+            const br = cmdBtn.dataset.branch;
+            if (wt) {
+              const pr = await fetch(`/api/pr?worktree=${encodeURIComponent(wt)}&branch=${encodeURIComponent(br || "")}`).then((x) => x.json());
+              V2.state._wsPr = pr;
+              if (pr?.pr?.url) window.open(pr.pr.url, "_blank", "noopener");
+            }
+          }
+          if (onMissionConversation()) {
+            const mid = V2.state.workspaceId || V2.state.selectedMissionId;
+            if (mid) await refreshMissionConversation(mid);
+          }
+          bump(); schedulePaint();
+        })
+        .catch((e) => toast(String(e.message || e), "err"));
+      return;
+    }
     const wsEarlier = ev.target.closest("[data-ws-earlier]");
     if (wsEarlier) {
       ev.preventDefault();
@@ -3271,10 +3491,14 @@ We'll capture the context automatically.</p>
           V2.state.overview = null;
           await refreshNeedsBadge();
           toast("Changes requested — Director will relaunch.");
-          await V2.fetchDashboard(missionId);
-          V2.state.showOutcome = true;
-          bump(); schedulePaint();
-          scrollToOutcomeThread();
+          if (onMissionConversation()) {
+            await refreshMissionConversation(missionId);
+          } else {
+            await V2.fetchDashboard(missionId);
+            V2.state.showOutcome = true;
+            bump(); schedulePaint();
+            scrollToOutcomeThread();
+          }
         },
       });
       return;
@@ -3335,6 +3559,31 @@ We'll capture the context automatically.</p>
       return;
     }
     if (t.hasAttribute("data-mc-provide-feedback")) {
+      const missionId = t.getAttribute("data-mc-provide-feedback");
+      if (onMissionConversation() || !document.getElementById("mc-feedback-panel")) {
+        openDirectorTextDialog({
+          title: "Give Feedback",
+          lead: "Guidance stays on this mission timeline — no other screen required.",
+          confirmLabel: "Save Feedback",
+          placeholder: "What should Director know or change?",
+          onSubmit: async (body) => {
+            await post("/api/v2/missions/collaboration", {
+              mission_id: missionId,
+              type: "feedback",
+              body,
+              actor: "director",
+            });
+            toast("Feedback saved to the mission.");
+            if (onMissionConversation()) await refreshMissionConversation(missionId);
+            else {
+              V2.state.overview = null;
+              await V2.fetchDashboard(missionId);
+              bump(); schedulePaint();
+            }
+          },
+        });
+        return;
+      }
       const panel = document.getElementById("mc-feedback-panel");
       if (panel) {
         panel.hidden = false;
@@ -3434,8 +3683,16 @@ We'll capture the context automatically.</p>
       return;
     }
     if (t.dataset.mcReviewOutcome) {
-      V2.state.showOutcome = true;
       const mid = t.dataset.mcReviewOutcome;
+      if (onMissionConversation()) {
+        V2.state._wsInlineReviewOpen = true;
+        bump(); schedulePaint();
+        requestAnimationFrame(() => {
+          document.getElementById("ws-inline-review")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        return;
+      }
+      V2.state.showOutcome = true;
       if (!location.hash.includes(mid)) {
         location.hash = "#/missions/" + encodeURIComponent(mid);
       }
