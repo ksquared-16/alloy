@@ -691,7 +691,8 @@ Presentation-only missions. No confidence/certification/evidence engine rewrites
 | **DX-3** | Decision cards | Effort / outputs / risks / dependencies; kill “Review outcome” as sole primary | DX-1 |
 | **DX-4** | Story timeline | Phase rail + gates; engineering history collapse; merge Recent Progress | DX-1 |
 | **DX-5** | Evidence gallery | Cards, filters, before/after; UI-primary screenshots; L1 strip | DX-1 |
-| **DX-6** | Levels + Builder mode | L1–L4 navigation chips; Executive/Builder toggle; mobile remote layout | DX-2…5 |
+| **DX-5.5** | Mission continuation | Recommended Next Action + alternatives (Review Findings, Provide Feedback, Close Without Continuing); presentation mappings only | DX-1…5 |
+| **DX-6** | Levels + Builder mode | L1–L4 navigation chips; Executive/Builder toggle; mobile remote layout | DX-2…5.5 |
 | **DX-7** | Remote-ready polish | Annotated comparison hooks, preview/demo slots (UI stubs OK if producers not ready) | DX-5 |
 | **DX-8** | QA + migration | Suites below; default Executive for new sessions; Builder opt-in | DX-6 |
 
