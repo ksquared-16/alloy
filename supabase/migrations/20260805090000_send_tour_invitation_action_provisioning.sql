@@ -94,22 +94,22 @@ WHERE NOT EXISTS (
 --    opens, so "after Schedule tour, before Confirm" holds in the rendered
 --    order without renumbering any existing placement.
 --
---    VISIBILITY. The same lifecycle window as `schedule_tour`: inviting a
---    family to pick a time is meaningful exactly where scheduling one is.
---    This is a display condition. Eligibility — resolvable recipient, at least
---    one usable channel, available slots — is decided by the action runtime at
---    invoke time and surfaces as an operator-visible blocked reason.
+--    VISIBILITY. No display condition — deliberately, and corrected from a live
+--    run. The first draft copied `schedule_tour`'s documented `status_key_in`
+--    window from `20260602190000`. Against a real tenant that hid the command
+--    on every record: those keys are pipeline-stage vocabulary, while the
+--    opportunities carry `status_key` values of `open` / `closed` / `new`, and
+--    the seeded `schedule_tour` placement in fact ships `condition_config {}`.
+--
+--    A status gate is also the wrong mechanism here. The approved behaviour is
+--    that eligibility — resolvable recipient, at least one usable channel,
+--    available slots — is decided by the action runtime at invoke time and
+--    SHOWN as an operator-visible blocked reason. A display condition would
+--    silently hide the command instead, which is the failure mode this whole
+--    provisioning exists to end.
 -- ---------------------------------------------------------------------------
 
-WITH tour_invite_status AS (
-    SELECT jsonb_build_array(
-        'qualification',
-        'contact_attempted',
-        'new_inquiry',
-        'waitlisted'
-    ) AS keys
-),
-def AS (
+WITH def AS (
     SELECT ad.id
     FROM public.action_definitions ad
     WHERE ad.org_id IS NULL
@@ -141,7 +141,7 @@ SELECT
     NULL::text,
     56,
     'menu_item'::text,
-    jsonb_build_object('status_key_in', (SELECT keys FROM tour_invite_status)),
+    '{}'::jsonb,
     true
 FROM def
 WHERE NOT EXISTS (
@@ -156,3 +156,28 @@ WHERE NOT EXISTS (
       AND ap.work_unit_id IS NULL
       AND ap.section_key IS NULL
 );
+
+-- ---------------------------------------------------------------------------
+-- 3) Self-repair — normalise an already-applied placement.
+--
+-- The first version of this migration shipped a `status_key_in` display
+-- condition that hid the command on every record. Any environment that applied
+-- that version keeps its row (the guard above is NOT EXISTS, so a re-run will
+-- not touch it), which would leave the command provisioned and invisible —
+-- exactly the state this file exists to fix. Converge it explicitly.
+--
+-- Scoped to the global placement for this one action, and idempotent: on a
+-- fresh apply the row already reads '{}' and the UPDATE is a no-op.
+-- ---------------------------------------------------------------------------
+
+UPDATE public.action_placements ap
+SET condition_config = '{}'::jsonb,
+    updated_at = now()
+FROM public.action_definitions ad
+WHERE ad.id = ap.action_definition_id
+  AND ad.org_id IS NULL
+  AND ad.key = 'send_tour_invitation'
+  AND ap.org_id IS NULL
+  AND ap.surface = 'record_header'
+  AND ap.slot = 'overflow'
+  AND ap.condition_config IS DISTINCT FROM '{}'::jsonb;
