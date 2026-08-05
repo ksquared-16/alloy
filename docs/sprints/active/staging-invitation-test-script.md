@@ -26,6 +26,49 @@ not running the code the migration assumes.
 
 ---
 
+## 0b. Measured staging state — 2026-08-05 (read-only)
+
+Inspected via the linked staging project `ikaxil…` (parent Alloy
+`vslwnnt…`). **This changes the plan: the test cannot run on staging as
+written.**
+
+| Fact | Measured |
+| --- | --- |
+| orgs | 2 — Firefly Early Learning, Alloy Bend |
+| **persons** | **0** |
+| **opportunities** | **0** |
+| locations | 20 |
+| tour_availability_rules | 6 active (Firefly only; 4 org-wide, 2 location-scoped) |
+| tour_bookings | 0 |
+| `tour_invitations` table | **does not exist** — Slice C migration not applied |
+| `send_tour_invitation` action | absent (expected before merge) |
+| outbound messages ever | 0 |
+| delivery events ever | 0 |
+| Firefly `tour_comms` | `enabled: true`, **email true, SMS false** |
+| Firefly email binding | **resend · active · primary · credentialed** |
+| Firefly SMS binding | **twilio · active · primary · credentialed** |
+
+**Two hard blockers.**
+
+1. **No families exist.** Zero persons, zero opportunities, and no person
+   carries an email or phone. There is nothing to select in a Work Unit, and
+   `send_tour_invitation` would refuse with `missing_recipient` anyway.
+2. **Live provider credentials.** Resend and Twilio bindings are active with
+   real credentials, and with zero send history there is **no evidence either
+   way** about whether a dispatcher drains the queue. Creating a fixture with a
+   real address here risks a genuine delivery.
+
+Mitigation already in place: Firefly has **SMS disabled by config**, so any test
+is email-only.
+
+**Recommended path:** certify on the local certification stack, where the full
+operator send is already proven end to end. Only move to staging once someone
+confirms (a) Resend is in test mode or the dispatcher is off, and (b) a
+synthetic family is seeded through the product's own Create Lead path with an
+address you control.
+
+---
+
 ## 1. Provider safety — MUST pass before any send
 
 Run against staging. **This has not been verified by the agent — no staging
