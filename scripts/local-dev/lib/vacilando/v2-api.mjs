@@ -827,6 +827,17 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     if (!id) return { status: 400, body: { ok: false, error: "missing_id" } };
     return { status: 200, body: { ok: true, ...evidenceGalleryVm(id) } };
   }
+  if (path === "/api/v2/evidence/file") {
+    const missionId = q("missionId") || q("mission_id");
+    const evidenceId = q("evidenceId") || q("evidence_id");
+    if (!missionId || !evidenceId) {
+      return { status: 400, body: { ok: false, error: "missing_mission_or_evidence_id" } };
+    }
+    const { resolveMissionEvidenceFile } = await import("./presentation/evidence-experience.mjs");
+    const full = resolveMissionEvidenceFile(missionId, evidenceId);
+    if (!full) return { status: 404, body: { ok: false, error: "evidence_file_not_found" } };
+    return { status: 200, filePath: full };
+  }
   if (path === "/api/v2/views/mission/kickoff") {
     const id = q("id") || q("mission_id");
     return { status: 200, body: { ok: true, ...kickoffVm(id) } };

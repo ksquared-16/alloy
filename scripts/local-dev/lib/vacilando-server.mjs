@@ -769,6 +769,14 @@ export function createVacilandoServer() {
           if (out) return sendJson(res, out.status, out.body);
         } else if (req.method === "GET") {
           const out = await handleV2Get(path, url, { headers: req.headers });
+          if (out?.filePath) {
+            const full = out.filePath;
+            res.writeHead(out.status || 200, {
+              "Content-Type": MIME[extname(full)] || "application/octet-stream",
+              "Cache-Control": "no-store",
+            });
+            return createReadStream(full).pipe(res);
+          }
           if (out) return sendJson(res, out.status, out.body);
         }
         return sendJson(res, 404, { ok: false, error: "unknown_v2_route", path });
