@@ -15,6 +15,7 @@ import {
     type OutcomeStatusConfiguredRow,
 } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
 
 export type StageOperatingContractIssueCode =
     | "primary_action_missing"
@@ -36,6 +37,14 @@ export type StageOperatingContractIssueCode =
     | "transition_status_noncanonical"
     | "transition_close_status_invalid"
     | "outcome_transition_unavailable"
+    /** A saved exit path points at a stage on the other journey track. */
+    | "transition_destination_grain_mismatch"
+    /** A saved exit path points at a stage whose grain cannot be resolved or is contradictory. */
+    | "transition_destination_grain_unresolved"
+    /** An outcome moves through a path that lands on the other journey track. */
+    | "outcome_movement_grain_mismatch"
+    /** An outcome moves through a path whose destination grain cannot be resolved. */
+    | "outcome_movement_grain_unresolved"
     | "legacy_status_close_invalid"
     | "legacy_work_completion_invalid";
 
@@ -57,7 +66,22 @@ export type ValidateStageOperatingPlanOperatingContractInput = {
     configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
     entityType?: string;
     processStageKeys?: ReadonlySet<string> | readonly string[];
+    /**
+     * Configured stages with their declared grain and operator label. Supplied so a saved exit path
+     * that crosses journey tracks is reported HERE, at authoring time, rather than only refused at
+     * execution. Absent → grain checks are skipped, never guessed.
+     */
+    processStages?: ReadonlyArray<{ key: string; label?: string | null; grain?: string | null }>;
 };
+
+/** Operator words for a journey grain. Never "family"/"child" bare — those read as jargon. */
+function grainInOperatorWords(grain: "family" | "child"): string {
+    return grain === "family" ? "the family case" : "individual children";
+}
+
+function grainSubjectWords(grain: "family" | "child"): string {
+    return grain === "family" ? "a family" : "a child";
+}
 
 function asSet(value: ReadonlySet<string> | readonly string[] | undefined): Set<string> {
     if (!value) return new Set();
@@ -320,6 +344,111 @@ export function validateStageOperatingPlanOperatingContract(
             );
         } catch {
             // Partial editing must never throw.
+        }
+    }
+
+    /**
+     * SAVED exit paths that cross journey tracks.
+     *
+     * The editor filters the destination picker so a new path cannot be authored across grains,
+     * and the executor refuses the write. Neither helps a plan that ALREADY holds such a path: the
+     * picker only shapes new choices, and an execution-time refusal arrives long after publish.
+     * This reports it at authoring time, where it can be fixed.
+     *
+     * Nothing is filtered, replaced or normalised. The saved transition and the outcome rule are
+     * left exactly as written and stay visible — a blocking issue is added beside them. Silently
+     * "repairing" configuration an operator authored is how intent gets lost.
+     *
+     * Skipped entirely unless the plan states its own grain and the caller supplied the configured
+     * stages. An absent declaration is not evidence of a mismatch, and guessing here would flag
+     * every legacy plan that predates `journey_segment`.
+     */
+    const planGrain =
+        plan.journey_segment === "child" ? "child"
+        : plan.journey_segment === "family" ? "family"
+        : null;
+    const configuredStages = input.processStages ?? [];
+
+    if (planGrain && configuredStages.length) {
+        const stageByKey = new Map(configuredStages.map((stage) => [stage.key, stage]));
+        const destinationLabel = (key: string) => stageByKey.get(key)?.label?.trim() || key;
+
+        /** Grain verdict for a destination, using the ONE shared resolver. */
+        const destinationGrainFor = (targetStageKey: string) =>
+            resolveStageGrain({
+                stageKey: targetStageKey,
+                configuredMetadataGrain: stageByKey.get(targetStageKey)?.grain,
+            });
+
+        const incompatibleRefs = new Set<string>();
+
+        for (const transition of plan.outgoing_transitions ?? []) {
+            const targetKey = transition.target_stage_key?.trim();
+            if (!targetKey) continue; // already reported by transition_destination_invalid
+            const resolution = destinationGrainFor(targetKey);
+            const controlId = `stage-transition-${transition.transition_ref || "new"}`;
+
+            if (!resolution.ok) {
+                incompatibleRefs.add(transition.transition_ref);
+                issues.push({
+                    code: "transition_destination_grain_unresolved",
+                    severity: "error",
+                    message:
+                        `"${destinationLabel(targetKey)}" does not say clearly whether it belongs to `
+                        + `the family case or to individual children, so this path cannot be checked. `
+                        + `Resolve the stage's configuration before publishing.`,
+                    controlId,
+                });
+                continue;
+            }
+            if (resolution.grain !== planGrain) {
+                incompatibleRefs.add(transition.transition_ref);
+                issues.push({
+                    code: "transition_destination_grain_mismatch",
+                    severity: "error",
+                    message:
+                        `This path moves ${grainSubjectWords(planGrain)} to `
+                        + `"${destinationLabel(targetKey)}", which is configured for `
+                        + `${grainInOperatorWords(resolution.grain)}. `
+                        + `Choose ${planGrain === "family" ? "a family" : "a child"} stage instead.`,
+                    controlId,
+                });
+            }
+        }
+
+        // The same fact where the operator is actually working: on the outcome that moves.
+        for (const rule of plan.outcome_rules) {
+            const outcomeKey = rule.when_outcome_key?.trim();
+            if (!outcomeKey) continue;
+            for (const target of rule.targets) {
+                if (target.kind !== "move_to_stage") continue;
+                const ref = target.transition_ref?.trim() ?? "";
+                if (!ref || !incompatibleRefs.has(ref)) continue;
+                const transition = (plan.outgoing_transitions ?? []).find(
+                    (row) => row.transition_ref === ref,
+                );
+                const targetKey = transition?.target_stage_key?.trim() ?? "";
+                const resolution = targetKey ? destinationGrainFor(targetKey) : null;
+                issues.push({
+                    code:
+                        resolution?.ok ?
+                            "outcome_movement_grain_mismatch"
+                        :   "outcome_movement_grain_unresolved",
+                    severity: "error",
+                    message:
+                        resolution?.ok ?
+                            `This outcome moves ${grainSubjectWords(planGrain)} to `
+                            + `"${destinationLabel(targetKey)}", which is configured for `
+                            + `${grainInOperatorWords(resolution.grain)}. `
+                            + `Choose ${planGrain === "family" ? "a family" : "a child"} stage instead.`
+                        :   `This outcome moves ${grainSubjectWords(planGrain)} to `
+                            + `"${destinationLabel(targetKey)}", which does not say clearly whether it `
+                            + `belongs to the family case or to individual children. Resolve the `
+                            + `stage's configuration before publishing.`,
+                    controlId: `stage-outcome-automation-${outcomeKey}-transition`,
+                    outcome_key: outcomeKey,
+                });
+            }
         }
     }
 
