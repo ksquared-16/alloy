@@ -694,9 +694,10 @@ Presentation-only missions. No confidence/certification/evidence engine rewrites
 | **DX-5.5** | Mission continuation | Recommended Next Action + alternatives (Review Findings, Provide Feedback, Close Without Continuing); presentation mappings only | DX-1…5 |
 | **DX-6** | Director Collaboration | Durable mission-scoped executive guidance (feedback, decisions, revision requests); not chat | DX-5.5 |
 | **DX-7** | Director Portfolio | Executive multi-mission home: counts, focus, posture-derived groups, rich mission cards — presentation aggregation only | DX-6 |
-| **DX-8** | Remote Review | Annotated comparison hooks, remote-ready polish | DX-5…7 |
-| **DX-9** | Mission List Convergence | Inbox / Needs You convergence with Portfolio (if still needed after DX-7) | DX-7…8 |
-| **DX-10** | Worker Operations | Worker ops demoted behind executive surface | DX-9 |
+| **DX-8** | Executive Command Center | Actionable inbox over Portfolio — surface existing mission actions (approve, review, resolve, park, close) without new engines | DX-7 |
+| **DX-9** | Remote Review | Annotated comparison hooks, remote-ready polish | DX-5…8 |
+| **DX-10** | Mission List Convergence | Inbox / Needs You convergence with Portfolio + Command Center | DX-8…9 |
+| **DX-11** | Worker Operations | Worker ops demoted behind executive surface | DX-10 |
 
 **Suggested first implementation mission:** DX-1 + DX-3 (hierarchy + decisions) — highest executive impact.
 

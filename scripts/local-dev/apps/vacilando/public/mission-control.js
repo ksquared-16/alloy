@@ -730,7 +730,57 @@ We'll capture the context automatically.</p>
     </section>`;
 
     const focusCards = (pf.focus || []).slice(0, 5);
-    const focusSec = (!isHistory && (focusCards.length || counts.needsAttention || counts.blocked))
+    const cc = pf.commandCenter || home.commandCenter || {};
+    const ccLanes = (cc.lanes || []).filter((l) => (l.cards || []).length > 0);
+
+    function commandCardHtml(c) {
+      const conf = c.confidence?.percent != null
+        ? `${c.confidence.percent}%${c.confidence.bandLabel ? ` · ${c.confidence.bandLabel}` : ""}`
+        : (c.confidence?.bandLabel || "—");
+      return `<article class="mc-card mc-command-card" data-command-lane="${esc(c.laneId || "")}">
+        <div class="mc-card-h">
+          <div>
+            <p class="mc-portfolio-kicker">${esc(c.actionTitle || c.laneLabel || "Action")}</p>
+            <b data-nav="missions/${esc(c.missionId)}" style="cursor:pointer">${esc(c.title)}</b>
+          </div>
+          <span class="mc-pill">${esc(c.phase || c.laneLabel || "")}</span>
+        </div>
+        <dl class="mc-portfolio-dl">
+          <div><dt>Why here</dt><dd>${esc(c.reason || "—")}</dd></div>
+          <div><dt>Recommended</dt><dd>${esc(c.recommendation || "—")}</dd></div>
+          <div><dt>Expected</dt><dd>${esc(c.expectedOutcome || "—")}</dd></div>
+          <div><dt>Confidence</dt><dd>${esc(conf)}</dd></div>
+          ${c.blocker ? `<div><dt>Blocker</dt><dd class="mc-portfolio-blocker">${esc(c.blocker)}</dd></div>` : ""}
+          <div><dt>Evidence</dt><dd>${esc(c.evidence?.label || "—")}</dd></div>
+          ${c.timeSensitivity ? `<div><dt>Timing</dt><dd>${esc(c.timeSensitivity)}</dd></div>` : ""}
+        </dl>
+        <div class="mc-card-cta mc-actions">
+          ${actionBtn(c.primaryAction)}
+          <button class="btn ghost" data-nav="missions/${esc(c.missionId)}">Open mission</button>
+        </div>
+      </article>`;
+    }
+
+    const commandSec = (!isHistory && (ccLanes.length || cc.lead))
+      ? `<section class="mc-command-center" id="mc-command-center" aria-label="Executive Command Center">
+          <div class="mc-command-center-h">
+            <div>
+              <p class="mc-portfolio-kicker">Needs Action</p>
+              <h3>${esc(cc.sectionTitle || "Executive Command Center")}</h3>
+              <p class="muted"><b>${esc(cc.lead || "")}</b> — ${esc(cc.question || "What can you do right now?")}</p>
+            </div>
+          </div>
+          ${ccLanes.map((lane) => `<div class="mc-command-lane" data-command-lane="${esc(lane.id)}">
+            <div class="mc-command-lane-h">
+              <h4>${esc(lane.label)} <span class="muted">${lane.count}</span></h4>
+              ${lane.blurb ? `<p class="muted">${esc(lane.blurb)}</p>` : ""}
+            </div>
+            <div class="mc-list mc-command-list">${(lane.cards || []).map(commandCardHtml).join("")}</div>
+          </div>`).join("")}
+        </section>`
+      : "";
+
+    const focusSec = (!isHistory && focusCards.length && !ccLanes.length)
       ? `<section class="mc-portfolio-focus" aria-label="Fifteen minute focus">
           <div class="mc-portfolio-focus-h">
             <div>
@@ -757,7 +807,7 @@ We'll capture the context automatically.</p>
       <div class="mc-list mc-portfolio-list">${(g.missions || []).map(portfolioCardHtml).join("")}</div>
     </section>`).join("");
 
-    const emptyHtml = (pf.empty || (!groups.length && !focusCards.length))
+    const emptyHtml = (pf.empty || (!groups.length && !focusCards.length && !ccLanes.length))
       ? (empty
         ? `<div class="rempty">
             <h3>${esc(empty.title)}</h3>
@@ -777,13 +827,13 @@ We'll capture the context automatically.</p>
     return shell(isHistory ? "Mission History" : "Director Portfolio", {
       lead: isHistory
         ? "Archived certification and validation history — read-only."
-        : "What is active, blocked, waiting on you, and what to do next — without opening every mission.",
+        : "Where to look (Portfolio) and what to do (Command Center) — without opening every mission.",
       actions: isHistory
         ? `<button class="btn" data-nav="kickoff">Create Mission</button>`
         : `<button class="btn ghost" type="button" data-mc-day-start>Start of day</button>
            <button class="btn ghost" type="button" data-mc-day-stop>Stop of day</button>
            <button class="btn" data-nav="kickoff">Create Mission</button>`,
-    }) + filterBar + countStrip + focusSec + groupSecs + emptyHtml + `</div>`;
+    }) + filterBar + countStrip + commandSec + focusSec + groupSecs + emptyHtml + `</div>`;
   };
 
   V2.viewMissionDetail = function (id) {

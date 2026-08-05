@@ -13,6 +13,7 @@ import { getOpenDeliverableReview } from "../deliverable-review.mjs";
 import { listDecisions } from "../decisions.mjs";
 import { listAssignments } from "../worker-assignment.mjs";
 import { missionContinuationVm } from "./mission-continuation.mjs";
+import { executiveCommandCenterVm } from "./executive-command-center.mjs";
 
 function relTime(isoStr) {
   if (!isoStr) return null;
@@ -386,7 +387,7 @@ export function directorPortfolioVm({ filter = "active" } = {}) {
       primaryAction: c.nextAction,
     }));
 
-  return {
+  const portfolioBase = {
     kind: "director_portfolio",
     filter: filter || "active",
     sectionTitle: "Director Portfolio",
@@ -407,5 +408,11 @@ export function directorPortfolioVm({ filter = "active" } = {}) {
           primaryAction: { kind: "nav", label: "Create Mission", href: "kickoff" },
         }
       : null,
+  };
+
+  return {
+    ...portfolioBase,
+    // DX-8 — action inbox over the same cards (Portfolio unchanged).
+    commandCenter: executiveCommandCenterVm(portfolioBase),
   };
 }
