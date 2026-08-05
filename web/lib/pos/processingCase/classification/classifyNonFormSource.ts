@@ -20,8 +20,13 @@ import type {
 
 export const CLASSIFIER_VERSION = "fp9.1";
 
-/** Max confidence a deterministic heuristic may claim — never absolute certainty. */
-const MAX_CONFIDENCE = 0.95;
+/**
+ * Max confidence a deterministic heuristic may claim — never absolute certainty.
+ *
+ * Exported so the governed-classification schema can state the real confidence
+ * contract by reference instead of restating the literal. Value unchanged.
+ */
+export const MAX_CONFIDENCE = 0.95;
 
 interface KeywordRule {
     /** Substring to look for (already lowercased). Matched against the combined haystack. */

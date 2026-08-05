@@ -11,7 +11,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classifyNonFormSource } from "./classifyNonFormSource";
 import { dbStoreProcessingCaseClassification } from "./processingCaseClassificationDb";
-import type { StoredProcessingClassification } from "./types";
+import { governSourceClassification } from "./governSourceClassification";
+import type {
+    SourceClassificationGovernanceDeps,
+    SourceClassificationGovernanceResult,
+} from "./governSourceClassification";
+import type { ClassifyNonFormSourceInput, StoredProcessingClassification } from "./types";
 
 export interface DocumentClassificationSignals {
     sourceKind?: string;
@@ -24,19 +29,47 @@ export interface DocumentClassificationSignals {
 
 export async function maybeClassifyProcessingCaseFromDocumentSafe(
     supabase: SupabaseClient,
-    args: { orgId: string; caseId: string; document: DocumentClassificationSignals }
+    args: {
+        orgId: string;
+        caseId: string;
+        document: DocumentClassificationSignals;
+        /**
+         * Trust governance (Phase 1.1). Additive and suppressible: **presence
+         * enables it**, omission suppresses it entirely.
+         *
+         * Opt-in rather than default-on for two reasons. It keeps every existing
+         * caller and test byte-identical without editing them, and it makes the
+         * suppressed arm — the control that proves Processing-visible output is
+         * unchanged — the natural default rather than a special mode.
+         *
+         * Production passes `{}` to accept the real repository and actor.
+         */
+        governance?: SourceClassificationGovernanceDeps;
+        /**
+         * Receives the governance outcome, including a governance GAP. Optional
+         * so the existing return contract is untouched — a caller that ignores
+         * it behaves exactly as before.
+         */
+        onGovernanceResult?: (result: SourceClassificationGovernanceResult) => void;
+    }
 ): Promise<StoredProcessingClassification | null> {
+    let classifierInput: ClassifyNonFormSourceInput | null = null;
+    let stored: StoredProcessingClassification | null = null;
+
     try {
         if (!args.orgId || !args.caseId) return null;
-        const result = classifyNonFormSource({
+        classifierInput = {
             sourceKind: args.document.sourceKind ?? "document",
             fileName: args.document.fileName,
             mimeType: args.document.mimeType,
             docType: args.document.docType,
             title: args.document.title,
             metadata: args.document.metadata,
-        });
-        return await dbStoreProcessingCaseClassification(supabase, {
+        };
+        const result = classifyNonFormSource(classifierInput);
+        // Processing writes FIRST and is never blocked by Trust. See the
+        // transaction-boundary note in `governSourceClassification.ts`.
+        stored = await dbStoreProcessingCaseClassification(supabase, {
             orgId: args.orgId,
             caseId: args.caseId,
             result,
@@ -48,4 +81,22 @@ export async function maybeClassifyProcessingCaseFromDocumentSafe(
         );
         return null;
     }
+
+    // Governance is recorded only for a classification Processing actually
+    // stored, and can neither change nor withhold the value returned below.
+    if (!args.governance || !classifierInput || !stored) {
+        args.onGovernanceResult?.({ status: "disabled" });
+        return stored;
+    }
+
+    const governance = await governSourceClassification(supabase, {
+        orgId: args.orgId,
+        caseId: args.caseId,
+        input: classifierInput,
+        result: stored,
+        deps: args.governance,
+    });
+    args.onGovernanceResult?.(governance);
+
+    return stored;
 }

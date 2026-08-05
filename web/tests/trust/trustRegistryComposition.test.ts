@@ -481,14 +481,32 @@ describe("the production composition root", () => {
         expect(TRUST_REGISTRY.composition_order).toEqual([
             "platform.privacy_policies",
             "capability.attention_suggestion_enrichment",
+            // Trust adoption Phase 1.1 — the first capability to adopt the platform.
+            "capability.processing_source_classification",
         ]);
         expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.id)).toEqual([...TRUST_REGISTRY.composition_order]);
-        expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.owner)).toEqual(["platform", "capability"]);
+        expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.owner)).toEqual(["platform", "capability", "capability"]);
     });
 
-    it("still registers exactly one Decision Class, unchanged from V1", () => {
-        expect(TRUST_REGISTRY.listDecisionClassKeys()).toEqual([ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY]);
-        expect(listDecisionClassKeys()).toEqual([ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY]);
+    /**
+     * Phase 0 asserted "exactly one Decision Class" as the proof that nothing had
+     * adopted the platform yet. Phase 1.1 IS the first adoption, so the count is
+     * precisely what the phase gate changes.
+     *
+     * The invariant that mattered is kept and made sharper: the registry holds
+     * exactly the declared set in the declared order, V1's class is still first,
+     * and V1's own definition is untouched by a second capability existing.
+     */
+    it("registers exactly the declared Decision Classes, V1's still first and unchanged", () => {
+        const expected = [ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY, "processing_source_classification"];
+        expect(TRUST_REGISTRY.listDecisionClassKeys()).toEqual(expected);
+        expect(listDecisionClassKeys()).toEqual(expected);
+
+        const v1 = TRUST_REGISTRY.getDecisionClass(ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY);
+        expect(v1?.risk_tier).toBe("convenience");
+        expect(v1?.requires_allowed_feature).toBe("draft_enrichment");
+        expect(v1?.strategy_preference).toEqual(["deterministic"]);
+        expect(v1?.trust_threshold).toBe(0.5);
     });
 
     it("ownership follows doctrine: the privacy policy is platform-owned, the rest capability-owned", () => {

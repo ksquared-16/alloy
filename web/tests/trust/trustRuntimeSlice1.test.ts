@@ -507,8 +507,26 @@ describe("mutation boundary", () => {
 // ---------------------------------------------------------------------------
 
 describe("V1 is not broadened", () => {
-    it("registers exactly one Decision Class", () => {
-        expect(listDecisionClassKeys()).toEqual([ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY]);
+    /**
+     * Originally "registers exactly one Decision Class" — V1's proof that nothing
+     * had adopted the platform. Trust adoption Phase 1.1 registers the second
+     * class, which is the phase gate rather than a regression.
+     *
+     * What V1 actually needed is preserved verbatim: V1's OWN class is still
+     * registered, still first, and its governance is unchanged. V1 is not
+     * broadened by another capability existing beside it.
+     */
+    it("V1's own Decision Class is still first and its governance is unchanged", () => {
+        expect(listDecisionClassKeys()[0]).toBe(ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY);
+
+        const v1 = resolveDecisionClass(ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY);
+        expect(v1).not.toBeNull();
+        expect(v1?.risk_tier).toBe("convenience");
+        expect(v1?.review_requirement).toBe("operator_review");
+        expect(v1?.trust_threshold).toBe(0.5);
+        expect(v1?.requires_allowed_feature).toBe("draft_enrichment");
+        expect(v1?.strategy_preference).toEqual(["deterministic"]);
+        expect(v1?.required_information).toEqual(["deterministic_attention_suggestion"]);
     });
 });
 

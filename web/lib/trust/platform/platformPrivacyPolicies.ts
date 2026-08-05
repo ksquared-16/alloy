@@ -16,6 +16,7 @@
  */
 
 import { ATTENTION_SUGGESTION_MINIMIZATION_POLICY_KEY } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/keys";
+import { PROCESSING_SOURCE_MINIMIZATION_POLICY_KEY } from "@/lib/trust/capabilities/processingSourceClassification/keys";
 import type { PrivacyPolicyV1 } from "@/lib/trust/privacy/privacyEngine";
 import type { TrustContribution } from "@/lib/trust/registry/trustRegistryTypes";
 
@@ -32,8 +33,23 @@ export const ATTENTION_SUGGESTION_MINIMIZATION_V1: PrivacyPolicyV1 = {
     prohibited_classes: ["financial"],
 };
 
+/**
+ * Strict minimization for Processing source classification, financial refused.
+ *
+ * The governed classification carries only a category, a bounded confidence and
+ * fixed rule tokens — no filename, no title, no document content. `strict` is
+ * nonetheless the correct mode: it costs nothing when there is nothing to
+ * minimize, and it means a future element that DOES carry source text is
+ * minimized by default rather than by remembering to ask.
+ */
+export const PROCESSING_SOURCE_MINIMIZATION_V1: PrivacyPolicyV1 = {
+    key: PROCESSING_SOURCE_MINIMIZATION_POLICY_KEY,
+    pii_mode: "strict",
+    prohibited_classes: ["financial"],
+};
+
 export const PLATFORM_PRIVACY_POLICY_CONTRIBUTION: TrustContribution = {
     id: "platform.privacy_policies",
     owner: "platform",
-    privacyPolicies: [ATTENTION_SUGGESTION_MINIMIZATION_V1],
+    privacyPolicies: [ATTENTION_SUGGESTION_MINIMIZATION_V1, PROCESSING_SOURCE_MINIMIZATION_V1],
 };

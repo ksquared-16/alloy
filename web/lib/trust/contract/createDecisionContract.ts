@@ -31,6 +31,19 @@ export type CreateDecisionContractInput<C extends Record<string, TrustDeclaredVa
     readonly initiating_actor: TrustInitiatingActor;
     readonly channel: TrustChannel;
     readonly nowIso?: string;
+    /**
+     * A DETERMINISTIC contract id, derived by the capability from a stable
+     * decision identity. Omit it and a fresh random id is generated, exactly as
+     * before — every existing caller is unaffected.
+     *
+     * Supplying one turns the contract table's primary key into an exactly-once
+     * guarantee for that identity: a concurrent second create loses on the
+     * primary key rather than quietly producing a duplicate governed decision.
+     *
+     * Only sound for a DETERMINISTIC Decision Class, where the same inputs
+     * provably yield the same judgment. A probabilistic class must not pass one.
+     */
+    readonly id?: string;
 };
 
 export type CreateDecisionContractResult =
@@ -58,7 +71,7 @@ export function createDecisionContract<C extends Record<string, TrustDeclaredVal
 
     const base = {
         schema_version: 1 as const,
-        id: randomUUID(),
+        id: input.id ?? randomUUID(),
         org_id: input.org_id,
         decision_class_key: input.decision_class_key,
         intent: input.intent,
