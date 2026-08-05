@@ -78,13 +78,35 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
     }
 
+    /**
+     * Status keys are OPTIONAL, because they describe queue MEMBERSHIP — not the operating plan.
+     *
+     * This used to be a hard 400 on every save, which made a disposition-keyed child stage
+     * unauthorable: `enrolling` scopes its queue by `included_disposition_keys` and has no status
+     * keys at all, so editing its outcome rules was impossible without inventing membership the
+     * stage does not use. Those invented keys are threaded into the work-unit save, so the
+     * "harmless" workaround would have rewritten the stage's queue definition.
+     *
+     * Omitted now means "leave membership exactly as configured". Supplied still means "this IS
+     * the membership", validated as before.
+     */
+    const statusKeysSupplied =
+        Array.isArray(body.selected_status_keys) || Array.isArray(body.status_keys);
     const selectedStatusKeys = Array.isArray(body.selected_status_keys)
         ? body.selected_status_keys
         : Array.isArray(body.status_keys)
           ? body.status_keys
           : [];
-    if (!selectedStatusKeys.length) {
-        return NextResponse.json({ error: "selected_status_keys is required" }, { status: 400 });
+    if (statusKeysSupplied && !selectedStatusKeys.length) {
+        // An explicit empty array states an intent to clear the queue. Refuse it rather than
+        // silently preserving — silently ignoring a stated intent is its own defect.
+        return NextResponse.json(
+            {
+                error:
+                    "selected_status_keys cannot be empty — omit the field to leave membership unchanged.",
+            },
+            { status: 400 },
+        );
     }
 
     const workUnitName =
@@ -151,7 +173,7 @@ export async function POST(request: NextRequest) {
             departmentId,
             processId: body.process_id ?? null,
             stageKey,
-            selectedStatusKeys,
+            ...(statusKeysSupplied ? { selectedStatusKeys } : {}),
             workUnitName,
             fieldRules,
             actorUserId: ctx.userId,

@@ -243,3 +243,68 @@ runtime still sees: lead transitions=None, decision grain=child, command_set_v1=
 ```
 
 Runtime remains on the previous publication. No operational records changed. Nothing published.
+
+---
+
+# Enrolling → Enrolled converted to the transition model. Zero warnings.
+
+## Platform correction
+
+`stage-runtime-config` required a non-empty `selected_status_keys` on EVERY save, which made a
+disposition-keyed child stage unauthorable. `enrolling` scopes its queue by
+`included_disposition_keys: ["qualified"]` and has no status keys, so repointing one outcome rule
+was impossible without inventing membership — and those keys are threaded into the work-unit save
+(`statusKeysPassedToWorkUnitSave`), so the workaround would have rewritten the queue definition.
+
+- omitted `selected_status_keys` → membership left exactly as configured
+- explicit `[]` → refused, because it states an intent to clear
+- supplied keys → validated and persisted as before
+- disposition membership is never translated into status membership
+
+## Controlled write
+
+| | |
+|---|---|
+| before sha256 | `7e33ce6b09a3d38caf3c925935e82e22e348a60adc3ed09c87f7a2564d8aaa91` |
+| read-back sha256 | `281bab0e4fa88f14844fb6a7f94b532c7946ed963df1d6044365e0fbcdcd07a5` |
+| equals candidate | **True** |
+
+Request omitted BOTH `selected_status_keys` and `queue_membership_v1`.
+
+```
+outcome_rules[0].targets[1].stage_key      "enrolled" -> <absent>
+outcome_rules[0].targets[1].transition_ref <absent>   -> "enrolling_to_enrolled"
+```
+
+## Post-write
+
+```
+enrolling queue_membership_v1 : included_disposition_keys ["qualified"]   (byte-identical)
+                                no included_status_keys invented
+transitions                   : enrolling_to_enrolled -> enrolled   (exactly once)
+complete_to_enrolled          : { kind: move_to_stage, transition_ref: "enrolling_to_enrolled" }
+grains                        : enrolling=child  enrolled=child
+```
+
+## Validate
+
+```
+can_publish : true
+errors      : NONE
+warnings    : NONE          ← movement_without_transition eliminated
+```
+
+## Published projection
+
+```
+e3b000d12cebda825fa24c3355e69d9ffd613f0f923ed0880b8584369db8d1a8   (unchanged throughout)
+```
+
+Nothing published. No operational records changed.
+
+## Incident note
+
+A transient Supabase outage timed out the first `ensure_stage_transition` attempt and wedged the
+dev server (`auth.session_resolve` 174s, unauthenticated). The server was restarted and the draft
+hash re-read to confirm the write had NOT landed before retrying. `ensure_stage_transition` is
+find-before-create, so the retry created exactly one transition.
