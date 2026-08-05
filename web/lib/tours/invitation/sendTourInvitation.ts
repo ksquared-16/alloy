@@ -174,12 +174,36 @@ export async function sendTourInvitation(args: {
     const orgId = String(args.orgId ?? "").trim();
     const opportunityId = String(args.opportunityId ?? "").trim();
 
-    const { data: oppRow } = await args.supabase
+    // `process_instance_id` is NOT selected: there is no such column on
+    // `opportunities`. Selecting it made PostgREST reject the whole query, and
+    // because only `data` was destructured that error was swallowed and returned
+    // as `missing_opportunity` — "This record is no longer available." The
+    // command therefore answered 404 for EVERY record in every tenant, and a
+    // schema mismatch read as a missing record. It is optional and nullable end
+    // to end (mintTourInvitation already defaults it to null), so nothing
+    // downstream loses anything.
+    const { data: oppRow, error: oppError } = await args.supabase
         .from("opportunities")
-        .select("id, name, primary_person_id, location_id, process_instance_id")
+        .select("id, name, primary_person_id, location_id")
         .eq("org_id", orgId)
         .eq("id", opportunityId)
         .maybeSingle();
+
+    // A failed lookup is NOT an absent record. Collapsing the two is exactly what
+    // hid this for the life of the feature, so they now read differently.
+    if (oppError) {
+        console.error("[sendTourInvitation] opportunity lookup failed", {
+            opportunity_id: opportunityId,
+            code: (oppError as { code?: string }).code ?? null,
+            message: oppError.message,
+        });
+        return {
+            ok: false,
+            code: "missing_opportunity",
+            message:
+                "The record could not be loaded, so nothing was sent. Please try again, and report this if it keeps happening.",
+        };
+    }
     if (!oppRow) {
         return { ok: false, code: "missing_opportunity", message: SEND_TOUR_INVITATION_OPERATOR_MESSAGE.missing_opportunity };
     }
@@ -188,7 +212,6 @@ export async function sendTourInvitation(args: {
         name: string | null;
         primary_person_id: string | null;
         location_id: string | null;
-        process_instance_id?: string | null;
     };
 
     const locationId = String(args.locationId ?? opportunity.location_id ?? "").trim();
@@ -261,7 +284,9 @@ export async function sendTourInvitation(args: {
         recipientPersonId: recipient.personId,
         opportunityId,
         locationId,
-        processInstanceId: opportunity.process_instance_id ?? null,
+        // No column links an opportunity to a process instance today; the mint
+        // defaults this to null. Kept explicit so the absence is a decision.
+        processInstanceId: null,
         content,
         createdByUserId: args.actorUserId ?? null,
         idempotencyKey: args.idempotencyKey,
@@ -327,7 +352,24 @@ export async function sendTourInvitation(args: {
     });
 
     if (!sentChannels.length) {
-        // The invitation exists and is valid; only delivery failed. Reported as such.
+        // A REPLAY that dispatches nothing is not a delivery failure. The comms
+        // orchestrator dedupes on the offered times, so pressing the button twice
+        // legitimately sends nothing the second time — and reporting
+        // `nothing_sent` there told operators "the parent has no reachable email
+        // or mobile number" about a parent who has both. Truthfully, the
+        // invitation already went out and there was nothing new to send.
+        if (minted.idempotentReplay) {
+            return {
+                ok: true,
+                invitationId: minted.invitationId,
+                idempotentReplay: true,
+                optionCount: options.length,
+                sentChannels: [],
+                skippedReasons: ["already_sent"],
+            };
+        }
+        // First send, nothing dispatched: the invitation exists and is valid, so
+        // this genuinely is a delivery problem. Reported as such.
         return { ok: false, code: "nothing_sent", message: SEND_TOUR_INVITATION_OPERATOR_MESSAGE.nothing_sent };
     }
 

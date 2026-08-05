@@ -110,6 +110,33 @@ function executeResponse(body: unknown, ok = true, status = 200) {
 }
 
 describe("send_tour_invitation derives its result from the server", () => {
+    it("reads the runtime's FLATTENED execution_result, as the live route returns it", async () => {
+        // Proven against the running app: the detail fields sit directly on
+        // execution_result, not under a nested `detail`.
+        fetchMock.mockResolvedValue(
+            executeResponse({
+                ok: true,
+                data: {
+                    execution_result: {
+                        invitation_id: "inv-9",
+                        option_count: 5,
+                        sent_channels: ["email", "sms"],
+                        idempotent_replay: false,
+                        skipped: [],
+                    },
+                },
+            })
+        );
+
+        const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
+
+        expect(out.ok).toBe(true);
+        const said = (window.alert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+        expect(said).toContain("Invitation created");
+        expect(said).toContain("Email queued");
+        expect(said).toContain("SMS queued");
+    });
+
     it("reports per-channel truth from sent_channels and skipped", async () => {
         fetchMock.mockResolvedValue(
             executeResponse({

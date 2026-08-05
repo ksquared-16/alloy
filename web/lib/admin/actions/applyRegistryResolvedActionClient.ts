@@ -506,10 +506,20 @@ export async function applyRegistryResolvedActionClient(
             // `result.detail` is accepted as a fallback only; reading the wrong
             // path silently degraded a real send into "no eligible delivery
             // channel", which is the same class of lie in the other direction.
+            // Verified against the live route: the runtime FLATTENS the action's
+            // detail onto `execution_result` itself —
+            //   data.execution_result = { invitation_id, option_count,
+            //                             sent_channels, idempotent_replay, skipped }
+            // A nested `detail` and the legacy `result.detail` are still accepted,
+            // so a future envelope change degrades to the failure path below
+            // rather than to a confident wrong answer.
             const execResult = (json.data?.execution_result ?? {}) as Record<string, unknown>;
-            const detail = ((execResult.detail as Record<string, unknown>) ??
-                json.result?.detail ??
-                null) as Record<string, unknown> | null;
+            const detail = (Array.isArray(execResult.sent_channels)
+                ? execResult
+                : ((execResult.detail as Record<string, unknown>) ?? json.result?.detail ?? null)) as Record<
+                string,
+                unknown
+            > | null;
 
             // Success must be DERIVED from the server result. A 2xx with no
             // recognisable invitation detail is not something to celebrate.
