@@ -62,6 +62,32 @@ function withConfiguredDept(
             chain.maybeSingle = async () => ({ data: { metadata }, error: null });
             return chain;
         }
+        if (table === "process_instances") {
+            // One chain that answers BOTH shapes this table is read through: the single-row child
+            // reads these tests already relied on, and the awaitable LIST read the family close
+            // guard performs when enumerating child enrollment tracks.
+            //
+            // Resolving the list to `[]` says "this lead has no child tracks" — true for these
+            // family-level cases. Left unstubbed the read fails, and the guard correctly refuses to
+            // close a family whose children it cannot enumerate: a fixture gap, not a product
+            // failure. Tests that need children stub this table themselves.
+            const original = originalFrom(table) as Record<string, unknown> | null;
+            const chain: Record<string, unknown> = {};
+            chain.select = () => chain;
+            chain.eq = () => chain;
+            chain.update = () => chain;
+            chain.maybeSingle = async () => {
+                const inner = original?.select as undefined | (() => Record<string, unknown>);
+                const readChain = typeof inner === "function" ? inner() : null;
+                const maybeSingle = readChain?.maybeSingle as undefined | (() => Promise<unknown>);
+                return typeof maybeSingle === "function"
+                    ? await maybeSingle()
+                    : { data: null, error: null };
+            };
+            chain.single = async () => ({ data: {}, error: null });
+            chain.then = (resolve: (value: unknown) => unknown) => resolve({ data: [], error: null });
+            return chain;
+        }
         return originalFrom(table);
     };
 }
