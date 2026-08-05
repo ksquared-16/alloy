@@ -43,6 +43,11 @@ function host() {
     };
 }
 
+/** `error` lives only on the failure arm of the result union. */
+function errorOf(out: Awaited<ReturnType<typeof applyRegistryResolvedActionClient>>): string {
+    return "error" in out && out.error != null ? String(out.error) : "";
+}
+
 function uiIntent(key: string, payload: Record<string, unknown> = {}): ResolvedActionForClient {
     return {
         key,
@@ -84,7 +89,7 @@ describe("an unhandled ui_intent can never report success", () => {
         const out = await applyRegistryResolvedActionClient(uiIntent(key, { intent: key }), host());
 
         expect(out.ok).toBe(false);
-        expect(String(out.error ?? "")).toMatch(/not available yet/i);
+        expect(errorOf(out)).toMatch(/not available yet/i);
     });
 
     it("issues no request at all when it cannot run — and still does not claim success", async () => {
@@ -99,7 +104,7 @@ describe("an unhandled ui_intent can never report success", () => {
 
     it("says nothing was sent, so the operator can retry safely", async () => {
         const out = await applyRegistryResolvedActionClient(uiIntent("some_future_command"), host());
-        expect(String(out.error ?? "")).toMatch(/nothing was sent/i);
+        expect(errorOf(out)).toMatch(/nothing was sent/i);
     });
 });
 
@@ -224,7 +229,7 @@ describe("send_tour_invitation derives its result from the server", () => {
         const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
 
         expect(out.ok).toBe(false);
-        expect(String(out.error ?? "").length).toBeGreaterThan(0);
+        expect(errorOf(out).length).toBeGreaterThan(0);
     });
 
     it("treats an unreadable body as failure", async () => {
@@ -239,7 +244,7 @@ describe("send_tour_invitation derives its result from the server", () => {
         const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
 
         expect(out.ok).toBe(false);
-        expect(String(out.error ?? "")).toMatch(/could not be read/i);
+        expect(errorOf(out)).toMatch(/could not be read/i);
     });
 
     it("treats a 2xx with no recognisable invitation detail as failure", async () => {
@@ -250,6 +255,6 @@ describe("send_tour_invitation derives its result from the server", () => {
         const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
 
         expect(out.ok).toBe(false);
-        expect(String(out.error ?? "")).toMatch(/not confirmed/i);
+        expect(errorOf(out)).toMatch(/not confirmed/i);
     });
 });
