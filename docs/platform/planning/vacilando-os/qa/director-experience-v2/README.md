@@ -24,13 +24,19 @@ Presentation layer only. Do **not** redesign mission architecture, workers, Dire
 
 ## Implementation phases (from spec)
 
-DX-0 doctrine lock → DX-1 Overview L1 → DX-2 confidence → DX-3 decisions → DX-4 story → DX-5 evidence → DX-6 levels/Builder → DX-7 remote polish → DX-8 QA/migration.
+DX-0 doctrine lock → DX-1 Overview L1 → DX-2 confidence → DX-3 decisions → DX-4 story → DX-5 evidence → **DX-5.5 continuation** → DX-6 levels/Builder → DX-7 remote polish → DX-8 QA/migration.
 
 **Suggested first build mission:** DX-1 + DX-3.
 
 **DX-1 + DX-3 evidence:** [`DX1-DX3-EVIDENCE.md`](DX1-DX3-EVIDENCE.md)
 
 **DX-2 Explained Confidence evidence:** [`DX2-EVIDENCE.md`](DX2-EVIDENCE.md)
+
+**DX-4 Mission Journey evidence:** [`DX4-EVIDENCE.md`](DX4-EVIDENCE.md)
+
+**DX-5 Evidence Experience evidence:** [`DX5-EVIDENCE.md`](DX5-EVIDENCE.md)
+
+**DX-5.5 Mission Continuation evidence:** [`DX5_5-EVIDENCE.md`](DX5_5-EVIDENCE.md)
 
 ## Thirty-second success gate
 

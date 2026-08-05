@@ -69,12 +69,16 @@ const advancePack = missionDecisionCardsVm(mid, {
 
 assert(advancePack.hasRecommendation, "advance recommended when advance.ok");
 assert(advancePack.recommended?.kind === "advance_implementation", "recommended kind");
-assert(advancePack.recommended?.buttonLabel === "Begin implementation", "explicit Begin implementation CTA");
+assert(advancePack.recommended?.buttonLabel === "Begin Implementation", "explicit Begin Implementation CTA");
 assert(advancePack.primaryAction?.kind === "advance_implementation", "primary action kind");
 assert(!advancePack.cards.some((c) => /Review outcome/i.test(c.buttonLabel)), "no Review outcome");
-assert(advancePack.alternatives.length === 3, "three alternatives");
+assert(advancePack.alternatives.length >= 3, "at least three alternatives (lifecycle + soft)");
 assert(advancePack.recommended.workLaunches === true, "advance launches work");
 assert(advancePack.alternatives.find((c) => c.kind === "park_outcome")?.workLaunches === false, "park does not launch");
+assert(advancePack.alternatives.find((c) => c.kind === "reopen_work")?.buttonLabel === "Request More Discovery", "DX-5.5 more discovery label");
+assert(advancePack.alternatives.find((c) => c.kind === "certify_completion")?.buttonLabel === "Close Without Continuing", "DX-5.5 close label");
+assert(advancePack.alternatives.some((c) => c.kind === "provide_feedback"), "Provide Feedback alternative");
+assert(advancePack.alternatives.some((c) => c.kind === "review_findings"), "Review Findings alternative");
 
 const discoveryHero = missionOutcomeHeroVm(mid, {
   posture: {
@@ -140,7 +144,7 @@ const closePack = missionDecisionCardsVm(mid, {
   advance: { ok: false },
 });
 assert(closePack.cards.find((c) => c.kind === "certify_completion")?.buttonLabel === "Accept and close", "accept/close copy");
-assert(closePack.cards.find((c) => c.kind === "reopen_work")?.buttonLabel === "Continue discovery", "continue discovery copy");
+assert(closePack.cards.find((c) => c.kind === "reopen_work")?.buttonLabel === "Request More Discovery", "request more discovery copy");
 
 // --- Integration smoke: dashboard nests executive L1 ---
 const brief = {
