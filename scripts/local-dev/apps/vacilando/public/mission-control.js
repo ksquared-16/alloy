@@ -929,20 +929,50 @@ We'll capture the context automatically.</p>
       </section>`;
     })();
 
-    const evidenceStripSec = `<section class="mc-sec mc-evidence-strip" id="mc-evidence-strip">
-      <div class="mc-card-h"><h3 style="margin:0">Evidence</h3>
-        <button class="btn ghost sm" type="button" data-nav="evidence/${esc(id)}">Open gallery</button>
-      </div>
-      ${evidenceStrip.empty
-        ? `<p class="muted">No evidence artifacts yet.</p>`
-        : `<ul class="mc-evidence-preview">${(evidenceStrip.artifacts || []).map((a) =>
-            `<li><b>${esc(a.title)}</b><span class="muted"> — ${esc(a.proves || a.type)}</span></li>`).join("")}</ul>`}
-      <div class="mc-depth-links">
-        <button class="btn ghost sm" type="button" data-nav="timeline/${esc(id)}">Mission Journey</button>
-        <button class="btn ghost sm" type="button" data-nav="decisions/${esc(id)}">Decisions archive</button>
-        <a class="btn ghost sm" href="#mc-depth">Technical depth</a>
-      </div>
-    </section>`;
+    const evidenceStripSec = (() => {
+      const strip = evidenceStrip;
+      if (!strip || (strip.empty && !strip.primaryProof)) {
+        return `<section class="mc-sec mc-evidence-strip" id="mc-evidence-strip">
+          <div class="mc-card-h"><h3 style="margin:0">Evidence</h3>
+            <button class="btn ghost sm" type="button" data-nav="evidence/${esc(id)}">Open gallery</button>
+          </div>
+          <p class="muted">No evidence artifacts yet.</p>
+        </section>`;
+      }
+      const kinds = (strip.kinds || []).map((k) => `<li>${esc(k.label)}</li>`).join("");
+      const primary = strip.primaryProof;
+      const thumbs = (strip.preview || []).map((a) => {
+        if (a.previewHref) {
+          return `<figure class="mc-ev-thumb">
+            <img src="${esc(a.previewHref)}" alt="${esc(a.title)}" loading="lazy" />
+            <figcaption>${esc(a.title)}</figcaption>
+          </figure>`;
+        }
+        return `<figure class="mc-ev-thumb missing">
+          <div class="mc-ev-thumb-ph">${esc(a.typeLabel || "Proof")}</div>
+          <figcaption>${esc(a.title)}</figcaption>
+        </figure>`;
+      }).join("");
+      const sufficiency = (strip.sufficiency || []).slice(0, 4).map((s) =>
+        `<li class="tone-${esc(s.tone || "info")}">${esc(s.text)}</li>`).join("");
+      return `<section class="mc-sec mc-evidence-strip" id="mc-evidence-strip">
+        <div class="mc-card-h"><h3 style="margin:0">Evidence</h3>
+          <button class="btn ghost sm" type="button" data-nav="evidence/${esc(id)}">${esc(strip.reviewLabel || "Review evidence")}</button>
+        </div>
+        ${kinds ? `<ul class="mc-ev-kinds">${kinds}</ul>` : ""}
+        ${primary ? `<p class="mc-ev-primary"><span class="muted">Primary proof</span><br/><b>${esc(primary.title)}</b>
+          <span class="muted"> — ${esc(primary.proves || primary.typeLabel || "")}</span></p>` : ""}
+        ${thumbs ? `<div class="mc-ev-thumbs">${thumbs}</div>` : ""}
+        ${sufficiency ? `<ul class="mc-ev-sufficiency">${sufficiency}</ul>` : ""}
+        ${strip.hasVisualProof === false ? `<p class="muted">No screenshot evidence on this mission.</p>` : ""}
+        <div class="mc-depth-links">
+          <button class="btn ghost sm" type="button" data-nav="evidence/${esc(id)}">Open gallery</button>
+          <button class="btn ghost sm" type="button" data-nav="timeline/${esc(id)}">Mission Journey</button>
+          <button class="btn ghost sm" type="button" data-nav="decisions/${esc(id)}">Decisions archive</button>
+          <a class="btn ghost sm" href="#mc-depth">Technical depth</a>
+        </div>
+      </section>`;
+    })();
 
     const journeyRailHtml = V2.journeyRailHtml;
 
@@ -1332,7 +1362,7 @@ We'll capture the context automatically.</p>
 
     // When deliverable certification is open, L1 still leads; DREV remains the cert briefing.
     // Suppress a second mission-level decision strip duplicate inside DREV (missionChoices cleared).
-    const l1 = outcomeHeroSec + execSummarySec + decisionSec + confGlanceSec + evidenceStripSec + journeyStripSec;
+    const l1 = outcomeHeroSec + execSummarySec + decisionSec + confGlanceSec + journeyStripSec + evidenceStripSec;
     const certOrOutcome = showOutcome ? outcomeSec : "";
 
     return shell(s.title || "Mission Dashboard", {
@@ -1708,15 +1738,57 @@ We'll capture the context automatically.</p>
         + `<div class="empty"><span class="spin"></span> Loading evidence…</div></div>`;
     }
     const page = V2.state.evidenceVm;
-    const cards = (page.artifacts || []).map((a) => `<article class="mc-card mc-ev-card">
-      <div class="mc-card-h"><b>${esc(a.title)}</b><span class="mc-pill">${esc(a.typeLabel)}</span></div>
-      <p><b>Proves:</b> ${esc(a.proves)}</p>
-      ${a.acceptanceCriteriaIds?.length ? `<p class="muted">Criteria: ${esc(a.acceptanceCriteriaIds.join(", "))}</p>` : ""}
-      <p class="muted">${esc(a.producedBy)} · ${esc(a.whenLabel)}${a.commit ? ` · ${esc(a.commit)}` : ""}</p>
-      ${a.command ? `<p class="mono">${esc(a.command)}${a.exitCode != null ? ` → ${a.exitCode === 0 ? "passed" : "failed"}` : ""}</p>` : ""}
-      ${a.previewLabel ? `<div>${esc(a.previewLabel)}</div>` : ""}
-      ${a.technicalPath ? `<details class="mc-diag"><summary>Technical location</summary><code>${esc(a.technicalPath)}</code></details>` : ""}
-    </article>`).join("") || `<div class="rempty">No evidence collected yet.</div>`;
+    const kinds = (page.kinds || []).map((k) => `<li>${esc(k.label)}</li>`).join("");
+    const primary = page.primaryProof;
+    const sufficiency = (page.sufficiency?.statements || page.sufficiency || [])
+      .map((s) => `<li class="tone-${esc(s.tone || "info")}">${esc(s.text)}</li>`).join("");
+
+    function cardHtml(a) {
+      if (!a) return "";
+      const img = a.previewHref && a.presentation === "media"
+        ? `<a class="mc-ev-media" href="${esc(a.previewHref)}" target="_blank" rel="noopener">
+            <img src="${esc(a.previewHref)}" alt="${esc(a.title)}" loading="lazy" />
+          </a>`
+        : "";
+      return `<article class="mc-card mc-ev-card cat-${esc(a.category || "")} result-${esc(a.result || "")}">
+        ${a.fixtureOnly ? `<p class="mc-ev-fixture">Fixture-only evidence</p>` : ""}
+        ${img}
+        <div class="mc-card-h">
+          <b>${esc(a.title)}</b>
+          <span class="mc-pill">${esc(a.typeLabel)}</span>
+        </div>
+        <p class="muted">${esc(a.categoryLabel || "")}${a.comparisonRole ? ` · ${esc(a.comparisonRole)}` : ""}</p>
+        <p><b>Proves:</b> ${esc(a.proves)}</p>
+        <p><b>Result:</b> ${esc(a.resultLabel || "—")}</p>
+        <p class="muted">${esc(a.producedBy)} · ${esc(a.whenLabel || "—")}${a.commit ? ` · ${esc(a.commit)}` : ""}
+          ${a.environment ? ` · ${esc(a.environment)}` : ""}</p>
+        ${a.acceptanceCriteriaIds?.length ? `<p class="muted">Criteria: ${esc(a.acceptanceCriteriaIds.join(", "))}</p>` : ""}
+        <details class="mc-diag"><summary>Technical details</summary>
+          ${a.command ? `<p class="mono">${esc(a.command)}${a.exitCode != null ? ` → ${a.exitCode === 0 ? "passed" : "failed"}` : ""}</p>` : ""}
+          ${a.technicalPath ? `<code>${esc(a.technicalPath)}</code>` : `<p class="muted">No file path recorded</p>`}
+          <pre class="mono">${esc(JSON.stringify(a.provenance || { evidenceId: a.evidenceId }, null, 2))}</pre>
+        </details>
+      </article>`;
+    }
+
+    const pairHtml = (page.pairs || []).map((p) => `<section class="mc-ev-pair">
+      <h4>${esc(p.title || "Before / After")}</h4>
+      <p class="muted">${esc(p.whatChanged || "")}</p>
+      <div class="mc-ev-pair-grid">
+        <div><p class="mc-ev-pair-label">Before</p>${cardHtml(p.before)}</div>
+        <div><p class="mc-ev-pair-label">After</p>${cardHtml(p.after)}</div>
+      </div>
+    </section>`).join("");
+
+    const groups = (page.groups || []).map((g) => `<section class="mc-sec mc-ev-group" id="ev-${esc(g.id)}">
+      <h3>${esc(g.label)} <span class="muted">(${esc(String(g.count))})</span></h3>
+      <div class="mc-ev-grid">${(g.items || []).map(cardHtml).join("")}</div>
+    </section>`).join("");
+
+    // Fallback flat list if groups empty but artifacts exist
+    const flat = !groups && (page.artifacts || []).length
+      ? `<div class="mc-ev-grid">${page.artifacts.map(cardHtml).join("")}</div>`
+      : "";
 
     const cov = (page.coverage || []).map((c) =>
       `<div class="mc-ac">${esc(c.statusLabel)} — ${esc(c.statement)}</div>`).join("");
@@ -1724,9 +1796,25 @@ We'll capture the context automatically.</p>
     return shell(page.title || "Evidence", {
       missionId: mid,
       active: "evidence",
-      lead: "What the work proves — not filesystem paths.",
-    }) + `<section class="mc-sec"><h3>Acceptance coverage</h3>${cov || `<div class="muted">No criteria mapped</div>`}</section>
-      <div class="mc-list">${cards}</div></div>`;
+      lead: page.empty
+        ? (page.emptyMessage || "Director is waiting on proof artifacts")
+        : "Proof first — paths and commands stay under Technical details.",
+    }) + `
+      <section class="mc-sec mc-ev-hero">
+        ${kinds ? `<ul class="mc-ev-kinds">${kinds}</ul>` : ""}
+        ${primary ? `<p class="mc-ev-primary"><span class="muted">Strongest proof</span><br/><b>${esc(primary.title)}</b>
+          <span class="muted"> — ${esc(primary.proves || "")}</span></p>` : ""}
+        ${sufficiency ? `<ul class="mc-ev-sufficiency">${sufficiency}</ul>` : ""}
+      </section>
+      ${pairHtml}
+      ${groups || flat || `<div class="rempty">${esc(page.emptyMessage || "No evidence collected yet.")}</div>`}
+      <details class="mc-sec">
+        <summary><h3 style="display:inline">Acceptance coverage</h3>
+          <span class="muted"> — secondary to gallery</span>
+        </summary>
+        ${cov || `<div class="muted">No criteria mapped</div>`}
+      </details>
+    </div>`;
   };
 
   V2.viewKickoff = function (missionId) {
