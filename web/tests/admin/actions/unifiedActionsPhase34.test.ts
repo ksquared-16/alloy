@@ -120,7 +120,13 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         expect(out.error).toMatch(/select a record/i);
     });
 
-    it("falls back safely for unknown action keys", async () => {
+    // Renamed from "falls back safely for unknown action keys". It asserted
+    // ok === true together with "no fetch was issued" — i.e. success reported
+    // without anything executing. That is not safe: it is how send_tour_invitation
+    // told operators an invitation had gone out while creating no invitation, no
+    // message and no event. The no-request assertion is kept; the success claim
+    // is inverted, because an unrunnable command must say so.
+    it("refuses unknown action keys instead of reporting success", async () => {
         const fetchSpy = vi.spyOn(globalThis, "fetch");
         const action: ResolvedActionForClient = {
             key: "unknown_custom_action",
@@ -139,8 +145,10 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
             entityId: "opp-1",
             context: { surface: "record_header" },
         });
-        expect(out.ok).toBe(true);
+        expect(out.ok).toBe(false);
         expect(resolveRelationshipActionKeyFromResolvedAction(action)).toBeNull();
+        // Still no request — the command genuinely cannot run. What changed is
+        // that it now admits that rather than claiming completion.
         expect(fetchSpy).not.toHaveBeenCalled();
         fetchSpy.mockRestore();
     });
