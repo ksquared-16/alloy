@@ -23,6 +23,11 @@ import {
 } from "./processingResolutionsDb";
 import type { IntakeFact } from "@/lib/intake/types";
 import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
+import {
+    captureIdentityGenerationJudgments,
+    type CaptureGenerationDeps,
+    type GenerationCaptureResult,
+} from "./trustAdapter/captureIdentityGeneration";
 
 function bandToLegacyConfidence(band: string): IntakeRecordMatchConfidence {
     switch (band) {
@@ -48,6 +53,15 @@ export type CanonicalResolutionRunResult = {
     resolutionRows: ProcessingResolutionRow[];
     factsPersisted: boolean;
     resolutionsPersisted: boolean;
+    /**
+     * Per-subject Trust governance status (Phase 1.5).
+     *
+     * Purely informational and OPTIONAL: `null` when capture was suppressed,
+     * absent entirely for callers that construct a result without running the
+     * engine. It never affects whether this generation succeeded, so requiring
+     * it would force unrelated constructors to declare a field they cannot know.
+     */
+    trustCapture?: GenerationCaptureResult | null;
 };
 
 function guardiansFromHousehold(household: IntakeHouseholdCandidate) {
@@ -207,6 +221,13 @@ export async function runCanonicalIdentityResolution(input: {
     locationId?: string | null;
     facts?: IntakeFact[];
     generationId?: string;
+    /**
+     * Trust governance capture (Phase 1.5). Defaults ON in production.
+     * `false` suppresses it entirely — the control arm proving Processing
+     * behaviour is byte-identical with and without Trust. An object injects
+     * certification seams.
+     */
+    trustCapture?: false | CaptureGenerationDeps;
 }): Promise<CanonicalResolutionRunResult> {
     const generationId = input.generationId ?? newGenerationId();
 
@@ -290,6 +311,25 @@ export async function runCanonicalIdentityResolution(input: {
         .eq("org_id", input.orgId)
         .eq("id", input.caseId);
 
+    // ---- Trust adoption Phase 1.5 -------------------------------------------
+    // The generation is now DURABLE: every subject row is persisted and the case
+    // status is committed. Only here is the judgment stable enough to govern,
+    // and only here is it unambiguously the ENGINE's — no operator has acted.
+    //
+    // Additive and non-blocking by construction: it never throws, it cannot
+    // change a resolution row, and a Trust outage produces durable per-subject
+    // gaps rather than failing this generation.
+    let trustCapture: GenerationCaptureResult | null = null;
+    if (input.trustCapture !== false) {
+        trustCapture = await captureIdentityGenerationJudgments(input.supabase, {
+            orgId: input.orgId,
+            caseId: input.caseId,
+            generationId,
+            resolutionRows,
+            deps: typeof input.trustCapture === "object" ? input.trustCapture : undefined,
+        });
+    }
+
     return {
         generationId,
         inputFactsHash,
@@ -298,5 +338,6 @@ export async function runCanonicalIdentityResolution(input: {
         resolutionRows,
         factsPersisted: Boolean(input.facts?.length),
         resolutionsPersisted: true,
+        trustCapture,
     };
 }

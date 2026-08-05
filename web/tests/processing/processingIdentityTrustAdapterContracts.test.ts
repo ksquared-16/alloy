@@ -465,9 +465,21 @@ describe("P13-E — the material carries no execution or provider authority", ()
         }
     });
 
-    it("is a pure function — no I/O, no persistence, no Trust import", () => {
+    /**
+     * Scoped to the PURE modules. Phase 1.5 added capture, reconciliation and a
+     * gap store to this directory; those legitimately persist. What must stay
+     * pure is the contract layer this phase defined.
+     */
+    const PURE_ADAPTER_MODULES = [
+        "identityTrustDecisionMaterial.ts",
+        "identityAdoptionIdentity.ts",
+        "safeExplanation.ts",
+        "governedIdentitySchema.ts",
+    ];
+
+    it("the contract layer is pure — no I/O, no persistence, no Trust import", () => {
         const dir = join(WEB_ROOT, "lib/pos/processingIdentity/trustAdapter");
-        for (const file of readdirSync(dir)) {
+        for (const file of PURE_ADAPTER_MODULES) {
             const src = readFileSync(join(dir, file), "utf8");
             expect(src).not.toContain("@/lib/trust");
             expect(src).not.toContain("supabase");

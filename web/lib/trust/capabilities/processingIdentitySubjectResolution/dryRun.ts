@@ -17,7 +17,10 @@
 
 import { createDecisionContract } from "@/lib/trust/contract/createDecisionContract";
 import type { TrustChannel, TrustInitiatingActor } from "@/lib/trust/contract/decisionContractTypes";
-import type { InformationClass } from "@/lib/trust/classification/informationClasses";
+import { PROCESSING_IDENTITY_SEMANTIC_MAP } from "@/lib/trust/capabilities/processingIdentitySubjectResolution/semanticMap";
+
+/** Re-exported for existing consumers; defined in its own leaf module. */
+export { PROCESSING_IDENTITY_SEMANTIC_MAP };
 import {
     PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY,
     PROCESSING_IDENTITY_SUBJECT_RESOLUTION_INFORMATION_KEY,
@@ -28,35 +31,6 @@ import { createNullTrustRepository } from "@/lib/trust/persistence/trustDecision
 import { executeDecisionContract } from "@/lib/trust/runtime/trustRuntime";
 import type { TrustRuntimeStep } from "@/lib/trust/runtime/trustRuntime";
 
-/**
- * Meaning of each element, by meaning rather than by field name.
- *
- * Every element is `operational`: a disposition, bounded categories, counts, a
- * band and Processing-authored sentences. **None is `identity`** — which is why
- * the class's privacy policy can prohibit that class outright. An
- * identity-class element reaching here would mean the adapter contract was
- * bypassed, and the transform refuses rather than minimizing.
- *
- * Keys are the FLATTENED child keys, because the runtime flattens one level of
- * declared information before classifying it.
- */
-export const PROCESSING_IDENTITY_SEMANTIC_MAP: Readonly<Record<string, InformationClass>> = {
-    subject_ref: "operational",
-    subject_role: "operational",
-    disposition: "operational",
-    disposition_source: "operational",
-    review_requirement: "operational",
-    confidence_band: "operational",
-    ambiguity_categories: "operational",
-    conflict_categories: "operational",
-    blocking_reason_codes: "operational",
-    evidence: "operational",
-    safe_explanations: "operational",
-    adoption_id: "operational",
-    input_facts_hash: "operational",
-    material_projection_version: "operational",
-    identity_resolver_version: "operational",
-};
 
 export type IdentityDryRunInput = {
     readonly org_id: string;
