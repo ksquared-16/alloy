@@ -38,6 +38,8 @@ DX-0 doctrine lock → DX-1 Overview L1 → DX-2 confidence → DX-3 decisions �
 
 **DX-5.5 Mission Continuation evidence:** [`DX5_5-EVIDENCE.md`](DX5_5-EVIDENCE.md)
 
+**DX-6 Director Collaboration evidence:** [`DX6-EVIDENCE.md`](DX6-EVIDENCE.md)
+
 ## Thirty-second success gate
 
 A first-time Director answers: what happened · succeed? · confidence · why · evidence · decision · next — without opening Depth.
