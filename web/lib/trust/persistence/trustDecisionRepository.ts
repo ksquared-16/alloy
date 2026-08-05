@@ -37,6 +37,16 @@ export const TRUST_OBSERVATION_KINDS = [
 export type TrustObservationKind = (typeof TRUST_OBSERVATION_KINDS)[number];
 
 export type TrustObservationInput = {
+    /**
+     * Optional deterministic primary key.
+     *
+     * `id` is a `uuid PRIMARY KEY DEFAULT gen_random_uuid()`: omit it and the
+     * database generates one, supply it and the primary key becomes the
+     * exactly-once authority for observations whose identity is derivable. That
+     * is what makes an equivalent append fail loudly rather than duplicate,
+     * without a second idempotency table or a new constraint.
+     */
+    readonly id?: string;
     readonly org_id: string;
     readonly package_id: string;
     readonly observation_kind: TrustObservationKind;
@@ -152,6 +162,8 @@ export function createSupabaseTrustRepository(): TrustRepository {
         },
         async insertObservation(input) {
             const { error } = await createAdminClient().from("trust_decision_observations").insert({
+                // Omitted entirely when undefined, so the column default applies.
+                ...(input.id ? { id: input.id } : {}),
                 org_id: input.org_id,
                 package_id: input.package_id,
                 observation_kind: input.observation_kind,

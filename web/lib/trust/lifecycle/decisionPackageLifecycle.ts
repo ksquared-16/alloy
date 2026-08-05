@@ -40,6 +40,10 @@ import {
     parseExpiryKind,
     readStringDetail,
 } from "@/lib/trust/lifecycle/lifecycleObservation";
+import {
+    parseSupersessionSource,
+    type SupersessionSource,
+} from "@/lib/trust/lifecycle/supersessionLineage";
 
 // ---------------------------------------------------------------------------
 // Projection shape
@@ -130,9 +134,26 @@ export type LifecycleSupersession = {
     readonly superseding_package_id: string | null;
     readonly reason: string | null;
     /**
+     * Where the replacing authority lives.
+     *
+     * `replacement_decision_package` names a successor package;
+     * `external_authority_decision` records that an authority outside Trust —
+     * today a Processing operator decision — replaced the judgment, in which
+     * case `superseding_package_id` is legitimately `null` and
+     * {@link LifecycleSupersession.superseding_reference} carries the evidence.
+     *
+     * `null` only for history written before the source was recorded.
+     */
+    readonly source: SupersessionSource | null;
+    /** Opaque durable reference into the replacing authority's own record. */
+    readonly superseding_reference: string | null;
+    /**
      * Whether the superseding package was supplied so its org and lineage could
      * be checked. `false` means the claim was taken at face value and the
      * cross-org and cycle checks did not run.
+     *
+     * Always `false` for an external-authority supersession: there is no
+     * successor package to verify, by construction rather than by omission.
      */
     readonly lineage_verified: boolean;
     readonly evidence: LifecycleEvidence | null;
@@ -175,6 +196,12 @@ export const LIFECYCLE_PROJECTION_ERROR_CODES = [
     "CROSS_ORG_SUPERSESSION",
     "SUPERSESSION_CYCLE",
     "MISSING_SUPERSEDING_PACKAGE_ID",
+    /**
+     * A supersession attributed to an authority outside Trust that names no
+     * durable reference into that authority's own record. "Something replaced
+     * it" without evidence is not lineage.
+     */
+    "MISSING_SUPERSESSION_REFERENCE",
     "MISSING_EXPIRY_KIND",
 ] as const;
 
@@ -401,18 +428,42 @@ export function projectDecisionPackageLifecycle(
     }
 
     // ---- 5. supersession ----------------------------------------------------
+    // A governed judgment stops being current in one of two ways: a newer
+    // Decision Package replaced it, or an authority OUTSIDE Trust did. The second
+    // is not a missing successor — it is a different kind of lineage, and it
+    // carries a durable reference into the deciding authority instead of an
+    // invented package id. Both are still exactly one claim per package.
     const supersededObs = byKind.get("superseded") ?? [];
     let supersession: LifecycleSupersession = {
         superseded: false,
         superseding_package_id: null,
         reason: null,
+        source: null,
+        superseding_reference: null,
         lineage_verified: false,
         evidence: null,
     };
     if (supersededObs.length > 0) {
-        const ids = new Set<string>();
+        /** One claim key per observation. Two distinct keys is ambiguous lineage. */
+        const claims = new Set<string>();
         for (const o of supersededObs) {
+            const source = parseSupersessionSource(o.detail.supersession_source);
             const id = readStringDetail(o.detail, "superseding_package_id");
+            const reference = readStringDetail(o.detail, "superseding_reference");
+
+            if (source === "external_authority_decision") {
+                if (!reference) {
+                    return fail(
+                        "MISSING_SUPERSESSION_REFERENCE",
+                        `A superseded observation on package ${pkg.id} attributes supersession to an external authority but names no detail.superseding_reference. Lineage must be deterministic.`,
+                        [o.id],
+                    );
+                }
+                claims.add(`external\u001f${reference}`);
+                continue;
+            }
+            // A replacement package, or history written before the source was
+            // recorded. Either way a successor id is mandatory.
             if (!id) {
                 return fail(
                     "MISSING_SUPERSEDING_PACKAGE_ID",
@@ -420,18 +471,24 @@ export function projectDecisionPackageLifecycle(
                     [o.id],
                 );
             }
-            ids.add(id);
+            claims.add(`package\u001f${id}`);
         }
-        if (ids.size > 1) {
+        if (claims.size > 1) {
             return fail(
                 "CONTRADICTORY_SUPERSESSION",
-                `Package ${pkg.id} claims to be superseded by more than one package (${[...ids].sort().join(", ")}). Lineage would be ambiguous.`,
+                `Package ${pkg.id} claims to be superseded by more than one authority (${[...claims]
+                    .map((c) => c.replace("\u001f", ":"))
+                    .sort()
+                    .join(", ")}). Lineage would be ambiguous.`,
                 supersededObs.map((o) => o.id),
             );
         }
 
-        const supersedingId = [...ids][0]!;
         const first = supersededObs[0]!;
+        const source = parseSupersessionSource(first.detail.supersession_source);
+        const external = source === "external_authority_decision";
+        const supersedingId = external ? null : readStringDetail(first.detail, "superseding_package_id");
+        const reference = readStringDetail(first.detail, "superseding_reference");
 
         if (supersedingId === pkg.id) {
             return fail(
@@ -441,7 +498,7 @@ export function projectDecisionPackageLifecycle(
             );
         }
 
-        const successor = input.supersedingPackages?.[supersedingId] ?? null;
+        const successor = supersedingId ? input.supersedingPackages?.[supersedingId] ?? null : null;
         if (successor) {
             if (successor.org_id !== pkg.org_id) {
                 return fail(
@@ -466,6 +523,8 @@ export function projectDecisionPackageLifecycle(
             superseded: true,
             superseding_package_id: supersedingId,
             reason: readStringDetail(first.detail, "reason"),
+            source,
+            superseding_reference: reference,
             lineage_verified: successor !== null,
             evidence: evidenceOf(first),
         };
@@ -487,7 +546,10 @@ export function projectDecisionPackageLifecycle(
         reason = "An execution authority acted. A change to the world outranks whether the recommendation is still current.";
     } else if (supersession.superseded) {
         disposition = "superseded";
-        reason = `A newer Decision Package (${supersession.superseding_package_id}) replaced this one before it was executed.`;
+        reason =
+            supersession.source === "external_authority_decision"
+                ? `An authority outside Trust replaced this judgment before it was executed (${supersession.superseding_reference}).`
+                : `A newer Decision Package (${supersession.superseding_package_id}) replaced this one before it was executed.`;
     } else if (expiry.expired) {
         disposition = "expired";
         reason = `The recommendation's window closed (${expiry.kind}) before it was executed.`;
