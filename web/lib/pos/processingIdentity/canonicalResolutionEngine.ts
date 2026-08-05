@@ -54,10 +54,14 @@ export type CanonicalResolutionRunResult = {
     factsPersisted: boolean;
     resolutionsPersisted: boolean;
     /**
-     * Per-subject Trust governance status (Phase 1.5). Additive: `null` when
-     * capture was suppressed. Never affects whether this generation succeeded.
+     * Per-subject Trust governance status (Phase 1.5).
+     *
+     * Purely informational and OPTIONAL: `null` when capture was suppressed,
+     * absent entirely for callers that construct a result without running the
+     * engine. It never affects whether this generation succeeded, so requiring
+     * it would force unrelated constructors to declare a field they cannot know.
      */
-    trustCapture: GenerationCaptureResult | null;
+    trustCapture?: GenerationCaptureResult | null;
 };
 
 function guardiansFromHousehold(household: IntakeHouseholdCandidate) {
