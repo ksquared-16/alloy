@@ -16,6 +16,7 @@ import { getAssignment, listAssignments, updateAssignment } from "./worker-assig
 import { listEvidence } from "./evidence.mjs";
 import { appendTimelineEvent, readTimeline } from "./timeline.mjs";
 import { submitOperatorDirectorMessage, listDirectorMessages } from "./director-comms.mjs";
+import { createCollaborationEntry } from "./mission-collaboration.mjs";
 import {
   executeDeliverableDirectorTurn,
   buildDeliverableDirectorInput,
@@ -1105,6 +1106,22 @@ export function acceptDeliverableReview(missionId, reviewId, {
 
   if (note) {
     try {
+      createCollaborationEntry({
+        missionId,
+        type: "approval_note",
+        body: note,
+        author: actor || "director",
+        status: "accepted",
+        deliverableId: review.assignment_id || null,
+        deliverableLabel: short,
+        title: `Approval Note — ${short}`,
+        source: "deliverable_certify",
+        nowMs,
+      });
+    } catch {
+      /* collaboration mirror is best-effort */
+    }
+    try {
       const out = submitOperatorDirectorMessage({
         missionId,
         reviewId,
@@ -1186,6 +1203,23 @@ export function requestDeliverableChanges(missionId, reviewId, {
     nowMs,
     idempotencyKey,
   });
+
+  try {
+    createCollaborationEntry({
+      missionId,
+      type: "revision_request",
+      body: verbatim,
+      author: actor || "director",
+      status: "open",
+      deliverableId: review.assignment_id || null,
+      deliverableLabel: shortDeliverableName(review.deliverable_title),
+      title: `Revision Request — ${shortDeliverableName(review.deliverable_title)}`,
+      source: "deliverable_request_changes",
+      nowMs,
+    });
+  } catch {
+    /* best-effort */
+  }
 
   const turn = executeDeliverableDirectorTurn(missionId, review, {
     trigger: "request_changes",

@@ -692,9 +692,10 @@ Presentation-only missions. No confidence/certification/evidence engine rewrites
 | **DX-4** | Story timeline | Phase rail + gates; engineering history collapse; merge Recent Progress | DX-1 |
 | **DX-5** | Evidence gallery | Cards, filters, before/after; UI-primary screenshots; L1 strip | DX-1 |
 | **DX-5.5** | Mission continuation | Recommended Next Action + alternatives (Review Findings, Provide Feedback, Close Without Continuing); presentation mappings only | DX-1…5 |
-| **DX-6** | Levels + Builder mode | L1–L4 navigation chips; Executive/Builder toggle; mobile remote layout | DX-2…5.5 |
-| **DX-7** | Remote-ready polish | Annotated comparison hooks, preview/demo slots (UI stubs OK if producers not ready) | DX-5 |
-| **DX-8** | QA + migration | Suites below; default Executive for new sessions; Builder opt-in | DX-6 |
+| **DX-6** | Director Collaboration | Durable mission-scoped executive guidance (feedback, decisions, revision requests); not chat | DX-5.5 |
+| **DX-7** | Remote Review | Annotated comparison hooks, remote-ready polish | DX-5…6 |
+| **DX-8** | Mission List Convergence | Executive mission list / inbox convergence | DX-6…7 |
+| **DX-9** | Worker Operations | Worker ops demoted behind executive surface | DX-8 |
 
 **Suggested first implementation mission:** DX-1 + DX-3 (hierarchy + decisions) — highest executive impact.
 

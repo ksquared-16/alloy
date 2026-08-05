@@ -950,6 +950,18 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .mc-feedback-panel[hidden]{display:none!important}
 .mc-feedback-text{width:100%;margin:8px 0 10px;padding:10px;border:1px solid var(--line,#d5d0c8);border-radius:8px;font:inherit;resize:vertical;min-height:88px}
 .mc-findings-focus{outline:2px solid rgba(47,107,69,.45);outline-offset:4px;border-radius:8px}
+.mc-collaboration .mc-collab-list{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.mc-collab-card{background:#fff}
+.mc-collab-card.projected{border-style:dashed}
+.mc-collab-card.status-open{border-color:rgba(180,120,40,.35)}
+.mc-collab-card.status-accepted,.mc-collab-card.status-resolved{border-color:rgba(47,107,69,.35)}
+.mc-collab-card.status-rejected{border-color:rgba(140,50,50,.35)}
+.mc-collab-body{white-space:pre-wrap;margin:8px 0;line-height:1.45}
+.mc-collab-title{font-weight:650;margin:0 0 4px}
+.mc-collab-meta{font-size:12.5px;margin:0}
+.mc-collab-compose{margin-top:12px}
+.mc-collab-compose summary{cursor:pointer;font-weight:650}
+.mc-feedback-type{display:block;width:100%;max-width:320px;margin:6px 0 10px;padding:8px;border:1px solid var(--line,#d5d0c8);border-radius:8px;font:inherit;background:#fff}
 .mc-conf-glance-line{font-size:16px;margin:0 0 8px}
 .mc-conf-explained .mc-conf-overall{display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:start;margin:8px 0 14px}
 .mc-conf-explained .mc-conf-pct{font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1;color:#1f4d30}

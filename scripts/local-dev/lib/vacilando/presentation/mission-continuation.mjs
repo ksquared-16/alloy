@@ -530,10 +530,11 @@ export function missionContinuationVm(missionId, {
     feedbackSurface: {
       id: "mc-feedback-panel",
       title: "Provide Feedback",
-      blurb: "The mission direction is fundamentally correct. Capture refinement notes here — distinct from Request More Discovery. Threaded Director conversations ship in a later slice.",
+      blurb: "The mission direction is fundamentally correct. Capture refinement notes here — distinct from Request More Discovery. Notes persist as Director Collaboration on this mission.",
       placeholder: "Example: I want MFA added. Billing should move before Scheduling. Keep the architecture but simplify the role editor.",
-      captureReady: false,
-      captureNote: "Feedback capture is prepared on this surface only — not yet persisted as a threaded conversation.",
+      captureReady: true,
+      captureNote: "Saved notes become durable collaboration entries (Feedback / Implementation Guidance). Not a chat thread.",
+      defaultType: "feedback",
     },
   };
 }

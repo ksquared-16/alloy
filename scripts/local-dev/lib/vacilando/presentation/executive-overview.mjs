@@ -27,6 +27,10 @@ import {
   missionContinuationVm,
   missionDecisionCardsVm,
 } from "./mission-continuation.mjs";
+import {
+  directorCollaborationVm,
+  collaborationStripVm,
+} from "./director-collaboration.mjs";
 
 export {
   explainedConfidenceVm,
@@ -36,6 +40,8 @@ export {
   executiveEvidenceStripVm,
   missionContinuationVm,
   missionDecisionCardsVm,
+  directorCollaborationVm,
+  collaborationStripVm,
 };
 
 /** @typedef {{ id: string, kind: string, label: string, explanation?: string, missionId?: string }} PostureChoice */
@@ -338,6 +344,8 @@ export function composeExecutiveL1(missionId, {
   const explained = confidence.explained
     || explainedConfidenceVm(missionId, { reviewVm, missionConfidence, decisions });
   const journey = missionJourneyStripVm(missionId);
+  const collaboration = collaborationStripVm(missionId);
+  const collaborationFull = directorCollaborationVm(missionId);
 
   // Prefer recommended continuation action over vague "Review outcome"
   let primaryAction = decisions.primaryAction;
@@ -376,6 +384,8 @@ export function composeExecutiveL1(missionId, {
     evidence,
     confidence: explained,
     journey,
+    collaboration,
+    collaborationFull,
     primaryAction,
     depthHint: "Technical depth holds local app, workers, usage, work inventory, and confidence calculation.",
   };
