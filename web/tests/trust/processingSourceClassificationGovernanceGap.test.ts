@@ -234,6 +234,9 @@ const FIXED_NOW = "2026-08-05T12:00:00.000Z";
 const SUBSIDY: ClassifyNonFormSourceInput = { sourceKind: "document", fileName: "2026_CCAP_Subsidy_Contract.pdf" };
 const SUBSIDY_DOC = { sourceKind: "document", fileName: "2026_CCAP_Subsidy_Contract.pdf" };
 
+/** A lookup that finds nothing — the failing paths never reach a stored package. */
+const missingLookup = async () => null;
+
 const failingRepository: TrustRepository = {
     async insertContract() { throw new Error("trust db down"); },
     async advanceContractLifecycle() {},
@@ -256,12 +259,12 @@ function silenceConsole() {
 describe("GAP-A — Processing succeeds; Trust failure becomes a durable gap", () => {
     it("direct success records a governed decision and NO gap", async () => {
         const store = makeDurableStore();
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, contracts, packages } = makeRecordingRepository();
         const seen: string[] = [];
 
         const stored = await maybeClassifyProcessingCaseFromDocumentSafe(store.client(), {
             orgId: "org-1", caseId: "case-1", document: SUBSIDY_DOC,
-            governance: { repository, nowIso: FIXED_NOW, clock: () => 0 },
+            governance: { repository, lookup: lookupOver(contracts, packages), nowIso: FIXED_NOW, clock: () => 0 },
             onGovernanceResult: (r) => seen.push(r.status),
         });
 
@@ -278,7 +281,7 @@ describe("GAP-A — Processing succeeds; Trust failure becomes a durable gap", (
 
         const stored = await maybeClassifyProcessingCaseFromDocumentSafe(store.client(), {
             orgId: "org-1", caseId: "case-1", document: SUBSIDY_DOC,
-            governance: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            governance: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
             onGovernanceResult: (r) => results.push(r.status),
         });
 
@@ -303,7 +306,7 @@ describe("GAP-A — Processing succeeds; Trust failure becomes a durable gap", (
 
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result,
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         const snap = store.exceptions[0]!.subject_ref as Record<string, unknown>;
@@ -353,7 +356,7 @@ describe("GAP-A — Processing succeeds; Trust failure becomes a durable gap", (
 
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input, result: classifyNonFormSource(input),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         const serialized = JSON.stringify(store.exceptions[0]);
@@ -373,7 +376,7 @@ describe("GAP-A — Processing succeeds; Trust failure becomes a durable gap", (
         const run = () =>
             governSourceClassification(store.client(), {
                 orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-                deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+                deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
             });
         await run();
         await run();
@@ -398,7 +401,7 @@ describe("GAP-B — the gap survives a process boundary and reconciles later", (
         // --- request 1: Processing succeeds, Trust fails -------------------
         await maybeClassifyProcessingCaseFromDocumentSafe(store.client(), {
             orgId: "org-1", caseId: "case-1", document: SUBSIDY_DOC,
-            governance: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            governance: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
         const caseUpdatesAfterCapture = store.caseUpdates.length;
 
@@ -434,7 +437,7 @@ describe("GAP-B — the gap survives a process boundary and reconciles later", (
 
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: original,
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         const { repository, contracts, packages } = makeRecordingRepository();
@@ -462,7 +465,7 @@ describe("GAP-B — the gap survives a process boundary and reconciles later", (
         const spies = silenceConsole();
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         const gaps = await listUnresolvedTrustGovernanceGaps(store.client(), { orgId: "org-1" });
@@ -495,7 +498,7 @@ describe("GAP-C — recovery is exactly-once", () => {
     async function captureGap(store: ReturnType<typeof makeDurableStore>, caseId = "case-1", input = SUBSIDY) {
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId, input, result: classifyNonFormSource(input),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
     }
 
@@ -608,7 +611,7 @@ describe("GAP-D — boundaries hold", () => {
 
         const outcome = await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input, result: classifyNonFormSource(input),
-            deps: { repository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository, lookup: lookupOver(contracts, packages), nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         expect(outcome.status).toBe("skipped_unsupported");
@@ -635,7 +638,7 @@ describe("GAP-D — boundaries hold", () => {
         const failed = makeDurableStore();
         const c = await maybeClassifyProcessingCaseFromDocumentSafe(failed.client(), {
             orgId: "org-1", caseId: "case-1", document: SUBSIDY_DOC,
-            governance: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            governance: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         expect(strip(b)).toBe(strip(a));
@@ -661,7 +664,7 @@ describe("GAP-D — boundaries hold", () => {
         // processing_cases, so reaching one would fail the test outright.
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
         const { repository, contracts, packages } = makeRecordingRepository();
         const gaps = await listUnresolvedTrustGovernanceGaps(store.client(), { orgId: "org-1" });
@@ -685,7 +688,7 @@ describe("GAP-D — boundaries hold", () => {
 
         const outcome = await governSourceClassification(brokenGapStore, {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         expect(outcome.status).toBe("gap_unrecordable");

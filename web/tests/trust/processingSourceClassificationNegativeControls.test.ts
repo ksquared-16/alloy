@@ -9,7 +9,7 @@
  * @see docs/platform/planning/trust-adoption/processing/PHASE-1-PROCESSING-ADOPTION-ASSESSMENT.md
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -41,14 +41,32 @@ function sourceFilesUnder(relative: string): string[] {
     return out;
 }
 
+/**
+ * A recording repository that ENFORCES the two uniqueness constraints the real
+ * schema declares: `trust_decision_contracts.id` is a PRIMARY KEY and
+ * `trust_decision_packages.contract_id` is UNIQUE.
+ *
+ * Without them a fake happily stores duplicates the database would refuse, and
+ * every idempotency assertion here would be theatre.
+ */
 function makeRecordingRepository() {
     const contracts: DecisionContractV1[] = [];
     const packages: DecisionPackageV1[] = [];
     const usage: ReasoningUsageInput[] = [];
     const repository: TrustRepository = {
-        async insertContract(c) { contracts.push(c); },
+        async insertContract(c) {
+            if (contracts.some((x) => x.id === c.id)) {
+                throw new Error(`duplicate key value violates unique constraint "trust_decision_contracts_pkey"`);
+            }
+            contracts.push(c);
+        },
         async advanceContractLifecycle() {},
-        async insertPackage(p) { packages.push(p); },
+        async insertPackage(p) {
+            if (packages.some((x) => x.contract_id === p.contract_id)) {
+                throw new Error(`duplicate key value violates unique constraint "trust_decision_packages_contract_id_key"`);
+            }
+            packages.push(p);
+        },
         async insertObservation() {},
         async insertReasoningUsage(u) { usage.push(u); },
     };
@@ -105,12 +123,16 @@ describe("NC-1 — classification rules copied into lib/trust would be caught", 
         "ccap",
         "voucher",
         "payment advice",
-        "reconciliation",
         "shot record",
         "izr",
         "intake packet",
         "application form",
         "vaccination",
+        // Deliberately excluded, because a substring scan reports them from
+        // ordinary prose and hex rather than from a copied rule:
+        //   "reconciliation" — also the English name of the recovery path;
+        //   "eob", "era", "835" — too short; they collide inside other words
+        //   and inside hex digests.
     ];
 
     it("the tokens are genuinely present in the Processing classifier", () => {
@@ -166,7 +188,7 @@ describe("NC-3 — an unsupported source that reached Trust would be caught", ()
         const input: ClassifyNonFormSourceInput = { sourceKind: "form_submission", fileName: "x.pdf" };
         await governSourceClassification(null, {
             orgId: "o", caseId: "c", input, result: classifyNonFormSource(input),
-            deps: { repository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository, lookup: async () => null, nowIso: FIXED_NOW, clock: () => 0 },
         });
         expect(contracts).toHaveLength(0);
 
@@ -283,25 +305,59 @@ describe("NC-7 — duplicate package creation inflating metrics would be caught"
         const { repository, packages, usage } = makeRecordingRepository();
         await governSourceClassification(null, {
             orgId: "o", caseId: "c", input: SUBSIDY_INPUT, result: classifyNonFormSource(SUBSIDY_INPUT),
-            deps: { repository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository, lookup: async () => null, nowIso: FIXED_NOW, clock: () => 0 },
         });
         expect(packages).toHaveLength(1);
         expect(usage).toHaveLength(1);
     });
 
-    it("two packages against one contract is detectable — contract_id is the dedupe key", async () => {
+    /**
+     * The database is the backstop, not the lookup.
+     *
+     * With the lookup deliberately broken (always "not governed"), a second
+     * attempt for the same adoption identity derives the SAME deterministic
+     * contract id and loses on the contract table's primary key. The seam then
+     * re-reads; because the lookup is broken it still finds nothing, so the
+     * error propagates and the caller records a gap rather than duplicating.
+     *
+     * Either way, exactly one governed decision exists.
+     */
+    it("a broken lookup cannot duplicate — the contract primary key refuses the second create", async () => {
         const { repository, contracts, packages } = makeRecordingRepository();
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
         const run = () =>
             governSourceClassification(null, {
                 orgId: "o", caseId: "c", input: SUBSIDY_INPUT, result: classifyNonFormSource(SUBSIDY_INPUT),
-                deps: { repository, nowIso: FIXED_NOW, clock: () => 0 },
+                deps: { repository, lookup: async () => null, nowIso: FIXED_NOW, clock: () => 0 },
             });
-        await run();
-        await run();
-        const contractIds = packages.map((p) => p.contract_id);
-        // One package per contract. A duplicate would collapse this set.
-        expect(new Set(contractIds).size).toBe(packages.length);
-        expect(contracts).toHaveLength(packages.length);
+
+        const first = await run();
+        const second = await run();
+
+        expect(first.status).toBe("governed");
+        // The second could not create, and could not pretend it had.
+        expect(second.status).not.toBe("governed");
+        expect(contracts).toHaveLength(1);
+        expect(packages).toHaveLength(1);
+        expect(packages[0]!.contract_id).toBe(contracts[0]!.id);
+        warn.mockRestore();
+        error.mockRestore();
+    });
+
+    it("the same adoption identity always derives the same contract id", async () => {
+        const { repository, contracts } = makeRecordingRepository();
+        const other = makeRecordingRepository();
+        const call = (repo: TrustRepository) =>
+            governSourceClassification(null, {
+                orgId: "o", caseId: "c", input: SUBSIDY_INPUT, result: classifyNonFormSource(SUBSIDY_INPUT),
+                deps: { repository: repo, lookup: async () => null, nowIso: FIXED_NOW, clock: () => 0 },
+            });
+        await call(repository);
+        await call(other.repository);
+        // Two independent stores, one derived identity — which is exactly what
+        // makes the primary key a real serialization point.
+        expect(contracts[0]!.id).toBe(other.contracts[0]!.id);
     });
 
     it("a refused decision still produces exactly one package, never zero and never two", async () => {

@@ -34,6 +34,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+    captureProcessingSourceClassification,
     decideProcessingSourceClassification,
     createSupabaseGovernedDecisionLookup,
     type GovernedDecisionLookup,
@@ -96,7 +97,8 @@ export async function reconcileOneTrustGovernanceGap(
 
     // ---- 1. Pre-check: is this already governed? ----------------------------
     // Authoritative, because contract_id is UNIQUE on the package table. This is
-    // what makes a retry after an ambiguous failure safe.
+    // what makes a retry after an ambiguous failure safe, and it avoids taking a
+    // claim for work that is already done.
     const existing = await lookup(identity);
     if (existing) {
         await resolveTrustGovernanceGap(supabase, {
@@ -116,25 +118,29 @@ export async function reconcileOneTrustGovernanceGap(
     const claimed = await claimTrustGovernanceGap(supabase, { gap, nowIso: now() });
     if (!claimed) return { status: "claim_lost" };
 
-    // ---- 3. Replay the judgment from the snapshot --------------------------
+    // ---- 3. Replay the judgment through the SAME seam the direct path uses --
     // The classifier is NOT re-run and `processing_cases` is NOT read: the
     // stored classification is the judgment, and re-deriving it would defeat
-    // the point of having recorded it.
-    let decision;
+    // the point of having recorded it. `capture` also absorbs a create that
+    // raced the direct path, returning that winner rather than duplicating it.
+    let capture;
     try {
-        decision = await decide({
-            org_id: gap.orgId,
-            processing_case_id: gap.caseId,
-            source_kind: s.source_kind,
-            classification: s.classification as unknown as Readonly<Record<string, unknown>>,
-            material_input_fingerprint: s.material_input_fingerprint,
-            material_input_version: s.material_input_version,
-            classifier_version: s.classifier_version,
-            initiating_actor: deps.initiating_actor ?? { actor_type: "system", actor_id: null },
-            channel: deps.channel ?? "system",
-            repository: deps.repository,
-            clock: deps.clock,
-        });
+        capture = await captureProcessingSourceClassification(
+            {
+                org_id: gap.orgId,
+                processing_case_id: gap.caseId,
+                source_kind: s.source_kind,
+                classification: s.classification as unknown as Readonly<Record<string, unknown>>,
+                material_input_fingerprint: s.material_input_fingerprint,
+                material_input_version: s.material_input_version,
+                classifier_version: s.classifier_version,
+                initiating_actor: deps.initiating_actor ?? { actor_type: "system", actor_id: null },
+                channel: deps.channel ?? "system",
+                repository: deps.repository,
+                clock: deps.clock,
+            },
+            { repository: deps.repository, lookup, decide },
+        );
     } catch (e) {
         // Unresolved by design. The claim already recorded the attempt, so retry
         // evidence is correct even though this attempt produced nothing.
@@ -144,15 +150,15 @@ export async function reconcileOneTrustGovernanceGap(
     // ---- 4. Resolve only on authoritative Trust success ---------------------
     await resolveTrustGovernanceGap(supabase, {
         gap: claimed,
-        contractId: decision.package.contract_id,
-        packageId: decision.package.id,
+        contractId: capture.contractId,
+        packageId: capture.packageId,
         nowIso: now(),
     });
 
     return {
-        status: "resolved",
-        contractId: decision.package.contract_id,
-        packageId: decision.package.id,
+        status: capture.reused ? "already_governed" : "resolved",
+        contractId: capture.contractId,
+        packageId: capture.packageId,
     };
 }
 

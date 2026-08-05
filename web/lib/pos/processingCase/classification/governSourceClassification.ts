@@ -38,7 +38,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustChannel, TrustInitiatingActor } from "@/lib/trust/contract/decisionContractTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
-import { decideProcessingSourceClassification } from "@/lib/trust/consumers/processingSourceClassification";
+import {
+    captureProcessingSourceClassification,
+    decideProcessingSourceClassification,
+    type GovernedDecisionLookup,
+} from "@/lib/trust/consumers/processingSourceClassification";
 import { PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY } from "@/lib/trust/capabilities/processingSourceClassification/keys";
 import {
     CLASSIFICATION_MATERIAL_INPUT_VERSION,
@@ -64,8 +68,21 @@ export type SourceClassificationGovernanceResult =
      * not a decision to refuse.
      */
     | { readonly status: "skipped_unsupported" }
-    /** One contract, one immutable package. */
-    | { readonly status: "governed"; readonly package: DecisionPackageV1 }
+    /**
+     * One contract, one immutable package, for one adoption identity.
+     *
+     * `reused` is true when this call recognized an existing governed result
+     * rather than creating one — a repeated classification of unchanged material
+     * is the SAME decision, so it emits no second package and no second metric.
+     * `package` is present only on the call that created it.
+     */
+    | {
+          readonly status: "governed";
+          readonly package: DecisionPackageV1 | null;
+          readonly contractId: string;
+          readonly packageId: string;
+          readonly reused: boolean;
+      }
     /**
      * Processing classified and stored; Trust did not. The gap is **durably
      * recorded** and recoverable by reconciliation. Not a success.
@@ -88,6 +105,8 @@ export type SourceClassificationGovernanceDeps = {
     readonly clock?: () => number;
     /** Seam for certification; production uses the real consumer. */
     readonly decide?: typeof decideProcessingSourceClassification;
+    /** Seam for certification; production uses the real Trust-record lookup. */
+    readonly lookup?: GovernedDecisionLookup;
 };
 
 /**
@@ -120,21 +139,33 @@ export async function governSourceClassification(
     const fingerprint = classificationMaterialFingerprint(args.input);
 
     try {
-        const decision = await decide({
-            org_id: args.orgId,
-            processing_case_id: args.caseId,
-            source_kind: args.input.sourceKind,
-            classification: governed as unknown as Readonly<Record<string, unknown>>,
-            material_input_fingerprint: fingerprint,
-            material_input_version: CLASSIFICATION_MATERIAL_INPUT_VERSION,
-            classifier_version: args.result.classifier_version,
-            initiating_actor: deps.initiating_actor ?? { actor_type: "system", actor_id: null },
-            channel: deps.channel ?? "system",
-            repository: deps.repository,
-            nowIso: deps.nowIso,
-            clock: deps.clock,
-        });
-        return { status: "governed", package: decision.package };
+        // The SAME seam reconciliation uses. A repeated classification of
+        // unchanged material returns the existing governed result rather than
+        // creating a second one.
+        const capture = await captureProcessingSourceClassification(
+            {
+                org_id: args.orgId,
+                processing_case_id: args.caseId,
+                source_kind: args.input.sourceKind,
+                classification: governed as unknown as Readonly<Record<string, unknown>>,
+                material_input_fingerprint: fingerprint,
+                material_input_version: CLASSIFICATION_MATERIAL_INPUT_VERSION,
+                classifier_version: args.result.classifier_version,
+                initiating_actor: deps.initiating_actor ?? { actor_type: "system", actor_id: null },
+                channel: deps.channel ?? "system",
+                repository: deps.repository,
+                nowIso: deps.nowIso,
+                clock: deps.clock,
+            },
+            { repository: deps.repository, lookup: deps.lookup, decide },
+        );
+        return {
+            status: "governed",
+            package: capture.package,
+            contractId: capture.contractId,
+            packageId: capture.packageId,
+            reused: capture.reused,
+        };
     } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
 

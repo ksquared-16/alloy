@@ -72,7 +72,16 @@ function makeRecordingRepository() {
             usage.push(u);
         },
     };
-    return { repository, contracts, packages, usage };
+    // Pre-wired governance deps, including a lookup backed by what THIS
+    // repository actually stored — so the suite exercises real
+    // adoption-identity idempotency rather than a stub that always misses.
+    const govDeps = {
+        repository,
+        lookup: lookupOver(contracts, packages),
+        nowIso: FIXED_NOW,
+        clock: () => 0,
+    };
+    return { repository, contracts, packages, usage, govDeps };
 }
 
 /** Fake Supabase that permits only `processing_cases` reads/updates. */
@@ -111,11 +120,33 @@ function makeFakeSupabase() {
 }
 
 const FIXED_NOW = "2026-08-05T12:00:00.000Z";
-const govDeps = (repository: TrustRepository) => ({
-    repository,
-    nowIso: FIXED_NOW,
-    clock: () => 0,
-});
+
+/**
+ * A lookup backed by what a recording repository actually stored, so these
+ * tests exercise real adoption-identity idempotency rather than a stub that
+ * always misses.
+ */
+function lookupOver(contracts: DecisionContractV1[], packages: DecisionPackageV1[]) {
+    return async (identity: {
+        org_id: string;
+        processing_case_id: string;
+        material_input_fingerprint: string;
+        classifier_version: string;
+    }) => {
+        const ids = contracts
+            .filter(
+                (c) =>
+                    c.org_id === identity.org_id &&
+                    c.correlation_id === identity.processing_case_id &&
+                    (c.context as Record<string, unknown>).material_input_fingerprint ===
+                        identity.material_input_fingerprint &&
+                    (c.context as Record<string, unknown>).classifier_version === identity.classifier_version,
+            )
+            .map((c) => c.id);
+        const pkg = packages.find((p) => ids.includes(p.contract_id));
+        return pkg ? { contract_id: pkg.contract_id, package_id: pkg.id } : null;
+    };
+}
 
 /** One representative input per supported non-form source kind. */
 const SUPPORTED_SOURCE_CASES: { kind: string; input: ClassifyNonFormSourceInput; expected: string }[] = [
@@ -212,7 +243,7 @@ describe("P1.1-A — capability registration through the Phase 0 composition roo
 describe("P1.1-B — one contract and one package per supported source type", () => {
     for (const scenario of SUPPORTED_SOURCE_CASES) {
         it(`${scenario.kind}: preserves category and confidence exactly`, async () => {
-            const { repository, contracts, packages } = makeRecordingRepository();
+            const { repository, contracts, packages, govDeps } = makeRecordingRepository();
             const result = classifyNonFormSource(scenario.input);
             expect(result.classification_key).toBe(scenario.expected);
 
@@ -221,7 +252,7 @@ describe("P1.1-B — one contract and one package per supported source type", ()
                 caseId: "case-1",
                 input: scenario.input,
                 result,
-                deps: govDeps(repository),
+                deps: govDeps,
             });
 
             expect(governance.status).toBe("governed");
@@ -240,14 +271,14 @@ describe("P1.1-B — one contract and one package per supported source type", ()
     }
 
     it("creates the contract with the right org, class and correlation id", async () => {
-        const { repository, contracts } = makeRecordingRepository();
+        const { repository, contracts, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[0]!.input;
         await governSourceClassification(null, {
             orgId: "org-42",
             caseId: "case-77",
             input,
             result: classifyNonFormSource(input),
-            deps: govDeps(repository),
+            deps: govDeps,
         });
         const contract = contracts[0]!;
         expect(contract.org_id).toBe("org-42");
@@ -260,14 +291,14 @@ describe("P1.1-B — one contract and one package per supported source type", ()
     });
 
     it("a valid low-confidence `unknown` is a decision, not a failure", async () => {
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, packages, govDeps } = makeRecordingRepository();
         const input: ClassifyNonFormSourceInput = { sourceKind: "document", fileName: "scan_0001.pdf" };
         const result = classifyNonFormSource(input);
         expect(result.status).toBe("unknown");
         expect(result.confidence).toBe(0);
 
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result, deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result, deps: govDeps,
         });
         const pkg = packages[0]!;
         expect(pkg.outcome).toBe("recommended");
@@ -282,13 +313,13 @@ describe("P1.1-B — one contract and one package per supported source type", ()
 
 describe("P1.1-C — an unsupported source never reaches the Trust Runtime", () => {
     it("creates no contract and no package for a form-backed source", async () => {
-        const { repository, contracts, packages, usage } = makeRecordingRepository();
+        const { repository, contracts, packages, usage, govDeps } = makeRecordingRepository();
         const input: ClassifyNonFormSourceInput = { sourceKind: "form_submission", fileName: "subsidy.pdf" };
         const result = classifyNonFormSource(input);
         expect(result.status).toBe("unsupported");
 
         const governance = await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result, deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result, deps: govDeps,
         });
 
         expect(governance.status).toBe("skipped_unsupported");
@@ -310,10 +341,10 @@ describe("P1.1-C — an unsupported source never reaches the Trust Runtime", () 
 
 describe("P1.1-D — the package is provider-independent and carries no execution authority", () => {
     it("has zero provider cost, deterministic strategy, escalation 0", async () => {
-        const { repository, packages, usage } = makeRecordingRepository();
+        const { repository, packages, usage, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[0]!.input;
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         const pkg = packages[0]!;
         expect(pkg.economics.provider_cost_units).toBe(0);
@@ -324,10 +355,10 @@ describe("P1.1-D — the package is provider-independent and carries no executio
     });
 
     it("carries no provider or model IDENTITY — only the sanctioned cost count", async () => {
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, packages, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[3]!.input;
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         const pkg = packages[0]!;
 
@@ -357,10 +388,10 @@ describe("P1.1-D — the package is provider-independent and carries no executio
     });
 
     it("declares no proposed command binding", async () => {
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, packages, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[0]!.input;
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         expect(packages[0]!.recommendation).not.toHaveProperty("proposed_command");
         expect(JSON.stringify(packages[0])).not.toContain("proposed_command");
@@ -368,12 +399,12 @@ describe("P1.1-D — the package is provider-independent and carries no executio
 
     it("writes nothing but the classification annotation — no identity, no plan, no case insert", async () => {
         const fake = makeFakeSupabase();
-        const { repository } = makeRecordingRepository();
+        const { repository, govDeps } = makeRecordingRepository();
         await maybeClassifyProcessingCaseFromDocumentSafe(fake.supabase, {
             orgId: "o",
             caseId: "c",
             document: { sourceKind: "document", fileName: "2026_CCAP_Subsidy_Contract.pdf" },
-            governance: govDeps(repository),
+            governance: govDeps,
         });
         // The fake throws on any table other than processing_cases, and on insert.
         expect(fake.inserted).toBe(false);
@@ -396,9 +427,9 @@ describe("P1.1-E — suppressing Trust leaves Processing-visible output byte-ide
         });
 
         const governedFake = makeFakeSupabase();
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, packages, govDeps } = makeRecordingRepository();
         const withTrust = await maybeClassifyProcessingCaseFromDocumentSafe(governedFake.supabase, {
-            orgId: "o", caseId: "c", document: doc, governance: govDeps(repository),
+            orgId: "o", caseId: "c", document: doc, governance: govDeps,
         });
 
         // Ignore only the persistence timestamp, which was never deterministic.
@@ -473,18 +504,22 @@ describe("P1.1-F — identical material input yields an equivalent governed judg
     it("two governed runs of the same input agree on everything except package identity and timing", async () => {
         const input = SUPPORTED_SOURCE_CASES[0]!.input;
         const run = async () => {
-            const { repository, packages, contracts } = makeRecordingRepository();
+            const { repository, packages, contracts, govDeps } = makeRecordingRepository();
             await governSourceClassification(null, {
-                orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+                orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
             });
             return { pkg: packages[0]!, contract: contracts[0]! };
         };
         const first = await run();
         const second = await run();
 
-        // Package ids and contract ids are UUIDs — deliberately NOT deterministic.
+        // Package ids are random UUIDs — deliberately NOT deterministic.
         expect(first.pkg.id).not.toBe(second.pkg.id);
-        // The governed judgment is.
+        // CONTRACT ids are, because they are derived from the adoption identity.
+        // That derivation is what makes the contract table's primary key the
+        // exactly-once authority for one governed decision.
+        expect(first.contract.id).toBe(second.contract.id);
+        // The governed judgment is deterministic too.
         expect(first.pkg.recommendation).toEqual(second.pkg.recommendation);
         expect(first.pkg.confidence).toBe(second.pkg.confidence);
         expect(first.pkg.evidence).toEqual(second.pkg.evidence);
@@ -497,14 +532,14 @@ describe("P1.1-F — identical material input yields an equivalent governed judg
     });
 
     it("no source content leaks into the contract — the fingerprint replaces it", async () => {
-        const { repository, contracts } = makeRecordingRepository();
+        const { repository, contracts, govDeps } = makeRecordingRepository();
         const input: ClassifyNonFormSourceInput = {
             sourceKind: "document",
             fileName: "Lyons_Family_Subsidy_Contract.pdf",
             title: "Alex Lyons — CCAP voucher",
         };
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         const serialized = JSON.stringify(contracts[0]!.context);
         expect(serialized).not.toContain("Lyons");
@@ -529,12 +564,12 @@ describe("P1.1-G — the classifier's real confidence contract is enforced, fail
     });
 
     it("an out-of-range confidence produces failed_validation, never a clamp", async () => {
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, packages, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[0]!.input;
         const tampered = { ...classifyNonFormSource(input), confidence: 1.4 };
 
         const governance = await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: tampered, deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: tampered, deps: govDeps,
         });
 
         expect(governance.status).toBe("governed");
@@ -613,13 +648,13 @@ describe("P1.1-H — a Trust persistence failure is explicit and never blocks Pr
                 throw new Error("db down");
             },
         } as unknown as SupabaseClient;
-        const { repository, contracts, packages } = makeRecordingRepository();
+        const { repository, contracts, packages, govDeps } = makeRecordingRepository();
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
         const out = await maybeClassifyProcessingCaseFromDocumentSafe(exploding, {
             orgId: "o", caseId: "c",
             document: { fileName: "subsidy_contract.pdf" },
-            governance: govDeps(repository),
+            governance: govDeps,
         });
 
         expect(out).toBeNull();
@@ -635,10 +670,10 @@ describe("P1.1-H — a Trust persistence failure is explicit and never blocks Pr
 
 describe("P1.1-I — the governed decision is measured exactly once", () => {
     it("one contract, one package and one usage record per governed classification", async () => {
-        const { repository, contracts, packages, usage } = makeRecordingRepository();
+        const { repository, contracts, packages, usage, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[2]!.input;
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         expect(contracts).toHaveLength(1);
         expect(packages).toHaveLength(1);
@@ -648,27 +683,45 @@ describe("P1.1-I — the governed decision is measured exactly once", () => {
         expect(packages[0]!.contract_id).toBe(contracts[0]!.id);
     });
 
-    it("a replayed classification is a NEW governed decision, not a duplicate of one", async () => {
-        const { repository, contracts, packages, usage } = makeRecordingRepository();
+    /**
+     * Superseded by the ratified adoption identity. This previously asserted
+     * that a replay produced a SECOND governed decision. It must not: repeating
+     * the same classification of unchanged material is the same judgment, and
+     * counting it twice would inflate every Trust metric that reads
+     * `trust_reasoning_usage`.
+     */
+    it("a replayed classification returns the SAME governed decision, counted once", async () => {
+        const { contracts, packages, usage, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[2]!.input;
         const run = () =>
             governSourceClassification(null, {
-                orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+                orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
             });
-        await run();
-        await run();
-        // Two attempts, two contracts, two packages, two usage records — one each.
-        expect(contracts).toHaveLength(2);
-        expect(packages).toHaveLength(2);
-        expect(usage).toHaveLength(2);
-        expect(new Set(packages.map((p) => p.contract_id)).size).toBe(2);
+        const first = await run();
+        const second = await run();
+
+        expect(first.status).toBe("governed");
+        expect(second.status).toBe("governed");
+        if (first.status === "governed" && second.status === "governed") {
+            expect(first.reused).toBe(false);
+            expect(second.reused).toBe(true);
+            expect(second.packageId).toBe(first.packageId);
+            expect(second.contractId).toBe(first.contractId);
+            // Only the creating call carries the package object.
+            expect(first.package).not.toBeNull();
+            expect(second.package).toBeNull();
+        }
+        // One contract, one package, ONE usage record.
+        expect(contracts).toHaveLength(1);
+        expect(packages).toHaveLength(1);
+        expect(usage).toHaveLength(1);
     });
 
     it("an unsupported source produces no usage record, so it cannot inflate a metric", async () => {
-        const { repository, usage } = makeRecordingRepository();
+        const { repository, usage, govDeps } = makeRecordingRepository();
         const input: ClassifyNonFormSourceInput = { sourceKind: "form_submission", fileName: "x.pdf" };
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         expect(usage).toHaveLength(0);
     });
@@ -680,10 +733,10 @@ describe("P1.1-I — the governed decision is measured exactly once", () => {
 
 describe("P1.1-J — the governed elements are operational and require no redaction", () => {
     it("reports strict mode, operational class only, and zero redaction steps", async () => {
-        const { repository, packages } = makeRecordingRepository();
+        const { repository, packages, govDeps } = makeRecordingRepository();
         const input = SUPPORTED_SOURCE_CASES[0]!.input;
         await governSourceClassification(null, {
-            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps(repository),
+            orgId: "o", caseId: "c", input, result: classifyNonFormSource(input), deps: govDeps,
         });
         const report = packages[0]!.privacy_report;
         expect(report.pii_mode).toBe("strict");
@@ -698,7 +751,7 @@ describe("P1.1-J — the governed elements are operational and require no redact
 
 describe("P1.1-K — the consumer refuses an ungrounded element rather than inventing one", () => {
     it("an empty classification element produces failed_reasoning, not a guess", async () => {
-        const { repository } = makeRecordingRepository();
+        const { repository, govDeps } = makeRecordingRepository();
         const decision = await decideProcessingSourceClassification({
             org_id: "o",
             processing_case_id: "c",

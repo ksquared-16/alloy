@@ -21,6 +21,10 @@ import {
     PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY,
     PROCESSING_SOURCE_CLASSIFICATION_INFORMATION_KEY,
 } from "@/lib/trust/capabilities/processingSourceClassification/keys";
+import {
+    processingSourceClassificationContractId,
+    type ProcessingSourceClassificationAdoptionIdentity,
+} from "@/lib/trust/capabilities/processingSourceClassification/adoptionIdentity";
 import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
@@ -77,13 +81,31 @@ export type ProcessingSourceClassificationDecision = {
     readonly step_trace: readonly TrustRuntimeStep[];
 };
 
-/** The identity that answers "has this exact judgment already been governed?". */
+/**
+ * The identity that answers "has this exact judgment already been governed?".
+ *
+ * The `decision_class_key` component of the ratified five is implicit: this
+ * lookup is scoped to `processing_source_classification` and filters on it.
+ */
 export type GovernedDecisionIdentity = {
     readonly org_id: string;
     readonly processing_case_id: string;
     readonly material_input_fingerprint: string;
     readonly classifier_version: string;
 };
+
+/** Widens a lookup identity to the full five-component adoption identity. */
+export function toAdoptionIdentity(
+    identity: GovernedDecisionIdentity,
+): ProcessingSourceClassificationAdoptionIdentity {
+    return {
+        org_id: identity.org_id,
+        processing_case_id: identity.processing_case_id,
+        decision_class_key: PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY,
+        material_input_fingerprint: identity.material_input_fingerprint,
+        classifier_version: identity.classifier_version,
+    };
+}
 
 export type GovernedDecisionReference = {
     readonly contract_id: string;
@@ -142,6 +164,17 @@ export function createSupabaseGovernedDecisionLookup(): GovernedDecisionLookup {
 }
 
 /**
+ * A lookup that never finds anything.
+ *
+ * Mirrors `createNullTrustRepository`, for callers that must not read — unit
+ * tests and dry runs. Using it in production would disable idempotency, which
+ * is why it is named for what it does rather than offered as a default.
+ */
+export function createNullGovernedDecisionLookup(): GovernedDecisionLookup {
+    return async () => null;
+}
+
+/**
  * Runs one source-classification decision through the Trust Runtime.
  *
  * Always resolves to a Decision Package. A missing element, a shape the owner's
@@ -178,6 +211,15 @@ export async function decideProcessingSourceClassification(
         initiating_actor: input.initiating_actor,
         channel: input.channel,
         nowIso: input.nowIso,
+        // Deterministic: one adoption identity yields one contract id, so the
+        // contract table's primary key refuses a duplicate governed decision.
+        id: processingSourceClassificationContractId({
+            org_id: input.org_id,
+            processing_case_id: input.processing_case_id,
+            decision_class_key: PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY,
+            material_input_fingerprint: input.material_input_fingerprint,
+            classifier_version: input.classifier_version,
+        }),
     });
 
     const execution = await executeDecisionContract({
@@ -192,4 +234,102 @@ export async function decideProcessingSourceClassification(
     });
 
     return { package: execution.package, step_trace: execution.step_trace };
+}
+
+// ---------------------------------------------------------------------------
+// The canonical lookup-or-capture seam
+// ---------------------------------------------------------------------------
+
+/**
+ * One governed result for one adoption identity.
+ *
+ * `reused` distinguishes "we created this" from "this already existed", which is
+ * what lets a caller know whether a metric was emitted without counting rows.
+ */
+export type GovernedCaptureResult = {
+    readonly contractId: string;
+    readonly packageId: string;
+    /** Present only when this call created it. A reuse returns identifiers. */
+    readonly package: DecisionPackageV1 | null;
+    readonly reused: boolean;
+};
+
+export type CaptureDeps = {
+    readonly repository?: TrustRepository;
+    readonly lookup?: GovernedDecisionLookup;
+    readonly decide?: typeof decideProcessingSourceClassification;
+};
+
+/**
+ * **The one seam.** Look up an already-governed result; create one only if none
+ * exists; resolve a concurrent create race by returning the winner.
+ *
+ * Used by all three paths — direct classification capture, governance-gap
+ * reconciliation, and ambiguous-success recovery — so the adoption identity is
+ * constructed once and interpreted the same way everywhere.
+ *
+ * Three layers, cheapest first:
+ *
+ *  1. **Pre-check.** A read that avoids the exception path in the common case.
+ *  2. **Deterministic contract id.** A concurrent second create collides on the
+ *     contract table's PRIMARY KEY, so the database serializes the race instead
+ *     of a check-then-act window doing it badly.
+ *  3. **Post-conflict resolve.** The loser re-reads and returns the winner, so
+ *     both callers converge on one governed result.
+ */
+export async function captureProcessingSourceClassification(
+    input: ProcessingSourceClassificationDecisionInput,
+    deps: CaptureDeps = {},
+): Promise<GovernedCaptureResult> {
+    const lookup = deps.lookup ?? createSupabaseGovernedDecisionLookup();
+    const decide = deps.decide ?? decideProcessingSourceClassification;
+    const identity: GovernedDecisionIdentity = {
+        org_id: input.org_id,
+        processing_case_id: input.processing_case_id,
+        material_input_fingerprint: input.material_input_fingerprint,
+        classifier_version: input.classifier_version,
+    };
+
+    const existing = await lookup(identity);
+    if (existing) {
+        return {
+            contractId: existing.contract_id,
+            packageId: existing.package_id,
+            package: null,
+            reused: true,
+        };
+    }
+
+    try {
+        const decision = await decide({ ...input, repository: deps.repository ?? input.repository });
+        return {
+            contractId: decision.package.contract_id,
+            packageId: decision.package.id,
+            package: decision.package,
+            reused: false,
+        };
+    } catch (e) {
+        // A create that raced another create for the SAME identity lost on the
+        // contract table's primary key. That is not a failure — the decision
+        // exists, or is landing, and someone else owns it.
+        //
+        // Re-read: if the winner has already stored its package, return it and
+        // both callers converge immediately.
+        const winner = await lookup(identity);
+        if (winner) {
+            return {
+                contractId: winner.contract_id,
+                packageId: winner.package_id,
+                package: null,
+                reused: true,
+            };
+        }
+        // Otherwise the winner is mid-flight: its contract exists, its package
+        // does not yet. Rethrowing is the SAFE outcome, not a defect — the
+        // caller records a durable gap, and reconciliation's own pre-check
+        // later finds the winner's package and resolves without duplicating.
+        // Convergence is eventual and durable; a duplicate is never created.
+        // (This branch also carries every genuine failure, which must propagate.)
+        throw e;
+    }
 }

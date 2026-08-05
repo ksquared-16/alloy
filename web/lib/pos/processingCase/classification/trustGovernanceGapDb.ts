@@ -38,8 +38,8 @@
  * See `operatorReviewService.ts`.
  */
 
-import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { processingSourceClassificationContractId } from "@/lib/trust/capabilities/processingSourceClassification/adoptionIdentity";
 import type { GovernedSourceClassificationV1 } from "./governedClassificationSchema";
 
 /** The discriminator that separates a governance gap from an identity exception. */
@@ -107,6 +107,11 @@ export type TrustGovernanceGapRow = {
  *
  * This is what makes "the same governed decision" a checkable claim. A changed
  * fingerprint or a bumped classifier is a DIFFERENT decision, not a duplicate.
+ *
+ * It delegates to the canonical derivation rather than restating it, so the
+ * value stored on a gap is **the same value** as the Decision Contract id that
+ * governs it. One identity, one construction, one number — a gap can therefore
+ * be matched to its contract by equality, not by re-deriving anything.
  */
 export function adoptionKey(input: {
     orgId: string;
@@ -115,17 +120,13 @@ export function adoptionKey(input: {
     materialInputFingerprint: string;
     classifierVersion: string;
 }): string {
-    return createHash("sha256")
-        .update(
-            [
-                input.orgId,
-                input.caseId,
-                input.decisionClassKey,
-                input.materialInputFingerprint,
-                input.classifierVersion,
-            ].join("|"),
-        )
-        .digest("hex");
+    return processingSourceClassificationContractId({
+        org_id: input.orgId,
+        processing_case_id: input.caseId,
+        decision_class_key: input.decisionClassKey,
+        material_input_fingerprint: input.materialInputFingerprint,
+        classifier_version: input.classifierVersion,
+    });
 }
 
 function boundReason(reason: string): string {

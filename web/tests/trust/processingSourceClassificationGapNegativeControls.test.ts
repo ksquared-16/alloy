@@ -46,6 +46,9 @@ function sourceFilesUnder(relative: string): string[] {
     return out;
 }
 
+/** A lookup that finds nothing — the failing paths never reach a stored package. */
+const missingLookup = async () => null;
+
 const failingRepository: TrustRepository = {
     async insertContract() { throw new Error("trust db down"); },
     async advanceContractLifecycle() {},
@@ -138,7 +141,7 @@ async function captureGap(store: ReturnType<typeof makeStore>) {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await governSourceClassification(store.client(), {
         orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-        deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+        deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
     });
     warn.mockRestore();
 }
@@ -152,7 +155,7 @@ describe("GNC-1 — a Trust failure that is ONLY logged would be caught", () => 
 
         const outcome = await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         // A log-only implementation would satisfy the console assertion...
@@ -219,17 +222,18 @@ describe("GNC-3 — retries creating duplicate packages would be caught", () => 
         const { repository, contracts, packages, usage } = makeRecordingRepository();
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-        // The capture that really succeeded in Trust...
+        // The capture that really succeeded in Trust. `missingLookup` so this
+        // first call genuinely creates rather than recognizing something.
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-            deps: { repository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
         expect(packages).toHaveLength(1);
 
         // ...but whose response was lost, so a gap was recorded for it anyway.
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input: SUBSIDY, result: classifyNonFormSource(SUBSIDY),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
         warn.mockRestore();
 
@@ -362,7 +366,7 @@ describe("GNC-5 — persisting a full source payload would be caught", () => {
         };
         await governSourceClassification(store.client(), {
             orgId: "org-1", caseId: "case-1", input, result: classifyNonFormSource(input),
-            deps: { repository: failingRepository, nowIso: FIXED_NOW, clock: () => 0 },
+            deps: { repository: failingRepository, lookup: missingLookup, nowIso: FIXED_NOW, clock: () => 0 },
         });
 
         const serialized = JSON.stringify(store.exceptions[0]);
