@@ -122,16 +122,31 @@ parent-facing Tour templates clear the canonical renderer on both channels
 
 ---
 
-## 7. Not delivered — browser proof
+## 7. Delivered — browser proof of the controlled channel failure
 
-The controlled channel-failure run (email succeeds, SMS blocked through a real
-supported condition, booking committed, one durable blocked row, one event,
-operator Activity showing a human-safe reason) is **not** captured.
+Captured live against the certification tenant. Booking committed (`201`,
+`confirmed`); email `queued`; SMS `blocked` with `policy:SUPPRESSED`,
+`stage=enqueue`; `message_blocked` emitted **once**, filed on
+`opportunities` + the opportunity id. Operator Activity rendered:
 
-Blocker: operator sign-in in the certification app targets
-`https://127.0.0.1/auth/v1/token` — scheme upgraded, port dropped — against a
-stack configured at `http://127.0.0.1:54421`. Desktop evidence resumes when that
-is repaired.
+```
+SMS blocked
+Recipient address is suppressed after a bounce or complaint.
+
+Email queued
+```
+
+Replay produced no duplicate row and no duplicate event. Across the full
+lifecycle: 3 email queued / 3 SMS blocked / 3 `message_blocked` /
+3 `message_queued` — exactly one per channel per lifecycle event.
+
+The earlier blocker recorded here — operator sign-in targeting
+`https://127.0.0.1/auth/v1/token` — **was not a defect in the request path.**
+That string was printed by the login page's dev panel, which rebuilt the URL
+from a hardcoded `https://` literal and `URL.hostname` (which excludes the
+port). The browser always posted to the configured origin. Corrected in
+`web/lib/supabase/publicAuthEnv.ts`; see
+`web/tests/supabase/publicSupabaseOrigin.test.ts`.
 
 ---
 
@@ -145,8 +160,33 @@ is repaired.
 
 ---
 
-## 9. Next exact action
+## 9. Evidence correction — the operator invitation was never certified
 
-Repair certification-app auth, then run the controlled channel failure and
-capture desktop evidence of email queued, SMS not sent, and a human-safe reason
-on one record.
+Earlier records in this sprint, including previous status reports, carried
+**"Slice D — operator sends invitation: done."** That claim is withdrawn.
+
+What was true: the handler, the mint/send/render libraries and the
+`tour_invitations` migration all shipped and are unit-tested.
+
+What was false: **no operator could invoke it.** The registry's contract is that
+config decides where an action shows, and nothing ever provisioned an
+`action_definitions` row or an `action_placements` row for
+`send_tour_invitation`. The Focus Panel Manage menu offered Schedule tour /
+Reschedule tour / Confirm tour and nothing else; the tenant held zero invitation
+messages and zero invitation workflow events. A registered handler tests green
+whether or not any operator can reach it, which is exactly why unit tests missed
+this and a live run caught it.
+
+Provisioned by `supabase/migrations/20260805090000_send_tour_invitation_action_provisioning.sql`
+and guarded by `web/tests/tours/sendTourInvitationProvisioning.test.ts`, which
+includes a parity rule: an operator-invocable registered action with no
+provisioning fails certification.
+
+**No operator-to-parent invitation journey has been certified yet.** That run is
+the remaining work.
+
+## 10. Next exact action
+
+Apply the provisioning migration to the certification tenant, confirm
+**Send tour invitation** appears in the Focus Panel Manage menu, execute it, and
+run the parent mobile journey from the link in the actual queued message.
