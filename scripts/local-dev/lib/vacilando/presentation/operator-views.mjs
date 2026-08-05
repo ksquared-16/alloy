@@ -61,6 +61,7 @@ import {
   evidenceExperienceGalleryVm,
   evidenceExperienceCardVm,
 } from "./evidence-experience.mjs";
+import { directorPortfolioVm } from "./director-portfolio.mjs";
 
 
 const STATUS_COPY = {
@@ -1437,19 +1438,9 @@ export function controlPlaneSummaryVm() {
 
 export function missionsHomeVm({ filter = "active" } = {}) {
   const includeArchived = filter === "archived" || filter === "history" || filter === "all";
-  let rows = listMissionsV2({ includeArchived: true });
-  if (filter === "active" || !filter) {
-    rows = rows.filter((r) => {
-      const m = getMission(r.mission_id);
-      return m?.archived !== true && r.status !== "completed";
-    });
-  } else if (filter === "archived" || filter === "history") {
-    // History = archived + certified-complete (so closeout never hides a mission).
-    rows = rows.filter((r) => {
-      const m = getMission(r.mission_id);
-      return m?.archived === true || r.status === "completed";
-    });
-  }
+  const portfolio = directorPortfolioVm({ filter: filter || "active" });
+
+  // Counts stay cheap — no second posture walk (portfolio already projected).
   const activeCount = listMissionsV2({ includeArchived: false })
     .filter((r) => r.status !== "completed").length;
   const archivedCount = listMissionsV2({ includeArchived: true })
@@ -1457,30 +1448,65 @@ export function missionsHomeVm({ filter = "active" } = {}) {
       const m = getMission(r.mission_id || r.missionId);
       return m?.archived === true || r.status === "completed";
     }).length;
+
+  // Compatibility mission rows for API consumers / history — derived from portfolio cards
+  // so we do not re-run posture for every mission (was tripling home latency).
+  const missions = (portfolio.cards || [])
+    .filter((c) => {
+      if (filter === "archived" || filter === "history") return true;
+      if (includeArchived) return true;
+      return c.groupId !== "completed_recently";
+    })
+    .map((c) => ({
+      missionId: c.missionId,
+      title: c.title,
+      status: c.postureId,
+      statusLabel: c.statusLabel,
+      postureDetail: c.outcome?.sentence || c.directorState,
+      phaseLabel: c.phase,
+      deliverablesLabel: c.deliverablesLabel,
+      directorState: c.directorState,
+      workersLine: c.workersLine,
+      updatedLabel: c.updatedLabel,
+      latestUpdate: c.outcome?.label || c.statusLabel,
+      openDecisionCount: c.blocker && /decision/i.test(c.blocker) ? 1 : 0,
+      primaryAction: c.primaryAction,
+      secondaryAction: c.secondaryAction,
+      archived: c.archived === true,
+      archiveClass: null,
+      archiveReason: null,
+      readOnly: c.archived === true,
+    }));
+
   return {
     kind: "missions_home",
     filter: filter || "active",
     activeCount,
     archivedCount,
-    summary: controlPlaneSummaryVm(),
-    emptyState: activeCount === 0 && (filter === "active" || !filter)
-      ? {
-          title: "No active missions",
-          body: "Create a Mission Brief to start real Alloy product work. Runtime validation history lives under Mission History.",
-          primaryAction: { kind: "nav", label: "Create Mission", href: "kickoff" },
-        }
-      : null,
-    missions: rows.map((r) => {
-      const card = missionListCardVm(r);
-      const m = getMission(r.mission_id);
-      return {
-        ...card,
-        archived: m?.archived === true,
-        archiveClass: m?.archive_class || null,
-        archiveReason: m?.archive_reason || null,
-        readOnly: m?.archive_read_only === true,
-      };
-    }),
+    summary: {
+      needsYouCount: portfolio.counts?.needsAttention ?? 0,
+      needsYouPreview: portfolio.needsInbox || [],
+      missions: {
+        active: portfolio.counts?.active ?? activeCount,
+        needingYou: portfolio.counts?.needsAttention ?? 0,
+        readyToStart: portfolio.counts?.waiting ?? 0,
+        running: portfolio.counts?.inProgress ?? 0,
+        byStatus: [],
+      },
+      // Workers remain on /workers — demoted from Portfolio home (DX-7).
+      workers: { total: 0, active: 0, attention: 0, rows: [] },
+    },
+    portfolio,
+    emptyState: portfolio.emptyState || (
+      activeCount === 0 && (filter === "active" || !filter)
+        ? {
+            title: "No active missions",
+            body: "Create a Mission Brief to start real Alloy product work. Runtime validation history lives under Mission History.",
+            primaryAction: { kind: "nav", label: "Create Mission", href: "kickoff" },
+          }
+        : null
+    ),
+    missions,
   };
 }
 

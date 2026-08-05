@@ -739,6 +739,29 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .btn.link{background:none;border:none;padding:0;color:#1f4d30;font:inherit;font-weight:650;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .btn.link:hover{color:#14311f}
 @media(max-width:900px){.mc-home-split{grid-template-columns:1fr}}
+.mc-portfolio-counts{margin-bottom:14px}
+.mc-portfolio-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.mc-portfolio-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mc-portfolio-kicker{margin:0 0 4px;font-size:11px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2,#5a5348)}
+.mc-portfolio-focus{margin:0 0 18px;padding:14px 16px;border:1px solid rgba(47,107,69,.22);border-radius:12px;background:rgba(47,107,69,.05)}
+.mc-portfolio-focus-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.mc-portfolio-focus-h h3{margin:0 0 4px;font-size:18px}
+.mc-portfolio-focus-ol{margin:12px 0 0;padding-left:1.2rem;line-height:1.55}
+.mc-portfolio-focus-ol li{margin:0 0 8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.mc-portfolio-group{margin:0 0 20px}
+.mc-portfolio-group-h{margin:0 0 10px}
+.mc-portfolio-group-h h3{margin:0 0 2px;font-size:16px}
+.mc-portfolio-list{display:grid;gap:10px}
+.mc-portfolio-card .mc-portfolio-dl{margin:10px 0 0;display:grid;gap:6px}
+.mc-portfolio-card .mc-portfolio-dl > div{display:grid;grid-template-columns:7.5rem 1fr;gap:8px;font-size:13px}
+.mc-portfolio-card .mc-portfolio-dl dt{margin:0;color:var(--ink-2,#5a5348);font-weight:650}
+.mc-portfolio-card .mc-portfolio-dl dd{margin:0}
+.mc-portfolio-blocker{color:var(--blocked,#a14a2e)}
+.mc-portfolio-card.is-stale{border-color:rgba(161,74,46,.35)}
+.mc-portfolio-card.tone-positive{border-color:rgba(47,107,69,.28)}
+.mc-portfolio-card.tone-caution,.mc-portfolio-card.tone-warning{border-color:rgba(192,106,63,.4)}
+.mc-portfolio-card.tone-blocked,.mc-portfolio-card.tone-negative{border-color:rgba(161,74,46,.4)}
+@media(max-width:640px){.mc-portfolio-card .mc-portfolio-dl > div{grid-template-columns:1fr}}
 .mc-q{margin:8px 0 0;padding-left:18px;line-height:1.55;font-size:13.5px}
 .mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 @media(max-width:720px){.mc-grid{grid-template-columns:1fr}.mobile-decision{padding:0 2px}}
