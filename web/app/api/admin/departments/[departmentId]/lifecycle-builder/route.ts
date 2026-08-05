@@ -8,8 +8,6 @@ import {
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 import {
-    isLifecycleBuilderOwnedDepartmentMetadata,
-    mergeLifecycleBuilderOwnedIntoMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderOwned";
 import {
     activeLifecycleProcess,
@@ -18,8 +16,6 @@ import {
     createLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
     clampLifecycleDescription,
-    lifecycleWorkspaceTileDescription,
-    mergeLifecycleBuilderIntoMetadata,
     reorderStage,
     removeProcessFromConfig,
     removeStageFromProcess,
@@ -34,6 +30,11 @@ import {
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
+import {
+    draftBuilder,
+    openDraft,
+    saveDraft,
+} from "@/lib/businessProcesses/configuration/businessProcessConfigurationService";
 import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { syncWorkUnitSortOrderFromBuilderStages } from "@/lib/lifecycle/syncWorkUnitSortOrderFromBuilder";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
@@ -88,36 +89,12 @@ async function loadDepartment(orgId: string, departmentId: string) {
     return data as { id: string; metadata?: unknown } | null;
 }
 
-async function saveConfig(orgId: string, departmentId: string, config: LifecycleBuilderV1) {
-    const stamped = ensureBuilderCommandSetsOnSave(config);
-    const row = await loadDepartment(orgId, departmentId);
-    if (!row) return null;
-    const metadata =
-        row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-            ? (row.metadata as Record<string, unknown>)
-            : {};
-    let nextMeta = mergeLifecycleBuilderIntoMetadata(metadata, stamped);
-    const active = activeLifecycleProcess(stamped);
-    if (active?.id && isLifecycleBuilderOwnedDepartmentMetadata(nextMeta)) {
-        nextMeta = mergeLifecycleBuilderOwnedIntoMetadata(nextMeta, { process_id: active.id });
-    }
-    const supabase = createAdminClient();
-    const syncTileDescription =
-        active && isLifecycleBuilderOwnedDepartmentMetadata(nextMeta)
-            ? lifecycleWorkspaceTileDescription(active.description, active.name)
-            : null;
-    const { error } = await supabase
-        .from("departments")
-        .update({
-            metadata: nextMeta,
-            ...(syncTileDescription != null ? { description: syncTileDescription } : {}),
-            updated_at: new Date().toISOString(),
-        })
-        .eq("id", departmentId)
-        .eq("org_id", orgId);
-    if (error) throw new Error(error.message);
-    return stamped;
-}
+/**
+ * `saveConfig` lived here and wrote `departments.metadata.lifecycle_builder_v1` directly. It is
+ * deleted rather than left unused: that field is a published projection guarded at the database,
+ * so the helper could not succeed, and an unused writer pointing at a forbidden target is exactly
+ * the thing a future caller reaches for. Authoring goes through `saveDraft`.
+ */
 
 function payloadFromConfig(config: LifecycleBuilderV1) {
     const process = activeLifecycleProcess(config);
@@ -227,7 +204,31 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             );
         }
 
-        let config = lifecycleBuilderFromDepartmentMetadata(row.metadata);
+        /**
+         * AUTHORING WRITES THE DRAFT, NEVER THE PROJECTION.
+         *
+         * `departments.metadata.lifecycle_builder_v1` is a published projection, and
+         * `trg_departments_lifecycle_projection_guard` refuses any write to it that publication
+         * did not authorize. This route used to load from that projection and save straight back
+         * to it, so once a department had configuration at all, EVERY action here failed at the
+         * database — rename_stage as surely as update_stage_grain.
+         *
+         * The draft is the editable surface (`business_process_drafts`), and it already carries
+         * both conflict tokens: `draft_revision` for concurrent edits, `base_revision_id` for
+         * staleness against the publication. `openDraft` is idempotent and seeds the first draft
+         * from the current publication, so a department that has never been edited enters here
+         * with a faithful copy rather than an empty one.
+         */
+        const draftClient = createAdminClient();
+        const draft = await openDraft(draftClient, {
+            orgId: ctx.orgId,
+            departmentId,
+            actorUserId: ctx.userId,
+            // Never-published departments seed from the projection they already have.
+            templateSeed: lifecycleBuilderFromDepartmentMetadata(row.metadata),
+        });
+        const loadedDraftRevision = draft.draftRevision;
+        let config = draftBuilder(draft) ?? lifecycleBuilderFromDepartmentMetadata(row.metadata);
         let ensuredTransition: { transition_ref: string; target_stage_key: string; created: boolean } | null = null;
         const action = typeof body.action === "string" ? body.action.trim() : "";
 
@@ -541,7 +542,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
          */
         const commandSetCheck = validateProcessCommandSetsForPublish(config);
 
-        await saveConfig(ctx.orgId, departmentId, config);
+        // Compare-and-set on the revision the editor loaded: a colleague who saved in between
+        // makes this fail rather than silently lose their work.
+        const savedDraft = await saveDraft(draftClient, {
+            orgId: ctx.orgId,
+            departmentId,
+            builder: ensureBuilderCommandSetsOnSave(config),
+            actorUserId: ctx.userId,
+            expectedDraftRevision: loadedDraftRevision,
+        });
         if (actionName === "reorder_stage") {
             const deptRow = await loadDepartment(ctx.orgId, departmentId);
             if (!deptRow) {
@@ -564,6 +573,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 ready: commandSetCheck.ok,
                 issues: commandSetCheck.issues,
             },
+            draft_revision: savedDraft.draftRevision,
             ...(ensuredTransition ? { ensured_transition: ensuredTransition } : {}),
         });
     } catch (e) {

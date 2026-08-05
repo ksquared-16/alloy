@@ -25,6 +25,33 @@ Companions: [`configuration-integrity-laws.md`](./configuration-integrity-laws.m
 **Drafts may be invalid. Published configuration may not.** That asymmetry is the whole point:
 operators need somewhere to build a half-finished process without the platform refusing to save.
 
+## Status — authoring convergence (2026-08-05)
+
+The model above was fully built at the database and service layers — `business_process_drafts`
+(with both CAS tokens), `business_process_revisions`, `publish_business_process_revision_v1`, the
+projection guard, and `openDraft` / `saveDraft` / `publishDraft` in
+`businessProcessConfigurationService.ts`.
+
+**The lifecycle-builder authoring route was not connected to any of it.** Its `saveConfig` wrote
+`departments.metadata.lifecycle_builder_v1` directly, which
+`trg_departments_lifecycle_projection_guard` refuses. The consequence was total rather than
+partial: once a department had configuration at all, EVERY action on that route failed at the
+database — `rename_stage` as surely as `update_stage_grain`. The builder had no legal way to save.
+
+`PATCH /api/admin/departments/{id}/lifecycle-builder` now reads through `openDraft` and writes
+through `saveDraft`, compare-and-setting on the `draft_revision` the editor loaded. `saveConfig`
+is deleted rather than left unused: an unused writer pointing at a forbidden target is what a
+future caller reaches for.
+
+Unchanged by that convergence, and load-bearing:
+
+- ordinary authoring never writes the projection; publication remains its only writer;
+- `begin_lifecycle_projection_write` is called by nothing in application code;
+- runtime keeps reading the published projection until Publish, so draft edits cannot leak into
+  operator execution;
+- structural and referential validation stays blocking on save; command-set completeness is
+  reported as `publication_readiness` on save and blocks at Validate and Publish.
+
 ## The seven questions
 
 | Question | Answer |
