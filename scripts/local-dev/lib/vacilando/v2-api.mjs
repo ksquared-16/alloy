@@ -33,6 +33,13 @@ import {
   classifyIssue,
 } from "./decisions.mjs";
 import {
+  createCollaborationEntry,
+  updateCollaborationStatus,
+  listCollaboration,
+  COLLABORATION_TYPES,
+  COLLABORATION_STATUSES,
+} from "./mission-collaboration.mjs";
+import {
   attachEvidence,
   listEvidence,
   listValidationRuns,
@@ -563,6 +570,37 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
   }
+  if (path === "/api/v2/missions/collaboration" || path === "/api/v2/collaboration") {
+    try {
+      const entry = createCollaborationEntry({
+        missionId: v.mission_id || v.missionId,
+        type: v.type || "feedback",
+        body: v.body || v.message || v.text,
+        author: v.actor || v.author || "director",
+        status: v.status || "open",
+        deliverableId: v.deliverable_id || v.deliverableId || null,
+        deliverableLabel: v.deliverable_label || v.deliverableLabel || null,
+        title: v.title || null,
+        relatedEntryId: v.related_entry_id || v.relatedEntryId || null,
+        source: v.source || "director_collaboration",
+      });
+      return { status: 201, body: { ok: true, entry } };
+    } catch (e) {
+      return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
+    }
+  }
+  if (path === "/api/v2/missions/collaboration/status" || path === "/api/v2/collaboration/status") {
+    const out = updateCollaborationStatus(
+      v.mission_id || v.missionId,
+      v.entry_id || v.entryId || v.id,
+      v.status,
+      {
+        actor: v.actor || "director",
+        note: v.note || null,
+      },
+    );
+    return { status: out.ok ? 200 : 404, body: out };
+  }
   if (path === "/api/v2/improvements") {
     try {
       const rec = captureImprovement({
@@ -794,6 +832,24 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     const mid = q("mission_id") || q("id");
     if (!mid) return { status: 400, body: { ok: false, error: "missing_mission_id" } };
     return { status: 200, body: { ok: true, messages: listDirectorMessages(mid) } };
+  }
+  if (path === "/api/v2/missions/collaboration" || path === "/api/v2/views/mission/collaboration") {
+    const mid = q("mission_id") || q("id");
+    if (!mid) return { status: 400, body: { ok: false, error: "missing_mission_id" } };
+    const { directorCollaborationVm } = await import("./presentation/director-collaboration.mjs");
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        collaboration: directorCollaborationVm(mid),
+        entries: listCollaboration(mid, {
+          status: q("status") || null,
+          type: q("type") || null,
+        }),
+        types: COLLABORATION_TYPES,
+        statuses: COLLABORATION_STATUSES,
+      },
+    };
   }
   if (path === "/api/v2/improvements" || path === "/api/v2/views/improvements") {
     const status = q("status") || "All";

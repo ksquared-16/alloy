@@ -901,15 +901,29 @@ We'll capture the context automatically.</p>
     }
 
     const feedbackSurface = decisionPack.feedbackSurface || {};
+    const collabPack = exec.collaborationFull || exec.collaboration || {};
     const feedbackPanel = `<section class="mc-sec mc-feedback-panel" id="mc-feedback-panel" hidden>
       <h3>${esc(feedbackSurface.title || "Provide Feedback")}</h3>
       <p>${esc(feedbackSurface.blurb || "")}</p>
-      <label class="muted" for="mc-feedback-text">Refinement notes</label>
+      <label class="muted" for="mc-feedback-type">Type</label>
+      <select id="mc-feedback-type" class="mc-feedback-type">
+        ${(collabPack.composeTypes || [
+          { id: "feedback", label: "Feedback" },
+          { id: "implementation_guidance", label: "Implementation Guidance" },
+          { id: "decision", label: "Decision" },
+          { id: "clarification", label: "Clarification" },
+          { id: "revision_request", label: "Revision Request" },
+          { id: "question", label: "Question" },
+          { id: "approval_note", label: "Approval Note" },
+          { id: "information", label: "Information" },
+        ]).map((t) => `<option value="${esc(t.id)}"${t.id === (feedbackSurface.defaultType || "feedback") ? " selected" : ""}>${esc(t.label)}</option>`).join("")}
+      </select>
+      <label class="muted" for="mc-feedback-text">Guidance</label>
       <textarea id="mc-feedback-text" class="mc-feedback-text" rows="4" placeholder="${esc(feedbackSurface.placeholder || "")}"></textarea>
-      <p class="muted">${esc(feedbackSurface.captureNote || "Feedback capture is prepared on this surface only.")}</p>
+      <p class="muted">${esc(feedbackSurface.captureNote || "Persists as Director Collaboration on this mission.")}</p>
       <div class="mc-actions">
         <button class="btn ghost" type="button" data-mc-feedback-dismiss>Close</button>
-        <button class="btn" type="button" data-mc-feedback-ack disabled title="Threaded capture ships later">Save feedback (later)</button>
+        <button class="btn" type="button" data-mc-feedback-save="${esc(id)}">Save to Collaboration</button>
       </div>
     </section>`;
 
@@ -930,6 +944,55 @@ We'll capture the context automatically.</p>
         : ""}
       ${feedbackPanel}
     </section>` : "";
+
+    const collabSec = (() => {
+      const c = collabPack;
+      const cards = c.cards || [];
+      const rows = cards.length
+        ? cards.map((item) => {
+          const actions = (item.statusActions || []).map((a) =>
+            `<button class="btn ghost sm" type="button" data-mc-collab-status="${esc(item.id)}" data-status="${esc(a.status)}" data-mission="${esc(id)}">${esc(a.label)}</button>`
+          ).join("");
+          return `<article class="mc-card mc-collab-card status-${esc(item.status || "open")}${item.projected ? " projected" : ""}">
+            <div class="mc-card-h">
+              <b>${esc(item.typeLabel || item.title)}</b>
+              <span class="mc-pill">${esc(item.statusLabel || item.status || "")}</span>
+            </div>
+            ${item.title && item.title !== item.typeLabel ? `<p class="mc-collab-title">${esc(item.title)}</p>` : ""}
+            <p class="mc-collab-body">${esc(item.body || "")}</p>
+            <p class="muted mc-collab-meta">
+              ${item.author ? `Author ${esc(item.author)}` : ""}
+              ${item.recordedLabel ? ` · Recorded ${esc(item.recordedLabel)}` : ""}
+              ${item.deliverableLabel ? ` · ${esc(item.deliverableLabel)}` : ""}
+              ${item.projected ? " · From Decisions archive" : ""}
+            </p>
+            ${actions ? `<div class="mc-actions mc-collab-actions">${actions}</div>` : ""}
+          </article>`;
+        }).join("")
+        : `<p class="muted">${esc(c.emptyMessage || "No collaboration recorded yet.")}</p>`;
+      const composer = c.composer || {};
+      return `<section class="mc-sec mc-collaboration" id="mc-collaboration">
+        <div class="mc-card-h">
+          <h3 style="margin:0">${esc(c.sectionTitle || "Director Collaboration")}</h3>
+          <button class="btn ghost sm" type="button" data-mc-provide-feedback="${esc(id)}">Add guidance</button>
+        </div>
+        <p class="muted">${c.summary
+          ? `${esc(String(c.summary.open || 0))} open · ${esc(String(c.summary.total || 0))} total${c.summary.revisionOpen ? ` · ${esc(String(c.summary.revisionOpen))} revision open` : ""}`
+          : "Why this path was chosen — institutional memory for the initiative."}</p>
+        <div class="mc-collab-list">${rows}</div>
+        <details class="mc-collab-compose">
+          <summary>Record collaboration</summary>
+          <p class="muted">${esc(composer.blurb || "")}</p>
+          <label class="muted" for="mc-collab-type">Type</label>
+          <select id="mc-collab-type" class="mc-feedback-type">
+            ${(c.composeTypes || []).map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join("")}
+          </select>
+          <label class="muted" for="mc-collab-text">Body</label>
+          <textarea id="mc-collab-text" class="mc-feedback-text" rows="3" placeholder="${esc(composer.placeholder || "")}"></textarea>
+          <button class="btn" type="button" data-mc-collab-save="${esc(id)}">Save</button>
+        </details>
+      </section>`;
+    })();
 
     const confGlanceSec = (() => {
       const c = confGlance;
@@ -1413,9 +1476,8 @@ We'll capture the context automatically.</p>
       </div>
     </details>`;
 
-    // DX-5.5 IA: Outcome → Summary → Confidence → Journey → Evidence → Recommended Next Action → Alternatives → Technical Depth
-    // When deliverable certification is open, L1 still leads; DREV remains the cert briefing.
-    const l1 = outcomeHeroSec + execSummarySec + confGlanceSec + journeyStripSec + evidenceStripSec + decisionSec;
+    // DX-6 IA: Outcome → Summary → Confidence → Journey → Evidence → Continuation → Collaboration → Depth
+    const l1 = outcomeHeroSec + execSummarySec + confGlanceSec + journeyStripSec + evidenceStripSec + decisionSec + collabSec;
     const certOrOutcome = showOutcome ? outcomeSec : "";
 
     return shell(s.title || "Mission Dashboard", {
@@ -2714,7 +2776,7 @@ We'll capture the context automatically.</p>
     }
   }
 
-  document.addEventListener("click", (ev) => {
+  document.addEventListener("click", async (ev) => {
     if (ev.target.closest("#improve-vacilando-btn") || ev.target.closest("[data-ci-open]")) {
       openImproveDialog();
       return;
@@ -2816,7 +2878,7 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
     if (!t) return;
 
     if (t.hasAttribute("data-mc-review-findings")) {
@@ -2837,12 +2899,71 @@ We'll capture the context automatically.</p>
         panel.scrollIntoView({ behavior: "smooth", block: "start" });
         const ta = document.getElementById("mc-feedback-text");
         if (ta) ta.focus();
+      } else {
+        const compose = document.querySelector(".mc-collab-compose");
+        if (compose) {
+          compose.open = true;
+          compose.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       }
       return;
     }
     if (t.hasAttribute("data-mc-feedback-dismiss")) {
       const panel = document.getElementById("mc-feedback-panel");
       if (panel) panel.hidden = true;
+      return;
+    }
+    async function saveCollaboration(missionId, type, body) {
+      const text = String(body || "").trim();
+      if (!text) {
+        toast("Add guidance text before saving.", "warn");
+        return false;
+      }
+      await post("/api/v2/missions/collaboration", {
+        mission_id: missionId,
+        type: type || "feedback",
+        body: text,
+        actor: "director",
+      });
+      toast("Saved to Director Collaboration.");
+      V2.state.overview = null;
+      await V2.fetchDashboard(missionId);
+      bump(); schedulePaint();
+      requestAnimationFrame(() => {
+        document.getElementById("mc-collaboration")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      return true;
+    }
+    if (t.hasAttribute("data-mc-feedback-save")) {
+      const missionId = t.getAttribute("data-mc-feedback-save");
+      const type = document.getElementById("mc-feedback-type")?.value || "feedback";
+      const body = document.getElementById("mc-feedback-text")?.value || "";
+      await saveCollaboration(missionId, type, body);
+      const panel = document.getElementById("mc-feedback-panel");
+      if (panel) panel.hidden = true;
+      return;
+    }
+    if (t.hasAttribute("data-mc-collab-save")) {
+      const missionId = t.getAttribute("data-mc-collab-save");
+      const type = document.getElementById("mc-collab-type")?.value || "feedback";
+      const body = document.getElementById("mc-collab-text")?.value || "";
+      await saveCollaboration(missionId, type, body);
+      return;
+    }
+    if (t.hasAttribute("data-mc-collab-status")) {
+      const entryId = t.getAttribute("data-mc-collab-status");
+      const status = t.getAttribute("data-status");
+      const missionId = t.getAttribute("data-mission");
+      await post("/api/v2/missions/collaboration/status", {
+        mission_id: missionId,
+        entry_id: entryId,
+        status,
+        actor: "director",
+      });
+      toast(`Marked ${status}.`);
+      V2.state.overview = null;
+      await V2.fetchDashboard(missionId);
+      bump(); schedulePaint();
       return;
     }
 
