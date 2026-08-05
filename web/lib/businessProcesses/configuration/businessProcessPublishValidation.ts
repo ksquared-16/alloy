@@ -30,6 +30,7 @@ import {
 } from "@/lib/lifecycle/validateConfiguredStageReferences";
 import { validateProcessExecutionGraph } from "@/lib/businessProcesses/configuration/executionGraphValidation";
 import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
+import { validateStageOperatingPlanOperatingContract } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 
 export const PUBLISH_UNREADABLE_PAYLOAD = "configuration_unreadable" as const;
 export const PUBLISH_DANGLING_REFERENCE = "dangling_stage_reference" as const;
@@ -38,6 +39,8 @@ export const PUBLISH_DUPLICATE_STAGE_KEY = "duplicate_stage_key" as const;
 export const PUBLISH_EMPTY_PROCESS = "process_has_no_stages" as const;
 /** A Work Template uses a capability the process has not selected. Blocking at publish. */
 export const PUBLISH_COMMAND_SET_INCOMPLETE = "process_command_set_incomplete" as const;
+/** An operating-contract finding, surfaced under its own contract code in `detail.contract_code`. */
+export const PUBLISH_OPERATING_CONTRACT = "stage_operating_contract" as const;
 
 export type PublishValidationResult = {
     /** Publication is refused while this is non-empty. */
@@ -197,6 +200,92 @@ export function validateParsedBusinessProcessForPublish(
      * `errors`, deliberately — `warnings` are documented as never blocking, and a Work Template
      * that invokes a capability the process has not selected is not executable at runtime.
      */
+    /**
+     * ONE operating-contract result, consumed by the stage editor AND by publication.
+     *
+     * The editor called `validateStageOperatingPlanOperatingContract` and publication did not, so a
+     * stage could show blocking issues while process-level Validate reported a clean, publishable
+     * draft. Two validation universes describing the same configuration is not a presentation bug;
+     * it means a publish can freeze in exactly what the editor is refusing.
+     *
+     * The contract is the single source. Its `severity` is carried through unchanged — errors
+     * block publication, warnings report — so neither surface can soften what the other blocks.
+     */
+    /**
+     * Contract codes the EXECUTION GRAPH already reports, in better words.
+     *
+     * Both validators inspect transition references, so wiring the contract into publication made
+     * one defect arrive twice — `movement_transition_not_found` from the graph and
+     * `outcome_transition_invalid` from the contract, describing the same outcome. "Each distinct
+     * issue renders once" means picking an owner per diagnosis, not deduplicating text.
+     *
+     * The graph wins these because it names the outcome and phrases the destination as a stage.
+     * The contract still contributes everything only it knows: journey grain, close-status
+     * resolution, primary actions, follow-up templates, and the stage-scoped "no way out at all".
+     */
+    const EXECUTION_GRAPH_OWNED = new Set([
+        "outcome_transition_invalid", // graph: movement_transition_not_found
+        "transition_destination_invalid", // graph: transition_destination_unknown
+        "transition_destination_self", // graph: transition_self_loop
+        "transition_identity_duplicate", // graph: duplicate_transition_identity
+        "transition_source_invalid", // graph: transition_missing_source / _source_unknown
+    ]);
+
+    for (const process of activeProcesses) {
+        const stages = process.stages ?? [];
+        const processStages = stages.map((s) => ({
+            key: s.key,
+            label: s.label ?? s.key,
+            grain: (s as { grain?: unknown }).grain ?? null,
+        }));
+        for (const stage of stages) {
+            const plan = stage.stage_operating_plan_v1;
+            if (!plan) continue;
+            const contractIssues = validateStageOperatingPlanOperatingContract({
+                plan,
+                processStageKeys: stages.map((s) => s.key),
+                processStages,
+                /*
+                 * Derived from the plan's OWN transitions. Omitting them made the contract
+                 * conclude the stage had no exit paths at all and report
+                 * `stage_transition_missing` against stages that plainly have them — trading the
+                 * false positive this slice removed for a new one.
+                 *
+                 * `configuredStatuses` is deliberately NOT passed: this validator is pure and
+                 * cannot read the tenant status catalog, and `undefined` means "cannot evaluate",
+                 * so status-domain checks are skipped rather than guessed from an empty list.
+                 */
+                transitionOptions: (plan.outgoing_transitions ?? []).map((t) => ({
+                    transition_ref: t.transition_ref,
+                    label: t.label,
+                    target_stage_key: t.target_stage_key,
+                    target_stage_label:
+                        stages.find((s) => s.key === t.target_stage_key)?.label ?? t.target_stage_key,
+                    available: t.available,
+                })),
+            });
+            for (const issue of contractIssues) {
+                if (EXECUTION_GRAPH_OWNED.has(issue.code)) continue;
+                const entry = {
+                    code: PUBLISH_OPERATING_CONTRACT,
+                    stage_key: stage.key,
+                    path:
+                        `processes[${process.key}].stages[${stage.key}]`
+                        + `.stage_operating_plan_v1`,
+                    message: issue.message,
+                    detail: {
+                        contract_code: issue.code,
+                        control_id: issue.controlId,
+                        ...(issue.outcome_key ? { outcome_key: issue.outcome_key } : {}),
+                        ...(issue.template_key ? { work_template_key: issue.template_key } : {}),
+                    },
+                };
+                if (issue.severity === "error") errors.push(entry as ConfigurationError);
+                else warnings.push(entry as ConfigurationWarning);
+            }
+        }
+    }
+
     {
         const commandSets = validateProcessCommandSetsForPublish(builder);
         for (const issue of commandSets.issues ?? []) {
@@ -212,5 +301,31 @@ export function validateParsedBusinessProcessForPublish(
         }
     }
 
-    return { errors, warnings };
+    /*
+     * "This stage has no way out" is stage-scoped CONTEXT. Once the execution graph has already
+     * named the specific movement that failed on that same stage, repeating the context states one
+     * problem twice — the exact pattern this program has been removing. The graph's message wins
+     * because it names the outcome and the transition; the contract's stage-scoped line is kept
+     * only where nothing more specific was reported.
+     */
+    const stagesWithMovementErrors = new Set(
+        errors
+            .filter(
+                (e) =>
+                    e.code === "movement_transition_not_found" || e.code === "movement_without_transition",
+            )
+            .map((e) => e.stage_key)
+            .filter(Boolean),
+    );
+    const deduped = errors.filter(
+        (e) =>
+            !(
+                e.code === PUBLISH_OPERATING_CONTRACT
+                && (e.detail as { contract_code?: string } | undefined)?.contract_code
+                    === "stage_transition_missing"
+                && stagesWithMovementErrors.has(e.stage_key)
+            ),
+    );
+
+    return { errors: deduped, warnings };
 }

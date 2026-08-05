@@ -200,15 +200,27 @@ describe("Process Stage operating contract — outcome editor (6–10)", () => {
         expect(summary.toLowerCase()).toMatch(/decision|move|complete/);
     });
 
-    it("work completion is owned by the Outcome Definition", () => {
+    it("work completion is owned by the Outcome Definition — expressed, not enforced", () => {
         const plan = tourConductTourProofPlan();
         const rule = plan.outcome_rules.find((row) => row.when_outcome_key === "tour_completed");
+        // The canonical model still puts completion on the Outcome Definition …
         expect(plan.outcomes.find((outcome) => outcome.outcome_key === "tour_completed")?.completes_work).toBe(true);
         expect(rule?.targets.some((target) => target.kind === "mark_stage_work_complete")).toBe(false);
 
+        /*
+         * … but `mark_stage_work_complete` remains SUPPORTED runtime behaviour, so an existing
+         * outcome that uses it is not invalid. This previously asserted
+         * `legacy_work_completion_invalid`, which was gated on `outgoing_transitions !== undefined`
+         * — "this stage has a transition", read as "this plan was re-authored". Authoring one
+         * unrelated exit path therefore condemned every outcome already on the stage; on Firefly it
+         * produced seven blocking errors against outcomes nobody had touched.
+         *
+         * The schema has no authoring-version marker to gate it correctly, so the diagnostic was
+         * withdrawn rather than re-gated on a second guess.
+         */
         rule!.targets.push({ kind: "mark_stage_work_complete" });
         const issues = validateStageOperatingPlanOperatingContract({ plan });
-        expect(issues.some((issue) => issue.code === "legacy_work_completion_invalid")).toBe(true);
+        expect(issues.map((issue) => issue.code as string)).not.toContain("legacy_work_completion_invalid");
     });
 
     it("10. Editor copy uses Outcomes not Results and Outcome Led execution mode", () => {

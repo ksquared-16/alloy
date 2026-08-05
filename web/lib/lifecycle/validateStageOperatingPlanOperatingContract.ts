@@ -44,9 +44,7 @@ export type StageOperatingContractIssueCode =
     /** An outcome moves through a path that lands on the other journey track. */
     | "outcome_movement_grain_mismatch"
     /** An outcome moves through a path whose destination grain cannot be resolved. */
-    | "outcome_movement_grain_unresolved"
-    | "legacy_status_close_invalid"
-    | "legacy_work_completion_invalid";
+    | "outcome_movement_grain_unresolved";
 
 export type StageOperatingContractIssue = {
     code: StageOperatingContractIssueCode;
@@ -63,6 +61,11 @@ export type ValidateStageOperatingPlanOperatingContractInput = {
     /** Valid executable Primary Action refs for this stage context. */
     validPrimaryActionRefs?: ReadonlySet<string> | readonly string[];
     transitionOptions?: ReadonlyArray<StageOutcomeTransitionOption>;
+    /**
+     * The case-status catalog. UNDEFINED means "the caller cannot resolve it" — status-domain
+     * checks are skipped rather than guessed. An empty ARRAY means "there are none", which is a
+     * finding. A pure caller such as publication validation has no database and must pass nothing.
+     */
     configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
     entityType?: string;
     processStageKeys?: ReadonlySet<string> | readonly string[];
@@ -131,7 +134,7 @@ function validateOutcomeBehavior(
     kind: OutcomeAutomationKind,
     draft: ReturnType<typeof readOutcomeAutomationDraft>,
     transitionOptions: ReadonlyArray<StageOutcomeTransitionOption>,
-    configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow>,
+    configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow> | undefined,
     entityType: string,
 ): StageOperatingContractIssue[] {
     const issues: StageOperatingContractIssue[] = [];
@@ -168,7 +171,7 @@ function validateOutcomeBehavior(
         }
     }
 
-    if (kind === "close_record") {
+    if (kind === "close_record" && configuredStatuses !== undefined) {
         const controlId = `${controlBase}-status`;
         const domainLabel = statusDomainOperatorLabel(entityType);
         const stageLabel = plan.stage_key?.trim() || "this stage";
@@ -237,7 +240,9 @@ export function validateStageOperatingPlanOperatingContract(
     const issues: StageOperatingContractIssue[] = [];
     const validPrimaryRefs = asSet(input.validPrimaryActionRefs);
     const transitionOptions = input.transitionOptions ?? [];
-    const configuredStatuses = input.configuredStatuses ?? [];
+    // Preserved as-is: `undefined` (cannot resolve) and `[]` (none configured) mean different
+    // things to the status-domain checks below.
+    const configuredStatuses = input.configuredStatuses;
     const entityType = entityTypeForPlan(plan, input.entityType);
 
     const outcomeKeys = new Set(plan.outcomes.map((o) => o.outcome_key));
@@ -264,7 +269,7 @@ export function validateStageOperatingPlanOperatingContract(
         } else if (!transition.target_stage_key.trim() || !processStageKeys.has(transition.target_stage_key)) {
             issues.push({ code: "transition_destination_invalid", severity: "error", message: "Select a configured destination stage.", controlId });
         }
-        if (transition.status_key) {
+        if (transition.status_key && configuredStatuses !== undefined) {
             const statusResolution = resolveOutcomeStatusOptions({
                 configuredStatuses,
                 purpose: "status_effect",
@@ -326,7 +331,7 @@ export function validateStageOperatingPlanOperatingContract(
         try {
             const draft = readOutcomeAutomationDraft(outcomeKey, plan.outcome_rules, {
                 transitionOptions: [...transitionOptions],
-                configuredStatuses,
+                configuredStatuses: configuredStatuses ?? [],
                 entityType,
             });
             if (draft.kind === "none") continue;
@@ -495,25 +500,28 @@ export function validateStageOperatingPlanOperatingContract(
                     });
                 }
             }
-            if (
-                plan.outgoing_transitions !== undefined
-                && (target.kind === "update_family_case_status" || target.kind === "update_child_enrollment_status")
-            ) {
-                issues.push({
-                    code: "legacy_status_close_invalid",
-                    severity: "error",
-                    message: "Newly edited outcomes must move through a transition for status and close behavior.",
-                    controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-transition`,
-                });
-            }
-            if (plan.outgoing_transitions !== undefined && target.kind === "mark_stage_work_complete") {
-                issues.push({
-                    code: "legacy_work_completion_invalid",
-                    severity: "error",
-                    message: "Work completion belongs to the Outcome Definition, not after-recording automation.",
-                    controlId: `stage-outcome-definition-${outcomeKey ?? "unknown"}`,
-                });
-            }
+            /*
+             * REMOVED: `legacy_status_close_invalid` and `legacy_work_completion_invalid`.
+             *
+             * Both were gated on `plan.outgoing_transitions !== undefined`, read as "this plan was
+             * re-authored under the newer outcome model, so legacy targets are no longer the
+             * canonical way to write it". That proxy is false. The field means only "this stage has
+             * at least one transition" — so authoring ONE unrelated exit path retroactively
+             * condemned every pre-existing outcome on the stage.
+             *
+             * It fired for real: adding `lead_to_tour` and `enrolling_to_enrolled` produced seven
+             * blocking errors against `reached_qualified`, `contact_closed_lost`,
+             * `enrollment_complete` and `family_withdrew` — outcomes nobody had touched, whose
+             * targets execute correctly. `update_family_case_status`,
+             * `update_child_enrollment_status` and `mark_stage_work_complete` all have real
+             * executors and remain supported runtime behaviour.
+             *
+             * A version-gated rule needs a version. The schema has none: `StageOperatingPlanV1
+             * .version` is the literal `1` on legacy and new plans alike, and
+             * `StageCompletionOutcomeV1` carries no authoring marker at all. Rather than invent a
+             * second implicit heuristic to replace the first, these diagnostics are withdrawn until
+             * the platform has an explicit authoring-version contract to gate them on.
+             */
             if (target.kind === "create_next_work") {
                 const templateKey = target.template_key?.trim() ?? "";
                 if (!templateKey || !plan.work_templates.some((work) => work.template_key === templateKey)) {
