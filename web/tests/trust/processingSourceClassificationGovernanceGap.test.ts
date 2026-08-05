@@ -514,6 +514,12 @@ describe("GAP-C — recovery is exactly-once", () => {
         // Replay the SAME gap object — the ambiguous-network case.
         const second = await reconcileOneTrustGovernanceGap(store.client(), { gap: gaps[0]!, deps });
         expect(second.status).toBe("already_governed");
+        // The branch must report WHICH governed decision it recognized, or the
+        // caller cannot tell recognition from a silent no-op.
+        if (second.status === "already_governed") {
+            expect(second.packageId).toBe(packages[0]!.id);
+            expect(second.contractId).toBe(contracts[0]!.id);
+        }
 
         // Exactly one governed decision, counted once.
         expect(contracts).toHaveLength(1);

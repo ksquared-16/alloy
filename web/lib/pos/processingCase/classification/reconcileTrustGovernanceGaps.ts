@@ -105,7 +105,11 @@ export async function reconcileOneTrustGovernanceGap(
             packageId: existing.package_id,
             nowIso: now(),
         });
-        return { status: "already_governed", ...existing };
+        return {
+            status: "already_governed",
+            contractId: existing.contract_id,
+            packageId: existing.package_id,
+        };
     }
 
     // ---- 2. Claim (compare-and-swap on retry_count) -------------------------
