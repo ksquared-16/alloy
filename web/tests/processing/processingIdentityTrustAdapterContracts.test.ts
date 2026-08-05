@@ -529,7 +529,13 @@ describe("P13-F — the adapter is dormant", () => {
         return out;
     }
 
-    it("no production module imports the adapter — only focused tests do", () => {
+    /**
+     * Phase 1.4 registered the identity capability, whose validation policy calls
+     * out to this adapter's SCHEMA — the sanctioned pattern Phase 1.1 established.
+     * What stays dormant is the material BUILDER: nothing in production computes
+     * identity Trust material, which is what "no production caller" protects.
+     */
+    it("no production module imports the adapter's material builder", () => {
         const importers: string[] = [];
         for (const area of ["lib", "app", "scripts", "components"]) {
             let files: string[] = [];
@@ -541,7 +547,9 @@ describe("P13-F — the adapter is dormant", () => {
             for (const file of files) {
                 if (file.includes("/trustAdapter/")) continue;
                 const src = readFileSync(file, "utf8");
-                if (src.includes("processingIdentity/trustAdapter")) {
+                // The capability contribution may reference the SCHEMA (the
+                // validation call-out). The builder must have no production caller.
+                if (src.includes("identityTrustDecisionMaterial") || src.includes("identityAdoptionIdentity")) {
                     importers.push(file.replace(WEB_ROOT, ""));
                 }
             }
@@ -549,16 +557,13 @@ describe("P13-F — the adapter is dormant", () => {
         expect(importers).toEqual([]);
     });
 
-    it("the decision class is DECLARED but not registered with the Trust registry", async () => {
+    it("the decision class key is stable and suffix-free, and is now registered dormant", async () => {
         const { listDecisionClassKeys } = await import("@/lib/trust/decisionClasses/decisionClassRegistry");
         expect(PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY).toBe("processing_identity_subject_resolution");
         expect(PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY).not.toMatch(/_v\d+$/);
-        // Declared here, registered nowhere.
-        expect(listDecisionClassKeys()).not.toContain(PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY);
-        expect(listDecisionClassKeys()).toEqual([
-            "attention_suggestion_enrichment",
-            "processing_source_classification",
-        ]);
+        // Phase 1.4 registered it. Registration makes the class AVAILABLE;
+        // dormancy is proven by the absence of a production caller, above.
+        expect(listDecisionClassKeys()).toContain(PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY);
     });
 
     it("lib/trust does not IMPORT the Processing identity engine", () => {
@@ -569,20 +574,30 @@ describe("P13-F — the adapter is dormant", () => {
             // `planHash.ts` in a comment as a stylistic precedent; a substring
             // scan would report that as a boundary breach.
             for (const m of src.matchAll(/from\s+"(@\/lib\/pos\/[^"]+)"/g)) {
-                if (m[1]!.includes("processingIdentity")) offenders.push(`${file.replace(WEB_ROOT, "")}: ${m[1]}`);
+                // The adapter CONTRACT is admissible (the validation call-out).
+                // The ENGINE never is.
+                for (const engine of [
+                    "canonicalResolutionEngine", "generateCandidates", "householdGraph",
+                    "matchIdentity", "processingFactsDb", "processingResolutionsDb",
+                    "identityResolutionEligibility",
+                ]) {
+                    if (m[1]!.includes(engine)) offenders.push(`${file.replace(WEB_ROOT, "")}: ${m[1]}`);
+                }
             }
         }
         expect(offenders).toEqual([]);
     });
 
-    it("the ONLY lib/trust → lib/pos import remains Phase 1.1's validation call-out", () => {
+    it("every lib/trust → lib/pos import is an owner-authored validation call-out", () => {
         const posImports: string[] = [];
         for (const file of sourceFilesUnder("lib/trust")) {
             const src = readFileSync(file, "utf8");
             for (const m of src.matchAll(/from\s+"(@\/lib\/pos\/[^"]+)"/g)) posImports.push(m[1]!);
         }
-        expect(posImports).toEqual([
+        // Both are owner-authored SCHEMA call-outs, never engine modules.
+        expect(posImports.sort()).toEqual([
             "@/lib/pos/processingCase/classification/governedClassificationSchema",
+            "@/lib/pos/processingIdentity/trustAdapter/governedIdentitySchema",
         ]);
     });
 

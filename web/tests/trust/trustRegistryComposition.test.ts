@@ -483,9 +483,16 @@ describe("the production composition root", () => {
             "capability.attention_suggestion_enrichment",
             // Trust adoption Phase 1.1 — the first capability to adopt the platform.
             "capability.processing_source_classification",
+            // Trust adoption Phase 1.4 — registered but DORMANT.
+            "capability.processing_identity_subject_resolution",
         ]);
         expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.id)).toEqual([...TRUST_REGISTRY.composition_order]);
-        expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.owner)).toEqual(["platform", "capability", "capability"]);
+        expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.owner)).toEqual([
+            "platform",
+            "capability",
+            "capability",
+            "capability",
+        ]);
     });
 
     /**
@@ -498,7 +505,11 @@ describe("the production composition root", () => {
      * and V1's own definition is untouched by a second capability existing.
      */
     it("registers exactly the declared Decision Classes, V1's still first and unchanged", () => {
-        const expected = [ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY, "processing_source_classification"];
+        const expected = [
+            ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY,
+            "processing_source_classification",
+            "processing_identity_subject_resolution",
+        ];
         expect(TRUST_REGISTRY.listDecisionClassKeys()).toEqual(expected);
         expect(listDecisionClassKeys()).toEqual(expected);
 

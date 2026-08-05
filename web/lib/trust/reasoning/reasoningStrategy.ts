@@ -42,8 +42,20 @@ export type ReasoningEvidenceItem = {
 export type ReasoningProposalV1 = {
     /** The proposal payload. Shape is owned by the Decision Class, not by the strategy kind. */
     readonly recommendation: Record<string, unknown>;
-    /** Statistical certainty only. Never operational approval, never trust. */
-    readonly confidence: number;
+    /**
+     * Statistical certainty only. Never operational approval, never trust.
+     *
+     * `null` means **no calibrated confidence exists** — materially different
+     * from `0`, and the honest answer for a deterministic class whose engine
+     * produces ordered CATEGORIES rather than probabilities. Reporting `0` there
+     * would assert zero certainty, which is a false claim about the judgment.
+     *
+     * A type-level widening only. `DecisionPackageV1.confidence` and the
+     * `confidence numeric` column were already nullable, the runtime passes this
+     * value straight through, and every existing strategy returning a `number`
+     * stays assignable and behaves identically.
+     */
+    readonly confidence: number | null;
     readonly evidence: readonly ReasoningEvidenceItem[];
     readonly explanation: string;
     /** Uncertainty the runtime could not remove; surfaced in the package. */
