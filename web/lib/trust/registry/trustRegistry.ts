@@ -28,6 +28,7 @@
 
 import { ATTENTION_SUGGESTION_ENRICHMENT_CONTRIBUTION } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/contribution";
 import { PROCESSING_SOURCE_CLASSIFICATION_CONTRIBUTION } from "@/lib/trust/capabilities/processingSourceClassification/contribution";
+import { PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CONTRIBUTION } from "@/lib/trust/capabilities/processingIdentitySubjectResolution/contribution";
 import { PLATFORM_PRIVACY_POLICY_CONTRIBUTION } from "@/lib/trust/platform/platformPrivacyPolicies";
 import { composeTrustRegistry } from "@/lib/trust/registry/composeTrustRegistry";
 import type { TrustContribution, TrustRegistry } from "@/lib/trust/registry/trustRegistryTypes";
@@ -42,6 +43,8 @@ export const TRUST_CONTRIBUTION_MANIFEST: readonly TrustContribution[] = Object.
     // ---- capabilities ------------------------------------------------------
     ATTENTION_SUGGESTION_ENRICHMENT_CONTRIBUTION,
     PROCESSING_SOURCE_CLASSIFICATION_CONTRIBUTION,
+    // Trust adoption Phase 1.4 — registered but DORMANT: no production caller.
+    PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CONTRIBUTION,
 ]);
 
 /** The composed, frozen registry. Composed exactly once, at module load. */

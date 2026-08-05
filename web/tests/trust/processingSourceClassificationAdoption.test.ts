@@ -192,11 +192,14 @@ describe("P1.1-A — capability registration through the Phase 0 composition roo
         expect(listDecisionClassKeys()).toContain(PROCESSING_SOURCE_CLASSIFICATION_CLASS_KEY);
     });
 
-    it("the registry now holds exactly two decision classes — composition, not replacement", () => {
-        expect(listDecisionClassKeys()).toEqual([
-            "attention_suggestion_enrichment",
-            "processing_source_classification",
-        ]);
+    it("the registry composes additively — this class is present and V1 is untouched", () => {
+        // Phase 1.4 added a third, dormant class. What this assertion protects is
+        // composition rather than a count: V1 stays first, this class is present,
+        // and nothing was replaced.
+        const keys = listDecisionClassKeys();
+        expect(keys[0]).toBe("attention_suggestion_enrichment");
+        expect(keys).toContain("processing_source_classification");
+        expect(new Set(keys).size).toBe(keys.length);
     });
 
     it("registers exactly one deterministic strategy bound to the class", () => {

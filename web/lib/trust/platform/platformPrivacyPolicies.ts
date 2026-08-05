@@ -17,6 +17,7 @@
 
 import { ATTENTION_SUGGESTION_MINIMIZATION_POLICY_KEY } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/keys";
 import { PROCESSING_SOURCE_MINIMIZATION_POLICY_KEY } from "@/lib/trust/capabilities/processingSourceClassification/keys";
+import { PROCESSING_IDENTITY_MINIMIZATION_POLICY_KEY } from "@/lib/trust/capabilities/processingIdentitySubjectResolution/keys";
 import type { PrivacyPolicyV1 } from "@/lib/trust/privacy/privacyEngine";
 import type { TrustContribution } from "@/lib/trust/registry/trustRegistryTypes";
 
@@ -48,8 +49,28 @@ export const PROCESSING_SOURCE_MINIMIZATION_V1: PrivacyPolicyV1 = {
     prohibited_classes: ["financial"],
 };
 
+/**
+ * Strict minimization for Processing identity subject resolution, with identity
+ * AND financial information refused outright.
+ *
+ * `identity` is prohibited here — unlike the other two policies — because the
+ * governed material is deliberately identity-FREE: categories, counts, bands and
+ * Processing-authored sentences. If an identity-class element ever reached this
+ * class, the correct response is to refuse the whole transform rather than
+ * minimize it, because its presence means the adapter contract was bypassed.
+ */
+export const PROCESSING_IDENTITY_MINIMIZATION_V1: PrivacyPolicyV1 = {
+    key: PROCESSING_IDENTITY_MINIMIZATION_POLICY_KEY,
+    pii_mode: "strict",
+    prohibited_classes: ["identity", "financial"],
+};
+
 export const PLATFORM_PRIVACY_POLICY_CONTRIBUTION: TrustContribution = {
     id: "platform.privacy_policies",
     owner: "platform",
-    privacyPolicies: [ATTENTION_SUGGESTION_MINIMIZATION_V1, PROCESSING_SOURCE_MINIMIZATION_V1],
+    privacyPolicies: [
+        ATTENTION_SUGGESTION_MINIMIZATION_V1,
+        PROCESSING_SOURCE_MINIMIZATION_V1,
+        PROCESSING_IDENTITY_MINIMIZATION_V1,
+    ],
 };
