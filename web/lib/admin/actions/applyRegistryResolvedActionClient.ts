@@ -467,11 +467,28 @@ export async function applyRegistryResolvedActionClient(
                     context: host.context,
                 }),
             });
-            const json = (await res.json().catch(() => ({}))) as {
-                ok?: boolean;
-                error?: string | { message?: string };
-                result?: { detail?: Record<string, unknown> };
-            };
+            let json:
+                | {
+                      ok?: boolean;
+                      error?: string | { message?: string };
+                      result?: { detail?: Record<string, unknown> };
+                      data?: { execution_result?: Record<string, unknown> };
+                  }
+                | null = null;
+            try {
+                json = await res.json();
+            } catch {
+                json = null;
+            }
+
+            // A body we cannot read is not a success. Silence is the failure mode
+            // this whole correction exists to remove.
+            if (!json || typeof json !== "object") {
+                return {
+                    ok: false,
+                    error: "The invitation could not be confirmed — the server response could not be read. Nothing was sent.",
+                };
+            }
             if (!res.ok || json.ok === false) {
                 const message =
                     typeof json.error === "string"
@@ -483,8 +500,27 @@ export async function applyRegistryResolvedActionClient(
             // Per-channel truth, never a generic "Invitation sent". A channel the
             // canonical enqueue refused is reported as refused — claiming otherwise is
             // precisely the failure this capability exists to avoid.
-            const detail = json.result?.detail ?? {};
-            const sent = Array.isArray(detail.sent_channels) ? (detail.sent_channels as string[]) : [];
+            // The route's documented success envelope is
+            //   { ok: true, data: { execution_result, affected_id? }, correlation_id }
+            // so the action's `detail` arrives under data.execution_result.detail.
+            // `result.detail` is accepted as a fallback only; reading the wrong
+            // path silently degraded a real send into "no eligible delivery
+            // channel", which is the same class of lie in the other direction.
+            const execResult = (json.data?.execution_result ?? {}) as Record<string, unknown>;
+            const detail = ((execResult.detail as Record<string, unknown>) ??
+                json.result?.detail ??
+                null) as Record<string, unknown> | null;
+
+            // Success must be DERIVED from the server result. A 2xx with no
+            // recognisable invitation detail is not something to celebrate.
+            if (!detail || !Array.isArray(detail.sent_channels)) {
+                return {
+                    ok: false,
+                    error: "The invitation result could not be read, so it is not confirmed. Check the record's Communications before retrying.",
+                };
+            }
+
+            const sent = detail.sent_channels as string[];
             const skipped = Array.isArray(detail.skipped) ? (detail.skipped as string[]) : [];
             const replay = detail.idempotent_replay === true;
             const parts: string[] = [];
@@ -712,7 +748,26 @@ export async function applyRegistryResolvedActionClient(
             window.alert(message);
             return { ok: true };
         }
-        return { ok: true };
+        // NO generic success fall-through.
+        //
+        // Reaching here means a provisioned `ui_intent` has no branch above, so
+        // NOTHING was executed — no request was issued, no server result was
+        // validated. Returning `{ ok: true }` here told operators their command
+        // ran when it had not: `send_tour_invitation` reported "completed" while
+        // creating no invitation, no message and no event. A command that cannot
+        // run must say so.
+        //
+        // This is deliberately not special-cased to one action. Any future
+        // provisioned intent without a branch fails loudly on its first click
+        // instead of silently lying for however long it takes someone to notice.
+        console.warn("[applyRegistryResolvedActionClient] unhandled ui_intent — nothing executed", {
+            key: actionKey,
+            intent,
+        });
+        return {
+            ok: false,
+            error: "This command is not available yet. Nothing was sent.",
+        };
     }
 
     const entityId = host.entityId?.trim();
