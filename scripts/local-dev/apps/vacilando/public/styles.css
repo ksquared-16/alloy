@@ -1153,6 +1153,14 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .ws-ctx-v{line-height:1.35;word-break:break-word}
 .ws-ctx-v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .ws-ctx-actions{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.ws-since{
+  margin:0 0 14px;padding:12px 14px;border:1px solid rgba(47,107,69,.22);
+  border-radius:12px;background:rgba(47,107,69,.06);
+}
+.ws-since-title{margin:0 0 8px;font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
+.ws-since-list{margin:0;padding-left:1.1rem;display:grid;gap:6px;font-size:13.5px;line-height:1.4}
+.ws-load-earlier{display:flex;justify-content:center;margin:0 0 10px}
+.ws-shell-boot .ws-context{opacity:.85}
 @media(max-width:980px){
   .ws-shell{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
   .ws-nav,.ws-context{border:0;max-height:160px}

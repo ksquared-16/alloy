@@ -2043,15 +2043,29 @@ function onSnap(s) {
 }
 async function poll() { try { const r = await fetch("/api/state", { cache: "no-store" }); onSnap(await r.json()); setLive(sseOk ? "live" : "polling"); } catch { setLive("offline"); } }
 function connect() { try { const es = new EventSource("/api/events"); es.addEventListener("snapshot", (ev) => { try { onSnap(JSON.parse(ev.data)); } catch {} sseOk = true; setLive("live"); }); es.addEventListener("hello", () => { sseOk = true; setLive("live"); }); es.onerror = () => { sseOk = false; }; } catch { sseOk = false; } }
+function isWorkspaceRoute() {
+  try {
+    const raw = location.hash.replace(/^#\/?/, "");
+    const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "";
+    return name === "workspaces" || name === "workspace";
+  } catch {
+    return false;
+  }
+}
 enforceMissionControlHome();
 if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = "#/missions";
-connect();
-// Board poll is background telemetry — Mission Control does not wait on it.
-poll(); fetchResources();
+// First Mission Control / Workspace paint immediately (shell interactive before board hydrate).
+render(true);
+// Board telemetry contends on the single-threaded control plane — defer on Workspace Runtime.
+if (isWorkspaceRoute()) {
+  setTimeout(() => { connect(); poll(); fetchResources(); }, 5000);
+} else {
+  connect();
+  poll();
+  fetchResources();
+}
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
-// First Mission Control paint immediately (shell interactive before board hydrate).
-render(true);
 
 // ---- Operator notifications: Needs You + legacy Director conversations.
 // Fires a native desktop notification when something newly needs the operator
@@ -2147,7 +2161,12 @@ async function notifyPoll() {
   } catch { /* keep last */ }
 }
 ensureNotifyPermission();
-notifyPoll(); setInterval(notifyPoll, 15000);
+if (isWorkspaceRoute()) {
+  setTimeout(() => notifyPoll(), 6000);
+} else {
+  notifyPoll();
+}
+setInterval(notifyPoll, 15000);
 // Also re-check permission when the window gains focus (macOS often prompts then).
 window.addEventListener("focus", () => { ensureNotifyPermission(); });
 // Poll the selected worker's Director requests while any is still running, so

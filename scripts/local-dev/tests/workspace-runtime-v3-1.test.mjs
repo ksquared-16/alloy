@@ -70,7 +70,7 @@ appendTimelineEvent(missionId, {
   visibility: "summary",
 });
 
-const msgs = projectTimelineToMessages(missionId, { limit: 50 });
+const msgs = projectTimelineToMessages(missionId, { limit: 50 }).messages;
 assert.ok(msgs.length >= 3, "projects timeline into messages");
 const lastThree = msgs.slice(-3);
 assert.equal(lastThree[0].from.label, "Cursor");
@@ -107,7 +107,7 @@ const reply = postWorkspaceReply("ws_identity", { text: "Continue." });
 assert.equal(reply.ok, true, "reply ok against bound mission id");
 assert.ok(reply.eventId);
 
-const replyMsgs = projectTimelineToMessages(V3_1_WORKSPACE.missionId, { limit: 20 });
+const replyMsgs = projectTimelineToMessages(V3_1_WORKSPACE.missionId, { limit: 20 }).messages;
 const kelly = replyMsgs.filter((m) => m.from.label === "Kelly" && m.provenance.type === "operator_message");
 assert.ok(kelly.some((m) => m.body === "Continue." || m.body.startsWith("Continue")));
 
@@ -136,7 +136,7 @@ createDecision({
   options: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
   actor: "director",
 });
-const afterDecision = projectTimelineToMessages(missionId, { limit: 80 });
+const afterDecision = projectTimelineToMessages(missionId, { limit: 80 }).messages;
 const decisionMsg = afterDecision.find((m) => m.provenance.type === "decision_requested");
 assert.ok(decisionMsg, "decision_requested projected");
 assert.equal(decisionMsg.from.label, "Director");

@@ -570,6 +570,19 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     }
     return { status: 200, body: out };
   }
+  if (path === "/api/v2/workspace/last-seen" || path === "/api/v2/views/workspace/last-seen") {
+    const { setWorkspaceLastSeen, resolveV31Workspace } = await import("./presentation/workspace-runtime.mjs");
+    const workspaceId = v.workspace_id || v.workspaceId || v.id || "ws_identity";
+    if (!resolveV31Workspace(workspaceId)) {
+      return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    }
+    const out = setWorkspaceLastSeen(workspaceId, {
+      eventId: v.event_id || v.eventId || null,
+      at: v.at || null,
+      operatorId: v.operator_id || v.operatorId || "kelly",
+    });
+    return { status: out.ok ? 200 : 400, body: out };
+  }
   if (path === "/api/v2/director/message") {
     try {
       const out = submitOperatorDirectorMessage({
@@ -892,14 +905,48 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     || path === "/api/v2/views/workspace"
     || path === "/api/v2/workspace"
   ) {
-    const { workspaceRuntimeVm, listV31Workspaces } = await import("./presentation/workspace-runtime.mjs");
+    const {
+      workspaceRuntimeVm,
+      workspaceShellVm,
+      workspaceMessagesVm,
+      listV31Workspaces,
+    } = await import("./presentation/workspace-runtime.mjs");
     const id = q("id") || q("workspace_id") || q("workspaceId") || "ws_identity";
     if (q("list") === "1") {
       return { status: 200, body: { ok: true, workspaces: listV31Workspaces() } };
     }
+    const mode = q("mode") || "full";
+    if (mode === "shell") {
+      const shell = workspaceShellVm(id);
+      if (!shell) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+      return { status: 200, body: { ok: true, shell, workspaces: listV31Workspaces() } };
+    }
+    if (mode === "messages") {
+      const before = q("before") || q("before_event_id") || null;
+      const limit = Math.min(100, Math.max(1, Number(q("limit") || 40) || 40));
+      const page = workspaceMessagesVm(id, { limit, beforeEventId: before });
+      if (!page) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+      return { status: 200, body: { ok: true, ...page } };
+    }
     const runtime = workspaceRuntimeVm(id);
     if (!runtime) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
     return { status: 200, body: { ok: true, runtime, workspaces: listV31Workspaces() } };
+  }
+  if (path === "/api/v2/views/workspace-shell") {
+    const { workspaceShellVm, listV31Workspaces } = await import("./presentation/workspace-runtime.mjs");
+    const id = q("id") || q("workspace_id") || "ws_identity";
+    const shell = workspaceShellVm(id);
+    if (!shell) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    return { status: 200, body: { ok: true, shell, workspaces: listV31Workspaces() } };
+  }
+  if (path === "/api/v2/views/workspace-messages") {
+    const { workspaceMessagesVm } = await import("./presentation/workspace-runtime.mjs");
+    const id = q("id") || q("workspace_id") || "ws_identity";
+    const before = q("before") || q("before_event_id") || null;
+    const limit = Math.min(100, Math.max(1, Number(q("limit") || 40) || 40));
+    const page = workspaceMessagesVm(id, { limit, beforeEventId: before });
+    if (!page) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    return { status: 200, body: { ok: true, ...page } };
   }
   if (path === "/api/v2/views/mission/timeline") {
     const id = q("id") || q("mission_id");
