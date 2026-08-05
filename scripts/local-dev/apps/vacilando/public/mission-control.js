@@ -679,102 +679,111 @@ We'll capture the context automatically.</p>
     V2.revalidate(`missions:${V2.state.missionsFilter || "active"}`, () => V2.fetchMissions(V2.state.missionsFilter || "active"));
     if (!V2.state.missionsHome && !V2.state.missionsError) {
       V2.fetchMissions(V2.state.missionsFilter || "active");
-      return shell("Missions", {
+      return shell("Director Portfolio", {
         actions: `<button class="btn" data-nav="kickoff">Create Mission</button>`,
-      }) + `<div class="empty"><div class="big"><span class="spin"></span> Loading missions…</div></div></div>`;
+      }) + `<div class="empty"><div class="big"><span class="spin"></span> Loading portfolio…</div></div></div>`;
     }
     if (V2.state.missionsError && !V2.state.missionsHome) {
-      return shell("Missions") + errPanel("Could not load missions", { message: V2.state.missionsError }, { retry: "missions" }) + `</div>`;
+      return shell("Director Portfolio") + errPanel("Could not load portfolio", { message: V2.state.missionsError }, { retry: "missions" }) + `</div>`;
     }
     const home = V2.state.missionsHome || {};
     const filter = home.filter || V2.state.missionsFilter || "active";
-    const rows = home.missions || [];
-    const empty = home.emptyState;
-    const sum = home.summary || {};
-    const ms = sum.missions || {};
-    const ws = sum.workers || {};
-    const statusChips = (ms.byStatus || []).map((s) =>
-      `<span class="mc-chip">${esc(s.label)} <b>${s.count}</b></span>`).join("");
-    const workerRows = (ws.rows || []).map((w) => `<tr>
-        <td><button class="btn link" type="button" data-nav="workers/${esc(w.workerId)}">${esc(w.slotLabel || w.workerId)}</button></td>
-        <td><span class="mc-pill ${esc(w.health || "")}">${esc(w.healthLabel || w.health || "—")}</span></td>
-        <td>${w.missionId
-          ? `<button class="btn link" type="button" data-nav="missions/${esc(w.missionId)}">${esc(w.missionTitle)}</button>`
-          : `<span class="muted">Unassigned</span>`}</td>
-        <td class="muted">${esc(w.deliverable || "—")}</td>
-      </tr>`).join("");
-    const needsPreview = (sum.needsYouPreview || []).map((n) => `<li>
-        <button class="btn link" type="button" data-nav="missions/${esc(n.missionId)}">${esc(n.missionTitle || n.missionId)}</button>
-        <span class="muted"> — ${esc(n.title)}</span>
-      </li>`).join("");
+    const pf = home.portfolio || {};
+    const counts = pf.counts || {};
+    const empty = pf.emptyState || home.emptyState;
+    const isHistory = filter === "archived" || filter === "history";
 
-    const summaryPanel = (filter === "archived" || filter === "history")
-      ? ""
-      : `<section class="mc-home-summary" aria-label="Control plane summary">
-      <div class="mc-stat-grid mc-home-stats">
-        <div class="mc-stat"><div class="mc-stat-k">Active missions</div><div class="mc-stat-v">${ms.active ?? home.activeCount ?? 0}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Needs you</div><div class="mc-stat-v">${sum.needsYouCount ?? ms.needingYou ?? 0}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Ready to start</div><div class="mc-stat-v">${ms.readyToStart ?? 0}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Running</div><div class="mc-stat-v">${ms.running ?? 0}</div></div>
-        <div class="mc-stat"><div class="mc-stat-k">Workers</div><div class="mc-stat-v">${ws.total ?? 0}<span class="muted" style="font-weight:500;font-size:12px"> · ${ws.active ?? 0} active${ws.attention ? ` · ${ws.attention} attention` : ""}</span></div></div>
-      </div>
-      ${statusChips ? `<div class="mc-home-chips">${statusChips}</div>` : ""}
-      <div class="mc-home-split">
-        <div class="mc-card" style="margin:0">
-          <div class="mc-card-h"><b>Workers</b>
-            <button class="btn ghost" type="button" data-nav="workers">All workers</button>
-          </div>
-          ${workerRows
-            ? `<table class="mc-table"><thead><tr><th>Worker</th><th>Status</th><th>Mission</th><th>Assignment</th></tr></thead><tbody>${workerRows}</tbody></table>`
-            : `<p class="muted" style="margin:8px 0 0">No workers reporting yet.</p>`}
+    function portfolioCardHtml(m) {
+      const conf = m.confidence?.percent != null
+        ? `${m.confidence.percent}%${m.confidence.bandLabel ? ` · ${m.confidence.bandLabel}` : ""}`
+        : (m.confidence?.bandLabel || "—");
+      return `<article class="mc-card mc-portfolio-card tone-${esc(m.outcome?.tone || "neutral")}${m.stale ? " is-stale" : ""}">
+        <div class="mc-card-h">
+          <b data-nav="missions/${esc(m.missionId)}" style="cursor:pointer">${esc(m.title)}</b>
+          <span class="mc-pill">${esc(m.statusLabel || m.groupLabel)}</span>
         </div>
-        <div class="mc-card" style="margin:0">
-          <div class="mc-card-h"><b>Needs You</b>
-            <button class="btn ghost" type="button" data-nav="needs-you">Open inbox</button>
-          </div>
-          ${needsPreview
-            ? `<ul class="mc-home-needs">${needsPreview}</ul>`
-            : `<p class="muted" style="margin:8px 0 0">Nothing waiting on you.</p>`}
-        </div>
+        <dl class="mc-portfolio-dl">
+          <div><dt>Phase</dt><dd>${esc(m.phase || "—")}</dd></div>
+          <div><dt>Outcome</dt><dd>${esc(m.outcome?.label || "—")}${m.outcome?.sentence ? `<span class="muted"> — ${esc(m.outcome.sentence)}</span>` : ""}</dd></div>
+          <div><dt>Recommendation</dt><dd>${esc(m.recommendation || "—")}</dd></div>
+          ${m.blocker ? `<div><dt>Blocker</dt><dd class="mc-portfolio-blocker">${esc(m.blocker)}</dd></div>` : ""}
+          <div><dt>Owner</dt><dd>${esc(m.owner || "—")}</dd></div>
+          <div><dt>Confidence</dt><dd>${esc(conf)}</dd></div>
+        </dl>
+        <div class="mc-card-meta muted">${esc(m.deliverablesLabel || "")}${m.updatedLabel ? ` · ${esc(m.updatedLabel)}` : ""}${m.stale ? " · Stale" : ""}</div>
+        <div class="mc-card-cta mc-actions">${m.archived
+          ? `<button class="btn ghost" data-nav="missions/${esc(m.missionId)}">Open history</button>`
+          : `${actionBtn(m.nextAction || m.primaryAction)}${m.secondaryAction ? actionBtn(m.secondaryAction) : ""}
+             <button class="btn ghost" data-nav="missions/${esc(m.missionId)}">Open</button>`}</div>
+      </article>`;
+    }
+
+    const countStrip = isHistory ? "" : `<section class="mc-portfolio-counts" aria-label="Portfolio counts">
+      <div class="mc-stat-grid mc-home-stats mc-portfolio-stat-grid">
+        <div class="mc-stat"><div class="mc-stat-k">Active</div><div class="mc-stat-v">${counts.active ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Waiting on Director</div><div class="mc-stat-v">${counts.needsAttention ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Blocked</div><div class="mc-stat-v">${counts.blocked ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Ready for Implementation</div><div class="mc-stat-v">${counts.readyImplementation ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Ready for Promotion</div><div class="mc-stat-v">${counts.readyClose ?? 0}</div></div>
+        <div class="mc-stat"><div class="mc-stat-k">Recently Completed</div><div class="mc-stat-v">${counts.completedRecently ?? 0}</div></div>
       </div>
     </section>`;
 
-    const cards = rows.map((m) => `<article class="mc-card mc-mission-card">
-      <div class="mc-card-h">
-        <b data-nav="missions/${esc(m.missionId)}" style="cursor:pointer">${esc(m.title)}</b>
-        <span class="mc-pill ${esc(m.status)}">${esc(m.archived ? "Archived" : m.statusLabel)}</span>
+    const focusCards = (pf.focus || []).slice(0, 5);
+    const focusSec = (!isHistory && (focusCards.length || counts.needsAttention || counts.blocked))
+      ? `<section class="mc-portfolio-focus" aria-label="Fifteen minute focus">
+          <div class="mc-portfolio-focus-h">
+            <div>
+              <p class="mc-portfolio-kicker">15-minute focus</p>
+              <h3>${esc(pf.focusLead || "Start here")}</h3>
+              <p class="muted">${esc(pf.focusQuestion || "If you only have 15 minutes — start here.")}</p>
+            </div>
+            <button class="btn ghost" type="button" data-nav="needs-you">Needs You inbox</button>
+          </div>
+          ${focusCards.length ? `<ol class="mc-portfolio-focus-ol">${focusCards.map((m) => `<li>
+            <button class="btn link" type="button" data-nav="missions/${esc(m.missionId)}">${esc(m.title)}</button>
+            <span class="muted"> — ${esc(m.recommendation || m.statusLabel || "")}</span>
+            ${actionBtn(m.nextAction || m.primaryAction)}
+          </li>`).join("")}</ol>` : ""}
+        </section>`
+      : "";
+
+    const groups = (pf.groups || []).filter((g) => (g.missions || []).length > 0);
+    const groupSecs = groups.map((g) => `<section class="mc-portfolio-group" data-portfolio-group="${esc(g.id)}" aria-label="${esc(g.label)}">
+      <div class="mc-portfolio-group-h">
+        <h3>${esc(g.label)} <span class="muted">${g.count}</span></h3>
+        ${g.blurb ? `<p class="muted">${esc(g.blurb)}</p>` : ""}
       </div>
-      <div class="mc-card-p">${esc(m.postureDetail || m.phaseLabel)}</div>
-      <div class="mc-card-m">${esc(m.deliverablesLabel)}</div>
-      <div class="mc-card-d">${esc(m.archived ? (m.archiveReason || "Archived certification history") : m.directorState)}</div>
-      <div class="mc-card-f">${esc(m.workersLine)}${m.openDecisionCount ? ` · ${m.openDecisionCount} open decision${m.openDecisionCount === 1 ? "" : "s"}` : ""}</div>
-      <div class="mc-card-meta muted">${esc(m.latestUpdate)} · ${esc(m.updatedLabel || "")}</div>
-      <div class="mc-card-cta mc-actions">${m.archived ? `<span class="muted">Read-only history</span>` : `${actionBtn(m.primaryAction)}${actionBtn(m.secondaryAction)}`}</div>
-    </article>`).join("")
-      || (empty
+      <div class="mc-list mc-portfolio-list">${(g.missions || []).map(portfolioCardHtml).join("")}</div>
+    </section>`).join("");
+
+    const emptyHtml = (pf.empty || (!groups.length && !focusCards.length))
+      ? (empty
         ? `<div class="rempty">
             <h3>${esc(empty.title)}</h3>
             <p>${esc(empty.body)}</p>
             <button class="btn" data-nav="kickoff">Create Mission</button>
           </div>`
-        : `<div class="rempty">No missions in this view.</div>`);
+        : `<div class="rempty">No missions in this view.</div>`)
+      : "";
 
     const filterBar = `<div class="mc-filter-bar row gap" style="margin-bottom:12px">
-      <button class="btn ghost ${filter === "active" ? "active" : ""}" type="button" data-missions-filter="active">Active (${home.activeCount ?? rows.length})</button>
-      <button class="btn ghost ${filter === "archived" || filter === "history" ? "active" : ""}" type="button" data-missions-filter="archived">Mission History (${home.archivedCount ?? 0})</button>
+      <button class="btn ghost ${filter === "active" ? "active" : ""}" type="button" data-missions-filter="active">Portfolio (${home.activeCount ?? counts.active ?? 0})</button>
+      <button class="btn ghost ${isHistory ? "active" : ""}" type="button" data-missions-filter="archived">Mission History (${home.archivedCount ?? 0})</button>
+      <button class="btn ghost" type="button" data-nav="workers">Workers</button>
       <button class="btn" data-nav="kickoff">Create Mission</button>
     </div>`;
 
-    return shell("Missions", {
-      lead: filter === "archived" || filter === "history"
+    return shell(isHistory ? "Mission History" : "Director Portfolio", {
+      lead: isHistory
         ? "Archived certification and validation history — read-only."
-        : "Control plane home — missions, workers, and what needs you.",
-      actions: filter === "archived" || filter === "history"
+        : "What is active, blocked, waiting on you, and what to do next — without opening every mission.",
+      actions: isHistory
         ? `<button class="btn" data-nav="kickoff">Create Mission</button>`
         : `<button class="btn ghost" type="button" data-mc-day-start>Start of day</button>
            <button class="btn ghost" type="button" data-mc-day-stop>Stop of day</button>
            <button class="btn" data-nav="kickoff">Create Mission</button>`,
-    }) + summaryPanel + filterBar + `<div class="mc-list">${cards}</div></div>`;
+    }) + filterBar + countStrip + focusSec + groupSecs + emptyHtml + `</div>`;
   };
 
   V2.viewMissionDetail = function (id) {

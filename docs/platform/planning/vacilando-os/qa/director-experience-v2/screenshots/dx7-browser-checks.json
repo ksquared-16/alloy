@@ -1,0 +1,138 @@
+{
+  "at": "2026-08-05T16:45:00.418Z",
+  "base": "http://127.0.0.1:3026",
+  "apiMeta": {
+    "kind": "director_portfolio",
+    "focusLead": "2 need you",
+    "counts": {
+      "active": 6,
+      "needsAttention": 2,
+      "blocked": 1,
+      "waiting": 1,
+      "inProgress": 0,
+      "readyImplementation": 1,
+      "readyClose": 1,
+      "completedRecently": 5
+    },
+    "groups": [
+      {
+        "id": "needs_attention",
+        "label": "Needs Your Attention",
+        "count": 2,
+        "titles": [
+          "DX7 Fixture — Needs Director",
+          "Mission 2 Identity & Access Platform Objective Transform the complete…"
+        ]
+      },
+      {
+        "id": "blocked",
+        "label": "Blocked",
+        "count": 1,
+        "titles": [
+          "DX7 Fixture — Blocked Trust"
+        ]
+      },
+      {
+        "id": "ready_implementation",
+        "label": "Ready for Implementation",
+        "count": 1,
+        "titles": [
+          "DX7 Fixture — Ready Implementation"
+        ]
+      },
+      {
+        "id": "ready_close",
+        "label": "Ready for Promotion",
+        "count": 1,
+        "titles": [
+          "DX7 Fixture — Ready Promotion"
+        ]
+      },
+      {
+        "id": "waiting",
+        "label": "Waiting",
+        "count": 1,
+        "titles": [
+          "DX7 Fixture — Waiting Comms"
+        ]
+      },
+      {
+        "id": "in_progress",
+        "label": "In Progress",
+        "count": 0,
+        "titles": []
+      },
+      {
+        "id": "completed_recently",
+        "label": "Recently Finished",
+        "count": 5,
+        "titles": [
+          "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+          "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity",
+          "Access and Roles mission > **Create a complete, understandable, and c…",
+          "Access & Roles V2 — Implementation Proposal",
+          "Access & Roles V2 — implement: Phase 0 — Catalog & role-definition integrity"
+        ]
+      }
+    ],
+    "focus": [
+      {
+        "title": "DX7 Fixture — Needs Director",
+        "groupId": "needs_attention",
+        "recommendation": "Open decision"
+      },
+      {
+        "title": "Mission 2 Identity & Access Platform Objective Transform the complete…",
+        "groupId": "needs_attention",
+        "recommendation": "Request More Discovery"
+      },
+      {
+        "title": "DX7 Fixture — Blocked Trust",
+        "groupId": "blocked",
+        "recommendation": "Resolve Blockers"
+      },
+      {
+        "title": "DX7 Fixture — Ready Implementation",
+        "groupId": "ready_implementation",
+        "recommendation": "Have Director re-check"
+      },
+      {
+        "title": "DX7 Fixture — Ready Promotion",
+        "groupId": "ready_close",
+        "recommendation": "Have Director re-check"
+      }
+    ],
+    "sampleCard": {
+      "title": "DX7 Fixture — Needs Director",
+      "phase": "Decision required",
+      "outcome": "Decision required",
+      "recommendation": "Open decision",
+      "owner": "Director (you)",
+      "confidence": {
+        "percent": 32,
+        "bandLabel": "At risk"
+      },
+      "nextAction": "Open decision"
+    }
+  },
+  "checks": {
+    "hasPortfolioTitle": true,
+    "hasCounts": true,
+    "hasFocus": true,
+    "groupCount": 6,
+    "cardCount": 11,
+    "hasWorkersLink": true,
+    "navigatedMissionHref": "missions/msn_22eb2a1ea6e3c65fc4",
+    "missionDetailStillRenders": true,
+    "apiIsPortfolio": true,
+    "apiHasCounts": true,
+    "apiHasGroups": true
+  },
+  "shots": {
+    "counts": "dx7-portfolio-counts.png",
+    "home": "dx7-portfolio-home.png",
+    "group": "dx7-portfolio-group.png",
+    "card": "dx7-portfolio-card.png",
+    "mission": "dx7-mission-detail-unchanged.png"
+  }
+}
