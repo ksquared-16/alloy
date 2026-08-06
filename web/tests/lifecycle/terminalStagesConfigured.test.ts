@@ -1,11 +1,15 @@
 /**
- * The canonical terminal stages, configured from the platform vocabulary rather than invented.
+ * A TENANT THAT CHOOSES to represent terminal results as stages — and the platform serving it.
  *
- * `closed` (family) and `closed_withdrawn` (child) already existed in
- * `ENROLLMENT_STAGE_DURABLE_STATES`; Firefly simply had neither. They are added through the
- * canonical `add_stage` + `update_stage_grain` actions, so stage identity, grain, membership and
- * destination compatibility keep being derived from configuration plus that vocabulary — no
- * tenant-specific terminal keys and no Firefly runtime branch.
+ * Firefly no longer configures `closed` or `closed_withdrawn`: a family case ends through
+ * `opportunities.status_key` and a child's participation through `process_instances.state`, and
+ * neither needs a stage. These keys are NOT canonical and the platform requires neither.
+ *
+ * What this file still proves is the other half of that statement — that a tenant who DOES want
+ * terminal stages is served correctly. The fixture below is a frozen capture of exactly such a
+ * configuration (`certification/sub-slice-3/L-readback.json`), read as one tenant's choice rather
+ * than as a required shape: grain resolves from its configured metadata, and movement onto each
+ * terminal stage is compatible only with a subject of that stage's own grain.
  *
  * A terminal stage is terminal because it holds no work, not because a flag says so.
  */
@@ -33,33 +37,35 @@ const stages = draft.config.processes[0]!.stages as Array<{
 }>;
 const byKey = (k: string) => stages.find((s) => s.key === k)!;
 
-describe("both terminal stages exist under the canonical keys", () => {
-    it("uses `closed`, not a tenant-specific family terminal key", () => {
+describe("this tenant's chosen terminal stages resolve from ITS configuration", () => {
+    it("carries a family terminal stage under the key this tenant chose", () => {
         expect(byKey("closed")).toBeDefined();
         expect(byKey("closed").label).toBe("Closed");
     });
 
-    it("uses `closed_withdrawn`, not a tenant-specific child terminal key", () => {
+    it("carries a child terminal stage under the key this tenant chose", () => {
         expect(byKey("closed_withdrawn")).toBeDefined();
         expect(byKey("closed_withdrawn").label).toBe("Closed / Withdrawn");
     });
 });
 
-describe("grain resolves cleanly and agrees with canon", () => {
-    it("`closed` is family from BOTH configured metadata and the canonical vocabulary", () => {
+describe("grain resolves from the tenant's configuration", () => {
+    it("resolves `closed` as family from CONFIGURED metadata, with the compat map reported but not deciding", () => {
         const stage = byKey("closed");
         expect(stage.grain).toBe("family");
         const r = resolveStageGrain({ stageKey: "closed", configuredMetadataGrain: stage.grain });
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         expect(r.grain).toBe("family");
+        // Configured metadata DECIDES; the compatibility map is listed only for transparency.
+        expect(r.source).toBe("configured_metadata");
         expect(r.opinions.map((o) => o.source).sort()).toEqual([
             "canonical_vocabulary",
             "configured_metadata",
         ]);
     });
 
-    it("`closed_withdrawn` is child from both sources", () => {
+    it("resolves `closed_withdrawn` as child from configured metadata", () => {
         const stage = byKey("closed_withdrawn");
         expect(stage.grain).toBe("child");
         const r = resolveStageGrain({ stageKey: "closed_withdrawn", configuredMetadataGrain: stage.grain });

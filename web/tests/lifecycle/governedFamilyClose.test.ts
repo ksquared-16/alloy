@@ -523,6 +523,124 @@ describe("governed family close", () => {
     });
 });
 
+describe("terminal stages are optional — a close needs no stage to move to", () => {
+    const prev = process.env.ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED;
+    beforeAll(() => {
+        process.env.ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED = "1";
+    });
+    afterAll(() => {
+        process.env.ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED = prev;
+    });
+
+    /** Neither half moves a stage. This tenant represents both terminal results as STATE only. */
+    const NO_MOVEMENT = parseStageOperatingPlanV1({
+        ...JSON.parse(JSON.stringify(PLAN)),
+        work_templates: [
+            {
+                ...JSON.parse(JSON.stringify(PLAN.work_templates[0])),
+                family_close: {
+                    action_ref: "close_lead",
+                    label: "Close family",
+                    child_outcome_label: "Not Enrolling",
+                    child_targets: [
+                        { kind: "update_child_enrollment_status", disposition_key: "not_enrolling" },
+                    ],
+                    family_targets: [{ kind: "update_family_case_status", status_key: "closed" }],
+                    required_inputs: [
+                        {
+                            key: "close_reason_key",
+                            label: "Reason",
+                            type: "select",
+                            required: true,
+                            binds_to_target_field: "close_reason_key",
+                            options: [{ value: "cost", label: "Cost" }],
+                        },
+                    ],
+                },
+            },
+        ],
+    })!;
+
+    const closeNoMovement = (world: World) =>
+        executeGovernedFamilyClose({
+            supabase: makeSupabase(world),
+            orgId: ORG,
+            userId: "user-1",
+            departmentId: "dept-1",
+            stageKey: "decision",
+            plan: NO_MOVEMENT,
+            templateKey: "review_child_paths",
+            opportunityId: LEAD,
+            inputValues: { close_reason_key: "cost" },
+        });
+
+    it("closes children and the family with no movement target on either half", async () => {
+        const world = makeWorld([
+            piRow("pi-emma", EMMA, "waitlisted", "waitlist"),
+            piRow("pi-liam", LIAM, "enrolling", "enrolling"),
+        ]);
+
+        const result = await closeNoMovement(world);
+
+        expect(result.ok).toBe(true);
+        // Children ended by STATE; each stayed exactly where they were.
+        for (const [id, stage] of [[EMMA, "waitlist"], [LIAM, "enrolling"]] as const) {
+            expect(child(world, id).state).toBe("not_enrolling");
+            expect(child(world, id).close_reason_key).toBe("cost");
+            expect(child(world, id).stage_key).toBe(stage);
+        }
+        // Family closed by STATUS; its stage is preserved because nothing was configured to move it.
+        expect(family(world).status_key).toBe("closed");
+        expect(family(world).stage_key).toBe("decision");
+    });
+
+    it("never invents an empty or placeholder stage key when no destination is configured", async () => {
+        const world = makeWorld([piRow("pi-emma", EMMA, "waitlisted", "waitlist")]);
+
+        await closeNoMovement(world);
+
+        // The absence of a destination must stay an absence — not "", not null, not a guess.
+        expect(child(world, EMMA).stage_key).toBe("waitlist");
+        expect(family(world).stage_key).toBe("decision");
+        for (const row of world.process_instances) {
+            expect(row.stage_key).toBeTruthy();
+        }
+    });
+
+    it("still blocks an enrolled child, and still skips one already terminal", async () => {
+        const blocked = makeWorld([
+            piRow("pi-emma", EMMA, "enrolled", "enrolled"),
+            piRow("pi-liam", LIAM, "waitlisted", "waitlist"),
+        ]);
+        const before = snap(blocked);
+        const refused = await closeNoMovement(blocked);
+        expect(refused.ok).toBe(false);
+        expect(refused.ok === false && refused.blocks?.[0]?.code).toBe("child_enrolled");
+        expect(blocked).toEqual(before);
+
+        const skipping = makeWorld([
+            piRow("pi-emma", EMMA, "waitlisted", "waitlist"),
+            piRow("pi-sophia", SOPHIA, "withdrawn", "decision"),
+        ]);
+        const sophiaBefore = snap(child(skipping, SOPHIA));
+        const done = await closeNoMovement(skipping);
+        expect(done.ok).toBe(true);
+        expect(child(skipping, SOPHIA)).toEqual(sophiaBefore);
+        expect(family(skipping).status_key).toBe("closed");
+    });
+
+    it("serves the OTHER tenant too — configured movement still moves", async () => {
+        // Same platform, a tenant that chose terminal stages. Both halves move.
+        const world = makeWorld([piRow("pi-emma", EMMA, "waitlisted", "waitlist")]);
+
+        const result = await close(world); // PLAN configures closed_withdrawn + closed
+
+        expect(result.ok).toBe(true);
+        expect(child(world, EMMA).stage_key).toBe("closed_withdrawn");
+        expect(family(world).stage_key).toBe("closed");
+    });
+});
+
 describe("governed family close — configuration is consumed, not hardcoded", () => {
     const prev = process.env.ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED;
     beforeAll(() => {
