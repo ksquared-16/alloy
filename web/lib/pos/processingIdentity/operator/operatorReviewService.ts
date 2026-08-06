@@ -67,6 +67,10 @@ import {
     type IdentityLineageDeps,
     type IdentityLineageOutcome,
 } from "../trustAdapter/identityLineageService";
+import {
+    bindCommitOutcomeToTrust,
+    type ExecutionLineageDeps,
+} from "../trustAdapter/executionLineageService";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -92,6 +96,13 @@ export type OperatorReviewDeps = {
      * certification seams.
      */
     trustLineage?: false | IdentityLineageDeps;
+    /**
+     * Trust execution binding (Phase 1.7). Defaults ON in production.
+     * `false` suppresses it entirely — the control arm proving plan generation,
+     * approval, preflight and execution are byte-identical with and without
+     * Trust. An object injects certification seams.
+     */
+    trustExecution?: false | ExecutionLineageDeps;
 };
 
 export type CaseReviewState = {
@@ -495,8 +506,18 @@ export async function executeApprovedPlanForCase(
     );
 
     // Persist the attempt (append-only) unless it is an idempotent replay of a prior committed attempt.
+    //
+    // `insertCommitAttempt` returns the DURABLE row id, which was previously
+    // discarded. It is captured now because it is the only identifier that
+    // PROVES the result persisted: a replayed attempt was loaded from the
+    // database and already carries the row id in `attemptId`, while a freshly
+    // executed one carries the synthetic `${planId}:attempt:${n}` until the
+    // insert returns.
+    let commitAttemptId: string | null = null;
     if (!(priorAttempt && attempt.attemptId === priorAttempt.attemptId)) {
-        await insertCommitAttempt(deps.supabase, attempt);
+        commitAttemptId = await insertCommitAttempt(deps.supabase, attempt);
+    } else {
+        commitAttemptId = priorAttempt.attemptId;
     }
 
     if (attempt.outcome === "preflight_rejected" || attempt.outcome === "failed") {
@@ -524,6 +545,26 @@ export async function executeApprovedPlanForCase(
             orgId: deps.orgId,
             caseId: input.caseId,
             attempt,
+        });
+    }
+
+    // ---- Trust adoption Phase 1.7 -------------------------------------------
+    // The commit result is now DURABLE. Only here may the real-world outcome of
+    // a governed judgment be observed — and only downstream: this records what
+    // the Processing executor DID. Nothing here can execute, approve or alter a
+    // plan, and Trust never initiates.
+    //
+    // Additive and non-blocking by construction: it never throws, it cannot
+    // change a Processing row, and a Trust outage produces durable,
+    // readiness-neutral per-package gaps rather than failing this execution.
+    if (deps.trustExecution !== false && commitAttemptId) {
+        await bindCommitOutcomeToTrust(deps.supabase, {
+            orgId: deps.orgId,
+            plan,
+            attempt,
+            commitAttemptId,
+            actorId: deps.actorId,
+            deps: typeof deps.trustExecution === "object" ? deps.trustExecution : undefined,
         });
     }
 
