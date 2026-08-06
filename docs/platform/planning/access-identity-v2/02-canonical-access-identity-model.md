@@ -4,7 +4,9 @@
 >
 > **Part I — §1–§13 · *Person ↔ user ↔ role ↔ scope*** (assignment `asg_7a47782c7dc1c9`). States the four
 > nouns and three edges normatively, re-anchors the accepted invariant register to today's code (§7), and
-> records divergences `M2-1 … M2-9` (§8).
+> records divergences `M2-1 … M2-9` (§8). **Reopened 2026-08-06** on operator guidance: §1.3 restates the
+> authority chain as **four layers, two branches** (`M2-16`), and §4.6 bounds what a role-administration
+> surface owes the model (`I-32`, `R1–R5`). Parts II and III are not modified by the reopen.
 >
 > **Part III — §24–§32 · *Decisions requiring approval*** (assignment `asg_90a921a3b7f414`). Consolidates
 > every open decision in the corpus — from all six documents that raise one — into a single register that can
@@ -35,10 +37,19 @@
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Person ↔ user ↔ role ↔ scope model* · assignment `asg_7a47782c7dc1c9`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
 **Worktree** `wt6-vacilando-os-product-def` @ `bdcf55908`
-**Date** 2026-08-03
+**Date** 2026-08-03 · **reopened and extended 2026-08-06** (§0, §1.3, §4.6) in
+`wt6-director-experience-dx5-5-continuation` @ `a72caaff4`
 **Status** Proposed — specification only. No code, schema, or migration is changed by this phase.
 **Method** static, file-grounded. Every claim marked **[verified]** was read at the cited `path:line` in this
 pass. Claims carried from the accepted model without re-derivation are marked **[carried]**.
+
+> **Reopen (2026-08-06), on operator guidance.** Two directives: *the role hierarchy is still too deep — reduce
+> to four layers*, and *simplify the role editor without changing the access architecture*. The first is
+> answered in **§1.3** — the chain is restated as four layers and two branches, which is what M2-1 already
+> implied. The second is **bounded, not executed**, in **§4.6**: `02` specifies what any role-editing surface
+> must preserve; the redesign itself belongs to `06-product-ia-and-flows.md` and is outside this assignment's
+> scope. The four-chapter Access workspace the guidance refers to (`users`, `roles`, `scopes`, `security`) was
+> read but **not modified**. Claims verified in the reopen pass are cited at `a72caaff4`.
 
 Keywords **MUST**, **MUST NOT**, **SHOULD**, **MAY** are used in the RFC 2119 sense.
 
@@ -91,9 +102,17 @@ Three consequences, and they carry most of §7's weight:
 | C10 — `owner`/`manager` are an RLS-only defect | **the vocabulary has leaked into application code** | §8, M2-6 |
 | §6.2 — "three break-glasses" | **at least 13 authority-deciding role literals** | §8, M2-7 |
 | §6.1 — `role_definitions` is the sole role vocabulary | **there are four vocabularies, one of them a CHECK constraint** | §4.2 |
+| §2 — "one chain, five links", drawn in sequence | **four layers, two branches** — the fifth link was width read as depth | §1.3, M2-16 |
 
 Nine divergences are newly recorded by this pass as **M2-1 … M2-9** (§8). Two new invariants (**I-26**,
 **I-27**) and two new decisions (**D9**, **D10**) follow from them.
+
+**The reopen pass (2026-08-06) adds two things and changes nothing else.** §1.3 restates the chain as **four
+layers, two branches** rather than five links — the arithmetic of M2-1, which Part I made but never carried
+through to the depth (**M2-16**). §4.6 states what a role-administration surface owes the model, so that
+simplifying the Access workspace can be checked against the architecture instead of judged by eye (**I-32**,
+constraints **R1–R5**). Both are projections of rules already in this document; **no invariant, edge, table, or
+decision is renumbered, reworded, or reinterpreted.**
 
 ---
 
@@ -119,11 +138,49 @@ All four are verified at the cited lines in this pass **[verified]**.
 | **E3a** | membership → capability | `role_definitions` → `role_permission_grants` → resolved key set | present; **does not honour `is_active`** (§4.4) |
 | **E3b** | membership → scope | `user_access_profiles(user_id, org_id)` → junctions | present; **fail-open on absence, bypassed by role** (§5) |
 
-### 1.3 The one authority chain, restated
+### 1.3 The authority chain is four layers deep, not five
 
-The accepted model's five-link chain **[carried]** (`02…:60-89` in the frozen copy) is unchanged and remains
-normative. This document adds only that its fourth and fifth links are **parallel branches off the third**,
-not a sequence — and that every gate therefore owes both (§7, I-23).
+The accepted model states *"One chain. Five links"* and draws them in sequence — credential → membership →
+role set → capability set → scope — with the consequence that *"a capability cannot escape its role; scope
+cannot escape its capability"* (frozen `02…:60-89`) **[carried]**. §0 shows the last two links are not in
+sequence: `user_access_profiles` is keyed on `(user_id, org_id)` and carries no `role` column
+(`20260504103000…:18-30`, unique at `:50`) **[verified]**, so scope hangs off the **membership**, not off the
+capability set.
+
+Once scope is a sibling of capability rather than its child, the fifth link is not depth. It is width:
+
+| Layer | Question | Capability branch (E3a) | Scope branch (E3b) |
+|---|---|---|---|
+| **L1 — Principal** | *who* | `auth.users.id` | *(shared)* |
+| **L2 — Membership** | *where* | `user_roles(user_id, org_id, role)` | *(shared)* |
+| **L3 — Assignment** | *as what* / *under what limit* | `role_definitions(org_id, role_key)` | `user_access_profiles(user_id, org_id)` |
+| **L4 — Resolved set** | *may do what* / *to which rows* | permission keys via `role_permission_grants` | department + site dimensions via the two junctions |
+
+**Four layers, two branches, both branches exactly four deep.** L1 and L2 are shared; the branches separate at
+L3 and are composed — never merged — at the gate.
+
+> **The chain is four layers deep. It MUST NOT be specified, drawn, or implemented as five.** A fifth layer can
+> only be produced by making one branch an input to the other, which is exactly what I-27 forbids.
+
+This is a restatement, not a change. No table, column, constraint, edge, or gate obligation moves; every
+invariant keeps its number and its wording. What changes is that the model stops describing a depth the schema
+does not have. Recorded as **M2-16** (§8).
+
+**This section also corrects Part I's own first statement of the finding.** The prior wording of §1.3 said the
+fourth and fifth links are *"parallel branches off the third"* — off the **role set**. §0 says otherwise, and
+§0 is right: `user_access_profiles` is keyed on the membership pair and never on a role, so the scope branch
+leaves at L2, one layer earlier. Branching at the role set would have left the chain five deep and would have
+made scope a property of a role. The corrected statement is that **E3a and E3b both leave the membership**.
+
+**One carried consequence follows from the correction.** The accepted §2's second consequence is right about
+the first pair and wrong-shaped about the second: scope does not derive from capability, so it cannot escape
+it. The correct form is what I-27 already requires —
+
+> **Narrowing is within a branch; composition is across branches.** A layer **MUST NOT** widen what the layer
+> above it in the *same* branch permitted. Between branches there is no narrowing relation at all: a gate
+> takes the intersection (I-27), and neither branch may read the other's output.
+
+Every gate still owes both branches (§7, I-23), unchanged.
 
 ---
 
@@ -327,6 +384,66 @@ load-bearing; it removes the one-principal path and leaves the two-principal pat
 
 This is decision **D9** (§10).
 
+### 4.6 What a role-administration surface owes the model
+
+The model has been silent on the operator surface, and that silence has become load-bearing: the Access
+workspace is under active simplification, and from the UI alone *simplify the editor* and *change the access
+architecture* are not distinguishable. This section supplies the boundary. It specifies **what any role-editing
+surface must preserve** — not what it should look like. The shape of the surface remains
+`06-product-ia-and-flows.md`'s to design.
+
+The surface today is one workspace at `/organization/access?section=…` with four chapters — `users`, `roles`,
+`scopes`, `security` (`web/lib/access/accessChapterRoutes.ts:10`) **[verified]** — rendered by
+`AccessWorkspaceSurface` (`:93-118`) **[verified]**, with `/settings/users-roles` retained as a thin named
+entrypoint (`UsersRolesConfigurationPage.tsx:7-18`) **[verified]**.
+
+**Roles and Access Scopes are already separate chapters, and that separation is not cosmetic** — it is L3's two
+branches made visible to the operator (§1.3). Folding them into a single role editor would put scope inside the
+role object and encode the precise category error I-27 forbids. It is the one simplification this document
+rules out by name.
+
+Five constraints. Each is a projection of a rule already stated above; none is new policy.
+
+| # | A role-administration surface… | Because | Rule |
+|---|---|---|---|
+| **R1** | **MUST** offer only `role_key`s present and `is_active` in `role_definitions` for the request's org | one role vocabulary | I-8, I-26 |
+| **R2** | **MUST NOT** present scope as an attribute of a role, or a role as an input to a scope control | the branches are independent in both directions | I-27, §0 |
+| **R3** | **MUST** be able to add and remove one `(principal, org, role)` row without disturbing the others | membership is the unit; capability is the union of roles | I-10, §4.1 |
+| **R4** | **MUST NOT** offer a role-level control that is not a capability grant | a role carries no behaviour of its own | §2 |
+| **R5** | **MUST** state, at the control itself, what deactivating a role does to principals already holding it | today it does nothing | M2-3, D10 |
+
+> **I-32 (new).** Simplification is a surface operation. A role-administration surface **MUST NOT** be where
+> the access model acquires or loses structure: every fact it writes **MUST** be expressible as rows in
+> `user_roles`, `role_definitions` and `role_permission_grants` under the constraints above, and every fact it
+> chooses not to show **MUST** remain settable by some sanctioned path.
+
+**R3 is the constraint violated today, and by the API rather than by the UI.** `PATCH /users/[userId]/role`
+deletes every role row for the pair and inserts one (`role/route.ts:44-47`) **[verified]**, §4.1. A surface
+built on that endpoint **cannot** satisfy R3 however it is drawn. So *"simplify the editor"* and *"do not
+change the access architecture"* are jointly satisfiable only if the additive assignment path that I-10 already
+requires is built first — otherwise a simplified single-select role control does not merely reflect C7, it
+hardens it into the product as an intended design.
+
+> **This is a sequencing constraint on the simplification, and it is the only claim in this section that is not
+> purely descriptive:** the additive `(principal, org, role)` assignment API — `03…`'s **`W-17` — Multi-role
+> write path** *(M · I-10 · closes C7 · informed by D2)* (`03…:1103`) **[verified]** — **SHOULD** land before,
+> or with, any redesign of the Roles chapter.
+
+**The plan of record already says this, and §4.6 only gives it a rule to be checked against.** `03…§14.1`
+records the same two facts as non-goals: the four-chapter Access surface *"already exists"* at
+`/organization/access` (`03…:1572-1575`, citing `web/tests/access/accessProductUi.test.ts:22-35`), and
+`W-10`/`W-17` *"change what those screens are backed by, **not what they are**"* (`03…:1576-1577`)
+**[verified]**. R1–R5 and I-32 are the conformance form of that sentence: *what those screens are* is the part
+a simplification may move, and *what they are backed by* is the part it may not.
+
+**Escalated, not answered.** The operator guidance that prompted this section — *simplify the role editor
+without changing the access architecture* — is a directive to a **surface**, and this document does not own one
+(§12.7). What `02` can do is bound it: that is R1–R5, I-32, and the sequencing constraint above. The redesign
+itself belongs to `06-product-ia-and-flows.md`, which exists only under
+`docs/platform/planning/vacilando-os/qa/access-identity-v2/` and is outside this assignment's declared scope —
+the same split `README.md` records as `X-2`. **No UI code, route, component, or QA-folder document was changed
+by this pass.**
+
 ---
 
 ## 5. Edge E3b — membership ↔ scope
@@ -479,13 +596,17 @@ The accepted model's I-1 … I-25 are unchanged in wording and keep their number
 | **I-29** | **Revocation is effective on the next request** | **open (new, Part II)** | `role/route.ts:44-47` and `remove/route.ts:26-30` invalidate nothing (M2-10) |
 | **I-30** | **Every resolver read error denies** | **open (new, Part II)** | `resolveAdminAccessCore.ts:145-161` discards the profile error and widens to `all` (M2-12) |
 | **I-31** | **Authority writes are atomic** | **open (new, Part II)** | `role/route.ts:44-47` delete-then-insert, no transaction (M2-14) |
+| **I-32** | **A role-administration surface adds and removes no model structure** | **open (new, reopen pass)** | R3 unsatisfiable on `role/route.ts:44-47`; §4.6 |
 
-**Score (31 invariants):** 3 met (I-5, I-6, I-12) · 2 partial (I-3, I-11) · 18 open · 6 worse · 2 carried
+**Score (32 invariants):** 3 met (I-5, I-6, I-12) · 2 partial (I-3, I-11) · 19 open · 6 worse · 2 carried
 unverified (I-4, I-21).
 
 > *Tally note.* Part I's line read "17 open · 5 worse · 4 carried", which summed to 31 against 27 rows. The
 > figures above are recounted directly from the table as it now stands; no Part I **status cell** was changed
 > except `I-25`, which Part II re-verified.
+>
+> *Reopen pass (2026-08-06).* `I-32` is appended and the score is recounted from 31 rows to 32 — 18 open
+> becomes 19. **No other row's status cell was changed**, and no invariant was renumbered or reworded.
 
 The one genuinely new *positive* is I-12 — and it is the only invariant closed by a migration rather than by
 reclassification.
@@ -507,6 +628,7 @@ Numbered `M2-n` so the accepted `C`/`G` register stays stable.
 | **M2-7** | Role literals decide authority in **at least 13** places, not the three the accepted model named | I-9 | break-glass is not one door | table below |
 | **M2-8** | `app_users.role` CHECK is a **fourth**, database-enforced role vocabulary including `vendor_owner`/`vendor_worker` | I-8 | vocabulary on the fallback authority path | `remote_schema.sql:1018` |
 | **M2-9** | Closing I-12 enlarged I-15 — the blanket grant now sweeps the unioned catalog | I-15 | coupled remediation | `phase0:90-98,292-296` |
+| **M2-16** | The chain is specified as **five links** and the schema is **four layers**; §1.3's first statement of the fix also branched at the wrong layer (role set, not membership) | — | **specification clarification**, not a defect — plus an internal inconsistency in Part I, now corrected | `20260504103000…:18-30,50`; frozen `02…:60-89`; §1.3 |
 
 ### M2-6, in detail
 
@@ -569,6 +691,10 @@ mechanical.
 | I-13 (M2-4) | For each pair of seeded roles, the symmetric difference of their granted keys **MUST** contain at least one key that some gate reads | static |
 | I-22 (M2-5) | Assert exactly one module defines `PORTAL_ROLES` or an equivalent admission set | static |
 | I-9 (M2-6, M2-7) | Role literals in application code appear only in the declared break-glass module; no literal names a key absent from `role_definitions` seeds | static |
+| **I-32 (R2)** | Assert no role-administration component reads a scope field, and no scope component reads `roleKeys` — the chapter split of §4.6 holds in code, not only in navigation | static |
+| **I-32 (R3)** | Give a fixture principal two roles through the sanctioned path, remove one through the surface's endpoint, assert the other **survives** | integration |
+| **I-32 (R1)** | Assert the role options a surface offers equal the `is_active` `role_definitions` rows for the request's org — neither a superset nor a hard-coded list | integration |
+| **M2-16** | Assert the model's own diagrams and prose state four layers; no artifact in the corpus draws capability → scope as a sequence | doc-lint |
 
 The I-13 check is the one that would have caught M2-4 before it shipped: it asks not *"is this key in the
 catalog"* but *"does granting or withholding this key change any outcome."*
@@ -641,6 +767,25 @@ rg -n 'from public.permission_definitions pd' supabase/migrations/20260729120000
 rg -n 'PORTAL_ROLES' web/lib
 rg -n 'DOCUMENT_READ_ROLES|"owner"' web/lib/documents/assertDocumentAccess.ts web/lib/agent/configLayoutAssist/configurationProposalAccess.ts
 rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
+
+# --- reopen pass (2026-08-06) ---
+
+# §1.3 (M2-16) — scope is keyed on the membership pair, never on a role
+rg -n 'user_access_profiles|role' supabase/migrations/20260504103000_user_access_scope_tables_v1.sql | head -20
+#   → the profile table has user_id, org_id and two *_scope mode columns; no role column.
+#   The accepted five-link wording it restates:
+sed -n '60,89p' docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md
+
+# §4.6 — the four Access chapters, and the thin users-roles entrypoint
+rg -n 'ACCESS_WORKSPACE_CHAPTERS' web/lib/access/accessChapterRoutes.ts
+rg -n 'access-chapter-(users|roles|scopes|security)' web/components/adminV2/settings/access/AccessWorkspaceSurface.tsx
+cat web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx   # 19 lines
+
+# §4.6 (R3) — why the current endpoint cannot satisfy "remove one role, keep the rest"
+rg -n 'delete|insert' 'web/app/api/admin/users/[userId]/role/route.ts'
+
+# §4.6 — the workstream the sequencing constraint names
+rg -n 'W-17' docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
 ```
 
 ---
@@ -664,6 +809,15 @@ rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
    `05-command-enforcement-census.md` supplies the surface and command halves this document cites but does not
    re-derive.
 8. **Read-only.** No source, schema, migration, or UI was modified. The frozen QA copy is untouched.
+9. **§4.6 constrains a surface it did not review.** The reopen pass read the Access workspace's chapter
+   definition, its render dispatch, and the `users-roles` entrypoint — **not** the Roles chapter's own
+   component tree, and no browser was opened. R1–R5 are therefore stated as **obligations on any surface**, and
+   only R3 is asserted as violated today, on API evidence (`role/route.ts:44-47`) rather than UI evidence.
+   Whether the current Roles chapter satisfies R1, R2, R4 or R5 **was not determined** and must not be inferred
+   from this section.
+10. **The reopen answered one directive and bounded the other.** "Reduce to four layers" is discharged in §1.3.
+   "Simplify the role editor" is **not** discharged — no editor was simplified, because this document does not
+   own one (§12.7). See §4.6's closing note.
 
 ---
 
@@ -686,6 +840,12 @@ rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
 - **Repository-wide searches:** `admin.users.*` / `admin.roles.*` (no matches), `settings.users_roles`
   (consumers), role literals in `web/lib`.
 - **Verified at** `bdcf55908` in `wt6-vacilando-os-product-def`.
+- **Reopen pass (2026-08-06), read at `a72caaff4` in `wt6-director-experience-dx5-5-continuation`:**
+  `web/lib/access/accessChapterRoutes.ts` (in full — the four chapters and their metadata),
+  `web/components/adminV2/settings/access/AccessWorkspaceSurface.tsx` (chapter dispatch, `:81-122`),
+  `web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx` (in full — a 19-line wrapper),
+  `03-implementation-qa-sequence.md` (`W-17` and the `I-10` coverage rows), and the frozen copy's §2 chain
+  (`02…:60-89`) for the five-link wording that §1.3 restates. **No file outside this document was modified.**
 
 ---
 ---
