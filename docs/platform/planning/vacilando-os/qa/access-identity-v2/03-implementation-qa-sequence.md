@@ -20,6 +20,9 @@ recorded *reasoning* is superseded by a migration from another track (§5, §14.
 · **W-4 re-verified 2026-08-04** (same mission, assignment `asg_91e144a61569e4`) — check green across a
 20-route expansion; baseline 26 → 17, entirely the `book-v2` retirement; a slack ratchet ceiling was
 found and tightened (§5)
+· **W-0 query amended 2026-08-06 under the Mission 2 reopen** (same mission and assignment) — the
+self-identifying target column is authored and grounded; **run 3 is not executed** and awaits one
+authorization (§4)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -307,6 +310,36 @@ self-identifying column so the output evidences which database it hit — was ca
 unadopted, because run 2 deliberately reused the committed query. `current_database()` is `postgres` on every
 Supabase project, so "we queried the right database" still rests on the channel's assertion. It should land
 with whichever census next changes the query.
+
+#### W-0 under the Mission 2 reopen — **query amended 2026-08-06, run 3 NOT executed**
+
+The reopen re-issued W-0 a third time, against exit criteria already met and re-confirmed four days earlier.
+**W-0's counts were not re-asserted and no third identical run was requested** — the paragraph directly above
+names that outcome as the wrong one. The reopen was instead spent on the single item still open *inside W-0's
+own scope*: the census cannot identify its own target.
+
+| Field | Value |
+|---|---|
+| Change | One added key, `target_identity`, carrying the org `id`/`slug` set, an `md5` fingerprint over the org ids, and `server_addr`/`server_version`/`cluster_name` as weak corroboration. Authored at the census file's `next_run_prepared` |
+| Q1–Q6 | **Byte-identical.** Only a new key is added, so run 3's counts stay directly comparable to runs 1 and 2 and the drift comparison stays valid |
+| Grounding | `public.orgs(id, name, slug, status, created_at, industry_id)` — `remote_schema.sql:2284-2291`. Only `id` and `slug` are read. `current_setting(name, true)` is the missing-ok form, so an unset parameter yields `NULL` rather than raising |
+| Read-only | Checked **by inspection** against `trusted-host-sql-readonly.mjs`: no forbidden keyword or phrase, still one statement, no new CTE. (`'cluster_name'` is a string literal and is stripped before the `CLUSTER` keyword scan.) Not run through `validateReadOnlySql()` — `node` and `shasum` are both permission-walled in the worker. The Director re-validates at execution, which is the real gate |
+| Hash | **Deliberately not recorded.** The worker cannot compute `sha256` here, and a guessed hash fails the run with `query_hash_mismatch`. The registry derives it; the executing Director records it |
+| Committed artifact | `combined_query` and `query_hash` (`743cd63b…`) are **unchanged**, so runs 1 and 2 stay verifiable against them |
+| State | **Awaiting one operator authorization** for `database.read_census`. Nothing was executed |
+
+**What this does not do.** Authoring the fix is not evidence. Until run 3 runs, the target is still *asserted
+by the channel, not proven by the output*, and `residual_risks[1]` stands undiminished. Q1–Q6 are also now
+**six days older** than the counts every §11 preflight is required to re-derive rather than cite.
+
+**Why this stopped short of executing.** Two reasons, and the second is the load-bearing one. First, the read
+is privileged: the trusted host action requires an operator authorization decision, and the worker never holds
+the credential — by design. Second, **§4.1's W-23 (Wave 0b) already schedules a re-run of Q1–Q6 on this same
+channel**, alongside Q7–Q17. Spending an authorization on Q1–Q6 alone, when a second census will re-run them
+anyway, is exactly the mistake §4.1 warns against: *"asking for live access four separate times is the mistake
+`W-0` Q6 already avoided once."* Whether run 3 goes alone or folds into W-23 is an operator decision, and it
+is recorded here rather than taken unilaterally — W-23 produces a **different** artifact
+(`wave0b-authority-census.json`) under a **different** workstream, and this assignment's scope is W-0.
 
 ---
 

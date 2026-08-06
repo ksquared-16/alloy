@@ -2173,3 +2173,473 @@ rg -n "Grants for admin: everything" -A4 supabase/migrations/20260729120000_*.sq
     Part IV, `README.md` was not updated; Parts IV and V are therefore still absent from its document table.
     Recorded as a standing follow-up, not an oversight.
 12. **Read-only.** No source, schema, migration or UI was modified by this phase.
+
+---
+
+# Part VI — Gap analysis, reopened: the four-layer chain and the role editor
+
+> **Added on operator reopen of the *Gap analysis* phase** (assignment `asg_04bcdd312f0dec`), against the
+> standing guidance recorded on it: *"Role hierarchy is still too deep — reduce to four layers"* and *"I want
+> the role editor simplified without changing the access architecture."*
+>
+> Part III reconciled the corpus against its plan on 2026-08-03 and found the plan two-thirds short. **That
+> finding has since been closed and the ground has moved twice more.** `03…` was re-sequenced and now binds
+> every register Part III named; five documents were then reopened on 2026-08-06 and created roughly sixty new
+> identifiers. This part re-measures the same three axes — register, plan, decisions — against the corpus as
+> it stands, and adds the one measurement the reopen made necessary and no document performs: **what number
+> the chain is being reduced *from*.**
+>
+> **The corpus is reused as input and not re-derived.** Every constituent finding is cited to its owning
+> document and marked **[carried]**. Claims marked **[verified this pass]** were established mechanically in
+> this worktree at `03efba377` by the commands in §69.
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Gap analysis* (reopened) · assignment `asg_04bcdd312f0dec`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-director-experience-dx5-5-continuation` @ `03efba377`
+**Date** 2026-08-06
+**Method** documentary and static. No request issued, no browser, no database, no test suite. **No new product
+defect is asserted here** — every defect below is owned by an earlier document or part (§70).
+
+---
+
+## 58. Headline — the plan caught up, and was outrun again the same week
+
+Part III's §24 said the corpus had converged and *"its plan still describes the subset of that understanding
+which existed on 31 July."* **That is no longer true, and the correction is the first thing this part owes.**
+
+> **`03-implementation-qa-sequence.md` was re-sequenced** (`0810bb566`, then `f5a19d0bc` for output #12).
+> The plan of record is now 3,600+ lines, carries **waves 6–12**, and its §23 binds *every* register Part III
+> found unnamed — `M2-n`, `A2-n`, `IA-n`, `IA-R n`, `T-1`…`T-18`, `C12`/`C13`, `X-1`…`X-9`, and the `AD-n`
+> decision register across **133 citing lines** **[verified this pass]**. §29's mechanical finding is
+> **closed**.
+
+And then, on 2026-08-06, five documents were reopened against the operator's two directives — and the same
+gap reopened beneath them:
+
+> **The plan of record names *none* of the reopen's registers.** `RM-1`…`RM-11`, `T-19`…`T-26`, `S-8`…`S-14`,
+> `H1`…`H3`, `D-RM1`, `D-15`, `AD-22`, `AD-23`, `M2-16`…`M2-19`, `A2-8`/`A2-9`, `I-35`ᴮ, `R6`…`R9`,
+> `RA-1`…`RA-5`, `IA-11`…`IA-14`, `IA-R11`…`IA-R17` — **zero matches, not few** **[verified this pass]**.
+
+**This is not the same finding twice; it is the finding's shape.** A corpus of eight documents, each reopened
+independently against operator guidance, produces registers faster than a single sequencing pass can absorb
+them — and each pass is individually careful. Part III named that pattern for the `X-n` series (*"each phase
+was individually careful; nothing reconciled them"*). §61 records that it is now **structural**, and §63 raises
+it to a gap in its own right rather than a recurring observation.
+
+**The second finding is the one the operator's instruction actually turns on**, and it is new:
+
+> **The corpus states four different counts of the same chain, and no document reconciles more than two of
+> them** (§62). Part IV counts **eight layers**; `02…§1.3` states **four layers in two branches**; `04…§3.6`
+> states **four in the schema and five at runtime**; `05…§5A.2` counts **fourteen rows — nine persisted stores
+> and three in-code derivations**. `06…§14.1` reconciles `02`'s four against `05`'s four and **does not
+> mention `01`'s eight or `04`'s five** **[verified this pass]**.
+
+All four counts are defensible and none is wrong; they count different things. But *"reduce to four layers"*
+is an instruction with a numeral in it, and **the corpus cannot presently tell the Director which number is
+being reduced, by how much, or when it has been achieved.** Under `05…§5A.5`'s count the target is already
+met in the role vocabulary; under Part IV's it is a four-layer deletion; under `04…`'s it is one bypass.
+
+**The one-sentence finding:** *the corpus has now specified the four-layer reduction and the simplified role
+editor five times over, in five documents, at four different counts, with no workstream, no acceptance
+criterion and no agreed baseline* — which is Part III's finding, one level up. Closing it is a Director act
+(§67), not a worker one.
+
+---
+
+## 59. Method — unchanged, with one addition
+
+§25's definition of a gap, its seven classes and its severity discipline are **carried unchanged**. Three
+notes specific to this pass:
+
+- **A closed gap is reported as closed.** §61 records `03`'s re-sequence as closing §29 before it records what
+  reopened. A gap analysis that only accumulates is not measuring.
+- **The reopen delta is measured as a set, not re-litigated.** §60 counts what the five reopened documents
+  created; it does not re-verify their findings. Their evidence stands with them.
+- **This part mints no decision.** Parts IV and V minted `D-RM1` and `D-15`; `04…` minted `AD-22`/`AD-23`.
+  §64 shows that three independent minting acts on one day is itself the defect being reported, so this part
+  **records the conflict and escalates it, and adds no number to the space it is complaining about.**
+
+---
+
+## 60. The reopen delta — what 2026-08-06 created
+
+Every identifier minted by the five reopen passes, by owning document. **[verified this pass]**
+
+| Document | Registers created | Count |
+|---|---|---:|
+| `01…` **Part IV** (role-model depth, editor) | `RM-1`…`RM-7`, `D-RM1` | 8 |
+| `01…` **Part V** (the same, as a threat model) | `RM-8`…`RM-11`, `T-19`…`T-26`, `H1`…`H3`, `S-8`…`S-14`, `D-15` | 23 |
+| `02…` (model, reopen) | `M2-16`…`M2-19`, `RA-1`…`RA-5`, `I-32`…`I-34` **[carried citations]** | ~12 |
+| `04…` (authentication, reopen) | `A2-8`, `A2-9`, `I-35`ᴮ, `R6`…`R9`, `AD-22`, `AD-23` | 9 |
+| `05…` (census, reopen) | §5A — no numbered IDs; a 14-row depth table and the four-layer target | 0 |
+| `06…` (IA, reopen) | `IA-11`…`IA-14`, `IA-R11`…`IA-R17` | 11 |
+| | | **≈ 60** |
+
+**Honest deflation, on §29's precedent.** Sixty identifiers are not sixty independent defects. `RM-1`…`RM-7`
+are model-shape observations that Part IV itself declares are *not* security findings (§44.2); `T-19`…`T-26`
+include two — `T-23`, `T-26` — explicitly recorded as a second instance of a carried defect (`T-13`, `I-7`);
+`H1`…`H3` are controls that **hold**, and belong in a coverage count rather than a defect count. Netting
+those out leaves roughly **thirty distinct new findings**, of which the corpus rates one **S1** (`T-19`) and
+four **S2**. The plan-coverage conclusion does not move: thirty and sixty are both *none of them*.
+
+**What is genuinely new, and not a re-framing** — the four items an execution phase would not have known:
+
+1. **`T-19`** — removal restores administration through two legacy stores no surface writes. **The corpus's
+   only new S1**, and per `01…§55` the cheapest S1 closure in it.
+2. **`T-20`** — the role editor's Active toggle revokes nothing at resolution.
+3. **`IA-12`** — a role under-reports its own membership, buildable today with no decision.
+4. **`H1`** — all five role-editing surfaces call the same four routes, so deleting 1,155 lines of legacy UI
+   is security-neutral. **The corpus's first positive structural finding about authority location.**
+
+---
+
+## 61. Plan coverage, re-measured — closed once, reopened once
+
+§29's table, re-run against the plan of record as it stands at `03efba377`.
+
+| Register | Owner | Named in `03` at `cd24874cb` (§29) | Named in `03` today |
+|---|---|:--:|:--:|
+| `C1`…`C11`, `G1`…`G6` | `01…` Part I (accepted) | yes | yes |
+| `C12`, `C13`, `M2-1`…`M2-15`, `A2-1`…`A2-7`, `IA-1`…`IA-10`, `T-1`…`T-18`, `X-1` | Mission 2 | **no** | **yes** — §23 binds every ID, bound or declared unassigned |
+| `IA-R1`…`IA-R10`, `S-1`…`S-7`, `I-26`…`I-34` | Mission 2 | **no** | **yes** — §25's `RL-16`…`RL-42` |
+| `AD-1`…`AD-21` | `02…` Part III | n/a | **yes** — §24, across 133 citing lines |
+| **`RM-1`…`RM-11`** | reopen | n/a | **no** |
+| **`T-19`…`T-26`** | reopen | n/a | **no** |
+| **`S-8`…`S-14`** | reopen | n/a | **no** |
+| **`H1`…`H3`, `D-RM1`, `D-15`, `AD-22`, `AD-23`** | reopen | n/a | **no** |
+| **`M2-16`…`M2-19`, `A2-8`/`A2-9`, `R6`…`R9`, `RA-1`…`RA-5`, `I-35`ᴮ** | reopen | n/a | **no** |
+| **`IA-11`…`IA-14`, `IA-R11`…`IA-R17`** | reopen | n/a | **no** |
+
+**Two conclusions, and they point opposite ways.**
+
+**The plan is now a good plan.** `03`'s re-sequence did the work Part III escalated: it bound every register,
+declared its unassigned IDs explicitly rather than silently, added waves 6–12 including the revocation and
+authentication waves Part III said had none, closed `X-3` and `X-5`, and raised `X-9` against its own
+numbering. GAP-2's *"not one line of the authentication build is sequenced"* is **closed** — wave 8 is the
+authentication build. **Part III's §26 workstream column is stale in the plan's favour**, and §63 amends it.
+
+**And it has been outrun again.** The reopen's ~60 identifiers include the corpus's only S1, and the plan
+that would schedule it does not know it exists. The distance is smaller than Part III's was — one week rather
+than one mission, thirty findings rather than thirty-four — but the **mechanism is identical**, and it has now
+happened twice with a careful pass on each side of it.
+
+> **The structural reading.** `03` can only ever be current as of its last sequencing pass, and the corpus
+> reopens per-document on operator guidance. **Nothing in the mission's process makes a reopen trigger a
+> re-sequence.** Until something does, every reopen produces exactly this gap, and the gap analysis discovers
+> it one phase later. This is recorded as **GAP-17** rather than as an observation, because a defect that has
+> recurred once at scale is a property of the system, not an incident.
+
+---
+
+## 62. GAP-15 — the corpus states four counts of one chain
+
+The measurement the operator's instruction requires and no document performs. All four are **[carried]** from
+their owners and were re-read this pass; the divergence is **[verified this pass]**.
+
+| Count | Source | What it counts | Number |
+|---|---|---|:--:|
+| **Eight layers** `L1`…`L8` | `01…§38` (`RM-2`) | Distinct stores or mappings a grant traverses to become a decision | **8** |
+| **Four layers, two branches** | `02…§1.3` | Layers of *derivation* in the canonical model — one trunk, capability and scope branches composed at the gate | **4** (+2 branches) |
+| **Four in schema, five at runtime** | `04…§3.6`, `§12.1` | The schema chain, plus `portalEligible` as a runtime fifth that satisfies a capability check on its own | **4 / 5** |
+| **Fourteen rows — 9 stores + 3 derivations** | `05…§5A.2` | Everything `resolveAdminAccessCore` consults, in order, counting each legacy read separately | **14** |
+| **Four nouns** | `05…§5A.5`, presented in `06…§15` | The operator's authoring layers: Person · Role · Capability · Scope | **4** |
+
+**None of these is wrong.** They count derivation layers, persisted stores, runtime gates and operator nouns
+respectively, and each document is explicit about its unit — Part IV even attaches a counting caveat (§44.3:
+*"do not quote the number without §38"*). **The gap is that no artifact holds them side by side**, so the
+instruction *"reduce to four layers"* has no defined starting number and therefore no defined completion.
+
+**One reconciliation exists and it covers half the problem.** `06…§14.1` is exactly the right work: it shows
+that `02`'s chain-four and `05`'s operator-four *"coincide in count by construction, not by identity"*, maps
+one to the other, and raises `IA-11` — that presenting the operator's four as an ordered list re-encodes the
+five-link chain the model abolished. **It does not mention `01`'s eight or `04`'s five** **[verified this
+pass]**. So the corpus reconciles two of four counts, and the two it leaves out are the two that carry the
+*security* argument (`RM-9`: the reduction closes an S1 and two S2s; `04…§3.6`: the runtime fifth layer is
+the thing `W-13` must remove).
+
+**Why this is a gap and not a pedantic complaint.** Three consequences, each concrete:
+
+1. **The acceptance criterion cannot be written.** `07…` binds acceptance to IDs. *"The chain is four layers"*
+   is satisfied today under `05…§5A.5`'s count and fails under all three others. No grader can mark it.
+2. **The directives read as contradictory only under one count.** `RM-1` finds *"reduce to four layers"* in
+   direct tension with *"without changing the access architecture"* — true under Part IV's eight-layer
+   reading, where the reduction deletes L5, L6, L8 and L2's legacy reads. Under `05…§5A.5`'s reading, four of
+   the six named reductions are **presentation-only** and the tension largely dissolves. `D-RM1` is therefore
+   partly an artifact of which count the reader is holding.
+3. **The two halves are already being scheduled against different baselines.** `04…§12.1` answers the
+   directive with `W-13` and `AD-22`; `05…§5A.6` answers it with a presentation-only list; `01…§51` answers it
+   with an ordering constraint over four deletions. **All three are the same instruction.**
+
+> **GAP-15 — the depth reduction has no agreed baseline, and therefore no definition of done.** Class:
+> **knowledge · register**. Constituents: `RM-2`, `02…§1.3`, `04…§3.6`, `05…§5A.2`, `05…§5A.5`, `IA-11`.
+> Severity `—` (no threat entry; it is a measurement gap). Workstream: **none**. Blocked on: `D-RM1`.
+> **Proposed, not written:** one reconciliation table, in `02…` where the canonical model lives, stating the
+> unit of each count and which one the instruction governs. It is a page of work and it unblocks an
+> acceptance criterion.
+
+---
+
+## 63. The gap register — amended and extended
+
+§26's fourteen gaps stand. This section records what the re-sequence closed, what the reopen added to
+existing rows, and three new gaps. **`W-n` in bold is an existing workstream; *italic* is a proposal.**
+
+### 63.1 Amendments to the fourteen
+
+| # | Change | Effect |
+|---|---|---|
+| **GAP-1** revocation | **+`T-19` (S1), +`T-20`, +`S-8`, +`S-9`, +`D-15`.** Workstream **no longer none** — `03…§16` wave 6 is the revocation wave | **Widened and now covered.** But wave 6 was sequenced before `T-19`; it addresses the cache, the missing disable verb and role deactivation, **not** the legacy re-admission path. **Still partially covered** |
+| **GAP-2** authentication | Workstream **no longer none** — `03…§18` wave 8 | **Closed as a plan gap.** `AD-22`/`AD-23` are new inputs to it |
+| **GAP-4** admission | **+`T-24`** — the authority-graph write gate is a role literal, capability second | `W-13`…`W-15` cover the pattern; `T-24` names a specific unlisted site |
+| **GAP-5** capability vocabulary | **+`T-21`**, **+`IA-13`** — grants are unconstrained on `role_key`; the grid is a lens promoted to a layer | `W-10` covers the grid; **`S-10`'s FK has no workstream** |
+| **GAP-6** role vocabularies | **+`T-21`** (phantom roles are grantable and enforceable) | Sharpens `M2-2`'s missing FK into an exploitable asymmetry |
+| **GAP-7** resolvers | **+`M2-18`** — the roster is an eighth resolution site reading authority tables directly | `W-21` predates it |
+| **GAP-9** enforcement as convention | **+`H1`** — a control that **holds**: five surfaces, four shared routes | **First positive.** Legacy UI deletion is security-neutral |
+| **GAP-10** atomicity and audit | **+`T-23`, +`S-12`.** Workstream **no longer none** — `03…§22` wave 12 is audit | Atomicity now has a second table; **unify-save depends on it** (`RM-11`) |
+| **GAP-11** tenancy | **+`T-26`, +`S-14`** — authority writes land in a lexicographically-picked org | `I-7`'s write-path form; `W-22` covers the read path only |
+| **GAP-12** truthfulness | **+`IA-12`, +`IA-14`, +`T-22`, +`IA-R13`…`IA-R17`, +`R6`.** Workstream **no longer none** — `03…§21` wave 11 | **Eight mechanisms became eleven.** Wave 11 predates all three additions |
+| **GAP-14** corpus integrity | **+`X-6`, `X-7`, `X-8`, `X-9`**, **+`X-10`, `X-11` (new, §65–66)** | `X-3`, `X-5` **closed**; `X-2` open and changed shape; four new |
+
+**Net:** three of Part III's five uncovered gaps (GAP-1 partially, GAP-2, GAP-10, GAP-12) now have
+workstreams. **Every one of those workstreams predates the findings this section adds to its gap.**
+
+### 63.2 Three new gaps
+
+| # | Gap | Constituents **[carried]** | Class | Sev | Workstream | Blocked on |
+|---|---|---|---|:--:|---|---|
+| **GAP-15** | **The depth reduction has no agreed baseline** — four counts of one chain, two reconciled (§62) | `RM-2`, `02…§1.3`, `04…§3.6`, `05…§5A.2`, `IA-11` | knowledge · register | — | **none** — *proposed: one reconciliation table in `02…`* | `D-RM1` |
+| **GAP-16** | **The role editor is the corpus's most-specified unbuilt change.** Five documents now specify it — `01…§40-42`/`§52`, `02…§4.6` (`RA-1`…`RA-5`), `04…§3.7`/`§6.4` (`R6`…`R9`), `05…§5A.4-5A.6`, `06…§15` — and **no workstream builds it.** Five surfaces are candidates for "the role editor" and which one is meant is undecided | `RM-5`, `RM-6`, `RM-11`, `RA-1`…`RA-5`, `R6`…`R9`, `IA-R12`, `IA-R15`, `05…§5A.6` | plan | — | **none** | `D-RM1`; *"which of five surfaces"* (`01…§43`) |
+| **GAP-17** | **The plan of record is outrun by every reopen.** `03` bound every Mission 2 register; the 2026-08-06 reopen created ~60 more and **nothing in the process triggers a re-sequence** (§61) | the reopen delta (§60) | plan · register | — | **none** — Director-owned | — |
+
+**GAP-16 is the one to read twice.** It is not that the editor work is unclear — it is *over*-specified. Four
+documents independently produced compatible specifications of the same screen, each bounded by its own
+discipline, and the corpus contains **no artifact that merges them into one buildable description**. `01…§52`
+sorts five changes by whether they touch a control; `05…§5A.6` sorts four by whether they need architecture;
+`06…§15` gives the IA; `02…§4.6` and `04…§6.4` give the MUST/MUST-NOT constraints. **An execution phase
+handed this assignment today would have to perform that merge itself, unreviewed**, which is precisely the
+condition under which `RM-11`'s warning — *"a phase ends up changing a gate while believing it changed a
+screen"* — comes true.
+
+---
+
+## 64. Decision coverage — the canonical register was superseded on the day it was ratified
+
+Part III §30 found the decision register uncitable. **`02…` Part III fixed it**: 21 open decisions, the
+canonical `AD-n` register, a three-clause renumbering rule, and `X-7`'s observation that nothing downstream
+had bound to a colliding number yet — *"a window, and it is open today."*
+
+**The window closed by use, not by ratification, and three documents minted into the register on the same
+day.** **[verified this pass]**
+
+| Act | Where | Into what | Status of the register it minted into |
+|---|---|---|---|
+| `AD-1`…`AD-21` proposed as canonical | `02…§25` | new `AD-n` space | **proposed, unratified** (`02…§26.2`) |
+| `03…§24` binds **all twenty-one** | `03…` | the same space | **bound by use** — `X-7` superseded (`03…§26`) |
+| `07…`'s audit criteria already used `AD-1`…`AD-5` | `07…:136-140` | **the same prefix, four days earlier** | **collision** — `X-9` |
+| `AD-22`, `AD-23` minted | `04…§7.1` | the same space, past its stated end | register is no longer 21; `02…§25` and `03…§24` both say 21 |
+| `D-15` minted | `01…§55` | **the legacy `D-n` space**, which `02…§26.2` proposed to retire | unregistered in `AD-n`; `02…§25`'s highest legacy is `D-14`/`D-IA4` |
+| `D-RM1` minted | `01…§43` | a **third** convention (`D-` with an `RM` qualifier), deliberately | outside both spaces |
+
+**So the corpus now holds twenty-one canonical decisions, two minted above them, one minted beside them in a
+space being retired, and one minted in a namespace of its own — against a rubric that uses the same prefix
+for something else entirely.** Every act is individually defensible and each document says why it chose as it
+did. `01…§55` even flags its own risk: *"`D-15` is at risk from the collisions §18/§30 record."*
+
+**The measurable state:**
+
+- **Open decisions: 25** — `AD-1`…`AD-21`, `AD-22`, `AD-23`, `D-15`, `D-RM1`. No single document lists them.
+- `03…§24` gates its waves on 21 of the 25 **[verified this pass]**.
+- `D-RM1` is the decision that **governs both operator directives** (§62, §63.2) and it is gated by nothing.
+- `02…§31`'s conformance check **`CR-2`** — *every cited decision resolves to exactly one defining site* —
+  **would now fail**, and `CR-1` would fail on `AD-1`…`AD-5` against `07…`.
+
+> **The recommendation, escalated not performed** (per the mission's document-authority rule and `01…§18`'s
+> precedent): **ratify or reject `02…§26.2` before the next reopen, and adopt `03…§26.1`'s option (a)** —
+> rename `07…`'s audit block to `AX-1`…`AX-5`, five IDs in one document that nothing cites by criterion ID.
+> Then fold `D-15` and `D-RM1` into `AD-24`/`AD-25`. **This is now the cheapest it will ever be**, and it
+> gets more expensive at each reopen — which is the same sentence `02…§24` wrote three days ago, one register
+> earlier.
+
+---
+
+## 65. `X-10` — three requirement namespaces, one a substring of another
+
+**Recorded as a corpus-integrity defect, not a product defect**, continuing the `X-n` series.
+
+> **`X-10` — the corpus now carries `R n` (`04…§6.4`), `IA-R n` (`06…§7`, `§17`) and `RA-n` (`02…§4.6`) as
+> three distinct requirement registers, and `R n` is a substring of `IA-R n`.** A word-boundary search for
+> `R6`…`R9` in the plan of record returns **21 matching lines, every one of them inside `IA-R6`…`IA-R9`**
+> — and `03` names `04`'s bare
+> `R6`…`R9` **nowhere** **[verified this pass]**. The two registers are mutually invisible to the search that
+> would find either.
+
+This is `X-9`'s shape arriving from a third direction, and `03…§26.1` predicted the class of it when it
+flagged the `AI-`/`IA-` transposition hazard and asked `RL-42`'s lint to catch it. **`R6` vs `IA-R6` is worse
+than a transposition**, because a reader who greps is told confidently that the requirement is covered.
+
+All three registers are well-formed in isolation: `RA-n` are role-*assignment* surface constraints, `R n` are
+what an Access surface owes the *authentication* model, `IA-R n` are IA requirements. **Nothing reconciled
+them.** *Recommendation, escalated not performed:* namespace `04`'s block as `AR-1`…`AR-4` at the next
+Director pass — four IDs, cited today only by `06…§17`'s `IA-R17` row and `04`'s own §12.
+
+---
+
+## 66. `X-11` — required output #2's reopen material is uncommitted
+
+> **`X-11` — `05-command-enforcement-census.md` §5A exists only as an uncommitted working-tree change**:
+> **+274 / −8 lines** at `03efba377` **[verified this pass]**. It carries the corpus's most detailed depth
+> measurement (the 14-row resolution table, §5A.2), the four-layer target (§5A.5) and the
+> presentation-vs-architecture split (§5A.6) — and **three committed documents cite it**: `06…§14.1` maps its
+> four nouns against the canonical chain, `06…§16.2` carries its capability-has-no-chapter finding, and
+> `01…§45` (Part V) cites `05…§2.1-2.2`.
+
+**This is `X-5` recurring**, four days after `03…§26` recorded `X-5` as **CLOSED**. The failure mode is
+identical — a required output's substance living in a working tree while other documents bind to it — and it
+is now the second instance, which makes it a process property rather than an oversight. `04…§12.3` already
+recorded the hazard from the other side: its citations into `05…` and `01…` are *"working-tree line numbers
+and will drift when that work is committed."*
+
+**Consequence, stated plainly:** at `03efba377` the corpus's four-layer specification is **partly
+uncommitted**, and a reader who checks out `HEAD` gets `06`'s reconciliation of a section that is not there.
+Committing it is not a worker decision about content — but the *state* is recorded here because a gap
+analysis that did not notice its most-cited new input was uncommitted would have missed the same thing `X-5`
+missed.
+
+---
+
+## 67. What the two directives now cost, and what still blocks them
+
+The operator asked for two things. Neither is blocked on discovery any longer — **both are blocked on one
+decision and one merge.**
+
+| | *Reduce to four layers* | *Simplify the role editor without changing the access architecture* |
+|---|---|---|
+| **Specified?** | **Over-specified** — four counts, two reconciled (§62) | **Over-specified** — five documents, one screen (GAP-16) |
+| **Assessed for security?** | **Yes** — `01…§51`: closes one S1 and two S2s, weakens no control found | **Yes** — `01…§52`: three of five items need a control attached |
+| **Sequenced?** | **Partly** — `W-10`, `W-13` exist and were sequenced for other reasons; **no depth-reduction workstream** | **No** — no workstream builds the editor |
+| **Buildable today, no decision?** | `S-8`'s legacy-read removal, *after* one database question (§49) | `IA-R13`/`IA-R14` (`IA-12`), `T-22`'s seven-line fix, the two placeholder tabs |
+| **Hard constraint** | **`RM-10`'s ordering** — L8 must not be removed before L4 is seeded and enforced, or the platform fails closed with no grants | **`H2`'s lock** — a grant save must preserve the 14 keys the grid cannot display |
+| **Blocked on** | `D-RM1`, and `GAP-15`'s missing baseline | `D-RM1`, and *which of five surfaces* (`01…§43`) |
+
+**Three things are true at once, and the Director needs all three:**
+
+1. **The instruction is safe.** `RM-9` — the layer reduction weakens no enforcement control this corpus could
+   find, because five of the eight layers never deny anything. The *"no access-architecture change"*
+   constraint, read against the eight-layer count, **protects compatibility surfaces and one bypass**.
+2. **The cheap work is real and unblocked.** `T-22`, `IA-12`, the placeholder tabs and the legacy-UI deletion
+   (`H1`) need no decision, no migration and no resolver change. **None is scheduled.**
+3. **The expensive work is one decision away, not one discovery away.** Nothing further needs to be
+   inventoried. `D-RM1` chooses a reading; `GAP-15` supplies the baseline; `GAP-16`'s merge produces the
+   buildable description. **Discovery on this subject should stop.**
+
+> **Recorded for the Director, not decided here:** the corpus has now spent five reopen passes on two
+> directives and produced ~60 identifiers, four counts and zero scheduled work. Per the mission's prohibition
+> on reinterpreting Compiled Mission intent, **this part does not choose the reading** — but it records that
+> a sixth documentary pass would produce a seventh register rather than a built screen.
+
+---
+
+## 68. What the corpus still cannot answer
+
+§33's list, re-run. **Closed:** *"which findings are in the plan"* (`03…§23`), *"what the authentication build
+is"* (wave 8), *"how decisions are numbered"* (`AD-n`, proposed). **Still open, and three are new:**
+
+1. **Does any live principal hold a legacy `admin`/`ops` row?** (`T-19`, `S-8`, `D-15`.) One query. It decides
+   whether the corpus's only S1 is live or structural, and it is the precondition of the cheapest S1 closure.
+2. **Is any authority change durably recorded anywhere?** Still unassessed by every document — wave 12 exists,
+   but `01…§54`'s bottom row shows **no control in the authority chain is regression-locked by a test**.
+3. **Which of the five role-editing surfaces do operators actually reach?** No browser has been opened in any
+   pass (`01…§44.1`, `§57.1`, `04…§12.3`). `H1` establishes shared routes, **not** equivalent behaviour.
+4. **Which layer count governs?** (New — GAP-15.)
+5. **What is the one buildable description of the simplified editor?** (New — GAP-16.)
+6. **What triggers a re-sequence of `03` after a reopen?** (New — GAP-17.) Today: nothing.
+
+---
+
+## 69. Reproduce
+
+```bash
+# §58 / §61 — the plan of record names NONE of the reopen's registers (expect: no output)
+rg -n 'RM-[0-9]|\bT-(19|2[0-6])\b|\bS-(8|9|1[0-4])\b|\bAD-2[23]\b|\bD-15\b|\bD-RM1\b' \
+   docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
+rg -n '\bIA-1[1-4]\b|\bIA-R1[1-7]\b|\bM2-1[6-9]\b|\bA2-[89]\b|\bRA-[1-5]\b|\bI-35\b' \
+   docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
+
+# §58 / §61 — but §29's finding IS closed: the AD-n register is bound 133 times
+rg -c '\bAD-[0-9]+\b' docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md   # 133
+git log --oneline -3 -- docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
+
+# §62 GAP-15 — four counts of one chain, and the reconciliation that covers two
+rg -n 'eight layers'          docs/platform/planning/access-identity-v2/01-existing-state-inventory.md
+rg -n 'One chain'             docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md
+rg -n 'fifth layer'           docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md
+rg -n 'Nine persisted stores' docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md
+rg -n 'eight layers|§38'      docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md
+#   → 06 §14.1 reconciles 02's four against 05's four; no match for 01's eight
+
+# §64 — the decision register was superseded on the day it was bound
+rg -n '\bAD-2[23]\b' docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md   # §7.1
+rg -n 'twenty-one'   docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md            # §24
+rg -n '\*\*D-15'     docs/platform/planning/access-identity-v2/01-existing-state-inventory.md              # §55
+
+# §65 X-10 — R n is a substring of IA-R n
+rg -c '\bR[6-9]\b' docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md   # 21 lines, ALL inside IA-R6..IA-R9
+rg -n '^\| \*\*R[6-9]\*\*' docs/platform/planning/vacilando-os/qa/access-identity-v2/04-authentication-model.md
+
+# §66 X-11 — output #2's reopen material is uncommitted
+git diff --stat -- docs/platform/planning/vacilando-os/qa/access-identity-v2/05-command-enforcement-census.md
+```
+
+---
+
+## 70. Limits — read before citing
+
+1. **Documentary and static.** No request issued, no browser, no database, no test, typecheck or build. This
+   part asserts **no new product defect**; every defect cited is owned by an earlier document or part, and
+   every severity is carried from `§14`/`§47` unchanged.
+2. **The reopen's findings were not re-verified.** §60 counts identifiers and §63 binds them to gaps; it does
+   **not** re-derive `T-19`…`T-26`, `RM-1`…`RM-11`, `M2-16`…`M2-19`, `A2-8`/`A2-9` or `IA-11`…`IA-14`. Their
+   evidence, and their limits, stay with their owners — including `T-19`'s unchecked precondition.
+3. **"≈60 identifiers" is a count of minted IDs, not of defects**, and §60 states the deflation to ~30
+   explicitly. **Do not quote the larger number as a defect count.**
+4. **§62's four counts are a reading of four documents, not a recount of the code.** This part did **not**
+   re-traverse `resolveAdminAccessCore` to adjudicate between eight, fourteen and five. It asserts only that
+   the corpus states four numbers and reconciles two — which is a documentary fact, and is the gap.
+   **Nothing here rules that any count is wrong.**
+5. **§63.1's workstream amendments are read from `03`'s wave titles and coverage table, not from a line-level
+   audit of each wave.** "Wave 6 does not address `T-19`" rests on `T-19` being absent from the document
+   (**[verified]**) and on wave 6's stated scope — **not** on a reading of every task in it. A wave could
+   incidentally close a finding it does not name.
+6. **The plan-coverage measurement is a name search.** As §29 noted for its own version: a workstream can
+   address a finding without citing its ID. The claim is *the plan does not name these*, which is what a
+   coverage table and a regression lock actually bind to.
+7. **GAP-15, GAP-16 and GAP-17 are gap numbers minted by this part** in `01…§26`'s space, which `03…§23`
+   binds. They will need binding at the next re-sequence, and they are the first three IDs to test GAP-17
+   against.
+8. **This part deliberately mints no decision** (§59), so the four-layer question remains `D-RM1`. It also
+   **creates, renumbers and re-sequences no workstream** — §63's `Workstream` column reports `03`'s content
+   and proposes in italics, exactly as §26 did.
+9. **`X-10` and `X-11` are corpus-integrity findings in the `X-n` space** and inherit `X-9`'s numbering risk:
+   if the Director renumbers, they travel with the rest.
+10. **Citations into `05…` are against the working tree**, not `03efba377` — that is `X-11` itself, and every
+    `05…§5A n` reference in this part will drift when that work is committed.
+11. **Scope discipline.** The assignment names one output path and **only that file was written.** As in Parts
+    IV and V, `README.md` was not updated; Parts IV, V and VI are absent from its document table. Recorded as
+    a standing follow-up.
+12. **Read-only.** No source, schema, migration or UI was modified by this phase.
+
+---
+
+## 71. Provenance — Part VI
+
+- **Verified at `03efba377`** in `wt6-director-experience-dx5-5-continuation`, with `05…` read from the
+  working tree (`X-11`).
+- **Read this pass:** `01…` §§24–36 (Part III, in full) and §§37–57 (Parts IV and V, in full);
+  `02…` §§24–32 (Part III — the decision register, collision map and `X-6`…`X-8`) and its §11 reopen block;
+  `03…` §§0–41 by heading, with §§23–27 read in full; `04…` §§6.4, 7.1, 12.1–12.4;
+  `05…` §5A.1–5A.6 (working tree); `06…` §§14.1–14.3, 15, 16.1–16.3, 17, 18.1.
+- **Mechanical checks:** every command in §69, each re-run at `03efba377`.
+- **Corrected this pass:** Part III §24/§29's headline — *"the plan has not moved"* — is **no longer true**
+  and is superseded by §61. Part III's text is left unedited, per the corpus's convention that a part records
+  its state at its date; §61 is the correction of record.
+- **Not re-verified:** all carried findings, all severities, all line numbers cited from earlier parts.
