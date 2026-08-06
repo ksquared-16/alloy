@@ -14,6 +14,7 @@ export type ParticipantDecisionSurfaceResponse = {
     ok: true;
     configured: boolean;
     template_key?: string;
+    work_label?: string;
     progress?: ParticipantDecisionProgress;
     rows?: ParticipantDecisionRowVM[];
     configuration_issues?: string[];

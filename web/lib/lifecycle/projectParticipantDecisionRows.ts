@@ -63,8 +63,15 @@ export type ParticipantDecisionRowVM = {
 export type ParticipantDecisionProgress = {
     resolved: number;
     total: number;
-    /** "1 of 3 resolved" / "All child paths chosen". Empty when there is nothing to say. */
+    /**
+     * Operator copy: "1 of 3 children decided". Empty when there is nothing to say.
+     *
+     * "decided" and "path", never "resolved" — `resolved` is this module's internal word for a
+     * computed condition, and it leaked onto the screen as jargon in the first version.
+     */
     summary: string;
+    /** Shown once every child has a path — the cue that the step can now be completed. */
+    completion_hint: string;
     /** Drives the family completion gate. True only when `total > 0 && resolved === total`. */
     all_resolved: boolean;
 };
@@ -123,16 +130,25 @@ export function deriveParticipantDecisionProgress(input: {
         (p) => p.state != null && resolvable.has(p.state.trim()),
     ).length;
 
+    const allDecided = total > 0 && resolved === total;
+    const noun = total === 1 ? "child" : "children";
+
     let summary = "";
     if (total > 0) {
         summary =
-            resolved === total ?
-                total === 1 ? "Child path chosen"
-                : "All child paths chosen"
-            :   `${resolved} of ${total} resolved`;
+            allDecided ?
+                total === 1 ? "This child has a path"
+                : "All children have a path"
+            :   `${resolved} of ${total} ${noun} decided`;
     }
 
-    return { resolved, total, summary, all_resolved: total > 0 && resolved === total };
+    return {
+        resolved,
+        total,
+        summary,
+        completion_hint: allDecided ? "You can now complete this step." : "",
+        all_resolved: allDecided,
+    };
 }
 
 function participantLabelFrom(

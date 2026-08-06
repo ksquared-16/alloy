@@ -99,12 +99,13 @@ describe("participant progress derivation", () => {
                 decisions,
             });
 
-        expect(at([null, null, null]).summary).toBe("0 of 3 resolved");
-        expect(at(["waitlisted", null, null]).summary).toBe("1 of 3 resolved");
-        expect(at(["waitlisted", "enrolling", null]).summary).toBe("2 of 3 resolved");
+        expect(at([null, null, null]).summary).toBe("0 of 3 children decided");
+        expect(at(["waitlisted", null, null]).summary).toBe("1 of 3 children decided");
+        expect(at(["waitlisted", "enrolling", null]).summary).toBe("2 of 3 children decided");
 
         const complete = at(["waitlisted", "enrolling", "not_enrolling"]);
-        expect(complete.summary).toBe("All child paths chosen");
+        expect(complete.summary).toBe("All children have a path");
+        expect(complete.completion_hint).toBe("You can now complete this step.");
         expect(complete.all_resolved).toBe(true);
         expect(complete.resolved).toBe(3);
     });
@@ -212,7 +213,7 @@ describe("family work is not closed by the first child", () => {
         const result = await completePathsChosen([pi("a", "waitlisted"), pi("b", null), pi("c", null)]);
 
         expect(result.ok).toBe(false);
-        expect(result.error).toContain("1 of 3 resolved");
+        expect(result.error).toContain("1 of 3 children decided");
         expect(result.work_closed).toBe(false);
         // Refused in `validate`, so durable state was never touched — not written and rolled back.
         expect(result.changed).toBe(false);
@@ -225,7 +226,7 @@ describe("family work is not closed by the first child", () => {
             pi("c", null),
         ]);
         expect(result.ok).toBe(false);
-        expect(result.error).toContain("2 of 3 resolved");
+        expect(result.error).toContain("2 of 3 children decided");
     });
 
     it("allows the completing outcome once every child has a path", async () => {
@@ -235,7 +236,7 @@ describe("family work is not closed by the first child", () => {
             pi("c", "not_enrolling"),
         ]);
         // The gate passed; anything failing now is downstream of it, never the gate itself.
-        expect(result.error ?? "").not.toContain("resolved");
+        expect(result.error ?? "").not.toContain("children decided");
     });
 
     it("explains itself in operator language, naming no status keys", async () => {

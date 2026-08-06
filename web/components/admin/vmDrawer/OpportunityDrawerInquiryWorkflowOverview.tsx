@@ -3,8 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import OpportunityInquiryChildrenSection from "@/components/admin/entity/OpportunityInquiryChildrenSection";
-import ParticipantDecisionsPanel from "@/components/admin/opportunity/ParticipantDecisionsPanel";
-import FamilyClosePanel from "@/components/admin/opportunity/FamilyClosePanel";
+import DecisionCurrentWorkCard from "@/components/admin/opportunity/DecisionCurrentWorkCard";
 import { FamilyContactsPanel } from "@/components/admin/opportunity/FamilyContactsPanel";
 import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { OpportunityInquirySummaryRightColumn } from "@/components/admin/opportunity/OpportunityInquirySummaryRightColumn";
@@ -258,17 +257,10 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                 </div>
             </div>
             {participantDecisionScope ?
-                <ParticipantDecisionsPanel
+                <DecisionCurrentWorkCard
                     scope={participantDecisionScope}
                     canMutate={!!canMutate}
-                    onApplied={refreshVm}
-                />
-            :   null}
-            {participantDecisionScope ?
-                <FamilyClosePanel
-                    scope={participantDecisionScope}
-                    canMutate={!!canMutate}
-                    onClosed={refreshVm}
+                    onChanged={refreshVm}
                 />
             :   null}
             {showInquiryChildren ?

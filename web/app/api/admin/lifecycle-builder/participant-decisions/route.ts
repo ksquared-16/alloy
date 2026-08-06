@@ -77,6 +77,8 @@ export async function GET(request: NextRequest) {
         ok: true,
         configured: true,
         template_key: surface.template_key,
+        // The work's own name, from configuration — the card must not invent a heading.
+        work_label: resolved.context.template.label,
         progress: surface.progress,
         rows: surface.rows.map((row) => ({
             ...row,

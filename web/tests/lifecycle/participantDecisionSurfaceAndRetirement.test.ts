@@ -131,7 +131,7 @@ describe("participant decision surface", () => {
 
         expect(surface?.rows.map((r) => r.label)).toEqual(["Emma Rivera", "Liam Rivera"]);
         expect(surface?.rows[0]?.decisions.map((d) => d.label)).toEqual(["Waitlist", "Begin Enrolling"]);
-        expect(surface?.progress.summary).toBe("0 of 2 resolved");
+        expect(surface?.progress.summary).toBe("0 of 2 children decided");
     });
 
     it("shows a chosen path per child without exposing keys or ids", async () => {
@@ -147,7 +147,7 @@ describe("participant decision surface", () => {
         // Operator-facing strings never carry the vocabulary.
         expect(emma.state_label).not.toContain("waitlisted");
         expect(surface!.rows[1]!.state_label).toBe("No path chosen yet");
-        expect(surface!.progress.summary).toBe("1 of 2 resolved");
+        expect(surface!.progress.summary).toBe("1 of 2 children decided");
     });
 
     it("disables a decision that would regress an enrolled child, with a reason", async () => {
@@ -214,12 +214,55 @@ describe("legacy Decision Split is retired — one implementation only", () => {
         const overview = readCode("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
         expect(overview).not.toContain('current_stage_key === "decision"');
         expect(overview).not.toContain("OpportunityDecisionSplitPanel");
-        expect(overview).toContain("ParticipantDecisionsPanel");
+        expect(overview).toContain("DecisionCurrentWorkCard");
+    });
+
+    it("presents ONE Decision work card, not sibling panels beside it", () => {
+        const overview = readCode("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
+        // The two panels that used to sit outside the work item are gone from the tree entirely.
+        expect(existsSync(path.join(WEB, "components/admin/opportunity/ParticipantDecisionsPanel.tsx"))).toBe(false);
+        expect(existsSync(path.join(WEB, "components/admin/opportunity/FamilyClosePanel.tsx"))).toBe(false);
+        expect(overview).not.toContain("ParticipantDecisionsPanel");
+        expect(overview).not.toContain("FamilyClosePanel");
+        // Exactly one render site.
+        expect(overview.split("<DecisionCurrentWorkCard").length - 1).toBe(1);
+    });
+
+    it("keeps closing the lead INSIDE the work card, beneath the child paths", () => {
+        const card = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
+        const childRows = card.indexOf("data-decision-child-row");
+        const closeSection = card.indexOf("data-decision-close-section");
+        expect(childRows).toBeGreaterThan(-1);
+        expect(closeSection).toBeGreaterThan(childRows);
+    });
+
+    it("speaks operator language and never the platform's own vocabulary", () => {
+        const card = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
+        /**
+         * Only JSX TEXT NODES are operator copy.
+         *
+         * An earlier version of this check scanned the whole file and failed on `row.resolved` and
+         * `all_resolved` — field names the operator never sees. Banning a word from identifiers as
+         * well as from copy would force the runtime to be renamed to satisfy a test about wording,
+         * which is the tail wagging the dog. So this reads what actually renders.
+         */
+        const textNodes = [...card.matchAll(/>([^<>{}]+)</g)]
+            .map((m) => m[1]!.trim())
+            .filter((t) => /[a-z]{3}/.test(t))
+            .join(" | ")
+            .toLowerCase();
+
+        for (const banned of ["resolved", "participant", "process instance", "disposition"]) {
+            expect(textNodes, `"${banned}" must not reach operator copy`).not.toContain(banned);
+        }
+        // The progress wording itself is the projection's, not the card's — the card renders it.
+        // Its exact phrasing is owned by participantDecisionProgress.test.ts.
+        expect(card).toContain("{progress.summary}");
     });
 
     it("keeps the replacement free of OCM lifecycle writes and stage-key branching", () => {
         const seam = readCode("lib/lifecycle/executeParticipantDecisionForChild.ts");
-        const panel = readCode("components/admin/opportunity/ParticipantDecisionsPanel.tsx");
+        const panel = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
         const route = readCode("app/api/admin/lifecycle-builder/participant-decisions/route.ts");
 
         for (const [name, source] of [
@@ -243,7 +286,7 @@ describe("legacy Decision Split is retired — one implementation only", () => {
     });
 
     it("keeps the panel free of raw identifiers in operator-visible text", () => {
-        const panel = readCode("components/admin/opportunity/ParticipantDecisionsPanel.tsx");
+        const panel = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
         // Identity is carried — as React keys, data attributes and request fields — but never
         // INTERPOLATED INTO COPY. That distinction is what this asserts: a `{row.x}` sitting in JSX
         // text position, rather than any mention of the field.
