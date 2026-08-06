@@ -33,6 +33,11 @@ import {
     type SupersedeIdentityDeps,
 } from "@/lib/trust/capabilities/processingIdentitySubjectResolution/supersede";
 import {
+    observeProcessingIdentityOperatorReview,
+    type ObserveReviewDeps,
+} from "@/lib/trust/capabilities/processingIdentitySubjectResolution/observeOperatorReview";
+import { effectForSupersessionReason } from "./identitySupersessionReasons";
+import {
     abandonIdentityLineageGap,
     claimIdentityLineageGap,
     listUnresolvedIdentityLineageGaps,
@@ -54,11 +59,13 @@ export type ReconcileLineageGapOutcome =
     /** Deterministically refused; the gap is closed with the refusal recorded. */
     | { readonly status: "abandoned"; readonly reason: string };
 
-export type ReconcileLineageDeps = SupersedeIdentityDeps & {
-    readonly lookup?: GovernedIdentityLookup;
-    readonly supersede?: typeof supersedeGovernedIdentityJudgment;
-    readonly now?: () => string;
-};
+export type ReconcileLineageDeps = SupersedeIdentityDeps &
+    ObserveReviewDeps & {
+        readonly lookup?: GovernedIdentityLookup;
+        readonly supersede?: typeof supersedeGovernedIdentityJudgment;
+        readonly observeReview?: typeof observeProcessingIdentityOperatorReview;
+        readonly now?: () => string;
+    };
 
 type Client = Pick<SupabaseClient, "from">;
 
@@ -77,6 +84,7 @@ export async function reconcileOneIdentityLineageGap(
     const now = deps.now ?? (() => new Date().toISOString());
     const lookup = deps.lookup ?? createSupabaseGovernedIdentityLookup();
     const supersede = deps.supersede ?? supersedeGovernedIdentityJudgment;
+    const observeReview = deps.observeReview ?? observeProcessingIdentityOperatorReview;
     const { gap } = input;
     const s = gap.snapshot;
 
@@ -101,57 +109,87 @@ export async function reconcileOneIdentityLineageGap(
         priorPackageId = found.package_id;
     }
 
-    // ---- 3. The SAME port the direct paths use ------------------------------
-    const result = await supersede(
-        {
-            org_id: gap.orgId,
-            prior_package_id: priorPackageId,
-            supersession_source: s.supersession_source,
-            superseding_package_id: s.superseding_package_id,
-            superseding_reference: s.superseding_reference,
-            reason: s.reason,
-            // Preserved from the original correction, not re-derived from
-            // whoever happens to be running reconciliation.
-            actor_type: s.actor_type,
-            actor_id: s.actor_id,
-            channel: "system",
-            correlation_id: gap.caseId,
-            context: {
-                processing_case_id: gap.caseId,
-                subject_ref: s.subject_ref,
-                prior_generation_id: s.prior_generation_id,
-                ...(s.replacement_generation_id
-                    ? { replacement_generation_id: s.replacement_generation_id }
-                    : {}),
-            },
-        },
-        deps,
-    );
+    // ---- 3. The SAME ports the direct paths use -----------------------------
+    // WHICH append is owed was decided when the decision committed and frozen
+    // into the snapshot. Re-classifying here would let a later change to the
+    // classifier silently rewrite the lifecycle of a decision that settled long
+    // ago. An absent kind is a row written before confirmation was
+    // distinguished from supersession, and every one of those is a supersession.
+    const observationKind = s.observation_kind ?? "superseded";
+    const result: { status: string; observationId?: string; reason?: string } =
+        observationKind === "superseded"
+            ? await supersede(
+                  {
+                      org_id: gap.orgId,
+                      prior_package_id: priorPackageId,
+                      supersession_source: s.supersession_source,
+                      superseding_package_id: s.superseding_package_id,
+                      superseding_reference: s.superseding_reference,
+                      reason: s.reason,
+                      // Preserved from the original decision, not re-derived
+                      // from whoever happens to be running reconciliation.
+                      actor_type: s.actor_type,
+                      actor_id: s.actor_id,
+                      channel: "system",
+                      correlation_id: gap.caseId,
+                      context: {
+                          processing_case_id: gap.caseId,
+                          subject_ref: s.subject_ref,
+                          prior_generation_id: s.prior_generation_id,
+                          ...(s.replacement_generation_id
+                              ? { replacement_generation_id: s.replacement_generation_id }
+                              : {}),
+                      },
+                  },
+                  deps,
+              )
+            : await observeReview(
+                  {
+                      org_id: gap.orgId,
+                      package_id: priorPackageId,
+                      observation_kind: observationKind,
+                      processing_reference: s.superseding_reference ?? "",
+                      effect: effectForSupersessionReason(s.reason),
+                      detail: {
+                          processing_case_id: gap.caseId,
+                          subject_ref: s.subject_ref,
+                          generation_id: s.prior_generation_id,
+                      },
+                      actor_type: s.actor_type,
+                      actor_id: s.actor_id,
+                      channel: "system",
+                      correlation_id: gap.caseId,
+                  },
+                  deps,
+              );
 
     if (result.status === "gap_required") {
         // Unresolved by design. The claim already recorded the attempt.
-        return { status: "still_failing", reason: result.reason };
+        return { status: "still_failing", reason: result.reason ?? "unknown" };
     }
     if (result.status === "refused") {
         await abandonIdentityLineageGap(supabase, {
             gap: claimed,
-            refusal: result.reason,
+            refusal: result.reason ?? "unknown",
             nowIso: now(),
         });
-        return { status: "abandoned", reason: result.reason };
+        return { status: "abandoned", reason: result.reason ?? "unknown" };
     }
 
     // ---- 4. Resolve only on an authoritative observation --------------------
     await resolveIdentityLineageGap(supabase, {
         gap: claimed,
-        observationId: result.observationId,
+        observationId: result.observationId!,
         priorPackageId,
         nowIso: now(),
     });
 
+    // `already_superseded` (lineage port) and `already_observed` (review port)
+    // are the same fact: an equivalent observation was already there.
+    const alreadyThere = result.status === "already_superseded" || result.status === "already_observed";
     return {
-        status: result.status === "already_superseded" ? "already_superseded" : "resolved",
-        observationId: result.observationId,
+        status: alreadyThere ? "already_superseded" : "resolved",
+        observationId: result.observationId!,
     };
 }
 

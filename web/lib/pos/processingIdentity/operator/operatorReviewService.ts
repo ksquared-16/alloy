@@ -63,7 +63,7 @@ import {
 import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
 import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES } from "@/lib/pos/trustGovernance/gapExceptionTypes";
 import {
-    supersedeForOperatorDecision,
+    recordOperatorDecisionLifecycle,
     type IdentityLineageDeps,
     type IdentityLineageOutcome,
 } from "../trustAdapter/identityLineageService";
@@ -328,7 +328,7 @@ export async function recordResolutionDecision(
     // readiness-neutral lineage gap rather than failing this correction.
     let trustLineage: IdentityLineageOutcome | null = null;
     if (deps.trustLineage !== false) {
-        trustLineage = await supersedeForOperatorDecision(deps.supabase, {
+        trustLineage = await recordOperatorDecisionLifecycle(deps.supabase, {
             orgId: deps.orgId,
             caseId: input.caseId,
             resolutionId: input.resolutionId,

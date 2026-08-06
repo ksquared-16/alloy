@@ -73,6 +73,15 @@ export type IdentityLineageGapSnapshotV1 = {
     superseding_reference: string | null;
     replacement_generation_id: string | null;
     reason: IdentitySupersessionReason;
+    /**
+     * Which append is owed.
+     *
+     * Optional, deliberately. Rows written before operator confirmation was
+     * distinguished from supersession carry no such field, and every one of them
+     * IS a supersession — so an absent value reads as `"superseded"` rather than
+     * orphaning those rows behind a schema-version bump they cannot satisfy.
+     */
+    observation_kind?: "superseded" | "accepted" | "deferred";
     /** Authoritative actor, captured from server context at correction time. */
     actor_type: "operator" | "system" | "automation";
     actor_id: string | null;
@@ -92,18 +101,28 @@ export type IdentityLineageGapRow = {
     snapshot: IdentityLineageGapSnapshotV1;
 };
 
-/** The stable key one gap row is claimed by. Prior identity + what replaced it. */
+/**
+ * The stable key one gap row is claimed by.
+ *
+ * Prior identity + what happened to it + which append is owed. The KIND is in
+ * the key because one package can legitimately owe an `accepted` and later a
+ * `superseded`; without it the second would be mistaken for a retry of the
+ * first. An absent kind hashes as `superseded`, so keys computed before the
+ * field existed still match their rows.
+ */
 export function lineageGapKey(snapshot: {
     prior_adoption_id: string;
     superseding_package_id: string | null;
     superseding_reference: string | null;
     reason: string;
+    observation_kind?: string;
 }): string {
     return [
         snapshot.prior_adoption_id,
         snapshot.superseding_package_id ?? "",
         snapshot.superseding_reference ?? "",
         snapshot.reason,
+        snapshot.observation_kind ?? "superseded",
     ].join("\u001f");
 }
 

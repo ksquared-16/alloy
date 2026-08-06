@@ -57,6 +57,10 @@ import {
     supersedeGovernedIdentityJudgment,
     type SupersedeIdentityDeps,
 } from "@/lib/trust/capabilities/processingIdentitySubjectResolution/supersede";
+import {
+    observeProcessingIdentityOperatorReview,
+    type ObserveReviewDeps,
+} from "@/lib/trust/capabilities/processingIdentitySubjectResolution/observeOperatorReview";
 import { PROCESSING_IDENTITY_FACT_MATERIAL_VERSION } from "../factMaterialProjection";
 import {
     findResolutionById,
@@ -65,7 +69,11 @@ import {
 } from "../processingResolutionsDb";
 import { processingIdentitySubjectAdoptionId } from "./identityAdoptionIdentity";
 import {
-    identitySupersessionReasonForDecision,
+    classifyOperatorIdentityDecisionEffect,
+    type OperatorDecisionClassification,
+} from "./classifyOperatorDecisionEffect";
+import {
+    identitySupersessionReasonForEffect,
     type IdentitySupersessionReason,
 } from "./identitySupersessionReasons";
 import {
@@ -82,7 +90,27 @@ export type IdentityLineageOutcome =
     | { readonly status: "superseded"; readonly observationId: string; readonly priorPackageId: string }
     /** An equivalent observation already existed. Nothing was appended. */
     | { readonly status: "already_superseded"; readonly observationId: string; readonly priorPackageId: string }
-    /** Nothing to supersede, and nothing owed. */
+    /**
+     * The operator agreed with the engine, or postponed. The package REMAINS
+     * CURRENT and stays eligible for execution binding; one `accepted` or
+     * `deferred` observation records the review.
+     */
+    | {
+          readonly status: "reviewed";
+          readonly observationId: string;
+          readonly priorPackageId: string;
+          readonly effect: string;
+          readonly observationKind: "accepted" | "deferred";
+      }
+    /** An equivalent review observation already existed. Nothing was appended. */
+    | {
+          readonly status: "already_reviewed";
+          readonly observationId: string;
+          readonly priorPackageId: string;
+          readonly effect: string;
+          readonly observationKind: "accepted" | "deferred";
+      }
+    /** Nothing to record, and nothing owed. */
     | { readonly status: "no_lineage"; readonly reason: string }
     /** Deterministically refused on a lineage rule. Retrying would refuse again. */
     | { readonly status: "refused"; readonly reason: string }
@@ -91,11 +119,13 @@ export type IdentityLineageOutcome =
     /** Both the lineage record and its recovery record were lost. */
     | { readonly status: "gap_unrecordable"; readonly reason: string; readonly gapError: string };
 
-export type IdentityLineageDeps = SupersedeIdentityDeps & {
-    readonly lookup?: GovernedIdentityLookup;
-    readonly supersede?: typeof supersedeGovernedIdentityJudgment;
-    readonly now?: () => string;
-};
+export type IdentityLineageDeps = SupersedeIdentityDeps &
+    ObserveReviewDeps & {
+        readonly lookup?: GovernedIdentityLookup;
+        readonly supersede?: typeof supersedeGovernedIdentityJudgment;
+        readonly observeReview?: typeof observeProcessingIdentityOperatorReview;
+        readonly now?: () => string;
+    };
 
 /** The adoption identity of one persisted subject row. The prior judgment's name. */
 export function adoptionIdForResolutionRow(
@@ -117,16 +147,32 @@ export function adoptionIdForResolutionRow(
 // ---------------------------------------------------------------------------
 
 /**
- * Record that an operator decision made a prior engine judgment non-current.
+ * Record what an operator decision DID to the prior engine judgment.
  *
  * Call AFTER the Processing decision has durably committed. The operator
  * decision itself never becomes a Decision Package: it is a Processing act, and
  * minting a package for it would label a human decision as deterministic
  * reasoning. Only its lifecycle consequence reaches Trust.
  *
- * Never throws. The correction stays authoritative whatever happens here.
+ * ## Not every operator decision is a supersession
+ *
+ * The effect is CLASSIFIED by comparing the durable engine judgment against the
+ * durable operator result — never inferred from `decided_by`, which says only
+ * that someone acted:
+ *
+ * ```text
+ * agreement, or the engine declined to decide → accepted   (package stays current)
+ * the operator postponed                      → deferred   (package stays current)
+ * the operator replaced the judgment          → superseded
+ * anything unrecognised                       → nothing at all
+ * ```
+ *
+ * A package that stays current stays eligible for Phase 1.7 execution binding,
+ * which is what makes the normal reviewed path recordable end to end.
+ *
+ * Never throws. The decision stays authoritative whatever happens here.
  */
-export async function supersedeForOperatorDecision(
+export async function recordOperatorDecisionLifecycle(
     supabase: SupabaseClient,
     input: {
         orgId: string;
@@ -160,19 +206,181 @@ export async function supersedeForOperatorDecision(
         return { status: "no_lineage", reason: "row_carries_no_adoption_identity" };
     }
 
+    // ---- 2. what did the operator actually DO? ------------------------------
+    const classification = classifyOperatorIdentityDecisionEffect(row);
+    // The durable Processing decision. An opaque id, never operator prose.
+    const processingReference = `processing_resolution:${row.id}`;
+
+    if (classification.observationKind === null) {
+        // Fail closed. Guessing would either invent a supersession that did not
+        // happen or suppress one that did, and of the two available errors,
+        // saying nothing is the one that cannot corrupt a lifecycle.
+        return { status: "no_lineage", reason: `unclassified_effect:${classification.effect}` };
+    }
+
+    if (classification.observationKind !== "superseded") {
+        return appendOperatorReview(supabase, {
+            orgId: input.orgId,
+            caseId: input.caseId,
+            row,
+            classification,
+            observationKind: classification.observationKind,
+            processingReference,
+            actorId: input.actorId,
+            deps,
+        });
+    }
+
     return appendSupersession(supabase, {
         orgId: input.orgId,
         caseId: input.caseId,
         priorRow: row,
         source: "external_authority_decision",
         supersedingPackageId: null,
-        // The durable Processing decision. An opaque id, never operator prose.
-        supersedingReference: `processing_resolution:${row.id}`,
+        supersedingReference: processingReference,
         replacementGenerationId: null,
-        reason: identitySupersessionReasonForDecision(row.decision_action),
+        reason: identitySupersessionReasonForEffect(classification.effect),
         actorType: "operator",
         actorId: input.actorId,
         deps,
+    });
+}
+
+/**
+ * Backwards-compatible alias.
+ *
+ * The old name asserted the outcome before classifying it — which is precisely
+ * the defect this corrects. Kept so no caller breaks mid-migration.
+ *
+ * @deprecated Use {@link recordOperatorDecisionLifecycle}.
+ */
+export const supersedeForOperatorDecision = recordOperatorDecisionLifecycle;
+
+/**
+ * Append the review observation for a decision that did NOT replace the
+ * judgment, and leave the package current.
+ *
+ * Structurally parallel to {@link appendSupersession}: same prior-package
+ * lookup by exact adoption identity, same durable-gap-on-failure contract, same
+ * refusal handling. What differs is only the kind appended and the fact that no
+ * lineage claim is made.
+ */
+async function appendOperatorReview(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        caseId: string;
+        row: ProcessingResolutionRow;
+        classification: OperatorDecisionClassification;
+        observationKind: "accepted" | "deferred";
+        processingReference: string;
+        actorId: string;
+        deps: IdentityLineageDeps;
+    },
+): Promise<IdentityLineageOutcome> {
+    const { deps, row, classification } = input;
+    const lookup = deps.lookup ?? createSupabaseGovernedIdentityLookup();
+    const observeReview = deps.observeReview ?? observeProcessingIdentityOperatorReview;
+    const now = () => deps.now?.() ?? new Date().toISOString();
+
+    const priorAdoptionId = adoptionIdForResolutionRow(row);
+
+    const gapBase = {
+        prior_adoption_id: priorAdoptionId,
+        decision_class_key: PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY,
+        subject_ref: row.subject_ref,
+        prior_generation_id: row.generation_id,
+        supersession_source: "external_authority_decision" as const,
+        superseding_package_id: null,
+        superseding_reference: input.processingReference,
+        replacement_generation_id: null,
+        // The review effect, carried in the supersession-reason slot so the gap
+        // snapshot stays ONE shape. `observation_kind` is what tells a
+        // reconciler which append to replay.
+        reason: identitySupersessionReasonForEffect(classification.effect),
+        observation_kind: input.observationKind,
+        actor_type: "operator" as const,
+        actor_id: input.actorId,
+    };
+
+    let prior: { contract_id: string; package_id: string } | null;
+    try {
+        prior = await lookup({ org_id: input.orgId, contract_id: priorAdoptionId });
+    } catch (e) {
+        return defer(supabase, {
+            orgId: input.orgId,
+            caseId: input.caseId,
+            subjectRef: row.subject_ref,
+            priorPackageId: null,
+            failureClass: "trust_supersession_failed",
+            failureReason: `prior_package_lookup_failed: ${message(e)}`,
+            gapBase,
+            nowIso: now(),
+        });
+    }
+    if (!prior) {
+        // Never governed, or its capture gap is still open. Reconciliation
+        // completes this once the package lands.
+        return defer(supabase, {
+            orgId: input.orgId,
+            caseId: input.caseId,
+            subjectRef: row.subject_ref,
+            priorPackageId: null,
+            failureClass: "prior_package_absent",
+            failureReason: "no_governed_package_for_prior_adoption_identity",
+            gapBase,
+            nowIso: now(),
+        });
+    }
+
+    const result = await observeReview(
+        {
+            org_id: input.orgId,
+            package_id: prior.package_id,
+            observation_kind: input.observationKind,
+            processing_reference: input.processingReference,
+            effect: classification.effect,
+            detail: {
+                processing_case_id: input.caseId,
+                subject_ref: row.subject_ref,
+                generation_id: row.generation_id,
+                engine_action: classification.engine.action,
+                operator_action: classification.operatorAction ?? "none",
+            },
+            actor_type: "operator",
+            actor_id: input.actorId,
+            channel: "system",
+            correlation_id: input.caseId,
+        },
+        deps,
+    );
+
+    if (result.status === "observed" || result.status === "already_observed") {
+        return {
+            status: result.status === "observed" ? "reviewed" : "already_reviewed",
+            observationId: result.observationId,
+            priorPackageId: prior.package_id,
+            effect: classification.effect,
+            observationKind: input.observationKind,
+        };
+    }
+    if (result.status === "refused") {
+        console.warn(
+            `${IDENTITY_LINEAGE_GAP_MARKER} case=${input.caseId} subject=${row.subject_ref}`,
+            `operator review observation REFUSED and not retried: ${result.reason}`,
+        );
+        return { status: "refused", reason: result.reason };
+    }
+
+    return defer(supabase, {
+        orgId: input.orgId,
+        caseId: input.caseId,
+        subjectRef: row.subject_ref,
+        priorPackageId: prior.package_id,
+        failureClass: "trust_supersession_failed",
+        failureReason: result.reason,
+        gapBase,
+        nowIso: now(),
     });
 }
 
