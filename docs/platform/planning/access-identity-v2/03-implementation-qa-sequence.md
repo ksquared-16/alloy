@@ -50,12 +50,13 @@
 > harness as buildable artifacts, a seven-screen tier-D record for the one wave whose deliverable is a
 > **screen**, a discharge rule for the `EA-7` red run with a per-lock assignment for `RL-47`…`RL-56`,
 > preflights for `M19`–`M21`, and the census fields that make `Q15`–`Q17` say in advance what a zero
-> licenses. **And `QE-10`…`QE-16`** — what deciding "met" looks like *after a reopen*: the criterion
+> licenses. **And `QE-10`…`QE-17`** — what deciding "met" looks like *after a reopen*: the criterion
 > verdict is the worker's own, copied verbatim (thirteen reviews now carry a failing check and no verdict
 > moved); `within_scope` is the literal `true`; the reopen keeps a `validation.passed` its own validator
 > could not produce; and **the three implementation assignments are scoped to the frozen QA-folder copy of
-> this plan**, which contains neither Part III nor Part IV. Parts I–IV are unmodified except this note and
-> §0's table.
+> this plan**, which contains neither Part III nor Part IV. **And `QE-17`: an operator resume reset this
+> assignment without terminating the worker it declared silent, so two sessions wrote this file at once.**
+> Parts I–IV are unmodified except this note and §0's table.
 
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Sequenced implementation / QA plan* · assignment `asg_fccd7bdedcab5b`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
@@ -106,9 +107,9 @@ corpus's own recurring failure is *not checking that a plan's premises still hol
 | **§48–§51** | `W-20` re-priced against `T-19` · census questions `Q15`…`Q17` · the four new ordering constraints (§1.6–§1.9) · the amended wave map and execution order. | **new** |
 | **§52–§56** | **Coverage of the reopen** — every ID bound or unassigned · the decision register at **25** · locks `RL-47`…`RL-56` and migrations `M19`…`M21` · tiers and exit gates for waves 13–14 · `X-14`. | **new** |
 | **§57–§59** | Part IV's limits, reproduce and provenance. | **new** |
-| **§60–§62** | **Part V.** Why Part III and §55 do not cover the reopen · **what decides "met" after a reopen** (`QE-10`…`QE-16`) · the two evidence classes the reopen requires (`EA-8`, `EA-9`). | **new** |
+| **§60–§62** | **Part V.** Why Part III and §55 do not cover the reopen · **what decides "met" after a reopen** (`QE-10`…`QE-17`) · the two evidence classes the reopen requires (`EA-8`, `EA-9`). | **new** |
 | **§63–§67** | `F17`/`F18` and the fault-injection harness · **tier D for wave 13 — the screen record** · the `EA-7` discharge rule for `RL-47`…`RL-56` · preflights for `M19`–`M21` · census evidence for `Q15`–`Q17`. | **new** |
-| **§68–§73** | The evidence ledger extended to the reopen · decisions `DR-14`…`DR-18` · two corrections (Part III's limit 1; `W-59`'s reachability premise) · Part V's limits, reproduce and provenance. | **new** |
+| **§68–§73** | The evidence ledger extended to the reopen · decisions `DR-14`…`DR-19` · **three** corrections (Part III's limit 1; `W-59`'s reachability premise; the count of redirected URLs, wrong in both earlier sections) · Part V's limits, reproduce and provenance. | **new** |
 
 Workstreams are `W-n` and continue the accepted series without renumbering: `W-0`…`W-22` are the accepted
 plan's, `W-23`…`W-53` are Part II's, **`W-54`…`W-62` are Part IV's** (§§46–47). Sizing is **S** ≤ 2 engineer-days · **M** 3–8 · **L** 9–20. These are
@@ -4841,8 +4842,9 @@ rg -c '\bRM-[0-9]+\b|\bT-2[0-6]\b|\bS-(8|9|1[0-4])\b|\bH[1-3]\b|\bM2-1[6-9]\b|\b
 > gate that names browser evidence without saying what it must contain.
 >
 > **Parts I–IV are unmodified.** Part V extends Part III to the reopen — and reports what this pass found
-> when it re-read the runtime that grades this work: **`QE-10`…`QE-16`, seven findings, all of them about
-> the evidence apparatus, one of them about the reopen that produced this assignment.**
+> when it re-read the runtime that grades this work: **`QE-10`…`QE-17`, eight findings, all of them about
+> the evidence apparatus, one of them about the reopen that produced this assignment — and one (`QE-17`)
+> about the resume that put a second worker on this very file while it was being written.**
 
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *QA and evidence plan* · assignment `asg_ae2d65e739f71c`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
@@ -4876,11 +4878,12 @@ that turned into when it was checked.
 
 ---
 
-## 61. What decides "met" after a reopen — `QE-10` … `QE-16`
+## 61. What decides "met" after a reopen — `QE-10` … `QE-17`
 
 Part III established that four mechanisms decide "met" and that three of them ran. This pass re-read all
-four **after** a mission-wide reopen. Two of Part III's findings re-confirm at larger n; seven are new; and
-**none is a product defect** — they are defects of the evidence apparatus, in `X-1`…`X-14`'s class.
+four **after** a mission-wide reopen. Two of Part III's findings re-confirm at larger n; **eight** are new;
+and **none is a product defect** — they are defects of the evidence apparatus, in `X-1`…`X-14`'s class.
+**`QE-17` was found by the mechanism it describes** and is the last of the eight.
 
 ### 61.1 What changed since Part III, in numbers
 
@@ -5011,6 +5014,41 @@ a markdown file** — its objective is *"build-time check that service-role rout
 neither its `scope` nor its `expectedDeliverables` names any source or test path **[verified]**. Under
 `QE-11`, nothing will notice.
 
+**`QE-17` — a resume can put two workers on one deliverable, and the deliverable is the only place it
+shows.** This assignment's record carries **both** `reopen_reason` and
+`"stalled_reset_reason": "Operator resumed after worker went silent"` **[verified in the store this
+pass]** — the second string is produced verbatim by `mission-reopen.mjs:137` on the `actor: "operator"`
+branch, so it records a click, not a Director inference. Three things follow, each read in source:
+
+1. **The resume does not require the worker to be silent.** `resumeStalledMission` refuses only when
+   `posture.id !== "worker_silent"` **and** no assignment is `running`/`verification` (`:126-133`)
+   **[verified]**. When a worker *is* live the posture is not `worker_silent`, `claimed` is non-empty, and
+   the guard passes on the second clause. The reset list then falls back to *every* claimed-running
+   assignment (`:120-124`).
+2. **Nothing terminates the process it declares stalled.** `resetStalledRunningAssignments`
+   (`worker-assignment.mjs:724-749`) **[verified]** sets `status: "ready"` and nulls `dispatch`,
+   `completionReport`, `contextAcknowledgement`, `workerId` and `provider` — a **store** operation. No
+   signal is sent, no PID is read. Its docstring is *"Reset claimed-running assignments that have **no live
+   worker**"*, and that premise is asserted by the caller, not checked. `resumeStalledMission`'s own
+   docstring — *"Does not pretend the old process is still live"* (`:106-107`) — is true of the record and
+   is not true of the machine.
+3. **It clears `validation` no more than the reopen does.** This record holds
+   `validation.passed: true, validated_at: "2026-08-04T16:42:25.372Z"` beside `completionReport: null`
+   **[verified]** — `QE-12` again, reached through the second door.
+
+> **What that cost, here.** While this session was reading, the deliverable grew **5,223 → 5,436 lines at
+> 15:36:22 local**, and this session held no edit **[verified: `git diff --numstat` moved from 407 to 601
+> added lines across two reads]**. Two `claude -p` processes carrying the Vacilando worker allowlist were
+> alive, started **15:31** and **15:34**; the acknowledgement in the store is stamped **22:34:46.666Z**
+> **[verified]**. **Two sessions were executing `asg_ae2d65e739f71c` at once.** The output was not lost —
+> the second pass at this section is a correction to work the first pass had already written (§70.3) — but
+> that is a property of what the two happened to be doing, not of anything the runtime guarantees.
+
+**And the store cannot say any of it.** `workerId` is `"claude-6"` — the **slot**, not the session;
+`dispatch.sessionId` holds one value; `dispatch.attempt` is `1`; `progress` is `[]` **[all verified]**.
+`QE-13` said a reopen is unattributed and unnumbered. **A resume is the same defect with a race attached**:
+the reopen duplicates *claims* about one deliverable, the resume duplicates *writers* of it.
+
 ### 61.3 What this means for waves 13 and 14
 
 Not that the plan is unbuildable. Three things, each of which the sections below act on:
@@ -5099,10 +5137,11 @@ never production** — the worktree contract governs and is not restated further
 | **S3** | Roles chapter rail + the selected role's user list | `admin` | as S1 | The `F17` member appears under **both** roles, in the count **and** the list | `W-55` |
 | **S4** | Roles chapter → Permissions, with the grants read failing | `admin` | fault injection (§63) | An error is visible and **Save is disabled**. The failure mode is a legitimate-looking all-*None* grid | `W-56` |
 | **S5** | Role page, top to bottom | `admin` | `F18` role | One page, no sub-tab bar, no placeholder panel; depth to a capability control ≤ 4 | `W-57` |
-| **S6** | The four retired URLs | `admin` | — | Each lands on `/organization/access` or 404s; none renders a second grid | `W-59` |
+| **S6** | The four retired URLs | `admin` | — | Each lands on `/organization/access` or 404s; none renders a second grid. For the two `adminV2` aliases the assertion is that the **three-hop chain terminates** there (§70.2) | `W-59` |
 | **S7** | Role page as a non-admin operator | `ops` | `Q11`'s holder question answered | The gradient: what an `ops` principal may edit is narrower and **stated**, not silently disabled | `W-57`, `W-29` |
 
-**S6 is smaller than `W-59` assumes, and §70.2 records why.** Three of the four URLs already redirect.
+**S6 is smaller than `W-59` assumes, and §70.2 records why.** **All four** URLs already redirect — two
+directly, two through a three-hop chain. S6 confirms the chain; it no longer discovers reachability (§70.3).
 
 **The artifact.** `wave13-screens/` — one image per row, named `s<N>-<workstream>.png`, plus `screens.json`
 with one object per row: `{id, route, principal, precondition, action, expected, observed, consoleErrors,
@@ -5215,12 +5254,12 @@ question.
 | Criterion | Mode | `EA` classes | The count, and where it comes from |
 |---|:--:|---|---|
 | `AC_d12_qa_evidence`, pass 1 | Count | `EA-1`, `EA-2`, `EA-4`, `EA-6` | Part III: 31 workstreams tiered, 7 waves gated, 16 fixtures batched, 9 findings verified |
-| **`AC_d12_qa_evidence`, pass 2** | Count | **`EA-8`** + the above | **This part:** 9 wave-13/14 workstreams' artifacts specified, 2 fixtures + 1 harness, 7 screens, 10 locks given a discharge, 3 preflights written, 3 census answers shaped, 7 findings verified. **The pass marker is what distinguishes this row from the one above** (`QE-13`) |
+| **`AC_d12_qa_evidence`, pass 2** | Count | **`EA-8`** + the above | **This part:** 9 wave-13/14 workstreams' artifacts specified, 2 fixtures + 1 harness, 7 screens, 10 locks given a discharge, 3 preflights written, 3 census answers shaped, 8 findings verified, 3 corrections. **The pass marker is what distinguishes this row from the one above** (`QE-13`) — **and this row was itself written by two concurrent sessions** (`QE-17`), which is the sharpest available argument for `DR-14`'s pass field |
 | `RB-24`…`RB-27` | — | — | Unchanged by this part. §38.2 stands, and `QE-10` sharpens why `RB-26` matters: the roadmap will inherit whatever the runtime lets it inherit |
 
 ---
 
-## 69. Decisions this part raises — `DR-14` … `DR-18`
+## 69. Decisions this part raises — `DR-14` … `DR-19`
 
 Continuing §44's `DR-13`. **None is worker-resolvable**; each is recorded with a recommendation and **not
 performed**. All five would be changes to `scripts/local-dev/lib/vacilando/` — application source this
@@ -5234,12 +5273,16 @@ phase's brief forbids and this document did not touch.
 | `DR-17` | **Should a criterion's `met` be computed rather than copied?** (`QE-10`, `QE-11`) It is the worker's own report, echoed into the Director's review; thirteen reviews carry a failing check and no verdict moved; `within_scope` is the literal `true` | **Yes, and narrowly**: a criterion may not be `met` while a `source: "automatic"` check on the same deliverable is `fail` — the verdict becomes `needs_operator`, not `unmet`. **This is the smallest change that makes an acceptance capable of being wrong**, which is `DR-8`/`DR-11`'s test applied to the mechanism that actually ran |
 | `DR-18` | **Do waves 2–14 get execution phases, and which tranche is next?** (`QE-16`) Three implementation assignments exist, for waves 0 and 1; `impl_w1b` declares no source deliverable | **Yes, and the next tranche is `W-54`, `W-55`, `W-56` + `W-20`** — §51's batch 2. Five of wave 13's six workstreams could start on approval and three need no decision at all (§51.2). **Whatever is decided, declare the source paths in `scope`** |
 
+| `DR-19` | **Must a resume prove the worker is gone before it relaunches?** (`QE-17`) `resumeStalledMission` passes its guard whenever any assignment is `running`, whether or not the posture is `worker_silent`; `resetStalledRunningAssignments` is a store write that signals no process; and this assignment ran two sessions at once against one file | **Yes, and the cheap half first.** Before relaunching, require either a `worker_silent` posture **or** an explicit operator override that says *"I know a worker may be live."* Then terminate the recorded session, or refuse and say why. **The one-line version — refuse the silent-path reset when the posture is not `worker_silent` — closes the race without any process management**, and `dispatch.attempt` should increment either way so the record can say a second worker existed |
+
 **`DR-14` and `DR-17` are the two that change what a reopen means.** The others improve the record; those
-two make it possible for a second pass to be judged against the first.
+two make it possible for a second pass to be judged against the first. **`DR-19` is the one that can
+destroy work rather than misdescribe it** — the others produce a record that cannot say what happened;
+this one produces two writers on one file, and only the file records that.
 
 ---
 
-## 70. Two corrections
+## 70. Three corrections
 
 ### 70.1 Part III's limit 1 cites a register that did not exist
 
@@ -5248,7 +5291,7 @@ two make it possible for a second pass to be judged against the first.
 defect in the part that exists to make citations checkable.
 
 **Recorded, not edited.** Parts I–IV are unmodified by this part (§43, refusal 3, adopted). And the honest
-note is this: **Part V mints `QE-10`…`QE-16`, so the citation is now true.** A citation that becomes
+note is this: **Part V mints `QE-10`…`QE-17`, so the citation is now true.** A citation that becomes
 correct one pass later was still wrong when it was written, and `RL-42`'s lint — the `CR-1`…`CR-5`
 citation check — is the instrument that would have caught it at the time.
 
@@ -5269,7 +5312,7 @@ the redirect table, without a browser** — `web/next.config.ts` **[verified thi
 
 **Three consequences.**
 
-1. **Two of the four authority surfaces `W-59` retires are already unreachable by URL.** Their page files
+1. **Two of the four authority surfaces `W-59` retires are redirected *directly*.** Their page files
    still exist (`web/app/legacy-admin/system/roles/page.tsx`,
    `web/app/legacy-admin/system/access-control/page.tsx` **[verified]**), so `W-59` is largely **deleting
    dead code behind existing redirects**, not withdrawing live surfaces. `H1` — *deleting them is
@@ -5279,23 +5322,43 @@ the redirect table, without a browser** — `web/next.config.ts` **[verified thi
    routes to `/settings/relationships`, not to the access surface. That is independent corroboration that
    it is *"a different concept sharing a word"*, and it supports §46's instruction to disposition it on its
    own terms.
-3. **The one row a browser must still settle** is the `adminV2` alias — `/adminV2/settings/user-access`,
-   whose page file exists and which `:108` redirects into `/admin/:path*`. Screen S6 exists for that row.
+3. **The two `adminV2` aliases are answered too — by a three-hop chain, which is a different kind of
+   answer.** Both alias page files exist — `web/app/adminV2/settings/user-access/page.tsx` and
+   `web/app/adminV2/settings/users-roles/page.tsx` **[verified]** — and the table routes both without a
+   browser: `:108 /adminV2/:path* → /admin/:path*`, then `:116 /admin/settings/:path* → /settings/:path*`,
+   then `:142`/`:144 /settings/users-roles`, `/settings/user-access → /organization/access` **[verified]**.
+   **So all four authority surfaces are already unreachable by URL** — two directly, two through three
+   redirects. What S6 settles is therefore no longer *"is it reachable"* but **"does the chain terminate at
+   the canonical surface"**, and that is worth an image precisely because a chain is the fragile form: each
+   hop is an independent request re-matched against the table, and **no single row asserts the chain.**
 
 **This corrects a premise, not a finding.** `RM-6`'s five surfaces and 1,155 legacy lines are unchallenged;
-what changes is that the *reachability* question `W-59` opens with is mostly already answered in the
-repository, and an execution phase should read `next.config.ts` before opening a browser.
+what changes is that the *reachability* question `W-59` opens with is already answered in the
+repository for all four URLs, and an execution phase should read `next.config.ts` before opening a browser.
+
+### 70.3 Both earlier counts of `W-59`'s redirected URLs were wrong, in different directions
+
+§64 said *"Three of the four URLs already redirect"* and §70.2 said *"Two of the four."* **Neither is the
+count.** The redirect table answers **four of four** — the two `legacy-admin` rows directly, the two
+`adminV2` aliases through `:108 → :116 → :142`/`:144`. Both statements are corrected above and at §64.
+
+**This is `RL-42`'s case a second time, inside one part.** Two sections of the same document, written in one
+pass, disagreed about a number that a single `rg` over `next.config.ts` settles — which is exactly the
+citation-lint argument §70.1 makes about Part III's limit 1. **A number repeated in two places is a claim
+made twice, and this corpus has now been wrong about one three times.**
 
 ---
 
 ## 71. Limits — read before citing
 
-1. **No product defect is asserted by this part.** `QE-10`…`QE-16` concern the assignment store, the
+1. **No product defect is asserted by this part.** `QE-10`…`QE-17` concern the assignment store, the
    evidence gallery, the deliverable-review store and the runtime source that writes them. The product
    claims in §§63–68 are **[carried]** from the documents that own them, through Part IV's bindings.
 2. **Nothing was executed.** `reopenAssignmentsForMoreWork`, `validateAssignmentCompletion`,
-   `missingRequiredEvidence` and the review builder were **read**; this mission's on-disk state was
-   **read**. No function was called, no assignment mutated, no artifact written to any gallery.
+   `missingRequiredEvidence`, the review builder, **`resumeStalledMission` and
+   `resetStalledRunningAssignments`** were **read**; this mission's on-disk state was **read**. No function
+   was called, no assignment mutated, no artifact written to any gallery, **and no worker process was
+   signalled** — including the second one `QE-17` reports.
 3. **§72's two halves were run differently, and the block says which.** Every repository claim was
    established by a ripgrep-backed search or a file read over this worktree, and every cited line number
    above was re-confirmed with `grep -n` in this shell **[verified]**. The **state** half was read with the
@@ -5315,13 +5378,26 @@ repository, and an execution phase should read `next.config.ts` before opening a
    conditional on a question nobody has asked.
 8. **§70.2 is a static reading of a redirect table.** Redirect precedence, middleware, and whether a legacy
    component still renders through some other entry point are **not** established by it. It shrinks
-   `W-59`'s URL half and leaves its component half exactly where Part IV put it.
-9. **`DR-14`…`DR-18` are escalations.** No runtime code was changed to fix `QE-14`, no assignment
-   re-scoped to fix `QE-15`, no `attempt` incremented, and no evidence profile added.
-10. **This part is written to the product-source folder**, which `07…§2.4` establishes is outside
+   `W-59`'s URL half and leaves its component half exactly where Part IV put it. **The three-hop `adminV2`
+   chain is read row by row, not executed**: that each hop re-matches the table is how Next.js redirects
+   are understood here, and it is the assertion screen S6 exists to settle. §70.3's *four of four* is a
+   claim about the table; it is not yet a claim about a browser.
+9. **`QE-17`'s process observation is external to the runtime.** The two live sessions were seen with `ps`
+   in this shell and by watching this file's size and `git diff --numstat` change while this session held
+   no edit. **Which session wrote which line is not established, and cannot be** — that absence is the
+   finding. The *mechanism* (`:126-133`, `:724-749`) is read in source and does not depend on the
+   observation.
+10. **`DR-14`…`DR-19` are escalations.** No runtime code was changed to fix `QE-14`, no assignment
+    re-scoped to fix `QE-15`, **no process was signalled or killed to act on `QE-17`**, no `attempt`
+    incremented, and no evidence profile added. `scripts/local-dev/lib/vacilando/` was **read only**.
+11. **This part is written to the product-source folder**, which `07…§2.4` establishes is outside
     `ALLOWED_CHANGE_PREFIX`. That is `X-2`/`DR-4`, unresolved, and now also `QE-15` — the same split
     reaching the execution assignments. **Knowingly, and it is not a worker's call to fix.**
-11. **Parts I–IV are unmodified**, except the header note and §0's table rows that name Part V.
+12. **Parts I–IV are unmodified**, except the header note and §0's table rows that name Part V.
+13. **This part was written across two sessions of one assignment** (`QE-17`). §§60–69 and §§70.1–70.2 were
+    written first; `QE-17`, §70.3, `DR-19` and the corrections at §64 and §70.2 came second, from a session
+    that could read the first's output but not its reasoning. **That is `EA-8`'s pass marker, applied to a
+    split the runtime did not intend and does not record.**
 
 ---
 
@@ -5363,6 +5439,25 @@ ls web/tests/access/                   # four suites, no fixtures/
 rg -n 'system/roles|system/access-control|customer-person-roles|organization/access' web/next.config.ts
 ls web/app/legacy-admin/system/roles/page.tsx web/app/legacy-admin/system/access-control/page.tsx
 
+# --- §70.3: the count is four, not two and not three -------------------------
+# The adminV2 aliases resolve through three hops, each an independent request:
+rg -n 'adminV2/:path\*|admin/settings/:path\*|settings/user-access|settings/users-roles' web/next.config.ts
+#   → :108  /adminV2/:path*          → /admin/:path*
+#   → :116  /admin/settings/:path*   → /settings/:path*
+#   → :142  /settings/users-roles    → /organization/access
+#   → :144  /settings/user-access    → /organization/access
+ls web/app/adminV2/settings/user-access/ web/app/adminV2/settings/users-roles/   # page.tsx in both
+
+# --- QE-17: the resume path, and what it does not do -------------------------
+rg -n 'export async function resumeStalledMission' -A 35 $W/mission-reopen.mjs
+#   → :106-107 docstring "Does not pretend the old process is still live"
+#   → :126     refuses only when posture is not worker_silent AND nothing is claimed-running
+#   → :137     "Operator resumed after worker went silent" — the exact string in the store
+rg -n 'export function resetStalledRunningAssignments' -A 26 $W/worker-assignment.mjs
+#   → :724-749 a store write: status/dispatch/workerId/provider/ack/report cleared
+#   → no signal, no PID, no liveness check; `validation` untouched (QE-12 again)
+#   → docstring asserts "no live worker"; nothing verifies it
+
 # --- §70.1: Part III's limit 1 cites QE-1…QE-10; the register is QE-1…QE-9 ----
 P=docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
 rg -n 'QE-1`…`QE-10|nine findings' $P
@@ -5384,6 +5479,14 @@ rg -n 'QE-1`…`QE-10|nine findings' $P
 #                                                     impl_w0, impl_w1, impl_w1b
 #   the impl_w0 record: "status": "ready", "completionReport": null,
 #   "contextAcknowledgement": null, "validation": { "passed": true, … }
+#
+#   the asg_ae2d65e739f71c record (QE-17), read the same way:
+#     "reopen_reason": "Operator requested more work after reviewing the outcome"
+#     "stalled_reset_reason": "Operator resumed after worker went silent"
+#     "status": "running", "workerId": "claude-6", "progress": [],
+#     "dispatch": { "sessionId": "exs_8126d8ce11f3b02b", "attempt": 1 },
+#     "validation": { "passed": true, "validated_at": "2026-08-04T16:42:25.372Z" }
+#     "contextAcknowledgement": { "acknowledgedAt": "2026-08-06T22:34:46.666Z" }
 ```
 
 > **One number in this block deserves the second look §58 gave its `8`.** The gallery went 59 → 141 and
@@ -5421,14 +5524,19 @@ rg -n 'QE-1`…`QE-10|nine findings' $P
   zero users; `within_scope`'s literal `true`; the review builder's source for
   `acceptance_criteria_results`; the six redirect rows and one rewrite row in `next.config.ts`; the absent
   fixture module; and Part III §40's `QE-1…QE-10` citation against its own nine-finding register.
-- **New this part.** Findings `QE-10`…`QE-16` · evidence classes `EA-8`, `EA-9` · the `F17`/`F18`
+- **New this part.** Findings `QE-10`…`QE-17` · evidence classes `EA-8`, `EA-9` · the `F17`/`F18`
   specification and the fault-injection harness · the seven-screen tier-D record for wave 13 · the `EA-7`
   discharge rule and its per-lock assignment · preflights for `M19`–`M21` · the census artifact fields
-  `gates`, `expires`, `zero_means` · the ledger's reopen rows · decisions `DR-14`…`DR-18` · two corrections
-  (§70). **No lock, migration, workstream, fixture, census question or decision minted by Parts I–IV was
-  renumbered, and `RL-43`…`RL-46` remain reserved** (§54.1).
-- **Escalated, not answered.** `DR-14`…`DR-18`, and every decision Parts I–IV escalated. **No decision was
+  `gates`, `expires`, `zero_means` · the ledger's reopen rows · decisions `DR-14`…`DR-19` · **three**
+  corrections (§70). **No lock, migration, workstream, fixture, census question or decision minted by
+  Parts I–IV was renumbered, and `RL-43`…`RL-46` remain reserved** (§54.1).
+- **Escalated, not answered.** `DR-14`…`DR-19`, and every decision Parts I–IV escalated. **No decision was
   answered.**
+- **Written across two sessions of one assignment.** `QE-17` records the mechanism and §71 limit 13 records
+  the split. The second session read `mission-reopen.mjs` (`:105-160`), `worker-assignment.mjs`
+  (`:720-749`), `mission-posture.mjs` (`:290-305`), `silent-worker-recover.mjs` (`:85-99`), the
+  `asg_ae2d65e739f71c` record in the assignment store, `web/next.config.ts` (`:104-172`, `:203-249`) and
+  the two `adminV2` alias page files. **It changed no runtime code and signalled no process.**
 - **Not consulted.** The deployed database; the running Director; any application source under `web/app` or
   `web/lib` beyond the redirect table and the two page files named above; the frozen QA copies, which are
   untouched.
