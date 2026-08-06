@@ -60,7 +60,15 @@ export type StageOperatingContractIssueCode =
     /** A required select input offers no options to choose from. */
     | "participant_decision_input_options_missing"
     /** Work completion is gated on participants being resolved, but nothing resolves them. */
-    | "participant_resolution_gate_without_decisions";
+    | "participant_resolution_gate_without_decisions"
+    /** Family close sends children to a stage that belongs to the family case. */
+    | "family_close_child_destination_grain_mismatch"
+    /** Family close sends the family to a stage that belongs to individual children. */
+    | "family_close_family_destination_grain_mismatch"
+    /** Family close names a destination stage this process does not configure. */
+    | "family_close_destination_invalid"
+    /** Family close closes children but leaves the family open, or the reverse. */
+    | "family_close_status_not_closing";
 
 export type StageOperatingContractIssue = {
     code: StageOperatingContractIssueCode;
@@ -234,6 +242,125 @@ function validateParticipantDecisions(
                     controlId,
                     template_key: work.template_key,
                     decision_key: decision.decision_key,
+                });
+            }
+        }
+    }
+
+    return issues;
+}
+
+/**
+ * Governed family close, checked at AUTHORING time.
+ *
+ * The two halves have OPPOSITE grain requirements and that is the whole point: children must land
+ * on a child stage, the family must land on a family stage. A configuration that gets either
+ * backwards produces a close that strands the record it was supposed to end, and the runtime would
+ * refuse it on a real family rather than here.
+ *
+ * `closes_record` semantics are also checked: a close whose family status does not actually close
+ * the case leaves a family sitting open with all its children terminated, which reads to an
+ * operator as "the button did nothing".
+ */
+function validateFamilyClose(
+    work: StageWorkTemplateV1,
+    processStages: ReadonlyArray<{ key: string; label?: string | null; grain?: string | null }> | undefined,
+    configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow> | undefined,
+    entityType: string,
+): StageOperatingContractIssue[] {
+    const close = work.family_close;
+    if (!close) return [];
+
+    const issues: StageOperatingContractIssue[] = [];
+    const controlId = `work-template-family-close-${work.template_key}`;
+    const stageByKey = new Map((processStages ?? []).map((s) => [s.key, s]));
+
+    const checkDestination = (
+        target: { kind: string; stage_key?: string | null; transition_ref?: string | null },
+        wanted: "child" | "family",
+        code: StageOperatingContractIssueCode,
+    ) => {
+        if (target.kind !== "move_to_stage") return;
+        const targetKey =
+            target.stage_key?.trim()
+            ?? (target.transition_ref?.startsWith("move_to_stage:")
+                ? target.transition_ref.slice("move_to_stage:".length).trim()
+                : null);
+        if (!targetKey || !processStages) return;
+
+        if (!stageByKey.has(targetKey)) {
+            issues.push({
+                code: "family_close_destination_invalid",
+                severity: "error",
+                message: "Closing this lead sends a record to a stage this process does not have.",
+                controlId,
+                template_key: work.template_key,
+            });
+            return;
+        }
+        const resolution = resolveStageGrain({
+            stageKey: targetKey,
+            configuredMetadataGrain: stageByKey.get(targetKey)?.grain,
+        });
+        const destinationLabel = stageByKey.get(targetKey)?.label?.trim() || targetKey;
+        if (!resolution.ok) {
+            issues.push({
+                code,
+                severity: "error",
+                message: `"${destinationLabel}" does not say clearly whether it holds families or children.`,
+                controlId,
+                template_key: work.template_key,
+            });
+            return;
+        }
+        if (resolution.grain !== wanted) {
+            issues.push({
+                code,
+                severity: "error",
+                message:
+                    wanted === "child" ?
+                        `Closing this lead sends each child to "${destinationLabel}", which belongs to `
+                        + `${grainInOperatorWords(resolution.grain)}. Children must end on a stage that holds `
+                        + `${grainSubjectWords("child")}.`
+                    :   `Closing this lead sends the lead itself to "${destinationLabel}", which belongs to `
+                        + `${grainInOperatorWords(resolution.grain)}. The lead must end on a stage that holds `
+                        + `${grainSubjectWords("family")}.`,
+                controlId,
+                template_key: work.template_key,
+            });
+        }
+    };
+
+    for (const target of close.child_targets) {
+        checkDestination(target, "child", "family_close_child_destination_grain_mismatch");
+    }
+    for (const target of close.family_targets) {
+        checkDestination(target, "family", "family_close_family_destination_grain_mismatch");
+    }
+
+    // Does the family status actually close the case? Skipped when the caller cannot resolve the
+    // status catalog — undefined means "cannot tell", never "there are none".
+    if (configuredStatuses !== undefined) {
+        const statusTarget = close.family_targets.find((t) => t.kind === "update_family_case_status");
+        const statusKey = statusTarget?.status_key?.trim();
+        if (statusKey) {
+            // `close_record` is the same purpose the outcome editor uses for a closing status, so
+            // "does this status close the case?" is answered by one resolver, not two opinions.
+            const resolved = resolveOutcomeStatusOptions({
+                configuredStatuses,
+                purpose: "close_record",
+                entityType,
+                selectedStatusKey: statusKey,
+            });
+            if (resolved.available && !resolved.selectedValid) {
+                issues.push({
+                    code: "family_close_status_not_closing",
+                    severity: "error",
+                    message:
+                        `Closing this lead ends every open child but leaves the lead itself open. `
+                        + `Choose a ${statusDomainOperatorLabel(entityType)} status that closes the record.`,
+                    controlId,
+                    template_key: work.template_key,
                 });
             }
         }
@@ -446,6 +573,9 @@ export function validateStageOperatingPlanOperatingContract(
         try {
             issues.push(...validatePrimaryAction(work, validPrimaryRefs));
             issues.push(...validateParticipantDecisions(work, input.processStages));
+            issues.push(
+                ...validateFamilyClose(work, input.processStages, configuredStatuses, entityType),
+            );
             for (const ref of work.outcome_refs ?? []) {
                 const outcomeRef = ref.outcome_ref?.trim();
                 if (outcomeRef && !outcomeKeys.has(outcomeRef)) {

@@ -27,7 +27,6 @@ import {
     STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS,
     type StageOutcomeRuleTargetV1,
     type StageParticipantDecisionInputV1,
-    type StageWorkParticipantDecisionV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type ParticipantDecisionInputIssue = {
@@ -61,8 +60,22 @@ function targetsAccepting(
     return targets.filter((t) => acceptors.includes(t.kind)).length;
 }
 
+/**
+ * The parts of a configured action this applier actually needs.
+ *
+ * Deliberately NOT `StageWorkParticipantDecisionV1`. Governed family close reuses this for both
+ * halves of its operation, and the only way to call it with the full decision type was to invent a
+ * `decision_key` and a `subject_grain` that meant nothing — a fake object built to satisfy a type,
+ * which is how a reader ends up believing family close runs a participant decision. Narrowing the
+ * parameter to what is read removes the lie.
+ */
+export type ParticipantDecisionInputBindable = {
+    targets: readonly StageOutcomeRuleTargetV1[];
+    required_inputs?: readonly StageParticipantDecisionInputV1[];
+};
+
 export function applyParticipantDecisionInputs(input: {
-    decision: StageWorkParticipantDecisionV1;
+    decision: ParticipantDecisionInputBindable;
     /** Raw operator values, keyed by input key. */
     values?: Record<string, unknown> | null;
 }): ApplyParticipantDecisionInputsResult {

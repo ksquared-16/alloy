@@ -39,8 +39,12 @@ export type ParticipantDecisionContext = {
     departmentMetadata: Record<string, unknown>;
     /** Operator label for a decision — its override, else the capability's registered label. */
     resolveDecisionLabel: (decision: StageWorkParticipantDecisionV1) => string;
-    /** Null when the decision's capability is not process-selected. */
-    assertCapabilitySelected: (decision: StageWorkParticipantDecisionV1) => string | null;
+    /**
+     * Null when the capability is process-selected. Takes only the capability reference, because
+     * that is the entire question — governed family close asks it too, and had to fabricate a
+     * decision object to do so while this took the full decision type.
+     */
+    assertCapabilitySelected: (ref: { action_ref: string }) => string | null;
 };
 
 export type ResolveParticipantDecisionContextResult =
@@ -138,12 +142,12 @@ export async function resolveParticipantDecisionContext(params: {
                 const capability = getPlatformCapability(decision.action_ref);
                 return capability?.operatorLabel?.trim() || decision.action_ref;
             },
-            assertCapabilitySelected: (decision) => {
-                const capability = getPlatformCapability(decision.action_ref);
+            assertCapabilitySelected: (ref) => {
+                const capability = getPlatformCapability(ref.action_ref);
                 if (!capability) {
-                    return `"${decision.action_ref}" is not a registered capability.`;
+                    return `"${ref.action_ref}" is not a registered capability.`;
                 }
-                if (!commandSetHasEnabledKey(commandSet, decision.action_ref, canonical)) {
+                if (!commandSetHasEnabledKey(commandSet, ref.action_ref, canonical)) {
                     return (
                         `This option is configured but its command is not enabled for this process. `
                         + `Enable it in the Business Process command set first.`

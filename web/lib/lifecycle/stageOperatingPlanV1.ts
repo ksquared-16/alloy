@@ -168,6 +168,55 @@ export type StageParticipantDecisionInputV1 = {
 };
 
 /**
+ * Target kinds the FAMILY half of a governed close may carry.
+ *
+ * The mirror image of the participant set: this one may move the family case and must not touch a
+ * child, because the child half of the operation has its own targets and its own guard. Keeping the
+ * two vocabularies separate is what stops a single misconfigured target list from closing a family
+ * without closing its children, or the reverse.
+ */
+export const STAGE_FAMILY_CLOSE_ALLOWED_FAMILY_TARGET_KINDS: readonly StageOutcomeRuleTargetKind[] = [
+    "update_family_case_status",
+    "move_to_stage",
+    "create_next_work",
+    "no_movement",
+];
+
+/**
+ * Governed family close, as configuration declares it.
+ *
+ * NOT a participant decision, and deliberately not expressible as one: closing a family is a single
+ * operator action whose effects land on several records at once, so it needs two target lists and a
+ * preview naming exactly who is affected. A per-child decision has neither.
+ *
+ * `child_targets` are applied to EVERY child the operation actually closes — the ones the platform's
+ * classifier puts in the closable set, never "all children". `family_targets` are applied to the
+ * family afterwards. Order is not configurable: children first, family second, so the family's own
+ * close guard sees a family whose children are already terminal and passes on the evidence rather
+ * than on an exemption. That guard stays in force; this operation never bypasses it.
+ */
+export type StageWorkFamilyCloseV1 = {
+    /** Registered capability key. Must be process-selected in `command_set_v1`. */
+    action_ref: string;
+    /** Operator label. Absent falls back to the capability's registered operator label. */
+    label?: string;
+    /**
+     * What the preview says the affected children BECOME — "Not Enrolling", "Withdrawn".
+     * Configuration owns these words because the disposition key behind them is vocabulary, not
+     * operator language, and must never reach the screen. Absent degrades to "closed".
+     */
+    child_outcome_label?: string;
+    /** Visibility. Absent means available; `false` keeps it authored but hidden. */
+    available?: boolean;
+    /** Applied to each child being closed. Child-grain vocabulary — cannot touch the family. */
+    child_targets: StageOutcomeRuleTargetV1[];
+    /** Applied to the family once every child close has succeeded. */
+    family_targets: StageOutcomeRuleTargetV1[];
+    /** Operator inputs collected before the operation runs — e.g. the one close reason. */
+    required_inputs?: StageParticipantDecisionInputV1[];
+};
+
+/**
  * One configured decision an operator can take for ONE participant of this work.
  *
  * This is not a second command catalog. `action_ref` names a capability the PROCESS already
@@ -233,6 +282,12 @@ export type StageWorkTemplateV1 = {
      * participants without touching the family record.
      */
     participant_decisions?: StageWorkParticipantDecisionV1[];
+    /**
+     * Governed family close offered from this work surface. Absent = this work does not offer it,
+     * which is how configuration controls where the operation appears without any code asking
+     * "is this the Decision stage?".
+     */
+    family_close?: StageWorkFamilyCloseV1;
 };
 
 export type StageCompletionOutcomeV1 = {
@@ -552,6 +607,65 @@ function parseParticipantDecision(raw: unknown): StageWorkParticipantDecisionV1 
     return decision;
 }
 
+/**
+ * Parse a governed family close.
+ *
+ * Both halves must be present and each must name its own state write exactly once. A close with no
+ * family status target would move a family nowhere while closing its children; one with no child
+ * disposition would strand the children under a closed family. Neither is a partially-valid
+ * configuration worth repairing, so the whole declaration is dropped and the surface shows nothing
+ * rather than a button that does half an operation.
+ */
+function parseFamilyClose(raw: unknown): StageWorkFamilyCloseV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const action_ref = trimNonEmpty(o.action_ref);
+    if (!action_ref) return null;
+
+    const readTargets = (value: unknown, allowed: readonly StageOutcomeRuleTargetKind[]) => {
+        const out: StageOutcomeRuleTargetV1[] = [];
+        if (!Array.isArray(value)) return out;
+        for (const item of value) {
+            const parsed = parseTarget(item);
+            if (parsed && allowed.includes(parsed.kind)) out.push(parsed);
+        }
+        return out;
+    };
+
+    const child_targets = readTargets(
+        o.child_targets,
+        STAGE_PARTICIPANT_DECISION_ALLOWED_TARGET_KINDS,
+    );
+    const family_targets = readTargets(
+        o.family_targets,
+        STAGE_FAMILY_CLOSE_ALLOWED_FAMILY_TARGET_KINDS,
+    );
+
+    if (child_targets.filter((t) => t.kind === "update_child_enrollment_status").length !== 1) {
+        return null;
+    }
+    if (family_targets.filter((t) => t.kind === "update_family_case_status").length !== 1) {
+        return null;
+    }
+
+    const close: StageWorkFamilyCloseV1 = { action_ref, child_targets, family_targets };
+    const label = trimNonEmpty(o.label);
+    if (label) close.label = label;
+    const childOutcomeLabel = trimNonEmpty(o.child_outcome_label);
+    if (childOutcomeLabel) close.child_outcome_label = childOutcomeLabel;
+    if (o.available === false) close.available = false;
+
+    if (Array.isArray(o.required_inputs)) {
+        const required_inputs: StageParticipantDecisionInputV1[] = [];
+        for (const item of o.required_inputs) {
+            const parsed = parseParticipantDecisionInput(item);
+            if (parsed) required_inputs.push(parsed);
+        }
+        close.required_inputs = required_inputs;
+    }
+    return close;
+}
+
 function parseDuePolicy(raw: unknown): StageWorkDuePolicy | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const o = raw as Record<string, unknown>;
@@ -640,6 +754,9 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
         }
         tpl.participant_decisions = participant_decisions;
     }
+
+    const family_close = parseFamilyClose(o.family_close);
+    if (family_close) tpl.family_close = family_close;
 
     return tpl;
 }
