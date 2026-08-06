@@ -88,8 +88,6 @@ export type PlanLineageDeps = {
     readonly supersessionLookup?: SupersessionObservationLookup;
 };
 
-type Client = Pick<SupabaseClient, "from">;
-
 /**
  * Resolve the exact governed judgments an approved plan's INCLUDED operations
  * derive from.
@@ -103,7 +101,9 @@ type Client = Pick<SupabaseClient, "from">;
  * reported as an exclusion the caller can defer on, never as a silent success.
  */
 export async function resolvePlanPackageLineage(
-    supabase: Client,
+    // The full client, not a `Pick<…, "from">`: this reads Processing state
+    // through the shared `listProcessingResolutionsByCase`, which takes one.
+    supabase: SupabaseClient,
     input: { orgId: string; plan: CommitPlan; deps?: PlanLineageDeps },
 ): Promise<PlanPackageLineage> {
     const deps = input.deps ?? {};
