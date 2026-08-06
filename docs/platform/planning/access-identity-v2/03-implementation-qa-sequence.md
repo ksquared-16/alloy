@@ -20,6 +20,30 @@
 > module, the two-process harness as a design, the preflight-evidence contract — and `QE-1`…`QE-9`, nine
 > mechanically-verified findings about **what actually decides "met" in this programme**. Parts I and II
 > are unmodified except this note and §0's table.
+>
+> **[Part IV — the reopen re-sequence, 2026-08-06.]** Five documents were reopened on 2026-08-06 against the
+> operator's two directives — *reduce the role hierarchy to four layers* and *simplify the role editor without
+> changing the access architecture* — and created roughly sixty identifiers. **This plan named none of them**
+> (`01…§58`, `§61`; re-verified at `03efba377`: a search for every reopen register returns **8 lines, all of
+> them `AD-15`** matched on the `D-15` substring — §58). Part IV (§§43–59) is the re-sequence: **waves 13 and
+> 14**, `W-54`…`W-62`, the merge `GAP-16` says no artifact performs, the schedule form of the four-layer
+> reduction `GAP-15` says has no definition of done, and §52 — **every reopen ID bound to a workstream or
+> declared unassigned with a reason.** Parts I–III are unmodified except this note and §0's table.
+>
+> **Part IV's sharpest finding is a correction to this plan, not to the product.** `W-0` Q2 returned zero and
+> §9 concluded the legacy fallback was *"unreachable for everyone alive in the database."* That is true of the
+> **lockout** question Q2 was written to answer and false of `T-19`, the corpus's only **S1**: removal is what
+> *creates* the zero-membership condition Q2 measured the absence of. `W-20` is therefore the cheapest S1
+> closure in the corpus and it is currently scheduled in the long tail (§48).
+>
+> **A second premise re-check corrects the reopen rather than the plan.** `T-21`/`S-10` rest on *"no FK
+> constrains `role_key`."* **Two do** — `role_permission_grants_role_definitions_fkey` and
+> `role_permission_grants_role_fk`, both `(org_id, role_key) → role_definitions`, both in the production
+> baseline **[verified this pass]**. `T-21`'s stated mechanism cannot occur, its severity is overstated, and
+> `S-10`'s remediation is not the migration it asks for — it is an API check, an end to read-time
+> fabrication, and a widened `M15`. The pair is also still `ON DELETE CASCADE`, which is the hazard Phase 0
+> fixed on the neighbouring column and left on this one. §56 states both corrections; §47's `W-61` is sized
+> against the corrected finding, not the recorded one.
 
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Sequenced implementation / QA plan* · assignment `asg_fccd7bdedcab5b`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
@@ -65,9 +89,14 @@ corpus's own recurring failure is *not checking that a plan's premises still hol
 | **§30–§32** | **QA and evidence plan** — why §10 is not enough, **what actually decides "met"** (`QE-1`…`QE-8`), and the evidence contract `EA-1`…`EA-7`. | **new** |
 | **§33–§37** | Verification tier per workstream `W-23`…`W-53` · per-wave exit gates 6–12 · the fixture module · the two-process harness · preflight evidence. | **new** |
 | **§38–§42** | The evidence ledger, decisions `DR-8`…`DR-12`, and this part's limits, reproduce and provenance. | **new** |
+| **§43–§45** | **Part IV.** What the re-sequence is · the trigger rule `GAP-17` asks for (`DR-13`) · **what "four layers" means as a schedule** (`GAP-15` in the plan's own unit). | **new** |
+| **§46–§47** | **Wave 13 — the role editor** (`W-54`…`W-59`), the one buildable description `GAP-16` says is missing · **wave 14 — the depth reduction** (`W-60`…`W-62`) and the **six** amendments to existing workstreams. | **new** |
+| **§48–§51** | `W-20` re-priced against `T-19` · census questions `Q15`…`Q17` · the four new ordering constraints (§1.6–§1.9) · the amended wave map and execution order. | **new** |
+| **§52–§56** | **Coverage of the reopen** — every ID bound or unassigned · the decision register at **25** · locks `RL-47`…`RL-56` and migrations `M19`…`M21` · tiers and exit gates for waves 13–14 · `X-14`. | **new** |
+| **§57–§59** | Part IV's limits, reproduce and provenance. | **new** |
 
 Workstreams are `W-n` and continue the accepted series without renumbering: `W-0`…`W-22` are the accepted
-plan's, `W-23`…`W-53` are new. Sizing is **S** ≤ 2 engineer-days · **M** 3–8 · **L** 9–20. These are
+plan's, `W-23`…`W-53` are Part II's, **`W-54`…`W-62` are Part IV's** (§§46–47). Sizing is **S** ≤ 2 engineer-days · **M** 3–8 · **L** 9–20. These are
 estimates on a codebase of **559** API route files and 289 migrations, not commitments.
 
 > **[M2 amendment] The route count moved: 539 → 559.** The accepted plan sized `W-14` and `W-15` against
@@ -3648,3 +3677,1140 @@ ls web/tests/access/                                   # four suites, no fixture
 - **Method.** Static and file-grounded. **No code, schema, migration or UI was changed. No test ran, no
   typecheck, no build, no browser, no request, no query. No decision was answered and no ID renumbered.
   The only file written is this one.**
+
+---
+---
+
+# Part IV — The reopen re-sequence **[new — 2026-08-06]**
+
+> **Trigger.** Five documents were reopened on 2026-08-06 against the operator's two directives — *reduce
+> the role hierarchy to four layers* and *simplify the role editor without changing the access
+> architecture*. They created roughly sixty identifiers, one of them the corpus's only **S1**. **This plan
+> named none of them** (`01…§58`, `§61`). Part IV is the re-sequence that `GAP-17` says nothing in the
+> process performs.
+>
+> **Parts I–III are unmodified.** Part IV extends them: waves **13** and **14**, workstreams
+> **`W-54`…`W-62`**, four ordering constraints (§1.6–§1.9), census questions `Q15`…`Q17`, locks
+> `RL-47`…`RL-56`, migrations `M19`…`M21`, decision `DR-13`, and §52 — every reopen ID **bound to a
+> workstream or declared unassigned with a reason**. Six existing workstreams are amended in place.
+
+---
+
+## 43. What this part is, and what it refuses to be
+
+`01…§67` states the position this part inherits, and it is the reason Part IV is a *schedule* and not a
+sixth specification:
+
+> *"the corpus has now spent five reopen passes on two directives and produced ~60 identifiers, four
+> counts and zero scheduled work… a sixth documentary pass would produce a seventh register rather than a
+> built screen"* (`01…:2535-2538`) **[carried]**.
+
+**So Part IV mints no finding.** Every product claim below is carried from the document that owns it, with
+its evidence. Part IV's own new material is confined to the four things a plan of record is for:
+
+| | What Part IV adds | Why it is this document's job and not another's |
+|---|---|---|
+| **1** | **Workstreams** — `W-54`…`W-62`, in two waves, sized, gated, exited | `GAP-16`: five documents specify the role editor and *"no workstream builds it"* (`01…:2411`) **[carried]** |
+| **2** | **The merge `GAP-16` says no artifact performs** — §46 is one buildable description of the editor, assembled from `01…§40-42`/`§52`, `02…§4.6`/`§17.8`, `04…§6.4`, `05…§5A.4-5A.6` and `06…§15` | `01…§63.2`: *"An execution phase handed this assignment today would have to perform that merge itself, **unreviewed**"* (`01…:2418-2419`) **[carried]**. Performing it in the plan is what makes it reviewable |
+| **3** | **The depth reduction in the plan's own unit** — §45 says which workstreams move which count, and what "done" is for each | `GAP-15`: the reduction *"has no agreed baseline, and therefore no definition of done"* (`01…:2373`) **[carried]** |
+| **4** | **Coverage** — §52 binds every reopen ID or declares it unassigned | `GAP-17`, and the discipline §23 established for Mission 2 |
+
+**Three refusals, each of them a document-authority boundary.**
+
+1. **Part IV does not author the four-count reconciliation table.** `01…§62` proposes it *"in `02…` where the
+   canonical model lives"* (`01…:2376-2377`) **[carried]**. §45 gives the **schedule** form of the reduction
+   — which workstream moves which layer — and cites the four counts without arbitrating between them. If
+   `02…` later publishes the reconciliation, §45 binds to it and does not compete with it.
+2. **Part IV does not answer `D-RM1` / `AD-25`.** It sequences *both* readings: §46 is the wave that is
+   correct under either, §47 is the wave that exists only under the architecture reading, and §51 schedules
+   them so that the decision arrives before the first workstream that depends on it — not before the wave.
+3. **Part IV renumbers nothing outside its own citations.** `01…§18`'s rule stands. Where a collision makes
+   a binding ambiguous, §56 states the disposition, applies it **inside Part IV only**, and escalates the
+   source-document fix.
+
+> **One consequence of refusal 2 is worth stating plainly, because it is the difference between this
+> re-sequence and a sixth specification.** `01…§67` finds the cheap work *"real and unblocked… **None is
+> scheduled**."* §46's first three workstreams — `W-54`, `W-55`, `W-56` — need **no decision, no migration,
+> no resolver change, and no answer to `AD-25`**. They are scheduled into batch 2 by §51. That is the whole
+> of Part IV's claim to have moved the directive forward.
+
+---
+
+## 44. `DR-13` — the trigger rule `GAP-17` asks for
+
+Continuing Part III's `DR-8`…`DR-12`; `DR-12` is the high-water mark **[verified this pass]**.
+
+`GAP-17` is not a product defect and not a knowledge gap. It is a **process defect with a mechanical form**:
+
+> *"`03` can only ever be current as of its last sequencing pass, and the corpus reopens per-document on
+> operator guidance. **Nothing in the mission's process makes a reopen trigger a re-sequence.** Until
+> something does, every reopen produces exactly this gap, and the gap analysis discovers it one phase
+> later"* (`01…:2326-2330`) **[carried]**.
+
+It has now happened twice — Mission 2's thirty-four findings, then the reopen's sixty — with *"a careful
+pass on each side of it"* (`01…:2323`) **[carried]**. A defect that recurs at scale is a property of the
+system, and the repair is not diligence.
+
+> **`DR-13` — does a reopen of any corpus document oblige a re-sequence of this plan before its findings
+> may be built?**
+>
+> - **(a) Yes, mechanically.** `RL-56` (§54) fails the docs lint when any register ID exists in a corpus
+>   document and is named nowhere in `03…`. A reopen then cannot be *merged* without either binding its IDs
+>   here or declaring them unassigned. **Recommended.** It is the same instrument `RL-42` already applies to
+>   `CR-1`…`CR-5` and `CV-1`, extended by one check, and it is the only option that does not depend on the
+>   next pass remembering.
+> - **(b) Yes, by convention.** The reopening phase writes its own coverage row into §52. Cheaper to adopt,
+>   and it is precisely what did not happen on 2026-08-06 across five documents.
+> - **(c) No.** The plan is re-sequenced when the Director commissions a sequencing phase. Then §52 is a
+>   snapshot with a date on it, `GAP-17` stays open by decision rather than by omission, and every
+>   acceptance rubric must state which pass it was written against.
+
+**Why this is `DR-` and not `AD-`.** `02…§37`'s clause 4 requires new *access-model* decisions to be minted
+into `AD-n`. `DR-13` decides nothing about access: it is a delivery-process decision about this artifact,
+which is the register `DR-8`…`DR-12` were created for (§39). **The distinction is load-bearing** — minting
+it as `AD-26` would put a documentation-process question into a sitting alongside revocation.
+
+**Cost, stated so the recommendation can be refused knowingly.** Option (a) makes `RL-56` red on the day it
+lands, because §52 is complete only as of this pass. Every subsequent reopen pays a coverage row. That is
+the intended cost: it converts `GAP-17` from a discovery into a build-time failure.
+
+---
+
+## 45. What "four layers" means as a schedule — `GAP-15` in this plan's unit
+
+`GAP-15` is the measurement gap the operator's instruction turns on: four counts of one chain, two of them
+reconciled, no artifact holding them side by side, therefore *"no defined starting number and no defined
+completion"* (`01…:2350`) **[carried]**.
+
+**This plan's unit is the workstream, not the layer.** So the question Part IV can answer — and the one an
+execution phase actually needs — is not *which count is right* but **which workstreams move which count, and
+what evidence closes each**. That is stated below without arbitrating between the counts.
+
+### 45.1 The four counts, and the workstream set each names
+
+All four are **[carried]** from their owners; the divergence is `01…§62`'s **[carried]**.
+
+| Count | Owner | Unit | Today | The workstreams that move it | Complete when |
+|---|---|---|:--:|---|---|
+| **Stores and mappings a grant traverses** | `01…§38` (`RM-2`) | derivation steps | **8** | `W-20` (L2 legacy) · `W-13` (L8 bypass) · `W-9`/`W-10` (L6 grid) · **`W-60`** (L5 views) | `W-62`'s enumeration returns four **[new]** |
+| **Layers of derivation in the canonical model** | `02…§1.3` | model layers | **4** (+2 branches) | **none — already met.** `W-8` and `W-17` protect it (`02…§15.6`) | Already met; `W-62` locks it |
+| **Schema chain vs runtime chain** | `04…§3.6`, `§12.1` | enforcement points | **4 / 5** | **`W-13`**, and only if `AD-22` answers both halves | No admission predicate satisfies a capability gate (`I-35`ᴮ) |
+| **Everything the resolver consults** | `05…§5A.2` | 9 stores + 3 derivations | **14** | `W-20` (rows 4–6) · `W-13` (row 7) · `W-9`/`W-10` (rows 10–11) · `W-60` | 14 rows fold to the four nouns without a legacy read |
+| **Operator nouns** | `05…§5A.5`, presented `06…§15` | authoring layers | **4** | `W-54`…`W-59` (wave 13) | Capability has a home; navigation depth ≤ 4 (`IA-R12`) |
+
+**Read the "today" column and the reason the instruction reads as contradictory becomes arithmetic.** Two of
+the five counts are *already four*. `01…§62`'s second consequence says the same thing from the other side:
+*"the directives read as contradictory only under one count"* (`01…:2364`) **[carried]**.
+
+### 45.2 The two reductions are different work, and this plan now says so in workstream numbers
+
+| | **The operator's four layers** | **The chain's depth** |
+|---|---|---|
+| Count moved | `05…§5A.5` / `06…§15` — nouns | `01…§38` / `05…§5A.2` — stores |
+| Wave | **13** (§46) | **14** (§47), plus `W-20`, `W-13`, `W-9`/`W-10` amended |
+| Architecture? | **No** — `05…§5A.6` items 1–4; `01…§42`'s first five | **Yes, by any reading** — `01…§37` `RM-1` |
+| Gated on `AD-25`? | **No.** Correct under both readings | **Yes**, for its scope; `AD-22` for the L8 half |
+| Security effect | Three of five items need a control attached (`RM-11`) | Closes one **S1** and two **S2** (`RM-9`) |
+| Hard constraint | `H2` — a grant save preserves the 14 keys the grid cannot display | `RM-10` — L8 must not go before L4 is seeded **and** enforced |
+
+`RM-7` is the recommendation both halves rest on: *"the two directives are separable, and separating them is
+the recommendation… Attempting both under one instruction is how a phase ends up changing a gate while
+believing it changed a screen"* (`01…:1623-1626`) **[carried]**. **Waves 13 and 14 are that separation,
+executed.**
+
+### 45.3 The definition of done `GAP-15` asks for
+
+> **`W-62` (§47) is the acceptance criterion.** *"Four layers"* is met when a single declared enumeration of
+> the resolution layers exists in code, the resolver reads no store absent from it, and a check fails when a
+> ninth appears. **Under `RM-2`'s count that enumeration has four rows; under `02…§1.3`'s it has four with
+> two branches; under `05…§5A.2`'s the fourteen rows map onto it with no unmapped row.** One artifact, three
+> counts satisfied, one grader.
+
+**This does not close `GAP-15`.** `GAP-15` asks for a reconciliation *table* in `02…`, and that remains
+`02…`'s to write (§43, refusal 1). What §45 supplies is the part `GAP-15` says is missing downstream — *"The
+acceptance criterion cannot be written… No grader can mark it"* (`01…:2362-2363`) **[carried]**. `W-62` is
+markable without the reconciliation, and better with it.
+
+---
+
+## 46. Wave 13 — the role editor · `W-54` … `W-59`
+
+**Closes `GAP-16`.** Five documents specify this screen and none builds it. This section is the merge
+`01…§63.2` says the corpus does not contain, performed here so that it is reviewed rather than improvised by
+whoever picks the work up.
+
+**The wave is correct under both readings of `AD-25`.** Every workstream below is presentation, projection or
+copy; none moves a layer. That is `05…§5A.6`'s architecture boundary, `01…§42`'s first five rows, and
+`02…§4.6`'s `I-32` — *"Simplification is a surface operation. A role-administration surface MUST NOT be where
+the access model acquires or loses structure"* (`02…:427-430`) **[carried]**.
+
+**Five constraints bind the whole wave** and are not restated per workstream. Each is **[carried]**:
+
+| Bound | Source | The specific thing it forbids |
+|---|---|---|
+| `RA-1`…`RA-5`, `I-32` | `02…§4.6` | offering an inactive role; presenting scope as a role attribute; an all-or-nothing role write; a role control that is not a capability grant |
+| `I-33`ᴬ, `I-34`ᴬ | `02…§17.8` (numbering per §56) | a surface that computes authority instead of projecting the resolver's; a write narrower than the read |
+| `R6`…`R9` | `04…§6.4` | copy that calls removal *revocation*; a per-user security control gated on admission |
+| `IA-R11`…`IA-R17` | `06…§17` | the four nouns as an ordered list; nested tab bars; a placeholder owning navigation; folding Scopes into Roles |
+| `H2` | `01…§48` | a grant save that strips the 14 keys the grid cannot display |
+
+> **`W-54`, `W-55` and `W-56` are the three items the corpus unanimously calls safe and unscheduled.** They
+> need no decision, no migration and no resolver change; in two of the three the data is **already in the
+> response the component receives** (`06…§17`) **[carried]**. §51 puts them in batch 2.
+
+### W-54 — The role control shows what it read, and refuses to write less *(S · `I-34`ᴬ, `IA-R14` · no decision)*
+
+The round trip on the Users chapter is lossy inbound and destructive outbound: the roster collapses a
+membership set to one `primary_role`, the editor is seeded from that one value, and the write **deletes every
+role row for the pair** before inserting one (`02…§17.7`, `M2-17`; `role/route.ts:44-47`) **[carried]**. An
+operator who changes the visible role of a principal holding `{admin, regional_lead}` *"silently destroys
+`regional_lead`* — having never been shown it" (`02…:1282-1284`) **[carried]**.
+
+**The one guard present makes it worse.** Save is disabled while the value is unchanged (`:576`), so *"every
+submission that reaches the destructive path is one where the operator changed the value they were shown"*
+(`02…:1287-1290`) **[carried]**.
+
+**This is not `W-17`, and that is the point.** `RA-3` — add and remove one `(principal, org, role)` row
+without disturbing the others — *cannot* be satisfied while the endpoint replaces, so `02…§4.6` makes `W-17`
+a sequencing constraint on any Roles-chapter redesign. `I-34`ᴬ asks for something **narrower and cheaper**:
+*"until `W-17` lands, the editor must not be able to reach the destructive path with a partial view"*
+(`02…:1339-1345`) **[carried]**. Two changes, both local:
+
+1. **Render every key the projection returned.** `GET …/members` already returns `role_keys` beside
+   `primary_role` (`members/route.ts:133`) **[verified this pass]**. **This is not a fetch change.**
+2. **Refuse, do not drop.** `PATCH /users/[userId]/role` rejects a submission that would remove a role the
+   request did not carry. Rejection is the correct verb: a surface that cannot express a fact **MUST NOT** be
+   able to delete it (`I-34`ᴬ).
+
+**QA.** Tier C (`F17`): edit a multi-role member; assert the unshown role survives **or** the write is
+refused with an error the surface renders. Tier A: no authority-write handler issues an unqualified `DELETE`
+over the `(user, org)` pair without echoing the full prior set. Tier B: the control renders `role_keys.length`
+controls, not one.
+**Exit.** No edit through the product removes a role the operator was not shown. `RL-50`.
+
+### W-55 — Membership is counted from the membership, not from the picker *(S · `IA-12`, `IA-R13` · no decision)*
+
+The Roles chapter buckets members by `primary_role` for both the rail count and the selected role's user list
+(`AccessRolesConfigurationPage.tsx:104-110`, `:249-251`, rendered `:368-369`) **[carried]**. `primary_role` is
+`displayRoleForAdminPicker` — `admin`, else `ops`, else first key lexicographically
+(`userRolesMembership.ts:22-27`) **[carried]**. So a member holding `{admin, regional_lead}` is **absent from
+`regional_lead`'s count and from its user list**, while the same component holds both keys and discards them
+at its type boundary: `MemberRow` declares `primary_role: string` and no `role_keys` field (`:37`)
+**[carried]**.
+
+**`A role's "who holds this" is the one question a role editor exists to answer`** (`06…:1166`) **[carried]**.
+
+**This workstream also unblocks a simplification item.** `05…§5A.6` item 3 folds *"Users with this role"* into
+the role header; `06…§15.4` finds that item *"blocked — the count it would promote is wrong for every
+multi-role member"* (`06…:1111`) **[carried]**. Promoting a wrong number into a header is what converts a
+defect nobody opens into one every operator reads. **`W-57` may not take item 3 until `W-55` has landed** —
+§1.7.
+
+**QA.** Tier C (`F17`): a member holding `{admin, regional_lead}` appears in **both** counts and **both**
+lists. Tier A: no component computes a membership count or list from a single-role value.
+**Exit.** Every membership question is answered from `role_keys`. `RL-51`.
+
+### W-56 — A read failure is visible, and it disables the write *(S · `T-22`, `S-11` · no decision)*
+
+Both the `!res.ok` and `catch` paths of the grants read call `setGrantKeys(new Set())` and return **without
+setting an error** (`AccessRolesConfigurationPage.tsx:128-135`); the Permissions tab then renders a
+legitimate-looking all-*None* state, and Save `PUT`s the empty set (`:231`), which deletes every grant for the
+role (`grants/route.ts:70-74`) **[carried]**. *"A failed read becomes a silent total revocation on the next
+save"* — `T-22`, **S3**.
+
+**Seven lines, in the file the rest of this wave rewrites.** `01…§52`: it is *"the only S3 in this pass that
+the simplification pass can close incidentally, and leaving it in place while rewriting the surface around it
+would be the worst outcome"* (`01…:1983-1986`) **[carried]**.
+
+**QA.** Tier C: fault-inject the grants read; assert an error renders and Save is disabled. Tier A: every
+`catch`/`!res.ok` path that clears an authority set also sets an error and a disabled-save flag — stated over
+**every** authority surface, not only this one (`S-11`).
+**Exit.** No authority editor renders an unknown state as an empty one. `RL-49`.
+
+### W-57 — The one-page role editor *(M · `IA-R11`, `IA-R12`, `IA-R15`, `IA-13` · needs the capability-home decision)*
+
+The merge. Six levels become four, and the four are the operator's four nouns.
+
+| Level today | Control | Disposition | Source |
+|---:|---|---|---|
+| 1 | Access workspace | keep | — |
+| 2 | Chapter tab bar (4) | keep, **re-presented as trunk-then-branches** — scope is a sibling of capability, never its successor | `IA-11`/`IA-R11`, `M2-16` |
+| 3 | Role collection rail | keep | — |
+| 4 | Role sub-tab bar (5) | **removed** — Overview becomes the page head, Permissions becomes a named capability section, Users folds into the header **after `W-55`**, the two placeholders leave navigation | `06…§15.2`, `05…§5A.6` 1–4 |
+| 5 | Permission grid row (9) | becomes the capability section's content | `06…§15.2` L3 |
+| 6 | Level control (3) | keep | — |
+
+**Three things this workstream must not do**, each a prohibition the corpus states by name:
+
+- **It MUST NOT fold the Scopes chapter into the role editor.** *"the single change in this whole area that
+  **would** change the access architecture — it would put scope inside the role object and encode the
+  category error `I-27` exists to forbid"* (`06…:1096-1099`) **[carried]**; `RA-2`, `IA-R16`.
+- **It MUST NOT present the four nouns as a left-to-right sequence.** *"A four-item list read left to right
+  is a five-link chain with one link hidden. The count is right and the topology is wrong"* (`06…:992-994`)
+  **[carried]**.
+- **It MUST NOT let the radio collapse strip out-of-grid keys.** `H2` holds today only because
+  `applyGridRowSelection` deletes just the edited row's keys and Save `PUT`s the union
+  (`permissionGrid.ts:65,74-76`) **[carried]**. The seed grants `admin` **every active key**, of which the
+  grid represents 18 of 32 — so without `H2`, opening Permissions and pressing Save deletes 14 grants.
+  **`H2` is not currently protected by a test** (`01…§48`, `§54`) **[carried]**.
+
+**The one decision.** `06…§18.2` asks whether capability gets a fifth chapter or a named section of the
+role's page, and recommends **a section** — *"a capability set with no role holding it grants nothing to
+nobody and has no row to live in"* (`06…:1272-1275`) **[carried]**. It is proposed, not minted; §53 records
+its number as contested. **`W-57` is sized against the section reading**; the chapter reading adds a route, a
+navigation entry and a second authoring surface, and would need `RA-4` re-checked.
+
+**`IA-13`'s caveat travels with the section, and bounds what it may claim.** `PERMISSION_GRID_ROWS` is a
+9-row literal and `levelFromGrantedKeys` derives a level per row, so a grant set that is not None/Read/Write
+has no representation. *"Naming the capability layer therefore promotes a lens to the status of a layer…
+**The four-layer editor is legible before `W-10` and true after it**"* (`06…:1183-1190`) **[carried]**.
+**`W-57`'s copy must not assert the capability section is the vocabulary until `W-10` lands** (§47, amendment 4).
+
+**QA.** Tier A: no element carrying `data-capability="planned"` is the sole content of a tab panel; at most
+one tab-bar component in the Access chapter tree; navigation depth to a grid control ≤ 4; no role-editing
+component reads or writes `user_access_profiles`, `user_department_access` or `user_site_access`. Tier C
+(`F18`): save a role whose grant set includes out-of-grid keys; assert all 32 survive. Review-time: chapter
+and section ordering places scope as a sibling of capability.
+**Exit.** Four levels, one page per role, `H2` locked. `RL-48`, `RL-52`, `RL-53`.
+
+### W-58 — One submit for the role page *(M · `RM-11`, `S-12` · **after `W-28`**)*
+
+`01…§40` records the defect this closes: three independent save paths — role meta (`:200`), grants (`:222`),
+creation (`:176`) — with no dirty-state tracking among 18 hooks, so *"an operator who edits the label and the
+grid and presses one button silently discards the other edit"* (`01…:1558-1560`) **[carried]**.
+
+**And `01…§52` records why it is the one item on the "architecture-free" list that is not safe as written:**
+
+> *"It composes a PATCH with `T-23`'s untransacted delete-then-insert into one operator action with **three
+> failure points and no compensation**. A partial failure would leave the label changed and the grants empty.
+> **Must land with `S-12` (atomicity), not before it**"* (`01…:1978`) **[carried]**.
+
+`W-28` — *atomic authority writes; removal becomes a transition* — is the workstream that supplies `S-12`, and
+§47's amendment 5 extends it to `role_permission_grants`. **`W-58` is therefore the only wave-13 item with a
+hard predecessor outside its wave**, and §51 schedules it accordingly.
+
+**QA.** Tier C: fault-inject the grant insert mid-submit; assert the label change did not persist and the
+grant set is unchanged. Tier A: the role page issues exactly one authority-mutating request per submit.
+**Exit.** One submit, one transaction, no partial state. `RL-22` (extended).
+
+### W-59 — Retire the four non-canonical role-editing surfaces *(S–M · `RM-6`, `H1` · no decision)*
+
+Role editing is reachable from **five** surfaces and **1,155 lines of it are legacy** —
+`/legacy-admin/system/roles` (416), `/legacy-admin/system/access-control` (369),
+`/legacy-admin/system/customer-person-roles` (370), plus two adminV2 aliases into the same component
+(`01…§41`) **[carried]**.
+
+**`H1` is what makes this safe, and it is the corpus's first positive structural finding about authority
+location:** all five surfaces call the **same four** `/api/admin/rbac/*` routes, so the legacy clients *"hold
+no authority the canonical surface does not… **deleting them is security-neutral and safe**"* (`01…:1812-1819`)
+**[verified by its owner]**. It is also the direct counter-example to `T-8`.
+
+**Two constraints.**
+
+- **`customer-person-roles` is a different concept sharing a word** — the family/household relationship
+  vocabulary, not operator authority (`01…§41`) **[carried]**. It must be dispositioned on its own terms, not
+  swept up in an authority cleanup. **If in doubt, leave it and say so**; `W-59`'s claim is about the four
+  authority surfaces.
+- **Reachability was never established.** `01…§44.1` is explicit that no browser was opened and *"no claim is
+  made about how any of this renders or behaves for a live operator — including whether the three legacy
+  surfaces in §41 are reachable"* (`01…:1655-1657`) **[carried]**. `W-59` opens with that check.
+
+**Why it belongs in this wave rather than the long tail.** *"'simplify the role editor' has five plausible
+referents, and an execution phase that simplifies the canonical one while four others remain has not
+simplified what the operator sees"* (`01…:1589-1591`) **[carried]**.
+
+**QA.** Tier A: exactly one component in the tree renders a role-permission grid; the retired routes return
+404 or redirect to the canonical href. Tier B: the canonical chapter is reachable and unchanged.
+**Exit.** One role editor. `RL-54` covers the copy that survives the deletion.
+
+---
+
+## 47. Wave 14 — the depth reduction · `W-60` … `W-62`, and six amendments
+
+**This wave exists only under `AD-25`'s architecture reading.** Under the other reading it is not descoped —
+it is *unscheduled*, and the operator should be told that the depth they reacted to remains (`01…§43`)
+**[carried]**.
+
+`RM-9` is the security input: the reduction *"closes one `S1` and two `S2` threats and weakens no control
+that this pass could find… The 'no access-architecture change' constraint attached to the role-editor work is
+**not protecting any enforcement control**"* (`01…:1951-1954`) **[carried]**.
+
+`RM-10` is the hard constraint, and it is not negotiable: **L8 must not be removed before L4 is seeded and
+enforced**, or the platform fails closed with no grants — *"a total operator lockout, not a security
+improvement"* (`01…:1956-1961`) **[carried]**. `W-13`'s existing position after the capability work is what
+satisfies it, and §51 does not move it.
+
+### W-60 — Retire the two compatibility views *(S–M · `T-25`, `S-13` · after a base-grant audit)*
+
+Phase 0 executes `GRANT SELECT ON public.permissions, public.permission_keys TO "anon"`
+(`…phase0…sql:163-164`) on two `security_invoker` views over the permission catalog — **L5**. It is closed
+today **by ordering alone**: `20260804180000_platform_anon_privilege_revocation.sql:105` revokes six days
+later (`01…§50`) **[carried]**.
+
+**Two reasons the views still go, and one reason the order matters.**
+
+1. Forward protection is `ALTER DEFAULT PRIVILEGES`, which governs objects created *without* an explicit
+   grant. *"It does not prevent a future migration from executing an explicit `GRANT … TO anon`, which is
+   precisely what Phase 0 did. The pattern is live; only this instance is closed"* (`01…:1926-1928`)
+   **[carried]**. `S-13` is the static form and is free.
+2. The views are migration residue, not a model concept (`01…§39` `RM-4`) **[carried]**.
+3. **But they currently carry a disagreement that is resolving correctly.** The base table still holds
+   `GRANT ALL … TO anon` while its SELECT policy is scoped `TO authenticated` — *"Two controls disagreed and
+   the stricter one held. That is the correct outcome by luck of layering, not by design — and it is one of
+   the four layers `RM-4` proposes to delete, which would remove the object carrying the contradiction"*
+   (`01…:1929-1934`) **[carried]**.
+
+> **So `W-60` opens by auditing the base-table grant, not by dropping the views.** Dropping the object that
+> carries a contradiction is not the same as resolving it. **Audit `permission_definitions`' own grants
+> first; then `M20` drops the views.**
+
+**QA.** Tier A (`S-13`): no migration grants any privilege on an access-control object to `anon`. Tier C: an
+`anon` client cannot read the catalog by any path after the drop. Tier A: zero readers of either view.
+**Exit.** L5 is one table with one grant posture. `RL-55`, `M20`.
+
+### W-61 — `role_key` integrity: the API check, and the end of read-time fabrication *(M · `T-21` corrected, `S-10` · no decision)*
+
+**Sized against the corrected finding, not the recorded one (§56.2).** `T-21`'s stated mechanism — grants
+authored for a role that does not exist, *"written and live"* — **cannot occur**: two foreign keys constrain
+`(org_id, role_key)` to `role_definitions`, both present in the production baseline **[verified this pass]**.
+`S-10`'s remediation is therefore *not* the migration it asks for. Three things remain, and each is real:
+
+1. **The API still fabricates roles at read time.** `mergeRoleDefinitionsWithDefaults` adds any missing member
+   of a hard-coded four-role constant as `is_system: true, is_active: true`
+   (`defaultRoleDefinitions.ts:34-47`), applied to every `GET /api/admin/rbac/roles` response
+   (`roles/route.ts:31`) **[carried]** — against Phase 0's own header, *"Role definitions are seeded by the
+   database, never fabricated at read time"* (`…phase0…sql:167-168`) **[carried]**. That constant is a
+   **fifth role vocabulary** (`01…§50`) **[carried]**. The editor lists a role that has no row; the operator
+   authors grants for it; **the FK rejects the write**. The defect is a fabricated vocabulary and an opaque
+   failure — not a phantom grant.
+2. **`PUT /rbac/grants` validates `permission_key` and not `role_key`** (`grants/route.ts:60-68`)
+   **[carried]**. `H3` — the same handler rigorously validating one column of a composite key and not the
+   other (`01…§48`) **[carried]** — is unchanged by the FK's existence: the check belongs in the handler so
+   the operator gets a stated rejection instead of a constraint error.
+3. **Both `role_key` FKs are `ON DELETE CASCADE`, and they are duplicates of each other**
+   (`role_permission_grants_role_definitions_fkey`, `role_permission_grants_role_fk`) **[verified this
+   pass]**. **This is the exact hazard Phase 0 fixed on the neighbouring column and left on this one**: its
+   own comment records that the legacy `permission_key` pair *"disagreed: one RESTRICT, one CASCADE —
+   meaning deleting a catalog key could silently delete grants"*, and replaced them with a single
+   `ON DELETE RESTRICT` (`…phase0…sql:125-141`) **[verified this pass]**. Deleting a `role_definitions` row
+   today silently deletes every grant it held, with no record that authority was destroyed.
+
+**And the asymmetry `T-21` describes is real but points the other way.** `user_roles.role` has **no** FK —
+only `org_id` and `user_id` are constrained (`prod_baseline.sql:6453,6458`) **[verified this pass]**. Grants
+are doubly constrained; **membership is unconstrained**, which is exactly what `02…§4.2` records as `M2-2`
+**[carried]** and what `W-16` closes. `W-61` does not duplicate `W-16`; it widens **`M15`** (§54).
+
+**QA.** Tier A: no API response contains a role definition without a persisted row. Tier C: a grant write
+naming an undefined `role_key` is rejected by the handler with a stated error, before the database sees it.
+Tier C: deleting a role definition that holds grants is **refused**, not cascaded.
+**Exit.** One role vocabulary, referentially enforced, and no authority deleted by cascade. `M21`, `M15`
+widened.
+
+### W-62 — The layer enumeration, declared and locked *(S · `GAP-15`'s definition of done · after `W-20`, `W-13`, `W-60`)*
+
+The acceptance criterion §45.3 specifies. One declared enumeration of the resolution layers, in code, beside
+the resolver; a check that the resolver reads no store absent from it; a check that fails when a ninth
+appears.
+
+**Why it is a workstream and not only a lock.** The enumeration is the artifact three counts are graded
+against, and it does not exist. `01…§54`'s bottom row is the reason it is worth building: **every control in
+the eight-layer enforcement matrix — including `H1`, `H2` and `H3`, the three that hold — is currently
+locked by no test**, and *"the simplification work is exactly the kind of change that degrades unlocked
+controls silently"* (`01…:2056-2058`) **[carried]**.
+
+**It runs last in its wave by construction:** an enumeration authored before `W-20`, `W-13` and `W-60` land
+would enumerate the layers this plan intends to delete.
+
+**QA.** Tier A: the resolver's reads are a subset of the declared enumeration; the enumeration has four
+entries; a test fails if a read is added without an entry. Tier B: the enumeration is what the effective-access
+surface projects (`W-48`).
+**Exit.** *"Four layers"* is a graded claim rather than an argued one. `RL-47` carries its membership half.
+
+### 47.1 Six amendments to existing workstreams
+
+Each is a reopen finding landing on a workstream that predates it. **No workstream is renumbered and none
+changes owner.**
+
+| # | Workstream | Amendment | From |
+|---|---|---|---|
+| **1** | **`W-20`** — remove the legacy fallback | **Closes `T-19`, the corpus's only `S1`.** Re-priced and re-scheduled — §48 | `T-19`, `S-8`, `D-15`/`AD-24` |
+| **2** | **`W-13`** — portal admission becomes a capability | Gains `I-35`ᴮ as its exit clause: **an admission predicate MUST NOT satisfy a capability gate**. `AD-22` must answer *both* halves or *"the fifth layer survives under a new name"* (`04…:752`) **[carried]**. Adds `T-24`'s unlisted site — `canManageUsersAndRoles.ts:16` returns true on the `"admin"` literal *before* consulting any capability, and `:58` admits whole-authority-graph reads on `portalEligible` | `A2-8`, `I-35`ᴮ, `T-24`, `AD-22` |
+| **3** | **`W-25`** — role deactivation revokes | **Must carry the roster projection with it.** The roster is correct today *only because the resolver is wrong*: neither joins `role_definitions`. *"The agreement is accidental, and closing `M2-3` breaks it: the moment `D10`/`AD-10` is decided as revoke and `I-26` lands, the roster becomes the only place still asserting the old authority"* (`02…:1272-1277`) **[carried]**. Sequence with `W-46` and `W-55` | `M2-18`, `T-20`, `S-9` |
+| **4** | **`W-10`** — the grid becomes a projection | Gains `H2` as a **precondition**, not a consequence — a regenerated grid covering all 32 keys changes what Save writes (`01…§51`) **[carried]** — and gains `IA-13`: `W-57`'s capability section is *legible* before `W-10` and *true* after it | `H2`, `IA-13`, `S-11` corollary |
+| **5** | **`W-28`** — atomic authority writes | **Extended to `role_permission_grants`.** `PUT /rbac/grants` deletes every grant for the role then inserts; an insert failure leaves the role with **zero** grants and returns 500 (`grants/route.ts:70-91`) **[carried]** — `T-23`, the same defect class as `T-13` on a second authority table. **`W-58` depends on this** | `T-23`, `S-12` |
+| **6** | **`W-22`** — explicit org, no lexicographic tiebreak | **Extended from the read path to the authority-write path.** The role editor writes to `access.orgId` — the lexicographically smallest org among the caller's `admin`/`ops` memberships, *"not an operator selection, and named on no surface"* — consumed at `roles/route.ts:10`, `grants/route.ts:9,39`, `remove/route.ts:13` (`T-26`) **[carried]** | `T-26`, `S-14` |
+
+> **Amendment 3 is the sharpest sequencing consequence in the reopen** (`02…§17.7`) **[carried]**, and it is
+> the kind that only appears when two documents are read together: `W-25` was sequenced in wave 6 against a
+> resolver defect, and the reopen found that fixing the resolver **creates** a surface defect that did not
+> exist before. A wave-6 execution phase working from Part II alone would ship it.
+
+---
+
+## 48. `W-20` re-priced — this plan's own conclusion was right about the wrong question
+
+**The correction Part IV owes before it schedules anything.** §9's `W-20` block reads:
+
+> *"**Q2 = 0.** Every auth user has at least one `user_roles` row, so the fallback — which fires only for
+> principals with zero membership rows — is **unreachable for everyone alive in the database**… **The L4
+> lockout population is empty**"* (`03…:1200-1203`) **[verified this pass, in file]**.
+
+**That is true, and it answers a different question than the one `T-19` asks.**
+
+| | `W-0` Q2 | `T-19` |
+|---|---|---|
+| Question | *Who would be **locked out** if the fallback were removed?* | *Who is **admitted** by the fallback after the product says they were removed?* |
+| Population | principals with **zero** `user_roles` rows **today** | principals with a legacy `admin`/`ops` row who are **removed tomorrow** |
+| Measured | **0** | **not measured — the census never asked** |
+
+**Removal is what creates the condition Q2 measured the absence of.** `remove/route.ts:26-30` deletes the
+principal's only `user_roles` row and nothing else — its own comment says *"Does not delete auth.users"*;
+resolution then calls `fetchLegacyAdminOpsOrgAndRole`, which reads `user_profiles.role`, then `app_users.role`
+by `id`, then by `auth_user_id`; those reads accept **only** `admin` and `ops`, and a match sets
+`portalEligible = true` — the primary API gate (`01…§49`) **[carried]**.
+
+> **So Q2 = 0 does not mean the fallback is inert. It means the fallback is *dormant*, and the product ships
+> a button that wakes it.** `01…§49`: *"The failure mode is not 'removal is slow' — it is 'removal is
+> inverted.' … Removing a `school_director` who has an old `app_users.role = 'admin'` row **promotes
+> them**"* (`01…:1854-1857`) **[carried]**. The product reports `{ ok: true }`.
+
+**Three consequences for the schedule.**
+
+1. **`W-20` moves out of the long tail.** §3.2 batch 10 was correct when `W-20` closed a latent `G1` and an
+   empty lockout class. It now closes the corpus's **only `S1`**, and §1.4 — *a defect that is live in the
+   product now outranks a defect that is latent* — puts it in **batch 2**. `01…§60` names it *"the cheapest
+   S1 closure in the corpus"* (`01…:2288`) **[carried]**.
+2. **Its lockout class is unchanged and its ritual is not.** §9 collapsed `W-20` from the four-step ritual to
+   *"a straight deletion"* on Q2 = 0. **That collapse stands** — deleting a dormant path cannot lock out a
+   population that is empty — but it is now conditional on **`Q15`** (§49), which asks the question Q2 did
+   not. If `Q15` is non-zero, the ritual returns and `M19` precedes the deletion.
+3. **It stops waiting on `AD-25`.** `W-20` is architecture work under `RM-1`'s reading, which would place it
+   behind the unanswered directive-scope decision. **It should not wait**, and the reason is `D-15`/`AD-24`,
+   not `AD-25`: *"This is the cheapest S1 closure in the corpus and it needs one database question answered,
+   not a design"* (`01…:2078-2079`) **[carried]**. `02…§38` places `AD-24` in sitting 1 — revocation — whose
+   exit test already covers it, and sitting 1 keeps its first position (`02…§39`) **[carried]**.
+
+**What does not change.** `W-20`'s existing content is intact: the `handle_new_user()` disposition (§9), the
+`M2-8` fourth-vocabulary clause, and `M2-5`'s reason the deletion is not one file —
+`resolveAdminPortalOrgCore.ts` re-implements the fallback and serves `requireAdminOrOps` across 147 route
+files, so `RL-12` is stated over **every** module. `RL-47` (§54) adds `S-8`'s form of the same check.
+
+**`T-19`'s precondition remains unverified, and Part IV does not pretend otherwise.** `01…§49` is explicit:
+*"**No database was queried** — whether any live tenant holds such rows is **not established here** and is
+the first thing an execution phase must check"* (`01…:1860-1862`) **[carried]**. What is established is
+structural: the current creation path writes only `user_roles`, so **the exposed population is exactly the
+pre-migration one** — the longest-tenured accounts, which are also the most likely to have held `admin`
+before `user_roles` existed.
+
+---
+
+## 49. Census questions `Q15` … `Q17` — the second census, extended
+
+`W-23` (§4.1) is the wave-0b census carrying `Q6`…`Q14`. **Three questions are added to it rather than to a
+third census**, because all three are read-only, all three gate a wave-13 or wave-14 workstream, and
+`01…§67` is right that *"Discovery on this subject should stop"* (`01…:2533`) **[carried]** — one more read
+is not a sixth documentary pass.
+
+| # | Question | Reads | Sizes / gates |
+|---|---|---|---|
+| **Q15** | **How many principals hold a `user_profiles.role` or `app_users.role` of `admin`/`ops`?** Broken out by whether they currently hold a `user_roles` row in any org, reproducing the resolver's precedence (`user_profiles`, then `app_users` by `id`, then by `auth_user_id`) | `user_profiles`, `app_users`, `user_roles` | **`W-20`, `M19`, `AD-24`.** Q2 counted the *zero-membership* population; Q15 counts the population `T-19` exposes **when removal runs**. Non-zero ⇒ `M19` precedes the deletion and §2's ritual returns |
+| **Q16** | **Which orgs are missing one or more of the four default `role_definitions` rows** — i.e. which orgs' role lists are served by read-time fabrication? | `orgs`, `role_definitions` | **`W-61`.** Sizes the fabrication defect. Zero ⇒ removing `mergeRoleDefinitionsWithDefaults` is a no-op today and a lock for tomorrow; non-zero ⇒ a backfill precedes it |
+| **Q17** | **How many principals hold more than one role in one org, and how many distinct `(user, org)` pairs are affected?** | `user_roles` | **`W-54`, `W-55`, `W-17`.** This is the one question that prices wave 13. Non-zero ⇒ the destructive round trip (`M2-17`) and the under-counted rail (`IA-12`) are **live**, not latent |
+
+> **`Q17` is the question that decides whether wave 13 is a correctness fix or a usability fix**, and it has
+> never been asked. `C7` records that the schema permits multi-role membership and the resolver honours it;
+> no document establishes whether any tenant *uses* it. **If `Q17` is zero, `W-54` and `W-55` are locks
+> against a defect no operator has hit yet — still worth building, and cheaply, but not `S1`-adjacent. If it
+> is non-zero, `M2-17` means ordinary edits have been destroying authority silently.**
+
+**Same discipline as `W-0` and `W-23`.** Read-only; one authorized read; produces
+`wave0b-authority-census.json` with the query text beside each answer (§4.1). **A census answer is a
+snapshot, not a standing warrant** — `W-0`'s counts were nine days old when Part II re-cited them (§11), and
+Q15 in particular must be **re-run at `M19`'s preflight**, not inherited.
+
+**Q15 is the only one of the three that could reasonably be argued into a preflight instead of the census.**
+It is placed in the census because `AD-24` needs it to be *decidable* — `D-15`'s recommendation is *"out"*,
+conditional on exactly this count (`01…§55`) **[carried]** — and a decision cannot wait on a preflight for a
+migration that the decision authorizes.
+
+---
+
+## 50. Four ordering constraints — §1.6 … §1.9
+
+§1.1–§1.5 are unchanged. These four continue them and are numbered into §1 because that is where this plan's
+ordering logic lives; they are stated here because Part IV is where their evidence is.
+
+### 1.6 A read change that closes a defect outranks the write change that makes it structural **[Part IV]**
+
+> **Where a defect can be closed by showing more and refusing more, that fix is scheduled ahead of the
+> architectural fix that would make it impossible — and it MUST NOT be deferred into it.**
+
+`02…§17.8` is the case that produced the rule: `RA-3` cannot be satisfied while the write path replaces, so
+`W-17` is a precondition of any Roles-chapter *redesign* — but `I-34`ᴬ asks for something narrower that is
+satisfiable now, *"by showing the full `role_keys` set the roster already returns rather than `primary_role`,
+and by having the write reject a submission that would remove a role the operator was not shown. Neither
+needs a migration, a decision, or the multi-role write path"* (`02…:1339-1345`) **[carried]**.
+
+**The failure this prevents is specific.** A simplified single-select role control shipped before `W-17`
+*"does not merely reflect `C7`, it hardens it into the product as an intended design"* (`02…:436-437`)
+**[carried]**. §1.6 is how `W-54` lands without doing that: it is additive to the read and restrictive to the
+write, so `W-17` remains free to arrive later and remove the restriction.
+
+### 1.7 A simplification MUST NOT promote a value it has not corrected **[Part IV]**
+
+> **Where a simplification would move a computed value into a more prominent position, the workstream that
+> corrects that value is a hard predecessor.**
+
+`06…§15.4`: item 3 — folding *"Users with this role"* into the header — is presentation-only *and unsafe*,
+because the count it promotes *"is **wrong for every multi-role member**"* (`06…:1111`) **[carried]**.
+*"Promoting a number into a role's header is exactly the move that converts a wrong number in a tab nobody
+opens into a wrong number every operator reads"* (`06…:1115-1117`) **[carried]**.
+
+Two applications in this plan: **`W-55` precedes `W-57`'s item 3**, and **`W-57` may not describe the
+capability section as the vocabulary before `W-10`** (`IA-13`). The general form is `01…§52`'s verdict on
+folding the Overview cards — *"Safe, but do not promote it. Folding a lossy summary into the tab that owns
+the truth makes the omission harder to notice"* (`01…:1979`) **[carried]**.
+
+### 1.8 A layer is removed only after its replacement is seeded **and** enforced **[Part IV]**
+
+> **`RM-10`, adopted as an ordering constraint.** Removing an admission layer before the layer that replaces
+> it is both seeded and enforced converts a fail-open platform into a fail-closed one with no grants.
+
+*"`03…`'s `W-13` sequences the L8 replacement after the capability work; **that ordering must be preserved
+and is the one hard constraint on this instruction**"* (`01…:1956-1961`) **[carried]**. §51 does not move
+`W-13`, and `W-62` — the enumeration that asserts the reduction happened — runs **after** the removals, not
+beside them.
+
+**The second clause is `W-20`'s.** A layer whose removal is gated on a data question is scheduled by the
+**census**, not by its wave (§48, `Q15`). This is §1.2 applied to a finding §1.2 predates.
+
+### 1.9 A reopen re-sequences this plan before its findings are built **[Part IV]**
+
+> **`GAP-17`, adopted as a constraint rather than left as an observation.** No workstream derived from a
+> reopen may be scheduled until the reopen's registers are bound in §52 or declared unassigned.
+
+This is the ordering form of `DR-13` (§44) and `RL-56` (§54). It is stated as a constraint because the
+alternative has now failed twice with a careful pass on each side of it (`01…§61`) **[carried]** — and
+because Part IV is itself the evidence that the repair is affordable: **one section per reopen, not one
+mission per reopen.**
+
+---
+
+## 51. The wave map and execution order, amended
+
+### 51.1 Fifteen waves
+
+§3.1's table, extended. Waves 0–12 are unchanged in content; only the two new rows and two amended `Gated on`
+cells are shown as changed.
+
+| Wave | Theme | Workstreams | Gaps closed | Gated on | State |
+|---|---|---|---|---|---|
+| **0 … 12** | *(unchanged — §3.1)* | `W-0`…`W-53` | — | — | carried |
+| **13** | **The role editor** | **`W-54` … `W-59`** | **`GAP-16`**, GAP-12 (part) | **nothing for `W-54`–`W-56`**; the capability-home decision for `W-57`; **`W-28`** for `W-58` | **new** |
+| **14** | **The depth reduction** | **`W-60` … `W-62`** | **`GAP-15`**'s definition-of-done half; GAP-5 (part) | **`AD-25`** for scope; **`AD-22`** for `W-13`'s half; `Q15`, `Q16` | **new** |
+
+**One wave is recorded as deliberately absent.** `GAP-17` gets **no wave**: `DR-13` and `RL-56` are a lint and
+a decision, not engineering work — the same disposition §3.1 gives `GAP-14`.
+
+### 51.2 Execution order, amended
+
+§3.2's batches, with the four changes this part makes. **Everything not named below is unchanged.**
+
+| # | Batch | Change | Why |
+|---|---|---|---|
+| **2** | The live-defect batch | **+ `W-20`** · **+ `W-54`, `W-55`, `W-56`** | `W-20` closes the only `S1` (§48). The three editor items need no decision, no migration and no resolver change, and two of them read data already on the wire. §1.4 |
+| **6** | Resolver | **+ `W-57`** *(after `W-55`)* | The one-page editor is a projection change; it belongs with the resolver-truthfulness work, not with the architecture wave. §1.7 binds it behind `W-55` |
+| **10** | The long tail | **− `W-20`** · **+ `W-59`, `W-58`** | `W-20` promoted out. `W-58` sits here because `W-28` (batch 4) is its hard predecessor; `W-59` is bulk deletion and parallelizable |
+| **12** | **Depth reduction** *(new batch)* | `W-60`, `W-61`, `W-62`, and `W-13`'s `I-35`ᴮ clause | Runs after batch 8 (admission) by `RM-10`/§1.8. `W-62` runs last within it, by construction |
+
+**The critical path is unchanged in shape and gains one terminal node**, because `W-62` asserts what the
+existing path delivers:
+
+```
+W-23  →  W-9        →  W-11          →  W-13           →  W-14        →  W-15         →  W-49  →  W-62
+ S      one catalog    one vocabulary    portal.access    route table    enforcement     gates    enumeration
+         M                M                 M                M              L              M         S
+```
+
+**The role-editor chain is short, wide and almost entirely off the critical path** — which is the finding
+`GAP-16` implies and never states:
+
+```
+W-54 ─┐
+W-55 ─┼─→  W-57  ─→  W-59              W-28  ─→  W-58
+W-56 ─┘     M         S–M               M          M
+ S          (one page)  (retire 4)     (batch 4)  (one submit)
+```
+
+Only `W-58` has a predecessor outside its own wave. **Five of wave 13's six workstreams could start the day
+they are approved**, and three of those need no approval beyond the wave itself.
+
+> **The one scheduling claim Part IV makes that the corpus does not already contain.** `01…§67` finds the
+> cheap work *"real and unblocked… **None is scheduled**"* and the expensive work *"one decision away, not
+> one discovery away"* (`01…:2529-2533`) **[carried]**. §51 schedules the first and gates the second. **After
+> this pass, the reopen's remaining cost is `AD-25` and `AD-22` — not another document.**
+
+---
+
+## 52. Coverage of the reopen — every ID bound, or unassigned with a reason
+
+§23's discipline, applied to `01…§60`'s delta. **An ID with no workstream is stated as such and given a
+reason; silence is not a disposition.** This is the section `RL-56` (§54) checks.
+
+### 52.1 `01…` Parts IV and V — role-model depth, and the threat model
+
+| ID | Binding | Note |
+|---|---|---|
+| `RM-1` | **unassigned — decision input** | It *is* `AD-25`'s question. Scheduling it would be answering it |
+| `RM-2` | §45.1, **`W-62`** | The eight-layer count is one of the four §45.1 reconciles by workstream |
+| `RM-3` | §45.1 | The four-authorable / four-interposed split is wave 13 vs wave 14's dividing line |
+| `RM-4` | **`W-20`, `W-13`, `W-9`/`W-10`, `W-60`** | The four removals, one workstream each; `W-60` is the one that had none |
+| `RM-5` | **`W-57`** | 607 lines, 18 hooks, 5 tabs, 27 radios — the measurement wave 13 acts on |
+| `RM-6` | **`W-59`** | Five surfaces, 1,155 legacy lines |
+| `RM-7` | §45.2 | *Separate the two directives* — adopted as the wave split, not as a finding to close |
+| `RM-8` | **`W-62`** | The enforcement-point cut is what the enumeration must be checkable against |
+| `RM-9` | **unassigned — decision input** | The security half of `AD-25`. §47 carries it as the wave's rationale |
+| `RM-10` | **§1.8** | Adopted as an ordering constraint |
+| `RM-11` | **`W-56`, `W-57`, `W-58`**, and **`W-53`** for the audit debt | Three of five items need a control; each control is now a named workstream |
+| `T-19` **S1** | **`W-20`** (batch 2) | §48 |
+| `T-20` | **`W-25`** | + amendment 3 |
+| `T-21` | **`W-61`** | **Corrected — §56.2.** Sized against the correction |
+| `T-22` | **`W-56`** | |
+| `T-23` | **`W-28`** | Amendment 5 |
+| `T-24` | **`W-13`** | Amendment 2 |
+| `T-25` | **`W-60`** | |
+| `T-26` | **`W-22`** | Amendment 6 |
+| `H1` | **`W-59`** | A control that holds, and the reason `W-59` is safe |
+| `H2` | **`W-57`, `W-10`** | Locked by `RL-48` — it was unlocked |
+| `H3` | **`W-61`** | The asymmetry it sharpens is `W-61`'s handler check |
+| `S-8` | **`W-20`** · `RL-47` | |
+| `S-9` | **`W-25`** | `RL-18` already exists |
+| `S-10` | **`W-61`** | **Corrected — §56.2.** Not the migration it asks for |
+| `S-11` | **`W-56`** · `RL-49`; corollary on **`W-57`** · `RL-48` | |
+| `S-12` | **`W-28`** · `RL-22` extended | |
+| `S-13` | **`W-60`** · `RL-55` | |
+| `S-14` | **`W-22`** | Amendment 6 |
+| `D-15` | **`AD-24`**, sitting 1 | Gates `W-20`'s remediation shape; needs `Q15` |
+| `D-RM1` | **`AD-25`**, sitting 0 | Gates wave 14's scope |
+
+### 52.2 `02…` — the model reopen
+
+| ID | Binding | Note |
+|---|---|---|
+| `M2-16` | §45.1, **`W-62`**, `IA-R11` | The four-layer restatement, in three places it has consequences |
+| `M2-17` | **`W-54`** | The destructive round trip |
+| `M2-18` | **`W-25`** (amendment 3), **`W-55`** | The roster as an eighth resolution site |
+| `M2-19` | §56 | Numbering; no product work |
+| `RA-1` | **`W-57`**, **`W-61`** | Only defined, active roles are offerable — which needs the fabrication to stop |
+| `RA-2` | **`W-57`** · `RL-53` | |
+| `RA-3` | **`W-17`** (existing), **`W-54`** | The narrow form now, the full form at `W-17`. §1.6 |
+| `RA-4` | **`W-57`** | Bounds the capability-home decision |
+| `RA-5` | **`W-25`** | The copy at the toggle is `AD-10(b)`'s cost |
+| `I-32` | **wave 13, as a whole** | The bound on the wave, not a workstream |
+| `I-33`ᴬ | **`W-48`**, **`W-55`** | Numbering per §56.1 |
+| `I-34`ᴬ | **`W-54`** · `RL-50` | Numbering per §56.1 |
+| `X-12`, `X-13` | **Director** — §26's class | Not worker-resolvable; not product defects |
+| `CR-6`…`CR-8` | **`RL-42`**, extended | The mechanical forms of §37's clauses 4 and 5 belong in the docs lint that already runs `CR-1`…`CR-5` |
+| `AD-24`, `AD-25` | §53 | Registered; **`AD-24` is contested** — §53.2 |
+
+### 52.3 `04…` — the authentication reopen
+
+| ID | Binding | Note |
+|---|---|---|
+| `A2-8` | **`W-13`** | Amendment 2 |
+| `A2-9` | **`W-38`**, **`W-13`** | The credential commands under the Access surface are org-scoped by the surface and not by the endpoint |
+| `I-35`ᴮ | **`W-13`** | Its exit clause: admission may deny, never authorize |
+| `R6` | **`W-54`/`W-57`** copy · `RL-54` | *Removed from this organization* stays honest while §2.1 holds |
+| `R7` | **`W-38`** | The org bound must hold when the endpoint is called directly |
+| `R8` | **`W-33`** | The method catalog derives, or is not presented as org-level |
+| `R9` | **`W-13`** | A per-user security control gated on admission is the same defect as `T-24` |
+| `AD-22` | §53, sitting 5 | Gates `W-13`'s half of wave 14 |
+| `AD-23` | §53, sitting 3 | Gates `W-33`; liftable alone (`02…§38`) |
+
+### 52.4 `06…` — the IA reopen · and `05…§5A`
+
+| ID | Binding | Note |
+|---|---|---|
+| `IA-11` | **`W-57`** · `IA-R11` | The ordered-list hazard |
+| `IA-12` | **`W-55`** | |
+| `IA-13` | **`W-57`**, **`W-10`** | §1.7 binds the claim, not the section |
+| `IA-14` | **`W-57`** · `RL-52` | |
+| `IA-R11` … `IA-R12` | **`W-57`** | |
+| `IA-R13` | **`W-55`** · `RL-51` | |
+| `IA-R14` | **`W-54`** · `RL-50` | |
+| `IA-R15`, `IA-R16` | **`W-57`** · `RL-52`, `RL-53` | |
+| `IA-R17` | **`W-54`/`W-57`** · `RL-54` | |
+| `05…§5A.2` | §45.1 | The 14-row count, reconciled by workstream |
+| `05…§5A.4` | **`W-57`** | Editor depth |
+| `05…§5A.5` | §45.1, **wave 13** | The four nouns |
+| `05…§5A.6` items 1–4 | **`W-57`** (item 3 after **`W-55`**) | §1.7 |
+| `05…§5A.6` item 5 | **`W-20`** | The one item `05` correctly classes as architecture |
+
+### 52.5 Gaps, and what has no workstream by decision
+
+| Gap | Disposition |
+|---|---|
+| **`GAP-15`** | **Partially closed.** §45 supplies the schedule form and `W-62` the definition of done. **The reconciliation table remains `02…`'s** (§43, refusal 1), and `GAP-15` does not close until it exists |
+| **`GAP-16`** | **Closed as a plan gap** by §46 — one buildable description, six workstreams, five of them startable on approval. *"Which of five surfaces"* is answered by `W-59`: **all of them, by deletion of four** |
+| **`GAP-17`** | **No wave, by decision.** `DR-13` + `RL-56`. Director-owned, like `GAP-14` |
+| `X-10`, `X-11`, `X-12`, `X-13`, **`X-14`** | **Director-owned**, §26's class. None is worker-resolvable and none is a product defect |
+
+**Six IDs are unassigned, and all six are the same kind of thing:** `RM-1`, `RM-9` (inputs to a decision, not
+work), `RM-3`, `RM-7` (framings this plan adopted rather than closed), and `M2-19` (numbering). **No finding
+about the product is unassigned.**
+
+---
+
+## 53. The decision register — twenty-five, and one contested number
+
+### 53.1 The state
+
+`01…§64` measures it: **25 open decisions** — `AD-1`…`AD-21`, `AD-22`, `AD-23`, `D-15`, `D-RM1` — and
+*"No single document lists them"* (`01…:2450`) **[carried]**. `02…§37`'s clause 4 supplies the rule that was
+missing and proposes `D-15` → **`AD-24`** and `D-RM1` → **`AD-25`**, applied *"only inside this file"*
+(`02…:2414-2416`) **[carried]**.
+
+**§24 of this plan gates its waves on 21 of the 25.** Part IV adds the remaining four to the gating, at the
+numbers `02…§37` proposes:
+
+| Decision | Sitting | Gates in this plan | Status |
+|---|---|---|---|
+| **`AD-22`** | 5 — vocabulary & resolver | **`W-13`**'s `I-35`ᴮ half; therefore wave 14's L8 removal | open |
+| **`AD-23`** | 3 — authentication | **`W-33`**; liftable from sitting 3 alone | open |
+| **`AD-24`** *(= `D-15`)* | 1 — revocation | **`W-20`**'s remediation shape and `M19`; needs `Q15` | open |
+| **`AD-25`** *(= `D-RM1`)* | **0 — directive scope** | **Wave 14's existence.** Gates nothing in wave 13 | open |
+
+**`02…§39`'s amended approval order is adopted as this plan's gating order**, unchanged: sitting 0 first
+alongside or immediately before sitting 5, because *"`AD-22` and `AD-25` are one question split across two
+sittings"* (`02…:2490-2492`) **[carried]**; sitting 1 keeps its first position.
+
+> **The scheduling consequence Part IV can state and `02` could not.** Sitting 0 gates **wave 14 only**.
+> Wave 13's first three workstreams are gated by nothing, and `W-57` is gated by a decision that is not in
+> any sitting (§53.2). **So the answer to *"what does an unanswered `AD-25` cost this week"* is: three
+> workstreams can start now, one more after a small product decision, and only the depth reduction waits.**
+> `02…§38` observes that every reopen adds specification against an unchosen reading and that *"this pass is
+> one more instalment of it"* (`02…:2439-2442`) **[carried]**. §46 is the instalment that converts into work.
+
+### 53.2 `AD-24` names two different questions, and this plan needs the other one
+
+**Verified this pass, in file:**
+
+- `06…§18.2` proposes **`AD-24` — *does capability get a chapter, or a section?*** — *"`AD-22` and `AD-23`
+  are taken by `04…§7.1`; this is the next free number under `§26.2`'s appending rule"* (`06…:1259-1262`).
+  **Committed** at `207cd5322`.
+- `02…§37`–`§38` assigns **`AD-24` = `D-15`**, the legacy-identity-tables question, and places it in sitting
+  1. **Uncommitted** working-tree material at `03efba377`.
+
+**Both applied the same rule correctly to different snapshots.** Under clause 4 — *"the raising document owns
+the question… **§25 owns the list**"* (`02…:2382-2387`) **[carried]** — `02…` holds the register, so its
+assignment governs and `06…`'s question must move. **Part IV does not renumber it** (§43, refusal 3); it
+cites it as **the capability-home decision** and records the disposition for the Director:
+
+> **Disposition, escalated not performed:** `AD-24` = `D-15` (sitting 1); `06…§18.2`'s capability-home
+> question becomes **`AD-26`** at the next pass that touches `02…§25`. It gates `W-57` only, its
+> recommendation is on file (*a section, not a chapter*), and **`W-57` is sized against that
+> recommendation** — so a decision either way changes the workstream's shape, not its position.
+
+**This is `X-12`'s prediction, one document later, and it is the reason `RL-56` is worth its cost.** `X-12`
+records that §26.2 *"was applied as if it were a register maintenance rule"* by three documents on one day.
+It was four.
+
+---
+
+## 54. Locks `RL-47` … `RL-56`, and migrations `M19` … `M21`
+
+### 54.1 Regression locks
+
+Continuing §25. **`RL-43`…`RL-46` are deliberately skipped**: §33.1 proposed those four numbers for `W-29`,
+`W-33`, `W-46` and `W-48` and *recorded the gap rather than minting them*, on the ground that silently
+minting into another part's register is how `X-1` happened. **Part IV honours that** — it mints from
+`RL-47` and leaves the four reserved. Every lock below is `proposed`.
+
+| Lock | Asserts | Tier | From | Workstream |
+|---|---|---|---|---|
+| **RL-47** | Authority resolves from exactly one membership store — no resolver reads a table that no operator surface writes and none displays | A + C | `S-8` / `T-19` | `W-20`, `W-62` |
+| **RL-48** | **`H2`** — a grant save preserves every key the surface cannot display; `admin`'s 32 keys survive an untouched save | C | `H2` / `S-11` corollary | `W-57`, `W-10` |
+| **RL-49** | A read failure on an authority surface is visible and disables the write; no `catch` or `!res.ok` path clears an authority set silently | A + C | `S-11` / `T-22` | `W-56` |
+| **RL-50** | A role control renders every key the projection returned; a write that would remove an unshown role is **refused**, not applied | C | `I-34`ᴬ / `IA-R14` / `M2-17` | `W-54` |
+| **RL-51** | No membership count or member list is computed from a collapsed single-role value | A + C | `IA-R13` / `IA-12` | `W-55` |
+| **RL-52** | No `data-capability="planned"` element is the sole content of a tab panel; at most one tab-bar component in the Access tree; depth to a capability control ≤ 4 | A | `IA-R12`, `IA-R15` / `IA-14` | `W-57` |
+| **RL-53** | No role-editing component reads or writes `user_access_profiles`, `user_department_access` or `user_site_access` | A | `IA-R16` / `RA-2` / `I-27` | `W-57` |
+| **RL-54** | Lifecycle copy names what the command performs — removal copy says *removed from this organization*, never *revoked*, *deactivated* or *disabled*, while §2.1 holds | A | `R6` / `IA-R17` | `W-54`, `W-57`, `W-59` |
+| **RL-55** | No migration grants any privilege on an access-control object to `anon` | A | `S-13` / `T-25` | `W-60` |
+| **RL-56** | **The plan stays current** — no register ID exists in a corpus document that this plan names nowhere | A (docs lint) | `GAP-17` / `DR-13` | §44 |
+
+**Two notes.**
+
+- **`RL-48` locks a control that currently holds and has never been tested.** `01…§54`'s bottom row: every
+  control in the eight-layer matrix is unlocked, *"and the simplification work is exactly the kind of change
+  that degrades unlocked controls silently"* (`01…:2056-2058`) **[carried]**. `RL-48` is `RL-32`'s shape —
+  it will never go red in review and will look like wasted effort until the day it doesn't.
+- **`RL-56` is red on the day it lands**, because §52 is complete only as of this pass. That is `DR-13`'s
+  intended cost (§44), and it should be adopted knowingly or not at all.
+
+### 54.2 Migrations
+
+Continuing §11; `M18` is the high-water mark **[verified this pass]**. **Every one targets `shared`** and
+therefore requires a read-only preflight under [`MIGRATION-APPLY-GATE.md`](../vacilando-os/MIGRATION-APPLY-GATE.md)
+before any authorization ask.
+
+| # | Workstream | Migration | Target | Preflight focus |
+|---|---|---|---|---|
+| **M19** **[conditional]** | `W-20` | Reconcile legacy `user_profiles.role` / `app_users.role` shadow rows into `user_roles`, then the reads are deleted in `W-20` | shared | **Runs only if `Q15` is non-zero.** Row count == `Q15`, re-run at preflight; **no membership is widened** — a legacy `admin` row must not become an `admin` membership without an operator naming it (`AD-24`) |
+| **M20** | `W-60` | Drop the `permissions` and `permission_keys` compatibility views | shared | Zero readers proven; **and the base-table `anon` grant audited first** — the views currently carry a contradiction that is resolving correctly (§47 `W-60`) |
+| **M21** | `W-61` | `role_permission_grants` FK hygiene — collapse the duplicate `(org_id, role_key)` pair to one constraint, and change `ON DELETE CASCADE` to `RESTRICT` | shared | Exactly two identical constraints before, exactly one after; **no grant row loses referential cover**; a role definition holding grants cannot be deleted after the change — confirm no seed or teardown path relies on the cascade |
+
+> **`M21` is `M15`'s missing twin, and Phase 0 wrote the argument for it.** `M15` drops the duplicate FK on
+> `permission_key` (`M2-2`). The `role_key` pair is the same defect on the neighbouring column, with the
+> worse `ON DELETE` posture: Phase 0's own comment records that the legacy `permission_key` pair *"disagreed:
+> one RESTRICT, one CASCADE — meaning deleting a catalog key could silently delete grants"* and replaced them
+> with a single `ON DELETE RESTRICT` (`…phase0…sql:125-141`) **[verified this pass]**. **Both `role_key`
+> constraints are `CASCADE`** (`prod_baseline.sql:6348,6353`) **[verified this pass]** — so deleting a role
+> definition silently deletes every grant it held, and nothing records that authority was destroyed.
+> **`M15` should be widened to name both pairs**, or the fix lands on one column and not the other for the
+> second time.
+
+**`M19` is the only conditional-on-census migration Part IV adds**, and §11's rule applies to it verbatim:
+*"A migration that is conditional on a census must not be written before the census answers, or it acquires a
+`WHERE` clause nobody can justify."*
+
+---
+
+## 55. Verification tier and exit gate — waves 13 and 14
+
+§10.1's tiers and §10.4's gate discipline apply unchanged. `EA-7` marks a workstream that ships a check and
+therefore owes a red-run.
+
+| Workstream | Tier | Fixture | Lock | `EA-7` | Note |
+|---|:--:|---|---|:--:|---|
+| `W-54` lossless role write | **C** + A + B | **`F17`** | `RL-50` | ✅ | `F17` is the multi-role member; **`Q17` sizes whether it is live or latent** |
+| `W-55` count from membership | C + A | **`F17`** | `RL-51` | ✅ | Same fixture; batch 2 |
+| `W-56` visible read failure | C + A | — | `RL-49` | ✅ | Fault injection; the A half is stated over every authority surface |
+| `W-57` one-page editor | A + **B** | **`F18`** | `RL-48`, `RL-52`, `RL-53` | ✅ | `F18` = a role holding out-of-grid keys. **B is required** — this is a user-visible surface change |
+| `W-58` one submit | C + A | `F18` | `RL-22` extended | — | Fault-inject mid-submit; **after `W-28`** |
+| `W-59` retire four surfaces | A + B | — | `RL-54` | — | Opens with a reachability check (`01…§44.1`) |
+| `W-60` retire the views | A + C | — | `RL-55` | ✅ | `M20`; base-grant audit precedes |
+| `W-61` `role_key` integrity | A + C | — | **none** — see below | ✅ | `M21`, `M15` widened |
+| `W-62` layer enumeration | A + B | `F1`–`F10` | `RL-47` | ✅ | Runs last in wave 14, by construction |
+
+**`W-61` carries no lock of its own, and that is a `QE-9` instance, not an oversight.** Its three parts are
+each locked elsewhere — the handler check by `RL-26`'s vocabulary discipline, the fabrication by `RL-35`'s
+catalog rule, and the cascade by `M21`'s preflight. **A reviewer who wants a tenth lock should mint `RL-57`
+for *"no authority row is deleted by a cascade"*, and Part IV records the gap rather than minting into its
+own register a second time** — the same restraint §33.1 exercised.
+
+### 55.1 Exit gates
+
+| Wave | Exit |
+|---|---|
+| **13** | One role editor, reachable by one route. Four navigation levels. Every membership question answered from `role_keys`. No authority write narrower than its read. No authority surface renders an unknown state as an empty one. `H2` locked. **Evidence:** `wave13-execution-evidence.json` in the `wave1-execution-evidence.json` shape, plus browser evidence per §10.4 — this is the first wave in the plan whose deliverable is a **screen** |
+| **14** | One declared layer enumeration, four entries, and the resolver reads nothing absent from it. No legacy membership store on the authority path. No compatibility view over the permission catalog. No admission predicate satisfying a capability gate. No authority deleted by cascade. **Evidence:** `wave14-execution-evidence.json`, plus `M19`–`M21` preflights and the `Q15`/`Q16` census answers they were sized against |
+
+> **Wave 13 is the first wave in this plan that cannot be exited from a terminal.** Every prior wave's
+> evidence is static analysis, fixtures and API-level tests. `W-57` and `W-59` change what an operator sees,
+> and the managed-sprint contract requires real browser verification for user-visible change — route, steps,
+> expected vs observed, console errors, failed requests, evidence paths. **`EA-7`'s red-run obligation does
+> not substitute for it**, and a wave-13 completion claim without browser evidence should be rejected.
+
+---
+
+## 56. Two corrections, and `X-14`
+
+### 56.1 `X-14` — `02…§17.8`'s new invariants collide with numbers this plan already binds
+
+**Verified this pass, in file.** `02…§17.8` mints `I-33` and `I-34` unsuperscripted, with the explicit
+rationale *"Deliberately no new letter series — each is an invariant, for the reason `M2-19` records"*
+(`02…:1315`). But both numbers were already taken, and **this plan already binds them**:
+
+| Number | Prior reading — bound here | New reading — `02…§17.8` |
+|---|---|---|
+| `I-33` | *authentication error text MUST NOT surface provider strings verbatim* — `04…§6.3`; bound at §19 **`W-32`**, §23, and `RL-29` | *the screen resolves through the resolver* |
+| `I-34` | *password policy MUST be enforced server-side* — `04…§6.3`; bound at §18 **`W-31`**, §23, and `RL-38` | *read-modify-write is lossless* |
+
+> **`X-14` — a document avoided minting a new letter series and collided instead with two numbers the plan of
+> record had already bound to workstreams and locks.** `04…§6.3` had avoided this in the other direction by
+> choosing `I-35`ᴮ *"above `02…`'s current ceiling"* (`04…:654`) **[carried]**; `02…`'s reopen minted
+> **below** it. This is `X-1`'s collision arriving a fourth time, and the first time it lands on IDs that a
+> **workstream, a lock and a coverage row** already cite.
+
+**Disposition, applied inside Part IV only.** The corpus already has the instrument — `01…§16`'s ᴬ/ᴮ
+superscripts, which §25 uses (`I-28`ᴬ, `I-30`ᴬ, `I-31`ᴬ/ᴮ). `02…` owns the ᴬ reading and `04…` the ᴮ. So
+**Part IV cites `02…§17.8`'s as `I-33`ᴬ and `I-34`ᴬ**, and every bare `I-33`/`I-34` in Parts I–III continues
+to mean `04…`'s, unchanged. **Nothing in Parts I–III is edited, and no source document is renumbered**
+(§43, refusal 3). The Director's cheapest fix is for `02…§17.8` to adopt the superscripts at its next pass;
+`CR-6`/`CR-7` (§52.2) are the mechanical form.
+
+### 56.2 `T-21` and `S-10` are overstated — the constraint they say is missing exists twice
+
+**Verified this pass, against `supabase/baselines/prod_baseline.sql` and the migration history.**
+
+`T-21` rests on *"no FK constrains `role_key`"*, and concludes that capabilities *"can be authored for a role
+that does not exist — and are live for anyone whose membership row carries that string"*, rated **S2**
+(`01…:1793`) **[carried]**. **Two foreign keys constrain it**, both `(org_id, role_key) → role_definitions
+(org_id, role_key)`:
+
+```
+role_permission_grants_role_definitions_fkey   ON DELETE CASCADE
+role_permission_grants_role_fk                 ON DELETE CASCADE
+```
+
+Present in `prod_baseline.sql:6348,6353` and in `20260329165048_remote_schema.sql:6513,6518` **[verified this
+pass]**. **So the grant write against a fabricated role does not succeed and go live — it is rejected by the
+database.** `T-21`'s stated mechanism cannot occur, and its severity is overstated.
+
+**Three real defects survive the correction, and `W-61` is sized against them** (§47): read-time fabrication
+of a fifth role vocabulary; a handler that validates one column of a composite key and not the other, so the
+operator gets a constraint error instead of a stated rejection; and **both constraints being `ON DELETE
+CASCADE`**, which is the hazard Phase 0 fixed on the neighbouring column and left on this one (§54.2).
+
+**And the asymmetry is real but inverted.** `user_roles.role` has no FK — only `org_id` and `user_id` are
+constrained (`prod_baseline.sql:6453,6458`) **[verified this pass]**. **Grants are doubly constrained;
+membership is unconstrained** — which is exactly what `02…§4.2` records as `M2-2` and what `W-16` closes.
+`01…` Part V and `02…` Part I disagree on this point, and `02…` is right.
+
+> **Recorded as a correction to the reopen, not to the product**, and stated here rather than in `01…`
+> because Part IV is what sizes `W-61` and a workstream sized against an overstated finding is how a plan
+> spends a migration on a constraint that already exists. `01…§44.5` invited exactly this re-check: the
+> `role_key` row is *"the one 'yes' in that table a sceptic should re-check."*
+
+### 56.3 `X-11` has a second instance
+
+`X-11` records that `05…§5A` — the corpus's most-cited new depth measurement — exists only as an uncommitted
+working-tree change (`01…§66`) **[carried]**. **The same is now true of `02…`'s Part III reopen**: §37–§40,
+which carry clause 4, clause 5, `X-12`, `X-13`, the sitting placements and the `AD-24`/`AD-25` assignments,
+are uncommitted at `03efba377` **[verified this pass]** — and §53 of this plan binds to them.
+
+**Recorded, not resolved.** Committing is not a worker decision about content. It is stated because a
+re-sequence that bound its decision register to uncommitted material without saying so would repeat exactly
+what `X-5` and `X-11` record.
+
+---
+
+## 57. Limits — read before citing
+
+1. **Static and file-grounded.** No database was queried, no browser opened, no request issued, no test run,
+   no typecheck, no build. **No claim is made about how anything renders or behaves for a live operator.**
+2. **Part IV mints no product finding.** Every defect claim is carried from its owning document with that
+   document's evidence marker. The four things verified in source this pass are named in §59 and are
+   confined to schema constraints, one API response field, and register high-water marks.
+3. **`T-19`'s precondition is still unverified, and it gates the plan's most-promoted workstream.** `W-20`
+   moves to batch 2 on a **structural** argument (§48). If `Q15` returns zero, `T-19` is latent rather than
+   live, and `W-20`'s promotion should be re-argued — not silently kept.
+4. **Wave 13's sizes assume the merge in §46 is complete.** It is assembled from five documents' worth of
+   constraints; if a sixth constraint exists that no reopen recorded, `W-57` is the workstream that absorbs
+   it, and it is sized `M` with no margin for a new prohibition.
+5. **`W-57` is sized against `06…§18.2`'s recommendation** (*a section, not a chapter*). The chapter reading
+   adds a route, a navigation entry and an authoring surface for an object the model does not have, and
+   would need `RA-4` re-checked. **Do not read `W-57`'s `M` as covering both readings.**
+6. **The `AD-24` collision is recorded, not resolved** (§53.2), so a reader citing `AD-24` must say which
+   question they mean until the Director settles it. Part IV always means `D-15`.
+7. **§45 does not close `GAP-15`.** It supplies the schedule form and the definition of done. The
+   reconciliation table remains `02…`'s, and citing §45 as having closed `GAP-15` would be wrong.
+8. **`RL-56` is a proposal with a known cost** — red on arrival, one coverage row per reopen forever. It is
+   the mechanical form of `DR-13(a)` and falls if the Director takes `(b)` or `(c)`.
+9. **Two of this part's inputs are uncommitted** — `05…§5A` and `02…§37`–`§40` (§56.3). Line citations into
+   them will drift when they are committed, exactly as `04…§12.3` warned.
+10. **No decision was answered, no ID renumbered outside this part's own citations, no workstream renamed or
+    renumbered, and no section of Parts I–III was edited.** The only file written is this one.
+
+---
+
+## 58. Reproduce
+
+```bash
+# --- §56.2: the two role_key FKs T-21 says do not exist ----------------------
+rg -n 'role_permission_grants_role' supabase/baselines/prod_baseline.sql
+#   → :6348 role_permission_grants_role_definitions_fkey  (org_id, role_key) ON DELETE CASCADE
+#   → :6353 role_permission_grants_role_fk                (org_id, role_key) ON DELETE CASCADE
+rg -n 'role_permission_grants_role' supabase/migrations/20260329165048_remote_schema.sql   # :6513, :6518
+
+# …and the argument Phase 0 wrote for M21, on the neighbouring column
+sed -n '125,141p' supabase/migrations/20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql
+#   → "the legacy pair disagreed: one RESTRICT, one CASCADE — meaning deleting a
+#      catalog key could silently delete grants"; replaced by ONE fkey ON DELETE RESTRICT
+
+# --- §56.2: membership is the unconstrained column (M2-2 is right) -----------
+rg -n 'ADD CONSTRAINT "user_roles_' supabase/baselines/prod_baseline.sql   # org_id, user_id — no role FK
+
+# --- §46 W-54: role_keys is already on the wire ------------------------------
+rg -n 'role_keys' web/app/api/admin/settings/users-roles/members/route.ts  # :12, :103, :133
+
+# --- §48: what W-0 Q2 actually answered --------------------------------------
+P=docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
+rg -n 'Q2 = 0|unreachable for everyone alive' $P                           # §9, §4.1's execution record
+
+# --- §56.1 X-14: I-33 / I-34 are already bound to workstreams and locks ------
+rg -n 'I-33|I-34' $P            # W-31, W-32, §23's rows, RL-29, RL-38 — all 04…'s readings
+rg -n 'I-33 \(new\)|I-34 \(new\)' docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md
+
+# --- §53.2: AD-24 names two questions ----------------------------------------
+rg -n 'AD-24' docs/platform/planning/vacilando-os/qa/access-identity-v2/06-product-ia-and-flows.md   # capability: chapter or section
+rg -n 'AD-24' docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md        # = D-15, sitting 1
+
+# --- §56.3: which inputs are uncommitted -------------------------------------
+git diff --numstat -- docs/platform/planning
+#   → 02-canonical-access-identity-model.md and 05-command-enforcement-census.md both dirty
+
+# --- §54: the register high-water marks this part mints above ----------------
+rg -o 'RL-[0-9]+' $P | sort -uV | tail -3      # RL-42 minted; RL-43..RL-46 proposed, not minted (§33.1)
+rg -o 'DR-[0-9]+' $P | sort -uV | tail -1      # DR-12
+rg -o '\bF1[0-9]\b' $P | sort -uV | tail -1    # F16
+rg -o '\bM1[0-9]\b' $P | sort -uV | tail -1    # M18
+
+# --- §52: the coverage check RL-56 would run ---------------------------------
+# BEFORE (the plan as it stood at 03efba377, which is the state §58 of 01… measured):
+git show 03efba377:$P | grep -cE 'RM-[0-9]+|T-2[0-6]|S-(8|9|1[0-4])|M2-1[6-9]|RA-[1-5]|IA-1[1-4]|IA-R1[1-7]|A2-[89]|D-15|D-RM1|AD-2[2-5]'
+#   → 8
+git show 03efba377:$P | grep -oE 'RM-[0-9]+|T-2[0-6]|…|.D-15|D-RM1|AD-2[2-5]' | sort | uniq -c
+#   → 8 AD-15   — every "match" is the substring D-15 inside AD-15. Add word
+#     boundaries and the count is ZERO: the plan named no reopen register at all.
+git show 03efba377:$P | grep -cE '\bRM-[0-9]+\b|\bT-2[0-6]\b|\bD-15\b|\bD-RM1\b|\bAD-2[2-5]\b'
+#   → 0
+
+# AFTER: every register below is named.
+rg -c '\bRM-[0-9]+\b|\bT-2[0-6]\b|\bS-(8|9|1[0-4])\b|\bH[1-3]\b|\bM2-1[6-9]\b|\bRA-[1-5]\b|\bIA-1[1-4]\b|\bIA-R1[1-7]\b|\bA2-[89]\b|\bR[6-9]\b|\bAD-2[2-5]\b' $P
+```
+
+> **The `8` is worth reading twice, because it is `X-10`'s failure mode in the check written to detect it.**
+> A reader who greps for `D-15` without word boundaries is told the plan covers it eight times over. **It
+> covered it zero times.** `RL-56`'s lint must anchor every ID on word boundaries or it will certify the gap
+> it exists to find — the same way `01…§65` found `R6`…`R9` returning *"21 matching lines, every one of them
+> inside `IA-R6`…`IA-R9`."*
+
+---
+
+## 59. Provenance — Part IV
+
+- **Inputs (reused, not re-derived).** `01-existing-state-inventory.md` Parts IV, V and VI at `03efba377` —
+  `RM-1`…`RM-11`, `T-19`…`T-26`, `H1`…`H3`, `S-8`…`S-14`, `D-RM1`, `D-15`, `GAP-15`…`GAP-17`, `X-10`,
+  `X-11`, §60's reopen delta and §67's cost table. `02-canonical-access-identity-model.md` at `c6e43be5f`
+  plus its uncommitted Part III reopen — §1.3, §4.6 (`RA-1`…`RA-5`, `I-32`), §15.6, §17.7–§17.8
+  (`M2-16`…`M2-19`, `I-33`ᴬ, `I-34`ᴬ), §37–§39 (clauses 4–5, `AD-24`/`AD-25`, the sittings).
+  `04-authentication-model.md` at `288a51b7b` — §3.6–§3.7, §6.4 (`R6`–`R9`), §7.1 (`AD-22`, `AD-23`),
+  `I-35`ᴮ, §12.1. `05-command-enforcement-census.md` §5A **(uncommitted)** — the 14-row depth table, the
+  four-noun target, the presentation/architecture split. `06-product-ia-and-flows.md` at `207cd5322` — §14,
+  §15 (the IA specification), §16 (`IA-11`…`IA-14`), §17 (`IA-R11`…`IA-R17`), §18.2. This plan's Parts I–III
+  in full.
+- **Read this pass, in source.** `supabase/baselines/prod_baseline.sql` (the `role_permission_grants` and
+  `user_roles` constraint blocks); `supabase/migrations/20260329165048_remote_schema.sql:6498-6518`;
+  `supabase/migrations/20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql:125-145`;
+  `web/app/api/admin/settings/users-roles/members/route.ts`.
+- **Mechanically verified this pass.** The two `(org_id, role_key)` foreign keys and their `ON DELETE
+  CASCADE` posture, in both the baseline and the migration history; the absence of any FK on
+  `user_roles.role`; Phase 0's own `RESTRICT`/`CASCADE` argument on `permission_key`; `role_keys` present in
+  the members response; `W-0` Q2's wording and scope in §9 and §4.1; `I-33`/`I-34`'s existing bindings to
+  `W-32`/`W-31`, §23 and `RL-29`/`RL-38`; the `AD-24` double assignment across `06…` and `02…`; the
+  uncommitted state of `02…` and `05…`; and the `RL`/`DR`/`F`/`M`/`W`/`Q`/`X`/`CV` high-water marks.
+- **New this part.** Workstreams `W-54`…`W-62` · waves 13–14 · ordering constraints §1.6–§1.9 · census
+  questions `Q15`…`Q17` · locks `RL-47`…`RL-56` · migrations `M19`…`M21` · fixtures `F17`, `F18` · decision
+  `DR-13` · corpus finding `X-14` · six amendments to existing workstreams · §52's coverage of the reopen.
+  **Two corrections are made to prior conclusions** — this plan's own reading of `W-0` Q2 (§48) and the
+  reopen's `T-21`/`S-10` (§56.2). **`RL-43`…`RL-46` are left reserved, not minted** (§54.1).
+- **Escalated, not answered.** `AD-22`, `AD-23`, `AD-24`, `AD-25`, the capability-home question, `DR-13`,
+  `X-14`'s renumbering, and `X-11`'s second instance. **No decision was answered.**
+- **Not consulted.** The deployed database; any application source under `web/app` beyond the one route file
+  named above; the running Director; `07-director-acceptance-rubric.md` beyond its bindings already carried
+  in Parts II–III.
+- **Method.** Static and file-grounded. **No code, schema, migration or UI was changed. No test ran, no
+  typecheck, no build, no browser, no request, no query. No ID was renumbered outside this part's own
+  citations, and no section of Parts I–III was edited. The only file written is this one.**
