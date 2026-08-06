@@ -335,8 +335,27 @@ function routeFilesUnder(dirs: readonly string[]): string[] {
     return found.sort();
 }
 
+/**
+ * Comments removed, so a gate *named in prose* cannot satisfy the lock.
+ *
+ * The 2026-08-04 form of this check was `source.includes(gate)` over the raw file. A route whose
+ * only mention of `requireAdminOrOps` was a TODO comment would have passed it — the §10.2 failure
+ * mode (mention vs. branch) reappearing inside the lock added to close a hand census. Line comments
+ * are stripped only when `//` is not preceded by `:`, so a `http://` inside a string literal does
+ * not truncate the line.
+ */
+function codeOnly(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+}
+
+/** The gate must be *called*, not merely named — `gate(` in code, not `gate` anywhere. */
+function callsAny(source: string, gates: readonly string[]): boolean {
+    const code = codeOnly(source);
+    return gates.some((gate) => new RegExp(`\\b${gate}\\s*\\(`).test(code));
+}
+
 function gatesPortalEligibility(source: string): boolean {
-    return SUFFICIENT_GATES.some((gate) => source.includes(gate));
+    return callsAny(source, SUFFICIENT_GATES);
 }
 
 describe("W-1 — every analytics-family route references a portal-enforcing gate (RL-1 coverage)", () => {
@@ -344,11 +363,34 @@ describe("W-1 — every analytics-family route references a portal-enforcing gat
     const routes = routeFilesUnder(ANALYTICS_FAMILY_DIRS);
 
     it("finds the analytics family, so the assertions below are not vacuous", () => {
-        // 26 route files as of 2026-08-04. Asserted as a floor: new routes are expected, and each
-        // one must satisfy the gate assertion below rather than change this number.
-        expect(routes.length).toBeGreaterThanOrEqual(20);
+        // 26 files on 2026-08-04, **27 on 2026-08-06**. Asserted as a floor that follows the live
+        // count up — W-4's lesson that a ratchet left below its floor hands out free slack applies
+        // here too: a floor of 20 against 27 files would let seven routes be deleted unnoticed.
+        expect(routes.length).toBeGreaterThanOrEqual(27);
         expect(routes).toContain("app/api/admin/metrics/resolve/route.ts");
         expect(routes).toContain("app/api/admin/intelligence/operational/route.ts");
+    });
+
+    it("does not credit a gate that appears only in a comment", () => {
+        // The predicate's own failure mode, asserted directly. Both shapes name a sufficient gate;
+        // only the one that calls it is credited.
+        const commentOnly = `
+            // TODO: gate this with requireAdminOrOps before shipping.
+            /** Superseded: used to call getAdminContextCached(). */
+            const access = await loadAdminAccessBundleCached();
+        `;
+        expect(gatesPortalEligibility(commentOnly)).toBe(false);
+        expect(gatesPortalEligibility(`await requireAdminOrOps(request);`)).toBe(true);
+        // …and the 2026-08-04 form of this predicate — `source.includes(gate)` — credited it.
+        // That is the gap this assertion closes, stated as a fact about the source rather than
+        // a claim in a comment.
+        expect(SUFFICIENT_GATES.some((gate) => commentOnly.includes(gate))).toBe(true);
+    });
+
+    it("keeps a URL in a string literal out of the comment stripper", () => {
+        // `//` inside `http://` must not truncate the rest of the line and hide a real gate call.
+        const withUrl = `const r = new NextRequest("http://localhost/x"); await requireAdminOrOps(r);`;
+        expect(gatesPortalEligibility(withUrl)).toBe(true);
     });
 
     it("rejects a route that holds only a raw access resolution (the G2 shape)", () => {
@@ -387,6 +429,86 @@ describe("W-1 — every analytics-family route references a portal-enforcing gat
     it("carries no stale exception", () => {
         for (const exception of FAMILY_GATE_EXCEPTIONS) {
             expect(routes).toContain(exception.route);
+            expect(exception.reason.length).toBeGreaterThan(0);
+        }
+    });
+});
+
+/**
+ * RL-1 widened to the exposure class — added 2026-08-06, the third issuance of W-1.
+ *
+ * The family census above scans three hand-listed directories. **G2 is not a property of those
+ * directories.** It is a shape: *resolve an access context that is `ok` for any authenticated org
+ * member, then gate on nothing else.* An analytics-shaped route landing under a fourth directory
+ * reopens G2 and the family scan cannot see it — the same "a lock naming N files cannot notice the
+ * N+1th" limit the 2026-08-04 re-verification recorded, one level up.
+ *
+ * So this block takes **all of `web/app/api`** as its subject and the raw primitive as its
+ * selector: the lock now follows the exposure rather than the folder. 92 of the repo's 570 route
+ * files resolve a raw bundle; every one of them must also call a gate that denies someone the
+ * portal refuses to admit, or a reviewed capability predicate.
+ *
+ * **Same honest limit, unchanged.** This proves a sufficient gate is *called*, never that its
+ * result is honoured — W-1's own two-resolution finding is exactly the error it cannot catch, and
+ * RL-1's tier-A half is still W-14's declared `(route → capability)` table.
+ */
+const API_ROOT = "app/api";
+
+/**
+ * Capability gates: they admit on a granted permission key rather than on portal eligibility.
+ *
+ * `canReadProgramPublication` (`configuration/programs/route.ts:49-57`) is the plan's own named
+ * reference shape for W-1 (§5) — it is the seventh route in the raw difference and is correctly
+ * gated. A route gating on a capability is not "gating on `access.ok` alone", which is what RL-1
+ * asserts, so it belongs here rather than in an exception list.
+ */
+const CAPABILITY_GATES = ["canReadProgramPublication", "canManageProgramPublication"] as const;
+
+/** Reviewed exceptions. Empty by design — an entry here is a security decision (W-4's ratchet). */
+const G2_CLASS_EXCEPTIONS: { route: string; reason: string }[] = [];
+
+function resolvesRawAccessContext(source: string): boolean {
+    return callsAny(source, RAW_RESOLUTIONS);
+}
+
+describe("W-1 — no route in web/app/api gates on a raw access resolution alone (RL-1, class-wide)", () => {
+    const webRoot = path.resolve(__dirname, "../..");
+    const subject = routeFilesUnder([API_ROOT]).filter((route) =>
+        resolvesRawAccessContext(fs.readFileSync(path.join(webRoot, route), "utf8"))
+    );
+
+    it("selects the routes that hold the G2 primitive, and finds enough of them to be meaningful", () => {
+        // 92 of 570 route files on 2026-08-06. A floor, ratcheted to the live count: if the
+        // selector silently stopped matching, this fails rather than passing on an empty subject.
+        expect(subject.length).toBeGreaterThanOrEqual(92);
+        expect(subject).toContain("app/api/admin/configuration/programs/route.ts");
+        expect(subject).toContain("app/api/admin/lifecycle-catalog/repair/route.ts");
+        // `metrics/resolve` is deliberately *not* in the subject: W-1 moved its raw resolution
+        // inside `requireAnalyticsReadAccess`, which is what closing G2 looks like from here.
+        expect(subject).not.toContain("app/api/admin/metrics/resolve/route.ts");
+    });
+
+    it("reads every selected route — an empty gate list flags all of them", () => {
+        const flaggedWithNoGates = subject.filter((route) => {
+            const source = fs.readFileSync(path.join(webRoot, route), "utf8");
+            return source.length > 0 && !callsAny(source, []);
+        });
+        expect(flaggedWithNoGates).toEqual(subject);
+    });
+
+    it("names no route that resolves an access context and gates on nothing else", () => {
+        const excepted = new Set(G2_CLASS_EXCEPTIONS.map((e) => e.route));
+        const ungated = subject.filter((route) => {
+            if (excepted.has(route)) return false;
+            const source = fs.readFileSync(path.join(webRoot, route), "utf8");
+            return !callsAny(source, [...SUFFICIENT_GATES, ...CAPABILITY_GATES]);
+        });
+        expect(ungated).toEqual([]);
+    });
+
+    it("carries no stale exception", () => {
+        for (const exception of G2_CLASS_EXCEPTIONS) {
+            expect(subject).toContain(exception.route);
             expect(exception.reason.length).toBeGreaterThan(0);
         }
     });

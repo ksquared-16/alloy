@@ -23,6 +23,10 @@ found and tightened (§5)
 · **W-0 query amended 2026-08-06 under the Mission 2 reopen** (same mission and assignment) — the
 self-identifying target column is authored and grounded; **run 3 is not executed** and awaits one
 authorization (§4)
+· **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
+on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
+`web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
+self-authority paths its enumeration could not see are live and latent, and W-8 arms one of them** (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -577,6 +581,115 @@ repoint the row is a product decision, raised rather than absorbed, and recorded
 unavailable behind a command-approval wall in this session, so the 2026-07-31 `rc=0` was **not** reproduced.
 The change is confined to one test file using only `node:fs`, `node:path` and vitest, and it executes green —
 but that is not a typecheck, and this record does not claim one.
+
+#### Wave 1 under the Mission 2 reopen — **DONE 2026-08-06**, assignment `asg_e9308076173af6`
+
+The reopen re-issued W-1…W-3 a third time. §4's rule holds a third time: **re-execute rather than re-assert.**
+This is the first re-execution across a *large* interval, and it is the run in which the locks held and their
+**subject enumeration** did not.
+
+| Field | Value |
+|---|---|
+| Base | `c66d57305` @ `agent/cursor/6-vacilando-v3-4-conversational-director` — **192 web commits** since the 2026-08-04 base `9e19c8736`; API routes 559 → **570**; migrations 302 → **312** |
+| Suites on arrival | **55 green**, matching the 2026-08-04 record exactly (36 + 14 + 5). **61** after this assignment's six additions |
+| Changed | `web/tests/access/analyticsRouteGates.test.ts` only. **No route handler, library, schema or migration was modified**, so nothing in this record is a behaviour change |
+| Evidence | [`wave1-reopen-evidence.json`](./wave1-reopen-evidence.json) |
+
+**W-1 / RL-1 — holds, and the family lock caught its first real arrival.** The analytics families grew 26 → 27:
+`metrics/oi-config/route.ts`, added since 2026-08-04. It gates through `getAdminContextCached` on both verbs
+(`:88`, `:107`), with `PATCH` additionally requiring `ctx.role === "admin"` (`:111-113`) — verified by hand as
+well as by the lock, because the lock alone proves only that a gate is named. **This is the first evidence the
+family census does the thing it was added for**; on 2026-08-04 it was asserted against a family that had not
+moved.
+
+**Two defects in the lock itself, both found and both fixed here.**
+
+1. **It credited a gate named in a comment.** The 2026-08-04 predicate was `source.includes(gate)` over the raw
+   file, so a route whose only mention of `requireAdminOrOps` was a `// TODO:` passed. That is the §10.2
+   failure mode — *mention* versus *branch* — reappearing **inside the lock that was added to retire a hand
+   census.** Comments are now stripped and the gate must be **called** (`gate(`), not named. Proved by a
+   red run: a probe route carrying the G2 shape *and* a `// TODO: gate this with requireAdminOrOps()` comment
+   is flagged; the old predicate credited it. The test asserts that fact about the same source rather than
+   claiming it in prose.
+2. **Its subject was three hand-listed directories, and G2 is not a property of a directory.** G2 is a *shape*
+   — resolve an access context that is `ok` for any authenticated org member, then gate on nothing else. An
+   analytics-shaped route landing under a fourth directory reopens it unseen; the 2026-08-04 record's own
+   limit ("a lock naming six files cannot notice a seventh") applies one level up, to the folder list. The
+   lock's subject is now **all of `web/app/api`, selected by the primitive**: **92 of 570** route files
+   resolve a raw access context, and every one calls a portal-enforcing gate or the reviewed capability
+   predicate `canReadProgramPublication` — this plan's own named reference shape (§5/W-1). Proved by a second
+   red run: a new ungated route added anywhere under `app/api` is flagged **by path**.
+
+The family floor was also ratcheted 20 → 27 to follow the live count, per W-4's lesson that a ratchet left
+below its floor hands out free slack. **The honest limit is unchanged and still governs:** this proves a
+sufficient gate is *called*, never that its result is honoured. W-1's own two-resolution finding remains the
+error it cannot catch, and RL-1's tier-A half is still W-14's declared table.
+
+**W-2 / RL-11 — the guard holds; its *subject* was wrong.** This is the finding of the run, and it is why the
+rule is re-execute rather than re-assert.
+
+Both prior enumerations asked *which route files name `user_roles` or `user_access_profiles`*. That question
+cannot see a membership write performed in a helper, and cannot see an authority table it did not name. Both
+misses are in the tree today and **both were already present on 2026-08-04**:
+
+1. **A fifth membership writer.** `POST /api/admin/dev/create-org` upserts `user_roles` through
+   `lib/dev/createOrgAndAssignAdmin.ts:71-78`. Its route file names `user_roles` only in a doc comment
+   (`:18`), so a route-file text census misses it **by construction**. It takes `admin_user_id` from the
+   **request body**, so a caller may name themselves; it is gated on `DEV_TENANT_SPINUP_ENABLED === "true"`
+   and `ctx.role === "admin"` (`:22-30`), which bounds the exposure to environments that set the flag. It is
+   also a **second instance of G4/W-5** — it writes a membership and no access-profile row, so it can grow
+   W-0 Q4, the count §6 requires re-derived immediately before M1.
+2. **A sixth authority table.** `user_department_access` is read by `resolveAdminAccessCore.ts:166` to build
+   `allowedDepartmentIds` — it *is* the restricted-department allow-list. Two product paths insert into it
+   **for the caller**, with a caller-supplied `department_id`: `POST /api/admin/lifecycle-catalog/repair`
+   (`repairLifecycleWorkspaceVisibility.ts:64-70` → `ensureLifecycleDepartmentWorkspaceAccess.ts:165`) and
+   `POST /api/admin/departments` (`:151-158`, for the department the caller just created). Neither carries
+   W-2's guard. W-2's own record counted *"widen your own department/site scope"* as a self-elevation vector
+   and guarded it on `PATCH …/access-scope`; this is the same vector on a table the enumeration never named.
+
+**Both are latent today — and W-8 arms the second.** `ensureLifecycleDepartmentWorkspaceAccess` returns before
+its insert whenever `portalAdminBypassesDepartmentScope(roleKeys)` holds (`:122-124`), and both routes admit
+`admin` only, so no principal who can reach them can currently execute the insert. **W-8 deletes exactly that
+bypass.** Its exit criterion — *"department scope is enforced for all roles"* — would be **false on the day it
+lands**: a department-restricted principal could restore access to any department carrying a lifecycle process
+by calling repair with its id. W-13 arms it from the other side, by admitting a persona that is not
+`admin`/`ops`. This is the same shape as W-0 Q1's finding about `handle_new_user()` — *defined, unattached,
+one change away from live* — and it is recorded, **not absorbed**: the remedy is W-8's scope, not W-1…W-3's.
+
+**W-2's exit criterion is therefore not met.** It reads *"a principal cannot alter its own membership through
+any product path"*, and two further paths exist. The three the workstream named are guarded and re-proved
+green; the criterion as written is not satisfied, and this record does not claim it is.
+
+The durable repair is a change of **question**, not of grep: enumerate authority writers **by table across
+`web/lib` and `web/app`**, not by name across route files. Run this pass, that set is — `user_roles` /
+`user_access_profiles`: the four guarded routes plus `lib/dev/createOrgAndAssignAdmin.ts:71`;
+`user_department_access`: `ensureLifecycleDepartmentWorkspaceAccess.ts:165` and
+`lifecycleActivationOwned.ts:111` (a delete). RL-11's subject should be that set. **It was not widened here**
+— RL-11's lock is `selfAuthorityMutation.test.ts`, outside this assignment's stated scope, and the widened
+lock should land with the guard it implies rather than as a silent test edit that goes green by naming
+paths nobody fixed.
+
+**W-3 / RL-2 — green, and its dangling decision now has a home.** RL-2 still parses every
+`permission_definitions` INSERT across a tree that grew 302 → 312 migrations, and still reports every grid key
+as seeded. §14.3.10 left *"restore and repoint the `workflows.*` row, or leave it removed"* open as a product
+decision; the plan of record has since bound it — `C13` → **W-11**, *"the row returns iff `W-11` seeds a
+workflows key that something enforces"*. Nothing for Wave 1 to do; recorded so the next reader does not
+re-raise a question that has been answered elsewhere.
+
+**Where this record is written, and where the plan actually lives.** This assignment's `scope` and
+`expectedDeliverables` name **this file**, which is the 2026-07-30 plan of a different mission
+(header: `msn_e9133cdade883793d2` · `asg_c505e1d0d76acd`). The live plan of record is
+`docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md` — Parts I–V, waves 0–14,
+`W-0`…`W-62` — and contains none of the reopen's re-sequence. That divergence is already registered as
+`X-2` / `DR-4` and, as an execution defect, as `QE-15`. **Wave 1's execution record now exists in two
+documents with different contents.** This run deliberately did not copy itself into the other file: which
+document is canonical is a Director decision, and a worker resolving it by duplication makes it harder, not
+easier.
+
+**Not verified this run.** No live database query — W-0's counts are now **six days old**, and finding 1 above
+means Q4 can grow through a path §6 does not name, so M1 must re-derive it rather than cite 2. No tier D, per
+§14.3.7 and because the only change is a test file. The typecheck result is recorded in the evidence file
+rather than claimed here.
 
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
@@ -1306,7 +1419,7 @@ contributor deleting one has to do it on purpose.
 
 | Lock | Asserts | Tier | From | Status |
 |---|---|---|---|---|
-| **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 | **LIVE** — `web/tests/access/analyticsRouteGates.test.ts` (tier B; the tier A half lands with W-14) |
+| **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 | **LIVE** — `web/tests/access/analyticsRouteGates.test.ts` (tier B; the tier A half lands with W-14). **Widened 2026-08-06**: subject is now every route under `web/app/api` that resolves a raw access context (92 of 570), not three hand-listed directories, and a gate named only in a comment no longer credits |
 | **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **LIVE** — `web/tests/admin/permissionGrid.test.ts` |
 | **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
 | **RL-4** | Membership creation writes a profile row atomically | C | G4 / W-5 | proposed |
@@ -1316,7 +1429,7 @@ contributor deleting one has to do it on purpose.
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
-| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B)** — `web/tests/access/selfAuthorityMutation.test.ts`, covering all three self-authority paths |
+| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5 |
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
@@ -1521,3 +1634,24 @@ Changed (local only — not pushed):
 **Method:** static, AST-grounded. No route handler, schema, migration or UI was modified, and no request was
 issued. The two exceptions spot-verified line-by-line for this record are `api/verticals/route.ts` and
 `api/webhooks/resend/route.ts`.
+
+### 15.3 Wave 1 re-execution under the reopen (2026-08-06, assignment `asg_e9308076173af6`)
+
+Evidence: [`wave1-reopen-evidence.json`](./wave1-reopen-evidence.json) — the suite counts, the two red runs
+and how each was staged, the re-enumerated subjects, and the typecheck result.
+
+Changed (local only — not pushed):
+
+| File | Role |
+|---|---|
+| `web/tests/access/analyticsRouteGates.test.ts` | RL-1 widened to the G2 *class* across `web/app/api`; comment-only gate names no longer credit; family floor ratcheted 26 → 27. **+6 tests, 36 → 42** |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md` | §5 execution record, §13 RL-1 and RL-11 status, this entry |
+
+**Two red runs, both staged against the real tree rather than a synthetic string**, then reverted: a probe
+route under `app/api/admin/` carrying the G2 shape (flagged by path), and the same probe naming a sufficient
+gate in a `// TODO:` comment (still flagged — the case the previous predicate credited). No probe survives in
+the tree; the suite is green with it removed.
+
+**Method:** static and file-grounded, plus the three Wave 1 suites executed. **No route handler, library,
+schema, migration or UI was modified**; no request was issued, no browser opened, and no live query run. The
+findings recorded against W-2 are reported, not remediated — see §5 for why.
