@@ -358,13 +358,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     operatingPlanJourneySegment: dst.stage_operating_plan_v1?.journey_segment,
                     configuredMetadataGrain: dst.grain,
                 });
-                // Narrow to the FAILING side before reading its message: `message` exists only on
-                // the unresolved/contradiction variants, so a ternary over the whole union does not
-                // typecheck.
-                const unresolved = !srcGrain.ok ? srcGrain : !dstGrain.ok ? dstGrain : null;
-                if (unresolved) {
+                // ONE GUARD PER SIDE. `message` exists only on the failing variants, and `grain`
+                // only on the succeeding one — so the check has to narrow each variable
+                // individually. A combined `if (!src.ok || !dst.ok)` cannot read `.message`
+                // inside it, and hoisting the failing side into a local loses the narrowing that
+                // the code AFTER the guard needs to read `.grain`.
+                if (!srcGrain.ok) {
                     return NextResponse.json(
-                        { error: unresolved.message, code: "stage_grain_unresolved" },
+                        { error: srcGrain.message, code: "stage_grain_unresolved" },
+                        { status: 409 },
+                    );
+                }
+                if (!dstGrain.ok) {
+                    return NextResponse.json(
+                        { error: dstGrain.message, code: "stage_grain_unresolved" },
                         { status: 409 },
                     );
                 }

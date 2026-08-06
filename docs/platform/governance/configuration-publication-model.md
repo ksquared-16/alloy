@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-06
+supersedes: []
+---
+
 # Alloy Configuration Publication Model
 
 Sprint: `bp-config-integrity` (slot 6), Law 4. Design + implementation contract.
