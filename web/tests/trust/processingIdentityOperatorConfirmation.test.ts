@@ -171,9 +171,24 @@ function deps(trust: ReturnType<typeof makeTrust>, governed: Record<string, stri
     };
 }
 
-/** The execution port needs its OWN package lookup key; supply it explicitly. */
+/**
+ * The execution binding needs EXECUTION-shaped lookups.
+ *
+ * `observationLookup` means different things to the two ports — the supersede
+ * port reads lineage claims, the execution port reads `executed`/`outcome` —
+ * so they cannot be spread from one object. Built explicitly rather than by
+ * override, which is what makes the difference visible.
+ */
 function execDeps(trust: ReturnType<typeof makeTrust>, governed: Record<string, string>) {
-    return { ...deps(trust, governed), packageLookup: trust.execPackageLookup as never };
+    const { lookup, now } = deps(trust, governed);
+    return {
+        repository: trust.repository,
+        packageLookup: trust.execPackageLookup,
+        observationLookup: trust.executionObservationLookup,
+        supersessionLookup: trust.observationLookup,
+        lookup,
+        now,
+    };
 }
 
 type Row = Record<string, unknown>;
