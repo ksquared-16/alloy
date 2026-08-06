@@ -25,6 +25,7 @@ type Row = {
 type Report = {
     ok: boolean;
     counts: Record<string, number>;
+    ratchet: { max_subject_unresolved: number | null; max_transitive_only_unresolved: number | null };
     violations: { route: string; kind: string }[];
     stale: { route: string; kind: string; list: string }[];
     rows: Row[];
@@ -36,6 +37,7 @@ const allowlist = JSON.parse(readFileSync(ALLOWLIST_PATH, "utf8")) as {
     exceptions: { route: string; model: string; reason: string }[];
     baseline: { route: string; frozen: string; why_not_an_exception: string; w15_note: string }[];
     advisory_transitive_only: { route: string; reason: string }[];
+    ratchet: { max_subject_unresolved: number; max_transitive_only_unresolved: number };
 };
 
 /**
@@ -158,17 +160,59 @@ describe("W-4 · the ratchet", () => {
         expect(current.filter((r) => !FROZEN_BASELINE.includes(r))).toEqual([]);
     });
 
-    it("does not grow the total exception count past the current floor of 17", () => {
-        // Ratcheted 26 → 17 on 2026-08-04. The 2026-07-31 baseline of 26 was set when the
-        // book-v2 funnel still existed; its retirement (ea3eaf377, via staging merge 5118940f7)
-        // removed all 9 of the unresolved routes it owned — 5 frozen baseline + 4 exceptions.
-        // Leaving the ceiling at 26 would have let 9 new exceptions be added silently, which is
-        // the one property this workstream exists to provide. A ratchet is only a ratchet if it
-        // follows the floor down.
-        expect(report.counts.subject_unresolved).toBeLessThanOrEqual(17);
+    // The ceilings now live in the register and are enforced by the CHECK, so `prebuild` fails on
+    // a breach rather than only `vitest`. That change is the fix for how this lock came to be red:
+    // e7e585010 grew the advisory set 3 → 9 in an allow-list-only commit, and nothing in the build
+    // path could see it. These tests assert the ceilings are pinned to the live floor — which is
+    // strictly stronger than the old `toBeLessThanOrEqual`, because a ceiling sitting ABOVE the
+    // floor is exactly the slack that handed out 9 free exceptions in the 2026-08-04 run.
+
+    it("pins both ceilings to the live floor — no slack, in either direction", () => {
+        expect({
+            unresolved: allowlist.ratchet.max_subject_unresolved,
+            advisory: allowlist.ratchet.max_transitive_only_unresolved,
+        }).toEqual({
+            unresolved: report.counts.subject_unresolved,
+            advisory: report.counts.transitive_only_unresolved,
+        });
     });
 
-    it("does not grow the advisory transitive-only set past its baseline of 3", () => {
-        expect(report.counts.transitive_only_unresolved).toBeLessThanOrEqual(3);
+    it("reports the register's ceilings rather than inventing its own", () => {
+        expect(report.ratchet).toEqual({
+            max_subject_unresolved: allowlist.ratchet.max_subject_unresolved,
+            max_transitive_only_unresolved: allowlist.ratchet.max_transitive_only_unresolved,
+        });
+    });
+
+    it("FAILS when a ceiling is left above a fallen floor — the slack state", () => {
+        const slack = runServiceClientPrincipalCheck({
+            ...allowlist,
+            ratchet: {
+                max_subject_unresolved: allowlist.ratchet.max_subject_unresolved + 9,
+                max_transitive_only_unresolved: allowlist.ratchet.max_transitive_only_unresolved,
+            },
+        }) as Report;
+        expect(slack.ok).toBe(false);
+        expect(slack.stale.filter((s) => s.kind === "ratchet-slack").map((s) => s.route)).toEqual([
+            "ratchet.max_subject_unresolved",
+        ]);
+    });
+
+    it("FAILS when the count grows past a ceiling — the breach state", () => {
+        // The shape of the actual regression: the advisory set grew and the ceiling did not move.
+        const breach = runServiceClientPrincipalCheck({
+            ...allowlist,
+            ratchet: { max_subject_unresolved: allowlist.ratchet.max_subject_unresolved, max_transitive_only_unresolved: 3 },
+        }) as Report;
+        expect(breach.ok).toBe(false);
+        expect(breach.violations.filter((v) => v.kind === "ratchet-exceeded").map((v) => v.route)).toEqual([
+            "ratchet.max_transitive_only_unresolved",
+        ]);
+    });
+
+    it("FAILS when no ceiling is recorded at all, so the count cannot be left unbounded", () => {
+        const missing = runServiceClientPrincipalCheck({ ...allowlist, ratchet: undefined }) as Report;
+        expect(missing.ok).toBe(false);
+        expect(missing.violations.filter((v) => v.kind === "ratchet-missing")).toHaveLength(2);
     });
 });

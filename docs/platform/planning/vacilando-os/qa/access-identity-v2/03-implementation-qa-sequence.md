@@ -908,6 +908,118 @@ through `runServiceClientPrincipalCheck()` — the exported function the CLI is 
 snapshot regenerated through that path is byte-identical to the committed one, so the check's *result* is
 verified at this base; its *CI wiring* is carried forward on the 2026-07-31 record and is not re-proven here.
 
+#### W-4 re-execution under the reopen — **DONE 2026-08-06**, assignment `asg_91e144a61569e4`
+
+Third leg. §4's rule applied again: **re-execute rather than re-assert** — and this time re-execution was not
+a formality, because **the lock was RED at this base.**
+
+| Field | Value |
+|---|---|
+| Base | `a3e01ddb5` on `agent/cursor/6-vacilando-v3-4-conversational-director` — the reopen's Wave 1 branch, not the `hotfix/…` branch the first two legs ran on. API routes 559 → **570** |
+| Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **15 tests, 1 FAILING on arrival**; **18 green** after the fix |
+| Wave 1 total | **84 tests green** across all four suites (18 + 42 + 14 + 10) |
+| CLI | `npm run check:service-client-principal` executed as a command this run — the approval wall the 2026-08-04 record noted did not recur. Green, and **shown red**, both at the CLI |
+| Typecheck | `vac run typecheck:tests` → **rc=0** |
+| Evidence | [`w4-reopen-evidence.json`](./w4-reopen-evidence.json); snapshot [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) regenerated |
+
+##### The baseline, third column
+
+| Measure | 2026-07-31 | 2026-08-04 | 2026-08-06 |
+|---|---|---|---|
+| API route files | 539 | 559 | **570** |
+| …hold a service-role client by direct import | 520 | 537 | **541** |
+| …of those, resolve a principal | 494 | 520 | **526** |
+| …of those, resolve none — **the exception baseline** | 26 | 17 | **15** |
+| — reviewed exceptions, each with a named authorization model | 21 | 17 | **15** |
+| — frozen W-15 remediation baseline, no model | 5 | 0 | **0** |
+| Reach a service client transitively | 536 | 556 | **567** |
+| …transitive-only *and* unresolved — advisory | 3 | 3 | **10** |
+
+**The lock was red, and the reason is the workstream's own failure mode.** The advisory ratchet capped the
+transitive-only set at 3; ten routes qualified. The set had grown on 2026-08-03 in `e7e585010`
+(*"record scoped public tour routes against the W-4 service-client gate"*) and again on 2026-08-04 in
+`9187ae81a`, and **neither commit moved the ceiling.** `e7e585010` touched exactly one file — the allow-list.
+
+The mechanism that let it through is worth stating precisely, because the 2026-08-04 record diagnosed the
+same defect class and fixed only that instance:
+
+1. The **check** enforces set membership exactly, in both directions. A route that appears without an entry is
+   a violation; an entry with no route is stale. That stops a list growing *without an edit*.
+2. It does **not** stop the edit. The only thing bounding a deliberate addition was a numeric ceiling — and
+   the ceilings lived **solely in the vitest lock**, never in `prebuild`.
+3. So an allow-list-only commit could add entries with `next build` staying green, and the breach stayed
+   latent until someone ran the lock on a base containing both lines of work. That base is this one, eleven
+   commits and three days later.
+
+**Fixed at the root, not at the instance.** The ceilings now live in the register under `ratchet` and the
+**check** enforces them, so a breach stops `prebuild`. Both directions are enforced, which is the 2026-08-04
+lesson made mechanical rather than remembered:
+
+- **over** the ceiling → a `ratchet-exceeded` **violation** — the bounded count grew;
+- **under** the ceiling → a `ratchet-slack` **stale** entry — the floor dropped and nobody followed it, which
+  is precisely the state that silently handed out nine free exceptions between 08-01 and 08-04;
+- **absent** → a `ratchet-missing` violation, so the bound cannot be deleted to make the build pass.
+
+The lock now asserts `ceiling === live floor` rather than `floor ≤ ceiling`. Under the old assertion the
+2026-08-04 slack was *green*; under the new one it is red the moment it appears.
+
+**Shown red, per §10.4.** Not only in-process: the ceilings were temporarily set to 24/3, `npm run
+check:service-client-principal` was run as a command, and it printed one `ratchet-exceeded` breach and one
+`ratchet-slack` entry (*"ceiling is 24 but the live floor is 15 — re-tighten it to 15, or it hands out 9 free
+exception(s)"*) and exited non-zero. The true ceilings were then restored. Three further red states are
+locked as tests: breach, slack, and missing.
+
+##### The −2 exception delta, and a route class leaving the enforced set
+
+The unresolved count fell 17 → 15. It reconciles exactly, and **it is not a fix**:
+
+| Route | Was | Now | Why |
+|---|---|---|---|
+| `public/tour-booking/[token]/resolve` | `exceptions` | `advisory_transitive_only` | Stopped importing a service client; `guardTourActionRoute` holds it |
+| `public/tour-booking/[token]/slots` | `exceptions` | `advisory_transitive_only` | Same |
+
+Plus five genuinely new routes on the advisory list — `decline`, `confirm`, `reschedule`, `cancel`,
+`cancel-intent`. 2 moved + 5 new + 3 original = 10.
+
+**This is a coverage escape, and it should be recorded as one.** W-4's enforced predicate is *direct import*.
+When Slice C moved the service client into `guardTourActionRoute`
+(`web/lib/tours/public/tourActionRouteGuard.ts:76`), two routes left the enforced set without any change in
+their authority, and landed on the advisory list — which is *weaker*, being bounded only by a count. The
+substance here is fine and arguably better: the guard returns the client only after `authorizeTourAction`
+proves token hash, link↔invitation recipient binding, and action kind (`:89`), and `requiredActions` is a
+module constant in all seven routes, never request-derived — verified this run. But the general shape holds:
+**a helper refactor is an exit from W-4's enforced predicate.** It cannot be closed inside W-4 without
+rebuilding the predicate on reachability rather than import, which would change what the number means. It is
+handed to **W-15** as a named property to preserve, not left implicit.
+
+##### The register was re-reviewed, and four entries were wrong
+
+All 15 exceptions still exist, still hold a service client, still resolve no principal — asserted per-entry by
+the lock. The advisory entries were then checked against the tree line by line, which the lock cannot do,
+since a reason is prose. **Four of the ten were inaccurate:**
+
+- three drifted line citations — `slots` `:20`→`:26`, `reschedule` `:21`→`:24`, `resolve` `:16`→`:27-35`;
+- one **substantive**: `resolve`'s reason claimed the route constant was `[view_tour_slots,
+  view_tour_details]` *"so a decline- or cancel-only token cannot read context."* The constant now lists **all
+  seven** action kinds, including `decline_tour` and `cancel_tour`
+  (`web/app/api/public/tour-booking/[token]/resolve/route.ts:27-35`). **The stated security property was
+  false.**
+
+The widening itself is deliberate and argued in the route header (`:18-25`) — any credential on the same
+invitation may re-read what that invitation already disclosed to that same recipient, and the authorizer still
+proves recipient binding, expiry and revocation. So the *code* is defensible; the *register* had silently
+stopped describing it. All four were corrected in place, marked `CORRECTED 2026-08-06` rather than rewritten
+to look as though they had always been right.
+
+**This is a limit of the check, newly evidenced.** The check enforces membership and now counts; **nothing
+binds a reason to the line it cites.** A reviewed exception can decay into an inaccurate one with the build
+green throughout — which is the exit criterion's *"reviewed artifact rather than a residue"* eroding by a
+route the ratchet does not cover. Periodic human re-reading is currently the only control, and this run is the
+evidence that it finds things.
+
+**The honest limit above is unchanged and still governs**: this check proves a principal is *resolved*, never
+that the result *gates* the handler. W-14 and W-15 still own that proof.
+
 ---
 
 ## 6. Wave 2 — The scope invariant
@@ -1433,7 +1545,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. **Re-verified 2026-08-04**: green across a 20-route expansion; ceiling ratcheted 26 → 17 |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests** |
 
 RL-2 is listed *because* it is temporary: W-3 adds it and W-10 replaces it. An assertion that becomes
 structurally unnecessary should be replaced deliberately, not quietly deleted when it starts failing.
