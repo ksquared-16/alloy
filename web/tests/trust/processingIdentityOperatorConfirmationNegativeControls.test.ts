@@ -16,7 +16,6 @@ import { IDENTITY_RESOLVER_VERSION } from "@/lib/identity";
 import type { IdentityCandidate } from "@/lib/identity";
 import type { ProcessingResolutionRow } from "@/lib/pos/processingIdentity/processingResolutionsDb";
 import type { CommitPlan, PlanOperation } from "@/lib/pos/processingIdentity/plan/planTypes";
-import type { CommitAttempt, OperationResult } from "@/lib/pos/processingIdentity/executor/executorTypes";
 import { computePlanContentHash } from "@/lib/pos/processingIdentity/plan/planHash";
 import { PROCESSING_IDENTITY_FACT_MATERIAL_VERSION } from "@/lib/pos/processingIdentity/factMaterialProjection";
 import { processingIdentitySubjectAdoptionId } from "@/lib/pos/processingIdentity/trustAdapter/identityAdoptionIdentity";

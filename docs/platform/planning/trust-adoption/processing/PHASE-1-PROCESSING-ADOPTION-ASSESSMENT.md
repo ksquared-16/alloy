@@ -715,14 +715,44 @@ Everything before it is certified by test and module graph.
   for a subject whose contributing operations all committed, and `outcome` for one where they did
   not. A `compensated` operation is never counted as committed: a reversal reported as a commit is
   precisely the falsehood this slice exists to prevent.
-- **New finding, D-15 — a superseded package must be excluded, and this is consequential.**
-  Phase 1.6 supersedes the engine's judgment on **any** operator decision, including a plain
-  confirmation. What a plan executes after an operator decides is the operator's decision, so
-  crediting the engine's package with it would be false. Engine-decided subjects are plan-eligible in
-  their own right (`evaluateSubjectEligibility`'s trusted-candidate and no-candidate branches), so
-  execution binding is live for them — but **a fully operator-reviewed case produces no execution
-  evidence at all**. Whether Phase 1.6 should supersede on confirmation as well as correction is a
-  real open question this slice surfaces rather than settles.
+- **D-15 — a superseded package must be excluded. RESOLVED: Phase 1.6's supersession rule was wrong.**
+  Excluding superseded packages is correct — what a plan executes after an operator overrides is the
+  operator's decision, so crediting the engine's package would be false. But Phase 1.6 superseded on
+  **any** operator decision, including a plain confirmation, which meant a fully operator-reviewed
+  case produced no execution evidence at all. Raised as an open question by 1.7 and **corrected in
+  this branch**: agreement is not supersession.
+
+### The confirmation-versus-supersession correction
+
+`classifyOperatorIdentityDecisionEffect` compares the durable ENGINE judgment with the durable
+OPERATOR result, and never reads `decided_by`:
+
+```text
+agreement, or the engine declined to decide → accepted   (package remains CURRENT, still bindable)
+the operator postponed                      → deferred   (package remains CURRENT)
+the operator replaced the judgment          → superseded
+anything unrecognised                       → nothing at all
+```
+
+- **New finding, D-16 — the engine judgment is recoverable, though it is overwritten.**
+  An operator decision UPDATEs `decision_action` and `selected_candidate_id` in place, so the
+  engine's answer is not stored. It is still exact: the engine's answer is a pure function of
+  `candidates`, and neither `recordResolutionDecision` nor `applyCommitSelectionToResolutions`
+  writes that column. The derivation moved out of `canonicalResolutionEngine` into a leaf
+  (`engineJudgment.ts`) that both the engine and the classifier import — a copy would drift, and the
+  drift would silently reclassify overrides as confirmations.
+- **New finding, D-17 — `review_required` is the engine DECLINING to decide, not a result.**
+  Its package asserts `disposition: needs_review` and asks for an operator. When one decides,
+  nothing the package claimed became untrue, so it is not superseded — it is `accepted`. This is
+  also the branch the normal reviewed path runs through, so misreading it is what made execution
+  binding unreachable in practice.
+- **No new observation kind, and no migration.** `accepted` and `deferred` are Phase 0 vocabulary
+  with existing projection semantics. The durable gap gained an OPTIONAL `observation_kind`; absent
+  reads as `superseded`, so rows written before the correction are not orphaned.
+- **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
+  and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
+  three entries. The count assertion now reads `size === length`, so adding a capability is a
+  deliberate act in the slice that adds it rather than an edit to every predecessor.
 - **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
   and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
   three entries. The count assertion now reads `size === length`, so adding a capability is a
