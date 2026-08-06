@@ -677,8 +677,56 @@ Everything before it is certified by test and module graph.
 | **1.3** identity adapter contracts | **Merged** — `cd34be872` (PR #348). Pure and dormant. No migration. |
 | **1.4** dormant identity decision class | **Merged** — `942d078dd` (PR #349). Registered, no production caller. No migration. |
 | **1.5** live identity capture | **Merged** — `c933ea15b` (PR #351). First live identity persistence. No migration. |
-| **1.6** operator-correction lineage | **Implemented, this branch.** Supersession of a prior governed judgment by an operator correction or a replacement generation. No migration. |
-| 1.7 | Not started. |
+| **1.6** operator-correction lineage | **Merged** — `8d6917a18` (PR #353). Supersession by an operator correction or a replacement generation. No migration. |
+| **1.7** commit outcome binding | **Implemented, this branch.** Commit Plan execution outcomes become bounded Trust evidence, downstream only. No migration. |
+| 1.8 | Not started — closeout. |
+
+### What 1.7 confirmed, refined, or corrected
+
+- **AD-P1-1 and AD-P1-2 hold, and are now structurally asserted.** No Phase 1.7 module imports the
+  executor, preflight, the plan builder, approval or the command registry, and a control proves it.
+  Trust never initiates: the binding is reachable only after `executeApprovedPlan` returns and its
+  attempt row is persisted.
+- **The assessment's central worry is closed without touching the plan.** §Central architecture
+  decision asked whether Decision Package lineage must live on the Commit Plan. It must not, and it
+  need not: `PlanOperation.resolutionRefs` has always carried `processing_resolutions.id`
+  (`recommendationBuilder.ts:465`), and synthesized participation operations inherit their child's.
+  Lineage is therefore fully reconstructable, **no field was added, and no historical plan hash can
+  move** — which is stronger than a fixture proving it did not.
+- **New finding, D-11 — the plan hash cannot be reached from outside its three inputs.**
+  `computePlanContentHash({orgId, caseId, operations})` projects each operation through an
+  eleven-key whitelist. `sourceResolutionVersions`, `builtAt`, `status` and every other plan field
+  are already outside it. A Trust value could only enter through an operation's `payload`,
+  `commandKey`, `targetId` or the other material keys — which is why the detail allow-list refuses
+  any operational field rather than filtering one out later.
+- **New finding, D-12 — `CommitAttempt.attemptId` means two different things.**
+  A freshly executed attempt carries the synthetic `${planId}:attempt:${n}`; one loaded from the
+  database carries the row uuid (`attemptsDb.attemptFromRow`). `insertCommitAttempt` returns the
+  durable id and `executeApprovedPlanForCase` **discarded it**. Only the row id proves persistence,
+  so it is now captured and used as the execution reference. The pre-existing ambiguity is untouched
+  otherwise and is worth a separate look.
+- **New finding, D-13 — Processing has no infrastructure-failure state.**
+  `AttemptOutcome` is `committed | partially_committed | failed | preflight_rejected`; none
+  distinguishes a declined command from a dead transport, and if the executor throws no attempt row
+  is persisted at all. Phase 0's `infrastructure_failure` class is therefore **unreachable from this
+  source and never emitted** — asserting it would claim knowledge Processing does not have.
+- **New finding, D-14 — a partial commit is only honest at subject grain.**
+  A package is one subject's judgment; a plan spans several. `partially_committed` yields `executed`
+  for a subject whose contributing operations all committed, and `outcome` for one where they did
+  not. A `compensated` operation is never counted as committed: a reversal reported as a commit is
+  precisely the falsehood this slice exists to prevent.
+- **New finding, D-15 — a superseded package must be excluded, and this is consequential.**
+  Phase 1.6 supersedes the engine's judgment on **any** operator decision, including a plain
+  confirmation. What a plan executes after an operator decides is the operator's decision, so
+  crediting the engine's package with it would be false. Engine-decided subjects are plan-eligible in
+  their own right (`evaluateSubjectEligibility`'s trusted-candidate and no-candidate branches), so
+  execution binding is live for them — but **a fully operator-reviewed case produces no execution
+  evidence at all**. Whether Phase 1.6 should supersede on confirmation as well as correction is a
+  real open question this slice surfaces rather than settles.
+- **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
+  and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
+  three entries. The count assertion now reads `size === length`, so adding a capability is a
+  deliberate act in the slice that adds it rather than an edit to every predecessor.
 
 ### What 1.6 confirmed, refined, or corrected
 
