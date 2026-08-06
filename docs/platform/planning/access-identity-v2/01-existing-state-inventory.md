@@ -1,11 +1,13 @@
 # 01 — Existing-state inventory
 
-> **This file has three parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
+> **This file has four parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is
 > the **security threat & enforcement matrix** — required output #7. **Part III (§§24–36)** is the
-> **gap analysis** — required output #8. Parts II and III were delivered by later Mission 2 phases and appended
-> here per their assignment scopes; each reuses what precedes it rather than restating it. Read Part I first, or
-> jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform) or
-> [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan).
+> **gap analysis** — required output #8. **Part IV (§§37–44)** is the **role-model depth and role-editor
+> surface inventory**, added on operator reopen. Parts II–IV were delivered by later Mission 2 phases and
+> appended here per their assignment scopes; each reuses what precedes it rather than restating it. Read Part I
+> first, or jump to [§10](#10-headline--the-unauthenticated-surface-is-the-best-defended-part-of-this-platform),
+> [§24](#24-headline--the-gap-is-no-longer-in-the-product-alone-it-is-between-the-corpus-and-its-plan) or
+> [§37](#37-headline--there-is-no-role-hierarchy-to-flatten).
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. This pass re-anchors the
 > inventory to the current worktree and records what has **changed since acceptance** — because remediation
@@ -531,6 +533,10 @@ Ordered by what an attacker gains, not by data volume.
 ## 14. Threat register
 
 Eighteen entries. **T-14 … T-16 are controls that hold** and are recorded as such.
+
+> **The register continues in Part V.** `T-19 … T-26` (§47) and `H1 … H3` (§48) were added on operator
+> reopen and extend this table; `S-8 … S-14` (§51) extend §17. Nothing in §§10–23 was revised — read this
+> part first, then §§45–57 for the layer-depth and role-editor frame.
 
 | # | Threat | Actor | Boundary | Asset | Sev | Intended control | Actual control | Evidence |
 |---|---|---|---|---|:--:|---|---|---|
@@ -1411,3 +1417,759 @@ rg -n '^\*\*D13' $Q/04-authentication-model.md $P/01-existing-state-inventory.md
   II already cite.
 - **Verified at** `cd24874cb` in `wt6-vacilando-os-product-def`.
 - **No source, schema, migration, or UI changed by this phase.**
+
+---
+---
+
+# Part IV — Role-model depth and the role-editor surface
+
+> **Added on operator reopen**, against two items of standing guidance recorded on this assignment:
+> *"Role hierarchy is still too deep — reduce to four layers"* (revision request) and *"I want the role editor
+> simplified without changing the access architecture"* (implementation guidance, recorded twice).
+>
+> Parts I–III inventory **authority**; none of them inventories **depth** or the **editor**. Neither term
+> appears in §§0–36 — no section counts the layers between a credential and a decision, and no section reads
+> `AccessRolesConfigurationPage.tsx`. This part supplies both, so that "four layers" and "simplified" have a
+> measured baseline instead of an impression. The accepted corpus is reused as input and not re-derived;
+> everything marked **[verified this pass]** was opened and read in this worktree at `a72caaff4`.
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Existing-state inventory* (reopened) · assignment `asg_b433c59b3aacd6`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-director-experience-dx5-5-continuation` @ `a72caaff4`
+**Date** 2026-08-06
+**Method** static, file-grounded. No request issued, no browser, no database. **No source, schema or UI modified.**
+
+---
+
+## 37. Headline — there is no role hierarchy to flatten
+
+The first thing an inventory owes this guidance is the fact that changes what the guidance means:
+
+> **`role_definitions` is flat. There is no parent role, no role inheritance, and no hierarchy table —
+> anywhere in the schema or the application.** A repository-wide search for `parent_role`, `parent_role_key`,
+> `role_hierarchy` and `inherits` returns **zero** authority-related matches; every hit is the unrelated
+> process-engine concept `inherits_context_stage` (`web/lib/process/participationConfig.ts:29`) or a
+> `node_modules` package name **[verified this pass]**.
+
+Roles are a **flat set of four seeded rows** — `admin`, `ops`, `regional_lead`, `school_director`, all
+`is_system = true` (`20260729120000_…phase0…sql:177-180`) **[carried, §3.3]** — plus any custom role an
+operator creates. Nothing nests. So *"role hierarchy is still too deep"* cannot be describing role-to-role
+nesting, because none exists to reduce.
+
+**What is deep is the resolution chain.** Between a credential and an allowed request the platform interposes
+**eight layers** (§38). An operator can author **four** of them; the other four are invisible on every operator
+surface, and one of those four *overrides* the operator's authoring entirely (§39).
+
+That produces the reading this part recommends, and the reason it must be confirmed rather than assumed:
+
+> **RM-1 — "reduce to four layers" is a coherent and achievable instruction, but it is an instruction about
+> the authority resolution chain, not about role nesting; and executing it is by definition an
+> access-architecture change.** It would delete or collapse layers L5, L6 and L8 — the compatibility views,
+> the hand-maintained grid projection, and the portal-eligibility bypass. **That is in direct tension with the
+> same guidance's instruction to simplify the role editor *"without changing the access architecture."***
+
+The two directives are individually sensible and jointly ambiguous. §42 separates the editor work that is
+genuinely architecture-free from the work that is not. **Which of the two constraints governs is a product
+decision, and this part does not make it** — per the mission's prohibition on reinterpreting Compiled Mission
+intent, it is escalated as **D-RM1** (§43).
+
+---
+
+## 38. RM-2 — the eight layers, counted
+
+Each row is a distinct store or mapping a grant must traverse to become a decision. **[verified this pass]**
+except where marked **[carried]**.
+
+| # | Layer | Where it lives | What it contributes | Operator-authorable? |
+|---:|---|---|---|:--:|
+| **L1** | **Credential / session** | `auth.users`; session resolved before the gate | Identity of the caller | no |
+| **L2** | **Membership** | `user_roles(user_id, org_id, role)` — read at `resolveAdminAccessCore.ts:111-114`; **plus three legacy fallback reads** — `user_profiles.role` (`:44`), `app_users.role` by `id` (`:54`) and by `auth_user_id` (`:62`) | Which org, which role strings | **yes** — assign role |
+| **L3** | **Role catalog** | `role_definitions(org_id, role_key, role_label, is_system, is_active)`; seeded 4 per org on `orgs` insert (`…phase0…sql:177-180`, trigger `:199-202`) | Label, active flag, system flag | **yes** — create / rename / deactivate |
+| **L4** | **Grants** | `role_permission_grants(org_id, role_key, permission_key, allowed)` — read at `resolveAdminAccessCore.ts:90-94` | Role → permission keys | **yes** — but only *through* L6 |
+| **L5** | **Permission catalog** | `permission_definitions` (canonical) **plus two `security_invoker` compatibility views** `permissions` and `permission_keys` (`…phase0…sql:147-164`) **[carried, §2.4]** | Which keys legally exist | no |
+| **L6** | **Operator grid projection** | `PERMISSION_GRID_ROWS` — **9 capability areas × 3 levels**, a hand-maintained TypeScript constant (`web/lib/admin/permissionGrid.ts:13-22`, levels `:1`) | Maps area+level ⇄ **18 grantable keys** | no — it *is* the authoring vocabulary, but it is source code |
+| **L7** | **Scope overlay** | `user_access_profiles` → `user_department_access` / `user_site_access` (`20260504103000_user_access_scope_tables_v1.sql:18,69,150`); read at `resolveAdminAccessCore.ts:145-150,163-175` | Department / site narrowing | **yes** — set scope |
+| **L8** | **Portal admission** | `PORTAL_ROLES = {admin, ops}` (`resolveAdminAccessCore.ts:18`), `portalEligible` (`:142`) | **Short-circuits L4–L6 for the primary API gate** | no |
+
+**Depth is not the same as branching.** The model is one layer wide at every level and eight layers tall. That
+is the opposite of the shape "hierarchy" implies, and it is why the complaint is real even though no hierarchy
+exists: an operator sets a role, and the consequence is decided six layers away by a constant they cannot see.
+
+---
+
+## 39. RM-3 — the four layers an operator can author, and the four that decide
+
+Splitting the table above by the *authorable* column is the finding:
+
+| | Layers | Operator sees them? |
+|---|---|---|
+| **Authorable** | L2 membership · L3 role catalog · L4/L6 capability grid · L7 scope | yes — four surfaces in the Access workspace (`accessChapterRoutes.ts:10` — `users`, `roles`, `scopes`, `security`) **[verified this pass]** |
+| **Interposed** | L1 credential · L5 catalog + 2 views · L6 as *source code* · L8 portal bypass | **no operator surface renders any of them** |
+
+**The operator already authors exactly four layers.** So the most economical reading of *"reduce to four
+layers"* is not *"remove four things I use"* — it is **"make the system be the four I can see."** That is a
+statement about the four interposed layers, and three of them are load-bearing:
+
+- **L8 is the sharpest.** `portalEligible` is still the primary API gate (§5), so for `admin` and `ops` the
+  entire grid an operator just spent time authoring is **not consulted**. This is the mechanism behind `T-6`
+  *revocation theatre* (§14) and `T-4` *`ops` is `admin`* — restated here only as *depth*: **two of the eight
+  layers exist solely to be bypassed by the eighth.**
+- **L6 is a hand-maintained duplicate of L5.** The grid is a TypeScript constant that must be kept in sync with
+  a database catalog by hand. `C12`/`C13` (§2.3) are precisely what happens when it is not, and `W-10`
+  — *regenerate the grid from the catalog* — is the corpus's own name for deleting this layer **[carried]**.
+- **L5 carries two compatibility views** that exist only to keep pre-Phase-0 readers working (`…phase0…sql:147-164`).
+  They are a migration artifact, not a model concept.
+
+**L2's three legacy fallback reads are a fifth candidate**, and the cheapest: they are the residue of two
+retired role stores (`user_profiles`, `app_users`) and they are the reason a role string can resolve from a
+table no operator surface writes.
+
+> **RM-4.** Four of the eight layers — **L5's two views, L6's hand-maintained projection, L8's bypass, and
+> L2's three legacy reads** — are compatibility or migration residue rather than model concepts. **An
+> eight-layer chain reduces to four without removing a single operator capability.** This is recorded as an
+> observation about the existing state; sequencing it is `03…`'s job, not this document's.
+
+---
+
+## 40. RM-5 — the role editor, measured
+
+`web/components/adminV2/settings/access/AccessRolesConfigurationPage.tsx`, **607 lines**, all
+**[verified this pass]**:
+
+| Measure | Count | Evidence |
+|---|---:|---|
+| Lines | **607** | whole file |
+| `useState` hooks | **18** | `:50-70` |
+| `fetch` call sites | **7** | `:76-78` (three, in one `Promise.all`), `:126`, `:181`, `:206`, `:228` |
+| Distinct endpoints | **5** | `rbac/roles`, `rbac/roles/{key}`, `rbac/grants`, `rbac/permissions`, `settings/users-roles/members` |
+| Independent save paths | **3** | `createRole` `:176`, `saveRoleMeta` `:200`, `saveGrants` `:222` |
+| Tabs in the selected-role workspace | **5** | `:254-260` — Overview · Permissions · Users · Experience Access · History |
+| …of which render a **placeholder** | **2** | `:535-537` and `:540-543`, both `data-capability="planned"` |
+| Grid rows presented | **9** | `permissionGrid.ts:13-22` |
+| Radio inputs rendered on the Permissions tab | **27** | 9 rows × 3 levels, `:484-497` |
+
+Four properties of that surface are worth recording as existing state, because each is a candidate for
+"simplified" and they are **not** equally architecture-free:
+
+1. **Two of five tabs display nothing.** *Experience Access* renders the sentence *"Derived from permission
+   grants. Planned projection."* and *History* renders *"A verified change history for this role is planned.
+   No events are fabricated for display."* Both are honest — commendably so, and consistent with the
+   truthfulness class in §31 — but they are **40% of the tab bar spent on zero information**.
+2. **Three save buttons, no cross-validation.** Role label/active (`:409-416`), permissions (`:504-511`), and
+   role creation (`:594-600`) each write independently. An operator who edits the label *and* the grid and
+   presses one button silently discards the other edit. There is no dirty-state tracking among the 18 hooks.
+3. **The Overview tab is a third rendering of data the other tabs own.** *Capability Summary* (`:418-434`)
+   re-derives from `grantKeys` what the Permissions tab edits; *Assigned Users* (`:435-444`) renders a count
+   of what the Users tab lists. Neither is editable. The tab exists to summarise two tabs adjacent to it.
+4. **Role creation asks the operator for a `role_key`.** The modal collects a technical identifier
+   (`:576-588`) and labels it *"Technical identifier only — operators see the label, not this key."* The
+   product asks the operator to author a value it then tells them they will never see.
+
+**Only item 4 touches the access model at all**, and only at its edge (whether `role_key` is operator-supplied
+or derived from the label). Items 1–3 are presentation: removing placeholder tabs, unifying the save, and
+folding the summary changes **no** grant, key, gate or table. §42 draws that line explicitly.
+
+---
+
+## 41. RM-6 — role editing is reachable from five surfaces, and 1,155 lines of it are legacy
+
+**[verified this pass]**
+
+| Surface | Lines | Status |
+|---|---:|---|
+| `/adminV2/settings/organization/access?section=roles` | 42 (page) → 607 (component) | canonical — `CANONICAL_ORGANIZATION_ACCESS_HREF` (`accessChapterRoutes.ts`) |
+| `/adminV2/settings/users-roles?section=…` | 41 → 19 | second entry to the **same** chapter component (`users-roles/page.tsx:35-40`) |
+| `/adminV2/settings/user-access` | 8 | third adminV2 entry |
+| `/legacy-admin/system/roles` | **416** | legacy `RolesClient.tsx` |
+| `/legacy-admin/system/access-control` | **369** | legacy `AccessControlClient.tsx` |
+| `/legacy-admin/system/customer-person-roles` | **370** | legacy — *customer* person roles, a **different** concept sharing the word "role" |
+
+**1,155 lines of legacy role-editing UI are still present in the tree.** Whether they are reachable by a live
+operator was not established (no browser was opened — §44), and `alloy-operator-surfaces` doctrine already
+holds that `/legacy-admin` is never the surface to judge operator behaviour. It is recorded because **"simplify
+the role editor" has five plausible referents**, and an execution phase that simplifies the canonical one while
+four others remain has not simplified what the operator sees.
+
+The last row is a distinct hazard: `customer-person-roles` is the *family/household* relationship vocabulary,
+not operator authority. It shares only the word.
+
+---
+
+## 42. What "simplify without changing the access architecture" can and cannot reach
+
+The constraint is precise and worth honouring literally. Sorting §40's findings by whether they alter any
+layer in §38:
+
+| Candidate | Touches which layer? | Architecture-free? |
+|---|---|:--:|
+| Remove the 2 placeholder tabs (`:533-544`) | none | **yes** |
+| Unify the 3 save paths into one submit | none — same endpoints, same payloads | **yes** |
+| Fold Overview's two read-only cards into the tabs that own them | none | **yes** |
+| Derive `role_key` from the label at creation | L3 write shape only; no gate, key or grant changes | **yes, at the edge** |
+| Collapse 27 radios into 9 three-state controls | L6 presentation only | **yes** |
+| Regenerate the grid from the catalog (`W-10`) | **deletes L6** | **no** |
+| Retire the two compatibility views | **deletes L5's views** | **no** |
+| Replace `portalEligible` with a `portal.access` capability (`W-13`) | **deletes L8** | **no** |
+| Drop the three legacy fallback reads | **narrows L2** | **no** |
+
+**The first five are available now and require no decision.** They would take the editor from 607 lines and 5
+tabs to something materially smaller without moving a single authority boundary — which is exactly what the
+guidance asks for.
+
+**The last four are the "four layers" work**, and they are architecture changes by any reading. Three of them
+already have workstream numbers in the plan of record (`W-10`, `W-13`, and `W-19`'s vicinity); none is
+scheduled as a *depth-reduction* effort, because the plan was never sequenced against a depth finding.
+
+> **RM-7 — the two directives are separable, and separating them is the recommendation.** The editor
+> simplification is real, unblocked, and architecture-free at items 1–5. The layer reduction is real,
+> valuable (§39 RM-4), and **cannot** be done under a no-architecture-change constraint. Attempting both under
+> one instruction is how a phase ends up changing a gate while believing it changed a screen.
+
+---
+
+## 43. D-RM1 — the decision this part escalates rather than makes
+
+Recorded in the `D-` space with an `RM` qualifier deliberately, because §18/§30 establish that the bare `D-n`
+register has already collided three times and that renumbering is Director-owned.
+
+> **D-RM1 — Does "reduce to four layers" govern the resolution chain (L1–L8), and does it override the
+> "no access-architecture change" constraint attached to the role-editor work?**
+>
+> - **If yes** — the target is the four operator-authorable layers of §39, delivered by removing L5's views,
+>   L6's hand-maintained projection, L8's bypass and L2's legacy reads (RM-4). This is architecture work,
+>   needs `W-10`/`W-13` sequencing, and is not a role-editor task.
+> - **If no, and the constraint governs** — the role-editor work is §42's first five items, the chain stays
+>   eight layers deep, and *"too deep"* is answered by presentation only. The operator should know that the
+>   depth they are reacting to would remain.
+>
+> **This part does not choose.** Reality diverges from the guidance's framing in a way the mission's
+> prohibition reserves to the Director: *there is no role hierarchy* (§37), so the instruction cannot be
+> executed literally, and the two available readings lead to two different phases in two different waves.
+
+Secondary, and cheaper to settle: **which of the five surfaces in §41 is "the role editor."**
+
+---
+
+## 44. Limits and provenance — Part IV
+
+1. **Static only.** No browser was opened, no request issued, no database queried. **No claim is made about
+   how any of this renders or behaves for a live operator** — including whether the three legacy surfaces in
+   §41 are reachable. Line counts are file facts, not screen facts.
+2. **Nothing here is a new *security* finding.** RM-1 … RM-7 are model-shape and surface-complexity findings.
+   Where they touch authority (L8's bypass, the grid/catalog divergence) they **restate** `T-4`, `T-6`, `C12`
+   and `C13` in the depth frame and are marked **[carried]**; the severity ratings stay with §14.
+3. **"Eight layers" is a counting judgement, not a measurement.** A different reader could merge L5 and L6
+   (both are "what keys exist"), giving seven, or split L2's legacy fallbacks out, giving nine. The layers are
+   enumerated individually in §38 precisely so a recount can be argued against the same evidence. **Do not
+   quote the number without §38.**
+4. **The four-vs-four split in §39 is derived from operator *surfaces*, not from a usability study.** It says
+   which layers have an editing UI, not which layers an operator understands.
+5. **`role_key` derivation (§42 row 4) was classed architecture-free on the L3 write path only.** `user_roles.role`
+   has no FK to `role_definitions` (`M2-2` **[carried]**), so changing how keys are minted has a blast radius
+   this pass did not trace. It is the one "yes" in that table a sceptic should re-check.
+6. **No workstream was created, renumbered or re-sequenced**, and `D-RM1` is escalated, not resolved — per the
+   mission's document-authority rule and §18's precedent.
+7. **Scope discipline.** The assignment names exactly one output path. **Only that file was written.** Unlike
+   Part III, this part did **not** update `README.md`; the README's document table therefore does not yet
+   record Part IV. That is a deliberate scope choice, not an oversight, and is left as a follow-up.
+8. **Read this pass:** `AccessRolesConfigurationPage.tsx` (full), `permissionGrid.ts` (full),
+   `resolveAdminAccessCore.ts:1-175`, `accessChapterRoutes.ts`, `users-roles/page.tsx`,
+   `…phase0…sql:64-125,170-210`; line counts for the three legacy clients and the four other access components.
+   **Mechanical:** the inheritance search (§37), `useState`/`fetch` occupancy, and `RM-`/`R-` namespace
+   vacancy across both corpus folders.
+9. **Verified at** `a72caaff4` in `wt6-director-experience-dx5-5-continuation` — a **different worktree** from
+   Parts I–III (`wt6-vacilando-os-product-def`). Carried line numbers were spot-checked, not re-derived.
+10. **Read-only.** No source, schema, migration or UI was modified by this phase.
+
+---
+---
+
+# Part V — The four-layer chain and the role editor, read as a threat model
+
+> **Added on operator reopen of the *Security threat and enforcement matrix* phase** (assignment
+> `asg_47e1c0dee2c5e0`). Part IV inventoried **depth** and the **editor** and closed by stating that
+> *"nothing here is a new security finding"* (§44.2) — correctly, because inventorying a surface is not
+> assessing it. **This part is the assessment Part IV deferred**, and it is what this assignment owes: the
+> operator's two directives — *reduce to four layers*, *simplify the role editor without changing the access
+> architecture* — both act directly on the authority path, and neither had been read through the threat frame.
+>
+> It extends Part II rather than revising it. `T-1 … T-18`, `S-1 … S-7` and §15's matrix stand unchanged.
+> This part adds `T-19 … T-26`, three holding controls `H1 … H3`, invariants `S-8 … S-14`, and a second
+> enforcement matrix cut by *layer* instead of by *boundary*. Everything marked **[verified this pass]** was
+> opened and read in this worktree; carried findings are cited to their owner.
+
+**Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Security threat and enforcement matrix* (reopened) · assignment `asg_47e1c0dee2c5e0`
+**contentHash** `3c36b58117e46b2363ef602b385409e7`
+**Worktree** `wt6-director-experience-dx5-5-continuation` @ `207cd5322` (working tree)
+**Date** 2026-08-06
+**Method** static, file-grounded. No request issued, no browser, no database, no test run. **Nothing below is a
+demonstrated vulnerability** — §11's severity scale and §22's limits apply unchanged.
+
+---
+
+## 45. Headline — eight layers, two decisions, one bypass
+
+Part IV counted the chain and found it eight layers deep (§38). Reading the same eight layers for *what each
+one denies at request time* produces the finding that decides the security half of the operator's instruction:
+
+> **Of the eight layers between a credential and an allowed request, exactly two can deny anything when the
+> request arrives — L4 grants and L7 scope — and both of them fail open. A third, L8, exists to bypass L4.
+> The remaining five never participate in a request-time decision at all.** **[verified this pass]**
+
+The consequence is the opposite of what "depth" usually implies. This is not defence in depth; there is no
+depth in the defence. It is **five inert layers wrapped around two permissive checks and one bypass**, and
+every one of the five is a place where an operator's intent is recorded but never consulted:
+
+- **L3 (role catalog) is enforced at assignment and ignored at resolution.** Deactivating a role blocks new
+  assignments and revokes nothing (T-20).
+- **L6 (the permission grid) is a TypeScript constant that the API does not enforce.** It is the operator's
+  entire authoring vocabulary and it governs 18 of the catalog's 32 keys (`05…§2.1-2.2` **[carried]**).
+- **L5 (permission catalog) is real — but at *write* time only** (H3). It constrains what may be granted, never
+  what a grant means.
+- **L2's three legacy reads are not a fallback; they are a second admission path** that outranks the first
+  when the first is empty, and can only produce `admin` or `ops` (T-19).
+- **L1 authenticates and discards** — §12's B1 finding, restated per-layer.
+
+**This is why "reduce to four layers" is safe.** RM-4 (§39) proposes removing L5's views, L6's projection,
+L8's bypass and L2's legacy reads. **Five of those four removals touch nothing that denies a request, and the
+sixth — L8 — is a bypass whose removal makes L4 load-bearing for the first time.** The reduction does not
+weaken enforcement; it removes the layers that were never enforcing and the one that was actively defeating
+enforcement. §51 states this as the security input to `D-RM1`.
+
+Two consequences that the depth frame makes visible and the boundary frame did not:
+
+1. **The three most severe findings in this pass are all *revocation* failures** (T-19, T-20, T-22) — and all
+   three sit in layers Part II's boundary matrix rated as structure rather than control. Part II's §20 already
+   concluded that *"remove this person" does not remove them*. **This part finds two further, independent
+   mechanisms by which it does not**, one of which is permanent rather than time-bounded.
+2. **The role editor is the platform's highest-value write surface and its least-constrained one.** It writes
+   asset **A1** (§13) through four routes, two of which admit on a role *literal* (T-24), and it is the surface
+   the operator has asked to simplify. §52 sorts the proposed simplifications by whether they touch a control.
+
+---
+
+## 46. RM-8 — the eight layers as enforcement points
+
+Part IV's §38 table by *authorability*; this one by *enforcement*. **[verified this pass]**
+
+| Layer | Runs on every request? | Can it deny? | On absence | On read error | Where |
+|---|:--:|:--:|---|---|---|
+| **L1** credential | yes | authenticates only | n/a | n/a | `middleware.ts:117` (§12 B1) |
+| **L2** membership | yes | **admits**, never denies | **falls through to three legacy reads** → `admin`/`ops` | `return null` — **denies** | `resolveAdminAccessCore.ts:111-140` |
+| **L3** role catalog | **no** | **not consulted at resolution** | — | — | `users/[userId]/role/route.ts:33` (assignment only) |
+| **L4** grants | yes | **yes** | empty grant set | `return []` — **denies** | `resolveAdminAccessCore.ts:89-100` |
+| **L5** permission catalog | **write time only** | yes, on grant writes | — | 500 | `grants/route.ts:60-68`; FK `…phase0…sql:136-140` |
+| **L6** operator grid | **no** | **no — UI vocabulary only** | — | — | `permissionGrid.ts:12-47` |
+| **L7** scope | yes | **yes** | **fails open — scope stays `all`** | **fails open** for the profile read | `resolveAdminAccessCore.ts:145-161` |
+| **L8** portal admission | yes | **inverts denial — it admits** | — | — | `resolveAdminAccessCore.ts:18,142` |
+
+**Read the "can it deny?" column.** Two yeses (L4, L7). One "not consulted." One "UI only." One "write time
+only." One that admits rather than denies. One that authenticates and stops. **An operator authoring in the
+Access workspace is editing L2, L3, L6 and L7 — and only two of those four reach a request-time decision.**
+
+Three properties worth stating separately because each is a finding in §47:
+
+- **L2's absence behaviour is the inverse of every other layer's.** Every other read in
+  `resolveAdminAccessCore` fails *closed* on error (`:116-119`, `:95-98`) or degrades to a bounded value.
+  L2 alone responds to *no rows* by consulting a different, older store that can only return the two most
+  privileged role strings in the platform (`:136-140`, `:49`, `:58`, `:66`) **[verified this pass]**.
+- **L7's fail-open is two distinct failures.** A missing `user_access_profiles` row leaves scope at `all`
+  (`:155-161`, comment at `:161`) — that is G4/T-5 **[carried]**. A profile-read *error* is discarded entirely
+  (no `error` destructured at `:145-150`) — that is T-9 **[carried]**. Both remain open.
+- **L4 is the only layer that both runs on every request and fails closed** (`:95-98` returns `[]`). It is also
+  the layer L8 bypasses.
+
+---
+
+## 47. Threat register extension — T-19 … T-26
+
+Continues §14. Severity scale is §11's, unchanged. **All eight are new to the corpus**; none restates a
+`T-1 … T-18` entry, and where one shares a *mechanism* with a carried finding that is stated in the row.
+
+| # | Threat | Actor | Boundary | Asset | Sev | Intended control | Actual control | Evidence |
+|---|---|---|---|---|:--:|---|---|---|
+| **T-19** | **Removal restores administration.** Removing a principal from their only org deletes their sole `user_roles` row; resolution then falls through to two legacy tables no operator surface writes or displays, which can only yield `admin` or `ops` — with `portalEligible = true`, the primary API gate. The route returns `{ok:true}` | Ex-principal | B2 | A1, A2, A3, A6 | **S1** | Removal removes authority | `remove/route.ts:26-30` deletes `user_roles`; `resolveAdminAccessCore.ts:131-140` then calls `fetchLegacyAdminOpsOrgAndRole`; `:49,58,66` accept only `admin`/`ops`; `:142` sets `portalEligible` | **[verified this pass]** — §49 |
+| **T-20** | **Deactivating a role revokes nothing.** `role_definitions.is_active=false` is enforced when *assigning* a role and never when *resolving* one; existing members keep every grant indefinitely. The toggle is the second control on the editor's Overview tab | — (control failure) | B2 | A1, A6 | **S2** | Deactivation denies | `resolveAdminAccessCore` never reads `role_definitions` (5 files do; it is not one); `fetchPermissionKeys:89-94` joins grants by `role_key` alone; assignment-side check at `users/[userId]/role/route.ts:33` | **[verified this pass]** — §50 |
+| **T-21** | **Phantom roles are grantable and enforceable but not assignable.** The roles API fabricates the four system roles at read time when no row exists; grant writes validate `permission_key` but never `role_key`, and no FK constrains it; resolution reads grants by `role_key` alone. So capabilities can be authored for a role that does not exist — and are live for anyone whose membership row carries that string | Insider; seed / import writer | B2, B4 | A1, A5 | **S2** | One role vocabulary, defined once (I-8) | `defaultRoleDefinitions.ts:34-47` merges defaults; applied at `roles/route.ts:31`; `grants/route.ts:60-68` validates keys only; the sole Phase 0 FK is on `permission_key` (`…phase0…sql:136-140`) | **[verified this pass]** — §50 |
+| **T-22** | **A failed read becomes a silent total revocation on the next save.** If the grants GET fails, the editor sets the grant set to empty **with no error shown**; the Permissions tab then renders as a legitimate all-*None* state, and Save writes that empty set, deleting every grant for the role | Transient DB / network fault | B2 | A1, A6 | **S3** | A read failure is visible and blocks writing | `AccessRolesConfigurationPage.tsx:128-135` — both the `!res.ok` and `catch` paths call `setGrantKeys(new Set())` and return without setting `error`; `:231` PUTs `[...grantKeys]`; `grants/route.ts:70-74` deletes all | **[verified this pass]** |
+| **T-23** | **Grant replacement is not atomic.** `PUT /rbac/grants` deletes every grant for the role, then inserts; an insert failure leaves the role with **zero** grants and returns 500 | Transient fault | B2 | A1 | **S3** | Authority writes are atomic (I-31ᴬ) | `grants/route.ts:70-91` — untransacted delete-then-insert, no compensation. **Same defect class as T-13, on a second authority table** | **[verified this pass]** |
+| **T-24** | **The authority graph's write gate is a role literal on an unconstrained column.** `canManageUsersAndRoles` returns true for any principal whose `roleKeys` contains `"admin"` *before* consulting any capability; `user_roles.role` has no FK. Reads of the whole authority graph additionally admit on `portalEligible` (L8) | Insider; seed / import writer | B2 | A1 | **S2** | Authority-graph writes gated on a capability | `canManageUsersAndRoles.ts:16` (literal), `:17` (capability, second); `:58` portal-or-manage for reads. No FK on `user_roles.role` (`02…` M2-2 **[carried]**) | **[verified this pass]** |
+| **T-25** | **Phase 0 re-granted `anon` SELECT on two access-control objects**, six days before the platform-wide anon revocation. Closed today **by migration ordering alone**; the default-privilege change does not prevent a future explicit `GRANT` | Internet | B1, B4 | A5 | **S4** | `anon` holds no public-schema privilege (issue #318) | `…phase0…sql:163-164` grants SELECT on `permissions`/`permission_keys` to `anon`; revoked by `20260804180000_platform_anon_privilege_revocation.sql:105` (its `:100` comment counts views). RLS is the second control: base-table SELECT policy names `authenticated` (`remote_schema.sql:7852`) and the views are `security_invoker` (`…phase0…sql:150,154`) | **[verified this pass]** — §50 |
+| **T-26** | **Authority writes land in an org the operator never chose.** The role editor writes to `access.orgId`, which is the lexicographically smallest org among the caller's `admin`/`ops` memberships — not an operator selection, and named on no surface | Insider (multi-org) | B5 | A1 | **S3** | The org a command acts on is explicit | `chooseOrgAndRoleKeysFromMembershipRows:30-32`; consumed as `auth.access.orgId` at `roles/route.ts:10`, `grants/route.ts:9,39`, `remove/route.ts:13`. **Sharpens I-7 (open) onto the authority-graph write path** | **[verified this pass]** |
+
+**Severity distribution.** One S1, four S2, three S3, one S4 — and **three of the top five are revocation
+failures**. Part II's §20 row *"revocation takes effect — not met, twice"* becomes **not met, four times**:
+the 120 s cache (T-1), the absent credential-disable verb (T-2), the legacy re-admission (T-19), and role
+deactivation (T-20).
+
+---
+
+## 48. Controls that hold on this surface — H1 … H3
+
+§14 records passing controls because a matrix that lists only failures cannot be used to judge coverage. Three
+hold here, and **each one is a constraint on the simplification work**, not merely reassurance.
+
+> **H1 — Enforcement is at the route, not the screen.** All five role-editing surfaces of §41 — the canonical
+> editor, its two adminV2 aliases, and both legacy clients — call the **same four** `/api/admin/rbac/*` routes
+> (`AccessRolesConfigurationPage.tsx:76-78,126,181,206,228`; `RolesClient.tsx:52,64,76,142,151,179`;
+> `AccessControlClient.tsx:56,76`) **[verified this pass]**. The 1,155 lines of legacy role UI are therefore a
+> **surface-area and consistency** problem, not an enforcement gap — they hold no authority the canonical
+> surface does not. *Consequence:* **deleting them is security-neutral and safe**, which is the one place in
+> this corpus where authority is located correctly. It is also the direct counter-example to T-8: command
+> authority here is *not* a property of transport.
+
+> **H2 — The grid does not strip what it cannot display.** The editor seeds its grant set from the server's
+> full response (`:132`) and `applyGridRowSelection` deletes only keys the edited row defines, preserving
+> out-of-grid keys (`permissionGrid.ts:65,74-76`); Save PUTs the union (`:231`) **[verified this pass]**. This
+> is load-bearing: the seed grants `admin` **every active key** (`…phase0…sql:292-296`), of which the grid
+> represents 18 of 32 (`05…§2.1-2.2` **[carried]**). Without H2, opening the Permissions tab and pressing Save
+> would silently delete the 14 keys the editor cannot show. **Any "collapse the 27 radios" change must carry a
+> regression lock for H2** (S-11).
+
+> **H3 — L5 is a real write-time enforcement layer.** Every submitted key is validated against
+> `permission_definitions.is_active` *before* the destructive delete (`grants/route.ts:60-68`), and Phase 0
+> added the single FK `role_permission_grants_permission_definitions_fkey` (`…phase0…sql:136-140`)
+> **[verified this pass]**. A grant cannot name a key that does not exist. *Consequence:* the asymmetry in
+> T-21 is sharper than it looks — the same handler that rigorously validates one column of the composite key
+> does not validate the other.
+
+**H2 and H3 are why §52 can classify some of Part IV's proposed simplifications as safe.** They are the
+controls those changes must not break, and neither is currently protected by a test.
+
+---
+
+## 49. T-19 in detail — removal restores administration
+
+The sharpest finding in this pass, and the one that most directly answers *"reduce to four layers."* It is a
+five-step chain, each step individually reasonable **[verified this pass]**:
+
+| # | Step | Evidence |
+|---|---|---|
+| 1 | The operator presses **Remove** on the canonical Users surface | `AccessUsersConfigurationPage.tsx:299` |
+| 2 | The route deletes the principal's `user_roles` row for the caller's org — and nothing else. Its own comment: *"Does not delete auth.users"* | `remove/route.ts:6,26-30` |
+| 3 | On the principal's next request, `chooseOrgAndRoleKeysFromMembershipRows` returns `null` — they now hold **no** membership row in any org | `resolveAdminAccessCore.ts:131-132` |
+| 4 | Resolution does not deny. It calls `fetchLegacyAdminOpsOrgAndRole`, which reads `user_profiles.role`, then `app_users.role` by `id`, then by `auth_user_id` | `:136-140`, `:44`, `:54`, `:62` |
+| 5 | Those reads accept **only** `"admin"` and `"ops"`. A match yields that role and sets `portalEligible = true` — the primary API gate | `:49`, `:58`, `:66`, `:142` |
+
+**The failure mode is not "removal is slow" — it is "removal is inverted."** A principal with a stale legacy
+row does not lose authority on removal; they lose whatever *narrower* role their `user_roles` row carried and
+resolve to `admin` or `ops`. Removing a `school_director` who has an old `app_users.role = 'admin'` row
+**promotes them**. The product reports success (`{ ok: true }`, `:34`) and no surface displays either legacy
+table.
+
+**Precondition, stated plainly.** This requires a legacy row to exist. **No database was queried** — whether
+any live tenant holds such rows is **not established here** and is the first thing an execution phase must
+check. What *is* established is structural and sufficient to act on:
+
+- The current user-creation path writes **only** `user_roles` (`users/route.ts` — no `user_profiles` or
+  `app_users` write; G4/§3.5 **[carried]**), so no *new* principal acquires a legacy row.
+- Therefore the exposed population is exactly the **pre-migration** one — the longest-tenured accounts, which
+  are also the ones most likely to have held `admin` before the `user_roles` model existed.
+- The two legacy tables are the residue of retired role stores (Part IV §39 **[carried]**). **Nothing in the
+  product writes them, displays them, or removes rows from them.**
+
+**Relation to T-1.** T-1 is a 120-second cache window. **T-19 has no window** — it is the steady state after
+the cache expires. They compound: the cache serves the old authority for 120 s, and the resolver then
+reconstructs an equal-or-greater authority from a store the operator cannot see.
+
+**This is the security case for dropping L2's legacy reads**, which Part IV listed as the cheapest of RM-4's
+four removals. It is not cleanup. It is the removal of a second, invisible, privilege-only admission path that
+defeats the platform's only membership-removal verb.
+
+---
+
+## 50. T-20, T-21 and T-25 in detail
+
+**T-20 — the Active toggle.** `role_definitions.is_active` is checked in exactly one place on the authority
+path: role *assignment* rejects an inactive role (`users/[userId]/role/route.ts:33-36`, *"Invalid or inactive
+role for this org"*). Resolution never reads the table at all — only five application files reference
+`role_definitions`, and `resolveAdminAccessCore.ts` is not among them; `fetchPermissionKeys` selects grants by
+`(org_id, role_key)` with no join and no active predicate (`:89-94`) **[verified this pass]**.
+
+So deactivating a role means: *no one new may be given it; everyone who has it keeps everything.* The editor
+offers the toggle beside the role label (`:409-416` **[carried, §40]**) with no indication that it governs
+future assignment only. **This is a distinct mechanism from T-6.** T-6 is *grants do not constrain surfaces*;
+T-20 is *the role's own lifecycle flag does not constrain grants*. Both present as the same thing to an
+operator: a control that reports success and changes nothing.
+
+A second-order note: the PATCH route refuses to deactivate a **system** role (`roles/[role_key]/route.ts:45-47`)
+but permits relabelling one unconditionally (`:41-43`). The one guard on that surface protects an operation
+that is already inert.
+
+**T-21 — phantom roles.** Phase 0's own section header reads *"Role definitions are seeded by the database,
+never fabricated at read time"* (`…phase0…sql:167-168`). The API still fabricates them:
+`mergeRoleDefinitionsWithDefaults` adds any missing member of a hard-coded four-role constant as
+`is_system: true, is_active: true, created_at: null` (`defaultRoleDefinitions.ts:34-47`), and
+`GET /api/admin/rbac/roles` applies it to every response (`roles/route.ts:31`) **[verified this pass]**.
+
+That constant is a **fifth role vocabulary** on top of the four `02…` M2-8 already records **[carried]**, and
+it produces a closed loop the corpus has not previously stated:
+
+1. The editor lists `regional_lead` whether or not a row exists.
+2. The operator authors permissions for it. `PUT /rbac/grants` validates every `permission_key` against the
+   catalog (H3) but **never checks that `role_key` names a real role**, and no FK constrains that column.
+3. The grants are written and are **live** — `fetchPermissionKeys` resolves by `role_key` alone.
+4. But `PATCH /users/{id}/role` **refuses to assign** the role, because *that* path does check
+   `role_definitions` (`:33`).
+
+**Capabilities can therefore be authored, stored and enforced for a role the product will not let an operator
+assign** — reachable only by a writer outside the product (seed, import, direct SQL), which `user_roles.role`'s
+missing FK permits (T-11 **[carried]**). The Phase 0 migration closed this at the database and the API layer
+re-opened it above.
+
+**T-25 — the `anon` grant.** `…phase0…sql:163-164` executes
+`GRANT SELECT ON public.permissions, public.permission_keys TO "anon"` — on the two compatibility views over
+the permission catalog, i.e. on L5. Six days later, `20260804180000_platform_anon_privilege_revocation.sql:105`
+runs `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon`, and its own comment confirms the sweep covers views
+(`:100`). **The grant is closed today, by ordering.** Two reasons to record it anyway:
+
+1. **The revocation's forward protection is `ALTER DEFAULT PRIVILEGES`** (`:83-85`), which governs objects
+   created *without* an explicit grant. It does not prevent a future migration from executing an explicit
+   `GRANT … TO anon`, which is precisely what Phase 0 did. The pattern is live; only this instance is closed.
+2. **The second control is RLS, and it is doing the real work.** The views are `security_invoker` (`:150,154`),
+   so an `anon` read executes under `anon`'s own RLS; `permission_definitions`' SELECT policy is scoped
+   `TO authenticated` (`remote_schema.sql:7852`) while the base table still carries `GRANT ALL … TO anon`
+   (`:9449`). **Two controls disagreed and the stricter one held.** That is the correct outcome by luck of
+   layering, not by design — and it is one of the four layers RM-4 proposes to delete, which would remove the
+   object carrying the contradiction.
+
+---
+
+## 51. What the four-layer reduction does to the threat model
+
+The security input to `D-RM1` (§43). Each RM-4 removal, against the register:
+
+| RM-4 removal | Closes | Weakens | Net |
+|---|---|---|---|
+| **L2's three legacy reads** | **T-19 (S1)** entirely; narrows T-1's compounding | nothing — no operator surface writes or reads these tables | **Strongly positive** |
+| **L8's `portalEligible` bypass** | Makes L4 load-bearing; is the mechanism behind **T-4** and **T-6** **[carried]**; removes the read-side admission in T-24 | **Requires L4 to be correct and seeded first** — removing the bypass before grants govern anything locks operators out | **Positive, strictly ordered** |
+| **L6's hand-maintained projection** (`W-10`) | The grid/catalog divergence behind **C12/C13** **[carried]**; makes the 18-of-32 authoring gap visible | **Must preserve H2** — a regenerated grid that covers all 32 keys changes what Save writes | **Positive with a lock** |
+| **L5's two compatibility views** | **T-25** at its source | **Removes one of the two controls** that currently disagree correctly (§50) — the base-table `anon` grant survives the views | **Positive, but audit the base grant first** |
+
+**Two findings follow, and they are the ones the Director needs.**
+
+> **RM-9 — the layer reduction closes one S1 and two S2 threats and weakens no control that this pass could
+> find.** No layer proposed for removal appears in the "can it deny?" column of §46 except L8, whose denial
+> value is *negative*. **The "no access-architecture change" constraint attached to the role-editor work is
+> not protecting any enforcement control** — it is protecting compatibility surfaces and one bypass.
+
+> **RM-10 — but the reduction is order-dependent, and one ordering is dangerous.** Removing L8 before L4 is
+> seeded and enforced converts a fail-open platform into a fail-closed one with no grants — a total operator
+> lockout, not a security improvement. `03…`'s `W-13` sequences the L8 replacement after the capability work;
+> **that ordering must be preserved and is the one hard constraint on this instruction.** Similarly, L2's
+> legacy reads must not be dropped until it is established that no live principal resolves *only* through
+> them (§49's unverified precondition) — otherwise removal locks out real administrators.
+
+**This does not resolve `D-RM1`.** It supplies the half a security assessment can supply: the reduction is
+safe and valuable, the constraint it collides with defends nothing, and the sequencing is non-negotiable.
+Whether the instruction *governs* remains the Director's call, per §43 and the mission's prohibition on
+reinterpreting Compiled Mission intent.
+
+---
+
+## 52. Security review of the "architecture-free five"
+
+Part IV §42 classified five editor simplifications as touching no layer. **Architecture-free is not the same as
+control-free**, and two of the five are not security-neutral as written.
+
+| §42 candidate | Touches a control? | Verdict |
+|---|---|---|
+| Remove the 2 placeholder tabs | **Yes, at the edge** — *History* is the only product statement of intent to have authority-change history, and §22's limit 5 records audit as the one matrix column never assessed | **Safe to remove the tab; record the debt.** Deleting the placeholder must not delete the requirement — S-14 |
+| **Unify the 3 save paths into one submit** | **Yes — materially** | **Not safe as written.** It composes a PATCH with T-23's untransacted delete-then-insert into one operator action with **three failure points and no compensation**. A partial failure would leave the label changed and the grants empty. **Must land with S-12 (atomicity), not before it** |
+| Fold Overview's read-only cards into the tabs | **Yes, at the edge** — *Capability Summary* derives from `PERMISSION_GRID_ROWS` only (`:156-161` **[verified this pass]**), so it structurally cannot show the 14 non-grid keys; on the `admin` role, which the seed grants all 32, it under-reports by design | **Safe, but do not promote it.** Folding a lossy summary into the tab that owns the truth makes the omission harder to notice. A6 (operator trust) is the asset |
+| Derive `role_key` from the label | No new exposure — `POST /rbac/roles` **already** slugifies (`:50`) | **Safe.** §44.5's caveat stands: `user_roles.role` has no FK, so key-minting changes have an untraced blast radius |
+| Collapse 27 radios into 9 three-state controls | **Yes — H2 depends on the current apply logic** | **Safe only with a regression lock.** `applyGridRowSelection` preserving out-of-grid keys is what prevents Save from stripping 14 grants from `admin`. Nothing tests it today |
+
+**And one addition the editor work should carry, because it is cheaper here than anywhere else:** T-22 is a
+seven-line fix in the same component — surface the grants read failure and disable Save while the grant set is
+unknown. It is the only S3 in this pass that the simplification pass can close *incidentally*, and leaving it
+in place while rewriting the surface around it would be the worst outcome.
+
+> **RM-11 — the editor simplification is genuinely available, but three of the five items need a control
+> attached, and none of the three is expensive.** Unify-save needs atomicity; radio-collapse needs an H2 lock;
+> tab-removal needs the audit debt recorded. **"Architecture-free" was the right classification of the
+> *layers* touched and the wrong one to read as "no security review needed."**
+
+---
+
+## 53. New security invariants — S-8 … S-14
+
+Continues §17's `S-n` space, and deliberately not the colliding `I-n` space (§18). Each is mechanically
+checkable.
+
+> **S-8.** Authority MUST resolve from exactly one membership store. No resolver may consult a table that no
+> operator surface writes and no operator surface displays. *Check:* `resolveAdminAccessCore` reads
+> `user_roles` and nothing else; `rg 'user_profiles|app_users' web/lib/admin/resolveAdminAccessCore.ts` → no
+> matches. **Fails today** at `:44,54,62` (T-19).
+
+> **S-9.** A role's `is_active = false` MUST deny at resolution, not only at assignment. *Check:* the grants
+> read joins `role_definitions` and filters `is_active`; a deactivated role resolves to zero permission keys.
+> **Fails today** — resolution never reads the table (T-20).
+
+> **S-10.** A grant MUST NOT exist for a role that has no definition row. `role_key` MUST be constrained as
+> rigorously as `permission_key` already is. *Check:* an FK from `role_permission_grants.role_key` to
+> `role_definitions`, and an existence check in `PUT /rbac/grants` beside the key validation at `:60-68`.
+> **Fails today** (T-21).
+
+> **S-11.** A read failure on an authority surface MUST be visible and MUST disable the write. No authority
+> editor may render an unknown state as an empty one. *Check:* every catch/`!res.ok` path that clears an
+> authority set also sets an error and a disabled-save flag. **Fails today** at
+> `AccessRolesConfigurationPage.tsx:128-135` (T-22). *Corollary — the H2 lock:* a grant save MUST preserve every
+> key the surface cannot display.
+
+> **S-12.** Every authority replacement MUST be atomic. *Check:* no route performs an untransacted
+> delete-then-insert on `user_roles`, `role_permission_grants`, or the scope tables. **Fails today** at
+> `grants/route.ts:70-91` (T-23) and at role reassignment (T-13 **[carried]**). This is I-31ᴬ, extended to the
+> second table and named as a precondition of the unify-save work.
+
+> **S-13.** No migration may `GRANT` any privilege on an access-control object to `anon`. *Check:* static —
+> `rg 'TO .*anon' supabase/migrations` returns no line naming `permissions`, `permission_keys`,
+> `permission_definitions`, `role_definitions`, `role_permission_grants`, `user_roles`, or the scope tables
+> (T-25).
+
+> **S-14.** The org an authority write lands in MUST be operator-selected and displayed on the surface
+> performing the write — never derived by sort order. *Check:* no authority-mutating route derives its
+> `org_id` from `chooseOrgAndRoleKeysFromMembershipRows`. **Fails today** (T-26); this is I-7's write-path form.
+
+**S-9, S-10 and S-12 are each a single migration or a single handler change.** S-8 is the one that requires a
+data question answered first (§49), and it is the one that closes the S1.
+
+---
+
+## 54. The enforcement matrix, cut by layer
+
+§15 cut controls by *boundary*. Depth requires the second cut. **Y** enforced · **P** partial · **N** absent ·
+**—** not applicable.
+
+| Control | L1 cred | L2 memb | L3 catalog | L4 grants | L5 perms | L6 grid | L7 scope | L8 portal |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Participates in a request-time decision | **Y** | **Y** | **N** | **Y** | **N** | **N** | **Y** | **Y** |
+| Can deny | — | **N** | **N** | **Y** | **N** | **N** | **Y** | **N** — admits |
+| Fails closed on read error | — | **Y** | — | **Y** | — | — | **N** | — |
+| Fails closed on absence | — | **N** — legacy path | — | **Y** | — | — | **N** — scope `all` | — |
+| Referentially constrained | — | **N** — no FK | — | **P** — key only | **Y** | **N** — source code | **P** | — |
+| Lifecycle flag honoured | — | — | **N** — assignment only | **P** — `allowed` | **Y** — `is_active` | — | — | — |
+| Operator can see it | **N** | **Y** | **Y** | **P** — via L6 | **N** | **N** | **Y** | **N** |
+| Bypassed by another layer | — | — | — | **Y — by L8** | — | — | **N** | — |
+| Regression-locked by a test | **N** | **N** | **N** | **N** | **N** | **N** | **N** | **N** |
+
+**The bottom row is the finding.** Every control in this table — including H1, H2 and H3, the three that hold
+— is currently unlocked. §17's S-7 said this of the public surface; it is equally true of the authority chain,
+and the simplification work is exactly the kind of change that degrades unlocked controls silently.
+
+**The `L4` column read downward is the four-layer instruction in one line:** the only layer that both runs on
+every request and fails closed is also the only one another layer exists to bypass.
+
+---
+
+## 55. Decisions — input to D-RM1, and one new
+
+**D-RM1 (§43) — the security half, answered.** §51 supplies evidence, not a decision: the layer reduction
+closes T-19 (S1), T-20 and T-4/T-6's mechanism (S2), and weakens no control this pass could find. **A "no
+access-architecture change" constraint applied to the whole instruction would preserve the three most severe
+revocation defects in the corpus.** The recommendation implied by the evidence is Part IV's RM-7 —
+*separate the two directives* — with §51's ordering (RM-10) attached as a hard constraint. **The choice
+remains the Director's.**
+
+**D-15 — new. Are the two legacy identity tables in the authority model, or out of it?**
+`user_profiles.role` and `app_users.role` are read by the resolver, written by nothing, displayed by nothing,
+and can only produce `admin` or `ops` (T-19). *Recommendation:* **out.** Establish whether any live principal
+resolves solely through them; if none, delete the three reads (S-8) — that closes the S1 outright. If some do,
+migrate those rows into `user_roles` first and then delete the reads. **This is the cheapest S1 closure in the
+corpus and it needs one database question answered, not a design.**
+
+*Numbering note.* `D-15` continues the `D-n` space and is **at risk from the collisions §18/§30 record**. It
+is registered here as `D-15` because the highest-numbered decision in the corpus is `D-14` (§19); if the
+Director renumbers, this moves with the rest. **This part created no workstream and re-sequenced nothing.**
+
+---
+
+## 56. Reproduce
+
+```bash
+# §46 / §49 T-19 — removal deletes the only membership row, then resolution consults two legacy stores
+rg -n 'from\("user_roles"\)|delete\(\)'            web/app/api/admin/users/\[userId\]/remove/route.ts
+rg -n 'fetchLegacyAdminOpsOrgAndRole|picked|return null' web/lib/admin/resolveAdminAccessCore.ts   # :131-140
+rg -n 'user_profiles|app_users|"admin" \|\| |portalEligible' web/lib/admin/resolveAdminAccessCore.ts
+
+# §46 / §50 T-20 — role_definitions is read at assignment, never at resolution
+rg -ln 'role_definitions' web/lib web/app --glob '!*.test.*'        # 5 files; resolveAdminAccessCore NOT among them
+rg -n 'role_definitions|is_active' web/app/api/admin/users/\[userId\]/role/route.ts   # :33 assignment-time check
+rg -n 'role_permission_grants' -A4 web/lib/admin/resolveAdminAccessCore.ts           # :89-94, no join, no active filter
+
+# §50 T-21 — roles are fabricated at read time; grants validate the key but not the role
+rg -n 'DEFAULT_ORG_ROLE_DEFINITIONS|mergeRoleDefinitionsWithDefaults' web/lib/admin/defaultRoleDefinitions.ts
+rg -n 'mergeRoleDefinitionsWithDefaults' web/app/api/admin/rbac/roles/route.ts        # :31
+rg -n 'permission_definitions|role_key' web/app/api/admin/rbac/grants/route.ts        # :60-68 keys only
+rg -n 'role_key' supabase/migrations/*.sql | rg -i 'references|fkey'                  # no role_key FK
+rg -n 'never fabricated at read time' supabase/migrations/20260729120000_*.sql        # :167
+
+# §47 T-22 / T-23 — read failure clears the set silently; the save is a delete-then-insert
+rg -n 'setGrantKeys\(new Set\(\)\)' web/components/adminV2/settings/access/AccessRolesConfigurationPage.tsx
+rg -n 'permission_keys: \[\.\.\.grantKeys\]' web/components/adminV2/settings/access/AccessRolesConfigurationPage.tsx
+rg -n 'delete\(\)|insert\(inserts\)' web/app/api/admin/rbac/grants/route.ts           # :70-91
+
+# §47 T-24 — the authority-graph gate is a role literal, capability second
+rg -n 'roleKeys.includes\("admin"\)|permissionKeys.includes|portalEligible' web/lib/admin/canManageUsersAndRoles.ts
+
+# §50 T-25 — Phase 0 grants anon SELECT on two access-control views; revoked 6 days later
+rg -n 'TO "anon"|security_invoker' supabase/migrations/20260729120000_*.sql           # :150,154,163,164
+rg -n 'REVOKE ALL ON ALL TABLES|ALTER DEFAULT PRIVILEGES|4 views' supabase/migrations/20260804180000_*.sql
+rg -n 'permission_definitions_select|TO "anon"' supabase/migrations/20260329165048_remote_schema.sql
+
+# §47 T-26 — the write org is a lexicographic pick, not a selection
+rg -n 'sort\(\)\[0\]|PORTAL_ROLES' web/lib/admin/resolveAdminAccessCore.ts            # :30-32
+
+# §48 H1 — five role-editing surfaces, four shared routes
+rg -n 'fetch\("/api/admin/rbac|fetch\(`/api/admin/rbac' \
+  web/components/adminV2/settings/access/AccessRolesConfigurationPage.tsx \
+  web/app/legacy-admin/system/roles/RolesClient.tsx \
+  web/app/legacy-admin/system/access-control/AccessControlClient.tsx
+
+# §48 H2 — out-of-grid keys are preserved; the seed grants admin every active key
+rg -n 'out-of-grid|next.delete|next.add' web/lib/admin/permissionGrid.ts              # :65,74-76
+rg -n "Grants for admin: everything" -A4 supabase/migrations/20260729120000_*.sql     # :291-296
+```
+
+---
+
+## 57. Limits and provenance — Part V
+
+1. **Nothing here was demonstrated.** No request was issued, no browser opened, no database queried, no test,
+   typecheck or build run. Every severity is structural per §11. **No claim is made that any deployed
+   environment has been compromised**, and T-19 in particular rests on a precondition — the existence of
+   legacy `admin`/`ops` rows — that **was not checked and cannot be checked from the repository** (§49).
+2. **T-19 is the finding most likely to change on contact with data.** If no live principal holds a legacy
+   role row, its severity is theoretical-until-a-row-appears rather than S1 — but the *structure* is
+   unconditional, and the removal verb's behaviour does not depend on today's data. It is rated on the
+   authority a successful actor would hold, which is §11's stated basis.
+3. **Layer numbering is Part IV's** (§38) and inherits its counting caveat (§44.3). §46 re-cuts the same eight
+   rows by enforcement; it does not re-derive them. **Do not quote "two of eight" without §46.**
+4. **RLS was not reviewed**, again. T-25's conclusion depends on the SELECT policy at `remote_schema.sql:7852`
+   being the operative one at `HEAD` — later policy migrations were **not** audited, and §22's limit 6 stands.
+5. **Migration ordering was read, not executed.** T-25's "closed today" rests on file timestamps and applied
+   order; no database was inspected to confirm the revocation took effect in any environment.
+6. **H1 establishes shared *routes*, not equivalent *behaviour*.** The two legacy clients were read only for
+   their fetch call sites; their payload shapes, error handling and any additional writes were **not**
+   reviewed. "Deleting them is safe" is a claim about authority, not about what else they do.
+7. **The action-registry and command surfaces were not re-opened.** T-8's finding is untouched by this part;
+   nothing here re-assesses `05…`'s census.
+8. **Carried findings were not re-verified** except where marked. T-1, T-4, T-6, T-9, T-11, T-13, C12/C13,
+   M2-2, M2-8, G4 and the 18-of-32 key split are cited to their owners.
+9. **No workstream was created or re-sequenced**, and `D-RM1` is **not** resolved — §51 supplies evidence for
+   it and explicitly leaves the decision with the Director, per §43 and the mission's prohibition on
+   reinterpreting Compiled Mission intent. `D-15` is raised, not decided.
+10. **Read in full this pass:** `web/app/api/admin/rbac/roles/route.ts`,
+    `web/app/api/admin/rbac/roles/[role_key]/route.ts`, `web/app/api/admin/rbac/grants/route.ts`,
+    `web/app/api/admin/rbac/permissions/route.ts`, `web/app/api/admin/users/[userId]/remove/route.ts`,
+    `web/lib/admin/canManageUsersAndRoles.ts`, `web/lib/admin/resolveAdminAccessCore.ts`,
+    `web/lib/admin/defaultRoleDefinitions.ts`, `web/lib/admin/permissionGrid.ts`.
+    **Read in part:** `AccessRolesConfigurationPage.tsx:110-240` (fetch/save region; §40's counts carried),
+    `AccessUsersConfigurationPage.tsx` (remove and reset call sites), `RolesClient.tsx` /
+    `AccessControlClient.tsx` (fetch call sites only), `users/[userId]/role/route.ts:29-37`,
+    `…phase0…sql:126-170,285-306`, `20260804180000_platform_anon_privilege_revocation.sql:80-137`,
+    `remote_schema.sql` (permission_definitions policy, grant and RLS regions).
+11. **Scope discipline.** The assignment names one output path and **only that file was written.** As in
+    Part IV, `README.md` was not updated; Parts IV and V are therefore still absent from its document table.
+    Recorded as a standing follow-up, not an oversight.
+12. **Read-only.** No source, schema, migration or UI was modified by this phase.
