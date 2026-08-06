@@ -79,6 +79,7 @@ describe("the gap is real and detected", () => {
     it("the command-set validator still reports it", () => {
         const result = validateProcessCommandSetsForPublish(draftWithCommandGap() as never);
         expect(result.ok).toBe(false);
+        if (result.ok) throw new Error("expected issues");
         expect(result.issues[0]!.code).toBe("work_template_orphan");
         expect(result.issues[0]!.capabilityKey).toBe("quick_message");
         expect(result.issues[0]!.stageKey).toBe("lead");
@@ -110,7 +111,7 @@ describe("Validate and Publish block on it", () => {
         const saveView = validateProcessCommandSetsForPublish(draftWithCommandGap() as never);
         const publishView = validateBusinessProcessForPublish(draftWithCommandGap());
         expect(publishView.errors.filter((e) => e.code === "process_command_set_incomplete")).toHaveLength(
-            saveView.issues.length,
+            saveView.ok ? 0 : saveView.issues.length,
         );
     });
 
@@ -141,7 +142,9 @@ describe("Validate and Publish block on it", () => {
 
     it("blocks a transition whose destination stage is not configured", () => {
         const broken = draftWithCommandGap();
-        broken.processes[0]!.stages[0]!.stage_operating_plan_v1!.outgoing_transitions = [
+        (broken.processes[0]!.stages[0]!.stage_operating_plan_v1 as unknown as {
+            outgoing_transitions: unknown;
+        }).outgoing_transitions = [
             {
                 transition_ref: "lead_to_nowhere",
                 source_stage_key: "lead",
@@ -159,7 +162,9 @@ describe("Validate and Publish block on it", () => {
     it("keeps structural and completeness blockers distinct", () => {
         // Both reach publish, under their own codes — neither masks the other.
         const broken = draftWithCommandGap();
-        broken.processes[0]!.stages[0]!.stage_operating_plan_v1!.outgoing_transitions = [
+        (broken.processes[0]!.stages[0]!.stage_operating_plan_v1 as unknown as {
+            outgoing_transitions: unknown;
+        }).outgoing_transitions = [
             {
                 transition_ref: "lead_to_nowhere",
                 source_stage_key: "lead",

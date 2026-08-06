@@ -233,11 +233,16 @@ export function validateParsedBusinessProcessForPublish(
 
     for (const process of activeProcesses) {
         const stages = process.stages ?? [];
-        const processStages = stages.map((s) => ({
-            key: s.key,
-            label: s.label ?? s.key,
-            grain: (s as { grain?: unknown }).grain ?? null,
-        }));
+        const processStages = stages.map((s) => {
+            const rawGrain = (s as { grain?: unknown }).grain;
+            return {
+                key: s.key,
+                label: s.label ?? s.key,
+                // A malformed STRING is passed through so `resolveStageGrain` can still refuse it;
+                // a non-string is indistinguishable from absent. Never coerced to a valid grain.
+                grain: typeof rawGrain === "string" ? rawGrain : null,
+            };
+        });
         for (const stage of stages) {
             const plan = stage.stage_operating_plan_v1;
             if (!plan) continue;
@@ -288,7 +293,8 @@ export function validateParsedBusinessProcessForPublish(
 
     {
         const commandSets = validateProcessCommandSetsForPublish(builder);
-        for (const issue of commandSets.issues ?? []) {
+        // `issues` exists only on the failing variant of the union.
+        for (const issue of commandSets.ok ? [] : commandSets.issues) {
             errors.push({
                 code: PUBLISH_COMMAND_SET_INCOMPLETE,
                 stage_key: issue.stageKey ?? null,

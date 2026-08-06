@@ -73,6 +73,7 @@ describe("the two defects are distinguishable", () => {
     it("a missing TRANSITION says so, and names the transition", () => {
         const result = validateConfiguredStageReferences(fireflyShapedConfig());
         expect(result.ok).toBe(false);
+        if (result.ok) throw new Error("expected violations");
         const v = result.violations[0]!;
         expect(v.defect).toBe("missing_transition");
         expect(v.message).toBe(
@@ -95,6 +96,7 @@ describe("the two defects are distinguishable", () => {
             },
         ] as never;
         const result = validateConfiguredStageReferences(config);
+        if (result.ok) throw new Error("expected violations");
         const v = result.violations.find((x) => x.defect === "missing_destination_stage")!;
         expect(v.message).toContain('points to stage "nowhere"');
     });

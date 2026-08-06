@@ -358,9 +358,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     operatingPlanJourneySegment: dst.stage_operating_plan_v1?.journey_segment,
                     configuredMetadataGrain: dst.grain,
                 });
-                if (!srcGrain.ok || !dstGrain.ok) {
+                // Narrow to the FAILING side before reading its message: `message` exists only on
+                // the unresolved/contradiction variants, so a ternary over the whole union does not
+                // typecheck.
+                const unresolved = !srcGrain.ok ? srcGrain : !dstGrain.ok ? dstGrain : null;
+                if (unresolved) {
                     return NextResponse.json(
-                        { error: (srcGrain.ok ? dstGrain : srcGrain).message, code: "stage_grain_unresolved" },
+                        { error: unresolved.message, code: "stage_grain_unresolved" },
                         { status: 409 },
                     );
                 }
@@ -634,7 +638,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             ...payloadFromConfig(config),
             publication_readiness: {
                 ready: commandSetCheck.ok,
-                issues: commandSetCheck.issues,
+                // `issues` exists only on the failing variant of the union.
+                issues: commandSetCheck.ok ? [] : commandSetCheck.issues,
             },
             draft_revision: savedDraft.draftRevision,
             ...(ensuredTransition ? { ensured_transition: ensuredTransition } : {}),

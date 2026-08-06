@@ -554,7 +554,12 @@ describe("Process Stage operating contract — follow-up work (22–25)", () => 
 
     it("supports zero or multiple follow-up Work Templates on one outcome", () => {
         const plan = tourConductTourProofPlan();
+        // Start from the CURRENT draft so the required round-trip fields (`preserved_targets`,
+        // `preserved_rules`, `completes_stage_work`, `had_behavior_rule`) carry through — writing a
+        // bare literal would drop exactly what the draft exists to preserve.
+        const current = readComposableOutcomeBehaviorDraft("needs_follow_up", plan.outcome_rules);
         const rules = upsertComposableOutcomeBehavior(plan.outcome_rules, "needs_follow_up", {
+            ...current,
             movement: "stay_in_stage",
             follow_up_work: [
                 {
