@@ -2505,6 +2505,16 @@ Committing it is not a worker decision about content — but the *state* is reco
 analysis that did not notice its most-cited new input was uncommitted would have missed the same thing `X-5`
 missed.
 
+> **`X-11` — CLOSED at `687048eb6` (2026-08-06).** That commit lands `05…` §5A together with the rest of the
+> reopen corpus (`01…`, `02…`, `03…` §4, `07…`, `wave0-authority-census.json`), so every citation into `05…`
+> now resolves against a commit rather than a working tree. **Two things this does not close.** (1) The
+> *process property* stands: two instances in four days of a required output's substance living uncommitted
+> while other documents bind to it. `X-11` is closed as a state, not as a lesson — a corpus convention that
+> a document is bindable only once committed is still unwritten. (2) **Line numbers cited into `05…` and
+> `01…` from `04…§12.3` and from §69 below were taken against the working tree and have not been
+> re-derived** against `687048eb6`; the *content* is identical, but any citation of the form `05…:NNN`
+> should be re-checked before it is relied on.
+
 ---
 
 ## 67. What the two directives now cost, and what still blocks them
@@ -2622,7 +2632,9 @@ git diff --stat -- docs/platform/planning/vacilando-os/qa/access-identity-v2/05-
 9. **`X-10` and `X-11` are corpus-integrity findings in the `X-n` space** and inherit `X-9`'s numbering risk:
    if the Director renumbers, they travel with the rest.
 10. **Citations into `05…` are against the working tree**, not `03efba377` — that is `X-11` itself, and every
-    `05…§5A n` reference in this part will drift when that work is committed.
+    `05…§5A n` reference in this part will drift when that work is committed. **Update:** it was committed, at
+    `687048eb6`. Section references (`05…§5A.2`, `§5A.5`, `§5A.6`) are stable and carry over unchanged; **line
+    references do not** and have not been re-derived. See `X-11`'s closure note in §66.
 11. **Scope discipline.** The assignment names one output path and **only that file was written.** As in Parts
     IV and V, `README.md` was not updated; Parts IV, V and VI are absent from its document table. Recorded as
     a standing follow-up.
