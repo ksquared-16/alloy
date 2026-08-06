@@ -564,6 +564,89 @@ describe("per-child Decision — failure containment and refresh contract", () =
     });
 });
 
+describe("a terminal child path needs no stage, and no stage list", () => {
+    /**
+     * A child stops pursuing enrollment through DURABLE STATE, not by being filed in a stage.
+     * Firefly's Not Enrolling is configured with a disposition and a required reason and NO
+     * movement target — the shape this proves. Nothing in the platform requires a
+     * `closed_withdrawn` stage to exist for that to work.
+     */
+    const NO_MOVEMENT_PLAN = parseStageOperatingPlanV1({
+        ...JSON.parse(JSON.stringify(PLAN)),
+        work_templates: [
+            {
+                ...JSON.parse(JSON.stringify(PLAN.work_templates[0])),
+                participant_decisions: [
+                    {
+                        decision_key: "child_not_enrolling",
+                        action_ref: "update_child_enrollment_status",
+                        label: "Not Enrolling",
+                        subject_grain: "child",
+                        targets: [
+                            { kind: "update_child_enrollment_status", disposition_key: "not_enrolling" },
+                        ],
+                        required_inputs: [
+                            {
+                                key: "close_reason_key",
+                                label: "Reason",
+                                type: "select",
+                                required: true,
+                                binds_to_target_field: "close_reason_key",
+                                options: [{ value: "cost", label: "Cost" }],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    })!;
+
+    const runNoMovement = (world: World, values?: Record<string, unknown>) =>
+        executeParticipantDecisionForChild({
+            supabase: makeSupabase(world),
+            orgId: ORG,
+            userId: "user-1",
+            departmentId: "dept-1",
+            stageKey: "decision",
+            plan: NO_MOVEMENT_PLAN,
+            templateKey: "review_child_paths",
+            decisionKey: "child_not_enrolling",
+            opportunityId: LEAD,
+            childIdentity: { customer_member_id: NOAH },
+            participantLabel: "Noah",
+            inputValues: values ?? { close_reason_key: "cost" },
+        });
+
+    it("parses and executes with no movement target at all", async () => {
+        const world = makeWorld();
+        expect(NO_MOVEMENT_PLAN.work_templates[0]!.participant_decisions![0]!.targets).toHaveLength(1);
+
+        const result = await runNoMovement(world);
+
+        expect(result.ok).toBe(true);
+        expect(rowOf(world, NOAH).state).toBe("not_enrolling");
+        expect(rowOf(world, NOAH).close_reason_key).toBe("cost");
+        // The child never moved — the stage they were on is untouched.
+        expect(rowOf(world, NOAH).stage_key).toBe("decision");
+    });
+
+    it("still requires the reason, and still leaves family and siblings alone", async () => {
+        const world = makeWorld();
+        const familyBefore = snapshot(world.opportunities[0]);
+        const emmaBefore = snapshot(rowOf(world, EMMA));
+
+        const refused = await runNoMovement(world, {});
+        expect(refused.ok).toBe(false);
+        expect(refused.ok === false && refused.code).toBe("inputs_invalid");
+
+        const done = await runNoMovement(world);
+        expect(done.ok).toBe(true);
+        expect(world.opportunities[0]).toEqual(familyBefore);
+        expect(world.opportunities[0].status_key).toBe("open");
+        expect(rowOf(world, EMMA)).toEqual(emmaBefore);
+    });
+});
+
 describe("per-child Decision — configuration is consumed, not hardcoded", () => {
     it("routes to whatever stage and disposition configuration names", async () => {
         const world = makeWorld();

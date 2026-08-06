@@ -57,12 +57,16 @@ tour      Conduct Tour gains Completed—Interested + Completed—Needs Follow-u
 tour      tour_transition_1 (family -> child Waitlist) REMOVED, with its two rules
 command   update_lead_status, add_child, add_family_member, schedule_tour, quick_message
 work tmpl contact_family primary quick_message; send_form + create_task removed
-stages    closed (family) and closed_withdrawn (child) added, work-free
+stages    closed / closed_withdrawn were added, then REMOVED again — see below
 ```
 
-Final stage order: `lead, tour, decision, waitlist, enrolling, enrolled, closed, closed_withdrawn`
-(sort_order 0,2,3,4,6,7,8,9). `closed` is appended at 8, not inserted after Decision — see the
-reorder hazard below.
+Final stage order: `lead, tour, decision, waitlist, enrolling, enrolled` (sort_order 0,2,3,4,6,7).
+
+`closed` and `closed_withdrawn` were added as work-free storage buckets for terminal results and
+have since been REMOVED from the draft. They were a modelling error: a family case ends through
+`opportunities.status_key` and a child's participation ends through `process_instances.state`.
+Neither terminal result needs a stage, and the platform must not require one. Whether a tenant
+represents a terminal result as a stage is a configuration choice.
 
 Six Tour outcomes are **preserved but operator-unreachable**, awaiting certification:
 Family Declined Tour, Move to Waitlist, Closed Lost, Tour Rescheduled, No Show, Tour Cancelled.
@@ -108,7 +112,8 @@ Each was a defect found while trying to make a configuration change. All are on 
 - **`create_task` is NOT in the capability registry.** `update_process_command_set` refuses it
   structurally. Do not add it to clear validation.
 - **`reorder_stage` syncs Work Unit order from the PUBLISHED projection** — stale for an
-  unpublished draft. This is why `closed` was appended rather than inserted. Recorded, not fixed.
+  unpublished draft. Recorded, not fixed. (This is why `closed` had been appended rather than
+  inserted, before both terminal stages were removed.)
 - **`stage-runtime-config` requires `selected_status_keys` only when editing membership.** Omit it
   for operating-plan-only edits; supplying invented keys rewrites the queue definition.
 

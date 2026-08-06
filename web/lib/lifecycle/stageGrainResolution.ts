@@ -11,16 +11,22 @@
  * configuration defect stays invisible for another six months. This module states the precedence
  * once, and makes disagreement a REPORTED outcome rather than a resolved one.
  *
- * Precedence, when sources agree:
+ * CONFIGURATION IS THE AUTHORITY. Precedence:
  *   1. explicit, valid operating-plan `journey_segment` — the stage's own declaration
- *   2. canonical durable-stage vocabulary — the platform's definition for known stage keys
- *   3. configured stage metadata — compatibility fallback for tenant-authored stages
+ *   2. configured `lifecycle_builder_v1` stage metadata — the tenant's declaration
+ *   3. built-in stage vocabulary — COMPATIBILITY ONLY, consulted when 1 and 2 are both silent
  *
- * When two available sources DISAGREE the result is a contradiction, not a winner. The grain of a
- * stage is not a preference to be arbitrated; a stage whose own plan and whose platform definition
- * describe different journeys is misconfigured, and movement onto it must stop until someone
- * decides which is true. That is deliberate: this sub-slice makes the Decision disagreement
- * visible and does NOT coerce it.
+ * The built-in vocabulary previously sat at position 2 and any disagreement with it blocked
+ * movement. That made a platform-owned list of stage keys authoritative over a tenant's own
+ * process: a stage named `waitlist` could not be configured family-grain, and a stage named
+ * `enrolled` inherited a grain nobody chose. Which stages a process has, and what grain each
+ * carries, belong to configuration. The platform defines what a stage IS and which movements are
+ * legal between grains — not which stages exist.
+ *
+ * So only the two CONFIGURED declarations can contradict each other, and that contradiction is
+ * still refused rather than arbitrated: a stage whose plan and whose metadata describe different
+ * journeys is misconfigured, and movement onto it must stop until someone decides which is true.
+ * The compatibility vocabulary can never contradict configured truth, only fill its silence.
  */
 
 import { enrollmentStageMembership } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
@@ -64,20 +70,32 @@ export type ResolveStageGrainInput = {
     configuredMetadataGrain?: unknown;
 };
 
-/** In precedence order, so the first agreeing opinion wins when there is no conflict. */
-function gatherOpinions(input: ResolveStageGrainInput): StageGrainOpinion[] {
-    const opinions: StageGrainOpinion[] = [];
+/**
+ * Configured declarations, and separately the compatibility fallback.
+ *
+ * They are returned apart because they are not peers: the configured pair may contradict each
+ * other and be refused for it; the fallback may only answer when the pair says nothing.
+ */
+function gatherOpinions(input: ResolveStageGrainInput): {
+    configured: StageGrainOpinion[];
+    compatibility: StageGrainOpinion | null;
+} {
+    const configured: StageGrainOpinion[] = [];
 
     const planGrain = normalizeGrain(input.operatingPlanJourneySegment);
-    if (planGrain) opinions.push({ source: "operating_plan", grain: planGrain });
-
-    const canonical = enrollmentStageMembership(input.stageKey);
-    if (canonical) opinions.push({ source: "canonical_vocabulary", grain: canonical.grain });
+    if (planGrain) configured.push({ source: "operating_plan", grain: planGrain });
 
     const metadataGrain = normalizeGrain(input.configuredMetadataGrain);
-    if (metadataGrain) opinions.push({ source: "configured_metadata", grain: metadataGrain });
+    if (metadataGrain) configured.push({ source: "configured_metadata", grain: metadataGrain });
 
-    return opinions;
+    // COMPATIBILITY: stages authored before `grain` was an explicit field carry no declaration at
+    // all. Consulting the built-in map keeps those resolvable instead of blocking movement on
+    // records that predate the field. Never compared against configured truth.
+    const builtIn = enrollmentStageMembership(input.stageKey);
+    const compatibility: StageGrainOpinion | null =
+        builtIn ? { source: "canonical_vocabulary", grain: builtIn.grain } : null;
+
+    return { configured, compatibility };
 }
 
 export function resolveStageGrain(input: ResolveStageGrainInput): StageGrainResolution {
@@ -91,35 +109,53 @@ export function resolveStageGrain(input: ResolveStageGrainInput): StageGrainReso
         };
     }
 
-    const opinions = gatherOpinions(input);
-    if (!opinions.length) {
-        return {
-            ok: false,
-            stage_key,
-            reason: "grain_unknown",
-            message:
-                `Stage "${stage_key}" does not declare a journey grain in its operating plan, the `
-                + `canonical stage vocabulary, or its configured metadata. Movement onto it cannot `
-                + `be validated — no change was made.`,
-        };
-    }
+    const { configured, compatibility } = gatherOpinions(input);
 
-    const distinct = new Set(opinions.map((opinion) => opinion.grain));
+    // Only configured declarations can contradict one another.
+    const distinct = new Set(configured.map((opinion) => opinion.grain));
     if (distinct.size > 1) {
         return {
             ok: false,
             stage_key,
             reason: "grain_contradiction",
-            conflicts: opinions,
+            conflicts: configured,
             message:
                 `Stage "${stage_key}" is configured with conflicting journey grains: `
-                + opinions.map((o) => `${o.source}=${o.grain}`).join(", ")
+                + configured.map((o) => `${o.source}=${o.grain}`).join(", ")
                 + `. Movement onto it is blocked until the configuration agrees — no change was made.`,
         };
     }
 
-    const winner = opinions[0]!;
-    return { ok: true, stage_key, grain: winner.grain, source: winner.source, opinions };
+    if (configured.length) {
+        const winner = configured[0]!;
+        return {
+            ok: true,
+            stage_key,
+            grain: winner.grain,
+            source: winner.source,
+            // The fallback is reported when present so a reader can see it was NOT what decided.
+            opinions: compatibility ? [...configured, compatibility] : configured,
+        };
+    }
+
+    if (compatibility) {
+        return {
+            ok: true,
+            stage_key,
+            grain: compatibility.grain,
+            source: compatibility.source,
+            opinions: [compatibility],
+        };
+    }
+
+    return {
+        ok: false,
+        stage_key,
+        reason: "grain_unknown",
+        message:
+            `Stage "${stage_key}" does not declare a journey grain in its operating plan or its `
+            + `configured metadata. Movement onto it cannot be validated — no change was made.`,
+    };
 }
 
 // ─── Movement compatibility ──────────────────────────────────────────────────────────────────

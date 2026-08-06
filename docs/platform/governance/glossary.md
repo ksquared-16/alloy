@@ -52,7 +52,10 @@ The frozen ontology has **two authored ledgers** — neither derivable from the 
 | Term | Meaning |
 |------|---------|
 | **Business Process** | Operator-facing configurable process (e.g. Enrollment Process). Settings UI label; internal tables may still say lifecycle. |
-| **Stage** | Step in a business process — queue membership + expected work. Operator primary lens on execution surface. |
+| **Stage** | Step in a business process — queue membership + expected work. Operator primary lens on execution surface. **Configured per process and per tenant.** Alloy doctrine defines stage semantics and invariants (what a stage is, its grain, transition integrity, family/child separation, terminal-state rules), *not* a mandatory list of stage keys. Template stage sets are optional examples. |
+| **Family case closure** | Durable case status — `opportunities.status_key = closed` plus a close reason. **Not inherently a terminal stage.** A tenant may configure a closed stage; the platform does not require one, and a valid family-close configuration may move no stage at all. |
+| **Child enrollment termination** | Durable child process state — `process_instances.state = not_enrolling \| withdrawn` plus a close reason. **Not inherently a terminal stage.** |
+| **Enrolled** | Completes the child's **Enrollment participation**. It is terminal for that process only — not the child's global state. Downstream Attendance, Billing, Scheduling, Communications and placement truths are owned by their respective platforms and are **not** subsequent Enrollment stages; they are established through domain records and signals after enrollment completes. |
 | **Record** | Authoritative entity detail in drawer (opportunity, person, child context). |
 | **Work Unit** | **Implementation construct** — hosts `queue_definition` and slug route. Not the operator's primary noun. |
 | **Queue** | Preview list for a stage lens — not authoritative record store. |

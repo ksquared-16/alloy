@@ -11,13 +11,10 @@
  * cannot mutate configuration and a test can prove that by construction.
  */
 
-import { enrollmentStageMembership } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { resolveStageGrain, type StageGrain } from "@/lib/lifecycle/stageGrainResolution";
 
 export type StageGrainChangeBlockerCode =
-    /** The platform itself defines this stage at a different grain. */
-    | "canonical_vocabulary_conflict"
     /** A saved path out of this stage would land on the other track. */
     | "outgoing_transition_conflict"
     /** A saved path into this stage would arrive from the other track. */
@@ -61,18 +58,12 @@ export function evaluateStageGrainChange(
     const current = normalizeGrain(input.currentConfiguredGrain);
     const blockers: StageGrainChangeBlocker[] = [];
 
-    // 1. The platform's own definition wins over a request to contradict it.
-    const canonical = enrollmentStageMembership(stageKey);
-    if (canonical && canonical.grain !== requested) {
-        blockers.push({
-            code: "canonical_vocabulary_conflict",
-            message:
-                `"${stageKey}" is defined by the platform as belonging to `
-                + `${canonical.grain === "family" ? "the family case" : "individual children"}, `
-                + `so it cannot be configured the other way.`,
-            stage_keys: [stageKey],
-        });
-    }
+    // 1. (removed) The built-in stage vocabulary used to VETO a grain change here: a stage whose
+    // key appeared in the platform's map could not be configured the other way. That made a
+    // platform-owned list of stage keys authoritative over the tenant's own process. Which stages
+    // exist and what grain each carries is configuration's decision; the blockers below are the
+    // real invariants — they check this change against the tenant's OWN saved paths and records,
+    // not against a list of names the platform happens to know.
 
     const stageByKey = new Map((input.processStages ?? []).map((s) => [s.key, s]));
     const label = (key: string) => stageByKey.get(key)?.label?.trim() || key;

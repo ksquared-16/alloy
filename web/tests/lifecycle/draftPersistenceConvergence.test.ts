@@ -82,9 +82,18 @@ describe("Decision resolves to family once configured metadata agrees", () => {
         if (!blocked.ok) expect(blocked.error.kind).toBe("stage_grain_mismatch");
     });
 
-    it("reported a contradiction before the correction", () => {
-        // Guards the regression: the pre-write shape must still be detectable.
-        const before = resolveStageGrain({ stageKey: "decision", configuredMetadataGrain: "child" });
+    it("still detects a stage that contradicts ITSELF", () => {
+        /**
+         * Previously this used metadata-vs-built-in-vocabulary as the contradiction. Configuration
+         * now owns stage grain, so that combination resolves cleanly to the configured value. The
+         * contradiction that remains detectable — and the one that matters — is a stage whose own
+         * operating plan and configured metadata disagree.
+         */
+        const before = resolveStageGrain({
+            stageKey: "decision",
+            operatingPlanJourneySegment: "family",
+            configuredMetadataGrain: "child",
+        });
         expect(before.ok).toBe(false);
         if (!before.ok) expect(before.reason).toBe("grain_contradiction");
     });

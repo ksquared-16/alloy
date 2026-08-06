@@ -7,8 +7,11 @@
  * configured metadata DISAGREES with the canonical vocabulary resolved cleanly in the editor and
  * was correctly refused at execution. Same contract, different evidence, opposite answers.
  *
- * Firefly's Decision stage is exactly that case: operating plan `family`, canonical vocabulary
- * `family`, department metadata `child`.
+ * The scenario used to be "configured metadata disagrees with the built-in stage vocabulary".
+ * That is no longer a contradiction: configuration owns stage grain, and the built-in map is a
+ * compatibility fallback consulted only when configuration is silent. The PARITY requirement is
+ * unchanged, so the case here is now a genuine contradiction — a stage whose own operating plan
+ * and whose configured metadata describe different journeys.
  */
 
 import { readFileSync } from "node:fs";
@@ -20,10 +23,14 @@ import { resolveStageGrain, assertStageMoveGrainCompatible } from "@/lib/lifecyc
 import { validateStageOperatingPlanOperatingContract } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
-/** Firefly's Decision stage as configured TODAY — metadata says child, everything else says family. */
-const DECISION_BEFORE = { key: "decision", label: "Decision", grain: "child" };
-/** After the correction this sub-slice makes. */
-const DECISION_AFTER = { key: "decision", label: "Decision", grain: "family" };
+/**
+ * A stage that contradicts ITSELF: its configured metadata says child while its own operating plan
+ * declares family. Both are configured declarations, so neither can be preferred — this is the
+ * contradiction the contract still refuses.
+ */
+const DECISION_BEFORE = { key: "decision", label: "Decision", grain: "child", journey_segment: "family" };
+/** Corrected — the two configured declarations agree. */
+const DECISION_AFTER = { key: "decision", label: "Decision", grain: "family", journey_segment: "family" };
 
 describe("Part 1 — the bootstrap carries configured grain", () => {
     const bootstrap = readFileSync(
@@ -87,19 +94,33 @@ describe("Part 1 — the editor now sees the contradiction runtime already saw",
     it("runtime resolution reports the contradiction", () => {
         const resolution = resolveStageGrain({
             stageKey: "decision",
+            operatingPlanJourneySegment: DECISION_BEFORE.journey_segment,
             configuredMetadataGrain: DECISION_BEFORE.grain,
         });
         expect(resolution.ok).toBe(false);
         expect(resolution.ok === false && resolution.reason).toBe("grain_contradiction");
     });
 
-    it("the editor validator reports the SAME contradiction, once grain reaches it", () => {
+    it("the editor refuses the same movement, once grain reaches it", () => {
+        /**
+         * Both surfaces refuse; the CODE differs because their evidence differs. The editor knows
+         * the destination's configured metadata (`child`) but not the destination's own operating
+         * plan, so it sees a clean child-grain destination and reports a family→child MISMATCH.
+         * The runtime, which loads the destination plan too, sees the stage contradict itself.
+         * Parity is "both refuse the same movement", not "both emit the same string".
+         */
         const issues = validateStageOperatingPlanOperatingContract({
             plan: planMovingTo(DECISION_BEFORE),
             processStages: stagesBefore,
             processStageKeys: stagesBefore.map((s) => s.key),
         });
-        expect(issues.some((i) => i.code === "transition_destination_grain_unresolved")).toBe(true);
+        expect(
+            issues.some(
+                (i) =>
+                    i.code === "transition_destination_grain_mismatch"
+                    || i.code === "transition_destination_grain_unresolved",
+            ),
+        ).toBe(true);
     });
 
     it("without grain the editor would have said nothing — which is the defect", () => {

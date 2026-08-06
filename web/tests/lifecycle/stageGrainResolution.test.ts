@@ -67,32 +67,60 @@ describe("grain resolution precedence", () => {
     });
 });
 
-describe("Firefly's Decision contradiction is reported, not arbitrated", () => {
-    // canonical=family, department metadata=child. Precedence alone would pick a winner; the
-    // contract deliberately refuses, because a stage whose sources describe different journeys is
-    // misconfigured and movement onto it must stop until someone decides which is true.
-    const decision = resolveStageGrain({ stageKey: "decision", configuredMetadataGrain: "child" });
-
-    it("does not silently coerce Decision to family", () => {
-        expect(decision.ok).toBe(false);
-        expect(decision.ok === false && decision.reason).toBe("grain_contradiction");
+describe("configuration owns stage grain; the built-in vocabulary is compatibility only", () => {
+    it("lets configured metadata decide, even against the built-in map", () => {
+        /**
+         * `decision` appears in the built-in vocabulary as family-grain. This used to be reported
+         * as a CONTRADICTION and block movement — a platform-owned list of stage keys overruling
+         * the tenant's own declaration. Which stages exist and what grain each carries belongs to
+         * configuration, so the configured value simply wins.
+         */
+        const resolved = resolveStageGrain({ stageKey: "decision", configuredMetadataGrain: "child" });
+        expect(resolved.ok).toBe(true);
+        expect(resolved.ok && resolved.grain).toBe("child");
+        expect(resolved.ok && resolved.source).toBe("configured_metadata");
     });
 
-    it("names every disagreeing source and its value", () => {
-        if (decision.ok) throw new Error("expected contradiction");
-        if (decision.reason !== "grain_contradiction") throw new Error("expected contradiction");
-        expect(decision.conflicts).toEqual(
+    it("still reports the fallback it did NOT use, so the reader can see it was outranked", () => {
+        const resolved = resolveStageGrain({ stageKey: "decision", configuredMetadataGrain: "child" });
+        expect(resolved.ok && resolved.opinions).toEqual(
             expect.arrayContaining([
-                { source: "canonical_vocabulary", grain: "family" },
                 { source: "configured_metadata", grain: "child" },
+                { source: "canonical_vocabulary", grain: "family" },
             ]),
         );
-        expect(decision.message).toContain("conflicting journey grains");
     });
 
-    it("agrees once the metadata is corrected, which is sub-slice 3's job", () => {
-        const corrected = resolveStageGrain({ stageKey: "decision", configuredMetadataGrain: "family" });
-        expect(corrected.ok && corrected.grain).toBe("family");
+    it("falls back to the built-in map only when configuration is silent", () => {
+        const resolved = resolveStageGrain({ stageKey: "decision" });
+        expect(resolved.ok && resolved.grain).toBe("family");
+        expect(resolved.ok && resolved.source).toBe("canonical_vocabulary");
+    });
+
+    it("does not require a stage to be in the built-in map at all", () => {
+        const resolved = resolveStageGrain({ stageKey: "tenant_invented", configuredMetadataGrain: "child" });
+        expect(resolved.ok && resolved.grain).toBe("child");
+    });
+
+    it("still refuses when the two CONFIGURED declarations disagree", () => {
+        // The real contradiction: the stage's own plan and its metadata describe different
+        // journeys. Refused, not arbitrated.
+        const conflicted = resolveStageGrain({
+            stageKey: "decision",
+            operatingPlanJourneySegment: "family",
+            configuredMetadataGrain: "child",
+        });
+        expect(conflicted.ok).toBe(false);
+        expect(conflicted.ok === false && conflicted.reason).toBe("grain_contradiction");
+        if (conflicted.ok === false && conflicted.reason === "grain_contradiction") {
+            expect(conflicted.conflicts).toEqual(
+                expect.arrayContaining([
+                    { source: "operating_plan", grain: "family" },
+                    { source: "configured_metadata", grain: "child" },
+                ]),
+            );
+            expect(conflicted.message).toContain("conflicting journey grains");
+        }
     });
 });
 
@@ -145,7 +173,11 @@ describe("movement compatibility", () => {
     it("blocks a contradictory destination and carries the conflict", () => {
         const result = assertStageMoveGrainCompatible({
             subjectGrain: "family",
-            destination: resolveStageGrain({ stageKey: "decision", configuredMetadataGrain: "child" }),
+            destination: resolveStageGrain({
+                stageKey: "decision",
+                operatingPlanJourneySegment: "family",
+                configuredMetadataGrain: "child",
+            }),
         });
         expect(result.ok).toBe(false);
         if (!result.ok) {

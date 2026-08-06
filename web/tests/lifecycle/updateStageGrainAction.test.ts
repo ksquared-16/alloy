@@ -133,19 +133,21 @@ describe("the preflight", () => {
         }
     });
 
-    it("blocks a change that contradicts the canonical vocabulary", () => {
-        // `waitlist` is defined by the platform as child-grain.
+    it("lets a tenant re-grain a stage the platform happens to know, when nothing configured objects", () => {
+        /**
+         * `waitlist` appears in the built-in stage vocabulary, and this used to be REFUSED on that
+         * ground alone — a platform-owned list of stage keys overruling a tenant's own process.
+         * Which stages exist and what grain each carries is configuration's decision. The change is
+         * still checked against the tenant's OWN saved paths (the tests below); it is simply no
+         * longer checked against a list of names.
+         */
         const decision = evaluateStageGrainChange({
             stageKey: "waitlist",
             requestedGrain: "family",
             currentConfiguredGrain: "child",
-            processStages: stages,
+            processStages: [{ key: "waitlist", label: "Waitlist", grain: "child" }],
         });
-        expect(decision.allowed).toBe(false);
-        if (!decision.allowed) {
-            expect(decision.blockers[0]!.code).toBe("canonical_vocabulary_conflict");
-            expect(decision.blockers[0]!.message).toContain("individual children");
-        }
+        expect(decision.allowed).toBe(true);
     });
 
     it("blocks when a saved way OUT would land on the other journey", () => {

@@ -110,6 +110,40 @@ describe("participant progress derivation", () => {
         expect(complete.resolved).toBe(3);
     });
 
+    it("counts a movement-free terminal path as decided", () => {
+        /**
+         * `not_enrolling` is produced by a decision that moves no stage. Progress is derived from
+         * the configured DISPOSITIONS, not from stage membership, so a child who ends without
+         * moving still counts as decided — and the family work can still complete.
+         */
+        const noMovement = parseStageOperatingPlanV1({
+            ...JSON.parse(JSON.stringify(planRaw(true))),
+            work_templates: [
+                {
+                    ...JSON.parse(JSON.stringify(planRaw(true).work_templates[0])),
+                    participant_decisions: [
+                        {
+                            decision_key: "child_not_enrolling",
+                            action_ref: "update_child_enrollment_status",
+                            label: "Not Enrolling",
+                            subject_grain: "child",
+                            targets: [
+                                { kind: "update_child_enrollment_status", disposition_key: "not_enrolling" },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        })!.work_templates[0]!.participant_decisions!;
+
+        const progress = deriveParticipantDecisionProgress({
+            participants: [{ state: "not_enrolling" }, { state: "not_enrolling" }],
+            decisions: noMovement,
+        });
+        expect(progress.all_resolved).toBe(true);
+        expect(progress.summary).toBe("All children have a path");
+    });
+
     it("does not count a state no configured decision produces", () => {
         // `enrolled` is a real platform state, but no decision on THIS work writes it, so it is not
         // a path this step resolved.

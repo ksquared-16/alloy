@@ -114,16 +114,21 @@ describe("a saved cross-grain path is reported", () => {
         expect(stageOperatingContractHasBlockingErrors(issues)).toBe(true);
     });
 
-    it("blocks a destination whose configured grain contradicts the canonical vocabulary", () => {
-        // Firefly's Decision: canonical says family, department metadata says child.
-        const contradictory = [...STAGES, { key: "decision", label: "Decision", grain: "child" }];
+    it("blocks a family stage sending records to a destination configured child-grain", () => {
+        /**
+         * This case used to be framed as "configured metadata contradicts the built-in stage
+         * vocabulary" and expected `..._grain_unresolved`. Configuration now owns stage grain, so
+         * the destination simply IS child-grain — and a family-grain source sending records there
+         * is a plain cross-grain MISMATCH. Still blocking; the reason is now the accurate one.
+         */
+        const configured = [...STAGES, { key: "decision", label: "Decision", grain: "child" }];
         const plan = planMovingTo("family", "lead", "decision");
         const issues = validateStageOperatingPlanOperatingContract({
             plan,
-            processStages: contradictory,
-            processStageKeys: contradictory.map((s) => s.key),
+            processStages: configured,
+            processStageKeys: configured.map((s) => s.key),
         });
-        expect(issues.some((i) => i.code === "transition_destination_grain_unresolved")).toBe(true);
+        expect(issues.some((i) => i.code === "transition_destination_grain_mismatch")).toBe(true);
         expect(stageOperatingContractHasBlockingErrors(issues)).toBe(true);
     });
 
