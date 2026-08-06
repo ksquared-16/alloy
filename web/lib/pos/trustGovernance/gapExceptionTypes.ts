@@ -35,6 +35,17 @@ export const TRUST_IDENTITY_RESOLUTION_GAP_TYPE = "trust_identity_resolution_gov
 export const TRUST_IDENTITY_LINEAGE_GAP_TYPE = "trust_identity_lineage_governance_gap" as const;
 
 /**
+ * Phase 1.7 — the outcome of an executed Commit Plan could not be observed.
+ *
+ * DISTINCT again, for the same reason: the replay material is an execution
+ * claim bound to a durable commit attempt, and it reconciles by appending an
+ * `executed`/`outcome` observation rather than by capturing a judgment or
+ * asserting lineage. The Processing execution itself already committed and is
+ * authoritative; only its Trust evidence is outstanding.
+ */
+export const TRUST_IDENTITY_EXECUTION_GAP_TYPE = "trust_identity_execution_governance_gap" as const;
+
+/**
  * Every gap type. Exclude all of these from any exception count that feeds an
  * operator-visible projection.
  */
@@ -42,6 +53,7 @@ export const TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES: readonly string[] = [
     TRUST_SOURCE_CLASSIFICATION_GAP_TYPE,
     TRUST_IDENTITY_RESOLUTION_GAP_TYPE,
     TRUST_IDENTITY_LINEAGE_GAP_TYPE,
+    TRUST_IDENTITY_EXECUTION_GAP_TYPE,
 ];
 
 export function isTrustGovernanceGapExceptionType(exceptionType: string): boolean {

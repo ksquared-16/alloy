@@ -394,12 +394,13 @@ describe("P15-NC-7 — governance gaps altering readiness would be caught", () =
                 const src = readFileSync(file, "utf8");
                 if (!src.includes('.from("processing_exceptions")')) continue;
                 // Any reader must either write gaps, or exclude every gap type.
-                // `LineageGapDb` is Phase 1.6's own gap store, registered here
-                // rather than special-cased — the control caught it on the day it
-                // was added, which is the control working.
+                // `LineageGapDb` (1.6) and `ExecutionGapDb` (1.7) are registered
+                // here rather than special-cased — each was caught by this
+                // control on the day it was added, which is the control working.
                 const isGapStore =
                     file.includes("GovernanceGapDb") ||
                     file.includes("LineageGapDb") ||
+                    file.includes("ExecutionGapDb") ||
                     file.includes("attemptsDb");
                 if (!isGapStore && !src.includes("TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES")) {
                     offenders.push(file.replace(WEB_ROOT, ""));

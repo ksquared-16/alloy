@@ -15,7 +15,7 @@ import {
 } from "../operator/identityResolutionEligibility";
 import type { IdentityCandidate } from "@/lib/identity";
 import {
-    supersedeForOperatorDecision,
+    recordOperatorDecisionLifecycle,
     type IdentityLineageDeps,
 } from "../trustAdapter/identityLineageService";
 
@@ -123,7 +123,7 @@ export async function applyCommitSelectionToResolutions(
         // here. Non-blocking: it cannot fail this commit selection.
         const resolutionId = (existing as { id?: string } | null)?.id;
         if (input.trustLineage !== false && resolutionId) {
-            await supersedeForOperatorDecision(supabase, {
+            await recordOperatorDecisionLifecycle(supabase, {
                 orgId: input.orgId,
                 caseId: input.caseId,
                 resolutionId,

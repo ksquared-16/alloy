@@ -677,8 +677,86 @@ Everything before it is certified by test and module graph.
 | **1.3** identity adapter contracts | **Merged** — `cd34be872` (PR #348). Pure and dormant. No migration. |
 | **1.4** dormant identity decision class | **Merged** — `942d078dd` (PR #349). Registered, no production caller. No migration. |
 | **1.5** live identity capture | **Merged** — `c933ea15b` (PR #351). First live identity persistence. No migration. |
-| **1.6** operator-correction lineage | **Implemented, this branch.** Supersession of a prior governed judgment by an operator correction or a replacement generation. No migration. |
-| 1.7 | Not started. |
+| **1.6** operator-correction lineage | **Merged** — `8d6917a18` (PR #353). Supersession by an operator correction or a replacement generation. No migration. |
+| **1.7** commit outcome binding | **Implemented, this branch.** Commit Plan execution outcomes become bounded Trust evidence, downstream only. No migration. |
+| 1.8 | Not started — closeout. |
+
+### What 1.7 confirmed, refined, or corrected
+
+- **AD-P1-1 and AD-P1-2 hold, and are now structurally asserted.** No Phase 1.7 module imports the
+  executor, preflight, the plan builder, approval or the command registry, and a control proves it.
+  Trust never initiates: the binding is reachable only after `executeApprovedPlan` returns and its
+  attempt row is persisted.
+- **The assessment's central worry is closed without touching the plan.** §Central architecture
+  decision asked whether Decision Package lineage must live on the Commit Plan. It must not, and it
+  need not: `PlanOperation.resolutionRefs` has always carried `processing_resolutions.id`
+  (`recommendationBuilder.ts:465`), and synthesized participation operations inherit their child's.
+  Lineage is therefore fully reconstructable, **no field was added, and no historical plan hash can
+  move** — which is stronger than a fixture proving it did not.
+- **New finding, D-11 — the plan hash cannot be reached from outside its three inputs.**
+  `computePlanContentHash({orgId, caseId, operations})` projects each operation through an
+  eleven-key whitelist. `sourceResolutionVersions`, `builtAt`, `status` and every other plan field
+  are already outside it. A Trust value could only enter through an operation's `payload`,
+  `commandKey`, `targetId` or the other material keys — which is why the detail allow-list refuses
+  any operational field rather than filtering one out later.
+- **New finding, D-12 — `CommitAttempt.attemptId` means two different things.**
+  A freshly executed attempt carries the synthetic `${planId}:attempt:${n}`; one loaded from the
+  database carries the row uuid (`attemptsDb.attemptFromRow`). `insertCommitAttempt` returns the
+  durable id and `executeApprovedPlanForCase` **discarded it**. Only the row id proves persistence,
+  so it is now captured and used as the execution reference. The pre-existing ambiguity is untouched
+  otherwise and is worth a separate look.
+- **New finding, D-13 — Processing has no infrastructure-failure state.**
+  `AttemptOutcome` is `committed | partially_committed | failed | preflight_rejected`; none
+  distinguishes a declined command from a dead transport, and if the executor throws no attempt row
+  is persisted at all. Phase 0's `infrastructure_failure` class is therefore **unreachable from this
+  source and never emitted** — asserting it would claim knowledge Processing does not have.
+- **New finding, D-14 — a partial commit is only honest at subject grain.**
+  A package is one subject's judgment; a plan spans several. `partially_committed` yields `executed`
+  for a subject whose contributing operations all committed, and `outcome` for one where they did
+  not. A `compensated` operation is never counted as committed: a reversal reported as a commit is
+  precisely the falsehood this slice exists to prevent.
+- **D-15 — a superseded package must be excluded. RESOLVED: Phase 1.6's supersession rule was wrong.**
+  Excluding superseded packages is correct — what a plan executes after an operator overrides is the
+  operator's decision, so crediting the engine's package would be false. But Phase 1.6 superseded on
+  **any** operator decision, including a plain confirmation, which meant a fully operator-reviewed
+  case produced no execution evidence at all. Raised as an open question by 1.7 and **corrected in
+  this branch**: agreement is not supersession.
+
+### The confirmation-versus-supersession correction
+
+`classifyOperatorIdentityDecisionEffect` compares the durable ENGINE judgment with the durable
+OPERATOR result, and never reads `decided_by`:
+
+```text
+agreement, or the engine declined to decide → accepted   (package remains CURRENT, still bindable)
+the operator postponed                      → deferred   (package remains CURRENT)
+the operator replaced the judgment          → superseded
+anything unrecognised                       → nothing at all
+```
+
+- **New finding, D-16 — the engine judgment is recoverable, though it is overwritten.**
+  An operator decision UPDATEs `decision_action` and `selected_candidate_id` in place, so the
+  engine's answer is not stored. It is still exact: the engine's answer is a pure function of
+  `candidates`, and neither `recordResolutionDecision` nor `applyCommitSelectionToResolutions`
+  writes that column. The derivation moved out of `canonicalResolutionEngine` into a leaf
+  (`engineJudgment.ts`) that both the engine and the classifier import — a copy would drift, and the
+  drift would silently reclassify overrides as confirmations.
+- **New finding, D-17 — `review_required` is the engine DECLINING to decide, not a result.**
+  Its package asserts `disposition: needs_review` and asks for an operator. When one decides,
+  nothing the package claimed became untrue, so it is not superseded — it is `accepted`. This is
+  also the branch the normal reviewed path runs through, so misreading it is what made execution
+  binding unreachable in practice.
+- **No new observation kind, and no migration.** `accepted` and `deferred` are Phase 0 vocabulary
+  with existing projection semantics. The durable gap gained an OPTIONAL `observation_kind`; absent
+  reads as `superseded`, so rows written before the correction are not orphaned.
+- **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
+  and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
+  three entries. The count assertion now reads `size === length`, so adding a capability is a
+  deliberate act in the slice that adds it rather than an edit to every predecessor.
+- **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
+  and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
+  three entries. The count assertion now reads `size === length`, so adding a capability is a
+  deliberate act in the slice that adds it rather than an edit to every predecessor.
 
 ### What 1.6 confirmed, refined, or corrected
 

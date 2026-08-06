@@ -5,7 +5,7 @@ import type { IdentityCandidate } from "@/lib/identity";
 import { IDENTITY_RESOLVER_VERSION } from "@/lib/identity";
 import { resolveIntakeRecordResolution } from "@/lib/intake/resolve/resolveIntakeRecordResolution";
 import { defaultActionForConfidence } from "@/lib/intake/resolve/buildProposals";
-import type { IntakeRecordMatchConfidence } from "@/lib/intake/resolve/types";
+import { bandToLegacyConfidence } from "./engineJudgment";
 import {
     hashFactsForResolution,
     insertProcessingFacts,
@@ -29,21 +29,10 @@ import {
     type GenerationCaptureResult,
 } from "./trustAdapter/captureIdentityGeneration";
 
-function bandToLegacyConfidence(band: string): IntakeRecordMatchConfidence {
-    switch (band) {
-        case "confirmed":
-            return "exact_match";
-        case "strong":
-            return "probable_match";
-        case "possible":
-        case "weak":
-            return "possible_match";
-        case "conflicted":
-            return "conflict";
-        default:
-            return "no_match";
-    }
-}
+// `bandToLegacyConfidence` moved to `./engineJudgment` so the operator-effect
+// classifier can reconstruct exactly what this engine decided. Same function,
+// ONE definition: a copy would drift, and the drift would silently reclassify
+// operator overrides as confirmations.
 
 export type CanonicalResolutionRunResult = {
     generationId: string;

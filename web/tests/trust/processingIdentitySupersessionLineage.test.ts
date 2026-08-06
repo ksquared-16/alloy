@@ -21,11 +21,11 @@ import { PROCESSING_IDENTITY_FACT_MATERIAL_VERSION } from "@/lib/pos/processingI
 import { processingIdentitySubjectAdoptionId } from "@/lib/pos/processingIdentity/trustAdapter/identityAdoptionIdentity";
 import {
     adoptionIdForResolutionRow,
-    supersedeForOperatorDecision,
+    recordOperatorDecisionLifecycle,
     supersedeForReplacementPackage,
 } from "@/lib/pos/processingIdentity/trustAdapter/identityLineageService";
 import {
-    identitySupersessionReasonForDecision,
+    identitySupersessionReasonForEffect,
     IDENTITY_SUPERSESSION_REASONS,
 } from "@/lib/pos/processingIdentity/trustAdapter/identitySupersessionReasons";
 import {
@@ -225,6 +225,27 @@ function makeStore(resolutions: Row[] = []) {
     return { client, exceptions, resolutions, resolutionWrites, forbiddenTables };
 }
 
+/**
+ * The candidate the ENGINE recommended.
+ *
+ * `confirmed` is what makes the engine assert `link_existing` rather than defer
+ * with `review_required`, and only an assertion can be contradicted. This suite
+ * is about SUPERSESSION, so its fixtures must be genuine overrides — a fixture
+ * with no candidates at all would be classified as one for the wrong reason.
+ */
+function engineCandidate(recordId: string): Record<string, unknown> {
+    return {
+        subjectRef: "parent-1",
+        entityType: "person",
+        recordId,
+        confidenceBand: "confirmed",
+        signals: [],
+        blockingConflicts: [],
+        explanation: "",
+        resolverVersion: IDENTITY_RESOLVER_VERSION,
+    };
+}
+
 function row(overrides: Partial<ProcessingResolutionRow> = {}): Row {
     return {
         id: "res-1",
@@ -235,7 +256,9 @@ function row(overrides: Partial<ProcessingResolutionRow> = {}): Row {
         subject_ref: "parent-1",
         subject_role: "parent",
         provisional: {},
-        candidates: [],
+        // The engine asserted `link_existing` → `rec-engine`; the operator chose
+        // `rec-1`. A genuine disagreement, which is what supersession records.
+        candidates: [engineCandidate("rec-engine")],
         decision_action: "link_existing",
         selected_candidate_id: "rec-1",
         decided_by: "operator",
@@ -288,7 +311,7 @@ describe("P16-1 — an operator correction supersedes the prior engine judgment"
         const trust = makeTrust();
         const store = makeStore([row()]);
 
-        const outcome = await supersedeForOperatorDecision(store.client(), {
+        const outcome = await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -305,7 +328,7 @@ describe("P16-1 — an operator correction supersedes the prior engine judgment"
         // No fake package id is invented for an operator.
         expect(o.detail.superseding_package_id).toBeNull();
         expect(o.detail.superseding_reference).toBe("processing_resolution:res-1");
-        expect(o.detail.reason).toBe("operator_confirmed_existing");
+        expect(o.detail.reason).toBe("operator_selected_other_candidate");
         // Supersession is not an execution.
         expect(o.execution_reference).toBeNull();
     });
@@ -315,7 +338,7 @@ describe("P16-1 — an operator correction supersedes the prior engine judgment"
         // The row claims a different operator; server context must win.
         const store = makeStore([row({ operator_id: "spoofed-by-payload" } as Partial<ProcessingResolutionRow>)]);
 
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -332,7 +355,7 @@ describe("P16-1 — an operator correction supersedes the prior engine judgment"
         // The engine still owns this row: no operator decision committed.
         const store = makeStore([row({ decided_by: "engine", operator_id: null })]);
 
-        const outcome = await supersedeForOperatorDecision(store.client(), {
+        const outcome = await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -350,7 +373,7 @@ describe("P16-1 — an operator correction supersedes the prior engine judgment"
         // A package exists, but for a DIFFERENT subject's adoption identity.
         const spies = silence();
 
-        const outcome = await supersedeForOperatorDecision(store.client(), {
+        const outcome = await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -369,7 +392,7 @@ describe("P16-1 — an operator correction supersedes the prior engine judgment"
         const store = makeStore([row(), row({ id: "res-2", subject_ref: "child-1" })]);
         const governed = { [adoptionIdFor()]: PRIOR_PKG, [adoptionIdFor({ subjectRef: "child-1" })]: NEW_PKG };
 
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -393,7 +416,7 @@ describe("P16-2 — supersession is exactly once", () => {
         const store = makeStore([row()]);
         const deps = lineageDeps(trust, { [adoptionIdFor()]: PRIOR_PKG });
         const call = () =>
-            supersedeForOperatorDecision(store.client(), {
+            recordOperatorDecisionLifecycle(store.client(), {
                 orgId: ORG,
                 caseId: CASE,
                 resolutionId: "res-1",
@@ -418,7 +441,7 @@ describe("P16-2 — supersession is exactly once", () => {
             prior_package_id: PRIOR_PKG,
             superseding_package_id: null,
             superseding_reference: "processing_resolution:res-1",
-            reason: "operator_confirmed_existing",
+            reason: "operator_selected_other_candidate",
         });
         // The write LANDED, then the caller saw an error.
         await trust.repository.insertObservation({
@@ -434,12 +457,12 @@ describe("P16-2 — supersession is exactly once", () => {
                 supersession_source: "external_authority_decision",
                 superseding_package_id: null,
                 superseding_reference: "processing_resolution:res-1",
-                reason: "operator_confirmed_existing",
+                reason: "operator_selected_other_candidate",
             },
         });
 
         const store = makeStore([row()]);
-        const outcome = await supersedeForOperatorDecision(store.client(), {
+        const outcome = await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -461,7 +484,7 @@ describe("P16-2 — supersession is exactly once", () => {
             supersession_source: "external_authority_decision" as const,
             superseding_package_id: null,
             superseding_reference: "processing_resolution:res-1",
-            reason: "operator_confirmed_existing",
+            reason: "operator_selected_other_candidate",
             actor_type: "operator" as const,
             actor_id: "user-1",
             channel: "system",
@@ -501,7 +524,7 @@ describe("P16-2 — supersession is exactly once", () => {
             supersession_source: "external_authority_decision" as const,
             superseding_package_id: null,
             superseding_reference: "processing_resolution:res-1",
-            reason: "operator_confirmed_existing",
+            reason: "operator_selected_other_candidate",
             actor_type: "operator" as const,
             actor_id: "user-1",
             channel: "system",
@@ -599,7 +622,7 @@ describe("P16-3 — lineage rules are enforced before the write", () => {
                 supersession_source: "external_authority_decision",
                 superseding_package_id: null,
                 superseding_reference: "processing_resolution:res-9",
-                reason: "operator_confirmed_new",
+                reason: "operator_overrode_with_create_new",
             },
             trust,
         );
@@ -800,7 +823,7 @@ describe("P16-5 — a Trust failure produces a durable, readiness-neutral gap", 
         const store = makeStore([row()]);
         const spies = silence();
 
-        const outcome = await supersedeForOperatorDecision(store.client(), {
+        const outcome = await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -821,7 +844,7 @@ describe("P16-5 — a Trust failure produces a durable, readiness-neutral gap", 
         const snapshot = exc.subject_ref as Record<string, unknown>;
         expect(snapshot.prior_package_id).toBe(PRIOR_PKG);
         expect(snapshot.prior_adoption_id).toBe(adoptionIdFor());
-        expect(snapshot.reason).toBe("operator_confirmed_existing");
+        expect(snapshot.reason).toBe("operator_selected_other_candidate");
         expect(snapshot.actor_id).toBe("user-1");
         expect(snapshot.superseding_reference).toBe("processing_resolution:res-1");
 
@@ -836,7 +859,7 @@ describe("P16-5 — a Trust failure produces a durable, readiness-neutral gap", 
         const deps = { ...lineageDeps(trust, { [adoptionIdFor()]: PRIOR_PKG }), repository: trust.repository };
 
         for (let i = 0; i < 3; i += 1) {
-            await supersedeForOperatorDecision(store.client(), {
+            await recordOperatorDecisionLifecycle(store.client(), {
                 orgId: ORG,
                 caseId: CASE,
                 resolutionId: "res-1",
@@ -856,7 +879,7 @@ describe("P16-5 — a Trust failure produces a durable, readiness-neutral gap", 
         const store = makeStore([row()]);
         const spies = silence();
 
-        const outcome = await supersedeForOperatorDecision(store.client(), {
+        const outcome = await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -894,7 +917,7 @@ describe("P16-6 — reconciliation completes deferred supersession", () => {
                 throw new Error("trust db down");
             },
         } as TrustRepository;
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -1059,7 +1082,7 @@ describe("P16-7 — no identity or operator text reaches Trust", () => {
             }),
         ]);
 
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -1072,19 +1095,24 @@ describe("P16-7 — no identity or operator text reaches Trust", () => {
             expect(serialized).not.toContain(leak);
         }
         // Only the bounded category survives.
-        expect(trust.observations[0]!.detail.reason).toBe("operator_confirmed_new");
+        expect(trust.observations[0]!.detail.reason).toBe("operator_overrode_with_create_new");
     });
 
-    it("the reason vocabulary is closed and an unknown action degrades safely", () => {
-        expect(identitySupersessionReasonForDecision("link_existing")).toBe("operator_confirmed_existing");
-        expect(identitySupersessionReasonForDecision("update_existing")).toBe("operator_confirmed_existing");
-        expect(identitySupersessionReasonForDecision("create_new")).toBe("operator_confirmed_new");
-        expect(identitySupersessionReasonForDecision("reject")).toBe("operator_rejected_candidate");
-        expect(identitySupersessionReasonForDecision("request_information")).toBe("operator_requested_information");
-        expect(identitySupersessionReasonForDecision("review_required")).toBe("operator_deferred_decision");
+    it("the reason vocabulary is closed and an unknown effect degrades safely", () => {
+        // Keyed on the classified EFFECT, not on `decision_action`. Keying on
+        // the action is what let `link_existing` map to a reason named
+        // "confirmed" while the lifecycle recorded a supersession.
+        expect(identitySupersessionReasonForEffect("confirmation")).toBe("operator_confirmed_engine_judgment");
+        expect(identitySupersessionReasonForEffect("engine_deferred_review")).toBe("operator_resolved_engine_review");
+        expect(identitySupersessionReasonForEffect("operator_deferred")).toBe("operator_deferred_decision");
+        expect(identitySupersessionReasonForEffect("override_existing_candidate")).toBe(
+            "operator_selected_other_candidate",
+        );
+        expect(identitySupersessionReasonForEffect("override_create_new")).toBe("operator_overrode_with_create_new");
+        expect(identitySupersessionReasonForEffect("rejection")).toBe("operator_rejected_candidate");
         // Never the raw string.
-        expect(identitySupersessionReasonForDecision(UNSAFE_NOTE)).toBe("operator_corrected_identity");
-        expect(identitySupersessionReasonForDecision(null)).toBe("operator_corrected_identity");
+        expect(identitySupersessionReasonForEffect(UNSAFE_NOTE)).toBe("operator_corrected_identity");
+        expect(identitySupersessionReasonForEffect(null)).toBe("operator_corrected_identity");
         expect(IDENTITY_SUPERSESSION_REASONS).toContain("replacement_engine_generation");
     });
 
@@ -1092,7 +1120,7 @@ describe("P16-7 — no identity or operator text reaches Trust", () => {
         const unsafe = buildSupersessionDetail({
             supersession_source: "external_authority_decision",
             superseding_reference: `processing_resolution:res-1 ${UNSAFE_NOTE}`,
-            reason: "operator_confirmed_new",
+            reason: "operator_overrode_with_create_new",
         });
         expect(unsafe).toEqual({ ok: false, reason: "unsafe_superseding_reference" });
 
@@ -1106,7 +1134,7 @@ describe("P16-7 — no identity or operator text reaches Trust", () => {
         const unsafeContext = buildSupersessionDetail({
             supersession_source: "external_authority_decision",
             superseding_reference: "processing_resolution:res-1",
-            reason: "operator_confirmed_new",
+            reason: "operator_overrode_with_create_new",
             context: { note: UNSAFE_NOTE },
         });
         expect(unsafeContext).toEqual({ ok: false, reason: "unsafe_context_value:note" });
@@ -1122,7 +1150,7 @@ describe("P16-7 — no identity or operator text reaches Trust", () => {
         ]);
         const spies = silence();
 
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -1174,7 +1202,7 @@ describe("P16-8 — the projection reports supersession deterministically", () =
                 supersession_source: "external_authority_decision",
                 superseding_package_id: null,
                 superseding_reference: "processing_resolution:res-1",
-                reason: "operator_confirmed_existing",
+                reason: "operator_selected_other_candidate",
             },
             observed_at_iso: NOW,
             ...overrides,
@@ -1197,7 +1225,7 @@ describe("P16-8 — the projection reports supersession deterministically", () =
             superseding_package_id: null,
             source: "external_authority_decision",
             superseding_reference: "processing_resolution:res-1",
-            reason: "operator_confirmed_existing",
+            reason: "operator_selected_other_candidate",
             lineage_verified: false,
         });
         expect(r.projection.operator_action_available).toBe(false);
@@ -1339,7 +1367,7 @@ describe("P16-8 — the projection reports supersession deterministically", () =
                         supersession_source: "external_authority_decision",
                         superseding_package_id: null,
                         superseding_reference: null,
-                        reason: "operator_confirmed_existing",
+                        reason: "operator_selected_other_candidate",
                     },
                 }),
             ],
@@ -1367,7 +1395,7 @@ describe("P16-9 — supersession is lineage, not a new governed decision", () =>
         const trust = makeTrust();
         const store = makeStore([row()]);
 
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
@@ -1385,7 +1413,7 @@ describe("P16-9 — supersession is lineage, not a new governed decision", () =>
         const deps = lineageDeps(trust, { [adoptionIdFor()]: PRIOR_PKG });
 
         for (let i = 0; i < 5; i += 1) {
-            await supersedeForOperatorDecision(store.client(), {
+            await recordOperatorDecisionLifecycle(store.client(), {
                 orgId: ORG,
                 caseId: CASE,
                 resolutionId: "res-1",
@@ -1403,7 +1431,7 @@ describe("P16-9 — supersession is lineage, not a new governed decision", () =>
         const store = makeStore([row()]);
         const spies = silence();
 
-        await supersedeForOperatorDecision(store.client(), {
+        await recordOperatorDecisionLifecycle(store.client(), {
             orgId: ORG,
             caseId: CASE,
             resolutionId: "res-1",
