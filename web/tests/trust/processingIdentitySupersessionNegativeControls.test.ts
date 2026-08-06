@@ -598,10 +598,15 @@ describe("P16-NC-8 — lineage gaps affecting readiness would be caught", () => 
     it("the gap is a warning and its type is excluded by the SHARED list", () => {
         expect(IDENTITY_LINEAGE_GAP_SEVERITY).toBe("warning");
         expect(TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES).toContain(TRUST_IDENTITY_LINEAGE_GAP_TYPE);
-        // All three capabilities, one list.
+        // Every capability's gap type, one list.
         expect(TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES).toContain(TRUST_SOURCE_CLASSIFICATION_GAP_TYPE);
         expect(TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES).toContain(TRUST_IDENTITY_RESOLUTION_GAP_TYPE);
-        expect(new Set(TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES).size).toBe(3);
+        // No duplicates. The COUNT is asserted by the slice that owns the
+        // newest type, so adding one is a deliberate act there rather than a
+        // number every prior slice has to be edited to agree with.
+        expect(new Set(TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES).size).toBe(
+            TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES.length,
+        );
     });
 
     it("the readiness count still excludes every gap type by list, not by name", () => {
@@ -622,7 +627,10 @@ describe("P16-NC-8 — lineage gaps affecting readiness would be caught", () => 
                 const src = readFileSync(file, "utf8");
                 if (!src.includes('.from("processing_exceptions")')) continue;
                 const isGapStore =
-                    file.includes("GovernanceGapDb") || file.includes("LineageGapDb") || file.includes("attemptsDb");
+                    file.includes("GovernanceGapDb") ||
+                    file.includes("LineageGapDb") ||
+                    file.includes("ExecutionGapDb") ||
+                    file.includes("attemptsDb");
                 if (!isGapStore && !src.includes("TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES")) {
                     offenders.push(file.replace(WEB_ROOT, ""));
                 }
