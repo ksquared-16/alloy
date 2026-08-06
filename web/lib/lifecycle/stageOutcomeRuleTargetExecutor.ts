@@ -42,6 +42,10 @@ import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitCh
 import { materializeEnrollmentForChildScope } from "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance";
 import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
 import { stampEnrollmentDateOnProcessInstances } from "@/lib/enrollment/stampEnrollmentDateOnProcessInstances";
+import {
+    assertSingleParticipantWrite,
+    type ParticipantWriteCountFailure,
+} from "@/lib/lifecycle/assertSingleParticipantWrite";
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
@@ -55,6 +59,12 @@ export type StageOutcomeExecutionSubject = {
     placement_candidate_id?: string | null;
     /** Open lifecycle work task for repeat/reopen automations. */
     work_id?: string | null;
+    /**
+     * Operator-facing name of the participant this write is about, so a refusal can say WHO it is
+     * about instead of quoting an id. Presentation only — never an identity, never used to resolve
+     * a subject, and absence changes no behaviour.
+     */
+    participant_label?: string | null;
 };
 
 /**
@@ -111,6 +121,8 @@ export type ApplyStageOutcomeRuleTargetResult = {
     blocked_reasons?: FamilyCloseBlockedReason[];
     /** Why a stage move was refused on grain grounds — structured for the same reason. */
     stage_grain_error?: StageMoveGrainError;
+    /** A participant-scoped write that matched no row, or several. Structured, not just a string. */
+    participant_write_error?: ParticipantWriteCountFailure;
     needs_attention?: boolean;
     status_updated?: boolean;
     /**
@@ -297,6 +309,26 @@ export async function applyStageOutcomeRuleTarget(
                 if (restored.error) throw new Error(`restore child enrollment state: ${restored.error}`);
             };
 
+            // A scope-targeted update that matched no row, or several, is not a success. Checked
+            // before anything downstream (events, placement, materialization) treats it as one.
+            //
+            // The inverse travels WITH the failure when rows were actually written: `moved > 1`
+            // means the ambiguous scope already wrote to every matched row, so the transaction must
+            // be able to unwind them. `moved === 0` wrote nothing, so there is nothing to undo and
+            // offering one would only invent a write.
+            const stateWrite = assertSingleParticipantWrite({
+                moved: pi.moved,
+                operation: "enrollment path",
+                participantLabel: subject.participant_label,
+            });
+            if (!stateWrite.ok) {
+                return {
+                    error: stateWrite.failure.message,
+                    participant_write_error: stateWrite.failure,
+                    ...(stateWrite.failure.moved > 1 ? { undo: undoChildState } : {}),
+                };
+            }
+
             const ocmBridgeId = subject.opportunity_customer_member_id?.trim() ?? null;
             // Child lifecycle event emitted from the process-instance transition (restored). While the
             // OCM bridge exists the event stays keyed on the OCM id so existing workflow subscriptions
@@ -325,12 +357,26 @@ export async function applyStageOutcomeRuleTarget(
                 }
             }
             // Waitlist placement candidate — sourced from the child's process instance (no OCM required).
+            //
+            // Declared OUT of the boundary, like the lifecycle event above and the enrollment
+            // materialization below. It used to be awaited bare: a throw here escaped
+            // `applyStageOutcomeRuleTarget` entirely, so the caller received an exception INSTEAD of
+            // a result — and therefore never received the `undo` for the state write that had
+            // already succeeded. The transition was committed with no inverse, which is the one
+            // outcome the compensation contract exists to prevent. Reported, never swallowed.
             if (dispositionKey === "waitlisted") {
-                await ensurePlacementCandidateForWaitlistedChildBySubject(supabase, {
-                    orgId,
-                    opportunityId: subject.opportunity_id,
-                    customerMemberId: childId,
-                });
+                try {
+                    await ensurePlacementCandidateForWaitlistedChildBySubject(supabase, {
+                        orgId,
+                        opportunityId: subject.opportunity_id,
+                        customerMemberId: childId,
+                    });
+                } catch (e) {
+                    console.error("[stageOutcomeRuleTargetExecutor] waitlist placement candidate", e);
+                    degradedEffects.push(
+                        `waitlist placement candidate not created: ${e instanceof Error ? e.message : String(e)}`,
+                    );
+                }
             }
             // Enrollment completion → materialize durable operational truth (agreement + placement +
             // schedule assignment). The process produces the facts; it does not own them. Non-blocking
@@ -582,6 +628,20 @@ export async function applyStageOutcomeRuleTarget(
                             stageKey: priorStage,
                         });
                         if (restored.error) throw new Error(`restore child stage: ${restored.error}`);
+                    };
+                }
+                // Same contract as the state write: 1 succeeds, 0 fails, >1 is an integrity
+                // failure that carries its inverse out so the transaction can unwind it.
+                const stageWrite = assertSingleParticipantWrite({
+                    moved: pi.moved,
+                    operation: "stage move",
+                    participantLabel: subject.participant_label,
+                });
+                if (!stageWrite.ok) {
+                    return {
+                        error: stageWrite.failure.message,
+                        participant_write_error: stageWrite.failure,
+                        ...(stageWrite.failure.moved > 1 && undoStageMove ? { undo: undoStageMove } : {}),
                     };
                 }
             } else {

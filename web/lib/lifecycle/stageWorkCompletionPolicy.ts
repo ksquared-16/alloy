@@ -50,6 +50,9 @@ export function normalizeCompletionPolicy(
     if (window != null && window > 0) policy.window_days = window;
     if (raw.repeat_until_outcome === true) policy.repeat_until_outcome = true;
     if (repeatDue != null && repeatDue > 0) policy.repeat_due_days = repeatDue;
+    if ((raw as { requires_all_participants_resolved?: unknown }).requires_all_participants_resolved === true) {
+        policy.requires_all_participants_resolved = true;
+    }
     const sufficient = normalizeSufficientCommandResults(
         (raw as { sufficient_command_results?: unknown }).sufficient_command_results,
     );

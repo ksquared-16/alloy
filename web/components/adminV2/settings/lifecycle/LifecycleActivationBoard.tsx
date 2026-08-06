@@ -68,7 +68,6 @@ import type {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     readProcessTracks,
-    splitRuleForStage,
     stagesForTrack,
 } from "@/lib/businessProcesses/businessProcessConfigReader";
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
@@ -1202,11 +1201,6 @@ export default function LifecycleActivationBoard({
         return stagesForTrack(builderProcess, activeTrackKey);
     }, [activeTrackKey, builderProcess, builderStages, processTracks]);
 
-    const activeSplitRule = useMemo(() => {
-        if (!builderProcess || !stageKey) return null;
-        return splitRuleForStage(builderProcess, stageKey);
-    }, [builderProcess, stageKey]);
-
     const builderStageKeys = useMemo(() => {
         return builderProcess ? stageKeysForProcess(builderProcess) : [];
     }, [builderProcess]);
@@ -1977,15 +1971,6 @@ export default function LifecycleActivationBoard({
                                     departmentId={runtimeDepartmentId}
                                     processId={processId}
                                 />
-                            :   null}
-                            {activeSplitRule ?
-                                <p
-                                    className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2 text-xs text-alloy-midnight/65"
-                                    data-testid="lifecycle-split-rule-hint"
-                                >
-                                    At Decision, choose a path for each child:{" "}
-                                    {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
-                                </p>
                             :   null}
                             {showAddStage ?
                                 <div className="rounded-lg border border-dashed border-alloy-pine/30 bg-alloy-pine/5 p-3">

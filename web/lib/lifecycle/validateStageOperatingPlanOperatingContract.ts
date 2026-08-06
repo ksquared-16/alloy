@@ -3,7 +3,11 @@
  * Associates issues with exact controls; never throws during partial editing.
  */
 
-import type { StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS,
+    type StageOperatingPlanV1,
+    type StageWorkTemplateV1,
+} from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     readOutcomeAutomationDraft,
     type OutcomeAutomationKind,
@@ -44,7 +48,19 @@ export type StageOperatingContractIssueCode =
     /** An outcome moves through a path that lands on the other journey track. */
     | "outcome_movement_grain_mismatch"
     /** An outcome moves through a path whose destination grain cannot be resolved. */
-    | "outcome_movement_grain_unresolved";
+    | "outcome_movement_grain_unresolved"
+    /** A per-child decision moves a child onto a stage that belongs to the family case. */
+    | "participant_decision_destination_grain_mismatch"
+    /** A per-child decision moves a child onto a stage whose grain cannot be resolved. */
+    | "participant_decision_destination_grain_unresolved"
+    /** A per-child decision names a destination stage this process does not configure. */
+    | "participant_decision_destination_invalid"
+    /** A required input binds to a target field none of the decision's targets can carry. */
+    | "participant_decision_binding_unsupported"
+    /** A required select input offers no options to choose from. */
+    | "participant_decision_input_options_missing"
+    /** Work completion is gated on participants being resolved, but nothing resolves them. */
+    | "participant_resolution_gate_without_decisions";
 
 export type StageOperatingContractIssue = {
     code: StageOperatingContractIssueCode;
@@ -54,6 +70,8 @@ export type StageOperatingContractIssue = {
     controlId: string;
     template_key?: string;
     outcome_key?: string;
+    /** Present on per-child decision findings, so the editor can mark the right row. */
+    decision_key?: string;
 };
 
 export type ValidateStageOperatingPlanOperatingContractInput = {
@@ -95,6 +113,133 @@ function asSet(value: ReadonlySet<string> | readonly string[] | undefined): Set<
 function entityTypeForPlan(plan: StageOperatingPlanV1, override?: string): string {
     if (override?.trim()) return override.trim();
     return plan.journey_segment === "child" ? "opportunity_customer_members" : "opportunities";
+}
+
+/**
+ * Per-child decisions, checked at AUTHORING time.
+ *
+ * The runtime refuses these same shapes — the grain guard on the target executor, the binding check
+ * in the input applier — but a refusal at click time is a defect the operator discovers on a real
+ * family. Everything decidable from configuration alone is decided here instead.
+ *
+ * Grain is judged with the SHARED resolver, so a decision's destination is weighed exactly as an
+ * outcome's destination is. The asymmetry that makes this feature work — a family-grain stage
+ * hosting child-grain decisions — is legitimate for the STAGE and illegitimate for the DESTINATION:
+ * moving a child onto a family stage is the cross-grain write the platform has spent this whole
+ * program learning to refuse.
+ */
+function validateParticipantDecisions(
+    work: StageWorkTemplateV1,
+    processStages: ReadonlyArray<{ key: string; label?: string | null; grain?: string | null }> | undefined,
+): StageOperatingContractIssue[] {
+    const issues: StageOperatingContractIssue[] = [];
+    const decisions = work.participant_decisions ?? [];
+
+    if (work.completion_policy?.requires_all_participants_resolved && !decisions.length) {
+        issues.push({
+            code: "participant_resolution_gate_without_decisions",
+            severity: "error",
+            message:
+                `"${work.label}" cannot be completed until every child has a path, but no per-child `
+                + `paths are configured on it — so it could never be completed.`,
+            controlId: `work-template-participant-gate-${work.template_key}`,
+            template_key: work.template_key,
+        });
+    }
+
+    if (!decisions.length) return issues;
+
+    const stageByKey = new Map((processStages ?? []).map((s) => [s.key, s]));
+
+    for (const decision of decisions) {
+        const controlId = `work-template-participant-decision-${work.template_key}-${decision.decision_key}`;
+
+        for (const input of decision.required_inputs ?? []) {
+            if (input.type === "select" && !(input.options?.length)) {
+                issues.push({
+                    code: "participant_decision_input_options_missing",
+                    severity: "error",
+                    message: `"${input.label}" asks the operator to choose, but no options are configured.`,
+                    controlId: `${controlId}-input-${input.key}`,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+            if (!input.binds_to_target_field) continue;
+            const acceptors = STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS[input.binds_to_target_field];
+            if (!decision.targets.some((t) => acceptors.includes(t.kind))) {
+                issues.push({
+                    code: "participant_decision_binding_unsupported",
+                    severity: "error",
+                    message:
+                        `"${input.label}" is collected but nothing this option does can record it. `
+                        + `Remove the input, or give the option a step that can carry it.`,
+                    controlId: `${controlId}-input-${input.key}`,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+        }
+
+        // Destination grain is only decidable when the caller supplied the stage inventory.
+        if (!processStages) continue;
+
+        for (const target of decision.targets) {
+            if (target.kind !== "move_to_stage") continue;
+            const targetKey =
+                target.stage_key?.trim()
+                ?? (target.transition_ref?.startsWith("move_to_stage:")
+                    ? target.transition_ref.slice("move_to_stage:".length).trim()
+                    : null);
+            if (!targetKey) continue;
+
+            if (!stageByKey.has(targetKey)) {
+                issues.push({
+                    code: "participant_decision_destination_invalid",
+                    severity: "error",
+                    message: `"${decision.label ?? decision.decision_key}" sends children to a stage this process does not have.`,
+                    controlId,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+                continue;
+            }
+
+            const resolution = resolveStageGrain({
+                stageKey: targetKey,
+                configuredMetadataGrain: stageByKey.get(targetKey)?.grain,
+            });
+            const destinationLabel = stageByKey.get(targetKey)?.label?.trim() || targetKey;
+
+            if (!resolution.ok) {
+                issues.push({
+                    code: "participant_decision_destination_grain_unresolved",
+                    severity: "error",
+                    message: `"${destinationLabel}" does not say clearly whether it holds families or children, so a child cannot be sent there.`,
+                    controlId,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+                continue;
+            }
+
+            if (resolution.grain !== "child") {
+                issues.push({
+                    code: "participant_decision_destination_grain_mismatch",
+                    severity: "error",
+                    message:
+                        `"${destinationLabel}" belongs to ${grainInOperatorWords(resolution.grain)}, so a `
+                        + `single child cannot be moved onto it. Per-child paths must lead to a stage that `
+                        + `holds ${grainSubjectWords("child")}.`,
+                    controlId,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+        }
+    }
+
+    return issues;
 }
 
 function validatePrimaryAction(
@@ -300,6 +445,7 @@ export function validateStageOperatingPlanOperatingContract(
     for (const work of plan.work_templates) {
         try {
             issues.push(...validatePrimaryAction(work, validPrimaryRefs));
+            issues.push(...validateParticipantDecisions(work, input.processStages));
             for (const ref of work.outcome_refs ?? []) {
                 const outcomeRef = ref.outcome_ref?.trim();
                 if (outcomeRef && !outcomeKeys.has(outcomeRef)) {
@@ -552,7 +698,7 @@ export function validateStageOperatingPlanOperatingContract(
     // differ by code, control, or grain — all of which are kept.
     const seen = new Set<string>();
     return issues.filter((issue) => {
-        const identity = `${issue.code}|${issue.controlId}|${issue.outcome_key ?? ""}|${issue.template_key ?? ""}`;
+        const identity = `${issue.code}|${issue.controlId}|${issue.outcome_key ?? ""}|${issue.template_key ?? ""}|${issue.decision_key ?? ""}`;
         if (seen.has(identity)) return false;
         seen.add(identity);
         return true;

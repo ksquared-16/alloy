@@ -81,9 +81,19 @@ function withConfiguredDept(
             // failure. Tests that need children stub this table themselves.
             const original = originalFrom(table) as Record<string, unknown> | null;
             const chain: Record<string, unknown> = {};
+            // An UPDATE and a LIST READ both resolve through `then`, and they must not resolve to
+            // the same value. This stub answered both with `[]`, which reads as "no rows matched" —
+            // correct for the family-close guard's enumeration, wrong for a child write, and
+            // invisible for as long as callers discarded the row count. Now that a scope-targeted
+            // write asserts it touched exactly one row, the stub has to say which operation it is
+            // standing in for.
+            let isUpdate = false;
             chain.select = () => chain;
             chain.eq = () => chain;
-            chain.update = () => chain;
+            chain.update = () => {
+                isUpdate = true;
+                return chain;
+            };
             chain.maybeSingle = async () => {
                 const inner = original?.select as undefined | (() => Record<string, unknown>);
                 const readChain = typeof inner === "function" ? inner() : null;
@@ -93,7 +103,8 @@ function withConfiguredDept(
                     : { data: null, error: null };
             };
             chain.single = async () => ({ data: {}, error: null });
-            chain.then = (resolve: (value: unknown) => unknown) => resolve({ data: [], error: null });
+            chain.then = (resolve: (value: unknown) => unknown) =>
+                resolve({ data: isUpdate ? [{ id: "pi-1" }] : [], error: null });
             return chain;
         }
         return originalFrom(table);

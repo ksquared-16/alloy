@@ -39,6 +39,7 @@ import {
     type StageGrain,
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
+import { journeySegmentForStageGrain } from "@/lib/lifecycle/grainVocabulary";
 
 import {
     captureUnknownFields,
@@ -625,11 +626,23 @@ export function updateStageGrain(
                     // ONE governed save keeps both declarations of the same fact in step. The
                     // product must expose one concept; leaving `journey_segment` authorable while
                     // `grain` was immutable is what let them drift apart in the first place.
+                    //
+                    // The two vocabularies are NOT the same size, though: `StageGrain` has five
+                    // values and `journey_segment` has two. Assigning the grain straight across
+                    // could write `person`, `account` or `work_item` into a field whose parser
+                    // rejects them — the plan would then fail to parse on the next read and the
+                    // stage would silently lose its operating plan. The canonical translator
+                    // answers whether the grain HAS a journey segment at all; when it does not,
+                    // the grain is still saved and the plan's segment is left exactly as authored
+                    // rather than overwritten with a value that cannot exist.
                     const plan = s.stage_operating_plan_v1;
+                    const segment = journeySegmentForStageGrain(grain);
                     return {
                         ...s,
                         grain,
-                        ...(plan ? { stage_operating_plan_v1: { ...plan, journey_segment: grain } } : {}),
+                        ...(plan && segment.ok ?
+                            { stage_operating_plan_v1: { ...plan, journey_segment: segment.segment } }
+                        :   {}),
                     };
                 }),
             };
