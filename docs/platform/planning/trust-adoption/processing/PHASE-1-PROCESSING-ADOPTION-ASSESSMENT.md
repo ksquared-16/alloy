@@ -678,8 +678,13 @@ Everything before it is certified by test and module graph.
 | **1.4** dormant identity decision class | **Merged** — `942d078dd` (PR #349). Registered, no production caller. No migration. |
 | **1.5** live identity capture | **Merged** — `c933ea15b` (PR #351). First live identity persistence. No migration. |
 | **1.6** operator-correction lineage | **Merged** — `8d6917a18` (PR #353). Supersession by an operator correction or a replacement generation. No migration. |
-| **1.7** commit outcome binding | **Implemented, this branch.** Commit Plan execution outcomes become bounded Trust evidence, downstream only. No migration. |
-| 1.8 | Not started — closeout. |
+| **1.7** commit outcome binding | **Merged** — `20d7f2ae7` (PR #354). Execution outcomes become bounded Trust evidence, downstream only; includes the confirmation-versus-supersession correction. No migration. |
+| **1.8** closeout | **In progress.** Certification and closeout only — no new capability behaviour. See [PHASE-1-CLOSEOUT.md](PHASE-1-CLOSEOUT.md). |
+
+**Phase 1 status: NOT READY TO CLOSE**, one blocker — neither typecheck graph has executed on the
+merged Phase 1.7 head, because PR #354 merged during a GitHub Actions major outage whose jobs
+reported `steps = 0`, and the full graphs cannot run on this host (exit 144). Everything else
+certifies. Detail and evidence in the closeout document.
 
 ### What 1.7 confirmed, refined, or corrected
 
