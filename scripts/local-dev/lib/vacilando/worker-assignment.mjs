@@ -317,6 +317,11 @@ export function serializeAssignmentPrompt(assignment, context) {
       assignment.reopen_reason,
       "",
     ] : []),
+    ...((context?.operatorGuidance || []).length ? [
+      `## Open operator guidance (from mission conversation)`,
+      ...(context.operatorGuidance.map((g) => `- [${g.type}] ${g.body}`)),
+      "",
+    ] : []),
     `## Completion contract`,
     `- Acknowledge context (version + contentHash) before changing code`,
     `- Submit start report before edits`,

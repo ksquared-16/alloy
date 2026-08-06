@@ -12,6 +12,7 @@ import { listAssignments } from "../worker-assignment.mjs";
 import { listEvidence } from "../evidence.mjs";
 import { resolveSlotIdentity } from "../identity.mjs";
 import { missionLocalServerVm } from "../mission-local-server.mjs";
+import { listDecisions } from "../decisions.mjs";
 import {
   getOpenDeliverableReview,
   deliverableReviewVm,
@@ -63,13 +64,18 @@ export function missionConversationListVm({ filter = "active", limit = 24 } = {}
     if (includeArchived && !mission?.archived && missionId !== identityId) return;
     const slot = Number(mission?.worker_slot ?? mission?.slot) || null;
     const identity = slot ? resolveSlotIdentity(slot) : null;
+    let needsCount = 0;
+    try {
+      needsCount = listDecisions(missionId, { status: "open" }).length;
+      if (getOpenDeliverableReview(missionId)) needsCount += 1;
+    } catch { needsCount = 0; }
     missions.push({
       kind: "mission_nav_item",
       missionId,
       workspaceId: missionId,
       title: displayMissionTitle(missionId, fallbackTitle || mission?.title),
-      needsYou: false,
-      needsCount: 0,
+      needsYou: needsCount > 0,
+      needsCount,
       phase: null,
       provider: identity?.provider || mission?.provider || null,
       slot,

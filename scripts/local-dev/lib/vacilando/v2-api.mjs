@@ -939,6 +939,11 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     if (!shell) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
     return { status: 200, body: { ok: true, shell, workspaces: listV31Workspaces() } };
   }
+  if (path === "/api/v2/views/mission-rail") {
+    const { missionConversationListVm } = await import("./presentation/mission-conversation.mjs");
+    const list = missionConversationListVm({ filter: "active" });
+    return { status: 200, body: { ok: true, ...list } };
+  }
   if (path === "/api/v2/views/workspace-messages") {
     const { workspaceMessagesVm } = await import("./presentation/workspace-runtime.mjs");
     const id = q("id") || q("workspace_id") || "ws_identity";

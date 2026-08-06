@@ -29,13 +29,18 @@
 <div class="app">
   <aside class="rail">
     <div class="brand"><div class="word">Vacilando<b>OS</b></div><div class="sub">Engineering Operating System</div></div>
-    <nav class="nav" id="nav">
-      <a data-route="workspaces"><svg class="ico"><use href="#i-compass"/></svg>Missions</a>
-      <a data-route="missions"><svg class="ico"><use href="#i-sprints"/></svg>Missions</a>
-      <a data-route="needs-you"><svg class="ico"><use href="#i-approvals"/></svg>Needs You<span class="badge" id="nb-needs">0</span></a>
-      <a data-route="workers"><svg class="ico"><use href="#i-workers"/></svg>Workers</a>
-      <a data-route="improvements"><svg class="ico"><use href="#i-activity"/></svg>Improvements</a>
-      <a data-route="settings"><svg class="ico"><use href="#i-repo"/></svg>Settings</a>
+    <nav class="nav nav-missions" id="nav" aria-label="Missions">
+      <div class="nav-missions-label">Missions</div>
+      <div id="mission-rail" class="mission-rail">
+        <a class="mission-rail-item" data-route="workspaces/msn_f74ed02c126c88d7ff"><span class="mission-rail-title">Identity Platform</span></a>
+      </div>
+      <details class="nav-more">
+        <summary>More</summary>
+        <a data-route="missions">Portfolio</a>
+        <a data-route="needs-you">Needs You<span class="badge" id="nb-needs">0</span></a>
+        <a data-route="workers">Workers</a>
+        <a data-route="improvements">Improvements</a>
+      </details>
     </nav>
     <div class="railcap" id="railcap"></div>
     <div class="nav-sep"></div>
@@ -48,7 +53,10 @@
         <g fill="#14311f"><rect x="36" y="56" width="3.4" height="34" rx="2"/><path d="M37.7 58 q-14 -8 -23 -4 q11 -1 23 4 M37.7 58 q14 -8 23 -4 q-11 -1 -23 4 M37.7 57 q-7 -13 -18 -15 q9 5 18 15 M37.7 57 q7 -13 18 -15 q-9 5 -18 15"/></g>
       </svg>
     </div>
-    <div class="ruser"><div class="av">A</div><div><div class="nm">Admin</div><div class="rl">Vacilando</div></div></div>
+    <a class="ruser" data-route="settings" title="Settings">
+      <div class="av">A</div>
+      <div><div class="nm">Settings</div><div class="rl">Admin</div></div>
+    </a>
   </aside>
 
   <main class="main">

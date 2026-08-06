@@ -236,40 +236,69 @@ const CRUMBS = {
   policies: "Policies", trust: "Runtime Trust",
 };
 function setActiveNav(name) {
-  const active = (name === "kickoff" || name === "timeline" || name === "decisions" || name === "evidence")
-    ? (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name)
-    : name;
-  const navActive = ["workspaces", "workspace", "missions", "needs-you", "workers", "improvements", "settings"].includes(name)
-    ? (name === "workspace" ? "workspaces" : name)
-    : (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name === "timeline" || name === "evidence" ? "missions" : name);
-  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === navActive));
+  const r = parseRoute();
+  const missionId = (r.name === "workspaces" || r.name === "workspace") ? (r.sub || null) : null;
+  document.querySelectorAll("#mission-rail .mission-rail-item").forEach((a) => {
+    const route = a.dataset.route || "";
+    const mid = route.split("/")[1] || "";
+    a.classList.toggle("active", Boolean(missionId && mid === missionId));
+  });
+  document.querySelectorAll(".nav-more a, .ruser[data-route]").forEach((a) => {
+    a.classList.toggle("active", a.dataset.route === name);
+  });
   $("#crumb").textContent = CRUMBS[name] || "Missions";
 }
 
+function escRail(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+window.renderMissionRail = function renderMissionRail(missions) {
+  const el = document.getElementById("mission-rail");
+  if (!el || !Array.isArray(missions)) return;
+  el.innerHTML = missions.map((m) => {
+    const id = m.missionId || m.workspaceId;
+    const badge = m.needsYou || m.needsCount
+      ? `<span class="badge">${escRail(String(m.needsCount || "!"))}</span>`
+      : "";
+    const meta = [m.provider, m.slot != null ? `slot ${m.slot}` : null].filter(Boolean).join(" · ");
+    return `<a class="mission-rail-item" data-route="workspaces/${escRail(id)}" title="${escRail(m.title || id)}">
+      <span class="mission-rail-title">${escRail(m.title || id)}${meta ? `<span class="mission-rail-meta">${escRail(meta)}</span>` : ""}</span>${badge}
+    </a>`;
+  }).join("");
+  setActiveNav(parseRoute().name);
+};
+
+async function fetchMissionRail() {
+  try {
+    const r = await fetch("/api/v2/views/mission-rail", { cache: "no-store" });
+    const j = await r.json();
+    if (j?.missions) window.renderMissionRail(j.missions);
+  } catch { /* keep stub */ }
+}
+
 /**
- * Cutover: empty hash and legacy home routes land in Mission Control Missions
- * unless the operator explicitly requested ?legacy=1.
- * Desktop historically opened #/director — that must not remain the landing page.
+ * Cutover: empty hash lands on Identity conversation (V3-4).
  */
 const LEGACY_HOME_ROUTES = new Set(["director", "command", "history", "policies", "trust"]);
+const V3_HOME = "#/workspaces/msn_f74ed02c126c88d7ff";
 function enforceMissionControlHome() {
   const hash = location.hash || "";
   const empty = !hash || hash === "#" || hash === "#/";
   if (empty) {
-    location.hash = "#/missions";
+    location.hash = V3_HOME;
     return;
   }
   if (legacyMode()) return;
   const r = parseRoute();
-  // Top-level legacy shells only (keep #/command/worker/N reachable via Settings → Legacy).
   if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) {
-    location.hash = "#/missions";
+    location.hash = V3_HOME;
   }
 }
 window.addEventListener("hashchange", () => {
   if (legacyMode()) return;
   const r = parseRoute();
-  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = "#/missions";
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = V3_HOME;
 });
 
 let lastKey = null;
@@ -2053,7 +2082,8 @@ function isWorkspaceRoute() {
   }
 }
 enforceMissionControlHome();
-if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = "#/missions";
+if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = V3_HOME;
+fetchMissionRail();
 // First Mission Control / Workspace paint immediately (shell interactive before board hydrate).
 render(true);
 // Board telemetry contends on the single-threaded control plane — defer on Workspace Runtime.

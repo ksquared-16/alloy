@@ -30,6 +30,7 @@ import {
   resolveMissionConversationId,
   displayMissionTitle,
 } from "./mission-conversation.mjs";
+import { executeMissionDirectorTurn } from "../mission-conversation-director.mjs";
 
 /** V3-1 single workspace seed — Identity Platform (still the primary conversation). */
 export const V3_1_WORKSPACE = Object.freeze({
@@ -120,6 +121,10 @@ function isMeaningfulEvent(e) {
 
 function eventToMessage(e) {
   const from = participantFromActor(e.actor, e.type);
+  const actions = [];
+  if (e.type === "director_response" && e.detail?.proposedAction) {
+    actions.push(e.detail.proposedAction);
+  }
   return {
     messageId: e.event_id,
     kind: messageKindForEvent(e.type, from),
@@ -136,7 +141,7 @@ function eventToMessage(e) {
     artifacts: Array.isArray(e.evidence_ids)
       ? e.evidence_ids.map((id) => ({ artifactId: id, type: "evidence", title: id }))
       : [],
-    actions: [],
+    actions,
   };
 }
 
@@ -327,21 +332,35 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
   }
 
   const currentState = deriveCurrentState(missionId);
-  // Patch workspace title into derived state
   currentState.workspaceTitle = displayMissionTitle(missionId);
   const operational = operationalRailVm(missionId);
-  const context = deriveContextRail(missionId);
+  // Reuse ops for context rail — avoid second operationalRailVm / port probe
+  const context = {
+    kind: "context_rail",
+    worker: operational.worker,
+    branch: operational.worker?.branch || null,
+    server: {
+      port: operational.server?.port || null,
+      status: operational.server?.status || null,
+      running: Boolean(operational.server?.running),
+      url: operational.server?.url || null,
+      statusLabel: operational.server?.statusLabel || null,
+    },
+    pr: operational.pr,
+    evidence: { count: null, jumpLabel: null },
+    openDecisions: null,
+    confidence: { percent: null, bandLabel: null },
+    settings: { workspaceId: missionId },
+    operational,
+  };
   const currentStateCompact = compressCurrentState(currentState, {
     provider: operational.worker?.provider,
     slot: operational.worker?.slot,
     serverStatus: operational.server?.statusLabel || operational.server?.status,
   });
   const inlineReview = inlineReviewCardVm(missionId);
-  const sinceLastVisit = composeSinceLastVisit(missionId, {
-    workspaceId: missionId,
-    operatorId,
-    currentState,
-  });
+  // Defer expensive since-last-visit off the critical shell path (V3-4 Opening fix)
+  const sinceLastVisit = null;
 
   return {
     kind: "workspace_shell",
@@ -356,7 +375,7 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     missions,
     messagesStatus: "loading",
     composer: {
-      placeholder: `Message ${displayMissionTitle(missionId)}…`,
+      placeholder: `Message Director about ${displayMissionTitle(missionId)}…`,
       enabled: true,
     },
     lastSeen: getWorkspaceLastSeen(missionId, { operatorId }),
@@ -481,11 +500,31 @@ export function postWorkspaceReply(workspaceId, { text, actor = "operator", oper
     detail: { workspaceId: ws.workspaceId, source: "v3_workspace_composer" },
   });
 
+  // V3-4: composer talks to Director — deterministic grounded reply in-thread
+  let director = null;
+  try {
+    director = executeMissionDirectorTurn(ws.missionId, {
+      operatorText: body,
+      operatorEventId: ev.event_id,
+    });
+  } catch (e) {
+    director = { ok: false, error: String(e?.message || e) };
+  }
+
   const runtime = workspaceRuntimeVm(ws.workspaceId, { operatorId });
   return {
     ok: true,
     eventId: ev.event_id,
     message: eventToMessage(ev),
+    directorMessage: director?.ok ? director.message : null,
+    director: director?.ok
+      ? {
+        ok: true,
+        mode: director.intent?.mode || null,
+        proposedAction: director.proposedAction || null,
+        collaborationId: director.collaboration?.id || null,
+      }
+      : { ok: false, error: director?.error || "director_turn_failed" },
     runtime,
   };
 }

@@ -702,7 +702,7 @@ We'll capture the context automatically.</p>
     }
   };
 
-  /** V3-2 Workspace Runtime — fast shell + progressive messages. */
+  /** V3-4 Workspace Runtime — coalesced shell fetch (no Opening thrash). */
   V2.fetchWorkspaceShell = async function (workspaceId) {
     const id = workspaceId || V2.state.workspaceId || "ws_identity";
     const prevId = V2.state.workspaceId;
@@ -710,55 +710,70 @@ We'll capture the context automatically.</p>
       V2.state.workspaceMessages = null;
       V2.state.workspaceMessagesStatus = "loading";
       V2.state.workspacePage = null;
+      V2.state.workspaceShell = null;
+      V2.state.workspaceError = null;
       V2.state._wsStickBottom = true;
     }
     V2.state.workspaceId = id;
+    V2.state._inflight = V2.state._inflight || {};
+    const inflightKey = `workspace-shell:${id}`;
+    if (V2.state._inflight[inflightKey]) return V2.state._inflight[inflightKey];
+
     const seq = (V2.state._wsShellSeq = (V2.state._wsShellSeq || 0) + 1);
-    try {
-      const j = await get("/api/v2/views/workspace-shell?id=" + encodeURIComponent(id));
-      if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
-      V2.state.workspaceShell = j.shell || j;
-      V2.state.workspaceList = j.shell?.missions || j.workspaces || V2.state.workspaceList || [];
-      V2.state.workspaceError = null;
-      // Compat shape for reply/actions that still read workspaceRuntime
-      V2.state.workspaceRuntime = {
-        ...(V2.state.workspaceRuntime || {}),
-        kind: "workspace_runtime",
-        workspace: V2.state.workspaceShell.workspace,
-        missionId: V2.state.workspaceShell.missionId,
-        currentState: V2.state.workspaceShell.currentState,
-        currentStateCompact: V2.state.workspaceShell.currentStateCompact,
-        context: V2.state.workspaceShell.context,
-        operational: V2.state.workspaceShell.operational,
-        inlineReview: V2.state.workspaceShell.inlineReview,
-        sinceLastVisit: V2.state.workspaceShell.sinceLastVisit,
-        composer: V2.state.workspaceShell.composer,
-        messages: V2.state.workspaceMessages || [],
-        page: V2.state.workspacePage || null,
-        messagesStatus: V2.state.workspaceMessagesStatus || "loading",
-      };
-      if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
-      markFetched(`workspace-shell:${id}`);
-      // Best-effort PR lookup — does not block shell paint
-      const wt = j.shell?.operational?.worker?.worktree;
-      const br = j.shell?.operational?.worker?.branch;
-      if (wt) {
-        fetch(`/api/pr?worktree=${encodeURIComponent(wt)}&branch=${encodeURIComponent(br || "")}`, { cache: "no-store" })
-          .then((r) => r.json())
-          .then((pr) => {
-            if (V2.state.workspaceId !== id) return;
-            V2.state._wsPr = pr;
-            bump(); schedulePaint();
-          })
-          .catch(() => {});
+    const work = (async () => {
+      try {
+        const j = await get("/api/v2/views/workspace-shell?id=" + encodeURIComponent(id));
+        if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
+        V2.state.workspaceShell = j.shell || j;
+        V2.state.workspaceList = j.shell?.missions || j.workspaces || V2.state.workspaceList || [];
+        V2.state.workspaceError = null;
+        V2.state.workspaceRuntime = {
+          ...(V2.state.workspaceRuntime || {}),
+          kind: "workspace_runtime",
+          workspace: V2.state.workspaceShell.workspace,
+          missionId: V2.state.workspaceShell.missionId,
+          currentState: V2.state.workspaceShell.currentState,
+          currentStateCompact: V2.state.workspaceShell.currentStateCompact,
+          context: V2.state.workspaceShell.context,
+          operational: V2.state.workspaceShell.operational,
+          inlineReview: V2.state.workspaceShell.inlineReview,
+          sinceLastVisit: V2.state.workspaceShell.sinceLastVisit,
+          composer: V2.state.workspaceShell.composer,
+          messages: V2.state.workspaceMessages || [],
+          page: V2.state.workspacePage || null,
+          messagesStatus: V2.state.workspaceMessagesStatus || "loading",
+        };
+        if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
+        markFetched(`workspace-shell:${id}`);
+        if (typeof window.renderMissionRail === "function") {
+          window.renderMissionRail(V2.state.workspaceList);
+        }
+        const wt = j.shell?.operational?.worker?.worktree;
+        const br = j.shell?.operational?.worker?.branch;
+        if (wt) {
+          fetch(`/api/pr?worktree=${encodeURIComponent(wt)}&branch=${encodeURIComponent(br || "")}`, { cache: "no-store" })
+            .then((r) => r.json())
+            .then((pr) => {
+              if (V2.state.workspaceId !== id) return;
+              V2.state._wsPr = pr;
+              bump(); schedulePaint();
+            })
+            .catch(() => {});
+        }
+      } catch (e) {
+        if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
+        V2.state.workspaceError = String(e.message || e);
       }
-    } catch (e) {
-      if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
-      V2.state.workspaceError = String(e.message || e);
-    }
-    bump(); schedulePaint();
-    if (V2.state.workspaceId === id && !V2.state._wsSending) {
-      V2.fetchWorkspaceMessages(id);
+      bump(); schedulePaint();
+      if (V2.state.workspaceId === id && !V2.state._wsSending && V2.state.workspaceShell) {
+        V2.fetchWorkspaceMessages(id);
+      }
+    })();
+
+    V2.state._inflight[inflightKey] = work;
+    try { await work; }
+    finally {
+      if (V2.state._inflight?.[inflightKey] === work) V2.state._inflight[inflightKey] = false;
     }
   };
 
@@ -839,45 +854,50 @@ We'll capture the context automatically.</p>
   V2.viewWorkspace = function (workspaceId) {
     const id = workspaceId || V2.state.workspaceId || "ws_identity";
     const shellReady = V2.state.workspaceShell && V2.state.workspaceId === id;
-    if (!V2.state._wsSending) {
-      V2.revalidate(`workspace-shell:${id}`, () => V2.fetchWorkspaceShell(id), { maxAgeMs: 15000 });
-    }
+
+    // V3-4: single coalesced kick — never dual revalidate+fetch while booting
     if (!shellReady) {
+      if (V2.state.workspaceError) {
+        return `<div class="ws-shell ws-shell-boot" data-workspace="${esc(id)}">
+          <section class="ws-main" aria-label="Conversation">
+            <header class="ws-main-h"><h1>Mission</h1></header>
+            <div class="ws-thread" id="ws-thread">
+              <div class="ws-empty">Could not open conversation: ${esc(V2.state.workspaceError)}
+                <button type="button" class="btn sm" data-ws-retry="${esc(id)}">Retry</button>
+              </div>
+            </div>
+          </section>
+          <aside class="ws-context" aria-label="Runtime"><div class="ws-ctx-label">Status</div><p class="ws-ctx-derived">Unavailable</p></aside>
+        </div>`;
+      }
       if (!V2.state._wsSending) V2.fetchWorkspaceShell(id);
-      // Instant frame — never blank the whole app on cold open
       return `<div class="ws-shell ws-shell-boot" data-workspace="${esc(id)}">
-        <aside class="ws-nav" aria-label="Missions">
-          <div class="ws-nav-label">Missions</div>
-          <button type="button" class="ws-nav-item on" data-nav="workspaces/${esc(id)}">
-            <span class="ws-nav-title">Opening…</span>
-            <span class="ws-nav-blurb">Loading mission…</span>
-          </button>
-        </aside>
         <section class="ws-main" aria-label="Conversation">
           <header class="ws-main-h"><h1>Mission</h1><p class="ws-main-sub">Opening conversation…</p></header>
-          <div class="ws-thread" id="ws-thread"><div class="ws-loading"><span class="spin"></span> Loading conversation…</div></div>
+          <div class="ws-thread" id="ws-thread"><div class="ws-loading" data-ws-msgs-loading="1"><span class="spin"></span> Loading…</div></div>
           <footer class="ws-composer-wrap">
-            <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="Message…" disabled></textarea>
+            <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="Message Director…" disabled></textarea>
             <button type="button" class="btn ws-send" disabled>Send</button>
           </footer>
         </section>
         <aside class="ws-context" aria-label="Runtime">
-          <div class="ws-ctx-label">Current State</div>
+          <div class="ws-ctx-label">Status</div>
           <p class="ws-ctx-derived">Loading…</p>
         </aside>
       </div>`;
     }
-    if (V2.state.workspaceError && !V2.state.workspaceShell) {
-      return `<div class="ws-shell"><div class="rempty">Could not load mission: ${esc(V2.state.workspaceError)}</div>
-        <button class="btn" type="button" data-ws-retry="${esc(id)}">Retry</button></div>`;
+    if (!V2.state._wsSending) {
+      V2.revalidate(`workspace-shell:${id}`, () => V2.fetchWorkspaceShell(id), { maxAgeMs: 20000 });
     }
     const rt = V2.state.workspaceShell;
     if (rt.missing) {
       return `<div class="ws-shell"><div class="rempty">Mission not found on this host.</div></div>`;
     }
     const ws = rt.workspace || {};
-    const list = (rt.missions?.length ? rt.missions : null)
-      || (V2.state.workspaceList?.length ? V2.state.workspaceList : [ws]);
+    if (rt.missions?.length) V2.state.workspaceList = rt.missions;
+    if (typeof window.renderMissionRail === "function") {
+      window.renderMissionRail(V2.state.workspaceList || rt.missions || []);
+    }
     const compact = rt.currentStateCompact || {};
     const ops = rt.operational || rt.context?.operational || {};
     const worker = ops.worker || rt.context?.worker || {};
@@ -890,21 +910,7 @@ We'll capture the context automatically.</p>
       ? (V2.state.workspaceMessagesInlineReview || rt.inlineReview)
       : null;
     const showShots = Boolean(V2.state._wsShowShots);
-
     const activeId = ws.workspaceId || ws.missionId || id;
-    const nav = list.map((w) => {
-      const mid = w.missionId || w.workspaceId || w.id;
-      const active = mid === activeId || mid === id;
-      const badge = w.needsYou || w.needsCount
-        ? `<span class="ws-nav-badge">${esc(String(w.needsCount || "!"))}</span>`
-        : "";
-      const meta = [w.provider, w.slot != null ? `slot ${w.slot}` : null, w.phase]
-        .filter(Boolean).join(" · ");
-      return `<button type="button" class="ws-nav-item${active ? " on" : ""}" data-nav="workspaces/${esc(mid)}">
-        <span class="ws-nav-row"><span class="ws-nav-title">${esc(w.title || "Mission")}</span>${badge}</span>
-        ${meta ? `<span class="ws-nav-blurb">${esc(meta)}</span>` : ""}
-      </button>`;
-    }).join("");
 
     const sinceHtml = since ? `<section class="ws-since" aria-label="Since your last visit">
       <h2 class="ws-since-title">${esc(since.title || "Since your last visit")}</h2>
@@ -1017,23 +1023,19 @@ We'll capture the context automatically.</p>
         </div>`
       : "";
 
-    return `<div class="ws-shell" data-workspace="${esc(activeId)}">
-      <aside class="ws-nav" aria-label="Missions">
-        <div class="ws-nav-label">Missions</div>
-        ${nav}
-      </aside>
+    return `<div class="ws-shell ws-shell-v34" data-workspace="${esc(activeId)}">
       <section class="ws-main" aria-label="Conversation">
         <header class="ws-main-h">
           <h1>${esc(ws.title || "Mission")}</h1>
         </header>
         <div class="ws-thread" id="ws-thread">${sinceHtml}${reviewHtml}${threadBody}</div>
         <footer class="ws-composer-wrap">
-          <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="${esc(rt.composer?.placeholder || "Message…")}"${composerEnabled ? "" : " disabled"}>${esc(draft)}</textarea>
+          <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="${esc(rt.composer?.placeholder || "Message Director…")}"${composerEnabled ? "" : " disabled"}>${esc(draft)}</textarea>
           <button type="button" class="btn ws-send" data-ws-send="${esc(activeId)}"${busy}>Send</button>
         </footer>
       </section>
       <aside class="ws-context" aria-label="Runtime">
-        <div class="ws-ctx-label">Current State</div>
+        <div class="ws-ctx-label">Status</div>
         ${stateCompact}
         <div class="ws-ctx-label">Operations</div>
         ${ctxBits}
@@ -3417,15 +3419,20 @@ We'll capture the context automatically.</p>
             workspace: out.runtime.workspace,
             missionId: out.runtime.missionId,
             currentState: out.runtime.currentState,
+            currentStateCompact: out.runtime.currentStateCompact,
             context: out.runtime.context,
+            operational: out.runtime.operational,
+            inlineReview: out.runtime.inlineReview,
             sinceLastVisit: out.runtime.sinceLastVisit,
             composer: out.runtime.composer,
+            missions: out.runtime.missions,
             messagesStatus: "ready",
             lastSeen: out.runtime.lastSeen,
           };
           V2.state.workspaceMessages = out.runtime.messages || [];
           V2.state.workspacePage = out.runtime.page || null;
           V2.state.workspaceMessagesStatus = "ready";
+          V2.state.workspaceMessagesInlineReview = out.runtime.inlineReview || null;
           V2.state.workspaceRuntime = out.runtime;
           V2.state.workspaceId = out.runtime.workspace?.workspaceId || workspaceId;
           markFetched(`workspace-shell:${V2.state.workspaceId}`);
@@ -3434,7 +3441,7 @@ We'll capture the context automatically.</p>
           V2.state.workspaceShell = null;
           await V2.fetchWorkspaceShell(workspaceId);
         }
-        toast("Sent.");
+        toast(out.director?.ok ? "Director replied." : "Sent.");
       } catch (e) {
         toast(String(e.message || e), "err");
       } finally {

@@ -8,6 +8,7 @@ import { getBrief, getBriefVersion } from "./mission-brief.mjs";
 import { getObjectiveByMission } from "./objective.mjs";
 import { listDecisions } from "./decisions.mjs";
 import { getCompiledMission } from "./compiled-mission.mjs";
+import { listCollaboration } from "./mission-collaboration.mjs";
 
 export const EXECUTION_PROTOCOL_VERSION = "vacilando.worker.protocol.v1";
 export const SUPPORTED_PROTOCOL_VERSIONS = new Set([EXECUTION_PROTOCOL_VERSION]);
@@ -49,6 +50,17 @@ export function buildMissionContextPackage(missionId, {
     ? compiled.exclusions
     : (b.outOfScope || []);
 
+  // V3-4: open operator guidance compounds into worker handoff
+  const operatorGuidance = listCollaboration(missionId, { status: "open", limit: 20 })
+    .filter((e) => ["feedback", "implementation_guidance", "revision_request", "clarification"].includes(e.type))
+    .map((e) => ({
+      id: e.id,
+      type: e.type,
+      title: e.title,
+      body: String(e.body || "").slice(0, 600),
+      at: e.at,
+    }));
+
   return {
     schema_version: "vacilando.mission_context.v1",
     missionId: b.missionId || missionId,
@@ -71,6 +83,7 @@ export function buildMissionContextPackage(missionId, {
       response: d.response,
       answeredAt: d.answered_at,
     })),
+    operatorGuidance,
     repository: repository || {
       root: process.env.ALLOY_REPO_ROOT || null,
       mergeTarget: b.executionPreferences?.mergeTarget || "staging",
