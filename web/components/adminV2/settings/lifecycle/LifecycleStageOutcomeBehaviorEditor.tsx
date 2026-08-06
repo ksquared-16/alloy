@@ -18,6 +18,7 @@ import {
     readComposableOutcomeBehaviorDraft,
     upsertComposableOutcomeBehavior,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
+import { CASE_CLOSE_REASONS } from "@/lib/lifecycle/caseCloseReasonVocabulary";
 
 type Props = {
     outcomeKey: string;
@@ -28,6 +29,8 @@ type Props = {
     transitionOptions: StageOutcomeTransitionOption[];
     /** Stages a new exit path may target. Absent when this surface cannot author transitions. */
     transitionDestinations?: Array<{ key: string; label: string }>;
+    /** Configured closed case statuses. Resolved by the parent from `status_definitions`. */
+    closedStatusOptions?: ReadonlyArray<{ status_key: string; status_label: string }>;
     /**
      * Creates the exit path to `targetStageKey` AND points this outcome at it, in one draft edit.
      * The caller owns both halves on purpose — doing them as two writes here dropped the path.
@@ -125,6 +128,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
     workTemplates,
     transitionOptions,
     transitionDestinations,
+    closedStatusOptions,
     onCreateTransition,
     onRulesChange,
 }: Props) {
@@ -161,6 +165,44 @@ export default function LifecycleStageOutcomeBehaviorEditor({
         draft.movement === "move_through_transition" || wantsMovement
             ? "move_through_transition"
             : "stay_in_stage";
+
+    /**
+     * Closing is a THIRD thing an outcome can do, not a flavour of moving.
+     *
+     * `update_family_case_status` writes durable case state and `move_to_stage` writes process
+     * position; they are separate authorities and a terminal outcome sets both. Presenting only
+     * "stay" and "move" forced closure to hide inside a movement, which is how Closed Lost ended
+     * up able to point at Tour. Recognised by the status resolving as CLOSED in the configured
+     * catalog — `reached_qualified` also carries a case status (`open`) and is not a closure.
+     */
+    const closedStatusKeys = new Set((closedStatusOptions ?? []).map((row) => row.status_key));
+    const draftClosesCase = Boolean(
+        draft.case_status?.status_key && closedStatusKeys.has(draft.case_status.status_key),
+    );
+    const [wantsClose, setWantsClose] = useState(false);
+    const canClose = (closedStatusOptions?.length ?? 0) > 0;
+    const mode: "stay" | "move" | "close" =
+        wantsClose || draftClosesCase ? "close"
+        : movement === "move_through_transition" ? "move"
+        : "stay";
+
+    const defaultClosedStatusKey = closedStatusOptions?.[0]?.status_key ?? "";
+    /** Apply a close, keeping every other part of the draft — including movement — intact. */
+    const applyClose = (patch: { status_key?: string; close_reason_key?: string }) => {
+        setWantsClose(true);
+        apply({
+            ...draft,
+            case_status: {
+                status_key: patch.status_key ?? draft.case_status?.status_key ?? defaultClosedStatusKey,
+                ...(patch.close_reason_key ?? draft.case_status?.close_reason_key
+                    ? {
+                          close_reason_key:
+                              patch.close_reason_key ?? draft.case_status?.close_reason_key,
+                      }
+                    : {}),
+            },
+        });
+    };
     const needsFirstTransition = !availableTransitions.length && canCreateTransition;
 
     return (
@@ -171,13 +213,20 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     <input
                         type="radio"
                         name={`movement-${outcomeKey}`}
-                        checked={movement === "stay_in_stage"}
+                        checked={mode === "stay"}
+                        data-testid={`stage-outcome-remain-${outcomeKey}`}
                         onChange={() => {
                             setWantsMovement(false);
-                            apply({ ...draft, movement: "stay_in_stage", transition_ref: undefined });
+                            setWantsClose(false);
+                            apply({
+                                ...draft,
+                                movement: "stay_in_stage",
+                                transition_ref: undefined,
+                                ...(draftClosesCase ? { case_status: undefined } : {}),
+                            });
                         }}
                     />
-                    Stay in stage
+                    Remain in {stageLabel}
                 </label>
                 <label
                     className={`inline-flex items-center gap-1 text-[0.6875rem] ${
@@ -187,11 +236,12 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     <input
                         type="radio"
                         name={`movement-${outcomeKey}`}
-                        checked={movement === "move_through_transition"}
+                        checked={mode === "move"}
                         disabled={!availableTransitions.length && !canCreateTransition}
                         data-testid={`stage-outcome-move-through-transition-${outcomeKey}`}
                         onChange={() => {
                             setWantsMovement(true);
+                            setWantsClose(false);
                             apply({
                                 ...draft,
                                 movement: "move_through_transition",
@@ -201,9 +251,139 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                             });
                         }}
                     />
-                    Move through transition
+                    Move to another stage
                 </label>
-                {movement === "move_through_transition" && availableTransitions.length ?
+                {canClose ? (
+                    <label className="ml-3 inline-flex items-center gap-1 text-[0.6875rem]">
+                        <input
+                            type="radio"
+                            name={`movement-${outcomeKey}`}
+                            checked={mode === "close"}
+                            data-testid={`stage-outcome-close-case-${outcomeKey}`}
+                            onChange={() => {
+                                setWantsMovement(false);
+                                applyClose({});
+                            }}
+                        />
+                        Close this lead
+                    </label>
+                ) : null}
+
+                {/*
+                  * Closure states both authorities at once, in business language: the durable case
+                  * result, why it ended, and where the record comes to rest. The destination list is
+                  * the ordinary transition list — a terminal close still moves through a configured
+                  * path, so nothing here is a second movement model or a direct stage write.
+                  */}
+                {mode === "close" ? (
+                    <div
+                        className="mt-1.5 space-y-1.5 rounded-md bg-alloy-midnight/[0.025] p-1.5"
+                        data-testid={`stage-outcome-close-panel-${outcomeKey}`}
+                    >
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[0.6875rem] text-alloy-midnight/70">Why it closed</span>
+                            <select
+                                className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                                value={draft.case_status?.close_reason_key ?? ""}
+                                aria-label="Close reason"
+                                data-testid={`stage-outcome-close-reason-${outcomeKey}`}
+                                onChange={(event) => applyClose({ close_reason_key: event.target.value })}
+                            >
+                                <option value="">Select a reason…</option>
+                                {CASE_CLOSE_REASONS.map((reason) => (
+                                    <option key={reason.key} value={reason.key}>{reason.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[0.6875rem] text-alloy-midnight/70">Case becomes</span>
+                            <select
+                                className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                                value={draft.case_status?.status_key ?? defaultClosedStatusKey}
+                                aria-label="Closed case status"
+                                data-testid={`stage-outcome-close-status-${outcomeKey}`}
+                                onChange={(event) => applyClose({ status_key: event.target.value })}
+                            >
+                                {(closedStatusOptions ?? []).map((status) => (
+                                    <option key={status.status_key} value={status.status_key}>
+                                        {status.status_label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[0.6875rem] text-alloy-midnight/70">Record comes to rest in</span>
+                            {availableTransitions.length ? (
+                                <select
+                                    className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                                    value={draft.transition_ref ?? ""}
+                                    aria-label="Closing destination"
+                                    data-testid={`stage-outcome-close-destination-${outcomeKey}`}
+                                    onChange={(event) =>
+                                        apply({
+                                            ...draft,
+                                            movement: event.target.value
+                                                ? "move_through_transition"
+                                                : "stay_in_stage",
+                                            transition_ref: event.target.value || undefined,
+                                        })
+                                    }
+                                >
+                                    <option value="">{stageLabel} (no move)</option>
+                                    {availableTransitions.map((transition) => (
+                                        <option key={transition.transition_ref} value={transition.transition_ref}>
+                                            {transition.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : needsFirstTransition ? (
+                                <>
+                                    <select
+                                        className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                                        value={newDestinationKey}
+                                        aria-label="Closing destination stage"
+                                        data-testid={`stage-outcome-close-new-destination-${outcomeKey}`}
+                                        onChange={(event) => setNewDestinationKey(event.target.value)}
+                                    >
+                                        <option value="">Select stage…</option>
+                                        {(transitionDestinations ?? []).map((stage) => (
+                                            <option key={stage.key} value={stage.key}>{stage.label}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="rounded-md bg-alloy-pine px-2 py-1 text-[0.6875rem] font-medium text-white disabled:opacity-40"
+                                        disabled={!newDestinationKey}
+                                        data-testid={`stage-outcome-close-create-destination-${outcomeKey}`}
+                                        onClick={() => {
+                                            onCreateTransition?.(newDestinationKey);
+                                            setNewDestinationKey("");
+                                        }}
+                                    >
+                                        Create way out
+                                    </button>
+                                </>
+                            ) : (
+                                <span className="text-[0.6875rem] text-alloy-midnight/50">
+                                    {stageLabel} — no way out configured
+                                </span>
+                            )}
+                        </div>
+
+                        <p className="text-[0.6875rem] leading-snug text-alloy-midnight/55">
+                            {draft.completes_stage_work
+                                ? "Current work is completed."
+                                : "Current work is left open."}
+                            {draft.follow_up_work.length
+                                ? " Follow-up work is created."
+                                : " No follow-up work is created."}
+                        </p>
+                    </div>
+                ) : null}
+
+                {mode === "move" && availableTransitions.length ?
                     <select
                         className="ml-2 rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
                         value={draft.transition_ref ?? ""}
@@ -226,7 +406,7 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                   * selector above replaces this block on the next render, because the stage draft
                   * now has a path and `transitionOptions` is derived from that draft.
                   */}
-                {movement === "move_through_transition" && needsFirstTransition ?
+                {mode === "move" && needsFirstTransition ?
                     <div
                         className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md bg-alloy-midnight/[0.025] p-1.5"
                         data-testid={`stage-outcome-create-transition-${outcomeKey}`}

@@ -64,9 +64,9 @@ work item (a Product decision — see B).
 an operator cannot move a child from Enrolling to Enrolled from Operator Work. **This is the one behavior gap that
 blocks the mock's states 07/10** and needs a configured completion command + transition.
 
-**A6 · Vocabulary/product mismatches** — three parallel stage vocabularies (canonical 8-stage template · `@deprecated`
+**A6 · Vocabulary/product mismatches** — three parallel stage vocabularies (example 8-stage template · `@deprecated`
 V1 granular · progression-doctrine), and a dangling `qualification` transition in the granular `contacting` plan
-(`:611`). The canonical 8-stage template is authoritative; the granular plans are non-live. Reconciling to one set is
+(`:611`). The 8-stage template was the seed Firefly started from — an optional example, not doctrine; the granular plans are non-live. Stages are configured per process and per tenant. Reconciling to one set is
 required so readiness (keyed to progression stages like `enrollment`) maps cleanly to template stages like `enrolling`.
 
 ---
@@ -84,7 +84,7 @@ Each row: current → proposed operator label → consuming surface → change c
 | B4 | `send_confirmation`, `send_reminder` (no label) | **"Send confirmation"**, **"Send reminder"** `⟨APPROVAL⟩` | Tour helpful actions | **config-only** (add catalog labels) |
 | B5 | `reschedule` (bare) → catalog `reschedule_tour` = "Reschedule tour" | **"Reschedule tour"** `⟨APPROVAL⟩` | Tour helpful action | **config-only** (fix key reference) |
 | B6 | Enrolling completion = outcome "Packet sent" only | add a configured completion command **"Enroll"** `⟨APPROVAL⟩` + a `move_to_stage: enrolled` transition gated on Required information | Operator Work primary action at Enrolling when ready | **runtime + config** (needs a registered handler + transition rule) |
-| B7 | three stage vocabularies + dangling `qualification` | converge to the canonical 8-stage set; remove `qualification` reference | queue membership, operating-plan lookup, readiness mapping | **config + light runtime** (reconciliation) |
+| B7 | three stage vocabularies + dangling `qualification` | converge to the example 8-stage template set; remove `qualification` reference | queue membership, operating-plan lookup, readiness mapping | **config + light runtime** (reconciliation) |
 
 Renames B1–B5 are **configuration-only** (edit labels in the stage operating plans / action catalog). B6 and B7 need
 **runtime work** (a completion command + transition; vocabulary convergence). Nothing here requires new architecture.
@@ -207,7 +207,7 @@ made — and the instruction is explicit that pending renames disqualify a READY
    information. Without it, no operator can complete enrollment from the card (states 07/10 are otherwise un-buildable
    truthfully).
 3. **Decide A3/B7 scope** — whether Enrolling needs explicit "assign classroom/schedule" work items or keeps them as
-   Required-information factors, and confirm convergence to the canonical 8-stage vocabulary.
+   Required-information factors, and confirm convergence to the example 8-stage template vocabulary.
 
 These are **decisions, not open design** — each has a proposed answer above awaiting a yes/no. Once 1–3 are signed off,
 this contract becomes **READY TO IMPLEMENT** with no further product input. Nothing else in the experience is unresolved.

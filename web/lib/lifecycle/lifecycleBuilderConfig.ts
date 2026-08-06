@@ -27,9 +27,11 @@ import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentSta
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
+    emptyProcessCommandSetV1,
     parseProcessCommandSetV1OrNull,
     type BusinessProcessCommandSetV1,
 } from "@/lib/lifecycle/processCommandSetV1";
+import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
 import {
     parseStageGrain,
@@ -37,6 +39,7 @@ import {
     type StageGrain,
     type StageSubjectResolutionStrategy,
 } from "@/lib/lifecycle/stageGrainV1";
+import { journeySegmentForStageGrain } from "@/lib/lifecycle/grainVocabulary";
 
 import {
     captureUnknownFields,
@@ -584,4 +587,255 @@ export function configuredStageKeysForMetadata(metadata: unknown): string[] {
 
 export function isConfiguredStageKey(metadata: unknown, stageKey: string): boolean {
     return configuredStageKeysForMetadata(metadata).includes(stageKey);
+}
+
+/**
+ * Set a stage's configured journey grain.
+ *
+ * `grain` was persisted authored configuration with NO authoring path: the enrollment template
+ * seeded it from `track_key`, `add_stage` wrote it once, and nothing in the product could correct
+ * it afterwards. That is how Firefly's Decision stage came to declare `child` while its own
+ * operating plan and the canonical vocabulary both say `family` — a disagreement an operator could
+ * see (once the editor surfaced it) but not fix.
+ *
+ * Idempotent by construction: requesting the grain a stage already has returns the SAME config
+ * object, so a no-op save cannot produce an unrelated diff.
+ */
+export function updateStageGrain(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageId: string,
+    grain: StageGrain
+): LifecycleBuilderV1 {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const stage = process.stages.find((s) => s.id === stageId);
+    if (!stage) throw new Error("Stage not found");
+    const planSegment = stage.stage_operating_plan_v1?.journey_segment;
+    const alreadyAligned = stage.grain === grain && (planSegment == null || planSegment === grain);
+    if (alreadyAligned) return config;
+
+    return {
+        ...config,
+        processes: config.processes.map((p) => {
+            if (p.id !== processId) return p;
+            return {
+                ...p,
+                stages: p.stages.map((s) => {
+                    if (s.id !== stageId) return s;
+                    // ONE governed save keeps both declarations of the same fact in step. The
+                    // product must expose one concept; leaving `journey_segment` authorable while
+                    // `grain` was immutable is what let them drift apart in the first place.
+                    //
+                    // The two vocabularies are NOT the same size, though: `StageGrain` has five
+                    // values and `journey_segment` has two. Assigning the grain straight across
+                    // could write `person`, `account` or `work_item` into a field whose parser
+                    // rejects them — the plan would then fail to parse on the next read and the
+                    // stage would silently lose its operating plan. The canonical translator
+                    // answers whether the grain HAS a journey segment at all; when it does not,
+                    // the grain is still saved and the plan's segment is left exactly as authored
+                    // rather than overwritten with a value that cannot exist.
+                    const plan = s.stage_operating_plan_v1;
+                    const segment = journeySegmentForStageGrain(grain);
+                    return {
+                        ...s,
+                        grain,
+                        ...(plan && segment.ok ?
+                            { stage_operating_plan_v1: { ...plan, journey_segment: segment.segment } }
+                        :   {}),
+                    };
+                }),
+            };
+        }),
+    };
+}
+
+export type EnsureStageTransitionResult = {
+    config: LifecycleBuilderV1;
+    transition_ref: string;
+    target_stage_key: string;
+    created: boolean;
+};
+
+/**
+ * Ensure a stage has an outgoing transition to a destination, creating it only if absent.
+ *
+ * Transitions were authorable from the stage editor's draft but had no lifecycle-builder ACTION,
+ * so a plan whose rules referenced a transition that was never persisted could not be repaired
+ * through the canonical save path — which is exactly how Firefly's Lead stage came to reference
+ * `lead_to_tour` with `outgoing_transitions: null`.
+ *
+ * Find-before-create, matching the editor: an existing path to the same destination is reused
+ * rather than duplicated. A requested ref is honoured when free; a ref already pointing somewhere
+ * else is a collision and throws rather than being silently repointed.
+ */
+export function ensureStageTransitionInConfig(
+    config: LifecycleBuilderV1,
+    processId: string,
+    sourceStageKey: string,
+    targetStageKey: string,
+    requestedRef?: string
+): EnsureStageTransitionResult {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const source = process.stages.find((s) => s.key === sourceStageKey);
+    if (!source) throw new Error("Source stage not found");
+    const target = process.stages.find((s) => s.key === targetStageKey);
+    if (!target) throw new Error("Target stage not found");
+    if (source.key === target.key) throw new Error("A stage cannot transition to itself");
+
+    const plan = source.stage_operating_plan_v1;
+    const existing = plan?.outgoing_transitions ?? [];
+    const ref = requestedRef?.trim() || "";
+
+    // A ref that already exists and points elsewhere is a collision, not a repoint.
+    const refHolder = ref ? existing.find((t) => t.transition_ref === ref) : undefined;
+    if (refHolder && refHolder.target_stage_key !== target.key) {
+        throw new Error(
+            `Transition "${ref}" already moves to "${refHolder.target_stage_key}" — ` +
+                `it cannot be reused for "${target.key}".`
+        );
+    }
+
+    const reusable = refHolder ?? existing.find((t) => t.target_stage_key === target.key);
+    if (reusable) {
+        return {
+            config,
+            transition_ref: reusable.transition_ref,
+            target_stage_key: reusable.target_stage_key,
+            created: false,
+        };
+    }
+
+    const transition_ref = ref || `${source.key}_transition_${existing.length + 1}`;
+    const created = {
+        transition_ref,
+        source_stage_key: source.key,
+        target_stage_key: target.key,
+        label: `Move to ${target.label || target.key}`,
+        available: true,
+    };
+    const nextPlan = {
+        ...(plan ?? {
+            version: 1 as const,
+            lifecycle_key: process.key,
+            stage_key: source.key,
+            work_templates: [],
+            outcomes: [],
+            outcome_rules: [],
+            attention_rules: [],
+        }),
+        outgoing_transitions: [...existing, created],
+    } as NonNullable<typeof plan>;
+
+    return {
+        config: {
+            ...config,
+            processes: config.processes.map((p) => {
+                if (p.id !== processId) return p;
+                return {
+                    ...p,
+                    stages: p.stages.map((s) =>
+                        s.id === source.id ? { ...s, stage_operating_plan_v1: nextPlan } : s
+                    ),
+                };
+            }),
+        },
+        transition_ref,
+        target_stage_key: target.key,
+        created: true,
+    };
+}
+
+export type UpdateProcessCommandSetResult = {
+    config: LifecycleBuilderV1;
+    commandSet: BusinessProcessCommandSetV1;
+    added: string[];
+    removed: string[];
+    /** Requested keys the canonical registry could not vouch for — nothing was written for these. */
+    rejected: Array<{ requested: string; reason: "unregistered" }>;
+};
+
+/**
+ * Add or remove capabilities in a process's command set.
+ *
+ * `command_set_v1` was authored configuration with no authoring path: only
+ * `ensureBuilderCommandSetsOnSave` ever wrote it, deriving membership automatically from stage
+ * action catalogs. A Work Template could therefore reference a capability the process had not
+ * selected, publication would refuse it, and no operator surface could resolve the disagreement.
+ *
+ * Every ADDED key must resolve through `tryResolvePlatformCapability`, and the CANONICAL key is
+ * what gets persisted — an alias in, its canonical form stored. A key the registry does not know is
+ * rejected with a structured reason rather than written through raw-key fallback, which is exactly
+ * how an unimplemented command would otherwise be authorized by accident.
+ *
+ * Removal is not symmetric: it takes the requested key as given and drops any entry whose canonical
+ * form matches, so a capability that has since been de-registered can still be cleaned up.
+ */
+export function updateProcessCommandSet(
+    config: LifecycleBuilderV1,
+    processId: string,
+    input: { addCapabilityKeys?: readonly string[]; removeCapabilityKeys?: readonly string[] }
+): UpdateProcessCommandSetResult {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+
+    const current = process.command_set_v1 ?? emptyProcessCommandSetV1();
+    const commands = [...current.commands];
+    const canonicalOf = (key: string): string | null => {
+        const resolved = tryResolvePlatformCapability(key);
+        return resolved.status === "known" ? resolved.capability.canonicalCommandKey : null;
+    };
+    const entryCanonical = (key: string) => canonicalOf(key) ?? key.trim();
+
+    const rejected: Array<{ requested: string; reason: "unregistered" }> = [];
+    const added: string[] = [];
+    const removed: string[] = [];
+
+    for (const requested of input.addCapabilityKeys ?? []) {
+        const key = requested.trim();
+        if (!key) continue;
+        const canonical = canonicalOf(key);
+        if (!canonical) {
+            rejected.push({ requested: key, reason: "unregistered" });
+            continue;
+        }
+        const existing = commands.find((c) => entryCanonical(c.capability_key) === canonical);
+        if (existing) {
+            // Idempotent. An explicitly disabled command is NOT silently re-enabled here — that is
+            // a different operator intent than "this process uses this capability".
+            continue;
+        }
+        // Appended, so existing ordering is untouched and the result is deterministic.
+        commands.push({ capability_key: canonical, enabled: true });
+        added.push(canonical);
+    }
+
+    for (const requested of input.removeCapabilityKeys ?? []) {
+        const key = requested.trim();
+        if (!key) continue;
+        const target = canonicalOf(key) ?? key;
+        const index = commands.findIndex((c) => entryCanonical(c.capability_key) === target);
+        if (index < 0) continue; // idempotent no-op
+        removed.push(commands[index]!.capability_key);
+        commands.splice(index, 1);
+    }
+
+    if (!added.length && !removed.length) {
+        return { config, commandSet: current, added, removed, rejected };
+    }
+
+    const commandSet: BusinessProcessCommandSetV1 = { ...current, version: 1, commands };
+    return {
+        config: {
+            ...config,
+            processes: config.processes.map((p) =>
+                p.id === processId ? { ...p, command_set_v1: commandSet } : p
+            ),
+        },
+        commandSet,
+        added,
+        removed,
+        rejected,
+    };
 }

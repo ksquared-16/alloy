@@ -47,6 +47,15 @@ export type LifecycleStageBootstrapFieldRequirements = {
 export type LifecycleStageBootstrapPayload = {
     department_id: string;
     builder_stage_key: string;
+    /**
+     * Every configured stage of the process, WITH its declared grain.
+     *
+     * The editor previously derived its stage list from `pipeline.queues` — work-unit definitions,
+     * which carry no grain — so it could not see a stage whose configured grain made a movement
+     * illegal, while the runtime could. `grain` is passed through unnormalised (`?? null`): absent
+     * stays absent and malformed stays malformed, so `resolveStageGrain` remains the only judge.
+     */
+    configured_stages?: Array<{ key: string; label: string; grain: unknown }>;
     /** Process track for builder stage (family_track | child_track). */
     stage_track_key?: string | null;
     operator_stage: LifecycleOperatorStage | null;

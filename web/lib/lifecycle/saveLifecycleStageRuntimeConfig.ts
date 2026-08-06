@@ -114,7 +114,11 @@ export type SaveLifecycleStageRuntimeConfigInput = {
     processId?: string | null;
     stageKey: string;
     /** Source of truth for this transaction — never re-resolved from an empty DB bucket. */
-    selectedStatusKeys: readonly string[];
+    /**
+     * Queue membership status keys. OMITTED means "leave membership as configured" — required only
+     * when the caller is actually editing status membership. A disposition-keyed stage has none.
+     */
+    selectedStatusKeys?: readonly string[];
     workUnitName?: string | null;
     /** Top-level metadata siblings, not part of the published lifecycle payload. */
     fieldRules?: LifecycleStageFieldRules | LifecycleStageFieldRulesStored | null;
@@ -327,10 +331,8 @@ export async function saveLifecycleStageRuntimeConfig(
     const stageKey = input.stageKey.trim();
     if (!stageKey) throw new Error("stageKey is required");
 
-    const selectedStatusKeys = requireLifecycleStageQueueStatusKeys(
-        stageKey,
-        effectiveLifecycleStageStatusKeys(stageKey, input.selectedStatusKeys),
-    );
+    // Resolved after the stage record is read when the caller omitted them — see below.
+    let selectedStatusKeys: string[] = [];
 
     // ---- phase 1: read. Nothing below this block writes until phase 4. -------------------------
 
@@ -461,6 +463,31 @@ export async function saveLifecycleStageRuntimeConfig(
         explicit: explicitMembership,
         stageMembership: stageRecord.queue_membership_v1,
     });
+
+    /**
+     * Status keys come from the REQUEST only when the caller supplied them. Otherwise they are read
+     * back from the membership already configured, so an operating-plan-only edit cannot disturb
+     * queue membership — and a disposition-keyed stage, which has none, is not forced to invent
+     * them.
+     *
+     * Disposition membership is never translated into status membership: a stage scoped by
+     * `included_disposition_keys` resolves to an empty status list and keeps its dispositions.
+     */
+    const membershipStatusKeys = Array.isArray(
+        (effectiveMembership as { included_status_keys?: unknown } | null)?.included_status_keys,
+    )
+        ? (effectiveMembership as unknown as { included_status_keys: string[] }).included_status_keys
+        : [];
+    if (input.selectedStatusKeys !== undefined) {
+        selectedStatusKeys = requireLifecycleStageQueueStatusKeys(
+            stageKey,
+            effectiveLifecycleStageStatusKeys(stageKey, input.selectedStatusKeys),
+        );
+    } else {
+        // Platform-managed defaults still apply where a stage has them; a disposition-keyed stage
+        // legitimately resolves to [].
+        selectedStatusKeys = effectiveLifecycleStageStatusKeys(stageKey, membershipStatusKeys);
+    }
     const subjectType = queueMembershipSubjectForStatusOptions({
         stageKey,
         trackKey: stageRecord.track_key ?? null,

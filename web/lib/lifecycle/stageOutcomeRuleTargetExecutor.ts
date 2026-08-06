@@ -11,6 +11,13 @@ import {
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
+import { isConfiguredClosedStatus } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+import { readEnrollmentInstancesForLead } from "@/lib/process/processInstances";
+import {
+    describeFamilyCloseBlock,
+    evaluateFamilyCloseGuard,
+    type FamilyCloseBlockedReason,
+} from "@/lib/lifecycle/familyCloseGuard";
 import { reconcileBusinessProcessWorkAcrossStageMove } from "@/lib/lifecycle/reconcileBusinessProcessWorkAcrossStageMove";
 import {
     moveEnrollmentInstanceStageByScope,
@@ -21,6 +28,11 @@ import {
     type EnrollmentProcessState,
 } from "@/lib/process/processInstances";
 import { assertStageConfigured, loadConfiguredStageInventory } from "@/lib/lifecycle/configuredStageInventory";
+import {
+    assertStageMoveGrainCompatible,
+    resolveStageGrain,
+    type StageMoveGrainError,
+} from "@/lib/lifecycle/stageGrainResolution";
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
@@ -30,6 +42,10 @@ import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitCh
 import { materializeEnrollmentForChildScope } from "@/lib/childcareOperational/materializeEnrollmentFromProcessInstance";
 import { isChildcareOperationalEnrollmentV1EnabledForOrg } from "@/lib/childcareOperational/featureFlag";
 import { stampEnrollmentDateOnProcessInstances } from "@/lib/enrollment/stampEnrollmentDateOnProcessInstances";
+import {
+    assertSingleParticipantWrite,
+    type ParticipantWriteCountFailure,
+} from "@/lib/lifecycle/assertSingleParticipantWrite";
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
@@ -43,6 +59,12 @@ export type StageOutcomeExecutionSubject = {
     placement_candidate_id?: string | null;
     /** Open lifecycle work task for repeat/reopen automations. */
     work_id?: string | null;
+    /**
+     * Operator-facing name of the participant this write is about, so a refusal can say WHO it is
+     * about instead of quoting an id. Presentation only — never an identity, never used to resolve
+     * a subject, and absence changes no behaviour.
+     */
+    participant_label?: string | null;
 };
 
 /**
@@ -70,8 +92,37 @@ async function resolveChildSubjectId(
     return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
+/**
+ * Does this family case status close the case?
+ *
+ * Uses the SHARED closed-status predicate rather than a local `=== "closed"`, so the guard agrees
+ * with Organization → Statuses and the Business Process editor by construction.
+ *
+ * Deliberately pure. An earlier version read the org's status catalog first, which was more
+ * configurable in theory and wrong in practice: it pulled `createAdminClient` onto a code path
+ * that outcome execution reaches with an injected client, and it charged every family status write
+ * — including the `open` ones — an extra query to answer a question the canonical case domain
+ * already settles. `opportunities.status_key` is `open | closed` by migration doctrine, which is
+ * exactly the key-level resolution this predicate applies for the opportunity grain.
+ */
+function familyCaseStatusCloses(statusKey: string): boolean {
+    return isConfiguredClosedStatus({
+        status_key: statusKey,
+        status_label: statusKey,
+        entity_type: "opportunities",
+        is_active: true,
+        metadata: null,
+    });
+}
+
 export type ApplyStageOutcomeRuleTargetResult = {
     error?: string;
+    /** Why a guarded target refused, structured for a command preview to translate. */
+    blocked_reasons?: FamilyCloseBlockedReason[];
+    /** Why a stage move was refused on grain grounds — structured for the same reason. */
+    stage_grain_error?: StageMoveGrainError;
+    /** A participant-scoped write that matched no row, or several. Structured, not just a string. */
+    participant_write_error?: ParticipantWriteCountFailure;
     needs_attention?: boolean;
     status_updated?: boolean;
     /**
@@ -147,6 +198,39 @@ export async function applyStageOutcomeRuleTarget(
             const statusKey = target.status_key?.trim();
             if (!statusKey) return { error: "Missing family case status key" };
             const closeReasonKey = target.close_reason_key?.trim();
+
+            /**
+             * A family case cannot close out from under its children.
+             *
+             * The guard lives HERE, on the target executor, rather than on the `close_lead`
+             * command or its placement, because this is the invariant-owning path: outcome rules,
+             * status-entry automation and domain-signal automation all resolve to this executor.
+             * Guarding a command would leave every configured rule free to close a family with a
+             * waitlisted or enrolled child still riding on it.
+             *
+             * Only closes are guarded. A write that leaves the case open is untouched, so
+             * `reached_qualified` (status `open`) never pays for this.
+             */
+            if (familyCaseStatusCloses(statusKey)) {
+                const read = await readEnrollmentInstancesForLead(supabase, {
+                    orgId,
+                    opportunityId: subject.opportunity_id,
+                });
+                const decision = evaluateFamilyCloseGuard(read);
+                if (!decision.allowed) {
+                    // Nothing has been written, so there is nothing to compensate — the
+                    // surrounding transaction aborts clean. The structured reasons travel out for
+                    // the command layer to turn into operator language and a named preview.
+                    return {
+                        error:
+                            "This lead cannot be closed while child enrollment tracks are still active ("
+                            + describeFamilyCloseBlock(decision)
+                            + ").",
+                        blocked_reasons: decision.reasons,
+                    };
+                }
+            }
+
             // Read the prior value BEFORE the write so the transaction has an inverse.
             const { data: priorStatus } = await supabase
                 .from("opportunities")
@@ -225,6 +309,26 @@ export async function applyStageOutcomeRuleTarget(
                 if (restored.error) throw new Error(`restore child enrollment state: ${restored.error}`);
             };
 
+            // A scope-targeted update that matched no row, or several, is not a success. Checked
+            // before anything downstream (events, placement, materialization) treats it as one.
+            //
+            // The inverse travels WITH the failure when rows were actually written: `moved > 1`
+            // means the ambiguous scope already wrote to every matched row, so the transaction must
+            // be able to unwind them. `moved === 0` wrote nothing, so there is nothing to undo and
+            // offering one would only invent a write.
+            const stateWrite = assertSingleParticipantWrite({
+                moved: pi.moved,
+                operation: "enrollment path",
+                participantLabel: subject.participant_label,
+            });
+            if (!stateWrite.ok) {
+                return {
+                    error: stateWrite.failure.message,
+                    participant_write_error: stateWrite.failure,
+                    ...(stateWrite.failure.moved > 1 ? { undo: undoChildState } : {}),
+                };
+            }
+
             const ocmBridgeId = subject.opportunity_customer_member_id?.trim() ?? null;
             // Child lifecycle event emitted from the process-instance transition (restored). While the
             // OCM bridge exists the event stays keyed on the OCM id so existing workflow subscriptions
@@ -253,12 +357,26 @@ export async function applyStageOutcomeRuleTarget(
                 }
             }
             // Waitlist placement candidate — sourced from the child's process instance (no OCM required).
+            //
+            // Declared OUT of the boundary, like the lifecycle event above and the enrollment
+            // materialization below. It used to be awaited bare: a throw here escaped
+            // `applyStageOutcomeRuleTarget` entirely, so the caller received an exception INSTEAD of
+            // a result — and therefore never received the `undo` for the state write that had
+            // already succeeded. The transition was committed with no inverse, which is the one
+            // outcome the compensation contract exists to prevent. Reported, never swallowed.
             if (dispositionKey === "waitlisted") {
-                await ensurePlacementCandidateForWaitlistedChildBySubject(supabase, {
-                    orgId,
-                    opportunityId: subject.opportunity_id,
-                    customerMemberId: childId,
-                });
+                try {
+                    await ensurePlacementCandidateForWaitlistedChildBySubject(supabase, {
+                        orgId,
+                        opportunityId: subject.opportunity_id,
+                        customerMemberId: childId,
+                    });
+                } catch (e) {
+                    console.error("[stageOutcomeRuleTargetExecutor] waitlist placement candidate", e);
+                    degradedEffects.push(
+                        `waitlist placement candidate not created: ${e instanceof Error ? e.message : String(e)}`,
+                    );
+                }
             }
             // Enrollment completion → materialize durable operational truth (agreement + placement +
             // schedule assignment). The process produces the facts; it does not own them. Non-blocking
@@ -458,6 +576,29 @@ export async function applyStageOutcomeRuleTarget(
                 return { error: membership.error.message };
             }
 
+            /**
+             * GRAIN GUARD. Configured-and-existing is not the same as configured-and-compatible:
+             * the family case and each child's enrollment move on their own tracks, and until now
+             * nothing stopped a child outcome writing a family stage or the reverse.
+             *
+             * Placed here, above every branch below, so it covers both writers. The destination's
+             * own operating plan is not loaded on this path — `plan` is the SOURCE stage's — so
+             * the resolver weighs the canonical vocabulary against the configured metadata and
+             * refuses when they disagree rather than picking one.
+             */
+            const destinationGrain = resolveStageGrain({
+                stageKey: targetStageKey,
+                configuredMetadataGrain: inventory.stageGrainsByKey[targetStageKey],
+            });
+            const grainCheck = assertStageMoveGrainCompatible({
+                subjectGrain: subject.journey_segment,
+                destination: destinationGrain,
+            });
+            if (!grainCheck.ok) {
+                // No write has happened, so the transaction aborts with nothing to compensate.
+                return { error: grainCheck.error.message, stage_grain_error: grainCheck.error };
+            }
+
             const nowIso = new Date().toISOString();
             let undoStageMove: (() => Promise<void>) | undefined;
             if (subject.journey_segment === "child") {
@@ -487,6 +628,20 @@ export async function applyStageOutcomeRuleTarget(
                             stageKey: priorStage,
                         });
                         if (restored.error) throw new Error(`restore child stage: ${restored.error}`);
+                    };
+                }
+                // Same contract as the state write: 1 succeeds, 0 fails, >1 is an integrity
+                // failure that carries its inverse out so the transaction can unwind it.
+                const stageWrite = assertSingleParticipantWrite({
+                    moved: pi.moved,
+                    operation: "stage move",
+                    participantLabel: subject.participant_label,
+                });
+                if (!stageWrite.ok) {
+                    return {
+                        error: stageWrite.failure.message,
+                        participant_write_error: stageWrite.failure,
+                        ...(stageWrite.failure.moved > 1 && undoStageMove ? { undo: undoStageMove } : {}),
                     };
                 }
             } else {

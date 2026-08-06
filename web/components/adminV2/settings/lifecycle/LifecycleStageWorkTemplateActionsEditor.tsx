@@ -8,6 +8,7 @@ import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes
 import type { StageCompletionOutcomeV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import {
     addWorkTemplateHelpfulAction,
     markWorkTemplateHelpfulActionsEmpty,
@@ -52,6 +53,9 @@ type Props = {
     /** Stage draft + transitions enable Outcome Definitions in this Work Template surface. */
     stageDraft?: StageOperatingPlanEditorDraft;
     transitionOptions?: StageOutcomeTransitionOption[];
+    /** Case-status catalog + grain, so a terminal outcome can resolve its closed status. */
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+    entityType?: string;
     onStageDraftChange?: (draft: StageOperatingPlanEditorDraft) => void;
 };
 
@@ -191,6 +195,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     stageDraft,
     transitionOptions = [],
     onStageDraftChange,
+    configuredStatuses,
+    entityType,
 }: Props) {
     const options = resolveWorkTemplateActionOptions({
         actionRegistry: configuredActions,
@@ -370,6 +376,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                         // operator to another section to satisfy its own dependency.
                         stageKey={stageKey}
                         processStages={processStages}
+                        configuredStatuses={configuredStatuses}
+                        entityType={entityType}
                         workTemplateKey={work.template_key}
                         onChange={onStageDraftChange}
                     />

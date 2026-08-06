@@ -41,6 +41,14 @@ function configuredDeptMetadata(stageKeys: string[] = MOVE_TARGET_STAGES): Recor
                         label: key,
                         sort_order: index,
                         is_active: true,
+                        // Real department metadata declares a grain on every stage; these
+                        // fixtures did not, so the grain guard correctly refused to validate a
+                        // move onto a stage that says nothing about which journey it belongs to.
+                        // Child-track keys are named explicitly, everything else is family.
+                        grain:
+                            ["waitlist", "enrolling", "enrolled", "closed_withdrawn"].includes(key)
+                                ? "child"
+                                : "family",
                     })),
                 },
             ],
@@ -60,6 +68,43 @@ function withConfiguredDept(
             chain.select = () => chain;
             chain.eq = () => chain;
             chain.maybeSingle = async () => ({ data: { metadata }, error: null });
+            return chain;
+        }
+        if (table === "process_instances") {
+            // One chain that answers BOTH shapes this table is read through: the single-row child
+            // reads these tests already relied on, and the awaitable LIST read the family close
+            // guard performs when enumerating child enrollment tracks.
+            //
+            // Resolving the list to `[]` says "this lead has no child tracks" — true for these
+            // family-level cases. Left unstubbed the read fails, and the guard correctly refuses to
+            // close a family whose children it cannot enumerate: a fixture gap, not a product
+            // failure. Tests that need children stub this table themselves.
+            const original = originalFrom(table) as Record<string, unknown> | null;
+            const chain: Record<string, unknown> = {};
+            // An UPDATE and a LIST READ both resolve through `then`, and they must not resolve to
+            // the same value. This stub answered both with `[]`, which reads as "no rows matched" —
+            // correct for the family-close guard's enumeration, wrong for a child write, and
+            // invisible for as long as callers discarded the row count. Now that a scope-targeted
+            // write asserts it touched exactly one row, the stub has to say which operation it is
+            // standing in for.
+            let isUpdate = false;
+            chain.select = () => chain;
+            chain.eq = () => chain;
+            chain.update = () => {
+                isUpdate = true;
+                return chain;
+            };
+            chain.maybeSingle = async () => {
+                const inner = original?.select as undefined | (() => Record<string, unknown>);
+                const readChain = typeof inner === "function" ? inner() : null;
+                const maybeSingle = readChain?.maybeSingle as undefined | (() => Promise<unknown>);
+                return typeof maybeSingle === "function"
+                    ? await maybeSingle()
+                    : { data: null, error: null };
+            };
+            chain.single = async () => ({ data: {}, error: null });
+            chain.then = (resolve: (value: unknown) => unknown) =>
+                resolve({ data: isUpdate ? [{ id: "pi-1" }] : [], error: null });
             return chain;
         }
         return originalFrom(table);

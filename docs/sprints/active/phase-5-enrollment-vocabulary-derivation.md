@@ -197,7 +197,7 @@ configuration/engineering — the mockup must **not** invent terms to cover them
    labeled commands.
 5. **Dangling `qualification`**: removed from the canonical template, but the `contacting` (granular) plan still
    transitions to `stage_key: "qualification"` (`defaultEnrollmentStageOperatingPlans.ts:611`), a stage with no
-   operating plan. A live reference-integrity gap. (Moot for the canonical 8-stage template, which has no `contacting`.)
+   operating plan. A live reference-integrity gap. (Moot for the example 8-stage template, which has no `contacting`.)
 6. **Dual stage vocabularies**: canonical (8) vs deprecated granular (~13) vs progression-doctrine (6). The
    "Required information" factors are keyed to the *progression* keys (`enrollment`, `qualification`), which don't
    1:1 match the canonical template keys (`enrolling`, no `qualification`). Reconciling these is an engineering/config

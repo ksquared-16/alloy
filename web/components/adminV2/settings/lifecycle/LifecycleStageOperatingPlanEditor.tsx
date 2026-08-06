@@ -62,7 +62,7 @@ type Props = {
     onDirtyChange?: (dirty: boolean) => void;
     actionCatalog?: StageActionCatalogV1 | null;
     configuredActions?: LifecycleConfiguredActionRow[];
-    processStages?: Array<{ key: string; label: string }>;
+    processStages?: Array<{ key: string; label: string; grain?: string }>;
     processTracks?: ProcessTracksV1 | null;
     configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
     /** P6.S3 — process record for Command selection gating. */
@@ -172,6 +172,9 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
             configuredStatuses,
             entityType,
             processStageKeys: (processStages ?? []).map((stage) => stage.key),
+            // Grain + label, so a SAVED exit path that crosses journey tracks is reported here at
+            // authoring time instead of only being refused at execution.
+            processStages: processStages ?? [],
         }),
         [validPrimaryActionRefs, transitionOptions, configuredStatuses, entityType, processStages],
     );
@@ -536,6 +539,8 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                     process={process ?? null}
                                     stageDraft={draft}
                                     transitionOptions={transitionOptions}
+                                    configuredStatuses={configuredStatuses}
+                                    entityType={entityType}
                                     onStageDraftChange={setDraft}
                                     onChange={(nextWork) =>
                                         setDraft((prev) => {

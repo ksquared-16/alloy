@@ -3,7 +3,11 @@
  * Associates issues with exact controls; never throws during partial editing.
  */
 
-import type { StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import {
+    STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS,
+    type StageOperatingPlanV1,
+    type StageWorkTemplateV1,
+} from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     readOutcomeAutomationDraft,
     type OutcomeAutomationKind,
@@ -15,6 +19,7 @@ import {
     type OutcomeStatusConfiguredRow,
 } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
 
 export type StageOperatingContractIssueCode =
     | "primary_action_missing"
@@ -36,8 +41,34 @@ export type StageOperatingContractIssueCode =
     | "transition_status_noncanonical"
     | "transition_close_status_invalid"
     | "outcome_transition_unavailable"
-    | "legacy_status_close_invalid"
-    | "legacy_work_completion_invalid";
+    /** A saved exit path points at a stage on the other journey track. */
+    | "transition_destination_grain_mismatch"
+    /** A saved exit path points at a stage whose grain cannot be resolved or is contradictory. */
+    | "transition_destination_grain_unresolved"
+    /** An outcome moves through a path that lands on the other journey track. */
+    | "outcome_movement_grain_mismatch"
+    /** An outcome moves through a path whose destination grain cannot be resolved. */
+    | "outcome_movement_grain_unresolved"
+    /** A per-child decision moves a child onto a stage that belongs to the family case. */
+    | "participant_decision_destination_grain_mismatch"
+    /** A per-child decision moves a child onto a stage whose grain cannot be resolved. */
+    | "participant_decision_destination_grain_unresolved"
+    /** A per-child decision names a destination stage this process does not configure. */
+    | "participant_decision_destination_invalid"
+    /** A required input binds to a target field none of the decision's targets can carry. */
+    | "participant_decision_binding_unsupported"
+    /** A required select input offers no options to choose from. */
+    | "participant_decision_input_options_missing"
+    /** Work completion is gated on participants being resolved, but nothing resolves them. */
+    | "participant_resolution_gate_without_decisions"
+    /** Family close sends children to a stage that belongs to the family case. */
+    | "family_close_child_destination_grain_mismatch"
+    /** Family close sends the family to a stage that belongs to individual children. */
+    | "family_close_family_destination_grain_mismatch"
+    /** Family close names a destination stage this process does not configure. */
+    | "family_close_destination_invalid"
+    /** Family close closes children but leaves the family open, or the reverse. */
+    | "family_close_status_not_closing";
 
 export type StageOperatingContractIssue = {
     code: StageOperatingContractIssueCode;
@@ -47,6 +78,8 @@ export type StageOperatingContractIssue = {
     controlId: string;
     template_key?: string;
     outcome_key?: string;
+    /** Present on per-child decision findings, so the editor can mark the right row. */
+    decision_key?: string;
 };
 
 export type ValidateStageOperatingPlanOperatingContractInput = {
@@ -54,10 +87,30 @@ export type ValidateStageOperatingPlanOperatingContractInput = {
     /** Valid executable Primary Action refs for this stage context. */
     validPrimaryActionRefs?: ReadonlySet<string> | readonly string[];
     transitionOptions?: ReadonlyArray<StageOutcomeTransitionOption>;
+    /**
+     * The case-status catalog. UNDEFINED means "the caller cannot resolve it" — status-domain
+     * checks are skipped rather than guessed. An empty ARRAY means "there are none", which is a
+     * finding. A pure caller such as publication validation has no database and must pass nothing.
+     */
     configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
     entityType?: string;
     processStageKeys?: ReadonlySet<string> | readonly string[];
+    /**
+     * Configured stages with their declared grain and operator label. Supplied so a saved exit path
+     * that crosses journey tracks is reported HERE, at authoring time, rather than only refused at
+     * execution. Absent → grain checks are skipped, never guessed.
+     */
+    processStages?: ReadonlyArray<{ key: string; label?: string | null; grain?: string | null }>;
 };
+
+/** Operator words for a journey grain. Never "family"/"child" bare — those read as jargon. */
+function grainInOperatorWords(grain: "family" | "child"): string {
+    return grain === "family" ? "the family case" : "individual children";
+}
+
+function grainSubjectWords(grain: "family" | "child"): string {
+    return grain === "family" ? "a family" : "a child";
+}
 
 function asSet(value: ReadonlySet<string> | readonly string[] | undefined): Set<string> {
     if (!value) return new Set();
@@ -68,6 +121,252 @@ function asSet(value: ReadonlySet<string> | readonly string[] | undefined): Set<
 function entityTypeForPlan(plan: StageOperatingPlanV1, override?: string): string {
     if (override?.trim()) return override.trim();
     return plan.journey_segment === "child" ? "opportunity_customer_members" : "opportunities";
+}
+
+/**
+ * Per-child decisions, checked at AUTHORING time.
+ *
+ * The runtime refuses these same shapes — the grain guard on the target executor, the binding check
+ * in the input applier — but a refusal at click time is a defect the operator discovers on a real
+ * family. Everything decidable from configuration alone is decided here instead.
+ *
+ * Grain is judged with the SHARED resolver, so a decision's destination is weighed exactly as an
+ * outcome's destination is. The asymmetry that makes this feature work — a family-grain stage
+ * hosting child-grain decisions — is legitimate for the STAGE and illegitimate for the DESTINATION:
+ * moving a child onto a family stage is the cross-grain write the platform has spent this whole
+ * program learning to refuse.
+ */
+function validateParticipantDecisions(
+    work: StageWorkTemplateV1,
+    processStages: ReadonlyArray<{ key: string; label?: string | null; grain?: string | null }> | undefined,
+): StageOperatingContractIssue[] {
+    const issues: StageOperatingContractIssue[] = [];
+    const decisions = work.participant_decisions ?? [];
+
+    if (work.completion_policy?.requires_all_participants_resolved && !decisions.length) {
+        issues.push({
+            code: "participant_resolution_gate_without_decisions",
+            severity: "error",
+            message:
+                `"${work.label}" cannot be completed until every child has a path, but no per-child `
+                + `paths are configured on it — so it could never be completed.`,
+            controlId: `work-template-participant-gate-${work.template_key}`,
+            template_key: work.template_key,
+        });
+    }
+
+    if (!decisions.length) return issues;
+
+    const stageByKey = new Map((processStages ?? []).map((s) => [s.key, s]));
+
+    for (const decision of decisions) {
+        const controlId = `work-template-participant-decision-${work.template_key}-${decision.decision_key}`;
+
+        for (const input of decision.required_inputs ?? []) {
+            if (input.type === "select" && !(input.options?.length)) {
+                issues.push({
+                    code: "participant_decision_input_options_missing",
+                    severity: "error",
+                    message: `"${input.label}" asks the operator to choose, but no options are configured.`,
+                    controlId: `${controlId}-input-${input.key}`,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+            if (!input.binds_to_target_field) continue;
+            const acceptors = STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS[input.binds_to_target_field];
+            if (!decision.targets.some((t) => acceptors.includes(t.kind))) {
+                issues.push({
+                    code: "participant_decision_binding_unsupported",
+                    severity: "error",
+                    message:
+                        `"${input.label}" is collected but nothing this option does can record it. `
+                        + `Remove the input, or give the option a step that can carry it.`,
+                    controlId: `${controlId}-input-${input.key}`,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+        }
+
+        // Destination grain is only decidable when the caller supplied the stage inventory.
+        if (!processStages) continue;
+
+        for (const target of decision.targets) {
+            if (target.kind !== "move_to_stage") continue;
+            const targetKey =
+                target.stage_key?.trim()
+                ?? (target.transition_ref?.startsWith("move_to_stage:")
+                    ? target.transition_ref.slice("move_to_stage:".length).trim()
+                    : null);
+            if (!targetKey) continue;
+
+            if (!stageByKey.has(targetKey)) {
+                issues.push({
+                    code: "participant_decision_destination_invalid",
+                    severity: "error",
+                    message: `"${decision.label ?? decision.decision_key}" sends children to a stage this process does not have.`,
+                    controlId,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+                continue;
+            }
+
+            const resolution = resolveStageGrain({
+                stageKey: targetKey,
+                configuredMetadataGrain: stageByKey.get(targetKey)?.grain,
+            });
+            const destinationLabel = stageByKey.get(targetKey)?.label?.trim() || targetKey;
+
+            if (!resolution.ok) {
+                issues.push({
+                    code: "participant_decision_destination_grain_unresolved",
+                    severity: "error",
+                    message: `"${destinationLabel}" does not say clearly whether it holds families or children, so a child cannot be sent there.`,
+                    controlId,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+                continue;
+            }
+
+            if (resolution.grain !== "child") {
+                issues.push({
+                    code: "participant_decision_destination_grain_mismatch",
+                    severity: "error",
+                    message:
+                        `"${destinationLabel}" belongs to ${grainInOperatorWords(resolution.grain)}, so a `
+                        + `single child cannot be moved onto it. Per-child paths must lead to a stage that `
+                        + `holds ${grainSubjectWords("child")}.`,
+                    controlId,
+                    template_key: work.template_key,
+                    decision_key: decision.decision_key,
+                });
+            }
+        }
+    }
+
+    return issues;
+}
+
+/**
+ * Governed family close, checked at AUTHORING time.
+ *
+ * The two halves have OPPOSITE grain requirements and that is the whole point: children must land
+ * on a child stage, the family must land on a family stage. A configuration that gets either
+ * backwards produces a close that strands the record it was supposed to end, and the runtime would
+ * refuse it on a real family rather than here.
+ *
+ * `closes_record` semantics are also checked: a close whose family status does not actually close
+ * the case leaves a family sitting open with all its children terminated, which reads to an
+ * operator as "the button did nothing".
+ */
+function validateFamilyClose(
+    work: StageWorkTemplateV1,
+    processStages: ReadonlyArray<{ key: string; label?: string | null; grain?: string | null }> | undefined,
+    configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow> | undefined,
+    entityType: string,
+): StageOperatingContractIssue[] {
+    const close = work.family_close;
+    if (!close) return [];
+
+    const issues: StageOperatingContractIssue[] = [];
+    const controlId = `work-template-family-close-${work.template_key}`;
+    const stageByKey = new Map((processStages ?? []).map((s) => [s.key, s]));
+
+    const checkDestination = (
+        target: { kind: string; stage_key?: string | null; transition_ref?: string | null },
+        wanted: "child" | "family",
+        code: StageOperatingContractIssueCode,
+    ) => {
+        if (target.kind !== "move_to_stage") return;
+        const targetKey =
+            target.stage_key?.trim()
+            ?? (target.transition_ref?.startsWith("move_to_stage:")
+                ? target.transition_ref.slice("move_to_stage:".length).trim()
+                : null);
+        if (!targetKey || !processStages) return;
+
+        if (!stageByKey.has(targetKey)) {
+            issues.push({
+                code: "family_close_destination_invalid",
+                severity: "error",
+                message: "Closing this lead sends a record to a stage this process does not have.",
+                controlId,
+                template_key: work.template_key,
+            });
+            return;
+        }
+        const resolution = resolveStageGrain({
+            stageKey: targetKey,
+            configuredMetadataGrain: stageByKey.get(targetKey)?.grain,
+        });
+        const destinationLabel = stageByKey.get(targetKey)?.label?.trim() || targetKey;
+        if (!resolution.ok) {
+            issues.push({
+                code,
+                severity: "error",
+                message: `"${destinationLabel}" does not say clearly whether it holds families or children.`,
+                controlId,
+                template_key: work.template_key,
+            });
+            return;
+        }
+        if (resolution.grain !== wanted) {
+            issues.push({
+                code,
+                severity: "error",
+                message:
+                    wanted === "child" ?
+                        `Closing this lead sends each child to "${destinationLabel}", which belongs to `
+                        + `${grainInOperatorWords(resolution.grain)}. Children must end on a stage that holds `
+                        + `${grainSubjectWords("child")}.`
+                    :   `Closing this lead sends the lead itself to "${destinationLabel}", which belongs to `
+                        + `${grainInOperatorWords(resolution.grain)}. The lead must end on a stage that holds `
+                        + `${grainSubjectWords("family")}.`,
+                controlId,
+                template_key: work.template_key,
+            });
+        }
+    };
+
+    for (const target of close.child_targets) {
+        checkDestination(target, "child", "family_close_child_destination_grain_mismatch");
+    }
+    for (const target of close.family_targets) {
+        checkDestination(target, "family", "family_close_family_destination_grain_mismatch");
+    }
+
+    // Does the family status actually close the case? Skipped when the caller cannot resolve the
+    // status catalog — undefined means "cannot tell", never "there are none".
+    if (configuredStatuses !== undefined) {
+        const statusTarget = close.family_targets.find((t) => t.kind === "update_family_case_status");
+        const statusKey = statusTarget?.status_key?.trim();
+        if (statusKey) {
+            // `close_record` is the same purpose the outcome editor uses for a closing status, so
+            // "does this status close the case?" is answered by one resolver, not two opinions.
+            const resolved = resolveOutcomeStatusOptions({
+                configuredStatuses,
+                purpose: "close_record",
+                entityType,
+                selectedStatusKey: statusKey,
+            });
+            if (resolved.available && !resolved.selectedValid) {
+                issues.push({
+                    code: "family_close_status_not_closing",
+                    severity: "error",
+                    message:
+                        `Closing this lead ends every open child but leaves the lead itself open. `
+                        + `Choose a ${statusDomainOperatorLabel(entityType)} status that closes the record.`,
+                    controlId,
+                    template_key: work.template_key,
+                });
+            }
+        }
+    }
+
+    return issues;
 }
 
 function validatePrimaryAction(
@@ -107,7 +406,7 @@ function validateOutcomeBehavior(
     kind: OutcomeAutomationKind,
     draft: ReturnType<typeof readOutcomeAutomationDraft>,
     transitionOptions: ReadonlyArray<StageOutcomeTransitionOption>,
-    configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow>,
+    configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow> | undefined,
     entityType: string,
 ): StageOperatingContractIssue[] {
     const issues: StageOperatingContractIssue[] = [];
@@ -144,7 +443,7 @@ function validateOutcomeBehavior(
         }
     }
 
-    if (kind === "close_record") {
+    if (kind === "close_record" && configuredStatuses !== undefined) {
         const controlId = `${controlBase}-status`;
         const domainLabel = statusDomainOperatorLabel(entityType);
         const stageLabel = plan.stage_key?.trim() || "this stage";
@@ -213,7 +512,9 @@ export function validateStageOperatingPlanOperatingContract(
     const issues: StageOperatingContractIssue[] = [];
     const validPrimaryRefs = asSet(input.validPrimaryActionRefs);
     const transitionOptions = input.transitionOptions ?? [];
-    const configuredStatuses = input.configuredStatuses ?? [];
+    // Preserved as-is: `undefined` (cannot resolve) and `[]` (none configured) mean different
+    // things to the status-domain checks below.
+    const configuredStatuses = input.configuredStatuses;
     const entityType = entityTypeForPlan(plan, input.entityType);
 
     const outcomeKeys = new Set(plan.outcomes.map((o) => o.outcome_key));
@@ -240,7 +541,7 @@ export function validateStageOperatingPlanOperatingContract(
         } else if (!transition.target_stage_key.trim() || !processStageKeys.has(transition.target_stage_key)) {
             issues.push({ code: "transition_destination_invalid", severity: "error", message: "Select a configured destination stage.", controlId });
         }
-        if (transition.status_key) {
+        if (transition.status_key && configuredStatuses !== undefined) {
             const statusResolution = resolveOutcomeStatusOptions({
                 configuredStatuses,
                 purpose: "status_effect",
@@ -271,6 +572,10 @@ export function validateStageOperatingPlanOperatingContract(
     for (const work of plan.work_templates) {
         try {
             issues.push(...validatePrimaryAction(work, validPrimaryRefs));
+            issues.push(...validateParticipantDecisions(work, input.processStages));
+            issues.push(
+                ...validateFamilyClose(work, input.processStages, configuredStatuses, entityType),
+            );
             for (const ref of work.outcome_refs ?? []) {
                 const outcomeRef = ref.outcome_ref?.trim();
                 if (outcomeRef && !outcomeKeys.has(outcomeRef)) {
@@ -302,7 +607,7 @@ export function validateStageOperatingPlanOperatingContract(
         try {
             const draft = readOutcomeAutomationDraft(outcomeKey, plan.outcome_rules, {
                 transitionOptions: [...transitionOptions],
-                configuredStatuses,
+                configuredStatuses: configuredStatuses ?? [],
                 entityType,
             });
             if (draft.kind === "none") continue;
@@ -320,6 +625,111 @@ export function validateStageOperatingPlanOperatingContract(
             );
         } catch {
             // Partial editing must never throw.
+        }
+    }
+
+    /**
+     * SAVED exit paths that cross journey tracks.
+     *
+     * The editor filters the destination picker so a new path cannot be authored across grains,
+     * and the executor refuses the write. Neither helps a plan that ALREADY holds such a path: the
+     * picker only shapes new choices, and an execution-time refusal arrives long after publish.
+     * This reports it at authoring time, where it can be fixed.
+     *
+     * Nothing is filtered, replaced or normalised. The saved transition and the outcome rule are
+     * left exactly as written and stay visible — a blocking issue is added beside them. Silently
+     * "repairing" configuration an operator authored is how intent gets lost.
+     *
+     * Skipped entirely unless the plan states its own grain and the caller supplied the configured
+     * stages. An absent declaration is not evidence of a mismatch, and guessing here would flag
+     * every legacy plan that predates `journey_segment`.
+     */
+    const planGrain =
+        plan.journey_segment === "child" ? "child"
+        : plan.journey_segment === "family" ? "family"
+        : null;
+    const configuredStages = input.processStages ?? [];
+
+    if (planGrain && configuredStages.length) {
+        const stageByKey = new Map(configuredStages.map((stage) => [stage.key, stage]));
+        const destinationLabel = (key: string) => stageByKey.get(key)?.label?.trim() || key;
+
+        /** Grain verdict for a destination, using the ONE shared resolver. */
+        const destinationGrainFor = (targetStageKey: string) =>
+            resolveStageGrain({
+                stageKey: targetStageKey,
+                configuredMetadataGrain: stageByKey.get(targetStageKey)?.grain,
+            });
+
+        const incompatibleRefs = new Set<string>();
+
+        for (const transition of plan.outgoing_transitions ?? []) {
+            const targetKey = transition.target_stage_key?.trim();
+            if (!targetKey) continue; // already reported by transition_destination_invalid
+            const resolution = destinationGrainFor(targetKey);
+            const controlId = `stage-transition-${transition.transition_ref || "new"}`;
+
+            if (!resolution.ok) {
+                incompatibleRefs.add(transition.transition_ref);
+                issues.push({
+                    code: "transition_destination_grain_unresolved",
+                    severity: "error",
+                    message:
+                        `"${destinationLabel(targetKey)}" does not say clearly whether it belongs to `
+                        + `the family case or to individual children, so this path cannot be checked. `
+                        + `Resolve the stage's configuration before publishing.`,
+                    controlId,
+                });
+                continue;
+            }
+            if (resolution.grain !== planGrain) {
+                incompatibleRefs.add(transition.transition_ref);
+                issues.push({
+                    code: "transition_destination_grain_mismatch",
+                    severity: "error",
+                    message:
+                        `This path moves ${grainSubjectWords(planGrain)} to `
+                        + `"${destinationLabel(targetKey)}", which is configured for `
+                        + `${grainInOperatorWords(resolution.grain)}. `
+                        + `Choose ${planGrain === "family" ? "a family" : "a child"} stage instead.`,
+                    controlId,
+                });
+            }
+        }
+
+        // The same fact where the operator is actually working: on the outcome that moves.
+        for (const rule of plan.outcome_rules) {
+            const outcomeKey = rule.when_outcome_key?.trim();
+            if (!outcomeKey) continue;
+            for (const target of rule.targets) {
+                if (target.kind !== "move_to_stage") continue;
+                const ref = target.transition_ref?.trim() ?? "";
+                if (!ref || !incompatibleRefs.has(ref)) continue;
+                const transition = (plan.outgoing_transitions ?? []).find(
+                    (row) => row.transition_ref === ref,
+                );
+                const targetKey = transition?.target_stage_key?.trim() ?? "";
+                const resolution = targetKey ? destinationGrainFor(targetKey) : null;
+                issues.push({
+                    code:
+                        resolution?.ok ?
+                            "outcome_movement_grain_mismatch"
+                        :   "outcome_movement_grain_unresolved",
+                    severity: "error",
+                    message:
+                        resolution?.ok ?
+                            `This outcome moves ${grainSubjectWords(planGrain)} to `
+                            + `"${destinationLabel(targetKey)}", which is configured for `
+                            + `${grainInOperatorWords(resolution.grain)}. `
+                            + `Choose ${planGrain === "family" ? "a family" : "a child"} stage instead.`
+                        :   `This outcome moves ${grainSubjectWords(planGrain)} to `
+                            + `"${destinationLabel(targetKey)}", which does not say clearly whether it `
+                            + `belongs to the family case or to individual children. Resolve the `
+                            + `stage's configuration before publishing.`,
+                    controlId: `stage-outcome-automation-${outcomeKey}-transition`,
+                    outcome_key: outcomeKey,
+                });
+            }
         }
     }
 
@@ -366,25 +776,28 @@ export function validateStageOperatingPlanOperatingContract(
                     });
                 }
             }
-            if (
-                plan.outgoing_transitions !== undefined
-                && (target.kind === "update_family_case_status" || target.kind === "update_child_enrollment_status")
-            ) {
-                issues.push({
-                    code: "legacy_status_close_invalid",
-                    severity: "error",
-                    message: "Newly edited outcomes must move through a transition for status and close behavior.",
-                    controlId: `stage-outcome-automation-${outcomeKey ?? "unknown"}-transition`,
-                });
-            }
-            if (plan.outgoing_transitions !== undefined && target.kind === "mark_stage_work_complete") {
-                issues.push({
-                    code: "legacy_work_completion_invalid",
-                    severity: "error",
-                    message: "Work completion belongs to the Outcome Definition, not after-recording automation.",
-                    controlId: `stage-outcome-definition-${outcomeKey ?? "unknown"}`,
-                });
-            }
+            /*
+             * REMOVED: `legacy_status_close_invalid` and `legacy_work_completion_invalid`.
+             *
+             * Both were gated on `plan.outgoing_transitions !== undefined`, read as "this plan was
+             * re-authored under the newer outcome model, so legacy targets are no longer the
+             * canonical way to write it". That proxy is false. The field means only "this stage has
+             * at least one transition" — so authoring ONE unrelated exit path retroactively
+             * condemned every pre-existing outcome on the stage.
+             *
+             * It fired for real: adding `lead_to_tour` and `enrolling_to_enrolled` produced seven
+             * blocking errors against `reached_qualified`, `contact_closed_lost`,
+             * `enrollment_complete` and `family_withdrew` — outcomes nobody had touched, whose
+             * targets execute correctly. `update_family_case_status`,
+             * `update_child_enrollment_status` and `mark_stage_work_complete` all have real
+             * executors and remain supported runtime behaviour.
+             *
+             * A version-gated rule needs a version. The schema has none: `StageOperatingPlanV1
+             * .version` is the literal `1` on legacy and new plans alike, and
+             * `StageCompletionOutcomeV1` carries no authoring marker at all. Rather than invent a
+             * second implicit heuristic to replace the first, these diagnostics are withdrawn until
+             * the platform has an explicit authoring-version contract to gate them on.
+             */
             if (target.kind === "create_next_work") {
                 const templateKey = target.template_key?.trim() ?? "";
                 if (!templateKey || !plan.work_templates.some((work) => work.template_key === templateKey)) {
@@ -415,7 +828,7 @@ export function validateStageOperatingPlanOperatingContract(
     // differ by code, control, or grain — all of which are kept.
     const seen = new Set<string>();
     return issues.filter((issue) => {
-        const identity = `${issue.code}|${issue.controlId}|${issue.outcome_key ?? ""}|${issue.template_key ?? ""}`;
+        const identity = `${issue.code}|${issue.controlId}|${issue.outcome_key ?? ""}|${issue.template_key ?? ""}|${issue.decision_key ?? ""}`;
         if (seen.has(identity)) return false;
         seen.add(identity);
         return true;

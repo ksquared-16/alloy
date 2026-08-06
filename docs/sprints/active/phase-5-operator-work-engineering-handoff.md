@@ -249,7 +249,7 @@ not frozen, never hardcoded**; do not use "Placement" or "Offer" in operator cop
 | C4 | `send_confirmation`, `send_reminder` (no label) | add catalog labels (copy = config decision) | config-only | during | **No** |
 | C5 | `reschedule` (bare) ≠ catalog `reschedule_tour` | fix key ref; use the catalog's labeled action | config-only | during | n/a |
 | C6 | Enrolling completion = outcome "Packet sent" only; **no terminal enrollment behavior** | **freeze the capability** (§6 pipeline); command/outcome **labels stay configurable** | **Engineering (capability) + config (labels)** | capability before final Enrollment QA | **No — capability frozen, copy configurable** |
-| C7 | three stage vocabularies + dangling `qualification` (`defaultEnrollmentStageOperatingPlans.ts:611`) | converge to canonical 8-stage set; remove `qualification` ref | config + light Engineering | during | n/a |
+| C7 | three stage vocabularies + dangling `qualification` (`defaultEnrollmentStageOperatingPlans.ts:611`) | converge to example 8-stage template set; remove `qualification` ref | config + light Engineering | during | n/a |
 | C8 | missing outcomes/placements mismatches (helpful actions unlabeled) | align template `action_ref`s to labeled catalog entries | config-only | during | n/a |
 
 ### 9-bis. Configuration migration / seeding required before final Enrollment QA
@@ -268,7 +268,7 @@ acceptance scenarios (§13.11-13) and any decision/waitlist surface. It is confi
    completion capability (the runtime handler) so the §6 pipeline resolves. Labels for the command/outcome are seeded
    from configuration (not hardcoded). This is the one item with a runtime (handler) component; the pipeline shape is
    frozen (§6), the words are configurable.
-3. **Vocabulary convergence (C7).** Converge the seed to the canonical 8-stage set and remove the dangling
+3. **Vocabulary convergence (C7).** Converge the seed to the example 8-stage template set and remove the dangling
    `qualification` transition reference (`defaultEnrollmentStageOperatingPlans.ts:611`) so readiness (keyed to
    progression stages) maps cleanly to the template stages. Migration must reconcile any tenant already on granular keys.
 4. **Catalog label/key fixes (C4/C5/C8).** Add the missing helpful-action catalog labels and fix the `reschedule` →
