@@ -23,7 +23,7 @@ import {
     supersedeForOperatorDecision,
     supersedeForReplacementPackage,
 } from "@/lib/pos/processingIdentity/trustAdapter/identityLineageService";
-import { identitySupersessionReasonForDecision } from "@/lib/pos/processingIdentity/trustAdapter/identitySupersessionReasons";
+import { identitySupersessionReasonForEffect } from "@/lib/pos/processingIdentity/trustAdapter/identitySupersessionReasons";
 import {
     IDENTITY_LINEAGE_GAP_SEVERITY,
     TRUST_IDENTITY_LINEAGE_GAP_TYPE,
@@ -447,10 +447,15 @@ describe("P16-NC-5 — superseding another subject would be caught", () => {
             "utf8",
         );
         expect(src).toContain("adoptionIdForResolutionRow");
-        // The lookup key IS the adoption identity, used verbatim as the contract id.
-        expect(src).toContain("contract_id: priorAdoptionId");
-        // ...and there is no second, weaker way in: exactly one lookup call.
-        expect([...src.matchAll(/await lookup\(/g)]).toHaveLength(1);
+        // EVERY lookup call keys on the adoption identity, and there is no other
+        // way in. Counting the calls would only track how many branches the file
+        // has — the supersession path and the review path each have one — while
+        // saying nothing about what they look up. What matters is that no call
+        // uses a weaker key, so the two counts must be equal.
+        const lookupCalls = [...src.matchAll(/await lookup\(/g)].length;
+        const adoptionKeyed = [...src.matchAll(/contract_id: priorAdoptionId/g)].length;
+        expect(lookupCalls).toBeGreaterThan(0);
+        expect(adoptionKeyed).toBe(lookupCalls);
     });
 });
 
@@ -476,7 +481,7 @@ describe("P16-NC-6 — unsafe reason text entering Trust would be caught", () =>
     });
 
     it("the Processing mapper cannot emit an operator's words", () => {
-        expect(identitySupersessionReasonForDecision(UNSAFE)).toBe("operator_corrected_identity");
+        expect(identitySupersessionReasonForEffect(UNSAFE)).toBe("operator_corrected_identity");
         const src = readFileSync(
             join(WEB_ROOT, "lib/pos/processingIdentity/trustAdapter/identitySupersessionReasons.ts"),
             "utf8",
