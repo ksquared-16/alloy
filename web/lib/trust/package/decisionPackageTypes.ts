@@ -84,6 +84,18 @@ export type DecisionPackagePrivacyReport = {
         readonly disposition: string;
         readonly support: string;
     }[];
+    /**
+     * What content-aware text minimization removed, per detector.
+     *
+     * Counts only, never a matched substring — recording the removed text to
+     * prove it was removed would defeat the removal. Absent when the policy
+     * required no text minimization.
+     */
+    readonly text_minimizations?: readonly {
+        readonly detector_key: string;
+        readonly redaction_kind: string;
+        readonly replaced_count: number;
+    }[];
 };
 
 export type DecisionPackageV1 = {

@@ -13,6 +13,12 @@
 import type { ClassificationResult, InformationClass } from "@/lib/trust/classification/informationClasses";
 import type { PiiMode, RedactionStep } from "@/lib/privacy/redactObject";
 import { redactObjectForAi } from "@/lib/privacy/redactObject";
+import type {
+    TextMinimizationClass,
+    TextMinimizationRecord,
+    TextMinimizationRefusalCode,
+} from "@/lib/privacy/minimizeTextContent";
+import { minimizeTextContent, validateTextMinimizationRequest } from "@/lib/privacy/minimizeTextContent";
 import type { PrivacyTransformRefusalCode, TransformationRecord } from "@/lib/trust/privacy/transformationDispatch";
 import { applyTransformation } from "@/lib/trust/privacy/transformationDispatch";
 import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
@@ -22,6 +28,18 @@ export type PrivacyPolicyV1 = {
     readonly pii_mode: PiiMode;
     /** Classes this policy refuses to admit to reasoning at all. */
     readonly prohibited_classes: readonly InformationClass[];
+    /**
+     * Embedded information classes that must be minimized INSIDE admitted text.
+     *
+     * Absent or empty means no content-aware minimization runs, which is why
+     * every policy registered before Phase 2.2 behaves exactly as it did: the
+     * capability is opt-in per policy, not a new default applied to text that
+     * was already reviewed under different rules.
+     *
+     * A class this platform cannot detect deterministically refuses the whole
+     * transform — see {@link validateTextMinimizationRequest}.
+     */
+    readonly required_text_minimizers?: readonly TextMinimizationClass[];
 };
 
 /**
@@ -64,6 +82,14 @@ export type ReasoningContextV1 = {
      * `implemented` from `compatibility_preserved` without reading the engine.
      */
     readonly transformations: readonly TransformationRecord[];
+    /**
+     * What content-aware text minimization removed, per detector.
+     *
+     * Counts only. The matched substrings are the very thing being removed, so
+     * recording one to prove the removal happened would defeat the removal.
+     * Empty when the policy requires no text minimization.
+     */
+    readonly text_minimizations: readonly TextMinimizationRecord[];
 };
 
 export type KnowledgeReference = {
@@ -72,7 +98,10 @@ export type KnowledgeReference = {
     readonly provider_key: string;
 };
 
-export type PrivacyTransformRefusal = "PRIVACY_PROHIBITED_CLASS" | PrivacyTransformRefusalCode;
+export type PrivacyTransformRefusal =
+    | "PRIVACY_PROHIBITED_CLASS"
+    | PrivacyTransformRefusalCode
+    | TextMinimizationRefusalCode;
 
 export type PrivacyTransformResult =
     | { readonly ok: true; readonly context: ReasoningContextV1 }
@@ -109,6 +138,21 @@ export function transformForReasoning(input: {
     policy: PrivacyPolicyV1;
     knowledge: readonly KnowledgeReference[];
 }): PrivacyTransformResult {
+    // Policy validity is checked BEFORE any element is examined. A policy asking
+    // for a class this platform cannot detect is wrong whether or not a given
+    // request happens to contain text — deciding it from the data would make the
+    // refusal depend on which message arrived.
+    const requestedMinimizers = input.policy.required_text_minimizers ?? [];
+    const minimizerCheck = validateTextMinimizationRequest(requestedMinimizers);
+    if (!minimizerCheck.ok) {
+        return {
+            ok: false,
+            refusal_code: minimizerCheck.refusal_code,
+            detail: `Privacy policy ${input.policy.key}: ${minimizerCheck.detail}`,
+            transformations: [],
+        };
+    }
+
     const prohibited = input.classification.elements.filter((e) =>
         input.policy.prohibited_classes.includes(e.information_class),
     );
@@ -125,6 +169,7 @@ export function transformForReasoning(input: {
 
     const admitted: Record<string, unknown> = {};
     const transformations: TransformationRecord[] = [];
+    const textMinimizations = new Map<TextMinimizationClass, TextMinimizationRecord>();
 
     for (const element of input.classification.elements) {
         const outcome = applyTransformation({ transformation: element.transformation, value: element.value });
@@ -166,7 +211,45 @@ export function transformForReasoning(input: {
             continue;
         }
 
-        admitted[element.key] = outcome.value;
+        // Content-aware minimization runs BEFORE structural redaction, and the
+        // order is not interchangeable. `redactObjectForAi` in `strict` mode
+        // reacts to an email-shaped value by replacing the WHOLE string, so
+        // "Email me at jane@example.com about Friday" becomes "Em…@e….redacted"
+        // — the sentence is destroyed along with the address, and there is
+        // nothing left for a content-aware pass to preserve. Removing the
+        // embedded identifier first means the structural pass sees ordinary
+        // prose and leaves it alone, which is the whole point of this slice.
+        let value = outcome.value;
+        if (requestedMinimizers.length > 0 && typeof value === "string") {
+            const minimized = minimizeTextContent(value, requestedMinimizers);
+            if (!minimized.ok) {
+                transformations.push({
+                    ...base,
+                    disposition: "refused",
+                    support: "unsupported",
+                    rationale: minimized.detail,
+                });
+                return {
+                    ok: false,
+                    refusal_code: minimized.refusal_code,
+                    // As above: no element key, and — more importantly here — no
+                    // fragment of the text being minimized.
+                    detail: `Privacy policy ${input.policy.key}: ${minimized.detail}`,
+                    transformations,
+                };
+            }
+            value = minimized.text;
+            for (const record of minimized.records) {
+                const existing = textMinimizations.get(record.detector_key);
+                textMinimizations.set(record.detector_key, {
+                    detector_key: record.detector_key,
+                    redaction_kind: record.redaction_kind,
+                    replaced_count: (existing?.replaced_count ?? 0) + record.replaced_count,
+                });
+            }
+        }
+
+        admitted[element.key] = value;
         transformations.push({
             ...base,
             disposition: "admitted",
@@ -186,6 +269,10 @@ export function transformForReasoning(input: {
             classes_present: input.classification.classes_present,
             pii_mode: input.policy.pii_mode,
             transformations,
+            // Stable order, independent of which element happened to be first.
+            text_minimizations: [...textMinimizations.values()].sort((a, b) =>
+                a.detector_key.localeCompare(b.detector_key),
+            ),
         },
     };
 }

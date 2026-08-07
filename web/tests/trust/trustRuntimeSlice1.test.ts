@@ -185,6 +185,7 @@ describe("S1 happy path — one contract produces one complete Decision Package"
                 classes_present: [],
                 pii_mode: "strict",
                 transformations: [],
+                text_minimizations: [],
             },
             proposal: {
                 recommendation: {},
