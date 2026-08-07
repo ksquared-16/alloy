@@ -70,8 +70,28 @@ export type ReasoningUsageInput = {
     readonly escalation_level: number;
     readonly latency_ms: number;
     readonly cache_utilized: boolean;
+    /** Strategy-MEASURED cost. Always present, zero when no provider ran. */
     readonly provider_cost_units: number;
     readonly outcome: string;
+    /**
+     * Provider execution facts, present only when a provider participated.
+     *
+     * Every field is optional and omission means **not reported** — never zero
+     * and never inferred. A deterministic execution supplies none of this, and
+     * that absence is the honest record of an execution in which no provider
+     * took part. Reasoning KIND is deliberately not here: `strategy_kind`
+     * already records it and `executionCapability.ts` derives the rest, so a
+     * second column would be a second truth to keep in sync.
+     */
+    readonly provider_key?: string | null;
+    readonly model_key?: string | null;
+    readonly model_version?: string | null;
+    /** `local` | `remote` | `unknown` as ASSERTED by the adapter. Never derived from the provider name. */
+    readonly execution_location?: string | null;
+    readonly input_units?: number | null;
+    readonly output_units?: number | null;
+    /** What the PROVIDER said it cost. Distinct from the strategy-measured `provider_cost_units`. */
+    readonly provider_reported_cost_units?: number | null;
 };
 
 export type TrustRepository = {
@@ -85,6 +105,33 @@ export type TrustRepository = {
     insertObservation(input: TrustObservationInput): Promise<void>;
     insertReasoningUsage(input: ReasoningUsageInput): Promise<void>;
 };
+
+/**
+ * The provider telemetry columns, included only when the caller supplied them.
+ *
+ * The distinction between an OMITTED key and an explicit `null` is the whole
+ * point. Omitted means the execution said nothing, so the column stays NULL and
+ * a deterministic row asserts no provider. An explicit `null` means the caller
+ * knows the value is absent. Zero-filling either would turn silence into a
+ * measurement — the same misstatement `parseProviderCostUnits` exists to stop.
+ */
+const PROVIDER_TELEMETRY_COLUMNS = [
+    "provider_key",
+    "model_key",
+    "model_version",
+    "execution_location",
+    "input_units",
+    "output_units",
+    "provider_reported_cost_units",
+] as const;
+
+function providerTelemetryColumns(input: ReasoningUsageInput): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const key of PROVIDER_TELEMETRY_COLUMNS) {
+        if (input[key] !== undefined) out[key] = input[key];
+    }
+    return out;
+}
 
 function contractRow(contract: DecisionContractV1): Record<string, unknown> {
     return {
@@ -187,6 +234,10 @@ export function createSupabaseTrustRepository(): TrustRepository {
                 cache_utilized: input.cache_utilized,
                 provider_cost_units: input.provider_cost_units,
                 outcome: input.outcome,
+                // Only when the execution actually supplied them. An omitted
+                // key leaves the column NULL, so a deterministic row asserts no
+                // provider and an unreported token count never becomes 0.
+                ...providerTelemetryColumns(input),
             });
             if (error) throw new Error(`trust.insertReasoningUsage: ${error.message}`);
         },

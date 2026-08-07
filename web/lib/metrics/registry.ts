@@ -282,7 +282,7 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         description:
             "Share of governed decisions resolved without escalating beyond deterministic reasoning. " +
             "Numerator: usage rows with escalation_level = 0. Denominator: all usage rows in window. " +
-            "Local-model execution is NOT distinguishable from deterministic in the current schema.",
+            "Local-model execution is now distinguishable: `trust_reasoning_usage.execution_location` records it when an adapter asserts it.",
         pack: "trust",
         computationKind: "event_window",
         format: "percent",
@@ -295,7 +295,7 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         label: "Escalated decisions",
         description:
             "Governed decisions that escalated beyond deterministic reasoning (escalation_level > 0). " +
-            "This counts escalation DEPTH, not provider usage \u2014 the schema records no provider identity. " +
+            "This counts escalation DEPTH, not provider usage; provider identity is recorded separately in `provider_key`. " +
             "Authoritative source: trust_reasoning_usage.escalation_level.",
         pack: "trust",
         computationKind: "event_window",
