@@ -200,4 +200,38 @@ describe("resolveCanonicalWorkTemplateActionOptions", () => {
 
         expect(options).toHaveLength(0);
     });
+
+    it("offers Create Work Item when command_set has create_work_item and Process Actions still keys create_task", () => {
+        const options = resolveCanonicalWorkTemplateActionOptions({
+            actionRegistry: [
+                {
+                    key: "create_task",
+                    label: "Create Task",
+                    action_scope: "lifecycle",
+                    placements: [{ placement_id: "p1", surface_label: "x", placement_label: "y", is_active: true }],
+                    operator_stages: [],
+                    action_definition_id: "d1",
+                    base_action_label: "Create Work Item",
+                    display_order: 1,
+                },
+            ],
+            stageActionCatalog: { version: 1, candidate_actions: [] },
+            stageDefinition: { journey_segment: "family" },
+            process: {
+                id: "proc-1",
+                key: "enrollment",
+                stages: [],
+                command_set_v1: {
+                    version: 1,
+                    commands: [{ capability_key: "create_work_item", enabled: true }],
+                },
+            } as never,
+        });
+
+        const workItem = options.find((row) => row.intentKey === "create_work_item");
+        expect(workItem).toBeTruthy();
+        expect(workItem?.label).toBe("Create Work Item");
+        expect(workItem?.ref).toBe("create_work_item");
+        expect(options.some((row) => row.ref === "create_task")).toBe(false);
+    });
 });
