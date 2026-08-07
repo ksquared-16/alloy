@@ -42,6 +42,14 @@ authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_pr
 `preflight.ok: true` with evidence [`w6-m1-preflight.json`](w6-m1-preflight.json). M1 moves **`unmet` →
 `operator_review`** — the first §11 migration to clear the shared-apply gate. **It is still not applied**, the
 exit criterion is still unmet, and **Accept must not advance the spine** (§6, §11)
+· **W-7 dual-read LANDED, switch NOT thrown 2026-08-07** (assignment `asg_45c7bf402913d3`) — the dispatched
+objective read "W-6 seeds (done)"; **W-6 has not seeded**, M1 is `authorized_awaiting_apply`, and Q4 still
+stands at 2, so the flip would have *been* the L1 lockout rather than risked it (§5 Q4: "W-7 cannot precede
+it"). Step 2 of the ritual shipped instead — it is the half that cannot be retrofitted after a switch. The
+whole switch is now one constant, `ABSENT_PROFILE_ENFORCEMENT`. Two defects in the one-line reading of "flip to
+deny" were found *before* the flip: **denial must force empty allow-lists**, or a principal with self-written
+`user_department_access` rows keeps the departments its missing profile withheld — W-7 would ship the fail-open
+one table over; and a **malformed scope value must not become a lockout** (§6)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
@@ -856,6 +864,85 @@ means Q4 can grow through a path §6 does not name, so M1 must re-derive it rath
 §14.3.7 and because the only change is a test file. The typecheck result is recorded in the evidence file
 rather than claimed here.
 
+#### Wave 1 under the DX7 fixture reissue — **DONE 2026-08-07**, assignment `asg_9e868dd2d78c27`
+
+The fourth issuance of W-1…W-3. §4's rule holds a fourth time: **re-execute rather than re-assert.** The
+finding of this run is that **W-5 invalidated the durable repair the previous run prescribed for W-2 — one
+commit after it was written.**
+
+| Field | Value |
+|---|---|
+| Base | `3e000209a` @ `agent/cursor/6-vacilando-v3-4-conversational-director` — **3 web commits** since the 2026-08-06 base `c66d57305`: `a3e01ddb5` (RL-1 widening), `0dd598e7a` (W-4 re-execution), `ab9c5730b` (**W-5**). API routes **570**, unchanged; migrations 312 → **314** |
+| Suites | **66 green** — `analyticsRouteGates` 47 · `selfAuthorityMutation` 14 · `permissionGrid` 5 |
+| Changed by this assignment | **No source, test, schema or migration file.** This record is the deliverable |
+| Evidence | [`wave1-dx7-reissue-evidence.json`](./wave1-dx7-reissue-evidence.json) |
+
+**W-1 / RL-1 — holds, and its subject did not move.** The analytics family is **27** files (floor 27) and the
+class-wide G2 subject is **92 of 570** (floor 92) — both unchanged from 2026-08-06, consistent with three web
+commits none of which added an analytics route. **Both ratchets sit exactly at the live count, so no slack was
+owed and none was taken.** The live values were re-derived by inverting each floor assertion to observe the
+actual, then restoring it; the lock's committed state is unchanged by this run.
+
+**W-2 / RL-11 — the guard holds; the *prescribed repair* is already obsolete.**
+
+The 2026-08-06 record prescribed the durable repair as a change of question: *enumerate authority writers by
+table across `web/lib` and `web/app`, not by name across route files.* Run today, that census **omits the
+workstream's own headline route.** `ab9c5730b` (W-5) moved membership writes behind two Postgres RPCs in
+`lib/admin/membershipWithProfile.ts` — `create_membership_with_access_profile` and
+`replace_membership_with_access_profile`. So:
+
+- `PATCH /api/admin/users/[userId]/role` — **the route W-2 exists to guard** — now contains **no occurrence of
+  `user_roles` at all**, not even the doc comment that made the last run's fifth writer findable. A by-table
+  census scores it zero.
+- The same is true of `POST /api/admin/users` and `lib/dev/createOrgAndAssignAdmin.ts`.
+
+**No behaviour regressed.** `isSelfAuthorityMutation` / `selfAuthorityMutationResponse` are still *called* by
+all three guarded routes (`role:23`, `remove:22`, `access-scope:82`), verified by call site, and the 14 tests
+are green. What broke is the **definition of RL-11's subject**. The durable key is now *the RPC names plus the
+tables* — and that key will break again the next time a write is consolidated. The only question that does not
+decay is *"what writes authority"*, and no text census answers it.
+
+**One writer not in any prior enumeration.** `POST /api/admin/users` (`:105`) creates a membership and carries
+no self-authority guard. It is **not** a self-elevation vector today: the target user id comes from
+`inviteUserByEmail`'s result rather than the request body, and inviting an already-registered address errors
+before the write. That is a protection **incidental to Supabase invite semantics, not a guard**, and it was not
+exercised live here.
+
+**W-2's exit criterion remains not met** — unchanged from 2026-08-06, and for the same two
+`user_department_access` paths. `app/api/admin/departments/route.ts` no longer inserts directly; it delegates
+to `ensureLifecycleDepartmentWorkspaceAccess` (`:153`), so the path is identical in effect and is now
+*additionally* invisible to a by-table route census. The remedy is still W-8's scope, not Wave 1's.
+
+**W-3 / RL-2 — green** across a tree that grew 312 → **314** migrations. Both new migrations
+(`20260807090000_membership_profile_atomic_create.sql`, `20260807140000_backfill_membership_access_profiles.sql`)
+are W-5/W-6 artifacts and seed no permission keys, so RL-2's subject is unmoved. C13 → W-11 still owns the
+restore question; nothing for Wave 1 to do.
+
+**Tree state during this run — recorded, not resolved, and not this assignment's work.** Three uncommitted
+changes were present in the worktree:
+
+1. `web/lib/admin/resolveAdminAccessCore.ts` — a **W-7 dual-read absent-profile instrument**
+   (`ABSENT_PROFILE_ENFORCEMENT = "legacy-all"`, behaviour-preserving today), with an untracked companion
+   `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts`. **W-7 is Wave 2, lockout class L1 —
+   the class this assignment explicitly prohibits.** Left untouched.
+2. `web/tests/access/analyticsRouteGates.test.ts` — **+107 lines** adding an RL-1 alias-completeness lock
+   (`getAdminContext` as a `@deprecated` alias of `getAdminContextCached`; `loadAdminAccessBundleCached` as a
+   second exported name for the raw primitive). This is the file named as this assignment's deliverable, and it
+   was **edited concurrently while this run was in progress** — the suite total moved 61 → 66 mid-session. Not
+   authored here, and deliberately not reverted.
+
+**The 66 green were therefore measured on a working tree, not on `3e000209a`.** That is the honest scope of
+this evidence, and it is the reason this record claims a re-execution rather than a certification.
+
+**Not run: typecheck** — as on 2026-08-04 and 2026-08-06. No live database query, so W-0's counts are now
+**seven days old** and M1 must still re-derive Q4 rather than cite it.
+
+**A second identity divergence.** This assignment arrives under mission `msn_bc33a72e3138ebc215`, titled
+*"DX7 Fixture — Ready Promotion"*, against a file whose header is `msn_e9133cdade883793d2`. `X-2` / `DR-4` /
+`QE-15` already register the *document* divergence; this run adds that the **mission issuing Wave 1 has itself
+changed identity, and its title describes a fixture rather than an access sprint.** Whether Wave 1 should still
+be re-issued at all is a Director question, raised here rather than absorbed.
+
 ### W-4 — Service-client principal check *(M · I-3 · addresses G6)*
 
 517 of 539 route files hold a service-role client. I-3 requires every one to resolve and gate a principal
@@ -1403,15 +1490,88 @@ post-apply criterion and the migration is unapplied.
 Flip `resolveAdminAccessCore.ts:152-161` from "missing profile ⇒ both scopes `all`" to deny, and delete the
 comment that calls it a legacy transition.
 
-Full ritual: W-6 seeds (done), then dual-read — resolve both answers, enforce the old, log every principal for
+Full ritual: W-6 seeds, then dual-read — resolve both answers, enforce the old, log every principal for
 whom they differ. **A divergence after W-5 and W-6 means a membership was created outside the atomic path**,
 which is exactly the defect worth finding before the switch, not after.
+
+**The switch is BLOCKED, and the ritual's first precondition is the reason (2026-08-07, `asg_45c7bf402913d3`).**
+The assignment's objective reads "W-6 seeds (done)". W-6 has **not** seeded. M1 is
+`authorized_awaiting_apply` — authored, preflighted, operator-authorized, and **never applied**, because no
+worker-reachable write channel to the shared target exists (§6 W-6). W-0 Q4 therefore still stands at **2**
+`(user, org)` pairs with no profile row. Flipping the fallback today denies those 2 principals every row, which
+is not a side effect of the switch — **it is lockout class L1 itself**, the class this workstream is filed
+under. §5's Q4 row already ruled on it: *"M1 is sized at exactly 2 rows. W-7 cannot precede it."* The flip was
+not made. **`(done)` in the dispatched objective is the only thing here that was stale**; the plan of record
+was right and the assignment text was wrong, so the plan won.
+
+**What was delivered instead is step 2, which is the half that is only buildable now.** A dual-read cannot be
+retrofitted after a switch — once the fallback is gone there is no second answer to compare against, and the
+observation window the exit criterion depends on can never be opened. Building it while blocked is not
+consolation work; it is the correct ordering, and the block bought the time to do it properly.
+
+**`web/lib/admin/resolveAdminAccessCore.ts`** — behaviour is unchanged by construction:
+
+- `resolveScopeAnswerFromProfile(profileRow, mode)` — pure, both answers derivable from one function.
+- `dualReadScopeAnswer(profileRow)` — resolves both, returns `{enforced, shadow, diverges}`.
+- `ABSENT_PROFILE_ENFORCEMENT: "legacy-all" | "deny"` — **the whole switch is this one constant.** Flipping it
+  to `deny` and deleting the three comment lines above it *is* W-7's switch commit. The legacy-transition
+  comment named in the objective is **already deleted** — the code no longer claims the fail-open is a
+  transitional state; it names it as the thing a constant withholds.
+- Divergences log as `[access-identity][W-7][scope-divergence] where=… user_id=… org_id=… enforced=… shadow=…
+  reason=absent_profile_row` — identifiers only, greppable, no free text.
+
+**Two findings the implementation forced, neither of which the section anticipated.**
+
+1. **Deny is not `restricted`. Deny is `restricted` *plus explicitly empty allow-lists*.** The naive flip sets
+   both dimensions to `restricted` and lets control fall into the existing branches, which then read
+   `user_department_access` / `user_site_access` for that principal. For a membership with no profile row those
+   tables are *usually* empty — but "usually empty" is not a denial, it is a coincidence of another table's
+   contents. §5 records `user_department_access` as a **sixth authority table with a self-authority write path
+   that W-8 arms**. Under the naive flip, a principal who can insert its own rows there would grant itself
+   exactly the departments its missing profile was supposed to withhold — W-7 would ship the fail-open it
+   exists to close, one table over. The `denyAll` flag forces `[]` on both dimensions and short-circuits both
+   reads. **This is a real defect in the one-line reading of "flip to deny", found before the flip rather than
+   after.**
+2. **A malformed scope value must not become a lockout.** Denial is reserved for an **absent** row. A profile
+   row storing `"nonsense"` or `""` resolves `all`, as it does today — otherwise W-7 silently converts a data-
+   quality problem into an L1 event. Locked by test.
+
+**The preview path was brought under the same constant, deliberately.**
+`resolveAdminAccessDimensionsForOrgMember` (§8, C11/W-21) carried an identical fallback. The objective names
+only the enforcement path, and leaving the preview alone would have been the literal reading — but it would
+mean that on the day the constant flips, admin settings displays `all` for a principal the resolver denies.
+That is C11's displayed-vs-actual divergence, newly created by W-7 rather than inherited. Both paths now read
+`ABSENT_PROFILE_ENFORCEMENT`, so **both flip together and neither can drift**. Enforcement is unchanged today,
+so this widens nothing; it is not a substitute for W-21's consolidation.
 
 **QA.**
 - Tier C: delete a profile row for a fixture principal, assert denial rather than `all`.
 - Tier C: the same principal with a profile row present is unaffected.
 - Tier D: one authenticated browser pass on `:3020` confirming a normally-configured operator is unaffected.
+
+**QA status — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts`, 10 tests green.** Both
+named Tier C cases are covered at the resolver's decision layer, plus: a stored restriction still reads from
+the profile and not the mode; denial is distinguishable from a stored double-restriction (`denyAll` set vs
+clear); the dual read diverges *exactly* when the row is absent across all four stored combinations; the
+malformed-value case. One test asserts `ABSENT_PROFILE_ENFORCEMENT === "legacy-all"` — **a guard, not
+decoration: it fails the build if anyone flips the switch while M1 is unapplied.** Full brokered typecheck
+`rc=0`; the seven neighbouring access suites (51 tests) pass unchanged.
+
+**Honest limits.** These are pure-function tests over the decision layer, not fixture-principal integration
+tests against a live tenant — the same authorization boundary that blocks M1 blocks those, exactly as it did
+for RL-4's Tier C. **Tier D is not run** and should not be, since nothing user-visible changed. Neither is
+evidence that the *switch* is safe; they are evidence that the answer the switch will enforce is correct.
+
 **Exit.** Zero divergences across the observation window; switch commit removes the fallback branch.
+**Unmet, and now precisely bounded.** The observation window **cannot open until M1 applies** — before then the
+dual read diverges for the 2 known profile-less pairs by construction, so a divergence count taken now measures
+the unapplied backfill, not an escape from W-5's atomic path. Remaining work, in order: (1) apply M1;
+(2) re-run W-0 Q4 → expect 0; (3) open the observation window and grep the divergence marker — **any** hit is a
+membership created outside the atomic path and is a W-5 defect, not a W-7 one; (4) flip
+`ABSENT_PROFILE_ENFORCEMENT` to `"deny"` and update the guard test. Steps 2–4 are minutes of work. **Step 1 is
+the entire blocker, and it is the same missing write channel that blocks W-6, W-9 and the other seven §11
+migrations** — W-7 is now the second workstream to terminate on it, which is the evidence that the channel gap
+is programme-level and not W-6's local misfortune.
 
 ### W-8 — No role widens a scope dimension *(M · I-20 · closes C8)*
 
@@ -1861,7 +2021,7 @@ contributor deleting one has to do it on purpose.
 | **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **LIVE** — `web/tests/admin/permissionGrid.test.ts` |
 | **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
 | **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (14 green): a source-level lock that no product membership writer calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; needs a live tenant this assignment was not authorized to write. Do not read this row as "atomicity is proven" until it runs |
-| **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | proposed |
+| **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | proposed |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
