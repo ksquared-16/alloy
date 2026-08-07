@@ -23,6 +23,7 @@ import {
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
+import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -628,19 +629,14 @@ function SummaryBody({
                         >
                             <CurrentWorkActionButtonContent action={dominant} />
                         </button>
-                        {helpful.map((action) => (
-                            <button
-                                key={action.key}
-                                type="button"
-                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                data-work-supporting-action={action.key}
-                                onClick={() => onAction(action)}
-                                onMouseEnter={() => onWarm(action)}
-                                onFocus={() => onWarm(action)}
-                            >
-                                <CurrentWorkActionButtonContent action={action} />
-                            </button>
-                        ))}
+                        {helpful.length > 0 ?
+                            <CurrentWorkTourGroupedActions
+                                actions={helpful}
+                                onAction={onAction}
+                                onWarm={onWarm}
+                                variant="summary"
+                            />
+                        :   null}
                         {subordinateOutcome ?
                             <button
                                 type="button"

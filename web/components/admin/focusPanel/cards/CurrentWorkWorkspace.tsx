@@ -8,6 +8,7 @@ import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeCon
 import CurrentWorkActivityPreview, {
     type CurrentWorkActivityPreviewItem,
 } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
+import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
 import { isCurrentWorkActionExecutable } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import type {
     CurrentWorkActionVM,
@@ -432,22 +433,11 @@ export default function CurrentWorkWorkspace({
                             data-work-section="more-actions"
                         >
                             <p className="alloy-os-currentwork-workspace__section-title">More actions</p>
-                            <ul className="alloy-os-currentwork-workspace__action-list">
-                                {helpfulActions.map((action) => (
-                                    <li key={action.key}>
-                                        <button
-                                            type="button"
-                                            className="alloy-os-currentwork-workspace__action-row"
-                                            data-work-supporting-action={action.key}
-                                            disabled={action.disabled}
-                                            title={action.disabledReason ?? undefined}
-                                            onClick={() => onAction(action)}
-                                        >
-                                            {action.label}
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                            <CurrentWorkTourGroupedActions
+                                actions={helpfulActions}
+                                onAction={onAction}
+                                variant="workspace"
+                            />
                         </section>
                     :   null}
 
