@@ -40,6 +40,8 @@ export type CreateChildPayload = {
     first_name?: string | null;
     last_name?: string | null;
     dob?: string | null;
+    /** Child profile gender (customer_member field_values). */
+    gender?: "female" | "male" | null;
     /** Optional backing person record for the child. */
     person_id?: string | null;
     relationship?: string | null;

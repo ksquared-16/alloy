@@ -29,6 +29,7 @@ export type IntakeFactType =
     | "date"
     | "dob"
     | "age_years"
+    | "gender"
     | "location_label"
     | "address"
     | "program_interest"
@@ -71,6 +72,8 @@ export type IntakePersonCandidate = {
     age_years: number | null;
     /** Derived from DOB when available — preferred for display. */
     calculated_age: Pick<DerivedFieldResult, "value" | "display"> | null;
+    /** Child profile gender when parsed from intake (female|male). */
+    gender?: "female" | "male" | null;
     program_interest: string | null;
     source_fact_ids: string[];
     confidence: IntakeFactConfidence;

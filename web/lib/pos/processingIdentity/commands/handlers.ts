@@ -342,6 +342,7 @@ const createChild: ProcessingIdentityCommand<CreateChildPayload, { child_id: str
             last_name: input.last_name ?? null,
             dob: input.dob ?? null,
             relationship: input.relationship ?? "child",
+            gender: input.gender ?? null,
         });
         return refResult([{ targetType: "child", recordId: res.id, created: res.created }], {
             child_id: res.id,

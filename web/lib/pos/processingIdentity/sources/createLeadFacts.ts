@@ -101,6 +101,18 @@ export function extractFactsFromCreateLeadHousehold(
                 evidence: "create_lead:intake",
             });
         }
+        if (child.gender) {
+            push({
+                fact_id: `${prefix}:gender`,
+                fact_type: "gender",
+                raw_value: child.gender,
+                normalized_value: child.gender,
+                confidence: child.confidence,
+                validation_state: child.validation_state,
+                role_hint: "child",
+                evidence: "create_lead:intake",
+            });
+        }
     }
 
     return facts;

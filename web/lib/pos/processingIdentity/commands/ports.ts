@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
 
 export type PortContext = {
     supabase: SupabaseClient;
@@ -62,6 +63,7 @@ export interface IdentityCommandPorts {
             last_name: string | null;
             dob: string | null;
             relationship: string;
+            gender?: "female" | "male" | null;
         },
     ): Promise<UpsertResult>;
 
@@ -242,7 +244,13 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                 .select("id")
                 .single();
             if (error || !data) throw new Error(error?.message ?? "create_child_failed");
-            return { id: String((data as { id: string }).id), created: true };
+            const childId = String((data as { id: string }).id);
+            if (input.gender === "female" || input.gender === "male") {
+                await upsertCustomerMemberConfigFieldValues(ctx.supabase, ctx.orgId, childId, {
+                    gender: input.gender,
+                });
+            }
+            return { id: childId, created: true };
         },
 
         async updateChild(ctx, input) {

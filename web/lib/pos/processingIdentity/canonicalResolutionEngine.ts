@@ -99,6 +99,7 @@ function provisionalForSubject(
             dob: child.dob ?? null,
             first_name: child.first_name,
             last_name: child.last_name,
+            ...(child.gender ? { gender: child.gender } : {}),
         };
     }
     if (role === "household") {

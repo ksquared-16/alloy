@@ -24,8 +24,6 @@ import { GenericBosCommandSessionBody } from "@/app/adminV2/components/aiCommand
 import { getBosCommandAdapterRegistration } from "@/lib/bos/commandSession/adapters/bosCommandAdapterRegistry";
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
-import { bosDraftToEligiblePayload } from "@/lib/bos/commandSession";
-import { createLeadDisplayName } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
 import { resolveCreatedRecordProcessContextHref } from "@/lib/platform/commands/createLead/resolveCreatedRecordProcessContextHref";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import {
@@ -544,17 +542,22 @@ function SuccessBody(props: {
             className={`mx-auto w-full space-y-4 ${props.compact ? "max-w-none" : "max-w-md"}`}
         >
             <WorkspaceCard padded>
-                <p className={WS_EYEBROW}>Complete</p>
-                <p className="mt-1.5 text-[15px] font-semibold text-alloy-midnight">{copy}</p>
+                <p className={WS_EYEBROW}>Lead created</p>
+                <p className="mt-1.5 text-[15px] font-semibold text-alloy-midnight">
+                    Family and child records were created successfully.
+                </p>
                 {processingCaseId ? (
                     <p className="mt-2 text-[12px] text-alloy-midnight/55">
-                        Processing review finished — records were committed through identity.
+                        Committed through Processing identity.
                     </p>
                 ) : (
                     <p className="mt-2 text-[12px] text-alloy-midnight/55">
                         Lead is ready in the workspace queue.
                     </p>
                 )}
+                {copy && copy !== "Lead created" && copy !== "Lead created." ? (
+                    <p className="mt-1 text-[12px] text-alloy-midnight/55">{copy}</p>
+                ) : null}
             </WorkspaceCard>
             <div className={`flex flex-col gap-2 ${props.compact ? "" : "sm:flex-row sm:flex-wrap"}`}>
                 <a
@@ -573,6 +576,14 @@ function SuccessBody(props: {
                 <button
                     type="button"
                     className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
+                    data-bos-command-session-done
+                    onClick={props.onReturn}
+                >
+                    Done
+                </button>
+                <button
+                    type="button"
+                    className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
                     data-bos-command-session-create-another
                     onClick={props.onCreateAnother}
                 >
@@ -585,14 +596,6 @@ function SuccessBody(props: {
                     onClick={props.onReturnToBos}
                 >
                     Return to BOS
-                </button>
-                <button
-                    type="button"
-                    className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
-                    data-bos-command-session-return-workspace
-                    onClick={props.onReturn}
-                >
-                    Return to Workspace
                 </button>
             </div>
         </div>
@@ -613,7 +616,7 @@ function ProcessingReviewBody(props: {
             <div>
                 <p className={WS_EYEBROW}>Processing</p>
                 <p className="mt-1 text-[13px] text-alloy-midnight/70">
-                    Review the household, then confirm once to create the lead and related records.
+                    Confirm once to create the lead and related records.
                 </p>
             </div>
             <IdentityReviewPanel
@@ -630,9 +633,7 @@ function ProcessingReviewBody(props: {
                         props.onFail("Commit completed but no lead record id was returned.");
                         return;
                     }
-                    const payload = bosDraftToEligiblePayload(props.session.draft);
-                    const name = createLeadDisplayName(payload);
-                    const successCopy = name ? `Created lead for ${name}.` : "Lead created.";
+                    const successCopy = "Lead created";
                     const focusPanelHref = resolveCreatedRecordProcessContextHref({
                         recordId: opportunityId,
                         workUnitKey: null,
@@ -672,7 +673,7 @@ function CommandFooter(props: {
             ) : null}
             {session.phase === "executing" ? (
                 <p className="mb-2 text-[12px] text-alloy-midnight/70">
-                    Continuing to Processing review…
+                    Checking for existing records…
                 </p>
             ) : null}
             <div className={`flex flex-wrap items-center gap-2 ${props.compact ? "gap-2.5" : ""}`}>
