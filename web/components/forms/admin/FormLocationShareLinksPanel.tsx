@@ -93,7 +93,7 @@ export function FormLocationShareLinksPanel({
     );
 
     /** Persisted path (any session, any operator) → session cache → nothing. */
-    const resolveLinkEmbedUrl = (link: FormPublicLinkRow): string | null => {
+    const resolveLinkEmbedUrl = (link: { id: string; metadata?: Record<string, unknown> }): string | null => {
         const persisted = readShareEmbedPath(link.metadata);
         if (persisted) {
             const origin = typeof window === "undefined" ? "" : window.location.origin;
