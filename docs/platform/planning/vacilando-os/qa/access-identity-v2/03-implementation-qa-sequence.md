@@ -26,7 +26,9 @@ authorization (§4)
 · **W-0 re-issued 2026-08-07** (mission `msn_e7894cb7225bae3c2b`, assignment `asg_86eb0e4a95142e`) — counts
 not re-asserted; **run 3 still not executed**, same single authorization outstanding. The run-3 *preparation*
 was audited and two plumbing defects were found and recorded: the insertion anchor does not match the query
-it anchors to under `JSON.parse`, and the obvious execution route fails closed on a stale `query_hash` (§4)
+it anchors to under `JSON.parse`, and the obvious execution route fails closed on a stale `query_hash` — the
+second was resolved the same day by `asg_f34761f0f418ee`, whose rename to `runs_1_2_query_hash` leaves the
+artifact one-authorization-ready; **that rename must not be reverted** (§4)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
@@ -378,9 +380,48 @@ falls back to the artifact's own `query_hash` whenever no `expectedQueryHash` is
 `743cd63b…` fails the run with `query_hash_mismatch`** — and correcting that hash in the same edit would destroy
 runs 1 and 2's verifiability against this file. The route that works is a **dedicated run-3 artifact carrying no
 `query_hash` key at all**: the comparison is then skipped and the registry computes the hash itself, so no
-precomputed `sha256` is needed — which matters, because the worker still cannot compute one. That artifact was
-**not created here**: it is a third file, this assignment's scope names two, and creating it would pre-empt the
-still-unanswered run-3-alone-vs-fold-into-W-23 decision above.
+precomputed `sha256` is needed — which matters, because the worker still cannot compute one.
+
+**That trap was resolved the same day, by a different route than the one recommended.** Assignment
+`asg_f34761f0f418ee`, running concurrently in this worktree, promoted the amended SQL into `combined_query`
+*and* renamed the top-level `query_hash` to `runs_1_2_query_hash` in the same edit — reaching the safe
+end-state without a third file. Verified against the live artifact: `combined_query` now carries the
+`target_identity` block, and neither `query_hash` nor `combined_query_hash` exists at top level, so the
+registry computes the hash itself. Runs 1 and 2 stay verifiable against the git blob recorded in
+`runs_1_2_query_provenance`, which is a stronger anchor than an in-file copy would have been.
+**The hazard is now inverted:** re-introducing a top-level key named `query_hash` holding `743cd63b…` would
+silently re-arm the mismatch and fail every run-3 attempt. That key must not be "restored".
+
+**3. The dedicated-artifact route cannot execute at all — and this is the finding that settles the choice.**
+Recorded by `asg_f34761f0f418ee`. The two paragraphs above treat the two routes as alternatives, one tidier than
+the other. They are not alternatives. **`queryArtifactPath` is not selectable through any Director or operator
+path in the codebase.** It is a *default parameter* of `fulfillDatabaseCensusForMission`
+(`trusted-host-actions.mjs:489`), pinned to `wave0-authority-census.json`, and **all three of its call sites
+invoke it without that argument**:
+
+```
+trusted-host-director.mjs:70   the worker-decision path — the only path a paused worker can reach
+v2-api.mjs:329                 POST /api/v2/trusted-host/census
+v2-api.mjs:461                 the operator's authorize_mission_census decision handler
+```
+
+A dedicated `wave0-run3-census.json` would therefore never be opened by anything. The failure mode is the bad
+one: not a refusal, but a **silent success returning the wrong answers**. The census would run, validate, report
+green, and hand back the runs 1/2 counts — a fourth byte-identical run, carrying **no `target_identity` at all**
+— having spent the single operator authorization this workstream has been waiting on since 2026-08-06. The write
+side confirms the same pinning independently: `trusted-host-actions.mjs:379-383` hard-codes the census evidence
+path to this same file regardless of which artifact was read. **Read and write are both pinned to
+`wave0-authority-census.json`; only that file can be run 3.** Promotion was not the tidier option — it was the
+only executable one.
+
+This also re-dates the gap. Between 2026-08-06 and 2026-08-07 the improvement was authored but **unreachable**,
+sitting in `next_run_prepared.inserted_sql`, a key nothing reads. An authorization granted in that window would
+have produced the byte-identical run the plan explicitly names as the wrong outcome. That is now closed, and one
+operator authorization is the only remaining step.
+
+Consequently the run-3 *anchor* fields are now historical rather than pending — the insertion has been applied,
+and re-applying it would duplicate the `target_identity` key. They are retained because the encoding defect
+above remains a live trap for any future amendment.
 
 **Worker tooling, re-tested and refined.** The 2026-08-06 claim that `node` and `shasum` are permission-walled
 **holds**, with one correction worth having: `node --version` *is* allowed (v22.21.1) while `node -e` and
