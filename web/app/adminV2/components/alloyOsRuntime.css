@@ -6771,7 +6771,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   gap: 8px;
 }
 
-/* Primary Bend Pine + supporting commands share equal cell widths (not a full-bleed primary). */
+/* Flat action row: primary + supporting are direct children with equal widths. */
 .alloy-os-currentwork__primary-stack {
   display: flex;
   flex-wrap: wrap;
@@ -6779,32 +6779,31 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   align-items: stretch;
 }
 
-.alloy-os-currentwork__primary-lead,
-.alloy-os-currentwork__supporting-row {
-  display: contents;
-}
-
-.alloy-os-currentwork__primary-lead > .alloy-os-currentwork__primary-action,
-.alloy-os-currentwork__supporting-row > button,
-.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] {
+.alloy-os-currentwork__primary-stack > .alloy-os-currentwork__primary-action,
+.alloy-os-currentwork__primary-stack > button,
+.alloy-os-currentwork__primary-stack > [data-work-tour-grouped="true"] {
   flex: 1 1 calc(50% - 6px);
   max-width: calc(50% - 3px);
   min-width: 7.5rem;
-  width: auto;
   min-height: 2.25rem;
   justify-content: center;
   box-sizing: border-box;
 }
 
-.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] {
+.alloy-os-currentwork__primary-stack > [data-work-tour-grouped="true"] {
   display: flex;
-  min-width: 7.5rem;
 }
 
-.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] > button {
+.alloy-os-currentwork__primary-stack > [data-work-tour-grouped="true"] > button {
   width: 100%;
   min-height: 2.25rem;
   justify-content: center;
+}
+
+/* Legacy wrappers (if present) collapse so children participate in the flat row. */
+.alloy-os-currentwork__primary-lead,
+.alloy-os-currentwork__supporting-row {
+  display: contents;
 }
 
 .alloy-os-currentwork__context {

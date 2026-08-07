@@ -127,7 +127,8 @@ describe("Contact Family → Communications loop", () => {
     it("What's Next presents dominant action separately from supporting commands", () => {
         const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
         expect(card).toContain("alloy-os-currentwork__primary-stack");
-        expect(card).toContain("alloy-os-currentwork__supporting-row");
+        expect(card).toContain("data-work-primary-action");
+        expect(card).toContain("CurrentWorkTourGroupedActions");
         expect(card).toContain("CurrentWorkContextStrip");
         expect(card).toContain("View activity");
         expect(card).toContain("data-work-recent-activity");

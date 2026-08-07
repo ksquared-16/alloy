@@ -225,46 +225,37 @@ export default function CurrentWorkFocusedSurface({
             :   <>
                     <CurrentWorkContextStrip surface={surface} truth={truth} />
                     {dominant || helpful.length > 0 || subordinateOutcome ?
-                        <div className="alloy-os-currentwork__primary-stack" data-work-focused-actions="true">
+                        <div className="alloy-os-currentwork__primary-stack" data-work-focused-actions="true" data-work-supporting-row="true">
                             {dominant ?
-                                <div className="alloy-os-currentwork__primary-lead" data-work-primary-row="true">
-                                    <button
-                                        type="button"
-                                        className="alloy-os-currentwork__primary-action"
-                                        data-work-primary-action={dominant.key}
-                                        data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
-                                        onClick={() => onActionButton(dominant)}
-                                        onMouseEnter={() => onWarm(dominant)}
-                                        onFocus={() => onWarm(dominant)}
-                                    >
-                                        <CurrentWorkActionButtonContent action={dominant} />
-                                    </button>
-                                </div>
-                            :   null}
-                            {helpful.length > 0 || subordinateOutcome ?
-                                <div
-                                    className="alloy-os-currentwork__supporting-row"
-                                    data-work-supporting-row="true"
+                                <button
+                                    type="button"
+                                    className="alloy-os-currentwork__primary-action"
+                                    data-work-primary-action={dominant.key}
+                                    data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
+                                    onClick={() => onActionButton(dominant)}
+                                    onMouseEnter={() => onWarm(dominant)}
+                                    onFocus={() => onWarm(dominant)}
                                 >
-                                    {helpful.length > 0 ?
-                                        <CurrentWorkTourGroupedActions
-                                            actions={helpful}
-                                            onAction={onActionButton}
-                                            onWarm={onWarm}
-                                            variant="summary"
-                                        />
-                                    :   null}
-                                    {subordinateOutcome ?
-                                        <button
-                                            type="button"
-                                            className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                            data-work-action="record-outcome"
-                                            onClick={() => onActionButton(subordinateOutcome)}
-                                        >
-                                            <CurrentWorkActionButtonContent action={subordinateOutcome} />
-                                        </button>
-                                    :   null}
-                                </div>
+                                    <CurrentWorkActionButtonContent action={dominant} />
+                                </button>
+                            :   null}
+                            {helpful.length > 0 ?
+                                <CurrentWorkTourGroupedActions
+                                    actions={helpful}
+                                    onAction={onActionButton}
+                                    onWarm={onWarm}
+                                    variant="summary"
+                                />
+                            :   null}
+                            {subordinateOutcome ?
+                                <button
+                                    type="button"
+                                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                    data-work-action="record-outcome"
+                                    onClick={() => onActionButton(subordinateOutcome)}
+                                >
+                                    <CurrentWorkActionButtonContent action={subordinateOutcome} />
+                                </button>
                             :   null}
                         </div>
                     :   null}

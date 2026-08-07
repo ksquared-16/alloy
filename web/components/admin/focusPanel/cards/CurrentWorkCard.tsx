@@ -626,7 +626,6 @@ function SummaryBody({
     const outcomeBlockReason =
         !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
 
-    const hasSupporting = helpful.length > 0 || Boolean(subordinateOutcome);
     const recentActivity = activityItems.slice(0, 3);
 
     return (
@@ -646,43 +645,34 @@ function SummaryBody({
                 <CurrentWorkContextStrip surface={surface} truth={truth} />
                 {dominant ?
                     <div className="alloy-os-currentwork__primary-stack" data-work-primary-stack="true">
-                        <div className="alloy-os-currentwork__primary-lead" data-work-primary-row="true">
+                        <button
+                            type="button"
+                            className="alloy-os-currentwork__primary-action"
+                            data-work-primary-action={dominant.key}
+                            data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
+                            onClick={() => onAction(dominant)}
+                            onMouseEnter={() => onWarm(dominant)}
+                            onFocus={() => onWarm(dominant)}
+                        >
+                            <CurrentWorkActionButtonContent action={dominant} />
+                        </button>
+                        {helpful.length > 0 ?
+                            <CurrentWorkTourGroupedActions
+                                actions={helpful}
+                                onAction={onAction}
+                                onWarm={onWarm}
+                                variant="summary"
+                            />
+                        :   null}
+                        {subordinateOutcome ?
                             <button
                                 type="button"
-                                className="alloy-os-currentwork__primary-action"
-                                data-work-primary-action={dominant.key}
-                                data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
-                                onClick={() => onAction(dominant)}
-                                onMouseEnter={() => onWarm(dominant)}
-                                onFocus={() => onWarm(dominant)}
+                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                data-work-action="record-outcome"
+                                onClick={() => onAction(subordinateOutcome)}
                             >
-                                <CurrentWorkActionButtonContent action={dominant} />
+                                <CurrentWorkActionButtonContent action={subordinateOutcome} />
                             </button>
-                        </div>
-                        {hasSupporting ?
-                            <div
-                                className="alloy-os-currentwork__supporting-row"
-                                data-work-supporting-row="true"
-                            >
-                                {helpful.length > 0 ?
-                                    <CurrentWorkTourGroupedActions
-                                        actions={helpful}
-                                        onAction={onAction}
-                                        onWarm={onWarm}
-                                        variant="summary"
-                                    />
-                                :   null}
-                                {subordinateOutcome ?
-                                    <button
-                                        type="button"
-                                        className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                        data-work-action="record-outcome"
-                                        onClick={() => onAction(subordinateOutcome)}
-                                    >
-                                        <CurrentWorkActionButtonContent action={subordinateOutcome} />
-                                    </button>
-                                :   null}
-                            </div>
                         :   null}
                     </div>
                 :   null}
