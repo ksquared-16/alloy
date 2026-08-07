@@ -15,6 +15,7 @@ export type CurrentWorkActionSurface =
     | "header_delegate"
     | "form_delivery"
     | "process_transition"
+    | "subject_selector"
     | "unsupported";
 
 function actionRegistryKey(action: Pick<CurrentWorkActionVM, "key" | "handlerKey" | "actionRef" | "resolved">): string {
@@ -45,13 +46,22 @@ export function resolveCurrentWorkActionSurface(
         CurrentWorkActionVM,
         "key" | "handlerKey" | "category" | "actionRef" | "resolved"
     > &
-        Partial<Pick<CurrentWorkActionVM, "placement">>,
+        Partial<Pick<CurrentWorkActionVM, "placement" | "relatedSubjectResolution" | "requiresSubjectPicker">>,
 ): CurrentWorkActionSurface {
     const key = actionRegistryKey(action);
     if (!key || key === "mutation_command") return "unsupported";
 
     if (isProcessTransitionAction(action)) {
         return "process_transition";
+    }
+
+    // Related-subject commands (e.g. Move to Waitlist → enrollment child) resolve through the
+    // subject selector before execute — metadata on the VM, not the action name.
+    if (
+        action.relatedSubjectResolution === "enrollment_child"
+        || action.requiresSubjectPicker === true
+    ) {
+        return "subject_selector";
     }
 
     const canonical = canonicalActionDefinition(key);

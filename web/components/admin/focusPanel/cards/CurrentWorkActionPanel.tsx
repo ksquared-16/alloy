@@ -26,6 +26,10 @@ const OpportunityTourScheduleActionModal = dynamic(
         ),
     { ssr: false },
 );
+const CurrentWorkSubjectSelectorPanel = dynamic(
+    () => import("@/components/admin/focusPanel/cards/CurrentWorkSubjectSelectorPanel"),
+    { ssr: false },
+);
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -82,6 +86,43 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                 onClose={onClose}
                 onComplete={onComplete}
             />
+        );
+    }
+
+    if (surface === "subject_selector") {
+        return (
+            <aside
+                className="alloy-os-currentwork__action-panel"
+                data-work-action-panel="true"
+                data-work-action-panel-key={action.key}
+                data-work-action-surface="subject_selector"
+                aria-label={`${action.label} — choose child`}
+            >
+                <div className="alloy-os-currentwork__action-panel-header">
+                    <div>
+                        <p className="alloy-os-currentwork__action-panel-eyebrow">Helpful action</p>
+                        <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
+                        {action.description ?
+                            <p className="alloy-os-currentwork__action-panel-desc">{action.description}</p>
+                        :   null}
+                    </div>
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__action-panel-close"
+                        onClick={onClose}
+                        aria-label="Close action panel"
+                        data-work-action-panel-close="true"
+                    >
+                        Close
+                    </button>
+                </div>
+                <CurrentWorkSubjectSelectorPanel
+                    action={action}
+                    opportunityId={opportunityId}
+                    onClose={onClose}
+                    onComplete={onComplete}
+                />
+            </aside>
         );
     }
 

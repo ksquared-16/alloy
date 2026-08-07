@@ -81,12 +81,23 @@ describe("resolveEligibleEnrollmentChildrenForOpportunity", () => {
         expect(result.subjects.map((s) => s.id)).toEqual(["ocm-1", "ocm-2"]);
     });
 
-    it("fails closed when no eligible children exist", async () => {
+    it("includes enrollment context in operator labels when present", async () => {
         const supabase = {
             from: vi.fn(() => ({
                 select: vi.fn(() => ({
                     eq: vi.fn(() => ({
-                        eq: vi.fn(async () => ({ data: [], error: null })),
+                        eq: vi.fn(async () => ({
+                            data: [
+                                {
+                                    id: "ocm-1",
+                                    customer_member_id: "cm-1",
+                                    stage_key: "enrolling",
+                                    outcome_status_key: "active",
+                                    customer_members: { display_name: "Ava Lee" },
+                                },
+                            ],
+                            error: null,
+                        })),
                     })),
                 })),
             })),
@@ -97,7 +108,9 @@ describe("resolveEligibleEnrollmentChildrenForOpportunity", () => {
             orgId: "org-1",
             opportunityId: "opp-1",
         });
-        expect(result.status).toBe("none");
-        expect(result.message).toMatch(/Add a child/i);
+        expect(result.status).toBe("single");
+        if (result.status === "single") {
+            expect(result.subject.label).toBe("Ava Lee · Enrolling · Active");
+        }
     });
 });

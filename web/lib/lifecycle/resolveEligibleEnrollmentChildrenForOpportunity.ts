@@ -62,7 +62,9 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
 
     const { data, error } = await params.supabase
         .from("opportunity_customer_members")
-        .select("id, customer_member_id, customer_members(first_name, last_name, display_name)")
+        .select(
+            "id, customer_member_id, outcome_status_key, stage_key, customer_members(first_name, last_name, display_name)",
+        )
         .eq("org_id", params.orgId)
         .eq("opportunity_id", opportunityId);
 
@@ -79,6 +81,8 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
         const rec = row as {
             id?: string;
             customer_member_id?: string | null;
+            outcome_status_key?: string | null;
+            stage_key?: string | null;
             customer_members?: {
                 first_name?: string | null;
                 last_name?: string | null;
@@ -88,9 +92,19 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
         const ocmId = trimOrNull(rec.id);
         const customerMemberId = trimOrNull(rec.customer_member_id);
         if (!ocmId || !customerMemberId) continue;
+        const name = childDisplayName(rec.customer_members);
+        const status = trimOrNull(rec.outcome_status_key);
+        const stage = trimOrNull(rec.stage_key);
+        const contextBits = [stage, status]
+            .filter(Boolean)
+            .map((bit) =>
+                String(bit)
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (c) => c.toUpperCase()),
+            );
         subjects.push({
             id: ocmId,
-            label: childDisplayName(rec.customer_members),
+            label: contextBits.length > 0 ? `${name} · ${contextBits.join(" · ")}` : name,
             grain: "opportunity_customer_member",
             customerMemberId,
         });
