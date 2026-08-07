@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { SURFACE_COMPOSER_LIBRARY_ATTR } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
 import {
     PROCESSING_BUILDER_CANONICAL_FIELDS,
@@ -70,9 +71,14 @@ export default function ProcessingFormBuilderLibraryPanel({
 
     if (!open || typeof document === "undefined") return null;
 
+    // Portals to `document.body`, so it escapes the Processing BOS modal shell's stacking context and
+    // must clear the shell itself (panel 97 / backdrop 96). At the old z-[70] this panel opened BEHIND
+    // the shell: "+ Add question" set state and rendered, but nothing was ever visible or clickable.
+    // Same root cause as ProcessingAlloyDialog's z-[80] → z-[110] repair (395026bf8).
     return createPortal(
         <div
-            className="pointer-events-auto fixed inset-0 z-[70] flex items-start justify-center bg-alloy-midnight/20 p-4 pt-16"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="pointer-events-auto fixed inset-0 flex items-start justify-center bg-alloy-midnight/20 p-4 pt-16"
             role="dialog"
             aria-label="Add question"
             {...{ [SURFACE_COMPOSER_LIBRARY_ATTR]: true }}
