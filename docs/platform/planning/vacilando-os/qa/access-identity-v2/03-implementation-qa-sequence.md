@@ -957,6 +957,92 @@ this evidence, and it is the reason this record claims a re-execution rather tha
 **Not run: typecheck** — as on 2026-08-04 and 2026-08-06. No live database query, so W-0's counts are now
 **seven days old** and M1 must still re-derive Q4 rather than cite it.
 
+#### Wave 1, fifth issuance — **CONCURRENT with the fourth**, 2026-08-07, assignment `asg_4360f505b75d48`
+
+**Two assignments executed W-1…W-3 against the same base at the same time.** `asg_9e868dd2d78c27` (above) and
+this one, both under DX7 fixture missions, neither aware of the other at dispatch. The record above notes
+`analyticsRouteGates.test.ts` was *"edited concurrently while this run was in progress — not authored here."*
+**It was authored here.** This record supplies the authorship, the proofs that run could not take, and two
+corrections to its description of the change.
+
+| Field | Value |
+|---|---|
+| Base measured | `3e000209a`, then re-measured at `448ca9d9f` after `7a623e7fe` (the fourth-issuance record) and `448ca9d9f` (W-7) landed mid-session. **66 green at both** |
+| Suites | **66 green** — `analyticsRouteGates` **42 → 47** · `selfAuthorityMutation` 14 · `permissionGrid` 5 |
+| Changed | `web/tests/access/analyticsRouteGates.test.ts` only. No route handler, library, schema or migration |
+| Typecheck | `vac run typecheck:tests` **rc=0** (brokered, 17:52:12Z → 17:56:53Z) |
+| Evidence | [`wave1-reissue-evidence.json`](./wave1-reissue-evidence.json) |
+
+**W-1 / RL-1 — a third subject defect, and the first one found *before* it had a live victim.**
+
+2026-08-06 moved RL-1's subject from three hand-listed *directories* to the G2 primitive. **The primitive list
+is itself hand-listed, and a module's own alias defeats it.** `callsAny` matches `symbol(`, and both defining
+modules export `@deprecated` aliases:
+
+| Alias | Target | Class | Live route callers | Effect |
+|---|---|---|---|---|
+| `getAdminAccessContext` (`getAdminAccessContext.ts:119`) | `getAdminAccessContextCached` | raw resolution | **0** | a route calling it holds the G2 shape but is **not selected** — invisible, so it can be neither flagged nor excepted |
+| `getAdminContext` (`getAdminContext.ts:73`) | `getAdminContextCached` | sufficient gate | **12** | a correctly gated route would be **flagged** — noisy, not unsafe |
+
+The dangerous direction has zero callers today. That is the **same shape as W-0 Q1's `handle_new_user()`
+finding** — defined, unreferenced, one import away from live — and it is why this is recorded as a defect
+rather than as a hypothetical. The suite was green throughout: greenness was never evidence here, because the
+escaping route would have been absent from the subject rather than passing in it.
+
+**The repair is the same change of question, applied one level up:** ask the defining module what it exports.
+A new lock parses `export const A = B;` from the three access-primitive modules and fails if an alias of a
+listed symbol is not itself listed, so a future alias forces the review instead of silently voiding the
+subject. Both aliases are now listed.
+
+**Proved by red runs, not asserted.** Removing `getAdminAccessContext` from `RAW_RESOLUTIONS` → **2 failed /
+45 passed**; removing `getAdminContext` from `SUFFICIENT_GATES` → **1 failed / 46 passed**. A permanent test
+also asserts the 2026-08-06 primitive list does *not* match an alias-only G2 route — the defect stated about
+source rather than in prose — and that `\bgetAdminAccessContext\s*\(` does not swallow
+`getAdminAccessContextCached(`, which would have held the 92 floor steady for the wrong reason.
+
+**Subject counts unmoved and both ratchets at the live floor:** family **27** (floor 27), class-wide **92 of
+570** (floor 92), re-derived at `448ca9d9f`. Consistent with an interval that added no route file.
+
+**Two corrections to the fourth-issuance record.** It describes this change as adding *"`loadAdminAccessBundleCached`
+as a second exported name for the raw primitive"* — that symbol was already listed on 2026-08-06 and is a
+distinct function, not an alias; the alias is `getAdminAccessContext`. And it reports the file as **+107 lines**,
+which was a mid-edit snapshot. Neither correction changes that run's conclusions.
+
+**W-2 — concur: the exit criterion remains not met**, for the same two `user_department_access` paths, both
+re-verified live here rather than cited. Two refinements to the 2026-08-06 description, from reading the
+routes this run:
+
+- **`POST /api/admin/lifecycle-catalog/repair`** takes `department_id` **from the request body** (`:21`, `:28`)
+  — a genuine self-scope-widening vector over an *arbitrary caller-chosen* department. This is the severe one.
+- **`POST /api/admin/departments`** does **not** take a caller-supplied department id: it passes the department
+  the caller just created, with `currentUserId: ctx.userId` from the resolved context. Still a self-write to an
+  authority table, but a materially weaker vector than the 2026-08-06 record's *"caller-supplied
+  `department_id`"* implies for both.
+- **`POST /api/admin/dev/create-org`** still takes `admin_user_id` from the body, but the org is created in the
+  same call, so a caller naming themselves gains admin over an org that did not previously exist. In scope for
+  the criterion as written; **not an elevation vector**.
+
+The latency gate is unchanged: `ensureLifecycleDepartmentWorkspaceAccess:122-124` returns before the insert
+whenever `portalAdminBypassesDepartmentScope` holds, so no principal who can reach these paths can execute the
+insert **today**. **W-8 deletes exactly that bypass.**
+
+**W-5 delivered half the prescribed durable repair.** 2026-08-06 asked for authority writers enumerated *by
+table across `web/lib` and `web/app`*. W-5's commit ran precisely that audit and added a source-level lock
+(`membershipAtomicWiring.test.ts:49`). Its regex is
+`/from\(\s*["']user_roles["']\s*\)\s*\.\s*(insert|upsert|update)\b/` — **`user_roles` only.**
+`user_department_access`, the sixth authority table, has **no writer lock of any kind**, so a new writer to it
+lands unseen. The missing half is precisely the half W-8 arms. **RL-11 was not widened here** — its lock is
+`selfAuthorityMutation.test.ts`, outside this assignment's scope, and the 2026-08-06 reasoning still holds: the
+widened lock should land with the guard it implies.
+
+**W-3 / RL-2 — green.** Neither new migration mentions `workflows` or `permission_definitions`, so the catalog
+picture is unmoved. C13 → W-11 still owns the restore question.
+
+**Concurrency is itself the finding worth escalating.** Two workers editing one repository under separate
+assignments produced a record describing another's uncommitted work as anonymous, and two evidence artifacts
+for one base. Nothing was lost — the fourth-issuance run correctly declined to revert what it did not author —
+but that was its judgment, not a property of the system. **Dispatch, not this plan, is where that is fixed.**
+
 **A second identity divergence.** This assignment arrives under mission `msn_bc33a72e3138ebc215`, titled
 *"DX7 Fixture — Ready Promotion"*, against a file whose header is `msn_e9133cdade883793d2`. `X-2` / `DR-4` /
 `QE-15` already register the *document* divergence; this run adds that the **mission issuing Wave 1 has itself
@@ -1730,6 +1816,74 @@ existing suite in `web/tests/admin/adminAccessScope.test.ts` extended rather tha
 with `department_scope = restricted` sees only allowed departments.
 **Exit.** No role literal appears in `accessScope.ts`; department scope is enforced for all roles.
 
+**The deletion is BLOCKED, and the second half of the exit criterion is the reason (2026-08-07,
+`asg_b94c9679108f0b`).** The bypass was **not** deleted. Removing it is a two-line change that would satisfy
+the first half of the exit criterion — *no role literal appears in `accessScope.ts`* — while making the second
+half, *department scope is enforced for all roles*, **false on the day it lands**. Shipping the first half
+alone would close `C8` on paper and leave the dimension unenforceable in practice, which is the precise
+failure mode this workstream exists to end.
+
+**The armed path, verified line by line.** `user_department_access` is the sixth authority table §5 records,
+and it has a **self-authority write path that only the bypass keeps latent**:
+
+| Step | Location | Behaviour today | Behaviour once the bypass is deleted |
+|---|---|---|---|
+| Gate | `accessScope.ts:56-66` | `effectiveDepartmentScopeDimensions` forces `departmentScope="all"` for admin/ops | returns the **stored** `restricted` |
+| Helper | `ensureLifecycleDepartmentWorkspaceAccess.ts:123-125` | returns early — **no insert reachable** | falls through |
+| Write | `ensureLifecycleDepartmentWorkspaceAccess.ts:165-169` | unreachable for admin/ops | **inserts a `user_department_access` row for the caller** |
+| Re-read | `repairLifecycleWorkspaceVisibility.ts:76-83` → `refreshDepartmentScopeDimensions` (`:176-197`) | n/a | the new row enters the caller's **live** `allowedDepartmentIds` in the same request |
+
+Both product routes that reach this helper pass the **caller's own** id, not a target-user parameter:
+
+- `POST /api/admin/lifecycle-catalog/repair` (`route.ts:14-16` admits `admin` only; `:35-43` passes
+  `access.userId`) takes an **arbitrary `department_id` of an existing department**. This is the severe one:
+  it is unbounded self-widening, one request per department, across every department in the org.
+- `POST /api/admin/departments` (`route.ts:151-158` passes `ctx.userId`) self-provisions when the created
+  department carries builder-owned metadata — and `metadata` is **caller-supplied in the request body**, so
+  the caller controls whether that branch fires.
+
+**`selfAuthorityMutation.ts` does not cover this.** That guard compares the caller id against a **route
+param** (`:20-25`), and these two paths have no target-user param — the subject is implicit. The three routes
+§5 guarded are `[userId]/role`, `[userId]/access-scope` and `[userId]/remove`; this is a fourth,
+helper-mediated path with no `[userId]` segment to compare against, which is exactly why W-2's enumeration
+could not see it.
+
+**Why this is not a theoretical risk.** W-0 Q6 = **1**: exactly one `(user, org)` pair holds `admin`/`ops`
+*and* `department_scope='restricted'`. That principal is the **only** one W-8 changes anything for — and is
+therefore the only one who reaches the armed path. The population W-8 exists to restrict and the population
+that can undo the restriction through a normal product button are **the same one person**. W-7's commit
+(`448ca9d9f`) already recorded this coupling from the other side when its naive flip would have read the same
+table: *"W-7 would have shipped the fail-open one table over."*
+
+**What W-8 is worth, so the block is not read as a reason to drop it.** `02…§15.6` finds
+`portalAdminBypassesDepartmentScope` to be *"the **only** place in the platform where a fifth layer actually
+exists"* (`02…:1106-1108`). W-8 is therefore not merely `C8`'s closure — it is the structural half of the
+operator's standing *"reduce the role hierarchy to four layers"* directive, and the one place where that
+directive is a code change rather than an IA change. The depth row at `03…:3812` records the model as already
+four-deep with W-8 named as what *protects* it. This should ship. It should ship **whole**.
+
+**Two remediations close the gap; they are not equivalent, and choosing between them is a product decision.**
+
+1. **Deny self-provisioning** — `ensureLifecycleDepartmentWorkspaceAccess` refuses when the subject is the
+   caller, extending the `selfAuthorityMutation` ban to its fourth path. The exit criterion becomes true.
+   Cost: a restricted admin who creates a department, or runs *Repair workspace visibility*, no longer gains
+   access to it and must be granted it by another administrator. The refusal string already written at
+   `repairLifecycleWorkspaceVisibility.ts:104-107` anticipates exactly this state.
+2. **Scope the provisioning to departments already inside the caller's allow-list** — the insert becomes a
+   no-op rather than a widening. Preserves the repair flow for departments the principal can already see,
+   but does **not** restore it for the case the feature was built for (a department the caller cannot yet
+   see), so it is a narrower fix that leaves the feature partly inert.
+
+**The announcement required by W-0 Q6 cannot be produced by a worker.** §4 requires the affected principal be
+*identified and announced* before deletion. `wave0-authority-census.json` Q6 (`:488-505`) carries the **count
+only**, and names the remedy as *"run Q6's supporting detail form"* — a live query through the Director-side
+trusted host action `database.read_census`. **No worker-side channel to it exists by design** (§6 W-6, and
+`3e000209a`). This is the same class of block W-6 hit, and re-dispatching W-8 to a worker cannot move it.
+
+**Status: `unmet`, held on decision — not on effort.** Both blockers are external to the code change: one is
+a product decision about the repair flow, one is a channel only the Director holds. No file under
+`web/` was modified by this assignment.
+
 ---
 
 ## 7. Wave 3 — One catalog, one vocabulary
@@ -2393,3 +2547,32 @@ the tree; the suite is green with it removed.
 **Method:** static and file-grounded, plus the three Wave 1 suites executed. **No route handler, library,
 schema, migration or UI was modified**; no request was issued, no browser opened, and no live query run. The
 findings recorded against W-2 are reported, not remediated — see §5 for why.
+
+### 15.4 W-8 pre-flight — deletion withheld (2026-08-07, assignment `asg_b94c9679108f0b`)
+
+The assignment directed deletion of `portalAdminBypassesDepartmentScope`. **The bypass was not deleted**, and
+no file under `web/` was modified. The finding is in §6 W-8; this entry records how it was reached and what
+was and was not proven.
+
+| File | Role |
+|---|---|
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md` | §6 W-8 pre-flight record, this entry |
+
+**What was verified, and how.** Static reading of the call graph from the two admitting routes down to the
+insert, each hop cited in §6 W-8: `accessScope.ts:45,51-53,56-66` → `repairLifecycleWorkspaceVisibility.ts:64-83`
+→ `ensureLifecycleDepartmentWorkspaceAccess.ts:123-125,165-169,176-197`, plus
+`api/admin/lifecycle-catalog/repair/route.ts:14-16,35-43` and `api/admin/departments/route.ts:151-158` for the
+caller-id arguments, and `selfAuthorityMutation.ts:20-25` for why the existing ban does not reach them. W-0 Q6
+was read from `wave0-authority-census.json:488-505` — **count only, no identity**.
+
+**Method:** static and file-grounded. **No route handler, library, schema, migration or UI was modified**; no
+request was issued, no browser opened, no test written or run, and no live query attempted. The armed path is
+established **by construction from the source** — it was *not* demonstrated against a live principal, because
+doing so would require both the missing census channel and a deliberate self-widening write against the shared
+tenant. That is the honest limit of this record: the control-flow claim is proven, the live exploit is not
+attempted.
+
+**Why no code shipped rather than a partial change.** Deleting the bypass and closing the self-write in one
+commit is buildable today, but which closure lands (§6 W-8, remediations 1 and 2) changes the behaviour of a
+working operator feature in different ways. Guessing it here would ship an unannounced product change on top
+of an unannounced authority change, for the one principal least able to absorb a surprise.
