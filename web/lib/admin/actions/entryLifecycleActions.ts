@@ -267,7 +267,9 @@ export async function executeCreateLeadAction(
 
     // Reuse the review already loaded during ingest — a second loadCaseReview was a clean-new
     // latency tax with no semantic benefit (case has not changed between the two calls).
-    let review: Awaited<ReturnType<typeof loadCaseReview>> = ingested.caseReview;
+    // `ingested.caseReview` is optional — the very next branch handles the absent case, so the
+    // annotation has to admit undefined. Without it the build-scope typecheck fails.
+    let review: Awaited<ReturnType<typeof loadCaseReview>> | undefined = ingested.caseReview;
     if (!review) {
         try {
             review = await loadCaseReview(reviewDeps, ingested.processingCaseId);

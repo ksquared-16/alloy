@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
@@ -26,7 +26,14 @@ export default function CurrentWorkTourGroupedActions({
     const { tour, rest } = partitionTourGroupedActions(actions);
     const [open, setOpen] = useState(false);
     const menuId = useId();
-    const rootRef = useRef<HTMLDivElement | null>(null);
+    // One ref serves two layout branches — an <li> in the workspace list and a <div> in the
+    // summary row. It is only used for `.contains()` on outside-click, so type it to the common
+    // base and attach it with a callback ref; a RefObject<HTMLDivElement> cannot be handed to an
+    // <li> (RefObject is invariant), which is what broke the staging build.
+    const rootRef = useRef<HTMLElement | null>(null);
+    const setRootRef = useCallback((el: HTMLElement | null) => {
+        rootRef.current = el;
+    }, []);
 
     useEffect(() => {
         if (!open) return;
@@ -62,7 +69,7 @@ export default function CurrentWorkTourGroupedActions({
                     </li>
                 ))}
                 {tour.length > 0 ?
-                    <li className="relative" ref={rootRef}>
+                    <li className="relative" ref={setRootRef}>
                         <button
                             type="button"
                             className="alloy-os-currentwork-workspace__action-row"
@@ -122,7 +129,7 @@ export default function CurrentWorkTourGroupedActions({
                 </button>
             ))}
             {tour.length > 0 ?
-                <div className="relative inline-flex" ref={rootRef} data-work-tour-grouped="true">
+                <div className="relative inline-flex" ref={setRootRef} data-work-tour-grouped="true">
                     <button
                         type="button"
                         className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
