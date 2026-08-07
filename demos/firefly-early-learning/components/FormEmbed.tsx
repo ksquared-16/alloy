@@ -8,8 +8,11 @@ type FormEmbedProps = {
  *
  * `loading="eager"` on purpose: `lazy` defers the iframe request until it nears the viewport, so
  * the form visibly pops in after scroll. This is the primary content of the page it sits on, so it
- * should start loading with the document. `fetchPriority="high"` puts it ahead of decorative
- * requests in the same batch.
+ * should start loading with the document.
+ *
+ * No `fetchPriority` here — it is defined for img/link/script, not iframe (it is absent from
+ * React's IframeHTMLAttributes for that reason). The root layout preconnects to the form host
+ * instead, which is what actually removes setup cost from this request.
  */
 export default function FormEmbed({ src, title }: FormEmbedProps) {
   return (
@@ -21,7 +24,6 @@ export default function FormEmbed({ src, title }: FormEmbedProps) {
         className="block h-[720px] w-full border-0"
         title={title}
         loading="eager"
-        fetchPriority="high"
       />
     </div>
   );
