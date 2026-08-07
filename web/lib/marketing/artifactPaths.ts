@@ -16,24 +16,41 @@ export const MARKETING_BRAND = {
 
 export const MARKETING_ASSETS = {
   hero: {
-    key: "hero/alloy-work-forward-hero",
-    src: "/marketing/hero/alloy-work-forward-hero.webp",
-    alt: "Alloy operating system: information enters, Business Processes organize work, and actions produce outcomes",
-    aspect: "5/3" as const,
+    key: "hero/alloy-work-forward-hero-v4",
+    src: "/marketing/hero/alloy-work-forward-hero-v4.png",
+    alt: "Alloy at the center connecting people, documents, communications, work, intelligence, automation, security, and integrations",
+    aspect: "1024/564" as const,
     ready: true,
   },
   disconnectedToUnified: {
-    key: "illustrations/disconnected-to-unified-v2",
-    src: "/marketing/illustrations/disconnected-to-unified-v2.webp",
-    alt: "Disconnected vs Unified: people stitching CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets together, versus Alloy as one operating system that moves work forward",
-    aspect: "1024/456" as const,
+    key: "illustrations/disconnected-to-unified-v7",
+    src: "/marketing/illustrations/disconnected-to-unified-v7.webp",
+    alt: "Disconnected systems around a person: documents, reports, tools, spreadsheets, tasks, messages, and email that don't talk — work that doesn't flow",
+    aspect: "834/660" as const,
     ready: true,
   },
+  valuePropBanner: {
+    key: "illustrations/value-prop-banner-v2",
+    src: "/marketing/illustrations/value-prop-banner-v2.webp",
+    alt: "From siloed to streamlined, save time, reduce risk, and drive impact with Alloy",
+    aspect: "971/326" as const,
+    /** Replaced by native ValuePropBanner component — keep file for reference only */
+    ready: false,
+  },
   businessProcesses: {
-    key: "illustrations/business-processes",
-    src: "/marketing/illustrations/business-processes.webp",
-    alt: "Business Processes organizing operational work",
-    aspect: "16/10" as const,
+    key: "illustrations/business-processes-v3",
+    src: "/marketing/illustrations/business-processes-v3.webp",
+    alt: "Business process stages from start through requirements, decision, outcome, and next step",
+    aspect: "1024/444" as const,
+    /** Replaced by native BusinessProcessFlow component — keep file for reference only */
+    ready: false,
+  },
+  processBenefits: {
+    key: "illustrations/process-benefits-icons-v1",
+    src: "/marketing/illustrations/process-benefits-icons-v1.webp",
+    alt: "Clear ownership, built-in consistency, real-time visibility, and better outcomes",
+    aspect: "992/267" as const,
+    /** Replaced by native ProcessBenefitsStrip component — keep file for reference only */
     ready: false,
   },
   processing: {

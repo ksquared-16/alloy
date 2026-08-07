@@ -8,6 +8,7 @@ export default function MarketingAssetImage({
   src,
   alt,
   aspectClassName = "aspect-[5/3]",
+  aspectRatio,
   className = "",
   priority = false,
   sizes = "(max-width: 768px) 100vw, 50vw",
@@ -18,6 +19,8 @@ export default function MarketingAssetImage({
   src: string;
   alt: string;
   aspectClassName?: string;
+  /** Inline aspect-ratio so layout never collapses if Tailwind JIT misses the class */
+  aspectRatio?: string;
   className?: string;
   priority?: boolean;
   sizes?: string;
@@ -28,7 +31,10 @@ export default function MarketingAssetImage({
   unoptimized?: boolean;
 }) {
   const media = (
-    <div className={`relative w-full overflow-hidden ${aspectClassName}`}>
+    <div
+      className={`relative w-full overflow-hidden ${aspectClassName}`}
+      style={aspectRatio ? { aspectRatio } : undefined}
+    >
       <Image
         src={src}
         alt={alt}

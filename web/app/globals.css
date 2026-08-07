@@ -1318,28 +1318,28 @@ body {
 }
 
 .marketing-section-pad {
-  padding-block: 56px;
+  padding-block: 36px;
 }
 
 .marketing-section-pad-compact {
-  padding-block: 48px;
+  padding-block: 28px;
 }
 
 .marketing-section-pad-spacious {
-  padding-block: 64px;
+  padding-block: 44px;
 }
 
 @media (min-width: 768px) {
   .marketing-section-pad {
-    padding-block: clamp(72px, 6vw, 96px);
+    padding-block: clamp(44px, 4vw, 64px);
   }
 
   .marketing-section-pad-compact {
-    padding-block: clamp(52px, 4.5vw, 72px);
+    padding-block: clamp(32px, 3vw, 44px);
   }
 
   .marketing-section-pad-spacious {
-    padding-block: clamp(72px, 5.5vw, 88px);
+    padding-block: clamp(48px, 4vw, 64px);
   }
 }
 
@@ -1353,8 +1353,8 @@ body {
 }
 
 .marketing-display-headline {
-  /* Hero title + sub — both lines locked at 36px */
-  font-size: 36px;
+  /* Hero headline — locked at 27px */
+  font-size: 27px;
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.035em;
@@ -1362,8 +1362,8 @@ body {
 }
 
 .marketing-section-headline {
-  /* Desktop max ~42px */
-  font-size: clamp(2rem, 1.55rem + 1.1vw, 2.625rem);
+  /* Homepage chapters below hero — 20% smaller than prior lock */
+  font-size: clamp(1.6rem, 1.24rem + 0.88vw, 2.1rem);
   line-height: 1.12;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -1379,7 +1379,8 @@ body {
 }
 
 .marketing-statement-headline {
-  font-size: clamp(1.75rem, 1.4rem + 1vw, 2.5rem);
+  /* Statement / CTA titles — matched 20% reduction */
+  font-size: clamp(1.4rem, 1.12rem + 0.8vw, 2rem);
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -1405,12 +1406,12 @@ body {
 }
 
 .marketing-pillar-row {
-  padding-block: 36px;
+  padding-block: 24px;
 }
 
 @media (min-width: 768px) {
   .marketing-pillar-row {
-    padding-block: clamp(44px, 4vw, 60px);
+    padding-block: clamp(28px, 2.5vw, 40px);
   }
 }
 
