@@ -1,0 +1,212 @@
+{
+  "title": "W-11 — catalog / enforcement reconciliation, and the enumerated deletion list",
+  "why_this_file_exists": "The plan (03…§7, W-11) makes one thing an exit artifact rather than an implementation detail: 'Deletions must be enumerated and shown to the operator before the migration runs, not discovered afterward.' This file is that enumeration. It is the operator's review list for migration M5 and the input to the decision recorded under `operator_decision_required`. Nothing here has been applied; no migration was authored.",
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "assignment_id": "asg_ddd008f2c3d92a",
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "phase": "Wave 3 — One vocabulary (W-11)"
+  },
+  "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "§7 — W-11",
+  "derivation": {
+    "method": "static, from this repository's migration tree and product sources at this commit",
+    "catalog_source": "every region of supabase/migrations/*.sql that can write a catalog row — an INSERT into permission_definitions / permissions / permission_keys, a DO block containing one, or a function body containing one",
+    "enforcement_source": "key-shaped string literals on comment-stripped executable lines of web/app, web/lib, web/components, web/scripts",
+    "files_scanned": 6201,
+    "instrument": "web/tests/access/permissionCatalogDiscovery.ts",
+    "guard": "web/tests/access/catalogVocabularyReconciliation.test.ts — asserts the lists below still equal the tree",
+    "not_a_live_measurement": "This is the tree, not the database. Live catalog width, live grant counts, and any key seeded on the target outside the tree are M5 preflight subjects (§11)."
+  },
+  "catalog_width": 57,
+  "enforced_count": 21,
+  "deletion_candidate_count": 36,
+  "addition_candidate_count": 1,
+  "discovery": {
+    "finding": "The catalog is 57 keys. Every static instrument in this workstream measured 35, because the parser they shared was pinned to one INSERT column order.",
+    "pinned_parser_width": 35,
+    "cross_check": "57 is the count the Phase 0 migration independently measured against the shared database on 2026-07-29 and recorded in its own comment ('Full platform catalog (shared 2026-07-29: 57 active keys)') before writing the literal that reproduces it. The corrected static derivation arrives at the same width from the other direction.",
+    "syntaxes_the_pinned_parser_could_not_reach": [
+      {
+        "syntax": "transposed columns",
+        "where": "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql — seed_default_rbac() writes (key, label, group_key, description); every other seed writes (key, group_key, label, …)",
+        "keys_hidden": 22
+      },
+      {
+        "syntax": "variable-driven",
+        "where": "20260722000000_operational_expectations_authority_model_p1_wave_c.sql — keys live in a FOR k, lbl, dsc IN VALUES list; the INSERT carries variables, not literals",
+        "keys_hidden": 2
+      }
+    ],
+    "keys_missed_by_pinned_parser": [
+      "admin.roles.read",
+      "admin.roles.write",
+      "admin.users.read",
+      "admin.users.write",
+      "fin.read",
+      "fin.write",
+      "operational_expectations.authority.assign",
+      "operational_expectations.authority.manage",
+      "ops.contacts.read",
+      "ops.contacts.write",
+      "ops.customers.read",
+      "ops.customers.write",
+      "ops.jobs.read",
+      "ops.jobs.write",
+      "ops.locations.read",
+      "ops.locations.write",
+      "ops.messaging.read",
+      "ops.messaging.write",
+      "ops.opportunities.read",
+      "ops.opportunities.write",
+      "ops.schedules.read",
+      "ops.schedules.write"
+    ],
+    "consequence_for_prior_records": "W-10's execution record states 25 projected rows over 35 keys and 'the grid can represent all of them'. The projection is total, so the second clause holds; the numbers do not. Against the real catalog the same projection renders more rows over 57 keys. W-10's exit criterion is unaffected; its arithmetic is restated in §7."
+  },
+  "enforced": [
+    { "key": "ai.enrichment.use", "sites": ["web/lib/ai/aiEnrichmentPermissions.ts", "web/lib/bos/auth/index.ts", "web/lib/bos/bosCapabilityRegistry.ts"], "note": "conditional — only when AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true; otherwise the routes fall back to portal admin/ops" },
+    { "key": "communications.send", "sites": ["web/app/api/admin/communications/bindings/route.ts", "web/app/api/admin/communications/identities/route.ts", "web/app/api/admin/communications/send/route.ts", "web/lib/communications/canonicalOutboundEnqueue.ts", "web/lib/communications/communicationPermissions.ts", "web/lib/communications/purpose/purposeRegistry.ts"] },
+    { "key": "config_assist.apply", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalState.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts", "web/lib/bos/bosCapabilityRegistry.ts"] },
+    { "key": "config_assist.generate", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts", "web/lib/bos/bosCapabilityRegistry.ts"] },
+    { "key": "config_assist.review", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalState.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts", "web/lib/bos/bosCapabilityRegistry.ts"] },
+    { "key": "data_quality.view", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "gates config-assist proposals only — the same edit made through the normal configuration surface is not checked against it" },
+    { "key": "documents.read", "sites": ["web/lib/documents/assertDocumentAccess.ts"] },
+    { "key": "fields.editability.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only, as data_quality.view" },
+    { "key": "fields.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
+    { "key": "fields.requirements.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
+    { "key": "layouts.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
+    { "key": "operational_expectations.author", "sites": ["web/lib/operationalExpectations/intake/authoringServerContext.ts"] },
+    { "key": "operational_expectations.ratify", "sites": ["web/lib/operationalExpectations/ratification/ratificationServerContext.ts"] },
+    { "key": "ops.messaging.write", "sites": ["web/lib/communications/communicationPermissions.ts"], "note": "the legacy alias for communications.send — the only key of the 22-key legacy seed vocabulary that anything consults" },
+    { "key": "option_sets.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
+    { "key": "reports.read", "sites": ["web/lib/admin/canReadAnalytics.ts"] },
+    { "key": "reports.write", "sites": ["web/lib/admin/canReadAnalytics.ts"] },
+    { "key": "sections.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
+    { "key": "settings.manage", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
+    { "key": "settings.read", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
+    { "key": "settings.users_roles", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"] }
+  ],
+  "deletion_candidates": [
+    "admin.roles.read",
+    "admin.roles.write",
+    "admin.users.read",
+    "admin.users.write",
+    "ai.provider.config.manage",
+    "ai.telemetry.review",
+    "billing.read",
+    "billing.write",
+    "communications.read",
+    "crm.customers.read",
+    "crm.customers.write",
+    "crm.opportunities.read",
+    "crm.opportunities.write",
+    "documents.write",
+    "fin.read",
+    "fin.write",
+    "operational_expectations.authority.assign",
+    "operational_expectations.authority.manage",
+    "ops.contacts.read",
+    "ops.contacts.write",
+    "ops.customers.read",
+    "ops.customers.write",
+    "ops.jobs.read",
+    "ops.jobs.write",
+    "ops.locations.read",
+    "ops.locations.write",
+    "ops.messaging.read",
+    "ops.opportunities.read",
+    "ops.opportunities.write",
+    "ops.schedules.read",
+    "ops.schedules.write",
+    "ops.workflows.read",
+    "ops.workflows.write",
+    "scheduling.read",
+    "scheduling.write",
+    "settings.users_roles.read"
+  ],
+  "deletion_candidates_by_vocabulary": {
+    "legacy_ops_fin_admin_seed_set": {
+      "count": 21,
+      "seeded_by": "20260329165048_remote_schema.sql (seed_default_rbac), re-seeded by 20260729120000_…phase0….sql",
+      "operator_meaning": "An operator has never been offered these as controls in a product surface, but since W-10 the grid projects the whole catalog, so they became visible controls that change nothing.",
+      "keys": ["admin.roles.read", "admin.roles.write", "admin.users.read", "admin.users.write", "fin.read", "fin.write", "ops.contacts.read", "ops.contacts.write", "ops.customers.read", "ops.customers.write", "ops.jobs.read", "ops.jobs.write", "ops.locations.read", "ops.locations.write", "ops.messaging.read", "ops.opportunities.read", "ops.opportunities.write", "ops.schedules.read", "ops.schedules.write", "ops.workflows.read", "ops.workflows.write"]
+    },
+    "grid_vocabulary": {
+      "count": 11,
+      "seeded_by": "20260505164000_permission_grid_keys.sql, re-seeded by 20260729120000_…phase0….sql",
+      "operator_meaning": "These are the ones that will surprise. They have been operator-visible controls with real labels — 'Billing / payments', 'Customers / families', 'Scheduling' — since the grid shipped. An operator may have set one to None believing it removed access.",
+      "keys": ["billing.read", "billing.write", "communications.read", "crm.customers.read", "crm.customers.write", "crm.opportunities.read", "crm.opportunities.write", "documents.write", "scheduling.read", "scheduling.write", "settings.users_roles.read"]
+    },
+    "declared_per_feature_but_inert": {
+      "count": 4,
+      "operator_meaning": "Seeded alongside a feature whose enforcement was never wired. ai.* are marked 'Future: separate keys (documented only)' in their own helper; operational_expectations.authority.* are seeded and granted to every org's admin and named nowhere in product source.",
+      "keys": ["ai.provider.config.manage", "ai.telemetry.review", "operational_expectations.authority.assign", "operational_expectations.authority.manage"]
+    }
+  },
+  "addition_candidates": [
+    {
+      "key": "communications.send.emergency",
+      "sites": ["web/lib/communications/eligibility/types.ts", "web/lib/communications/canonicalOutboundEnqueue.ts"],
+      "declared_as": "EMERGENCY_SEND_PERMISSION_KEY",
+      "what_it_gates": "the one branch that allows an emergency send to override an opted-out or suppressed recipient (evaluateEligibility: category === 'emergency' && emergencyPermitted !== true → refuse), and it is written into the enqueue record as the permission the send was made under",
+      "why_the_row_alone_is_not_a_fix": "No production caller ever sets emergencyPermitted to true — every path passes `req.emergencyPermitted ?? false`, and the only `true` values in the tree are in tests. So the key is not merely ungrantable, it is unbindable: seeding a catalog row would make it grantable and still change nothing. Binding it to the resolved permission set is an enforcement-sweep item (W-15), not W-11's.",
+      "recommendation": "seed the catalog row under W-11 so the vocabulary is complete and the key is grantable; record the binding as a W-15 item so the row is not read as having made emergency sends possible"
+    }
+  ],
+  "excluded_from_addition_candidates": [
+    { "literal": "ai.task_assist", "where": "web/app/api/admin/ai/task-assist/apply/route.ts", "why": "a `sourceCapability` provenance label, not a permission key" },
+    { "literal": "communications.family_send", "where": "web/app/api/admin/communications/family-send/route.ts", "why": "a `sourceCapability` provenance label, not a permission key" },
+    { "literal": "ops.work_overdue_count / ops.workflow_failure_rate / ops.needs_attention_count / ops.readiness_gap_count", "where": "web/lib/metrics/registry.ts", "why": "metric identifiers that share the ops.* prefix; no permission semantics" }
+  ],
+  "residual_gap_after_w11": {
+    "statement": "The plan's exit requires the residual gap to be a written number rather than an unknown. It is written here.",
+    "if_all_36_are_deleted_and_the_1_addition_is_seeded": {
+      "catalog_width": 22,
+      "keys_enforced_by_a_route_or_helper": 21,
+      "keys_enforced_by_nothing": 0,
+      "keys_grantable_but_unbindable": 1,
+      "note": "communications.send.emergency is the one. It is the residual gap, and it is one key, named."
+    },
+    "what_this_does_not_close": "'Enforced' here means a product source names the key. It does not mean a route declares it, and it does not mean the enforcement is reachable — 8 of the 21 gate config-assist proposals only, and 1 is env-conditional. The declared-route-capability set does not exist until W-14, and the standing check that every catalog key resolves to ≥1 enforcement site is W-50/RL-35. W-11 makes those checks authorable; it does not perform them."
+  },
+  "operator_decision_required": {
+    "gate": "The plan makes this review a precondition of M5: deletions are shown before the migration runs. No migration was authored in this assignment.",
+    "the_ask": "Approve, amend, or reject the 36-key deletion list above — and separately, the sequencing question below.",
+    "why_it_cannot_be_decided_by_a_worker": "11 of the 36 have been operator-visible controls with meaningful labels. Deleting them is correct if a control that changes nothing is worse than no control — which is this plan's stated position (05…§7 item 5, and the brief's first rejection condition) — but it removes settings an operator may believe are load-bearing.",
+    "options": [
+      { "id": "delete_all_36", "description": "M5 deletes every unenforced key. Fully closes C4 in the deletion direction; the grid narrows to 22 rows' worth of keys; C13's workflows row does not return." },
+      { "id": "delete_25_defer_11", "description": "Delete the 21 legacy + 4 inert-declared keys, and defer the 11 grid-vocabulary keys to a wave where their features are either enforced or withdrawn. Lower operator surprise; leaves the visible half of the theatre standing." },
+      { "id": "deactivate_not_delete", "description": "Set is_active = false rather than DELETE. Reversible, avoids the FK problem entirely, and keeps grant rows intact — but leaves the rows in the table, so 'one vocabulary' becomes 'one vocabulary plus a graveyard', and W-50's build check would need an is_active predicate." }
+    ]
+  },
+  "m5_preconditions_established_by_this_pass": [
+    {
+      "id": "P1",
+      "finding": "Grants must be deleted before keys, or M5 aborts on live data.",
+      "detail": "The one surviving FK on role_permission_grants.permission_key is ON DELETE RESTRICT (W-9's execution record), and seed_default_rbac grants admin every active key, so every one of the 36 is expected to carry live grant rows on every org. Handed forward by W-9 as consequence 1; confirmed here against the corrected catalog."
+    },
+    {
+      "id": "P2",
+      "finding": "The deletion is not durable unless the same migration edits seed_default_rbac's catalog literal.",
+      "detail": "The live seed_default_rbac() — as rewritten by Phase 0 — inserts all 57 keys into permission_definitions on every call, ON CONFLICT DO NOTHING. Creating one organization after M5 re-creates every key M5 deleted. The plan sequences W-11 before W-12 so that W-12's enumeration knows what to enumerate; that ordering is right for the grant half and insufficient for the catalog half. M5 must either rewrite the function's catalog insert itself or land in the same migration as M6.",
+      "status": "raised against the plan — see §7"
+    },
+    {
+      "id": "P3",
+      "finding": "Live preflight is required and has not been run.",
+      "detail": "Everything here is derived from the tree. M5's §11 preflight must establish, on the target: the live catalog width (is it 57?), whether any key exists live that no migration seeds, the grant-row count per deletion candidate, and whether any org holds a grant on a key the tree does not know about. Channel is the trusted host action database.read_census, as for M1."
+    }
+  ],
+  "status": {
+    "exit_criteria": {
+      "enumerated_deletion_list_reviewed": "not met — the list is produced and presented; operator review is the open gate",
+      "catalog_and_enforced_set_reconciled": "not met — reconciliation is measured, not applied; no migration authored",
+      "residual_gap_is_a_written_number": "met — see residual_gap_after_w11"
+    },
+    "migration_authored": false,
+    "migration_applied": false,
+    "pushed": false
+  }
+}

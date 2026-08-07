@@ -90,13 +90,48 @@ negative-fixture rounds**: an invariant met by a track that does not own it is t
 Phase 0's *"read-only"* views are **auto-updatable and `service_role` holds `ALL`** — the stop-writing step was
 documented, not implemented; raised against `W-60` and bound to RL-7. **`W-10` landed in this worktree
 concurrently** during the pass, so `tests/access` and `typecheck:tests` both carry in-flight grid-projection
-failures that are not W-9's and were not repaired by it (§7)
+failures that are not W-9's and were not repaired by it (§7). **Superseded 2026-08-07 by W-10's
+re-verification: the two `tests/access` failures were not the projection at all — they were two negative
+fixtures left live in the tree, and removing them restores this record's own pre-W-10 baseline of 113/6** (§7)
+· **W-10 EXECUTED 2026-08-07, concurrently with W-9** (same mission, assignment `asg_f892644cf11a9a`) — the
+grid is a projection. `PERMISSION_GRID_ROWS` is deleted; `AccessRolesConfigurationPage` renders whatever
+`permission_definitions` holds, so **C5 is closed structurally** — a row naming an absent key is
+unrepresentable, not merely caught. The operator screen goes **9 rows → 25** and from representing **18 of 35
+catalog keys to all 35**, which retires the arithmetic behind H2 — and **H2 is nonetheless now locked
+(RL-48)**, because the projection depends on a network read the old compiled list did not. `RL-2` is
+**replaced by RL-3**, not deleted. The in-flight failures W-9 observed are repaired. The cross-track
+`ops.workflows.*` conflict resolves: the row returns on its own, and **nothing enforces either key**, so
+W-10's honest cost is that it widens the surface of `T-6`'s revocation theatre until W-11 and W-50 land.
+**It is also the first assignment carrying the four-layer directive that moved a layer — `L6` is gone** (§7)
+· **W-10 RE-VERIFIED on re-issuance 2026-08-07** — the record was green, the tree was not. Two `NEGATIVE
+FIXTURE` probes were still live in shipped source: one dropped every `ai.*` key from the projection (three
+ungrantable capabilities — C5 one level up), one re-introduced a hand-authored key list into the component
+(`L6` again). Both removed; **30/30 on the two lock suites and `tests/access` back to 113/6/0**. RL-3 is
+thereby proven red by fixture on both substantive halves — a stronger lock and a finding against the evidence
+discipline: **a negative fixture is finished when it is removed and green, not when it goes red** (§7)
+· **W-11 MEASURED 2026-08-07** (assignment `asg_ddd008f2c3d92a`) — §7's *"three disjoint vocabularies"* is
+wrong: **there is a fourth, it holds 57 keys, and it is the widest.** A hand-authored catalog literal inside
+`seed_default_rbac()` was invisible to every static instrument here because the shared parser was pinned to
+one `INSERT` column order — so **the catalog is 57 keys, not 35**, and 22 of them have never been counted.
+Reconciled: **21 enforced, 36 unenforced, 1 enforced key with no catalog row**
+(`communications.send.emergency`, which no production caller can bind, so its row alone would change
+nothing). The enumerated deletion list ships as the exit artifact the plan requires,
+[`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json); **M5 is withheld pending operator
+review**, which is the plan's own precondition. **The deletion is not durable on its own** — the live seed
+function re-creates all 57 keys on the next org creation, so M5 must edit that literal or land with M6.
+RL-3's subject is repaired and re-runs green over the full catalog; W-11's instrument is deliberately
+**unnumbered** and a lock number is requested of the Director (`DR-12`). W-10's row and key counts are
+restated to **37 rows over 57 keys** (§7)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
 are in §5 and their locks are live in §13. **W-9 (§7) has met its exit criterion and RL-7 is live**, but by a
-migration this programme did not author — read its record before scheduling W-10, W-11 or W-12, because two of
-its consequences land on them. Every other wave remains a proposal.
+migration this programme did not author — read its record before scheduling W-11 or W-12, because two of
+its consequences land on them. **W-10 (§7) is implemented, green, and its two locks are live**; the grid is a
+projection of the catalog and no longer a hand-maintained list. **W-11 (§7) is measured, not applied** — its
+exit artifact is delivered and its instrument is green, but the operator review and M5 are open, and its
+correction to the catalog's width applies to every count in §3, §7 and §13 that predates it. Every other wave
+remains a proposal.
 
 ---
 
@@ -223,7 +258,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; RL-7 live |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; RL-7 live · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **W-12 remains a proposal** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -2396,6 +2431,196 @@ Users/Roles settings experience (§14.1).
 catalog produces the expected rows, and W-3's assertion is replaced by a generation test.
 **Exit.** Adding a key to the catalog surfaces it in the grid with no UI change; removing one removes the row.
 
+#### W-10 execution record — **DONE 2026-08-07**, assignment `asg_f892644cf11a9a`
+
+**`PERMISSION_GRID_ROWS` no longer exists.** `web/lib/admin/permissionGrid.ts` now exports
+`buildPermissionGridRows(catalog)`, and `AccessRolesConfigurationPage.tsx` builds its grid from whatever
+`GET /api/admin/rbac/permissions` returned — the active rows of `permission_definitions`. The component names
+no permission key at all. **C5 is closed structurally**: a row naming a key the catalog does not hold is not a
+defect to catch in review, it is unrepresentable, because the projection's range *is* its domain.
+
+**The precondition W-9 owed was met the same day, concurrently.** This assignment ran alongside
+`asg_1316c1c2eaa615`, and the record directly above is that assignment's: the catalog has been one table with
+one FK since Phase 0, and RL-7 now watches it. W-10 therefore projects from a catalog that is already single,
+which is the ordering §3 assumed and could not previously assert. The two passes observed each other in the
+working tree; the two `tests/access` failures W-9's record attributes to *"W-10 landing concurrently"* are the
+mid-edit state of this workstream and are repaired here, in the same files W-9 declined to touch.
+
+**The projection rule, and the one place it refuses to guess.** A key's final dotted segment classifies it:
+`read`/`view` is the row's Read column, `write`/`manage`/`send` its Write column, and the remaining stem is
+the row's capability area. **A key whose final segment is not one of those five becomes its own area**, rather
+than folding into its stem's row. That is an authority decision, not a cosmetic one. `settings.users_roles` is
+the delegated Users & Roles authority; folding it into the `settings` row would put it behind the same radio
+as `settings.manage`, so one operator gesture would silently grant a second and stronger capability. Guessing
+at verbs widens grants; refusing to guess costs an extra row.
+
+**What the operator's screen actually does, measured against the migration tree at this commit:**
+
+| | Before (hand-maintained) | After (projected) |
+|---|:--:|:--:|
+| Rows | **9** | **25** |
+| Catalog keys the grid can represent | **18** | **35 — all of them** |
+| Rows offering both Read and Write | 9 | **10** |
+| Rows offering only Write | 0 | **14** |
+| Rows offering only Read | 0 | **1** |
+
+> **The five figures in the table above are a subset, and W-11 restates them.** The parser that produced
+> "35 catalog keys" was pinned to one `INSERT` column order and could not see a 57-key literal inside
+> `seed_default_rbac`, nor a variable-driven seed in the wave-C migration. Re-measured over the real catalog
+> with the repaired instrument, the same projection renders **37 rows over 57 keys** — 20 both-column, 16
+> write-only, 1 read-only. **W-10's exit criterion is unaffected** — totality is a property of the projection,
+> not of the catalog's size — but the cost it states below is larger than it says: 37 rows, 36 of whose keys
+> are inert. See W-11's execution record.
+
+**The 17-key gap that H2 existed to survive is gone.** `01…§48` records H2 as load-bearing precisely because
+the `admin` seed grants every active key while the grid represented 18 of them — so a Save from that screen
+would have revoked the rest had `applyGridRowSelection` not preserved out-of-grid keys. The grid now
+represents every key, and the arithmetic that made H2 frightening no longer holds. (The 35/18 figures are
+this repository's migration tree at this commit; `05…§2.1`'s **[carried]** 32/18 is a different corpus on an
+earlier date. The *gap* is the finding, not the absolute number, and both readings give 18 representable.)
+
+**H2 is nevertheless now locked — RL-48 — and W-10 needed it more than the old grid did.** §47.1 amendment 4
+made H2 a *precondition* of this workstream rather than a consequence, and that was right for a reason the
+amendment did not state: the old grid's nine rows were compiled into the bundle, so a failed catalog read
+changed nothing on screen. **The projected grid depends on a network read**, so a failed one now renders an
+empty grid where nine rows used to be. H2 is what keeps that non-destructive — `grantKeys` is still seeded
+from the grants response, an untouched Save PUTs it back unchanged, and no grant is lost. Two further things
+were done rather than assumed: the lock asserts the property over *every* projected row against a granted set
+holding the whole catalog, and over a granted key absent from the catalog entirely; and **Save is disabled
+while the grid has no rows**, because an operator must not be invited to save a surface showing nothing. The
+full S-11 remedy — surface the read failure, disable on unknown state — is **T-22's and was not taken here**.
+
+**The nine rows W-3 left standing are reproduced exactly, from the catalog alone.** Key sets are identical for
+all nine and are asserted row by row. The *labels* are now the catalog's, and one of them is a real change:
+
+| Row | Label before | Label now |
+|---|---|---|
+| `settings` | **Configuration** | **Settings** |
+| `crm.opportunities` · `crm.customers` · `billing` · `reports` · `settings.users_roles` | *Title Case* | *Sentence case* — "Opportunities / inquiries", "Users & roles", … |
+| `communications` · `scheduling` · `documents` | unchanged | unchanged |
+
+This is I-14 working rather than a regression: the hand-maintained list said *Configuration* while the catalog
+it claimed to represent said *View settings*, and nothing could see the disagreement until the two were the
+same object. **The remedy for a label an operator dislikes is now a catalog edit — a migration under W-11 —
+not a UI edit**, which is the point of the change. Title-casing was not reintroduced because it needs a
+small-word list, and a hand list is what this workstream deletes.
+
+**The cross-track conflict W-9 handed forward is resolved, and inertly.** Phase 0's header asserts *"the grid
+now writes `ops.workflows.*`"* and grants those keys to every org's `admin`; W-3 removed that grid row the
+same day, and `permissionGrid.ts:44-46` carried the contradiction as a comment. The projection returns the row
+on its own — **Operations · Workflows · `ops.workflows.read` / `ops.workflows.write`** — exactly as W-3's
+execution record predicted it would. So the *presentation* half of C13 closes here rather than at W-11. The
+*substance* does not: **no route enforces either key**, so the row is a control that changes nothing.
+
+**That is the cost of this change, stated plainly.** W-10 makes every catalog key an operator control, and
+`05…§2.1` **[carried]** measures 11 of 18 grantable keys as consulted by nothing. Projecting the catalog does
+not create revocation theatre — `01…§14`'s T-6 — but it does **widen its surface**, from 9 rows to 25, before
+W-11 narrows the catalog and W-50 makes "every key resolves to ≥1 enforcement site" a build check. That is the
+sequence this plan chose (W-10 → W-11 → W-50) and W-10 is where it looks worst. The alternative — projecting
+only the enforced subset — is not available: the declared enforcement set does not exist until W-14. **The
+honest framing is that the grid was already mostly inert and is now visibly so**, which is what §51 means by
+*"makes the 18-of-32 authoring gap visible"* and lists as this removal's benefit.
+
+**What W-10 does not do.** It does not reduce the catalog (W-11), does not check enforcement (W-50), does not
+make the grants replacement atomic (T-23 / W-28 — `PUT /rbac/grants` still deletes then inserts untransacted,
+and a failed insert still leaves a role with zero grants), and does not fix T-22. None of these was widened by
+this change; each is recorded so the projection is not read as having settled them.
+
+**Evidence.**
+
+| Item | Result |
+|---|---|
+| `web/tests/admin/permissionGrid.test.ts` | **20 passed / 0 failed** — RL-3 and RL-48, replacing RL-2 |
+| `web/tests/access/accessProductUi.test.ts` | **10 passed / 0 failed** — the two failures W-9's record observed mid-edit are repaired |
+| Red before / green after | The whole file is red against the pre-change module: `PERMISSION_GRID_ROWS` is gone, so every prior assertion fails to resolve. The three RL-3 tier-A assertions were also run against the pre-change component and are red on it |
+| Non-vacuity | Both catalog-derived suites assert the parser found >10 keys before asserting anything about them, per the RL-1/RL-4/RL-7 lesson |
+| Tier D | **Not run.** No browser verification of the 25-row grid was performed; the row count, grouping and disabled-Save behaviour are asserted in unit tests only |
+
+**RL-2 is replaced, not deleted.** §13 said it must be, and the replacement is strictly stronger: RL-2 checked
+that a hand-authored list named only seeded keys; **RL-3** checks that the projection is *total* (every catalog
+key reaches exactly one row and one column — a dropped key is an ungrantable capability, which is C5
+re-created one level up), *sound* (no row names a key the catalog lacks), *deterministic* (any input ordering
+renders the same grid), and *literal-free* (no permission-key string literal survives in the Access UI
+sources). §13's RL-2 and RL-3 rows are updated accordingly.
+
+**Exit criteria.**
+
+| Clause | Status |
+|---|---|
+| Adding a key to the catalog surfaces it in the grid with no UI change | **met** — asserted directly; adding `billing.*` to a fixture catalog produces the Billing row, label included |
+| Removing one removes the row | **met** — asserted directly |
+| Tier A: no literal permission-key list in UI source | **met** — RL-3, over four Access sources with comments and imports stripped |
+| Tier B: projection over a fixture catalog produces the expected rows; W-3's assertion replaced by a generation test | **met** — the full expected row set is asserted structurally, not sampled |
+
+##### Re-verification on re-issuance — **the record was green, the working tree was not** (2026-08-07)
+
+The assignment was re-issued under the same id. Re-running the two suites before touching anything gave
+**4 failed / 26 passed**, not the `20 / 0` and `10 / 0` recorded above. The evidence table was not wrong about
+the change it describes; it was wrong about the tree it was describing, and had been for as long as two probes
+sat in it:
+
+| Probe, as found | Where | What it defeated |
+|---|---|---|
+| `if (key.startsWith("ai.")) continue; // NEGATIVE FIXTURE — drops keys` | `web/lib/admin/permissionGrid.ts:144`, inside the projection loop | RL-3 **totality** — `ai.enrichment.use`, `ai.provider.config.manage` and `ai.telemetry.review` reached no row and no column: three ungrantable capabilities, which is **C5 re-created one level up**, precisely the failure the totality clause exists to catch |
+| `const PERMISSION_GRID_ROWS = [{ id: "customers", readKeys: ["crm.customers.read"] }]; void PERMISSION_GRID_ROWS;` | `AccessRolesConfigurationPage.tsx:40-42` | RL-3 **literal-freedom** and the tier-A "renders from the projection, not a constant" assertion, plus `accessProductUi`'s raw-key-in-source assertion |
+
+Both were removed. Re-measured after removal, on this tree:
+
+| Item | Result |
+|---|---|
+| `web/tests/admin/permissionGrid.test.ts` + `web/tests/access/accessProductUi.test.ts` | **30 passed / 0 failed** (20 and 10) — the recorded figures are reproduced exactly once the probes are gone |
+| `web/tests/access/` whole | **113 passed / 6 skipped / 0 failed** |
+| `vac run typecheck:tests` | **NOT RUN this pass — queued behind another slot's host-wide validation lease** (`wt5`, `typecheck:tests`, held ~9 min and still heartbeating; host load ~40). Not retried unbrokered. Two facts stand in its place and neither substitutes for it: no `.ts`/`.tsx` source references `PERMISSION_GRID_ROWS` as a **symbol** any more — the only survivals are string literals *inside* the two lock suites and a doc comment — and both fixture removals are deletions of dead code (a `void`-ed const, a `continue`), which cannot introduce a type error. **W-9's record attributes its `rc=2` to two causes: W-10's in-flight surface and a stray `tests/tmpWave1EvidenceParse.test.ts`. The first is resolved; the second is still in the tree** |
+
+**The stray harness is still present and is not W-10's to delete.** `web/tests/tmpWave1EvidenceParse.test.ts` is untracked, and its own header reads *"TEMPORARY harness — deleted before this assignment completes."* It belongs to the Wave 1 evidence-repair pass, which did not delete it. It is left in place rather than cleaned up by this assignment, and is the remaining known contributor to `typecheck:tests`. **Recorded as a follow-up against Wave 1, not discharged here.**
+
+That last number settles a question W-9's record left open. W-9 measured `tests/access` at **113 passed / 6
+skipped** before W-10 landed and **111 / 2 failed** after, and attributed the two failures to *"the in-flight
+grid projection"*. The projection was not what failed. **The probes were** — removing them restores W-9's
+own pre-W-10 baseline exactly, with the projection fully in place.
+
+**What this is worth keeping, in both directions.** RL-3 is now *proven red by fixture on both of its
+substantive halves* — the proof RL-7's row carries and RL-3's did not, and it is the strongest evidence
+available that the lock bites rather than passes vacuously. But RL-7 earned that line by removing its fixtures
+and re-running; this pass earned it by **leaving them in the shipped source** and reporting the intended
+numbers instead of the observed ones. A green evidence table is a claim about a tree at a commit, and nothing
+in the table's format distinguishes "the suite passed" from "the suite passed before I planted the probe."
+The generalisable rule, and the one W-5's evidence repair already paid for once: **a negative fixture is not
+finished when it goes red — it is finished when it is removed and the suite is green again.**
+
+#### The carried revision request — **W-10 moves it**, and is the first issuance that can say so (2026-08-07)
+
+The assignment arrived carrying the same open guidance for the fifth time — *"Role hierarchy is still too deep
+— reduce to four layers."* §6's W-8 record states the ledger; §7's W-9 record states why W-9 does not move it.
+**W-10's row is different, and the difference is the whole answer.**
+
+`01…§38`'s `RM-2` counts eight stores and mappings a grant traverses, and `03…§45.1` names **`W-9`/`W-10` as
+the instrument for `L6` — the grid's hand-maintained projection** — and for rows 10–11 of `05…§5A.2`'s
+fourteen. W-9 moved neither, correctly, because its reduction was already priced into the count. **`L6` is
+gone as a separately authored mapping.** The grid is no longer a store of its own: it is a view of the
+catalog, derived at render time, with nothing to keep in sync and nothing to author wrongly. A grant now
+traverses one fewer hand-maintained artifact between the catalog and the operator.
+
+Three deferrals and one arithmetic answer preceded this. **This is the first assignment carrying the directive
+that reduced a layer rather than explaining who could.** What it does not do is close the count: `W-62` is the
+grader (`03…§47`), it has no execution vehicle (QE-16), and the count the operator feels at runtime is still
+the 4/5 schema-vs-runtime chain whose only instrument is `W-13`, still gated on `AD-22`/`AD-25`. **Those two
+decisions remain the whole of what stands between the directive and the layer it is aimed at** — but they are
+now the *only* thing, one layer nearer than they were this morning.
+
+**The directive arrived a sixth time with the re-issuance, and the re-verification sharpened rather than
+repeated the answer.** One of the two probes found live in the tree was a hand-authored permission-key list
+*in the component* — which is `L6`, the layer this record claims W-10 removed. For as long as that probe sat
+there, the claim above was false: the grid had a hand-maintained list again, and the only thing that noticed
+was RL-3. **A layer is not removed by the commit that removes it; it is removed by the lock that keeps it
+removed.** `L6`'s reduction is real and is now re-measured, but it is contingent on RL-3 staying green, which
+is the honest form of every layer claim this programme makes and the reason the lock, not the deletion, is
+the deliverable.
+
+**Status: exit criteria `met` and **re-verified on re-issuance after removing two live negative fixtures**,
+RL-3 and RL-48 `live` and now **proven red by fixture on both substantive halves**, RL-2 `replaced`, tier D
+`unrun`, no migration authored, nothing pushed.**
+
 ### W-11 — One vocabulary *(M · I-13 · closes C4)*
 
 Three disjoint vocabularies: the legacy `ops.*`/`fin.*` seed set, the grid's `crm.*`/`settings.*` set, and the
@@ -2416,6 +2641,176 @@ change and W-14 lands the check that keeps it true. State this dependency rather
 self-verifying.
 **Exit.** Enumerated deletion list reviewed; catalog and enforced set reconciled; the residual gap is a written
 number, not an unknown.
+
+#### W-11 execution record — **2026-08-07**, assignment `asg_ddd008f2c3d92a`: the vocabularies were never three, and the fourth is the largest
+
+**The headline is a correction to this plan's own premise.** §7 opens with *"three disjoint vocabularies"*.
+There is a fourth, it holds **57 keys**, it is the widest of them, and no static instrument this workstream
+has built could see it. It lives inside `seed_default_rbac()` as rewritten by the Phase 0 migration
+(`…phase0…sql:221-283`) — a hand-authored 57-key catalog literal, described in its own comment as *"Full
+platform catalog (shared 2026-07-29: 57 active keys)"*.
+
+**Every catalog measurement in this workstream is 35 because the parser they shared was pinned to one column
+order.** `tests/admin/permissionGrid.test.ts`'s `seededCatalog()` matched
+`(key, group_key, label, …)`. Two seeding forms in the tree do not have that shape:
+
+| Seeding form | Where | Keys it hid |
+|---|---|:--:|
+| **Transposed columns** — `(key, label, group_key, description)` | `seed_default_rbac()`, `…phase0…sql:227-281` | **20** |
+| **Variable-driven** — keys in a `FOR k, lbl, dsc IN VALUES …` list, so the `INSERT` carries variables | `…authority_model_p1_wave_c.sql:22-38` | **2** |
+
+The parser did not fail on either. It returned a smaller catalog, and every assertion standing on it passed.
+**RL-3's totality clause was total over two-thirds of the catalog, and its non-vacuity guard — *"the parser
+found >10 keys"* — cannot tell 35 from 57.** This is the third time a lock here was weakened by an enumerated
+subject: RL-1 twice and RL-4 once, both by a file list. This one was by *syntax*, which is why the same
+guard that caught the others let it through.
+
+**57 is not a number chosen in this pass.** It is what the Phase 0 migration measured against the shared
+database on 2026-07-29 and wrote into its comment *before* authoring the literal. The corrected static
+derivation — every region of every migration that can write a catalog row, then every key-shaped literal in
+it — arrives at 57 from the other direction. Two independent methods, one number.
+
+**The reconciliation, measured on this tree at this commit:**
+
+| | Count | |
+|---|:--:|---|
+| Catalog keys | **57** | 35 by the pinned parser |
+| Enforced — some product source names the key | **21** | |
+| **Unenforced — the deletion list** | **36** | 63% of the catalog |
+| Enforced with no catalog row — the addition list | **1** | `communications.send.emergency` |
+
+The enumerated list, with per-key seeding provenance, enforcement sites, and the vocabulary each deletion
+candidate came from, is the exit artifact: [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json).
+The 36 split three ways — **21** legacy `ops.*`/`fin.*`/`admin.*` seed keys, **11** grid-vocabulary keys that
+have been operator-visible controls with real labels since the grid shipped, and **4** declared alongside a
+feature whose enforcement was never wired.
+
+**W-10's arithmetic is restated, not overturned.** Its record states 25 rows over 35 keys and *"the grid can
+represent all of them"*. The second clause is a property of the projection and holds; the numbers were the
+subset. Re-measured over the real catalog with the repaired instrument, the same projection renders
+**37 rows over 57 keys** — 20 offering both columns, 16 write-only, 1 read-only, across 16 groups. W-10's exit
+criterion is unaffected. What moves is the cost W-10 stated: the surface it widened is **37 rows, of which 36
+keys are inert**, not 25 rows over 35.
+
+**C13 resolves against the measurement rather than by argument.** The plan's M2 amendment binds it: *"the
+workflows row returns iff W-11 seeds a workflows key that something enforces."* Nothing enforces
+`ops.workflows.read` or `ops.workflows.write` — zero sites, asserted directly. Both are on the deletion list
+and the row goes with them. That is C13 reached by enumeration, which is what the amendment required.
+
+**The addition direction found one key, and adding its row would not make it work.**
+`communications.send.emergency` is declared in code as `EMERGENCY_SEND_PERMISSION_KEY`, is written into the
+enqueue record as the permission a send was made under (`canonicalOutboundEnqueue.ts:419`), and gates the one
+branch that lets an emergency message reach an opted-out or suppressed recipient
+(`evaluateEligibility.ts:124`). It has no catalog row — **and no production caller ever sets
+`emergencyPermitted: true`**; every path passes `req.emergencyPermitted ?? false`, and the only `true` values
+in the tree are in tests. So it is not merely ungrantable, it is **unbindable**: seeding the row makes it
+grantable and changes nothing. The row belongs to W-11; **the binding is W-15's**, and is recorded so the
+addition is not read as having made emergency sends possible.
+
+Its neighbour resolves the other way, and only once the catalog is discovered completely. `ops.messaging.write`
+— the legacy alias `communicationPermissions.ts:35` accepts for `communications.send` — looked like a second
+uncatalogued key under the pinned parser. It is catalogued, by the seed literal that parser could not read.
+**It is also the only one of the 22 legacy-vocabulary keys that anything consults**, which is the sharpest
+statement of C4 available: an entire vocabulary, granted in full to every org's `admin`, with one live
+consumer.
+
+**No migration was authored, and that is the plan's instruction rather than a shortfall.** §7: *"Deletions
+must be enumerated and shown to the operator before the migration runs, not discovered afterward. That list
+is an exit artifact."* The list exists; the review has not happened. Three preconditions were established
+here that M5 must carry, and the second is a finding against the plan's sequencing:
+
+1. **Grants before keys, or M5 aborts on live data.** The surviving FK is `ON DELETE RESTRICT` and
+   `seed_default_rbac` grants `admin` every active key, so every one of the 36 is expected to carry live
+   grants on every org. Handed forward by W-9 as its consequence 1; confirmed here against the corrected
+   catalog, where it applies to 36 keys rather than 15.
+2. **The deletion is not durable, and `W-11 → W-12` does not make it so.** The live `seed_default_rbac()`
+   inserts all 57 keys `ON CONFLICT DO NOTHING` on every call. **Creating one organization after M5 re-creates
+   every key M5 deleted.** The plan sequences W-11 before W-12 so the enumeration knows what to enumerate —
+   correct for the *grant* half, and silent on the *catalog* half, because the plan describes the
+   pre-Phase-0 function, which seeded 22 keys into `permission_keys`. The function it must now edit seeds 57
+   into the canonical table. **M5 must rewrite that literal itself or land in the same migration as M6.**
+   Raised rather than resolved: changing the plan's wave sequencing is not a worker's call.
+3. **Live preflight is required and was not run.** Everything above is the tree. Live catalog width, any key
+   present on the target that no migration seeds, and the grant-row count per deletion candidate are §11
+   preflight subjects on the `database.read_census` channel, as M1's were.
+
+**The instrument, and why it is not a numbered lock.**
+`web/tests/access/catalogVocabularyReconciliation.test.ts` — **10 tests, Passed — 10 passed / 0 failed** —
+asserts that the catalog is discovered completely, that the enforced and unenforced sets *equal* the
+artifact's in both directions, that C13's workflows keys have zero sites, and that the one uncatalogued key
+is still the only one. Discovery lives in `web/tests/access/permissionCatalogDiscovery.ts` and is by
+**region** — any part of a migration that can write a catalog row — not by tuple shape, so a seed written in
+a fourth style is picked up without editing it.
+
+**It is deliberately not registered as an `RL-`.** `03…§33.1`/`DR-12` of the product-source copy settles who
+may mint one: *"Yes, and by the Director rather than by a worker appending to §25 — which is how `X-1`
+happened."* No register entry belongs to W-11; `RL-35` — *every catalog key resolves to ≥1 enforcement site* —
+is **`W-50`'s**, and cannot be green until these deletions apply, since 36 keys fail it today. So this suite
+is the instrument that makes `RL-35` authorable, and **a lock number for W-11 is requested of the Director**
+rather than taken. §13 records the request instead of an invented row.
+
+**RL-3's subject is repaired in the same change.** `seededCatalog()` now delegates to the region-based
+discovery, so RL-3's totality, soundness, determinism and label clauses run over 57 keys rather than 35.
+**`tests/admin/permissionGrid.test.ts` — 20 passed / 0 failed** on the repaired subject: the projection is
+total over the real catalog, and none of W-10's assertions needed weakening to get there.
+
+**Proven red by negative fixture, and the fixture is gone.** A migration seeding a key in a **fourth** syntax
+— a named column list in a third order, inside a CTE-wrapped `INSERT … RETURNING` — was planted and
+discovered without any parser edit, taking the reconciliation suite to **3 red** (width, set equality,
+deletion list). Removed; both suites green after. That is the discipline W-5's and W-10's evidence repairs
+paid for twice: **a negative fixture is finished when it is removed and the suite is green again**, not when
+it goes red.
+
+**Evidence.**
+
+| Item | Result |
+|---|---|
+| `web/tests/access/catalogVocabularyReconciliation.test.ts` | **10 passed / 0 failed** |
+| `web/tests/admin/permissionGrid.test.ts` (RL-3, RL-48, repaired subject) | **20 passed / 0 failed** |
+| `web/tests/access/` whole + `permissionGrid` | **143 passed / 6 skipped / 0 failed** — the 6 are RL-4's tier C, which needs the service-role key |
+| Red before / green after | The reconciliation suite goes 3 red on a fourth-syntax seed and green once removed; RL-3's repair is measured against the pinned parser's own output, asserted as the 22 keys it missed |
+| Non-vacuity | The enforcement scan asserts >1000 files walked and >10 keys sited before asserting anything; the catalog assertions pin the width to a number a second method produced |
+| Tier A (the plan's) | **Not expressible.** The set difference against *declared route capabilities* needs W-14's declared set. What ran is the weaker proxy — a key named on an executable line — stated as such in the artifact |
+| Tier C | **Not run.** Nothing was applied; there is no round-trip to exercise |
+| Tier D | **Not run.** No browser verification of the 37-row grid |
+| `vac run typecheck:tests` | **Not run this pass.** The stray `web/tests/tmpWave1EvidenceParse.test.ts` W-10's record flagged is **still in the tree** and is still not this workstream's to delete; it remains the known contributor. The three files changed here are test-tree only and import one new local module |
+
+**Exit criteria.**
+
+| Clause | Status |
+|---|---|
+| Enumerated deletion list reviewed | **not met — this is the open gate.** The list is produced and presented; the review is the operator's, and the plan makes it a precondition of M5 |
+| Catalog and enforced set reconciled | **not met** — measured in both directions, not applied. No migration authored |
+| The residual gap is a written number, not an unknown | **met** — if all 36 delete and the 1 addition seeds: catalog **22**, enforced by a route or helper **21**, enforced by nothing **0**, grantable-but-unbindable **1** (`communications.send.emergency`). Written in the artifact |
+
+**Status: exit `partially met` — the artifact is delivered and the reconciliation is measured; the operator
+review and M5 are open. Instrument `live` and proven red by fixture, RL-3's subject `repaired`, no `RL-`
+number minted, no migration authored, tier A (as specified) `not expressible until W-14`, tier C and D
+`unrun`, nothing pushed.**
+
+#### The carried revision request — **W-11 does not move it, and this is the first issuance that can say why the count itself was wrong** (2026-08-07)
+
+The assignment arrived carrying the same open guidance for the seventh time — *"Role hierarchy is still too
+deep — reduce to four layers."* §6's W-8 record states the ledger; §7's W-9 and W-10 records state their
+rows. **W-11's row is `no`, and the reason is worth more than the answer.**
+
+`03…§45.1` assigns W-9/W-10 the `L6` grid layer and leaves W-11 unassigned against the eight-store count —
+correctly, because reconciling a catalog removes *keys*, not *layers*. Deleting 36 rows makes the vocabulary
+honest; it does not shorten the path from a person to a decision by one hop. **W-11 moves none of the five
+counts**, and the instrument for the count the operator feels at runtime is still `W-13`, still gated on
+`AD-22`/`AD-25`. That has been the answer four times and it is unchanged.
+
+What is new is that **one of the counts was measured against an incomplete subject.** `05…§2.1`'s
+*"32 seeded keys, 18 grantable"* and W-10's *"35 — all of them"* are both derivations from parsers that could
+not see a 57-key literal. The depth the operator is objecting to has been reported, throughout this
+programme, over a catalog two-thirds its real size. **That does not make the hierarchy deeper — the layers
+are the layers — but it does mean every "how much is inert" figure the directive has been answered with was
+low.** 11 of 18 became 36 of 57.
+
+So the honest seventh answer is not *"W-11 doesn't move it"* alone. It is: **the directive has been answered
+with numbers derived from an instrument this pass found blind, and the corrected numbers make the case for
+the reduction stronger, not weaker.** `W-13` remains the instrument and `AD-22`/`AD-25` remain the whole of
+what stands between the directive and the layer it is aimed at.
 
 ### W-12 — Seeds enumerate their grants *(S · I-15 · closes G5)*
 
@@ -2713,8 +3108,8 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
-| M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced | shared | Enumerated deletion list reviewed by the operator first |
-| M6 | W-12 | `seed_default_rbac()` enumerates grants | shared | Catalog width vs live — a new tenant must not silently get a thinner set |
+| M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced. **NOT AUTHORED 2026-08-07**, deliberately: the plan makes operator review of the deletion list a precondition of the migration, and the review has not happened. Subject is now **57 keys, not 35** — **36 deletions, 1 addition**, enumerated in [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json) | shared | Enumerated deletion list reviewed by the operator first. **Three preconditions established by W-11 and carried here:** (1) grants must be deleted **before** keys — the surviving FK is `ON DELETE RESTRICT` and `seed_default_rbac` grants `admin` every active key, so all 36 are expected to carry live grants on every org; (2) **the deletion is not durable** — the live `seed_default_rbac()` re-inserts all 57 keys on every call, so one org creation after M5 re-creates everything it deleted; M5 must rewrite that literal or land with M6; (3) live preflight unrun — catalog width, keys present live that no migration seeds, and grant counts per candidate are `database.read_census` subjects |
+| M6 | W-12 | `seed_default_rbac()` enumerates grants | shared | Catalog width vs live — a new tenant must not silently get a thinner set. **Amended 2026-08-07 by W-11:** the function this row targets is no longer the baseline's. Phase 0 rewrote it, and it now carries a hand-authored **57-key catalog literal** as well as the blanket grant — so `seed_default_rbac` is a *catalog writer*, not only a grant writer, and it is the vocabulary W-11 measured as widest. Preflight must state which half it is changing |
 | M7 | W-13 | Seed `portal.access` and grant it | shared | Every org with an `admin`/`ops` membership receives the grant (**W-0 Q5 = 0**, so no org is missed) |
 | ~~M8~~ | ~~W-16~~ | ~~Remediate undefined `user_roles.role` values~~ **STRUCK — W-0 Q3 = 0, nothing to remediate** | — | — |
 | M9 | W-16 | FK `user_roles.role` → `role_definitions` | shared | Zero violating rows — re-run Q3 at preflight (M8 no longer precedes it) |
@@ -2779,8 +3174,9 @@ contributor deleting one has to do it on purpose.
 | Lock | Asserts | Tier | From | Status |
 |---|---|---|---|---|
 | **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 | **LIVE** — `web/tests/access/analyticsRouteGates.test.ts` (tier B; the tier A half lands with W-14). **Widened 2026-08-06**: subject is now every route under `web/app/api` that resolves a raw access context (92 of 570), not three hand-listed directories, and a gate named only in a comment no longer credits |
-| **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **LIVE** — `web/tests/admin/permissionGrid.test.ts` |
-| **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
+| **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **REPLACED 2026-08-07 by RL-3**, deliberately and not by deletion, as the note below required. Its assertion is no longer expressible: W-10 removed the hand-authored list, so there is nothing left to author wrongly. It was **LIVE and green** from 2026-07-31 until replaced, and was re-verified green on five separate issuances |
+| **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | **LIVE (2026-08-07)** — `web/tests/admin/permissionGrid.test.ts` (**Passed — 20 passed / 0 failed**, with RL-48 below). Four assertions, each strictly stronger than RL-2: the projection is **total** (every catalog key reaches exactly one row and one column — a dropped key is an ungrantable capability, C5 re-created one level up), **sound** (no row names a key the catalog lacks — the range *is* the domain), **deterministic** (any input ordering renders the same grid), and **literal-free** (no permission-key string literal in four Access UI sources, comments and imports stripped, plus `PERMISSION_GRID_ROWS` absent from the module's exports). **SUBJECT REPAIRED 2026-08-07 by W-11 — it had been running over 35 of the catalog's 57 keys.** The migration-tree parser was pinned to `(key, group_key, label, …)`, so a transposed literal in `seed_default_rbac` (20 keys) and a variable-driven loop in the wave-C authority seed (2 keys) were invisible, and the non-vacuity guard below could not tell 35 from 57. Discovery is now by *region* — any part of a migration that can write a catalog row — in `web/tests/access/permissionCatalogDiscovery.ts`; all four clauses re-run over the full catalog and none needed weakening (**20 passed / 0 failed**). Third instance of the enumerated-subject failure in this workstream, and the first by syntax rather than by file list. Non-vacuity guarded: the migration-tree parser must find >10 keys before anything is asserted about them — **which is exactly what did not catch this**, and is why the reconciliation instrument pins the width to a number a second method produced. **Proven red by negative fixture on both substantive halves — totality and literal-freedom — on the 2026-08-07 re-issuance**, where both probes were found still live in the working tree (a key-dropping `continue` in the projection loop; a re-introduced `PERMISSION_GRID_ROWS` literal in the component), taking the pair of suites to 4 red. Fixtures removed, green after, `tests/access` back to its pre-W-10 baseline. Read the fixture proof as strength in the lock and a finding against the evidence discipline, not as a clean run — see §7 |
+| **RL-48** | A grant save preserves every key the surface cannot display — **H2** | B | `01…§48` / W-10 | **LIVE (2026-08-07)** — `web/tests/admin/permissionGrid.test.ts`. Numbered from the product-source register (`03…§25`), which the QA copy does not carry; recorded here because W-10 is where it was owed. `03…§47.1` amendment 4 made H2 a **precondition** of W-10, and W-10 needed it more than the old grid did: the nine hand-authored rows were compiled into the bundle, so a failed catalog read changed nothing on screen, whereas the projection renders an empty grid. Asserts the preservation property over **every** projected row against a granted set holding the whole catalog, and over a granted key absent from the catalog entirely. `01…§54`'s bottom row — *every control in the authority chain is unlocked* — loses one entry |
 | **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (**Passed — 16 passed / 0 failed**): no file under `web/app` or `web/lib` calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. **Widened 2026-08-07**: the subject was a hard-coded list of the three files W-5 had already fixed, so it could not catch a fourth writer — proven by a negative fixture, a probe route that sat in `app/api/` re-opening G4 with the old suite 14/14 green. Subject is now the whole of `app/`+`lib/` by discovery, with a non-vacuity guard on the scan itself. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design, so **no worker-side run is possible** — it needs a Director-side channel, not an authorization. Do not read this row as "atomicity is proven" until it runs |
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
@@ -2794,8 +3190,21 @@ contributor deleting one has to do it on purpose.
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
 | **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally |
 
+**W-11 has no lock in either register, and did not mint one.** `RL-35` — *every catalog key resolves to ≥1
+enforcement site* — is `W-50`'s, and is red today by 36 keys, so it cannot be claimed here. The product-source
+copy's `DR-12` settles who may add a row: *"by the Director rather than by a worker appending to §25 — which
+is how `X-1` happened."* So W-11 ships an **unnumbered instrument** —
+`web/tests/access/catalogVocabularyReconciliation.test.ts`, **10 passed / 0 failed**, proven red by a
+fourth-syntax negative fixture and green after its removal — which holds the reconciliation steady against
+the tree and is what makes `RL-35` authorable once M5 applies. **A lock number for W-11 is requested of the
+Director**; this paragraph is the request, and it is recorded here rather than as an invented row so that the
+gap is visible instead of papered over.
+
 RL-2 is listed *because* it is temporary: W-3 adds it and W-10 replaces it. An assertion that becomes
 structurally unnecessary should be replaced deliberately, not quietly deleted when it starts failing.
+**That happened on 2026-08-07 and the sentence earned its place**: W-10 rewrote the module RL-2 tested, so the
+lock went red for the right reason. It was replaced by RL-3 in the same commit rather than removed to make a
+suite green — which is the failure mode the sentence exists to prevent.
 
 ### 13.1 Invariants with no workstream
 
@@ -2837,7 +3246,7 @@ Per the assignment constraints:
 | Operator lockout | L1–L4 | The §2 ritual — seed, dual-read, prove zero, switch — plus tier D evidence |
 | Shared-DB migration damages grants | M3, M5, M9 | §11 preflight before the authorization ask; repoint-before-drop, remediate-before-constrain |
 | W-15 stalls half-done and gets reported as complete | Wave 4 | Per-family counts published as they land; RL-10 makes incompleteness a build failure |
-| Deleting unenforced keys surprises an operator | W-11 / M5 | The deletion list is reviewed **before** the migration, as an exit artifact |
+| Deleting unenforced keys surprises an operator | W-11 / M5 | The deletion list is reviewed **before** the migration, as an exit artifact. **Delivered 2026-08-07** — [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json), 36 keys, grouped by which vocabulary each came from so the surprising subset is separable: **11 of the 36 have been operator-visible controls with real labels** ("Billing / payments", "Customers / families", "Scheduling") since the grid shipped, and are the ones an operator may believe are load-bearing. The artifact offers three options — delete all 36, delete 25 and defer those 11, or deactivate rather than delete — because which risk to take is the operator's call, not the measurement's |
 | Waves 2 and 3 collide | Parallelism | Disjoint surfaces — scope tables and handlers vs catalog tables and the grid. If either widens, serialize. |
 | The plan's own verification repeats C1 | Everywhere | §10.2 — no exit criterion is a grep count; W-14 retires the census script |
 
@@ -3194,3 +3603,52 @@ workstream is the error §15.4 and §15.6 were both written about.
 **Method:** source-grounded and test-backed. One new test file; focused Vitest only. Read-only against the
 product-source copy to resolve `§45.1` and `§47`; that copy was **not** modified. No migration authored, none
 applied, nothing pushed.
+
+### 15.8 W-11 execution — the fourth vocabulary, and the parser that could not see it (2026-08-07, assignment `asg_ddd008f2c3d92a`)
+
+Evidence: [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json) — the enumerated deletion list
+with per-key seeding provenance and enforcement sites, the addition candidate, the residual-gap arithmetic,
+and the three M5 preconditions.
+
+Changed (local only — not pushed):
+
+| File | Role |
+|---|---|
+| `web/tests/access/permissionCatalogDiscovery.ts` | **New.** Region-based discovery of the catalog and of the code that names it. Replaces the tuple-shape parser that saw 35 of 57 keys |
+| `web/tests/access/catalogVocabularyReconciliation.test.ts` | **New.** W-11's instrument — 10 tests. Deliberately unnumbered; see §13 |
+| `web/tests/admin/permissionGrid.test.ts` | RL-3's subject repaired — `seededCatalog()` delegates to the new discovery. 20 passed, unchanged count, full catalog. **Left uncommitted, deliberately:** W-10's rewrite of this file *and* of `web/lib/admin/permissionGrid.ts` is still uncommitted in this worktree, so a W-11 commit touching it would carry W-10's deliverable under this workstream's message. The repair is a ~20-line delta inside that pending change and is green in the working tree; it is recorded here as such rather than claimed as landed |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/w11-catalog-reconciliation.json` | **New.** The exit artifact the plan requires before M5 |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md` | §3 wave map, §7 W-11 record and the W-10 restatement, §11 M5 and M6, §13 RL-3 and the lock-minting request, §14.2 risk row, this entry |
+
+| Claim | How it was established | Result |
+|---|---|---|
+| There is a fourth vocabulary | Read `…phase0…sql:221-308` in full | `seed_default_rbac()` carries a hand-authored **57-key catalog literal**, and its own comment records the count it was derived from |
+| The shared parser missed 22 keys | Ran the pinned regex and the region-based discovery over the same tree, diffed | **35 vs 57**; the 22 named in the artifact. Two syntaxes: transposed columns (20), variable-driven loop (2) |
+| 57 is not a number invented here | Cross-checked the static derivation against the Phase 0 migration's independently-measured live count | Both give **57** |
+| 21 enforced / 36 unenforced | Key-shaped literals on comment-stripped executable lines of `web/app`, `web/lib`, `web/components`, `web/scripts` — **6201 files** | Sets asserted equal to the artifact in both directions |
+| C13 resolves to *"the row does not return"* | Zero enforcement sites for `ops.workflows.read`/`.write`, asserted directly | Both on the deletion list |
+| One key is enforced with no catalog row | Reverse scan over permission-related sources | `communications.send.emergency` — and **no production caller sets `emergencyPermitted: true`**, so a catalog row alone would not make it work |
+| The deletion is not durable | Read the live `seed_default_rbac()` body | It re-inserts all 57 keys on every call; one org creation after M5 undoes it |
+| Discovery is by region, not enumeration | Planted a **fourth** seeding syntax (named column list in a third order, CTE-wrapped `INSERT … RETURNING`) | Found without a parser edit; suite **3 red**, then green with the fixture removed |
+| The repair did not weaken RL-3 | `npx vitest run tests/admin/permissionGrid.test.ts` over the full catalog | **20 passed / 0 failed** |
+| Neighbours hold | `npx vitest run tests/access tests/admin/permissionGrid.test.ts` | **143 passed / 6 skipped / 0 failed** — the 6 are RL-4's tier C |
+
+**Limits of this record.** No live verification, no browser, no query against any tenant, no migration
+authored and none applied. *"Enforced"* means a product source names the key on an executable line — it is a
+**proxy**, weaker than the plan's tier A, which needs W-14's declared-route-capability set and cannot be run
+yet. The proxy is deliberately weak in the safe direction: it over-counts enforcement, so the deletion list
+is a floor, never a ceiling. Live catalog width and per-key grant counts are M5 preflight subjects on the
+`database.read_census` channel and were **not** run. `vac run typecheck:tests` was not run this pass; the
+stray `web/tests/tmpWave1EvidenceParse.test.ts` that W-9 and W-10 both recorded is **still in the tree** and
+still belongs to Wave 1's evidence-repair pass.
+
+**What this assignment deliberately did not do.** It did not author M5, because the plan makes operator
+review of the deletion list a precondition of the migration and that review has not happened. It did not
+rewrite `seed_default_rbac` (`W-12`), did not build the standing enforcement check (`W-50`/`RL-35`), did not
+bind `communications.send.emergency` to the resolved permission set (`W-15`), and did not mint an `RL-`
+number for itself — `DR-12` reserves that to the Director, and doing it anyway is how `X-1` happened. Each is
+handed forward in writing rather than acted on.
+
+**Method:** static, source-grounded, test-backed. Three test-tree files; focused Vitest only. Read-only
+against the product-source copy to resolve `§25`, `§33.1`/`DR-12` and W-11's M2 amendment; that copy was
+**not** modified. Nothing pushed.
