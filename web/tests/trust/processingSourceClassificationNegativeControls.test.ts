@@ -24,6 +24,7 @@ import type { DecisionContractV1 } from "@/lib/trust/contract/decisionContractTy
 import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
 import type { ReasoningUsageInput, TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { decideProcessingSourceClassification } from "@/lib/trust/consumers/processingSourceClassification";
+import { processingSourceClassificationDeterministicStrategy } from "@/lib/trust/reasoning/strategies/processingSourceClassificationDeterministic";
 
 const WEB_ROOT = join(__dirname, "..", "..");
 
@@ -237,16 +238,58 @@ describe("NC-4 — a rescaled confidence would be caught", () => {
  * because relying on either alone would be a weaker guarantee than the pair.
  */
 describe("NC-5 — provider identity added to the recommendation would be caught", () => {
-    it("layer 1: the strategy drops a smuggled provider_key before it reaches the package", async () => {
+    /**
+     * Phase 2.1 moved this defence EARLIER, and the control is updated to say so.
+     *
+     * `provider_key` is not in the capability's semantic map, so `classifyElements`
+     * defaults it to `identity`, whose declared transformation is `tokenize`.
+     * Before transformation dispatch existed, `tokenize` was a no-op: the element
+     * was admitted to the reasoning context raw, and only the strategy's whitelist
+     * projection stopped it reaching the package. Now the privacy engine refuses
+     * the whole transform, so the smuggled key never enters the context at all.
+     *
+     * That is strictly stronger — the element is stopped one layer sooner — but it
+     * would silently retire this test's coverage of the strategy whitelist, so the
+     * whitelist is asserted directly below instead of incidentally.
+     */
+    it("layer 0: an undeclared provider_key is refused by privacy before reasoning begins", async () => {
         const withProvider = { ...validRecommendation(), provider_key: "openai" };
         const { decision, packages } = await governRecommendation(withProvider);
 
-        expect(decision.package.recommendation).not.toBeNull();
+        expect(decision.package.outcome).toBe("refused_privacy");
+        expect(decision.package.recommendation).toBeNull();
+        expect(JSON.stringify(packages[0]).toLowerCase()).not.toContain("openai");
+        expect(JSON.stringify(packages[0])).not.toContain("provider_key");
+    });
+
+    it("layer 1: the strategy whitelist still drops a smuggled provider_key, asserted directly", () => {
+        // Isolates the strategy from the runtime: even handed a context that
+        // already contains the smuggled key, the projection emits exactly six.
+        const outcome = processingSourceClassificationDeterministicStrategy.reason({
+            context: {
+                transformed: { ...validRecommendation(), provider_key: "openai" },
+                knowledge: [],
+                redaction_steps: [],
+                classes_present: ["operational"],
+                pii_mode: "strict",
+                transformations: [],
+            },
+            nowIso: FIXED_NOW,
+        }) as { ok: true; proposal: { recommendation: Record<string, unknown> } };
+
+        expect(outcome.ok).toBe(true);
+        expect(Object.keys(outcome.proposal.recommendation).sort()).toEqual([
+            "classification_key", "classifier_version", "confidence", "label", "signals", "status",
+        ]);
+        expect(JSON.stringify(outcome.proposal.recommendation).toLowerCase()).not.toContain("openai");
+    });
+
+    it("a valid recommendation still reaches the package with exactly its six keys", async () => {
+        const { decision } = await governRecommendation(validRecommendation());
+        expect(decision.package.outcome).toBe("recommended");
         expect(Object.keys(decision.package.recommendation!).sort()).toEqual([
             "classification_key", "classifier_version", "confidence", "label", "signals", "status",
         ]);
-        expect(JSON.stringify(packages[0]).toLowerCase()).not.toContain("openai");
-        expect(JSON.stringify(packages[0])).not.toContain("provider_key");
     });
 
     it("layer 2: the owner's parser refuses the same payload outright", () => {
@@ -276,6 +319,14 @@ describe("NC-6 — a command binding added to the recommendation would be caught
             proposed_command: { command_key: "create_person", inputs: {} },
         };
         const { decision } = await governRecommendation(withCommand);
+        // Refused at privacy now rather than dropped by the strategy (see NC-5),
+        // but the guarantee this control exists for is unchanged and asserted
+        // identically: neither the key nor the command reaches the package.
+        // The refusal explanation deliberately names the information CLASS and
+        // transformation, never the caller-supplied element key — otherwise a
+        // smuggled key would write its own name into an immutable package
+        // through the refusal meant to stop it.
+        expect(decision.package.outcome).toBe("refused_privacy");
         expect(JSON.stringify(decision.package)).not.toContain("proposed_command");
         expect(JSON.stringify(decision.package)).not.toContain("create_person");
     });
