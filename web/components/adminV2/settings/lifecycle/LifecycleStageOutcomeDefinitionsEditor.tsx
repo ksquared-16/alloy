@@ -16,7 +16,10 @@ import {
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import { resolveOutcomeStatusOptions } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
-import { resolveStageGrain } from "@/lib/lifecycle/stageGrainResolution";
+import {
+    entityGrainFromJourneySegment,
+    filterGrainCompatibleStageDestinations,
+} from "@/lib/lifecycle/filterGrainCompatibleStageDestinations";
 import {
     setWorkTemplateOutcomeRefs,
     workTemplateOutcomeRefs,
@@ -78,30 +81,18 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
         .filter((outcome): outcome is NonNullable<typeof outcome> => Boolean(outcome));
 
     /** This stage's own grain, from the draft that owns these outcomes. */
-    const entityGrain: "family" | "child" | null =
-        draft.journey_segment === "child" ? "child"
-        : draft.journey_segment === "family" ? "family"
-        : null;
+    const entityGrain = entityGrainFromJourneySegment(draft.journey_segment);
 
     /**
      * Destinations an exit path from this stage may target. A stage cannot transition to itself,
      * which the operating contract already rejects (`transition_destination_self`).
+     * Grain-compatible only — UX convenience; server validators remain defense in depth.
      */
-    const transitionDestinations = (processStages ?? [])
-        .filter((stage) => stage.key !== stageKey)
-        // Grain-compatible only. A family case and a child's enrollment move on separate tracks,
-        // so offering the other track's stages invites a movement the runtime will refuse anyway.
-        // CONVENIENCE, not authority: `assertStageMoveGrainCompatible` on the executor is what
-        // actually prevents the write. A stage whose grain cannot be resolved, or whose sources
-        // disagree, is withheld here rather than silently offered.
-        .filter((stage) => {
-            if (!entityGrain) return true;
-            const resolution = resolveStageGrain({
-                stageKey: stage.key,
-                configuredMetadataGrain: (stage as { grain?: unknown }).grain,
-            });
-            return resolution.ok && resolution.grain === entityGrain;
-        });
+    const transitionDestinations = filterGrainCompatibleStageDestinations({
+        processStages: processStages ?? [],
+        stageKey: stageKey ?? "",
+        entityGrain,
+    });
     const canAuthorTransition = Boolean(stageKey?.trim()) && transitionDestinations.length > 0;
 
     /**
