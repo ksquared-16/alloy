@@ -50,10 +50,24 @@ whole switch is now one constant, `ABSENT_PROFILE_ENFORCEMENT`. Two defects in t
 deny" were found *before* the flip: **denial must force empty allow-lists**, or a principal with self-written
 `user_department_access` rows keeps the departments its missing profile withheld — W-7 would ship the fail-open
 one table over; and a **malformed scope value must not become a lockout** (§6)
+· **W-4 re-executed 2026-08-07 under the DX7 fixture reissue** (mission `msn_bc33a72e3138ebc215`, assignment
+`asg_360e21924f40a5`) — check **green** at the CLI, **18 tests green**, evidence snapshot byte-identical, every
+baseline measure unmoved, and the ratchet at the live floor in both directions for the first time since the
+ceilings moved into the register. The finding is a **correction to this workstream's own record**: the coverage
+escape it handed W-15 on 2026-08-06 was generalised too far — **W-5 and W-7 both extracted helpers and neither
+left the enforced set**, because the escape is caused by a helper that *constructs or returns* the service
+client, not by helper extraction (§5)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
 self-authority paths its enumeration could not see are live and latent, and W-8 arms one of them** (§5)
+· **W-1…W-3 issued a fifth time, CONCURRENTLY with the fourth 2026-08-07** (mission `msn_e7894cb7225bae3c2b`,
+assignment `asg_4360f505b75d48`) — **two assignments executed the same three workstreams against the same base
+at the same time.** This one authored the RL-1 change the fourth-issuance record observed in the working tree
+and attributed to a concurrent editor. A **third** RL-1 subject defect found and fixed: the primitive list is
+defeated by a module's own `@deprecated` **alias**, so a route holding the G2 shape through
+`getAdminAccessContext` was *unselectable*. Red-run proven both directions; `vac run typecheck:tests` **rc=0**,
+the first typecheck any Wave 1 run has reproduced since 2026-07-31. **W-2's exit criterion remains unmet** (§5)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
@@ -1278,6 +1292,104 @@ evidence that it finds things.
 **The honest limit above is unchanged and still governs**: this check proves a principal is *resolved*, never
 that the result *gates* the handler. W-14 and W-15 still own that proof.
 
+#### W-4 under the DX7 fixture reissue — **DONE 2026-08-07**, assignment `asg_360e21924f40a5`
+
+Fourth leg, and the first one to arrive *after* two helper refactors landed in the workstream's own blind spot.
+§4's rule applies a fourth time: **re-execute rather than re-assert.** The check is green, every measure is
+unmoved, and the finding is not in the numbers — it is that **the coverage-escape property this record handed
+to W-15 on 2026-08-06 was stated too broadly, and the counter-example landed one commit later.**
+
+| Field | Value |
+|---|---|
+| Base | `448ca9d9f` @ `agent/cursor/6-vacilando-v3-4-conversational-director` — **3 web commits** since the 2026-08-06 base `a3e01ddb5`: `0dd598e7a` (this workstream's own ratchet fix), `ab9c5730b` (**W-5**), `448ca9d9f` (**W-7** dual-read). API routes **570**, unchanged |
+| CLI | `npm run check:service-client-principal` executed as a command — **green**, full table printed |
+| Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **18 tests green**, matching the 2026-08-06 record exactly |
+| Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) regenerated via `check:service-client-principal:evidence` and **byte-identical** to the committed copy |
+| Changed by this assignment | **No source, test, register or migration file.** This record is the deliverable |
+
+##### The baseline, fourth column — every measure unmoved
+
+| Measure | 2026-07-31 | 2026-08-04 | 2026-08-06 | 2026-08-07 |
+|---|---|---|---|---|
+| API route files | 539 | 559 | 570 | **570** |
+| …hold a service-role client by direct import | 520 | 537 | 541 | **541** |
+| …of those, resolve a principal | 494 | 520 | 526 | **526** |
+| …of those, resolve none — **the exception baseline** | 26 | 17 | 15 | **15** |
+| — reviewed exceptions, each with a named authorization model | 21 | 17 | 15 | **15** |
+| — frozen W-15 remediation baseline, no model | 5 | 0 | 0 | **0** |
+| Reach a service client transitively | 536 | 556 | 567 | **567** |
+| …transitive-only *and* unresolved — advisory | 3 | 3 | 10 | **10** |
+
+**The ratchet sits exactly at the live floor in both directions** — ceilings `unresolved ≤ 15` and
+`advisory ≤ 10`, live floors 15 and 10. No slack was owed and none was taken. This is the first run since the
+ceilings moved out of the vitest lock and into the register on 2026-08-06, so it is also the first evidence
+that `prebuild` now carries the bound it used to leave to a test nobody ran.
+
+##### The finding: helper extraction is not the escape — *constructing the client* is
+
+The 2026-08-06 record handed W-15 a named property after two tour routes left the enforced set:
+*"a helper refactor is an exit from W-4's enforced predicate."* Two helper refactors have since landed, and
+**neither escaped.** The predicate held, and it held for a structural reason worth stating, because the broad
+version of the property would have predicted two more escapes and mis-directed W-15's sweep:
+
+| Helper | Shape | Effect on W-4's enforced set |
+|---|---|---|
+| `lib/tours/public/tourActionRouteGuard.ts` (Slice C) | **constructs** the client (`:76`) and **returns** it to the caller (`:89`) | routes stopped importing one → **exit**, 2 routes fell to the advisory list |
+| `lib/admin/membershipWithProfile.ts` (**W-5**) | **receives** a `SupabaseClient` parameter; constructs nothing | routes keep their own client → **no exit** |
+| `lib/admin/resolveAdminAccessCore.ts` (**W-7**) | same — every entry point takes `supabase: SupabaseClient` (`:130`, `:173`, `:197`, `:298`) | **no exit** |
+
+W-5 is the sharp case. It moved **every** membership write in the codebase out of route handlers and behind
+two Postgres RPCs — the exact "consolidate writes into a helper" move that cost W-2 its census subject one
+section down (§5, fourth issuance). Yet direct holders stayed at **541** and both affected routes stayed
+credited: `app/api/admin/users/route.ts` still imports `createAdminClient` (`:2`) and resolves through
+`getAdminContextCached`/`requireUsersRolesManageAuth` (`:3`, `:4`); `…/users/[userId]/role/route.ts` imports at
+`:2`, constructs at `:32`, resolves at `:12`. Neither appears on any allow-list, so the check being green is
+itself the proof that both resolve a principal.
+
+**The refined property, for W-15:** a helper is an exit from W-4's predicate **iff it constructs or returns the
+service-role client**. A helper that takes the client as a parameter cannot be an exit, because the caller must
+still construct one — and constructing one requires the import the predicate is built on. That is a property of
+the predicate rather than an observation about three files, so it is durable in the way the 2026-08-06 wording
+was not. The remedy for the real class is unchanged and still W-15's: `tourActionRouteGuard` is the shape to
+recognise, not "helpers."
+
+**This narrows the 2026-08-06 concern without dismissing it.** Two routes really did leave the enforced set for
+the weaker advisory list, bounded only by a count, and that remains true and remains W-15's to preserve. What
+this run establishes is that the leak is **rare and structurally identifiable**, not a general property of
+refactoring — and it took a run positioned after a large consolidation to tell the two apart.
+
+##### Not shown red at the CLI this run, and why
+
+§10.4 asks for a red demonstration, and the 2026-08-06 record produced one by temporarily setting the register's
+ceilings to 24/3 and running the CLI. **That was deliberately not repeated here.** A concurrent writer is active
+in this worktree — `448ca9d9f` landed mid-session, and `web/tests/access/analyticsRouteGates.test.ts` is
+uncommitted-modified by another assignment — so temporarily corrupting a *tracked register file* risks another
+session committing the corrupted state. That is a worse failure than a carried-forward demonstration.
+
+The red states are instead proven **in-process, against the same exported function the CLI is a thin wrapper
+over**: `runServiceClientPrincipalCheck(allowlistOverride)` (`checkServiceClientPrincipal.mjs:463`) takes an
+override precisely so red can be shown without mutating the register. Five of the 18 locked tests do exactly
+that — empty list, stale entry, `ratchet-exceeded` breach, `ratchet-slack`, `ratchet-missing`. What is carried
+forward on the 2026-08-06 record, and not re-proven here, is that the **CLI process exits non-zero** on those
+states; the check's *result* is verified at this base through both the CLI (green) and the lock.
+
+##### What this run did not verify
+
+**Not run: typecheck** — no source file was changed, so there is nothing at this base a typecheck would cover
+that the 2026-08-06 `vac run typecheck:tests` rc=0 does not. **No live database query**, so W-0's counts are
+now **seven days old**; nothing in W-4 depends on them. **No tier D**, per §14.3.7.
+
+**The register was not re-read line by line this run.** The 2026-08-06 leg did that and found four inaccurate
+advisory entries; the byte-identical evidence snapshot proves the *sets* have not moved, but §5's own finding
+above is that set-identity is exactly what does **not** bind a reason to the line it cites. Three commits, none
+touching the listed routes, is a weak reason to expect drift — but it is a reason, not a proof, and the control
+is still periodic human re-reading rather than anything mechanical.
+
+**The honest limit above is unchanged and still governs**: this check proves a principal is *resolved*, never
+that the result *gates* the handler. W-14 and W-15 still own that proof. The mission-identity divergence
+recorded at §5's fourth-issuance leg applies to this assignment too (`msn_bc33a72e3138ebc215`, *"DX7 Fixture —
+Ready Promotion"*); it is not re-raised here.
+
 ---
 
 ## 6. Wave 2 — The scope invariant
@@ -2050,7 +2162,7 @@ contributor deleting one has to do it on purpose.
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
-| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests** |
+| **RL-15** | No route holds a service-role client without resolving a principal or a reviewed exception; the exception lists only shrink | A | G6 / W-4 | **LIVE** — `web/scripts/checkServiceClientPrincipal.mjs` in `prebuild`, locked by `web/tests/access/serviceClientPrincipalCheck.test.ts`. Re-verified 2026-08-04: green across a 20-route expansion; ceiling ratcheted 26 → 17. **Re-executed 2026-08-06: found RED** — the advisory ratchet had been breached 3 → 10 by an allow-list-only commit that `prebuild` could not see. Ceilings moved into the register and enforced by the check, over *and* under; unresolved re-tightened 17 → 15; **18 tests**. **Re-executed 2026-08-07: green**, 18 tests, every measure unmoved, ceilings at the live floor in both directions — the first run to exercise the register-side ratchet, and the run that narrowed the coverage escape to *helpers that construct or return the client* rather than helper extraction generally |
 
 RL-2 is listed *because* it is temporary: W-3 adds it and W-10 replaces it. An assertion that becomes
 structurally unnecessary should be replaced deliberately, not quietly deleted when it starts failing.
