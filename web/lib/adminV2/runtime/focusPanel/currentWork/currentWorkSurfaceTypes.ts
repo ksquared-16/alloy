@@ -47,6 +47,15 @@ export type CurrentWorkActionVM = {
     resolved?: ResolvedActionForClient | null;
     /** Resolved execution state (Slice F) — every visible enabled action is provably executable. */
     execution?: CurrentWorkActionExecution | null;
+    /**
+     * Related-subject resolution for commands invoked from family/opportunity context
+     * (e.g. Move to Waitlist → enrollment child). Drives subject_selector surface.
+     */
+    relatedSubjectResolution?: "enrollment_child" | null;
+    /** When truth already lists multiple eligible subjects — prefer picker before execute. */
+    requiresSubjectPicker?: boolean;
+    /** Operator-safe block when related subjects are known-empty. */
+    blockedReason?: string | null;
 };
 
 export type { CurrentWorkActionExecution, CurrentWorkActionExecutionStatus } from "./executeCurrentWorkAction";

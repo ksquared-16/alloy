@@ -37,6 +37,7 @@ import {
     applyChildWaitlistViaOutcomeRuntime,
     resolveChildWaitlistSubjectFromOcm,
 } from "@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime";
+import { resolveEligibleEnrollmentChildrenForOpportunity } from "@/lib/lifecycle/resolveEligibleEnrollmentChildrenForOpportunity";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 
 /** Canonical waitlist outcome — matches enrollment readiness rules / status defs. */
@@ -133,6 +134,73 @@ export function isOpportunityCustomerMemberSubjectType(entityType: string): bool
     );
 }
 
+export function isOpportunityFamilySubjectType(entityType: string): boolean {
+    const t = entityType.trim().toLowerCase();
+    return t === "opportunity" || t === "opportunities" || t === "case";
+}
+
+/**
+ * Family Focus Panel posts opportunity as the subject. For waitlist_child, resolve the
+ * related OCM: exactly one → auto; zero/many → fail closed (never invent / never pick first).
+ */
+export async function resolveWaitlistChildExecutionSubject(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    executionSubject: CommandExecutionSubject;
+    inputValues?: Record<string, unknown>;
+}): Promise<
+    | { ok: true; executionSubject: CommandExecutionSubject }
+    | { ok: false; code: "needs_subject" | "no_eligible_child"; message: string }
+> {
+    if (isOpportunityCustomerMemberSubjectType(input.executionSubject.entityType)) {
+        return { ok: true, executionSubject: input.executionSubject };
+    }
+
+    const fromPayload = resolveChildEnrollmentSubjectId({
+        executionSubject: { entityType: "opportunity_customer_member", entityId: "" },
+        inputValues: input.inputValues,
+    });
+    if (fromPayload) {
+        return {
+            ok: true,
+            executionSubject: {
+                entityType: "opportunity_customer_member",
+                entityId: fromPayload,
+            },
+        };
+    }
+
+    if (!isOpportunityFamilySubjectType(input.executionSubject.entityType)) {
+        return {
+            ok: false,
+            code: "needs_subject",
+            message: `Child Enrollment requires a child participation subject (got "${input.executionSubject.entityType}").`,
+        };
+    }
+
+    const classified = await resolveEligibleEnrollmentChildrenForOpportunity({
+        supabase: input.supabase,
+        orgId: input.orgId,
+        opportunityId: input.executionSubject.entityId,
+    });
+
+    if (classified.status === "single") {
+        return {
+            ok: true,
+            executionSubject: {
+                entityType: "opportunity_customer_member",
+                entityId: classified.subject.id,
+            },
+        };
+    }
+
+    if (classified.status === "multiple") {
+        return { ok: false, code: "needs_subject", message: classified.message };
+    }
+
+    return { ok: false, code: "no_eligible_child", message: classified.message };
+}
+
 /**
  * Build DecisionIntent for Child Enrollment — domain from registry, not client.
  */
@@ -195,7 +263,7 @@ export async function executeChildEnrollmentMutationViaAdapter(
             "[commandRuntime] Child Enrollment adapter refused capability owner mismatch"
         );
     }
-    if (!isChildEnrollmentMutationFacadeSupported(input.commandKey)) {
+    if (!isChildEnrollmentMutationFacadeSupported(input.capability.canonicalCommandKey)) {
         throw new Error(
             `[commandRuntime] Child Enrollment adapter refused unsupported key "${input.commandKey}"`
         );
@@ -217,14 +285,26 @@ export async function executeChildEnrollmentMutationViaAdapter(
         );
     }
 
-    if (!isOpportunityCustomerMemberSubjectType(input.executionSubject.entityType)) {
+    let executionSubject = input.executionSubject;
+    if (canonical === "waitlist_child") {
+        const remapped = await resolveWaitlistChildExecutionSubject({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            executionSubject: input.executionSubject,
+            inputValues: input.invocation.inputValues,
+        });
+        if (!remapped.ok) {
+            throw new Error(`[commandRuntime] ${remapped.message}`);
+        }
+        executionSubject = remapped.executionSubject;
+    } else if (!isOpportunityCustomerMemberSubjectType(executionSubject.entityType)) {
         throw new Error(
-            `[commandRuntime] Child Enrollment adapter requires opportunity_customer_member subject (got "${input.executionSubject.entityType}")`
+            `[commandRuntime] Child Enrollment adapter requires opportunity_customer_member subject (got "${executionSubject.entityType}")`
         );
     }
 
     const targetResolved = resolveChildEnrollmentTargetState({
-        commandKey: input.commandKey,
+        commandKey: canonical,
         inputValues: input.invocation.inputValues,
     });
     if ("error" in targetResolved) {
@@ -232,7 +312,7 @@ export async function executeChildEnrollmentMutationViaAdapter(
     }
 
     const subjectId = resolveChildEnrollmentSubjectId({
-        executionSubject: input.executionSubject,
+        executionSubject,
         inputValues: input.invocation.inputValues,
     });
     if (!subjectId) {
@@ -242,7 +322,7 @@ export async function executeChildEnrollmentMutationViaAdapter(
     input.guard.markDelegated();
 
     const intent = buildChildEnrollmentDecisionIntent({
-        commandKey: input.commandKey,
+        commandKey: canonical,
         subjectId,
         subjectType: "opportunity_customer_member",
         targetState: targetResolved.targetState,
@@ -259,7 +339,7 @@ export async function executeChildEnrollmentMutationViaAdapter(
             const previewResult: MutationResult = {
                 status: "previewed",
                 preview: {
-                    commandKey: input.commandKey,
+                    commandKey: canonical,
                     domain: "enrollment_status",
                     subjectId,
                     subjectType: "opportunity_customer_member",
@@ -317,7 +397,7 @@ export async function executeChildEnrollmentMutationViaAdapter(
         if (!progression.ok) {
             const blocked: MutationResult = {
                 status: "blocked",
-                commandKey: input.commandKey,
+                commandKey: canonical,
                 domain: "enrollment_status",
                 subjectId,
                 blockedReason: progression.error,
@@ -335,7 +415,7 @@ export async function executeChildEnrollmentMutationViaAdapter(
         const committed: MutationResult = {
             status: "committed",
             mutationId: `waitlist-outcome:${resolved.customer_member_id}`,
-            commandKey: input.commandKey,
+            commandKey: canonical,
             domain: "enrollment_status",
             subjectId,
             subjectType: "opportunity_customer_member",

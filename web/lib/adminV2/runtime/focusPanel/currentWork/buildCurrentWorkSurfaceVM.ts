@@ -370,6 +370,15 @@ function buildWorkPrimaryAction(args: {
             placement: "current_work_primary",
             handlerKey: resolved.handlerKey,
             actionRef: resolved.actionRef,
+            relatedSubjectResolution: resolved.relatedSubjectResolution,
+            requiresSubjectPicker: resolved.requiresSubjectPicker,
+            ...(resolved.blockedReason
+                ? {
+                      disabled: true,
+                      disabledReason: resolved.blockedReason,
+                      blockedReason: resolved.blockedReason,
+                  }
+                : { blockedReason: null }),
         };
     }
     // Outcome-led / no Primary Action: never fabricate a Primary Action from the work title.

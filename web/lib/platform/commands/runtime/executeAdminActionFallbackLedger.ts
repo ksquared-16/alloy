@@ -54,7 +54,7 @@ export const EXECUTE_ADMIN_ACTION_FALLBACK_LEDGER: readonly ExecuteAdminActionFa
 
     // Intentional compatibility — do not delete without traffic zero
     { key: "mark_lost", disposition: "direct_domain_compatibility", note: "Force-lost distinct from close_lead" },
-    { key: "move_to_waitlist", disposition: "direct_domain_compatibility", note: "Alias debt vs waitlist_child; enrollment side effects" },
+    { key: "move_to_waitlist", disposition: "migrated", note: "Alias of waitlist_child; family-context facade → child Enrollment outcome progression" },
     { key: "approve_enrollment", disposition: "direct_domain_compatibility", note: "Alias debt vs enroll_child; handoff logic" },
     { key: "move_to_qualification", disposition: "direct_domain_compatibility", note: "Lifecycle status branch without mutation twin" },
     { key: "record_tour_outcome", disposition: "direct_domain_compatibility", note: "Tour residual beside terminal facade keys" },

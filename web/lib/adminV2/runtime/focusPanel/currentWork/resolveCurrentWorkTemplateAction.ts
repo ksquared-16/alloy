@@ -12,6 +12,8 @@ import {
 import type { CurrentWorkActionRefLookup } from "./currentWorkTemplateConfig";
 import { actionFromRef } from "./currentWorkTemplateConfig";
 
+export type CurrentWorkRelatedSubjectResolution = "enrollment_child";
+
 export type ResolvedCurrentWorkTemplateAction = {
     actionRef: string;
     intentKey: string;
@@ -19,7 +21,18 @@ export type ResolvedCurrentWorkTemplateAction = {
     description: string | null;
     handlerKey: string;
     requiresSubjectPicker: boolean;
+    relatedSubjectResolution: CurrentWorkRelatedSubjectResolution | null;
+    blockedReason: string | null;
 };
+
+export function relatedSubjectResolutionForExecutionKey(
+    executionKey: string,
+): CurrentWorkRelatedSubjectResolution | null {
+    const key = executionKey.trim();
+    // Intent key (move_to_waitlist) and executor key (waitlist_child) both need child subject resolution.
+    if (key === "waitlist_child" || key === "move_to_waitlist") return "enrollment_child";
+    return null;
+}
 
 export function resolveCurrentWorkTemplateAction(input: {
     actionRef: string;
@@ -55,5 +68,7 @@ export function resolveCurrentWorkTemplateAction(input: {
         description: lookupRef?.description ?? null,
         handlerKey: plan.executionKey,
         requiresSubjectPicker: plan.requiresSubjectPicker,
+        relatedSubjectResolution: relatedSubjectResolutionForExecutionKey(plan.executionKey),
+        blockedReason: plan.blockedReason?.trim() || null,
     };
 }

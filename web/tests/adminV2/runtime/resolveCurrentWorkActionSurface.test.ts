@@ -101,6 +101,21 @@ describe("resolveCurrentWorkActionSurface", () => {
         ).toBe("header_delegate");
     });
 
+    it("routes enrollment-child related-subject actions to subject_selector", () => {
+        expect(
+            resolveCurrentWorkActionSurface(
+                action({
+                    key: "waitlist_child",
+                    label: "Move to Waitlist",
+                    actionRef: "move_to_waitlist",
+                    handlerKey: "waitlist_child",
+                    relatedSubjectResolution: "enrollment_child",
+                    resolved: resolvedAction("waitlist_child"),
+                }),
+            ),
+        ).toBe("subject_selector");
+    });
+
     it("falls back to header_delegate when resolved registry action exists without inline surface", () => {
         expect(
             resolveCurrentWorkActionSurface(

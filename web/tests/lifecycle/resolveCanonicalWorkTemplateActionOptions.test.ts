@@ -6,6 +6,53 @@ import {
 } from "@/lib/lifecycle/resolveCanonicalWorkTemplateActionOptions";
 
 describe("resolveCanonicalWorkTemplateActionOptions", () => {
+    it("promotes enabled waitlist_child alias into Move to Waitlist intent", () => {
+        const options = resolveCanonicalWorkTemplateActionOptions({
+            actionRegistry: [
+                {
+                    key: "waitlist_child",
+                    label: "Waitlist Child",
+                    action_scope: "lifecycle",
+                    placements: [{ placement_id: "p1", surface_label: "x", placement_label: "y", is_active: true }],
+                    operator_stages: [],
+                    action_definition_id: "d1",
+                    base_action_label: "Waitlist Child",
+                    display_order: 1,
+                },
+            ],
+            stageActionCatalog: {
+                version: 1,
+                candidate_actions: [],
+            },
+            stageDefinition: { journey_segment: "family" },
+        });
+
+        const waitlist = options.filter((row) => row.intentKey === "move_to_waitlist");
+        expect(waitlist).toHaveLength(1);
+        expect(waitlist[0]?.ref).toBe("move_to_waitlist");
+        expect(waitlist[0]?.label).toBe("Move to Waitlist");
+        expect(options.some((row) => row.ref === "waitlist_child")).toBe(false);
+    });
+
+    it("keeps schedule_tour when waitlist alias promotion runs", () => {
+        const options = resolveCanonicalWorkTemplateActionOptions({
+            actionRegistry: [],
+            stageActionCatalog: {
+                version: 1,
+                candidate_actions: [
+                    { action_key: "waitlist_child", recommendation: "ready" },
+                    { action_key: "schedule_tour", recommendation: "recommended" },
+                ],
+            },
+            stageDefinition: { journey_segment: "family" },
+        });
+
+        expect(options.map((row) => row.ref)).toEqual(
+            expect.arrayContaining(["move_to_waitlist", "schedule_tour"]),
+        );
+        expect(options.filter((row) => row.intentKey === "move_to_waitlist")).toHaveLength(1);
+    });
+
     it("merges waitlist grain variants into one Move to Waitlist intent", () => {
         const options = resolveCanonicalWorkTemplateActionOptions({
             actionRegistry: [],
@@ -78,7 +125,7 @@ describe("resolveCanonicalWorkTemplateActionOptions", () => {
         expect(options.map((row) => row.ref)).toContain("record_payment");
     });
 
-    it("groups lifecycle actions for alternate paths without duplicate waitlist peers", () => {
+    it("groups configured transitions for alternate paths without inventing waitlist peers", () => {
         const options = resolveCanonicalWorkTemplateAlternatePathOptions({
             actionRegistry: [],
             stageActionCatalog: {
@@ -92,10 +139,28 @@ describe("resolveCanonicalWorkTemplateActionOptions", () => {
             processTransitions: [{ key: "lead", label: "Lead" }, { key: "waitlist", label: "Waitlist" }],
             stageKey: "lead",
             stageDefinition: { journey_segment: "family" },
+            stageOperatingPlan: {
+                version: 1,
+                lifecycle_key: "enrollment",
+                stage_key: "lead",
+                journey_segment: "family",
+                work_templates: [],
+                outcomes: [],
+                outcome_rules: [],
+                outgoing_transitions: [
+                    {
+                        transition_ref: "move_to_stage:waitlist",
+                        source_stage_key: "lead",
+                        target_stage_key: "waitlist",
+                        label: "Move to Waitlist",
+                        available: true,
+                    },
+                ],
+            } as never,
         });
 
-        const waitlistActions = options.filter((row) => row.intentKey === "move_to_waitlist");
-        expect(waitlistActions).toHaveLength(1);
+        // Alternate paths are stage transitions only — command intents belong on Helpful Actions.
+        expect(options.some((row) => row.intentKey === "move_to_waitlist")).toBe(false);
         expect(options.some((row) => row.ref === "move_to_stage:waitlist")).toBe(true);
     });
 
