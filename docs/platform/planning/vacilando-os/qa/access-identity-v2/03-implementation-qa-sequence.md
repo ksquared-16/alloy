@@ -23,12 +23,19 @@ found and tightened (§5)
 · **W-0 query amended 2026-08-06 under the Mission 2 reopen** (same mission and assignment) — the
 self-identifying target column is authored and grounded; **run 3 is not executed** and awaits one
 authorization (§4)
-· **W-0 re-issued 2026-08-07** (mission `msn_e7894cb7225bae3c2b`, assignment `asg_86eb0e4a95142e`) — counts
-not re-asserted; **run 3 still not executed**, same single authorization outstanding. The run-3 *preparation*
-was audited and two plumbing defects were found and recorded: the insertion anchor does not match the query
-it anchors to under `JSON.parse`, and the obvious execution route fails closed on a stale `query_hash` — the
-second was resolved the same day by `asg_f34761f0f418ee`, whose rename to `runs_1_2_query_hash` leaves the
-artifact one-authorization-ready; **that rename must not be reverted** (§4)
+· **W-0 re-issued 2026-08-07** (mission `msn_e7894cb7225bae3c2b`, assignment `asg_86eb0e4a95142e`) — the run-3
+*preparation* was audited and two plumbing defects found: the insertion anchor does not match the query it
+anchors to under `JSON.parse`, and the obvious execution route fails closed on a stale `query_hash` (§4)
+· **W-0 made executable 2026-08-07** (mission `msn_bc33a72e3138ebc215`, assignment `asg_f34761f0f418ee`) — the
+amended SQL was **promoted into `combined_query`** and the stale top-level `query_hash` renamed to
+`runs_1_2_query_hash`. Until this landed the improvement was authored but **unreachable**, sitting in a key
+nothing reads. The alternative route — a dedicated run-3 artifact — is **unexecutable**: `queryArtifactPath` is
+a default parameter and none of its three call sites passes it, so it would have failed *silently*, spending
+the authorization on a byte-identical run. **That rename must not be reverted** (§4)
+· **W-0 run 3 EXECUTED 2026-08-07T17:24:16Z** (`tha_67f9c69f628d1a`) — **zero drift for the third consecutive
+run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
+`ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
+is still unproven, so `target.confirmed_against_live` stays `false` (§4)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
@@ -433,6 +440,51 @@ uncomputable in-worker. Neither is an authoring shortcut. The Director discharge
 **W-0's exit criteria are unaffected and remain met.** Q1–Q6 counts and query text stay committed; L1–L4 may
 still cite them, subject to the standing rule that every consumer re-derives rather than cites. The counts are
 now **eight days old**.
+
+#### W-0 run 3 — **EXECUTED 2026-08-07T17:24:16Z**, and the census finally identifies its own target
+
+The authorization that had been outstanding since 2026-08-06 was granted, and run 3 executed against the
+promoted `combined_query`. Executed under mission `msn_e7894cb7225bae3c2b` / assignment `asg_86eb0e4a95142e`
+(trusted host action `tha_67f9c69f628d1a`); the artifact it ran was made executable by `asg_f34761f0f418ee`.
+The full record — `run_history[3]`, `target_identity_resolved`, and the rewritten `residual_risks[1]` — is in
+[`wave0-authority-census.json`](./wave0-authority-census.json); this section records only what it means for §4.
+
+| Field | Value |
+|---|---|
+| Query hash | `743cd63b…` → **`a3982ca5…`**. The hash *changes* here, and that is correct rather than drift: the sole difference is the added `target_identity` key. **Every Q1–Q6 expression is byte-identical**, so the counts stay directly comparable to runs 1 and 2 |
+| Target | `alloy_deployed_primary`, channel fingerprint `b15dad2c6d030ed4` — and now, for the first time, **self-evidenced** |
+| Org fingerprint | **`ab7e5dde2e229d5c46e251456e4d9534`** over org ids `7803388d…` / `93667019…` (slugs `alloy-bend`, `demo-childcare-co-…`), `server_version` 17.6, `cluster_name` `main` |
+
+**Zero drift, for the third consecutive run.** Every consequence-bearing count returned exactly what it returned
+on 2026-07-31 and 2026-08-04 — Q1 (**0** application triggers of 62 total; `handle_new_user()` still defined
+and unattached), Q2 (0), Q3 (0, and `q3_distinct_undefined_roles` empty), Q4 (**2** pairs without a profile, of
+6 distinct pairs from 8 membership rows, 0 orphan profiles), Q5 (3 admin/ops pairs, 0 undefined, 0 inactive),
+Q6 (1 restricted admin/ops, 2 restricted site-scope). **All six §4 rules stand re-confirmed against live data
+for the third time.** L2, L3 and L4 remediation sets are empty; L1 is still exactly 2 rows.
+
+**What the target column bought, stated precisely.** Org UUIDs are globally unique, so `ab7e5dde…` is a
+fingerprint of the data the census actually read, computed by the database rather than asserted by the channel.
+Any future run returning it is *provably* against the same target; any run that does not is provably against a
+different one. **It does not prove the Supabase project ref** — nothing in the output names
+`ikaxilmwmrmbagoidedu`, so `target.confirmed_against_live` stays `false` deliberately. The residual is now much
+narrower than it was: the *identity* of the database queried is self-evidenced, and only its *name in Supabase's
+console* is still taken on trust. Runs 1 and 2 returned no org ids, so this run **establishes** that baseline
+rather than confirming it backwards — their target remains inferential; every run from here forward does not.
+
+**Two mechanical facts for whoever runs the next census**, both observed rather than predicted:
+
+1. **The Director's merge-back does not append to `run_history`.** It rewrites `status`, `query_hash`,
+   `execution` and `results` only (`trusted-host-actions.mjs:385-406`), spreading every other key through
+   untouched. The run-3 history entry was written by hand afterwards, and the next one will have to be too.
+2. **It overwrites `results` in place**, so the prior run's raw result block does not survive in the file.
+   Run 2's is recoverable from git blob `f95f89302bbd92f3e24e8c4a93dbb0231f0a664e` (this file's content at
+   commit `7dc06920a`), which is also where runs 1 and 2's exact query text lives now that `combined_query`
+   carries the amendment.
+
+**W-0's counts are no longer eight days old — they are current as of this run.** The standing rule is
+unchanged and still governs: Q4 is the count that grows, and every §11 preflight must re-derive it rather than
+cite this one. Per the census file's `now_also_serves_w6_m1_preflight`, this run is *also* the fresh Q4 that
+W-6/M1 requires immediately before apply, and its `q4_pairs_without_profile = 2` is the number M1 must equal.
 
 ---
 
