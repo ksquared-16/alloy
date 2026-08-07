@@ -6,8 +6,8 @@
  * wrong", it is "someone inserts into user_roles directly". A behavioural test
  * of the helper cannot catch a sixth writer being added next month; this can.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     createMembershipWithAccessProfile,
@@ -20,12 +20,46 @@ const webRoot = join(__dirname, "..", "..");
  * The membership writers found by W-5's audit — enumerated BY TABLE across
  * lib/ and app/, not by name across route files, which is the census that
  * missed createOrgAndAssignAdmin twice.
+ *
+ * This list documents WHAT WAS FIXED. It is deliberately NOT the subject of the
+ * no-direct-write lock below: a fixed list can only ever re-check files that are
+ * already correct, so it cannot notice a fourth writer arriving. That is the
+ * same subject-pinning escape §5 found twice in RL-1.
  */
 const MEMBERSHIP_WRITER_SOURCES = [
     "app/api/admin/users/route.ts",
     "app/api/admin/users/[userId]/role/route.ts",
     "lib/dev/createOrgAndAssignAdmin.ts",
 ];
+
+/**
+ * Direct writes to the membership table re-open G4. Reads and deletes are fine —
+ * `users/[userId]/remove` deletes only and creates no unscoped membership.
+ */
+const DIRECT_WRITE = /from\(\s*["'`]user_roles["'`]\s*\)\s*(?:\.\s*\w+\([^)]*\)\s*)*?\.\s*(insert|upsert|update)\b/;
+
+/** The whole product surface. Not a directory list — the trees themselves. */
+const PRODUCT_TREES = ["app", "lib"];
+
+function sourceFilesUnder(dir: string): string[] {
+    const out: string[] = [];
+    const walk = (abs: string) => {
+        for (const entry of readdirSync(abs, { withFileTypes: true })) {
+            if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+            const child = join(abs, entry.name);
+            if (entry.isDirectory()) walk(child);
+            else if (/\.tsx?$/.test(entry.name)) out.push(child);
+        }
+    };
+    walk(join(webRoot, dir));
+    return out;
+}
+
+function directMembershipWriters(): string[] {
+    return PRODUCT_TREES.flatMap(sourceFilesUnder)
+        .filter((abs) => DIRECT_WRITE.test(readFileSync(abs, "utf8")))
+        .map((abs) => relative(webRoot, abs));
+}
 
 /** A minimal Supabase stand-in that records the rpc call and returns a canned result. */
 function fakeClient(result: { data?: unknown; error?: { code?: string; message: string } }) {
@@ -42,12 +76,35 @@ function fakeClient(result: { data?: unknown; error?: { code?: string; message: 
 const membershipRow = { user_id: "u1", org_id: "o1", role: "ops" };
 
 describe("W-5 — membership writers use the atomic path", () => {
+    /**
+     * The load-bearing lock. Discovers writers rather than re-checking a list, so
+     * a NEW direct writer added anywhere under app/ or lib/ fails this test on the
+     * commit that adds it. Exit criterion: "Q4's count cannot grow."
+     */
+    it("no file under app/ or lib/ writes user_roles directly", () => {
+        expect(
+            directMembershipWriters(),
+            "route these through @/lib/admin/membershipWithProfile — a direct write re-opens G4"
+        ).toEqual([]);
+    });
+
+    it("the discovery scan is not vacuous", () => {
+        // If the walker or the regex silently stops matching, the lock above passes
+        // for the wrong reason. Prove both against a known direct writer.
+        const files = PRODUCT_TREES.flatMap(sourceFilesUnder);
+        expect(files.length).toBeGreaterThan(500);
+        expect(files.some((f) => f.endsWith(join("admin", "users", "route.ts")))).toBe(true);
+
+        const knownDirectWriter = readFileSync(
+            join(webRoot, "tests/processing/cert/processingIdentityCertFixtures.ts"),
+            "utf8"
+        );
+        expect(DIRECT_WRITE.test(knownDirectWriter)).toBe(true);
+    });
+
     it.each(MEMBERSHIP_WRITER_SOURCES)("%s does not write user_roles directly", (relPath) => {
         const src = readFileSync(join(webRoot, relPath), "utf8");
-
-        // Direct writes to the membership table re-open G4. Reads are fine.
-        const directWrite = /from\(\s*["']user_roles["']\s*\)\s*\.\s*(insert|upsert|update)\b/.test(src);
-        expect(directWrite, `${relPath} writes user_roles directly — route it through membershipWithProfile`).toBe(false);
+        expect(DIRECT_WRITE.test(src), `${relPath} writes user_roles directly`).toBe(false);
     });
 
     it.each(MEMBERSHIP_WRITER_SOURCES)("%s imports the atomic helper", (relPath) => {
