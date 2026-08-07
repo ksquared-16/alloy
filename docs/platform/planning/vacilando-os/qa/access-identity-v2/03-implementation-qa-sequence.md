@@ -149,6 +149,12 @@ Four workstreams can deny every operator access to the product if they land wron
 All four are the same shape — *a widening default is replaced by an explicit source of truth* — so all four
 use one ritual rather than four bespoke plans.
 
+**L1 is at step 2 of that ritual as of 2026-08-07** — dual-read shipped, enforcement unchanged, switch
+withheld because step 1 (W-6/M1) has not applied. It is the first of the four to reach step 2, and it
+demonstrated the ritual earning its keep: the switch, written as the one-line change its workstream describes,
+would have shipped a fresh fail-open through `user_department_access` (§6 W-7). **The step that caught it was
+step 2, not the QA in step 3.**
+
 ### The four-step switch ritual
 
 1. **Seed.** Write the new source of truth for all existing subjects, in its own migration, under the §11
@@ -1513,10 +1519,11 @@ consolation work; it is the correct ordering, and the block bought the time to d
 
 - `resolveScopeAnswerFromProfile(profileRow, mode)` — pure, both answers derivable from one function.
 - `dualReadScopeAnswer(profileRow)` — resolves both, returns `{enforced, shadow, diverges}`.
-- `ABSENT_PROFILE_ENFORCEMENT: "legacy-all" | "deny"` — **the whole switch is this one constant.** Flipping it
-  to `deny` and deleting the three comment lines above it *is* W-7's switch commit. The legacy-transition
-  comment named in the objective is **already deleted** — the code no longer claims the fail-open is a
-  transitional state; it names it as the thing a constant withholds.
+- `ABSENT_PROFILE_ENFORCEMENT: "legacy-all" | "deny"` — **the whole switch is this one constant**, and it is
+  built to be *deleted* by the switch commit, not left flipped: §2 step 4 requires the old path and its
+  constant to go in the same commit, because a dormant fallback is exactly what phase 1 §2.1 is about. The
+  legacy-transition comment named in the objective is **already deleted** — the code no longer calls the
+  fail-open a transitional state; it names it as the thing a constant withholds until M1 lands.
 - Divergences log as `[access-identity][W-7][scope-divergence] where=… user_id=… org_id=… enforced=… shadow=…
   reason=absent_profile_row` — identifiers only, greppable, no free text.
 
@@ -1544,6 +1551,16 @@ That is C11's displayed-vs-actual divergence, newly created by W-7 rather than i
 `ABSENT_PROFILE_ENFORCEMENT`, so **both flip together and neither can drift**. Enforcement is unchanged today,
 so this widens nothing; it is not a substitute for W-21's consolidation.
 
+**The operator guidance carried on this assignment was NOT actioned here, and that is the correct call.**
+`asg_45c7bf402913d3` carried the open revision request *"Role hierarchy is still too deep — reduce to four
+layers."* It is not W-7's, and it is already registered and answered in five discovery deliverables
+(`02…§1.3`, `04…§3.6`, `05…§5A.2`–`§5A.5`, `06…§927`, `07…RB-39/RB-40`). The reason it is worth a line *here*
+is that its live instrument is in **this file**: `04…§3.6` finds the fifth layer surviving at runtime is
+`portalEligible`, which `resolveAdminAccessCore.ts:18` computes from the hard-coded `PORTAL_ROLES`. Removing it
+is **W-13's** scope and **RL-9's** lock. Touching it inside W-7 — while editing the very lines that produce it
+— would have been the same class of error as removing the department-scope bypass this assignment explicitly
+prohibits: convenient, adjacent, and someone else's exit criterion. `PORTAL_ROLES` is untouched.
+
 **QA.**
 - Tier C: delete a profile row for a fixture principal, assert denial rather than `all`.
 - Tier C: the same principal with a profile row present is unaffected.
@@ -1567,8 +1584,10 @@ evidence that the *switch* is safe; they are evidence that the answer the switch
 dual read diverges for the 2 known profile-less pairs by construction, so a divergence count taken now measures
 the unapplied backfill, not an escape from W-5's atomic path. Remaining work, in order: (1) apply M1;
 (2) re-run W-0 Q4 → expect 0; (3) open the observation window and grep the divergence marker — **any** hit is a
-membership created outside the atomic path and is a W-5 defect, not a W-7 one; (4) flip
-`ABSENT_PROFILE_ENFORCEMENT` to `"deny"` and update the guard test. Steps 2–4 are minutes of work. **Step 1 is
+membership created outside the atomic path and is a W-5 defect, not a W-7 one; (4) per §2 step 4, enforce
+`deny` and **delete `ABSENT_PROFILE_ENFORCEMENT`, the `legacy-all` branch and the guard test in that same
+commit** — flipping the constant and leaving it in place would satisfy the behaviour and fail the ritual,
+leaving precisely the dormant fallback W-20 exists to clean up. Steps 2–4 are minutes of work. **Step 1 is
 the entire blocker, and it is the same missing write channel that blocks W-6, W-9 and the other seven §11
 migrations** — W-7 is now the second workstream to terminate on it, which is the evidence that the channel gap
 is programme-level and not W-6's local misfortune.

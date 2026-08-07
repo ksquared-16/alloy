@@ -18,6 +18,95 @@ export type ResolvedAdminAccessCore = {
 const PORTAL_ROLES = new Set(["admin", "ops"]);
 
 /**
+ * W-7 (I-19, lockout class L1) — absent scope denies.
+ *
+ * Which answer the resolver *enforces* when a membership has no `user_access_profiles` row.
+ * - `legacy-all` — the historical fail-open: both dimensions resolve `all`.
+ * - `deny`       — W-7's target: the membership sees nothing.
+ *
+ * MUST remain `legacy-all` until M1 (`20260807140000_backfill_membership_access_profiles.sql`)
+ * is APPLIED on the shared target. W-0 Q4 stands at 2 `(user, org)` pairs with no profile row,
+ * so flipping this ahead of the backfill locks out those 2 principals — the exact L1 outcome
+ * W-7 exists to avoid. Plan §5 Q4: "W-7 cannot precede it."
+ *
+ * Flipping this constant to `deny` and deleting the two lines above it is the whole switch.
+ */
+export type AbsentProfileMode = "legacy-all" | "deny";
+
+export const ABSENT_PROFILE_ENFORCEMENT: AbsentProfileMode = "legacy-all";
+
+export type ProfileScopeRow = { department_scope?: unknown; site_scope?: unknown } | null | undefined;
+
+export type ScopeAnswer = {
+    departmentScope: DepartmentScopeMode;
+    siteScope: SiteScopeMode;
+    /**
+     * True only for the absent-profile denial. Denial is `restricted` *plus explicitly empty
+     * allow-lists* — never `restricted` alone. A membership with no profile row may still hold
+     * `user_department_access` / `user_site_access` rows, and §5 records that table as a sixth
+     * authority table with a self-authority write path W-8 arms. Letting denial fall through to
+     * "restricted, then read whatever those tables hold" would let a principal grant itself the
+     * departments its missing profile was supposed to withhold.
+     */
+    denyAll: boolean;
+};
+
+/** Pure: the scope answer a given profile row yields under a given absent-profile mode. */
+export function resolveScopeAnswerFromProfile(
+    profileRow: ProfileScopeRow,
+    mode: AbsentProfileMode
+): ScopeAnswer {
+    if (profileRow) {
+        const ds = String(profileRow.department_scope ?? "").trim();
+        const ss = String(profileRow.site_scope ?? "").trim();
+        return {
+            departmentScope: ds === "restricted" ? "restricted" : "all",
+            siteScope: ss === "restricted" ? "restricted" : "all",
+            denyAll: false,
+        };
+    }
+    if (mode === "deny") {
+        return { departmentScope: "restricted", siteScope: "restricted", denyAll: true };
+    }
+    return { departmentScope: "all", siteScope: "all", denyAll: false };
+}
+
+/**
+ * Step 2 of the L1 ritual: resolve BOTH answers, enforce the configured one, and report whether
+ * they differ. A divergence after W-5 and W-6 means a membership was created outside the atomic
+ * path — the defect worth finding before the switch rather than after.
+ */
+export function dualReadScopeAnswer(profileRow: ProfileScopeRow): {
+    enforced: ScopeAnswer;
+    shadow: ScopeAnswer;
+    diverges: boolean;
+} {
+    const shadowMode: AbsentProfileMode = ABSENT_PROFILE_ENFORCEMENT === "deny" ? "legacy-all" : "deny";
+    const enforced = resolveScopeAnswerFromProfile(profileRow, ABSENT_PROFILE_ENFORCEMENT);
+    const shadow = resolveScopeAnswerFromProfile(profileRow, shadowMode);
+    const diverges =
+        enforced.departmentScope !== shadow.departmentScope ||
+        enforced.siteScope !== shadow.siteScope ||
+        enforced.denyAll !== shadow.denyAll;
+    return { enforced, shadow, diverges };
+}
+
+/** Stable, greppable divergence record for W-7's observation window. Identifiers only — no free text. */
+function logScopeDivergence(
+    where: string,
+    userId: string,
+    orgId: string,
+    enforced: ScopeAnswer,
+    shadow: ScopeAnswer
+): void {
+    console.warn(
+        `[access-identity][W-7][scope-divergence] where=${where} user_id=${userId} org_id=${orgId} ` +
+            `enforced=${enforced.departmentScope}/${enforced.siteScope} ` +
+            `shadow=${shadow.departmentScope}/${shadow.siteScope} reason=absent_profile_row`
+    );
+}
+
+/**
  * Pure helper: primary org + role_keys[] for that org from membership rows.
  * Primary org rule — preserve CRM semantics:
  * - If any admin/ops rows exist, choose lexicographically smallest org_id among those rows only.
@@ -149,19 +238,16 @@ export async function resolveAdminAccessCore(
         .eq("org_id", orgId)
         .maybeSingle();
 
-    let departmentScope: DepartmentScopeMode = "all";
-    let siteScope: SiteScopeMode = "all";
+    const { enforced, shadow, diverges } = dualReadScopeAnswer(profileRow as ProfileScopeRow);
+    if (diverges) logScopeDivergence("resolveAdminAccessCore", userId, orgId, enforced, shadow);
 
-    if (profileRow) {
-        const ds = String((profileRow as { department_scope?: unknown }).department_scope ?? "").trim();
-        const ss = String((profileRow as { site_scope?: unknown }).site_scope ?? "").trim();
-        if (ds === "restricted") departmentScope = "restricted";
-        if (ss === "restricted") siteScope = "restricted";
-    }
-    /** Missing profile row ⇒ department_scope/site_scope stay `all` (legacy transition until profiles always exist). */
+    const departmentScope: DepartmentScopeMode = enforced.departmentScope;
+    const siteScope: SiteScopeMode = enforced.siteScope;
 
     let allowedDepartmentIds: string[] | null = null;
-    if (departmentScope === "restricted") {
+    if (enforced.denyAll) {
+        allowedDepartmentIds = [];
+    } else if (departmentScope === "restricted") {
         const { data: deptRows, error: deptErr } = await supabase
             .from("user_department_access")
             .select("department_id")
@@ -176,7 +262,9 @@ export async function resolveAdminAccessCore(
     }
 
     let allowedSiteLocationIds: string[] | null = null;
-    if (siteScope === "restricted") {
+    if (enforced.denyAll) {
+        allowedSiteLocationIds = [];
+    } else if (siteScope === "restricted") {
         const { data: siteRows, error: siteErr } = await supabase
             .from("user_site_access")
             .select("location_id")
@@ -240,18 +328,20 @@ export async function resolveAdminAccessDimensionsForOrgMember(
         .eq("org_id", orgId)
         .maybeSingle();
 
-    let departmentScope: DepartmentScopeMode = "all";
-    let siteScope: SiteScopeMode = "all";
+    // Same instrument and the SAME constant as the enforcement path above: this is the admin
+    // settings preview, and if it kept its own fallback the switch would leave displayed authority
+    // reading `all` while actual authority denied. Behaviour is unchanged today — both read
+    // ABSENT_PROFILE_ENFORCEMENT, so both flip together.
+    const { enforced, shadow, diverges } = dualReadScopeAnswer(profileRow as ProfileScopeRow);
+    if (diverges) logScopeDivergence("resolveAdminAccessDimensionsForOrgMember", userId, orgId, enforced, shadow);
 
-    if (profileRow) {
-        const ds = String((profileRow as { department_scope?: unknown }).department_scope ?? "").trim();
-        const ss = String((profileRow as { site_scope?: unknown }).site_scope ?? "").trim();
-        if (ds === "restricted") departmentScope = "restricted";
-        if (ss === "restricted") siteScope = "restricted";
-    }
+    const departmentScope: DepartmentScopeMode = enforced.departmentScope;
+    const siteScope: SiteScopeMode = enforced.siteScope;
 
     let allowedDepartmentIds: string[] | null = null;
-    if (departmentScope === "restricted") {
+    if (enforced.denyAll) {
+        allowedDepartmentIds = [];
+    } else if (departmentScope === "restricted") {
         const { data: deptRows, error: deptErr } = await supabase
             .from("user_department_access")
             .select("department_id")
@@ -266,7 +356,9 @@ export async function resolveAdminAccessDimensionsForOrgMember(
     }
 
     let allowedSiteLocationIds: string[] | null = null;
-    if (siteScope === "restricted") {
+    if (enforced.denyAll) {
+        allowedSiteLocationIds = [];
+    } else if (siteScope === "restricted") {
         const { data: siteRows, error: siteErr } = await supabase
             .from("user_site_access")
             .select("location_id")
