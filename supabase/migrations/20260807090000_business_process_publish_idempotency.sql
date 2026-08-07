@@ -313,6 +313,7 @@ DECLARE
     v_revision public.business_process_revisions%ROWTYPE;
     v_publication public.configuration_publications%ROWTYPE;
     v_current_revision_id uuid;
+    v_current_checksum text;
     v_existing public.business_process_revisions%ROWTYPE;
     v_existing_publication public.configuration_publications%ROWTYPE;
     v_revision_number integer;
@@ -342,8 +343,24 @@ BEGIN
     ORDER BY cp.revision_number DESC
     LIMIT 1;
 
-    -- Rolling back to what is already live is a no-op, for the same reason a duplicate publish is.
-    IF v_current_revision_id IS NOT DISTINCT FROM p_target_revision_id THEN
+    -- Rolling back to CONTENT that is already live is a no-op, for the same reason a duplicate
+    -- publish is — and the test must be the same one publish uses.
+    --
+    -- Comparing revision IDS is not enough: after a rollback, the live revision is a NEW row that
+    -- CARRIES the target's payload, so `target != current` while the content is identical. Rolling
+    -- back to the same target twice then appended an endless run of revisions with byte-identical
+    -- payloads. Comparing the CHECKSUM makes the rule "is this content already live?", which is the
+    -- question both operations actually ask.
+    SELECT cp.payload_checksum INTO v_current_checksum
+    FROM public.configuration_publications cp
+    WHERE cp.org_id = p_org_id
+      AND cp.domain_key = 'business_process'
+      AND cp.subject_id = p_department_id
+    ORDER BY cp.revision_number DESC
+    LIMIT 1;
+
+    IF v_current_revision_id IS NOT NULL
+       AND v_current_checksum IS NOT DISTINCT FROM v_target.payload_checksum THEN
         SELECT * INTO v_existing_publication
         FROM public.configuration_publications
         WHERE org_id = p_org_id
@@ -353,10 +370,14 @@ BEGIN
         ORDER BY revision_number DESC
         LIMIT 1;
 
+        SELECT * INTO v_existing
+        FROM public.business_process_revisions
+        WHERE id = v_current_revision_id;
+
         RETURN jsonb_build_object(
             'department_id', p_department_id,
-            'revision_id', v_target.id,
-            'revision_number', v_target.revision_number,
+            'revision_id', v_existing.id,
+            'revision_number', v_existing.revision_number,
             'rolled_back_from_revision_id', v_target.id,
             'publication_id', v_existing_publication.id,
             'audit_event_id', v_existing_publication.audit_event_id,
