@@ -72,6 +72,18 @@ export const WORK_TEMPLATE_ACTION_INTENT_SPECS: readonly WorkTemplateActionInten
         },
         defaultRef: "close_lead",
     },
+    {
+        intentKey: "create_work_item",
+        label: "Create Work Item",
+        description: "Create a Work Item tied to this record.",
+        category: "workflow",
+        aliases: ["create_work_item", "create_task"],
+        refBySubjectGrain: {
+            opportunity: "create_task",
+            process_subject: "create_task",
+        },
+        defaultRef: "create_task",
+    },
 ];
 
 const ALIAS_TO_INTENT = new Map<string, WorkTemplateActionIntentSpec>();

@@ -158,12 +158,19 @@ export function buildLifecycleActionsMatrixRows(params: {
             }
         }
         const enabled = Boolean(configuredRow?.placements.some((p) => p.is_active && p.placement_id));
+        const storedLabel = configuredRow?.label?.trim() || "";
+        // action_definitions may still carry the legacy "Create Task" seed label — prefer the
+        // curated Process Action label until an operator sets a custom display name.
+        const label =
+            baseActionKey === "create_task" && (!storedLabel || storedLabel === "Create Task")
+                ? base.label
+                : storedLabel || base.label;
         rows.push({
             base_action_key: baseActionKey,
             default_label: base.label,
             saveable: saveableKeys.has(baseActionKey),
             enabled,
-            label: configuredRow?.label ?? base.label,
+            label,
             placement_ids: [...placementIds],
             stage_restrictions:
                 configuredRow?.action_scope === "stage" ? [...configuredRow.operator_stages] : [],

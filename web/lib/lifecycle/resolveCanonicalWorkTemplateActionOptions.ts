@@ -354,6 +354,15 @@ function processSelectionKeySet(
     for (const key of keys) {
         out.add(key);
         out.add(normalizeActionRefToIntentKey(key));
+        const resolved = tryResolvePlatformCapability(key);
+        if (resolved.status === "known") {
+            out.add(resolved.capability.capabilityKey);
+            out.add(resolved.capability.canonicalCommandKey);
+            for (const alias of resolved.capability.compatibilityAliases ?? []) {
+                out.add(alias);
+                out.add(normalizeActionRefToIntentKey(alias));
+            }
+        }
     }
     // A DERIVED-empty legacy migration is not an operator saying "no Commands" — treating it as one
     // emptied the picker and left the work item unconfigurable. Only an explicit `command_set_v1`
@@ -365,10 +374,20 @@ function processSelectionKeySet(
 function keyInSelection(selection: Set<string>, key: string): boolean {
     const trimmed = key.trim();
     if (!trimmed) return false;
-    return (
-        selection.has(trimmed) ||
-        selection.has(normalizeActionRefToIntentKey(trimmed))
-    );
+    if (selection.has(trimmed) || selection.has(normalizeActionRefToIntentKey(trimmed))) {
+        return true;
+    }
+    // Process Actions may still key placements as create_task while command_set stores
+    // create_work_item (registry canonical). Match either side through the capability registry.
+    const resolved = tryResolvePlatformCapability(trimmed);
+    if (resolved.status === "known") {
+        if (selection.has(resolved.capability.canonicalCommandKey)) return true;
+        if (selection.has(resolved.capability.capabilityKey)) return true;
+        for (const alias of resolved.capability.compatibilityAliases ?? []) {
+            if (selection.has(alias)) return true;
+        }
+    }
+    return false;
 }
 
 export function resolveCanonicalWorkTemplateActionOptions(input: {
