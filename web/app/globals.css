@@ -1305,3 +1305,122 @@ body {
     animation: none;
   }
 }
+
+/* ==========================================================================
+   Marketing site primitives (docs/marketing/ALLOY-BRAND-DOCTRINE.md)
+   Layout compression pass: concise executive scale + chapter composition.
+   ========================================================================== */
+.marketing-content-width {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-inline: clamp(20px, 4.5vw, 56px);
+}
+
+.marketing-section-pad {
+  padding-block: 56px;
+}
+
+.marketing-section-pad-compact {
+  padding-block: 48px;
+}
+
+.marketing-section-pad-spacious {
+  padding-block: 64px;
+}
+
+@media (min-width: 768px) {
+  .marketing-section-pad {
+    padding-block: clamp(72px, 6vw, 96px);
+  }
+
+  .marketing-section-pad-compact {
+    padding-block: clamp(52px, 4.5vw, 72px);
+  }
+
+  .marketing-section-pad-spacious {
+    padding-block: clamp(72px, 5.5vw, 88px);
+  }
+}
+
+.marketing-eyebrow {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-alloy-bend-pine);
+}
+
+.marketing-display-headline {
+  /* Hero title + sub — both lines locked at 36px */
+  font-size: 36px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--color-alloy-midnight-forge);
+}
+
+.marketing-section-headline {
+  /* Desktop max ~42px */
+  font-size: clamp(2rem, 1.55rem + 1.1vw, 2.625rem);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--color-alloy-midnight-forge);
+}
+
+.marketing-page-headline {
+  font-size: clamp(2rem, 1.6rem + 1.2vw, 2.75rem);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  color: var(--color-alloy-midnight-forge);
+}
+
+.marketing-statement-headline {
+  font-size: clamp(1.75rem, 1.4rem + 1vw, 2.5rem);
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--color-alloy-midnight-forge);
+}
+
+.marketing-body-lg {
+  font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  line-height: 1.65;
+  font-weight: 400;
+  color: rgba(39, 63, 82, 0.72);
+}
+
+.marketing-body {
+  font-size: 0.975rem;
+  line-height: 1.65;
+  font-weight: 400;
+  color: rgba(39, 63, 82, 0.68);
+}
+
+.marketing-copy-measure {
+  max-width: 38.75rem; /* ~620px */
+}
+
+.marketing-pillar-row {
+  padding-block: 36px;
+}
+
+@media (min-width: 768px) {
+  .marketing-pillar-row {
+    padding-block: clamp(44px, 4vw, 60px);
+  }
+}
+
+.marketing-asset-frame {
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-site-chrome * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
