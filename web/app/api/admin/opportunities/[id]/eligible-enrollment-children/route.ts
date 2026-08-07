@@ -5,13 +5,14 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
 import { resolveEligibleEnrollmentChildrenForOpportunity } from "@/lib/lifecycle/resolveEligibleEnrollmentChildrenForOpportunity";
 
-type RouteContext = { params: Promise<{ opportunityId: string }> };
+type RouteContext = { params: Promise<{ id: string }> };
 
 /**
  * GET — eligible child Enrollment participations for related-subject commands
  * (e.g. Move to Waitlist from family Focus Panel).
  *
  * Returns operator-facing labels only (no grain / OCM vocabulary in product copy).
+ * Dynamic segment must be `[id]` to match sibling opportunity routes.
  */
 export async function GET(_request: NextRequest, context: RouteContext) {
     const forbidden = await requireAdminOrOps();
@@ -19,7 +20,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
-    const { opportunityId: rawId } = await context.params;
+    const { id: rawId } = await context.params;
     const opportunityId = rawId?.trim() ?? "";
     if (!opportunityId) {
         return apiError("BAD_REQUEST", "opportunityId is required", 400);
