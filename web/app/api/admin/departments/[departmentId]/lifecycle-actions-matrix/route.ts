@@ -14,8 +14,15 @@ import {
 import {
     loadLifecycleActionsMatrix,
     saveLifecycleActionsMatrix,
+    upsertEnabledProcessActionsIntoCommandSet,
     type LifecycleActionsMatrixSaveRow,
 } from "@/lib/lifecycle/lifecycleActionsMatrix";
+import { mergeCategoryFDepartmentMetadata } from "@/lib/lifecycle/mergeCategoryFDepartmentMetadata";
+import {
+    builderFromDraft,
+    editProcessInDraft,
+} from "@/lib/businessProcesses/configuration/editProcessInDraft";
+import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 
 async function loadDepartment(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -118,22 +125,68 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ dep
             builderStageKeys,
             existingMetadata: metadata,
         });
-        if (result.metadata_patch) {
-            const nextMeta = { ...metadata, ...result.metadata_patch };
-            const { error: metaErr } = await supabase
-                .from("departments")
-                .update({ metadata: nextMeta, updated_at: new Date().toISOString() })
-                .eq("id", departmentId)
-                .eq("org_id", ctx.orgId);
-            if (metaErr) throw new Error(metaErr.message);
+
+        // Category F: order key only. Never rewrite publication-owned lifecycle_builder_v1.
+        const nextMeta = mergeCategoryFDepartmentMetadata(metadata, result.metadata_patch);
+        const { error: metaErr } = await supabase
+            .from("departments")
+            .update({ metadata: nextMeta, updated_at: new Date().toISOString() })
+            .eq("id", departmentId)
+            .eq("org_id", ctx.orgId);
+        if (metaErr) throw new Error(metaErr.message);
+
+        let publication_required = false;
+        let draft_revision: number | undefined;
+        if (result.enabled_definition_keys.length) {
+            const editorState = await loadBusinessProcessEditorState(supabase, {
+                orgId: ctx.orgId,
+                departmentId,
+                actorUserId: ctx.userId ?? null,
+            });
+            if (editorState) {
+                const draftBuilder = builderFromDraft(editorState);
+                const processId = draftBuilder.active_process_id?.trim() || null;
+                const process = processId
+                    ? draftBuilder.processes.find((p) => p.id === processId) ?? null
+                    : null;
+                if (process && processId) {
+                    const wouldChange = upsertEnabledProcessActionsIntoCommandSet(
+                        process,
+                        result.enabled_definition_keys,
+                    );
+                    if (wouldChange) {
+                        const draftSave = await editProcessInDraft(supabase, {
+                            orgId: ctx.orgId,
+                            departmentId,
+                            processId,
+                            actorUserId: ctx.userId ?? null,
+                            expectedDraftRevision: editorState.draft_revision,
+                            edit: (current) =>
+                                upsertEnabledProcessActionsIntoCommandSet(
+                                    current,
+                                    result.enabled_definition_keys,
+                                ) ?? current,
+                        });
+                        publication_required = draftSave.publicationRequired;
+                        draft_revision = draftSave.draftRevision;
+                    }
+                }
+            }
         }
+
         const payload = await loadLifecycleActionsMatrix(supabase, ctx.orgId, {
             primaryRecordLabel: activation?.primary_record_label ?? "Lead",
             builderStageKeys,
-            departmentMetadata: result.metadata_patch ? { ...metadata, ...result.metadata_patch } : metadata,
+            departmentMetadata: nextMeta,
         });
 
-        return NextResponse.json({ ok: true, ...result, ...payload });
+        return NextResponse.json({
+            ok: true,
+            ...result,
+            ...payload,
+            publication_required,
+            ...(draft_revision != null ? { draft_revision } : {}),
+        });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to save matrix" }, { status: 400 });
     }
