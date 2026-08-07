@@ -16,6 +16,48 @@
   "commit_at_remeasure": "448ca9d9f",
   "executed_utc": "2026-08-07T17:56:53Z",
 
+  "evidence_repair": {
+    "reopen_reason": "Operator change request — EVIDENCE REPAIR. Director found a required automated-test artifact reporting a failed test run.",
+    "what_the_director_saw": "This artifact's `red_runs_proving_non_vacuity` block recorded two deliberate source mutations with the strings '2 failed / 45 passed' and '1 failed / 46 passed'. Those are NEGATIVE FIXTURES — probes that mutated the lock's subject to prove the lock is not vacuous, each reverted immediately after. An automated scan cannot distinguish that from a suite that failed. The `results` block compounded it by reporting only a green COUNT (66) with no pass/fail integers to contradict the reading.",
+    "root_cause": "reporting form, not product behaviour",
+    "product_behaviour_changed": false,
+    "source_files_changed": [],
+    "repair_actions": [
+      "Re-ran the required validation only — the three Wave 1 lock suites, unmutated tree, at 45cb6cfe3.",
+      "Added structured integer pass/fail counts to `results` (suite + per-file), replacing count-only reporting.",
+      "Renamed `red_runs_proving_non_vacuity` to `non_vacuity_probes` and restated each probe as a negative fixture with an explicit `probe_verdict`, `assertions_fired`/`assertions_unaffected`, and `reverted: true` — no 'N failed' phrasing survives.",
+      "Applied the same two corrections to the mirrored prose in 03-implementation-qa-sequence.md §Wave 1 fifth issuance (suite row and the red-run sentence).",
+      "Swept every artifact in this directory for other failed-run strings; the only remaining `red_run` mentions (wave1-reopen-evidence.json:96,107) are prose that already states the suite is green with the tree clean."
+    ],
+    "replacement_validation": {
+      "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+      "cwd": "web",
+      "commit": "45cb6cfe3579c158862cc74940e4444935042aee",
+      "executed_utc": "2026-08-07T18:04:53Z",
+      "suite_result": "Passed",
+      "test_files_passed": 3,
+      "test_files_failed": 0,
+      "tests_passed": 66,
+      "tests_failed": 0,
+      "per_file": [
+        { "path": "web/tests/access/analyticsRouteGates.test.ts", "passed": 47, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/access/selfAuthorityMutation.test.ts", "passed": 14, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/admin/permissionGrid.test.ts", "passed": 5, "failed": 0, "result": "Passed" }
+      ],
+      "tree_clean_for_named_deliverable": "git diff HEAD -- web/tests/access/analyticsRouteGates.test.ts is empty"
+    },
+    "contradictory_artifacts_remaining": 0,
+    "consistency_with_sibling_record": "wave1-dx7-reissue-evidence.json independently reports total_passed 66 / total_failed 0 for the same three suites. The two records now agree in both value and form.",
+    "tree_state_not_this_assignment": {
+      "path": "web/tests/access/membershipAtomicWiring.test.ts",
+      "what": "uncommitted W-5 lock widening (subject moved from a fixed writer list to a walk of app/ and lib/), authored by another concurrent assignment",
+      "observed_state": "16 passed / 0 failed",
+      "authored_here": false,
+      "reverted_or_modified_here": false,
+      "note": "Recorded, not resolved — it is neither in this assignment's scope nor in contradiction with this evidence."
+    }
+  },
+
   "concurrency": {
     "finding": "TWO assignments executed W-1…W-3 against the same base at the same time, neither aware of the other at dispatch.",
     "other_assignment": "asg_9e868dd2d78c27",
@@ -80,6 +122,18 @@
   },
 
   "results": {
+    "suite_result": "Passed",
+    "total_tests": 66,
+    "total_passed": 66,
+    "total_failed": 0,
+    "total_skipped": 0,
+    "test_files_total": 3,
+    "test_files_passed": 3,
+    "test_files_failed": 0,
+    "runner": "vitest, focused run (three files, unmutated working tree)",
+    "commit_at_validation": "45cb6cfe3579c158862cc74940e4444935042aee",
+    "executed_utc": "2026-08-07T18:04:53Z",
+    "reconciliation_note": "Re-run under the evidence-repair reopen. This block is the authoritative pass/fail record for this artifact. The earlier issuance reported only a green COUNT (66) with no pass/fail integers, and recorded its mutation probes with 'N failed' strings that an automated evidence scan read as a failed test run. No product behaviour was changed to produce this result; the tree was already clean at HEAD and every probe mutation had been reverted before the fifth issuance was committed.",
     "suites_green_on_arrival": 61,
     "suites_green_after_this_assignment": 66,
     "matches_prior_record": true,
@@ -90,6 +144,9 @@
         "lock": "RL-1",
         "tests_before": 42,
         "tests_after": 47,
+        "passed": 47,
+        "failed": 0,
+        "result": "Passed",
         "status": "green; subject widened by this assignment (alias completeness)"
       },
       {
@@ -98,6 +155,9 @@
         "lock": "RL-11",
         "tests_before": 14,
         "tests_after": 14,
+        "passed": 14,
+        "failed": 0,
+        "result": "Passed",
         "status": "green on arrival, unmodified — see w2_exit_criterion below"
       },
       {
@@ -106,6 +166,9 @@
         "lock": "RL-2",
         "tests_before": 5,
         "tests_after": 5,
+        "passed": 5,
+        "failed": 0,
+        "result": "Passed",
         "status": "green on arrival, unmodified"
       }
     ]
@@ -156,21 +219,46 @@
       "why_it_matters": "This is the 2026-08-06 subject defect one level up. That run moved the subject from three hand-listed DIRECTORIES to the primitive; the primitive list was itself still hand-listed. Same shape as W-0 Q1's handle_new_user() finding — defined, unreferenced, one change away from live.",
       "repair": "Both aliases listed, and a new lock derives `export const A = B;` aliases from the three defining modules and fails if an alias of a listed symbol is not itself listed. A future alias forces the review rather than silently voiding the subject."
     },
-    "red_runs_proving_non_vacuity": [
-      {
-        "mutation": "removed `getAdminAccessContext` from RAW_RESOLUTIONS",
-        "result": "2 failed / 45 passed",
-        "failing": [
-          "lists every alias of a raw access primitive",
-          "did not select an alias-only G2 route under the 2026-08-06 primitive list"
-        ]
-      },
-      {
-        "mutation": "removed `getAdminContext` from SUFFICIENT_GATES",
-        "result": "1 failed / 46 passed",
-        "failing": ["lists every alias of a sufficient gate"]
-      }
-    ],
+    "non_vacuity_probes": {
+      "what_these_are": "NEGATIVE FIXTURES, not suite results. Each probe temporarily mutated the lock's subject list, observed that the lock rejected the mutation, then reverted it. A probe that reports assertions firing is a probe that SUCCEEDED — the lock is non-vacuous. These are diagnostic observations, never a run of the delivered suite.",
+      "probe_outcome": "all probes rejected their mutation as designed",
+      "probes_total": 2,
+      "probes_behaved_as_designed": 2,
+      "probes_anomalous": 0,
+      "delivered_suite_result": "Passed",
+      "delivered_suite_passed": 66,
+      "delivered_suite_failed": 0,
+      "mutations_present_in_committed_tree": false,
+      "reverted_before_commit": true,
+      "verified_clean_at": "45cb6cfe3579c158862cc74940e4444935042aee — `git diff HEAD -- web/tests/access/analyticsRouteGates.test.ts` is empty",
+      "probes": [
+        {
+          "probe_id": "NV-1",
+          "mutation": "removed `getAdminAccessContext` from RAW_RESOLUTIONS",
+          "expected": "the alias-completeness assertions reject the mutated subject",
+          "observed": "rejected as designed — 2 assertions fired, 45 unaffected",
+          "assertions_fired": 2,
+          "assertions_unaffected": 45,
+          "probe_verdict": "lock is non-vacuous",
+          "fired": [
+            "lists every alias of a raw access primitive",
+            "did not select an alias-only G2 route under the 2026-08-06 primitive list"
+          ],
+          "reverted": true
+        },
+        {
+          "probe_id": "NV-2",
+          "mutation": "removed `getAdminContext` from SUFFICIENT_GATES",
+          "expected": "the alias-completeness assertion rejects the mutated subject",
+          "observed": "rejected as designed — 1 assertion fired, 46 unaffected",
+          "assertions_fired": 1,
+          "assertions_unaffected": 46,
+          "probe_verdict": "lock is non-vacuous",
+          "fired": ["lists every alias of a sufficient gate"],
+          "reverted": true
+        }
+      ]
+    },
     "honest_limit": "Unchanged and still governing: this proves a sufficient gate is CALLED, never that its result is honoured. W-1's own two-resolution finding remains the error it cannot catch. RL-1's tier-A half is still W-14's declared table."
   },
 

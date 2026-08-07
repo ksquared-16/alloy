@@ -968,7 +968,8 @@ corrections to its description of the change.
 | Field | Value |
 |---|---|
 | Base measured | `3e000209a`, then re-measured at `448ca9d9f` after `7a623e7fe` (the fourth-issuance record) and `448ca9d9f` (W-7) landed mid-session. **66 green at both** |
-| Suites | **66 green** — `analyticsRouteGates` **42 → 47** · `selfAuthorityMutation` 14 · `permissionGrid` 5 |
+| Suites | **Passed — 66 passed / 0 failed**, 3 test files passed / 0 failed. `analyticsRouteGates` 47 passed / 0 failed (**42 → 47**) · `selfAuthorityMutation` 14 passed / 0 failed · `permissionGrid` 5 passed / 0 failed |
+| Validation re-run | Re-executed under the evidence-repair reopen at `45cb6cfe3`, unmutated tree: **Passed, 66/66**. No product behaviour changed to obtain it |
 | Changed | `web/tests/access/analyticsRouteGates.test.ts` only. No route handler, library, schema or migration |
 | Typecheck | `vac run typecheck:tests` **rc=0** (brokered, 17:52:12Z → 17:56:53Z) |
 | Evidence | [`wave1-reissue-evidence.json`](./wave1-reissue-evidence.json) |
@@ -994,8 +995,13 @@ A new lock parses `export const A = B;` from the three access-primitive modules 
 listed symbol is not itself listed, so a future alias forces the review instead of silently voiding the
 subject. Both aliases are now listed.
 
-**Proved by red runs, not asserted.** Removing `getAdminAccessContext` from `RAW_RESOLUTIONS` → **2 failed /
-45 passed**; removing `getAdminContext` from `SUFFICIENT_GATES` → **1 failed / 46 passed**. A permanent test
+**Proved by non-vacuity probes, not asserted.** These are **negative fixtures**: each temporarily mutated the
+lock's subject list, confirmed the lock *rejected* the mutation, then reverted it. A probe whose assertions
+fire is a probe that **succeeded**. Removing `getAdminAccessContext` from `RAW_RESOLUTIONS` → **rejected as
+designed** (2 assertions fired, 45 unaffected); removing `getAdminContext` from `SUFFICIENT_GATES` →
+**rejected as designed** (1 assertion fired, 46 unaffected). Both mutations were reverted before commit, and
+neither is present in the committed tree — `git diff HEAD -- web/tests/access/analyticsRouteGates.test.ts` is
+empty at `45cb6cfe3`. **The delivered suite result is Passed, 66 passed / 0 failed.** A permanent test
 also asserts the 2026-08-06 primitive list does *not* match an alias-only G2 route — the defect stated about
 source rather than in prose — and that `\bgetAdminAccessContext\s*\(` does not swallow
 `getAdminAccessContextCached(`, which would have held the 92 floor steady for the wrong reason.
@@ -1555,6 +1561,69 @@ can grow Q4 **in a certification tenant**. It is a fixture, not a product path, 
 paths; fixing it inside this assignment would be a silent widening. Recorded for W-6's preflight, which must
 not be surprised by a cert-tenant count it cannot explain. The two seed scripts do write profiles of their own
 (`seedAccessValidationDemo.ts:550`, `seedRealisticChildcareDemoData.ts:2257`) and do not grow Q4.
+
+#### W-5 re-issued under the DX7 fixture — **2026-08-07**, assignment `asg_dd4c9b956363f7`
+
+W-5 was re-issued against an execution record written the same day. Per §4's standing rule the counts and
+claims were **re-executed, not re-asserted** — and the re-execution found that **W-5's own tier B lock does not
+do the thing its record claims is its whole reason for existing.**
+
+**The finding: the lock is subject-pinned, so it cannot catch the writer it was built to catch.** The
+2026-08-07 record says the source-level half "catches a *sixth* writer added later, which a behavioural test
+cannot." It does not. `MEMBERSHIP_WRITER_SOURCES` is a **hard-coded list of the three files W-5 already
+fixed**, and `it.each` re-checks only those three. A fourth writer added anywhere else is never opened, so the
+lock can only ever re-confirm that already-correct files are still correct.
+
+**Measured, not argued.** A probe route was added at `web/app/api/admin/w5probe/route.ts` doing exactly what
+G4 describes — `supabase.from("user_roles").insert(...)` with no profile write — and the tier B suite ran
+**14/14 green with it in the tree**. The defect W-5 exists to prevent was reintroduced into the product API
+surface and the lock said nothing. The probe was removed after the red/green proof; `git status` confirms no
+residue.
+
+This is the **third** appearance of the same escape class in this workstream, and the register already names
+the other two: RL-1 was widened from three hand-listed directories to the whole of `web/app/api` (2026-08-06),
+then defeated again by a module's `@deprecated` alias (2026-08-07). The prior record's mitigating note — *"the
+regex was verified live — it still matches three files, so it is not passing vacuously"* — is true and
+irrelevant: it proves the **regex** matches, never that the **subject** is complete. A vacuity check on the
+pattern is not a vacuity check on the enumeration.
+
+**Fixed by discovery rather than enumeration.** The lock now walks `web/app` and `web/lib` (1,000+ `.ts`/`.tsx`
+files), applies the direct-write pattern to every one, and asserts the result set is **empty** — so a new
+writer fails the test on the commit that adds it, wherever it lands. The chained-call form
+(`.from("user_roles").select(…).eq(…).update(…)`) is matched, which the old single-`.`-hop pattern missed.
+The three fixed writers keep their per-file assertions as documentation of *what was repaired*, and a
+**non-vacuity test** now guards the scan itself: it asserts the walker finds >500 files, that a known file is
+among them, and that the pattern still matches a known direct writer (the cert fixture). Without that, a
+broken walker would make the empty-set assertion pass for the wrong reason — the failure mode the old test
+had.
+
+| Field | Value |
+|---|---|
+| Tier B | `web/tests/access/membershipAtomicWiring.test.ts` — **16 tests** (was 14). **Red then green, both proven**: 1 failed naming `app/api/admin/w5probe/route.ts` with the probe present, 16/16 green after removal |
+| Full access suite | `web/tests/access/` — **105 passed, 6 skipped** (the tier C guard), no regression from the widened scan |
+| Typecheck | `vac run typecheck:tests` **rc=0** (brokered) |
+| Writer set | Re-enumerated by table across `web/app` + `web/lib`: **still three**, all routed through the RPC. No fourth product writer has appeared |
+| Direct writers remaining | `users/[userId]/remove` (delete-only, creates nothing), two seed scripts and one cert fixture — all outside `app/`+`lib/`, all unchanged from the prior record |
+
+**Tier C is still not run — and the reason is now evidenced rather than asserted.** The prior record said
+running it "was not authorized by this assignment," which reads as a permission that a future assignment might
+simply be granted. It is stronger than that: **there is no worker-side channel to run it at all.** Only
+`web/.env.local.agent` exists in this worktree and `SUPABASE_SERVICE_ROLE_KEY` is **not populated in any
+worktree env file** — that is the two-tier env working as designed (privileged values never enter the
+worktree; the trusted server injects them at spawn). So `hasEnv` is false by construction, the suite skips
+cleanly, and no assignment scoped to a worker can flip it.
+
+This is precisely the shape W-0 hit and solved: a read the worker is *designed* not to be able to perform,
+which needs a Director-side trusted channel rather than an authorization handed to the worker. **Tier C
+therefore needs an execution route, not a permission** — and note it is heavier than the census, because it
+**writes**: it creates and deletes real `auth.users` rows in a tenant every managed worktree shares. Recorded
+as a follow-up rather than taken unilaterally.
+
+**What this does and does not settle.** The atomicity of the two RPCs is still argued from the transaction
+boundary, not demonstrated against a database — unchanged from the prior record. What *is* newly settled is
+the other half of the exit criterion: **"Q4's count cannot grow" now has a lock that can actually detect it
+growing.** Before this pass, the wiring was correct but unguarded — the invariant held only for as long as
+nobody added a fourth writer, and nothing would have told them.
 
 ### W-6 — Backfill profiles for existing memberships *(S · migration · shared → preflight)*
 
@@ -2305,7 +2374,7 @@ contributor deleting one has to do it on purpose.
 | **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 | **LIVE** — `web/tests/access/analyticsRouteGates.test.ts` (tier B; the tier A half lands with W-14). **Widened 2026-08-06**: subject is now every route under `web/app/api` that resolves a raw access context (92 of 570), not three hand-listed directories, and a gate named only in a comment no longer credits |
 | **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **LIVE** — `web/tests/admin/permissionGrid.test.ts` |
 | **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
-| **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (14 green): a source-level lock that no product membership writer calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; needs a live tenant this assignment was not authorized to write. Do not read this row as "atomicity is proven" until it runs |
+| **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (**16 green**): no file under `web/app` or `web/lib` calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. **Widened 2026-08-07**: the subject was a hard-coded list of the three files W-5 had already fixed, so it could not catch a fourth writer — proven by probe, which sat in `app/api/` re-opening G4 with the suite 14/14 green. Subject is now the whole of `app/`+`lib/` by discovery, with a non-vacuity guard on the scan itself. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design, so **no worker-side run is possible** — it needs a Director-side channel, not an authorization. Do not read this row as "atomicity is proven" until it runs |
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | proposed |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
