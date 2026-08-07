@@ -265,22 +265,26 @@ export async function executeCreateLeadAction(
         executorPorts: createExecutorPorts(supabase),
     };
 
-    let review: Awaited<ReturnType<typeof loadCaseReview>>;
-    try {
-        review = await loadCaseReview(reviewDeps, ingested.processingCaseId);
-    } catch {
-        // Fake/incomplete clients in unit tests — keep interactive review rather than fail create.
-        return {
-            ok: true,
-            mode: "processing_review",
-            processing_case_id: ingested.processingCaseId,
-            readiness: ingested.readiness,
-            idempotency_key: ingested.idempotencyKey,
-            work_unit_id: workUnitId,
-            work_unit_key: workUnitKey,
-            status_key: statusKeyForLead,
-            stage_key: "lead",
-        };
+    // Reuse the review already loaded during ingest — a second loadCaseReview was a clean-new
+    // latency tax with no semantic benefit (case has not changed between the two calls).
+    let review: Awaited<ReturnType<typeof loadCaseReview>> = ingested.caseReview;
+    if (!review) {
+        try {
+            review = await loadCaseReview(reviewDeps, ingested.processingCaseId);
+        } catch {
+            // Fake/incomplete clients in unit tests — keep interactive review rather than fail create.
+            return {
+                ok: true,
+                mode: "processing_review",
+                processing_case_id: ingested.processingCaseId,
+                readiness: ingested.readiness,
+                idempotency_key: ingested.idempotencyKey,
+                work_unit_id: workUnitId,
+                work_unit_key: workUnitKey,
+                status_key: statusKeyForLead,
+                stage_key: "lead",
+            };
+        }
     }
 
     const presentation = buildCreateLeadReviewPresentation({
