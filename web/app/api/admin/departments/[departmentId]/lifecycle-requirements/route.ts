@@ -33,6 +33,7 @@ import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActiva
 import { parseRuleLevelsV1 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import { parseRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
 import { replacePatchedStageFieldRules } from "@/lib/lifecycle/replacePatchedStageFieldRules";
+import { mergeCategoryFDepartmentMetadata } from "@/lib/lifecycle/mergeCategoryFDepartmentMetadata";
 
 function isOperatorStageKey(s: string): s is LifecycleOperatorStage {
     return (LIFECYCLE_STAGE_ORDER as readonly string[]).includes(s);
@@ -183,6 +184,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         let metadata = prevMeta;
         if (operatorPatch) metadata = deepMergeJsonObjects(metadata, operatorPatch);
         if (builderReset) metadata = deepMergeJsonObjects(metadata, builderReset);
+        metadata = mergeCategoryFDepartmentMetadata(prevMeta, metadata);
         const supabase = createAdminClient();
         const { data: updated, error } = await supabase
             .from("departments")
@@ -268,9 +270,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 { status: 400 }
             );
         }
-        const metadata = replacePatchedStageFieldRules(
-            deepMergeJsonObjects(prevMeta, metadataPatch),
-            metadataPatch,
+        const metadata = mergeCategoryFDepartmentMetadata(
+            prevMeta,
+            replacePatchedStageFieldRules(
+                deepMergeJsonObjects(prevMeta, metadataPatch),
+                metadataPatch,
+            ),
         );
         const supabase = createAdminClient();
         const { data: updated, error } = await supabase
@@ -318,7 +323,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         );
     }
 
-    const metadata = deepMergeJsonObjects(prevMeta, metadataPatch);
+    const metadata = mergeCategoryFDepartmentMetadata(
+        prevMeta,
+        deepMergeJsonObjects(prevMeta, metadataPatch),
+    );
     const supabase = createAdminClient();
     const { data: updated, error } = await supabase
         .from("departments")

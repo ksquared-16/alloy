@@ -19,10 +19,7 @@ import {
     parseLifecycleActionsMatrixOrder,
     sortBaseActionKeysByMatrixOrder,
 } from "@/lib/lifecycle/lifecycleActionsMatrixOrder";
-import {
-    lifecycleBuilderFromDepartmentMetadata,
-    mergeLifecycleBuilderIntoMetadata,
-} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 import {
     lifecycleActivationBaseActionByKey,
@@ -246,70 +243,62 @@ async function deactivateBuilderPlacementsForDefinition(
 }
 
 /**
- * Ensure enabled Process Actions also appear in the active process command_set_v1 so
- * Work Template Helpful Actions can select them (e.g. Waitlist Child → Move to Waitlist).
+ * Ensure enabled Process Actions also appear in process command_set_v1 so Work Template Helpful
+ * Actions can select them (e.g. Waitlist Child → Move to Waitlist).
+ *
+ * Returns null when unchanged. Callers must persist via the draft writer (`editProcessInDraft`) —
+ * never by writing `departments.metadata.lifecycle_builder_v1` directly.
  */
-export function upsertEnabledProcessActionsIntoCommandSetMetadata(
-    existingMetadata: Record<string, unknown> | null | undefined,
+export function upsertEnabledProcessActionsIntoCommandSet(
+    process: LifecycleBuilderProcessRecord,
     enabledDefinitionKeys: readonly string[],
-): Record<string, unknown> | null {
+): LifecycleBuilderProcessRecord | null {
     const keys = [...new Set(enabledDefinitionKeys.map((k) => k.trim()).filter(Boolean))];
     if (!keys.length) return null;
 
-    const builder = lifecycleBuilderFromDepartmentMetadata(existingMetadata ?? null);
-    const activeId = builder.active_process_id?.trim() || null;
-    if (!activeId) return null;
-
+    const existing = process.command_set_v1;
+    const commands = existing?.commands ? [...existing.commands] : [];
+    const present = new Set(commands.map((c) => c.capability_key.trim()));
+    const presentIntents = new Set([...present].map((k) => normalizeActionRefToIntentKey(k)));
     let changed = false;
-    const processes = builder.processes.map((process) => {
-        if (process.id !== activeId) return process;
-        const existing = process.command_set_v1;
-        const commands = existing?.commands ? [...existing.commands] : [];
-        const present = new Set(
-            commands.map((c) => {
-                const raw = c.capability_key.trim();
-                return raw;
-            }),
-        );
-        const presentIntents = new Set(
-            [...present].map((k) => normalizeActionRefToIntentKey(k)),
-        );
 
-        for (const key of keys) {
-            const intent = normalizeActionRefToIntentKey(key);
-            if (present.has(key) || present.has(intent) || presentIntents.has(intent)) {
-                // Re-enable if previously present but disabled.
-                const idx = commands.findIndex(
-                    (c) =>
-                        c.capability_key.trim() === key
-                        || c.capability_key.trim() === intent
-                        || normalizeActionRefToIntentKey(c.capability_key) === intent,
-                );
-                if (idx >= 0 && !commands[idx]!.enabled) {
-                    commands[idx] = { ...commands[idx]!, enabled: true };
-                    changed = true;
-                }
-                continue;
+    for (const key of keys) {
+        const intent = normalizeActionRefToIntentKey(key);
+        if (present.has(key) || present.has(intent) || presentIntents.has(intent)) {
+            const idx = commands.findIndex(
+                (c) =>
+                    c.capability_key.trim() === key
+                    || c.capability_key.trim() === intent
+                    || normalizeActionRefToIntentKey(c.capability_key) === intent,
+            );
+            if (idx >= 0 && !commands[idx]!.enabled) {
+                commands[idx] = { ...commands[idx]!, enabled: true };
+                changed = true;
             }
-            // Prefer operator intent key when one exists (move_to_waitlist vs waitlist_child).
-            const capability_key = intent !== key ? intent : key;
-            commands.push({ capability_key, enabled: true });
-            present.add(capability_key);
-            presentIntents.add(normalizeActionRefToIntentKey(capability_key));
-            changed = true;
+            continue;
         }
-
-        if (!changed && existing) return process;
+        // Prefer operator intent key when one exists (move_to_waitlist vs waitlist_child).
+        const capability_key = intent !== key ? intent : key;
+        commands.push({ capability_key, enabled: true });
+        present.add(capability_key);
+        presentIntents.add(normalizeActionRefToIntentKey(capability_key));
         changed = true;
-        return {
-            ...process,
-            command_set_v1: { version: 1 as const, commands },
-        };
-    });
+    }
 
     if (!changed) return null;
-    return mergeLifecycleBuilderIntoMetadata(existingMetadata ?? {}, { ...builder, processes });
+    return {
+        ...process,
+        command_set_v1: { version: 1 as const, commands },
+    };
 }
+
+export type LifecycleActionsMatrixSaveResult = {
+    saved: number;
+    /** Category-F only — never includes `lifecycle_builder_v1`. */
+    metadata_patch: Record<string, unknown>;
+    /** Enabled action definition keys to upsert into draft `command_set_v1`. */
+    enabled_definition_keys: string[];
+};
 
 export async function saveLifecycleActionsMatrix(
     supabase: SupabaseClient,
@@ -320,7 +309,7 @@ export async function saveLifecycleActionsMatrix(
         builderStageKeys?: readonly string[];
         existingMetadata?: Record<string, unknown> | null;
     }
-): Promise<{ saved: number; metadata_patch?: Record<string, unknown> }> {
+): Promise<LifecycleActionsMatrixSaveResult> {
     const primaryRecordLabel = opts?.primaryRecordLabel?.trim() || "Lead";
     const allStageKeys = opts?.builderStageKeys?.length
         ? opts?.builderStageKeys
@@ -435,18 +424,13 @@ export async function saveLifecycleActionsMatrix(
         saved += 1;
     }
 
-    // Apply order first, then command_set upsert on that base — command upsert returns full
-    // metadata (via mergeLifecycleBuilderIntoMetadata), so it must not overwrite a newer order key.
-    const withOrder = {
-        ...(opts?.existingMetadata ?? {}),
-        ...buildLifecycleActionsMatrixOrderPatch(
-            orderedKeys.length ? orderedKeys : LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER,
-            opts?.existingMetadata ?? null,
-        ),
-    };
-    const metadata_patch =
-        upsertEnabledProcessActionsIntoCommandSetMetadata(withOrder, enabledDefinitionKeys) ?? withOrder;
-    return { saved, metadata_patch };
+    // Category F only — order lives outside publication-owned lifecycle_builder_v1.
+    // command_set_v1 upserts go through the draft writer in the route, never this patch.
+    const metadata_patch = buildLifecycleActionsMatrixOrderPatch(
+        orderedKeys.length ? orderedKeys : LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER,
+        opts?.existingMetadata ?? null,
+    );
+    return { saved, metadata_patch, enabled_definition_keys: enabledDefinitionKeys };
 }
 
 export function baseActionKeyFromConfiguredRow(
