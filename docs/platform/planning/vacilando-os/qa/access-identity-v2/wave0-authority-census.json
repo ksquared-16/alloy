@@ -138,7 +138,38 @@
     "readonly_validation": "Validated BY INSPECTION against scripts/local-dev/lib/vacilando/trusted-host-sql-readonly.mjs. The added block introduces no FORBIDDEN_KEYWORDS and matches no FORBIDDEN_PHRASES: it adds only jsonb_build_object, jsonb_agg, COALESCE, md5, string_agg, inet_server_addr and current_setting over public.orgs, adds no statement (still one statement), and adds no CTE. Note the validator strips string literals before scanning, so 'cluster_name' does NOT trip the CLUSTER keyword rule. NOT executed through validateReadOnlySql() in this session — node and shasum are both permission-walled in this worker. The Director re-validates at execution, which is the real gate.",
     "query_hash": "DELIBERATELY ABSENT — DO NOT GUESS ONE. The worker could not compute sha256 (node and shasum are permission-walled here). trusted-host-action-registry.mjs computes hash = sha256(sql) itself, and only compares when an expectedQueryHash is supplied or the artifact carries a query_hash field; recording a wrong hash here would fail the run with query_hash_mismatch. The executing Director derives it and records it in the run-3 history entry.",
     "execution_mechanics": "The registry reads the query from j.combined_query || j.sql || j.query only. This file's top-level combined_query and query_hash are LEFT UNCHANGED so runs 1 and 2 stay verifiable against them. To execute run 3, the amended text (combined_query + this insertion) must be presented as the artifact's combined_query — either by promoting it here at run time, or by pointing queryArtifactPath at a dedicated run-3 artifact. That choice is the executor's; it is recorded rather than pre-empted because this assignment's scope is the two files it names.",
-    "supersedes_nothing": "This does not alter, retract or re-open any run-1 or run-2 result. Runs 1 and 2 stand exactly as recorded."
+    "supersedes_nothing": "This does not alter, retract or re-open any run-1 or run-2 result. Runs 1 and 2 stand exactly as recorded.",
+    "now_also_serves_w6_m1_preflight": "ADDED 2026-08-07 by the W-6 assignment. Run 3 was authored on 2026-08-06 and is still unexecuted. W-6/M1 independently requires a fresh Q4 immediately before apply (§11). Those are the SAME live read — run 3's combined_query already computes q4_pairs_without_profile, q4_membership_rows, q4_distinct_user_org_pairs and q4_profiles_without_membership. Executing run 3 therefore discharges BOTH obligations on ONE operator authorization; requesting a separate W-6 census would be a second authorization for a query that is a subset of this one. See w6_m1_preflight for the pass/fail rules applied to run 3's output."
+  },
+  "w6_m1_preflight": {
+    "workstream": "W-6",
+    "migration": "supabase/migrations/20260807140000_backfill_membership_access_profiles.sql",
+    "target": "shared",
+    "status": "SPECIFIED AND AUTHORED, NOT EXECUTED — `preflight.ok` is NOT yet true",
+    "prepared_at": "2026-08-07",
+    "prepared_by": "claude (Vacilando managed slot 6), assignment asg_5b1ea3f9a620c6",
+    "why_not_executed": "The census channel is the Vacilando trusted host action `database.read_census`, which the DIRECTOR executes host-side. The worker protocol exposes only `vacilando-decision` and `vacilando-report` — there is no worker-side channel to invoke it, and no privileged credential reaches the worker by design. This is the same dependency that has held run 3 since 2026-08-06.",
+    "execution_source": "next_run_prepared (run 3). No separate query is needed or wanted.",
+    "reads": [
+      "q4_pairs_without_profile — the number M1 must create",
+      "q4_membership_rows and q4_distinct_user_org_pairs — grain corroboration; all three must be distinct-or-explained, never interchanged",
+      "q4_profiles_without_membership — the orphan population M1 must leave untouched"
+    ],
+    "pass_rules": [
+      "RULE 1 (sizing). M1's created-row count MUST equal q4_pairs_without_profile as returned by the preflight run, NOT the 2 recorded in results[]. The migration enforces this in-transaction and aborts on mismatch, so a stale number cannot silently size a wrong apply.",
+      "RULE 2 (grain). The comparison is against q4_pairs_without_profile. Comparing against q4_membership_rows (8 at run 2) or q4_distinct_user_org_pairs (6 at run 2) would let the preflight pass on a wrong migration — see queries[Q4].result.grain_ruling.",
+      "RULE 3 (coverage). Post-apply, the Q4 anti-join MUST return 0. This is W-6's exit criterion and W-7's precondition.",
+      "RULE 4 (no modification). q4_profiles_without_membership must be unchanged post-apply, and zero pre-existing profile rows may differ. The migration snapshots every pre-existing row into a temp table and EXCEPT-compares after the insert, so this is evidenced rather than argued from ON CONFLICT DO NOTHING semantics.",
+      "RULE 5 (immediacy). The census must be re-run IMMEDIATELY BEFORE apply. Q4 is the one count that grows with product use. W-5 landed 2026-08-07 and closed the three product membership writers, so the growth path is closed — but `tests/processing/cert/processingIdentityCertFixtures.ts:115` still upserts user_roles with no profile row and CAN grow Q4 in a certification tenant. A preflight count above the last census is therefore explainable, not automatically alarming; a count that cannot be attributed to that fixture IS alarming and means a sixth membership writer exists."
+    ],
+    "expected_but_not_asserted": "2, if the tenant has been idle since 2026-08-04 and W-5's closure held. This number is recorded as an EXPECTATION for triage only. Nothing in the migration or the gate reads it — §4's standing rule is that every consumer re-derives rather than cites, and residual_risks[0] stands.",
+    "abort_conditions": [
+      "q4_pairs_without_profile cannot be attributed to a known writer (cert fixture) — stop; a sixth membership writer exists and W-5's audit was incomplete.",
+      "q4_profiles_without_membership > 0 — not a blocker for M1 (which never touches orphans), but it must be recorded and explained before apply, because run 1 and run 2 both measured 0 and an orphan means a profile outlived its membership."
+    ],
+    "referential_safety": "CHECKED, NOT ASSUMED (2026-08-07, static). The insert selects (user_id, org_id) straight out of user_roles into user_access_profiles, whose FKs point at auth.users(id) and public.orgs(id). user_roles carries the SAME two FKs — user_roles_user_id_fkey and user_roles_org_id_fkey, both ON DELETE CASCADE (20260329165048_remote_schema.sql:6618,6623). No row in user_roles can therefore reference a user or org that user_access_profiles would reject, so the backfill cannot fail on foreign key violation. Scope values 'all'/'all' satisfy both CHECK constraints (20260504103000:26-29), and ON CONFLICT (user_id, org_id) is backed by the real constraint uq_user_access_profiles_user_org (ibid.:49-50) rather than an assumed one. This closes the apply-time failure mode where a backfill sized correctly still aborts on referential grounds.",
+    "post_apply_evidence": "The migration's DO block RAISEs a NOTICE block carrying membership_rows, distinct_user_org_pairs, pairs_without_profile_before, profile_rows_created, pairs_without_profile_after, profile_rows before/after, orphan_profiles before/after and pre_existing_rows_mutated. Capture that output verbatim into the evidence file named by §11's migrations[].preflight.evidence_path. Tier A is the post-apply anti-join returning 0.",
+    "gate_position": "Per MIGRATION-APPLY-GATE.md this migration is `awaiting_authorization` with `preflight.ok` ABSENT — not false-by-judgment but unexecuted. Under that document's table a shared-target migration whose preflight is missing is `unmet`, NOT `operator_review`. W-6 therefore cannot be accepted on this run, and Accept must not advance the spine."
   },
   "method": {
     "read_only": true,

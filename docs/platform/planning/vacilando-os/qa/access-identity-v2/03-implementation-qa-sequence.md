@@ -1121,7 +1121,36 @@ immediately before M1 rather than citing 2; the number is a snapshot, last taken
 so no membership was created in the interval; the count was stable because the tenant was idle, not because
 the fail-open path was fixed. M1 still sizes itself from a fresh census, never from this line.
 
-**QA.** Tier A: post-apply anti-join returns zero. Evidence file per §11.
+**M1 is authored, not applied — `20260807140000_backfill_membership_access_profiles.sql` (2026-08-07).**
+The insert is `SELECT DISTINCT ur.user_id, ur.org_id, 'all', 'all' FROM user_roles … ON CONFLICT (user_id,
+org_id) DO NOTHING` — additive, idempotent, never `DO UPDATE`. Around it, a `DO` block measures the pre-state,
+snapshots **every** pre-existing profile row into a temp table, and after the insert enforces four
+post-conditions in-transaction: created count == the anti-join measured microseconds earlier · zero pairs left
+uncovered · zero pre-existing rows differing under an `EXCEPT` comparison · table total grew by exactly the
+created count with the orphan population unmoved. Any failure `RAISE`s and the migration transaction rolls
+back, so **a wrong-sized apply aborts instead of landing**. "No existing profile row modified" is therefore
+evidenced by comparison, not argued from `ON CONFLICT` semantics.
+
+The in-transaction sizing check is a *backstop*, not the preflight. §11 still requires the live Q4 re-run
+before the operator is asked to authorize anything; the migration only guarantees that a stale number cannot
+silently size a wrong apply.
+
+**Preflight is specified and unexecuted.** It rides run 3 of the W-0 census artifact
+(`wave0-authority-census.json` → `w6_m1_preflight`), which already computes `q4_pairs_without_profile`,
+`q4_membership_rows`, `q4_distinct_user_org_pairs` and `q4_profiles_without_membership` — the same live read,
+so one operator authorization discharges both obligations. The census channel is the Director-side trusted
+host action `database.read_census`; **no worker-side channel to it exists and no privileged credential reaches
+a worker by design**, which is the same dependency that has held run 3 since 2026-08-06.
+
+**Gate position.** Per [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md), M1 is
+`awaiting_authorization` with `preflight` **absent** — not `ok: false` by judgment, but unexecuted. A
+shared-target migration with a missing preflight is **`unmet`, not `operator_review`**. W-6 cannot be accepted
+on this state, and Accept must not advance the spine.
+
+**QA.** Tier A: post-apply anti-join returns zero. Evidence file per §11 —
+`w6-m1-preflight.json`, carrying the preflight census output and the migration's post-apply `NOTICE` block
+verbatim (membership rows, distinct pairs, pairs-without-profile before/after, rows created, profile totals,
+orphans before/after, pre-existing rows mutated).
 **Exit.** Every membership has exactly one profile row, and W-0 Q4 re-run returns 0.
 
 ### W-7 — Absent scope denies *(M · I-19 · lockout class L1)*
@@ -1516,7 +1545,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one | shared | Row count == W-0 Q4 (**= 2** at census time, re-run before applying); no existing profile modified (**0 orphan profiles exist**) |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**not applied**) | shared | Row count == W-0 Q4 **as re-run at preflight**, never the **2** recorded on 2026-08-04; zero pairs uncovered after; no existing profile modified (**0 orphan profiles** at census). Preflight rides census **run 3** (`w6_m1_preflight`), **unexecuted** → `preflight` absent → **unmet** |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | M3 | W-9 | Catalog consolidation — repoint grants to one FK | shared | Every grant satisfies the surviving FK; no unexpected incoming FKs or dependent views |
 | M4 | W-9 | Drop retired catalog tables (**separate, later**) | shared | Zero readers proven since M3 |
