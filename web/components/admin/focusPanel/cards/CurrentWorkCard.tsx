@@ -24,6 +24,7 @@ import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
+import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -39,6 +40,7 @@ import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
 import {
     ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE,
+    buildContactFamilySendFollowOnNotice,
     type ContactFamilySendCompleteDetail,
 } from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
@@ -199,9 +201,14 @@ export default function CurrentWorkCard({
         const onContactFamilySend = (event: Event) => {
             const detail = (event as CustomEvent<ContactFamilySendCompleteDetail>).detail;
             if (!detail || detail.opportunity_id !== opportunityId) return;
-            setHandoffNotice(
-                detail.recipient_label ? `${detail.success_message} · just now` : detail.success_message,
-            );
+            const sentLine = detail.recipient_label
+                ? `${detail.success_message} · just now`
+                : detail.success_message;
+            const followOn = buildContactFamilySendFollowOnNotice({
+                associated: detail.associated,
+                outcome_key: detail.outcome_key,
+            });
+            setHandoffNotice(followOn ? `${sentLine} ${followOn}` : sentLine);
             closeActionPanel();
         };
         window.addEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
@@ -457,6 +464,7 @@ export default function CurrentWorkCard({
             error={error}
             handoffNotice={handoffNotice}
             activityItems={activityPreviewItems}
+            truth={context.truth as Record<string, unknown>}
             onChecklistItem={handleChecklistItem}
             onAction={invokeAction}
             onWarm={warmAction}
@@ -514,6 +522,7 @@ export default function CurrentWorkCard({
                 surface={surface}
                 opportunityId={opportunityId}
                 focusedWorkItemId={focusedWorkItemId}
+                truth={context.truth as Record<string, unknown>}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 onWarm={warmAction}
@@ -575,6 +584,7 @@ function SummaryBody({
     surface,
     opportunityId,
     focusedWorkItemId,
+    truth,
     onChecklistItem,
     onAction,
     onWarm,
@@ -582,13 +592,14 @@ function SummaryBody({
     surface: CurrentWorkSurfaceVM;
     opportunityId: string;
     focusedWorkItemId: string | null;
+    truth?: Record<string, unknown> | null;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
 }) {
     // ONE shared derivation so the summary and the focused "View details" surface show the SAME
-    // buttons — a dominant command (or outcome when outcome-led), two helpful actions, and Record
-    // outcome as a subordinate button when a command leads.
+    // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
+    // Record outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
     const workId = surface.primaryWorkItem?.work_id?.trim() || "";
     const workItemsLinkActive =
@@ -601,6 +612,8 @@ function SummaryBody({
      */
     const outcomeBlockReason =
         !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
+
+    const hasSupporting = helpful.length > 0 || Boolean(subordinateOutcome);
 
     return (
         <div
@@ -616,43 +629,49 @@ function SummaryBody({
                 </p>
             :   null}
             <div className="alloy-os-currentwork__summary-controls">
+                <CurrentWorkContextStrip surface={surface} truth={truth} />
                 {dominant ?
-                    <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork__primary-action"
-                            data-work-primary-action={dominant.key}
-                            data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
-                            onClick={() => onAction(dominant)}
-                            onMouseEnter={() => onWarm(dominant)}
-                            onFocus={() => onWarm(dominant)}
-                        >
-                            <CurrentWorkActionButtonContent action={dominant} />
-                        </button>
-                        {helpful.length > 0 ?
-                            <CurrentWorkTourGroupedActions
-                                actions={helpful}
-                                onAction={onAction}
-                                onWarm={onWarm}
-                                variant="summary"
-                            />
-                        :   null}
-                        {subordinateOutcome ?
+                    <div className="alloy-os-currentwork__primary-stack" data-work-primary-stack="true">
+                        <div className="alloy-os-currentwork__primary-lead" data-work-primary-row="true">
                             <button
                                 type="button"
-                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                data-work-action="record-outcome"
-                                onClick={() => onAction(subordinateOutcome)}
+                                className="alloy-os-currentwork__primary-action"
+                                data-work-primary-action={dominant.key}
+                                data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
+                                onClick={() => onAction(dominant)}
+                                onMouseEnter={() => onWarm(dominant)}
+                                onFocus={() => onWarm(dominant)}
                             >
-                                <CurrentWorkActionButtonContent action={subordinateOutcome} />
+                                <CurrentWorkActionButtonContent action={dominant} />
                             </button>
+                        </div>
+                        {hasSupporting ?
+                            <div
+                                className="alloy-os-currentwork__supporting-row"
+                                data-work-supporting-row="true"
+                            >
+                                {helpful.length > 0 ?
+                                    <CurrentWorkTourGroupedActions
+                                        actions={helpful}
+                                        onAction={onAction}
+                                        onWarm={onWarm}
+                                        variant="summary"
+                                    />
+                                :   null}
+                                {subordinateOutcome ?
+                                    <button
+                                        type="button"
+                                        className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                        data-work-action="record-outcome"
+                                        onClick={() => onAction(subordinateOutcome)}
+                                    >
+                                        <CurrentWorkActionButtonContent action={subordinateOutcome} />
+                                    </button>
+                                :   null}
+                            </div>
                         :   null}
                     </div>
                 :   null}
-                {/* WHAT'S NEXT — obligation-first. Obligation + one concise why live in the card header;
-                    the body leads with ONE dominant action, keeps secondary actions and outcome access
-                    visually subordinate, and shows a concise "Still needed" readiness summary. Detailed
-                    completeness is owned by the Required Information card and is not reproduced here. */}
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
                 {workId ?
                     <div

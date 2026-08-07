@@ -13,7 +13,25 @@ export type ContactFamilySendCompleteDetail = {
     success_message: string;
     task_id?: string | null;
     associated?: boolean;
+    /** Outcome key written on association (e.g. left_message) — presentation only. */
+    outcome_key?: string | null;
 };
+
+/**
+ * Operator-facing follow-on line after a successful Current Work send.
+ * Send → left_message keeps Contact Family open by configured Lead Work Template sufficiency.
+ */
+export function buildContactFamilySendFollowOnNotice(detail: {
+    associated?: boolean;
+    outcome_key?: string | null;
+}): string | null {
+    if (!detail.associated) return null;
+    const outcome = String(detail.outcome_key ?? "").trim().toLowerCase();
+    if (outcome === "left_message" || !outcome) {
+        return "Contact attempt recorded. Contact Family stays open until a result is recorded.";
+    }
+    return "Contact attempt recorded.";
+}
 
 export function dispatchContactFamilySendComplete(detail: ContactFamilySendCompleteDetail): void {
     if (typeof window === "undefined") return;

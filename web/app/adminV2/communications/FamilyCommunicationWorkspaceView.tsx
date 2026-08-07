@@ -39,7 +39,7 @@ import {
     prefixTextareaLines,
     wrapTextareaSelection,
 } from "@/app/adminV2/communications/activityEmbedTextFormatting";
-import { formatComposerBodyForDisplay } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
+import { formatComposerBodyForDisplay, composerMarkupToPlainText } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
 import {
     COMMS_ACCENT_BG_SUBTLE_CLASS,
     COMMS_ACCENT_BORDER_CLASS,
@@ -916,19 +916,89 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 </div>
 
                 {LIVE_WORKSPACE && (sendResult || sendError) ? (
-                    <div data-cc-send-review className="mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] shadow-sm">
-                        {sendError ? <div className="text-alloy-ember">{sendError}</div> : null}
-                        {sendResult ? (
+                    <div
+                        data-cc-send-review
+                        data-cc-send-confirm={sendResult?.mode === "preflight" ? "true" : undefined}
+                        className={
+                            sendResult?.mode === "preflight"
+                                ? "mt-2 rounded-xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.04] px-3.5 py-3 shadow-sm"
+                                : "mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] shadow-sm"
+                        }
+                    >
+                        {sendError ? <div className="text-sm text-alloy-ember">{sendError}</div> : null}
+                        {sendResult?.mode === "preflight" ? (
+                            <>
+                                <p className="text-[15px] font-semibold tracking-tight text-alloy-midnight">
+                                    Ready to send
+                                </p>
+                                <p className="mt-1 text-[13px] text-alloy-midnight/55" data-cc-send-confirm-recipient="true">
+                                    {workspaceMode === "sms" ? "SMS" : "Email"}
+                                    {" to "}
+                                    {sendResult.results
+                                        .filter((r) => r.status === "ready")
+                                        .map((r) => r.display_name)
+                                        .join(", ")
+                                        || selectionSummary(selectedRecipientIds, allLiveRecipients)
+                                        || "selected recipients"}
+                                    {sendResult.summary.blocked > 0
+                                        ? ` · ${sendResult.summary.blocked} blocked`
+                                        : ""}
+                                </p>
+                                <div
+                                    className="mt-3 rounded-lg border border-alloy-stone/20 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-alloy-midnight"
+                                    data-cc-send-confirm-preview="true"
+                                >
+                                    {workspaceMode === "email" && subjectDraft.trim() ?
+                                        <p className="mb-1.5 font-medium text-alloy-midnight">{subjectDraft.trim()}</p>
+                                    :   null}
+                                    <p className="whitespace-pre-wrap text-alloy-midnight/90">
+                                        {composerMarkupToPlainText(bodyDraft).trim() || "(Empty message)"}
+                                    </p>
+                                </div>
+                                {sendResult.results.some((r) => r.status === "blocked") ?
+                                    <ul className="mt-2 space-y-0.5 text-[11px] text-alloy-midnight/55">
+                                        {sendResult.results
+                                            .filter((r) => r.status === "blocked")
+                                            .map((r) => (
+                                                <li key={r.person_id}>
+                                                    {r.display_name}
+                                                    {r.reason ? ` — ${r.reason}` : " — blocked"}
+                                                </li>
+                                            ))}
+                                    </ul>
+                                :   null}
+                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={onDismissSend}
+                                        className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}
+                                        data-cc-send-back="true"
+                                    >
+                                        Back to edit
+                                    </button>
+                                    {sendResult.summary.ready > 0 ?
+                                        <button
+                                            type="button"
+                                            disabled={sending}
+                                            onClick={onConfirmSend}
+                                            className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}
+                                            data-cc-send-confirm-action="true"
+                                        >
+                                            <Send className="h-3.5 w-3.5" />
+                                            {sending ? "Sending…" : "Confirm send"}
+                                        </button>
+                                    :   null}
+                                </div>
+                            </>
+                        ) : sendResult ? (
                             <>
                                 <div className="mb-1 font-semibold text-alloy-midnight">
-                                    {sendResult.mode === "preflight" ? "Review before sending" : "Send results"}
+                                    Send results
                                     <span className="ml-1 font-normal text-alloy-midnight/55">
-                                        {sendResult.mode === "preflight"
-                                            ? `${sendResult.summary.ready} ready · ${sendResult.summary.blocked} blocked`
-                                            : `${sendResult.summary.sent} sent · ${sendResult.summary.blocked} blocked · ${sendResult.summary.failed} failed`}
+                                        {`${sendResult.summary.sent} sent · ${sendResult.summary.blocked} blocked · ${sendResult.summary.failed} failed`}
                                     </span>
                                 </div>
-                                <ul className="space-y-0.5">
+                                <ul className="space-y-0.5 text-[11px]">
                                     {sendResult.results.map((r) => (
                                         <li key={r.person_id} className="flex items-center gap-1.5">
                                             <span className={`inline-block h-1.5 w-1.5 rounded-full ${r.status === "sent" || r.status === "ready" ? "bg-alloy-juniper" : r.status === "blocked" ? "bg-alloy-amber" : "bg-red-500"}`} />
@@ -938,23 +1008,12 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     ))}
                                 </ul>
                                 <div className="mt-1.5 flex items-center gap-1.5">
-                                    {sendResult.mode === "preflight" && sendResult.summary.ready > 0 ? (
-                                        <button
-                                            type="button"
-                                            disabled={sending}
-                                            onClick={onConfirmSend}
-                                            className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}
-                                        >
-                                            <Send className="h-3.5 w-3.5" />
-                                            Confirm send ({sendResult.summary.ready})
-                                        </button>
-                                    ) : null}
                                     <button
                                         type="button"
                                         onClick={onDismissSend}
                                         className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}
                                     >
-                                        {sendResult.mode === "sent" ? "Done" : "Back"}
+                                        Done
                                     </button>
                                 </div>
                             </>

@@ -459,6 +459,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                     contact_attempt_association?: {
                         associated?: boolean;
                         task_id?: string;
+                        outcome_key?: string;
                     };
                 };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
@@ -505,6 +506,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                                 success_message: successMessage,
                                 task_id: data.contact_attempt_association?.task_id ?? null,
                                 associated: data.contact_attempt_association?.associated === true,
+                                outcome_key: data.contact_attempt_association?.outcome_key ?? null,
                             });
                         }
                         return;

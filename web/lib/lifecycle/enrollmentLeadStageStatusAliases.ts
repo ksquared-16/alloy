@@ -43,7 +43,10 @@ export function expandEnrollmentNewLeadsQueueStatusKeys(statusKeys: readonly str
  */
 export function canonicalNewLeadStatusLabel(statusKey: string | null | undefined): string | null {
     const k = normalizeStatusKey(statusKey ?? "");
-    return k === "new_inquiry" || k === "new_lead" ? "New Lead" : null;
+    if (k === "new_inquiry" || k === "new_lead") return "New Lead";
+    // Legacy bare `new` still appears on some rows / activity previews — never render lowercase.
+    if (k === "new") return "New";
+    return null;
 }
 
 export function isEnrollmentNewLeadsQueueKey(queueKey: string): boolean {

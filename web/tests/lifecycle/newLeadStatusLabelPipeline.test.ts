@@ -11,6 +11,7 @@ describe("New Lead status label — single pipeline", () => {
     it("canonicalNewLeadStatusLabel resolves the legacy keys and nothing else", () => {
         expect(canonicalNewLeadStatusLabel("new_inquiry")).toBe("New Lead");
         expect(canonicalNewLeadStatusLabel("new_lead")).toBe("New Lead");
+        expect(canonicalNewLeadStatusLabel("new")).toBe("New");
         expect(canonicalNewLeadStatusLabel("waitlisted")).toBeNull();
     });
 
@@ -41,5 +42,7 @@ describe("New Lead status label — single pipeline", () => {
                 renderHint: "status",
             }),
         ).toBe("Waitlisted");
+        // Bare lowercase status tokens must never reach the UI unchanged.
+        expect(formatLayoutRuntimeStatusLabel("new", { renderHint: "status" })).toBe("New");
     });
 });
