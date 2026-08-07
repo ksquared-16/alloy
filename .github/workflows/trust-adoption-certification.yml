@@ -1,0 +1,81 @@
+# Trust Adoption certification gate — standing invariants for the Trust program.
+#
+# Why this exists. Through Phase 0, 1, 2.0, 2.1 and 2.2 the Trust and Processing
+# suites were run on a developer machine and quoted in PR descriptions. No CI job
+# executed them: `web-typecheck.yml` compiles the test files without running
+# them, and `operational-expectations-gates.yml` runs only
+# `tests/operationalExpectations/`. So "CI is green" has never meant "the Trust
+# suite passes" — it meant the code typechecks. This job closes that gap.
+#
+# Scoped by design, following the pattern `operational-expectations-gates.yml`
+# already established. The repository's full Vitest suite is NOT green at
+# baseline, so a whole-suite job could never be a gate: it would be red for
+# reasons unrelated to Trust and would be ignored within a week. The scope below
+# is green today with NO allowlist, NO `|| true` and NO continue-on-error, so any
+# red is unambiguously ours.
+#
+# What the scope protects, and why each part is in it:
+#
+#   tests/trust                       Trust Runtime, Decision Contract/Package,
+#                                     lifecycle and supersession, privacy engine
+#                                     and transformation dispatch (2.1), text
+#                                     minimization (2.2), the Phase 1 closeout
+#                                     certification, and every boundary control
+#                                     asserting Trust reaches no provider.
+#   tests/metrics/trustMetrics.test.ts The Trust usage/outcome metrics the program
+#                                     depends on. Deliberately this ONE file, not
+#                                     tests/metrics — the rest of that directory
+#                                     is enrollment and OI KPI work this program
+#                                     does not own.
+#   tests/processing                  Processing's deterministic Trust integration:
+#                                     identity resolution, Trust adapter contracts
+#                                     and their negative controls.
+#   tests/pos/commit                  The immutable Commit Plan, approval binding
+#                                     and execution boundary — the authority chain
+#                                     Phase 1 promised Trust would never acquire.
+#
+# What is deliberately OUT, and why. Seven failures were observed repeatedly
+# against staging during Phases 1–2.2. All seven live outside this boundary:
+#
+#   tests/metrics/metricEngine        an enrollment tour-conversion KPI threshold
+#   tests/metrics/metricPacks         asserts all 27 registry metrics sit in a
+#                                     pack; six ENROLLMENT metrics do not. No
+#                                     Trust metric is missing. Enrollment/OI owns it.
+#   tests/intake/*  (2)               prose fact extraction — intake, not Trust
+#   tests/pos/formDraft               document title derivation — presentation
+#
+# None is excluded because it is red. Each is excluded because another team owns
+# it, and each was classified before being set aside. Excluding a test for
+# FAILING would make this gate a fiction; excluding it for OWNERSHIP is what
+# keeps the gate meaningful.
+name: Trust Adoption certification
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      # Trust invariants are certified against real DDL in places, so a migration
+      # can regress this gate without touching web/**.
+      - "supabase/migrations/**"
+      - ".github/workflows/trust-adoption-certification.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  trust-adoption-certification:
+    name: Trust Adoption certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: "web/.nvmrc"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # The canonical command lives in package.json so the local run and the
+      # gate cannot drift into testing different things.
+      - name: Run Trust Adoption certification suites
+        run: npm run test:trust-adoption
