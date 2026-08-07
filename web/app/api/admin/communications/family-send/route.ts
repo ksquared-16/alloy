@@ -8,6 +8,11 @@ import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
 import { resolveFamilyCommunicationWorkspace } from "@/lib/communications/v2/familyWorkspace";
 import { orchestrateFamilySend, type FamilySendChannel, type RecipientVM } from "@/lib/communications/v2/familyWorkspace";
+import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
+import {
+    composerMarkupToEmailHtml,
+    composerMarkupToPlainText,
+} from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
 
 /**
  * POST /api/admin/communications/family-send — UI-5G.
@@ -65,12 +70,28 @@ export async function POST(req: Request) {
     }
     const channel = channelRaw as FamilySendChannel;
     const subject = typeof body.subject === "string" ? body.subject : null;
-    const message = String(body.body ?? "").trim();
-    if (!message) return NextResponse.json({ error: "body is required" }, { status: 400 });
+    const messageRaw = String(body.body ?? "").trim();
+    if (!messageRaw) return NextResponse.json({ error: "body is required" }, { status: 400 });
     if (channel === "email" && !(subject && subject.trim())) return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
     const confirm = body.confirm === true;
     const clientToken = typeof body.client_token === "string" ? body.client_token : null;
     const replyToThreadId = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id : null;
+    const opportunityIdRaw = typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
+    const opportunityId = UUID_RE.test(opportunityIdRaw) ? opportunityIdRaw : null;
+
+    let message = messageRaw;
+    let bodyIsHtml = false;
+    if (channel === "email") {
+        const converted = composerMarkupToEmailHtml(messageRaw);
+        if (!converted.ok) {
+            return NextResponse.json({ error: "Message body contains markup that is not allowed" }, { status: 400 });
+        }
+        message = converted.html;
+        bodyIsHtml = true;
+    } else {
+        message = composerMarkupToPlainText(messageRaw);
+        if (!message.trim()) return NextResponse.json({ error: "body is required" }, { status: 400 });
+    }
 
     const supabase = createAdminClient();
     const orgCheck = await assertRowOrg(supabase, "customers", customerId, ctx.orgId);
@@ -116,6 +137,7 @@ export async function POST(req: Request) {
                         primaryEntityType: "persons",
                         primaryEntityId: personId,
                         bodyRaw: text,
+                        bodyIsHtml: ch === "email" && bodyIsHtml,
                         subjectRaw: ch === "email" ? (subj ?? null) : null,
                         userAuthored: true,
                         // Per-recipient identity: a three-recipient bulk request
@@ -128,6 +150,7 @@ export async function POST(req: Request) {
                             source: "family_send",
                             customer_id: customerId,
                             author_user_id: ctx.userId ?? null,
+                            ...(opportunityId ? { opportunity_id: opportunityId } : {}),
                         },
                     });
                     return send.outcome === "sent_to_queue" || send.outcome === "duplicate"
@@ -138,9 +161,60 @@ export async function POST(req: Request) {
             { recipientPersonIds, channel, subject, body: message, confirm }
         );
 
+        let contact_attempt_association:
+            | {
+                  associated: boolean;
+                  task_id?: string;
+                  outcome_key?: string;
+                  reason?: string;
+                  error?: string;
+              }
+            | undefined;
+
+        // After a confirmed send with at least one accepted recipient, satisfy open Contact Family
+        // work on the opportunity via the existing communications→work seam (no new framework).
+        if (
+            confirm &&
+            opportunityId &&
+            ctx.userId &&
+            result.mode === "sent" &&
+            result.summary.sent > 0
+        ) {
+            const firstMessageId =
+                result.results.find((r) => r.status === "sent" && r.communication_message_id)?.communication_message_id
+                ?? null;
+            try {
+                const assoc = await associateOutboundCommunicationToContactAttempt({
+                    supabase,
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    opportunityId,
+                    channel,
+                    communicationMessageId: firstMessageId,
+                });
+                contact_attempt_association =
+                    assoc.associated
+                        ? { associated: true, task_id: assoc.task_id, outcome_key: assoc.outcome_key }
+                        : { associated: false, reason: assoc.reason, error: assoc.error };
+            } catch (e) {
+                contact_attempt_association = {
+                    associated: false,
+                    error: e instanceof Error ? e.message : String(e),
+                };
+            }
+        }
+
         return NextResponse.json({
             ...result,
-            meta: { customer_id: customerId, channel, confirm, consent_enforced: enforceConsent },
+            contact_attempt_association,
+            meta: {
+                customer_id: customerId,
+                channel,
+                confirm,
+                consent_enforced: enforceConsent,
+                opportunity_id: opportunityId,
+                reply_to_thread_id: replyToThreadId,
+            },
         });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Family send failed" }, { status: 500 });

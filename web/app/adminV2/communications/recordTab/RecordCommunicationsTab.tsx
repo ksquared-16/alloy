@@ -21,6 +21,7 @@ export default function RecordCommunicationsTab(props: {
     initialPreviewVm?: FamilyCommunicationWorkspacePreviewVM | null;
     compactActivityLoading?: boolean;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    entryContext?: "current_work" | null;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
@@ -45,6 +46,7 @@ export default function RecordCommunicationsTab(props: {
                     initialPreviewVm={props.initialPreviewVm}
                     compactActivityLoading={props.compactActivityLoading}
                     surfaceVariant={props.surfaceVariant}
+                    entryContext={props.entryContext}
                 />
             </div>
         );

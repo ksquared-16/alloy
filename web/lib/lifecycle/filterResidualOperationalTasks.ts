@@ -31,7 +31,15 @@ function collectStageWorkIds(
     return ids;
 }
 
-/** Remove lifecycle stage-work rows from generic follow-up task previews. */
+/**
+ * Residual follow-ups only — strips stage-operating-plan work (Contact Family, etc.).
+ *
+ * Focus Panel Activity → Work Items must NOT use this filter: operators need the same
+ * Contact Family row they see in global Work Items. Prefer the unfiltered inquiry
+ * preview (`tasks_raw` / `summaries.tasks`) for that surface.
+ *
+ * Kept for queue/golden-path callers that still want ad-hoc follow-ups only.
+ */
 export function filterResidualOperationalTasks(
     preview: InquirySummaryTaskPreviewPayload,
     stageWorkRuntime: StageWorkRuntimeProjection | WorkIntentRuntimeProjection | null,

@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
-import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import {
     OPPORTUNITY_DRAWER_VM_COMPOSE_VERSION,
     stripOpportunityDrawerRecordStaging,
@@ -150,12 +149,12 @@ export async function composeOpportunityDrawerViewModel(
         published_stage_inputs,
         stage_work: stage_work_state,
     } = deferred.workspace_detail;
-    // Orchestrator-owned cross-tier join: the residual-tasks filter needs B's stage-work runtime; B's
-    // record patches are applied here, before the single `above_fold.record` snapshot below.
-    const filteredTasksSummary = filterResidualOperationalTasks(initial.summaries.tasks_raw, stage_work_runtime);
-    record._inquiry_summary_tasks = filteredTasksSummary;
+    // Activity → Work Items must show the same open stage-work rows as global Work Items
+    // (e.g. Contact Family) — do not strip operating-plan work from the inquiry preview.
+    const tasksSummary = initial.summaries.tasks_raw;
+    record._inquiry_summary_tasks = tasksSummary;
     if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
-        (record._overview_data as Record<string, unknown>)._inquiry_summary_tasks = filteredTasksSummary;
+        (record._overview_data as Record<string, unknown>)._inquiry_summary_tasks = tasksSummary;
     }
     Object.assign(record, deferred.record_patches);
 
@@ -197,7 +196,7 @@ export async function composeOpportunityDrawerViewModel(
             record: stripOpportunityDrawerRecordStaging(record),
         },
         summaries: {
-            tasks: filteredTasksSummary,
+            tasks: tasksSummary,
             active_tour_bookings: initial.summaries.active_tour_bookings,
             reminders: initial.summaries.reminders,
             bos: initial.summaries.bos,

@@ -141,7 +141,7 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
         // surface — reusing the SAME embedded section + fill/scroll/pinned-footer layout contract the
         // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-
         // workspace__embed` → activity_embed variant). The composer fills the host height with an
-        // internal-scroll thread and its Send / Send later / BOS Assist footer stays visible.
+        // internal-scroll thread and its Send / Send later / BOS footer stays visible.
         // Close lives on the What's Next card header (capability-active) so the compose body
         // gets full vertical room — no Communication chip / Message sub-header here.
         return (
@@ -160,6 +160,7 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                             embedded
                             embeddedHeaderMode="description_only"
                             surfaceVariant="activity_embed"
+                            entryContext="current_work"
                         />
                     </div>
                 </div>

@@ -99,6 +99,8 @@ export type CanonicalSendRequest = {
 
     bodyRaw: string;
     subjectRaw?: string | null;
+    /** True when bodyRaw is rich HTML (email only). SMS must stay plain. */
+    bodyIsHtml?: boolean;
     /** True when an operator authored the content (vs platform-composed). */
     userAuthored: boolean;
     templateId?: string | null;
@@ -227,6 +229,7 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
             channelRaw: facts.channel,
             toRaw: facts.toAddress,
             bodyRaw: req.bodyRaw,
+            bodyIsHtml: req.bodyIsHtml === true && facts.channel === "email",
             emailSubjectRaw: req.subjectRaw ?? null,
             communicationProviderBindingId: req.communicationProviderBindingId ?? null,
             audience: req.audience,

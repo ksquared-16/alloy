@@ -267,13 +267,16 @@ describe("buildQueueCurrentWorkSummary", () => {
 });
 
 describe("Work Runtime Convergence integration contracts", () => {
-    it("compose wires stage_work_runtime and filters follow-ups", () => {
+    it("compose wires stage_work_runtime and keeps stage-work in Activity Work Items", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
+        const deferred = read("lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource.ts");
         // Ownership moved: the stage-work projection is resolved through the thin shared slice
-        // (which internally runs projectStageWorkRuntime). The behavioral wiring is unchanged.
-        expect(compose).toContain("resolveOpportunityStageWorkSlice");
+        // (which internally runs projectStageWorkRuntime). Activity Work Items uses unfiltered
+        // tasks_raw so Contact Family shares identity with global Work Items.
+        expect(deferred).toContain("resolveOpportunityStageWorkSlice");
         expect(compose).toContain("stage_work_runtime");
-        expect(compose).toContain("filterResidualOperationalTasks");
+        expect(compose).toContain("tasks_raw");
+        expect(compose).not.toContain("filterResidualOperationalTasks");
         const slice = read("lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice.ts");
         expect(slice).toContain("projectStageWorkRuntime");
     });
