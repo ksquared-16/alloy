@@ -37,6 +37,7 @@ import type {
     UpdatePersonPayload,
     UpdateProcessParticipationPayload,
 } from "./commandPayloads";
+import { ensureStageEntryWorkForCreatedLead } from "@/lib/lifecycle/ensureStageEntryWorkForCreatedLead";
 
 function portCtx(context: CommandContext): PortContext {
     return { supabase: context.supabase, orgId: context.orgId, actorId: context.actorId };
@@ -495,15 +496,42 @@ const createLead: ProcessingIdentityCommand<CreateLeadPayload, { lead_id: string
         };
     },
     async execute(input, context) {
+        const stageKey = input.stage_key ?? "lead";
         const res = await context.ports.createLead(portCtx(context), {
             household_id: input.household_id,
             primary_person_id: input.primary_person_id,
             name: input.name,
             status_key: input.status_key ?? "new",
-            stage_key: input.stage_key ?? "lead",
+            stage_key: stageKey,
             work_unit_id: input.work_unit_id ?? null,
             location_id: input.location_id ?? null,
         });
+        // Initial stage-entry work (e.g. Contact Family) is owned by the published Lead plan.
+        // Create Lead writes durable stage membership but historically skipped the spawn seam
+        // that outcome-driven stage moves already use — Current Work then had nothing to match.
+        try {
+            const spawned = await ensureStageEntryWorkForCreatedLead({
+                supabase: context.supabase,
+                orgId: context.orgId,
+                userId: context.actorId ?? null,
+                opportunityId: res.id,
+                stageKey,
+            });
+            if (
+                spawned.action === "skipped" &&
+                spawned.reason &&
+                spawned.reason !== "terminal_or_workless_stage" &&
+                spawned.reason !== "no_entry_work_template" &&
+                spawned.reason !== "no_destination_plan"
+            ) {
+                console.warn("[create_lead] stage entry work skipped", spawned);
+            }
+        } catch (e) {
+            console.warn(
+                "[create_lead] ensureStageEntryWorkForCreatedLead",
+                e instanceof Error ? e.message : e,
+            );
+        }
         return refResult([{ targetType: "lead", recordId: res.id, created: res.created }], {
             lead_id: res.id,
         });

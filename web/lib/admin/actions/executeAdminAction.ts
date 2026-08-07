@@ -350,6 +350,7 @@ export async function executeAdminAction(
                 readiness: created.readiness,
                 idempotency_key: created.idempotency_key,
                 work_unit_id: created.work_unit_id,
+                work_unit_key: created.work_unit_key,
                 status_key: created.status_key,
                 stage_key: created.stage_key,
                 ...(created.mode === "committed"

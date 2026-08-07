@@ -38,6 +38,29 @@ function asStringList(v: unknown): string[] {
     return v.map((x) => String(x).trim()).filter(Boolean);
 }
 
+async function resolveWorkUnitKey(
+    supabase: SupabaseClient,
+    orgId: string,
+    workUnitId: string | null,
+): Promise<string | null> {
+    const id = workUnitId?.trim();
+    if (!id) return null;
+    try {
+        const { data, error } = await supabase
+            .from("work_units")
+            .select("key")
+            .eq("id", id)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (error) return null;
+        const key = (data as { key?: string | null } | null)?.key;
+        return typeof key === "string" && key.trim() ? key.trim() : null;
+    } catch {
+        // Unit-test fakes often stub only the tables Create Lead historically touched.
+        return null;
+    }
+}
+
 export async function resolveOrgDefaultVerticalId(
     supabase: SupabaseClient,
     orgId: string
@@ -72,6 +95,7 @@ export async function executeCreateLeadAction(
           readiness: string;
           idempotency_key: string;
           work_unit_id: string | null;
+          work_unit_key: string | null;
           status_key: string;
           stage_key: string;
           opportunity_id: string;
@@ -86,6 +110,7 @@ export async function executeCreateLeadAction(
           readiness: string;
           idempotency_key: string;
           work_unit_id: string | null;
+          work_unit_key: string | null;
           status_key: string;
           stage_key: string;
           opportunity_id?: string;
@@ -188,6 +213,7 @@ export async function executeCreateLeadAction(
             status: 422,
         };
     }
+    const workUnitKey = await resolveWorkUnitKey(supabase, ctx.orgId, workUnitId);
     const locationId = trim(input.merged.location_id) || null;
 
     const householdCommit = readCreateLeadCommitSelectionFromPayload(input.merged);
@@ -251,6 +277,7 @@ export async function executeCreateLeadAction(
             readiness: ingested.readiness,
             idempotency_key: ingested.idempotencyKey,
             work_unit_id: workUnitId,
+            work_unit_key: workUnitKey,
             status_key: statusKeyForLead,
             stage_key: "lead",
         };
@@ -289,6 +316,7 @@ export async function executeCreateLeadAction(
                 readiness: "committed",
                 idempotency_key: ingested.idempotencyKey,
                 work_unit_id: workUnitId,
+                work_unit_key: workUnitKey,
                 status_key: statusKeyForLead,
                 stage_key: "lead",
                 opportunity_id: opportunityId,
@@ -310,6 +338,7 @@ export async function executeCreateLeadAction(
         readiness: ingested.readiness,
         idempotency_key: ingested.idempotencyKey,
         work_unit_id: workUnitId,
+        work_unit_key: workUnitKey,
         status_key: statusKeyForLead,
         stage_key: "lead",
     };
