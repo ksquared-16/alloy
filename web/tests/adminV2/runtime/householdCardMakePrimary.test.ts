@@ -13,6 +13,11 @@ describe("Household card — Make primary wiring", () => {
         expect(card).toContain("data-household-make-primary-contact");
         expect(card).toContain("householdShowsPrimaryContactControl");
         expect(card).toContain("alloy-os-household__primary-badge");
+        // Summary-card tertiary text control — muted by default, Bend Pine on hover/focus.
+        expect(card).toContain("text-alloy-slate");
+        expect(card).toContain("hover:text-alloy-bend-pine");
+        expect(card).toContain("focus-visible:text-alloy-bend-pine");
+        expect(card).not.toContain("text-alloy-blue hover:underline");
     });
 
     it("Focus Panel mutation delegates to patchHouseholdPrimaryContact + record refresh", () => {
