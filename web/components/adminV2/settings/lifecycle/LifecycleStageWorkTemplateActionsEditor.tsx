@@ -43,7 +43,7 @@ type Props = {
     stageOutcomes: StageCompletionOutcomeV1[];
     actionCatalog: StageActionCatalogV1 | null;
     configuredActions: LifecycleConfiguredActionRow[];
-    processStages: Array<{ key: string; label: string; grain?: string | null }>;
+    processStages: Array<{ key: string; label: string; grain?: string }>;
     stageOperatingPlan?: StageOperatingPlanV1 | null;
     processTracks?: ProcessTracksV1 | null;
     stageDefinition?: { journey_segment?: string } | null;

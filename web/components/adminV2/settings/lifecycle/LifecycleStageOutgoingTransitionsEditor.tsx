@@ -30,7 +30,7 @@ type Props = {
     stageKey: string;
     stageLabel?: string;
     transitions: StageOutgoingTransitionV1[];
-    processStages: Array<{ key: string; label: string; grain?: string | null }>;
+    processStages: Array<{ key: string; label: string; grain?: string }>;
     configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow>;
     entityType: string;
     /** Read-only, and only to name what triggers each path. Never written here. */

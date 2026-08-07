@@ -58,7 +58,7 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(waysOut).toContain("filterGrainCompatibleStageDestinations");
 
         const stageEditor = read("components/adminV2/settings/lifecycle/StageEditorV2.tsx");
-        expect(stageEditor).toContain("grain: stage.grain ?? null");
+        expect(stageEditor).toContain("...(stage.grain ? { grain: stage.grain } : {})");
     });
 });
 

@@ -11,7 +11,7 @@ import { resolveStageGrain, type StageGrain } from "@/lib/lifecycle/stageGrainRe
 export type StageDestinationOption = {
     key: string;
     label: string;
-    grain?: string | null;
+    grain?: string;
 };
 
 /**
