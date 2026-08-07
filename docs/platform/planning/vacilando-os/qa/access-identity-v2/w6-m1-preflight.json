@@ -131,9 +131,33 @@
     "6_json_evidence": { "status": "DONE — this file" }
   },
 
+  "apply_authorization": {
+    "granted": true,
+    "granted_at": "2026-08-07",
+    "granted_by": "operator (Kelly), answered from Mission Control",
+    "decision": "Authorize the M1 shared apply, or parse-check it first?",
+    "chosen_option": "(a) Authorize the apply now, confirming the target carries org fingerprint ab7e5dde2e229d5c46e251456e4d9534",
+    "not_chosen": "(b) parse-check on a disposable PostgreSQL first — so residual risk R2 is ACCEPTED, not discharged. A syntax error in the DO block will surface at apply time. It is safe (the migration transaction rolls back, leaving the database exactly as it was) but costs a repeat round trip.",
+    "status_after_authorization": "AUTHORIZED, NOT YET APPLIED. This is a real intermediate state and the register should not collapse it to either neighbour: `awaiting_authorization` is now wrong (the operator has answered), and `applied` is not yet true (no migration has run).",
+    "why_the_worker_did_not_apply_it": "NO EXECUTION CHANNEL EXISTS — this is structural, not a permission the worker failed to request. The only Vacilando trusted host action is `database.read_census` (trusted-host-action-registry.mjs:11, 130 — it is the sole entry in the registry), and the registry calls validateReadOnlySql() unconditionally on every action (:111). An INSERT trips FORBIDDEN_KEYWORDS, so the census channel is incapable of applying a migration BY CONSTRUCTION rather than by policy. There is no `database.apply_migration` action to authorize. Separately, DATABASE_URL is on the toolkit's denylist twice (verify.sh:202, :210), so no worker holds a credential for the deployed target. The authorization is therefore genuine and actionable — but it is actionable by the OPERATOR on the trusted host, not by this worker."
+  },
+
+  "how_to_apply": {
+    "step_1_confirm_target": "Confirm the target carries org fingerprint ab7e5dde2e229d5c46e251456e4d9534 — equivalently the two org UUIDs 7803388d-cdee-4afb-89cf-23a137f39423 and 93667019-bd28-49b5-a688-acc9bb1e0a19, slugs alloy-bend and demo-childcare-co-c144769f. This is the operator's explicit condition on the authorization. If the target does not carry those orgs, THIS PREFLIGHT IS VOID FOR IT and must be re-run.",
+    "step_2_apply_THIS_FILE_ONLY": "psql \"$DATABASE_URL\" -f supabase/migrations/20260807140000_backfill_membership_access_profiles.sql",
+    "step_2_warning_DO_NOT_USE_DB_PUSH": "DO NOT run `supabase db push`. It applies EVERY pending migration, and this repository carries a 28-migration Processing/Identity backlog recorded as unapplied against the deployed target (see method.schema_drift_check_post_execution.limit and method.schema_reverification_2026_08_04.not_checked in wave0-authority-census.json). `db push` would therefore apply 28 unrelated, un-preflighted migrations alongside M1 — a mass shared-target change the operator authorized nothing of, and precisely the class of silent widening MIGRATION-APPLY-GATE.md exists to prevent. The authorization covers ONE file. Apply that one file.",
+    "step_3_capture": "psql prints RAISE NOTICE output to stderr and shows it at the default client_min_messages=notice. Capture the full block verbatim into post_apply_evidence.captured below — no summarising, no rounding.",
+    "step_4_tier_a": "Run the anti-join at 20260807140000_backfill_membership_access_profiles.sql:174-179 as a SEPARATE statement after the migration commits, and record the result. It must return 0. This is W-6's exit criterion and W-7's precondition — the in-transaction post-condition is a backstop, not a substitute, because it runs before commit.",
+    "step_5_update_register": "Set migrations[].status to `applied` in §11, and set this file's post_apply_evidence.status accordingly. Only then does the acceptance gate become eligible for `pass`."
+  },
+
   "post_apply_evidence": {
-    "status": "NOT CAPTURED — the apply has not occurred",
+    "status": "NOT CAPTURED — authorized 2026-08-07 but not yet executed; see apply_authorization.why_the_worker_did_not_apply_it",
     "tier_a": "The anti-join at 20260807140000_backfill_membership_access_profiles.sql:174-179 returning 0.",
+    "captured_notice_block": null,
+    "captured_tier_a_anti_join": null,
+    "captured_at": null,
+    "capture_slots_are_null_deliberately": "These three keys are pre-shaped and null rather than absent, so that filling them is transcription rather than authoring, and so that a reader can tell at a glance that the evidence is MISSING rather than that the file forgot to ask for it. Do not delete them; replace the nulls.",
     "to_capture_verbatim_on_apply": [
       "membership_rows",
       "distinct_user_org_pairs",

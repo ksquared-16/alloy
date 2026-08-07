@@ -1330,9 +1330,28 @@ them would make the gate unsatisfiable by construction — the worker would have
 earn permission to apply.
 
 **What has not changed.** `preflight.ok: true` does **not** auto-apply and does **not** complete W-6. The
-migration's status is still `awaiting_authorization`, never `applied`; the exit criterion (post-apply anti-join
-= 0) is still unmet; the acceptance gate is still `needs_operator`. Per the gate's hard rule, **Accept must not
-run and must not advance the objective spine** — that exact bug shipped once on Access & Roles Phase 0.
+exit criterion (post-apply anti-join = 0) is still unmet and the acceptance gate is still `needs_operator`. Per
+the gate's hard rule, **Accept must not run and must not advance the objective spine** — that exact bug shipped
+once on Access & Roles Phase 0.
+
+**The operator authorized the apply on 2026-08-07 — and it still did not happen, for a structural reason worth
+fixing at the programme level.** Option (a) was chosen: apply now, confirming the target carries org
+fingerprint `ab7e5dde…`. Option (b) — parse-check first — was declined, so **R2 is accepted, not discharged**:
+the `DO` block has still never been parsed, and a syntax error will now surface at apply time (safely, via
+rollback, but at the cost of a repeat round trip). M1's state is therefore **`authorized_awaiting_apply`**,
+which is a real intermediate the register must not collapse into either neighbour.
+
+**No worker could execute it, and no Director trusted-host path could either.** `database.read_census` is the
+*only* action in the trusted host registry (`trusted-host-action-registry.mjs:11, 130`), and
+`validateReadOnlySql()` runs unconditionally on every action (`:111`) — an `INSERT` trips the forbidden-keyword
+scan, so **the census channel cannot apply a migration by construction**, not by policy. There is no
+`database.apply_migration` action to authorize, and `DATABASE_URL` is denylisted twice besides. **This is the
+gap to close before W-9**: the trusted host mechanism was built for read-only evidence and does that well, but
+**all nine §11 migrations terminate in a privileged write with no equivalent channel** — and W-9's catalog
+consolidation is materially riskier than this two-row backfill. Apply steps are turnkey in
+[`w6-m1-preflight.json`](w6-m1-preflight.json) → `how_to_apply`, including one hard warning: apply **the single
+file** with `psql`, never `supabase db push`, which would carry the **28-migration Processing/Identity backlog**
+recorded as unapplied against this target along with it.
 
 **W-6 was dispatched twice, and the second dispatch authored nothing.** Assignment `asg_5b1ea3f9a620c6` arrived
 a second time on 2026-08-07 at the same `contentHash` `3c36b58117e46b2363ef602b385409e7`, same objective, same
@@ -1771,7 +1790,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**not applied**) | shared | **PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`, evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) → **`operator_review`** (was `unmet`). Row count re-derived at **2** on the `pairs_without_profile` grain — not the 8 membership rows, not the 6 distinct pairs; **0 orphan profiles**. Post-apply rules (zero pairs uncovered, no existing profile modified) **pending the apply**; `status` stays `awaiting_authorization` until then |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**AUTHORIZED 2026-08-07, NOT YET APPLIED**) | shared | **PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`, evidence [`w6-m1-preflight.json`](w6-m1-preflight.json). Row count re-derived at **2** on the `pairs_without_profile` grain — not the 8 membership rows, not the 6 distinct pairs; **0 orphan profiles**. Operator authorized the apply; **no worker-reachable write channel exists to execute it** (see below). Post-apply rules **pending**; `status` is `authorized_awaiting_apply`, never `applied`, until the NOTICE block and Tier A anti-join are captured |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | M3 | W-9 | Catalog consolidation — repoint grants to one FK | shared | Every grant satisfies the surviving FK; no unexpected incoming FKs or dependent views |
 | M4 | W-9 | Drop retired catalog tables (**separate, later**) | shared | Zero readers proven since M3 |
