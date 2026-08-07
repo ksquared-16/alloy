@@ -1022,13 +1022,22 @@ confirmation run was green at `364fbfd95` (18:10:41Z, 66 passed / 0 failed). A r
 **not** green: RL-1's class-wide ratchet rejected the tree, resolving the G2 subject to **91 against a floor of
 92**. The cause is **W-8 — Wave 2, lockout class** — being implemented concurrently by another assignment in
 this same worktree: 18 uncommitted files under `web/app/api/admin/**`, `web/lib/admin/**` and
-`web/lib/lifecycle/**`, none present at session start. `access-scope-debug/route.ts` self-identifies the change
-in a comment and deletes the `portalAdminBypassesDepartmentScope` import, which is precisely what removes that
-route from the G2 subject. **This assignment prohibits Wave 2 lockout-class changes and made none.** The floor
-was **not** lowered to 91: doing so would silently ratify a change this plan deliberately *withheld* at
-`1430b12e4`, and would void the ratchet by the same mechanism §5 has rejected twice. **RL-1 did its job** — it
-detected a real subject regression the instant one appeared. Whether W-8 proceeds is a Director decision, and
-its floor must be re-derived inside W-8's own record. Escalated, not absorbed.
+`web/lib/lifecycle/**`, none present at session start. The route that left the subject is
+`app/api/admin/departments/route.ts`, which called `getAdminAccessContextCached` **only** to read `roleKeys` for
+`portalAdminBypassesDepartmentScope`; with the bypass gone there is nothing to read, so the raw resolution went
+with it. The route did not lose a gate. **This assignment prohibits Wave 2 lockout-class changes and made
+none**, and did not lower the floor.
+
+**The W-8 assignment then lowered it itself, inside this assignment's named deliverable.** At 18:18Z it edited
+`analyticsRouteGates.test.ts`, moving the class-wide floor to **91** and adding
+`expect(subject).not.toContain("app/api/admin/departments/route.ts")`. That is not a silent retune — it states
+its reason in source and pins the departing route by name, so the floor cannot drift down again unnoticed, and
+the three lock suites are **Passed, 66 passed / 0 failed** with it in place. The reasoning is sound on its
+merits. It remains a **Wave 2 change to a Wave 1 deliverable, made while that deliverable was under an
+evidence-repair reopen**, and it means approving Wave 1's evidence and approving W-8 are no longer separable at
+the file level. **RL-1 did its job** — it detected a real subject regression the instant one appeared, and
+forced the change to be argued rather than absorbed. Whether W-8 proceeds is a Director decision. Escalated,
+not absorbed.
 
 **Evidence repair, second pass — quoting the defect reproduced it.** The first repair (`364fbfd95`) rewrote the
 probe prose correctly but *explained* the original wording by **quoting the offending tallies verbatim** in the
@@ -1042,6 +1051,46 @@ thirteen parse clean. One further instance of the same class was found and rewor
 tier B row (§6) stated a correctly-rejecting negative fixture in suite-result form; its facts are unchanged.
 **The rule this establishes: evidence repair must delete the triggering pattern, not annotate it.** Report the
 assertions that fired, never a count in the shape of a run.
+
+**Evidence repair, third pass — both earlier repairs edited a file the check does not read.** The finding was
+raised a third time, so this pass stopped repairing text and went to find what is actually being parsed. It is
+not in this repository. `deliverable-evidence.mjs:174` builds the Director's parse input from an evidence
+record's **`title` + `description`** — the row in the mission's evidence gallery — and never opens its
+`fileUri`. On the test evidence for this assignment `fileUri` is `null`. So both prior repairs rewrote prose in
+a document the test check does not consult, and the check reported the same thing it always had.
+
+The offending record is **`ev_4fb9be489ef3bd37`** (`type: test`, "Tests executed", created 18:03:11Z with the
+*original* fifth-issuance submission, before any repair). Its description reports the two non-vacuity probes
+with per-probe assertion tallies written in suite-result form. It is deliberately not quoted — quoting it is
+precisely what defeated the first repair. The probes behaved correctly and were reverted before commit; only
+the wording is at fault.
+
+**No action available to this assignment can clear it.** `evaluateAssignmentTests`
+(`deliverable-evidence.mjs:239-240`) computes `suiteFailed` as `.some(...)` over *every* test-type record for
+the assignment and then sets `suitePassed = .some(passed) && !suiteFailed`. A single bad record vetoes the
+assignment, and newer records do not outrank older ones — the clean record attached at 18:20Z
+(`ev_8036d46eea82b49c`) parses green and changes nothing. `listEvidence` (`evidence.mjs:122`) filters only by
+assignment and type: no recency, no attempt, **no supersede**. Note that `listDeliverableReviews` *does* take
+`includeSuperseded`; the evidence store is the one stage in this pipeline with no way to retract. `attachEvidence`
+is its only mutator — there is no update and no delete.
+
+The one action that would clear the finding is retracting or superseding `ev_4fb9be489ef3bd37`, which means
+writing to the Director's own append-only audit log, outside the worktree. That is not a worker's to do, and
+doing it to turn a check green is the wrong instinct even where it is possible. **Escalated as a decision, not
+absorbed.** The required validation was re-run regardless: **Passed, 66 passed / 0 failed across 3 files** at
+`3f8046824` (18:22:10Z), and every artifact in this directory re-scanned clean against all four of the parser's
+failure predicates. **The durable lesson:** an evidence-repair reopen is only actionable if the worker can reach
+the text being parsed. Here the parsed text is the evidence *record* and the repairable text was the evidence
+*file*, and nothing connects the two.
+
+**Independently corroborated by W-5, and that is what makes it structural.** `asg_dd4c9b956363f7` hit the
+identical wall on a different workstream and a different suite, and wrote it up at §W-5 above (its own record is
+`ev_adda2689ef22024a` at 18:09:40Z, its ignored clean replacement `ev_48656e8babb8e255` at 18:19:09Z). Two
+assignments, working independently, reached the same conclusion: **an evidence-repair reopen cannot converge
+from the worker side.** Each pass attaches a cleaner record, the original stays, the aggregate stays red, and
+the assignment reopens on the same cause. Both also refused the same workaround — hand-editing Director state
+under `~/.local/state/alloy-dev` — which W-5's record correctly names *"the same move as editing a test to go
+green."* Concur. **This is a Director-side defect in the DX7 review path, not a Wave 1 reporting failure.**
 
 **Subject counts unmoved and both ratchets at the live floor:** family **27** (floor 27), class-wide **92 of
 570** (floor 92), re-derived at `448ca9d9f`. Consistent with an interval that added no route file.
@@ -1636,9 +1685,9 @@ had.
 
 | Field | Value |
 |---|---|
-| Tier B — required validation | `web/tests/access/membershipAtomicWiring.test.ts` — **Passed: 16 passed / 0 failed**, 1 test file passed / 0 failed (was 14 tests). Re-executed 2026-08-07 under the evidence-repair reopen against an unmutated tree |
+| Tier B — required validation | `web/tests/access/membershipAtomicWiring.test.ts` — **Passed: 16 passed / 0 failed**, 1 test file passed / 0 failed (was 14 tests). Re-executed 2026-08-07T18:22:52Z under the second evidence-repair reopen against an unmutated tree |
 | Tier C — guard | `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 skipped / 0 failed**; `describe.skipIf(!hasEnv)` holding as designed. Authored, never executed |
-| Full access suite (cross-check, not this deliverable's gate) | `web/tests/access/` at re-run: the five suites this deliverable can speak to report **104 passed / 0 failed**, 6 skipped (the tier C guard). One assertion outside W-5 is currently rejecting — RL-1's 92-route subject floor in `analyticsRouteGates` measured 91 — traced to a concurrent uncommitted edit removing `getAdminAccessContextCached` from `app/api/admin/departments/route.ts`. That is Wave 1's ratchet; W-5 neither caused nor repaired it |
+| Full access suite (cross-check, not this deliverable's gate) | `web/tests/access/` re-measured 2026-08-07T18:23:19Z: **Passed — 105 passed / 0 failed**, 6 skipped (the tier C guard), 5 test files passed / 0 failed / 1 skipped. RL-1's subject floor is green again: the W-8 owner moved it to 91 and pinned the departing route by name, in the tree but uncommitted. **This number is a snapshot of a tree another assignment is editing** — it is a cross-check, not this deliverable's gate |
 | Typecheck | `vac run typecheck:tests` **rc=0** (brokered) |
 | Writer set | Re-enumerated by table across `web/app` + `web/lib`: **still three**, all routed through the RPC. No fourth product writer has appeared |
 | Direct writers remaining | `users/[userId]/remove` (delete-only, creates nothing), two seed scripts and one cert fixture — all outside `app/`+`lib/`, all unchanged from the prior record |
@@ -1694,6 +1743,50 @@ boundary, not demonstrated against a database — unchanged from the prior recor
 the other half of the exit criterion: **"Q4's count cannot grow" now has a lock that can actually detect it
 growing.** Before this pass, the wiring was correct but unguarded — the invariant held only for as long as
 nobody added a fourth writer, and nothing would have told them.
+
+##### Evidence repair, second reopen — 2026-08-07, `asg_dd4c9b956363f7`
+
+**The first repair was correct and still did not clear the check, and the reason is structural.** The reopen
+arrived a second time with the two findings unchanged. Rather than reword the record again, the Director's
+review path was executed against this assignment's actual attached artifacts, and it produces a diagnosis the
+prose cannot fix:
+
+| Attached artifact | Created | How `parseTestEvidenceSemantics` reads it |
+|---|---|---|
+| `ev_adda2689ef22024a` | 18:09:40Z | **failed** — 16 passed, and a nonzero digits-before-`failed` token from the `w5probe` negative fixture |
+| `ev_48656e8babb8e255` | 18:19:09Z | **passed** — 16 passed / 0 failed |
+| Aggregate for the assignment | — | `checkStatus = fail`, `suiteFailed = true` |
+
+**The first repair added a corrected artifact; it could not remove the defective one.** `deliverable-review.mjs:290`
+collects evidence with `listEvidence(missionId, { assignmentId })` — **every artifact ever attached to the
+assignment, with no recency filter and no supersession** — and `evaluateAssignmentTests` sets `suiteFailed` if
+**any** of them parses as a failed run. The store is append-only by construction: `evidence.mjs` exports
+`attachEvidence` and `listEvidence` and **no amend, supersede or withdraw operation exists**.
+
+**So an evidence-repair reopen cannot converge from the worker side.** Each pass attaches a cleaner artifact,
+the original stays, the aggregate stays red, and the assignment reopens on the same cause. This is the loop,
+stated mechanically rather than inferred: the change request asks for *replacement* evidence, and the evidence
+model has no replacement. **This is a Director-side defect in the DX7 review path, not a W-5 defect**, and it
+is escalated rather than worked around — the only worker-reachable "fix" would be hand-editing Director state
+under `~/.local/state/alloy-dev`, which is the same move as editing a test to go green.
+
+**The required validation was rerun anyway, and it is green.** Tier B `membershipAtomicWiring.test.ts` —
+**Passed, 16 passed / 0 failed**, 1 test file passed / 0 failed. Tier C
+`membershipProfileInvariant.integration.test.ts` — **6 skipped / 0 failed**, `describe.skipIf(!hasEnv)` holding
+as designed. Directory cross-check `web/tests/access/` — **Passed, 105 passed / 0 failed**, 6 skipped. Measured
+at `3f8046824` on 2026-08-07 at 18:22:52Z and 18:23:19Z. **No route handler, library, schema, migration or test
+file was changed to produce this result**; `git diff HEAD` against both named deliverables is empty. A
+temporary harness was used to execute the Director's parser and was deleted before commit.
+
+**One correction rather than a restatement.** The prior full-suite row recorded 104 passed with RL-1 rejecting
+at 91 against a floor of 92. That no longer holds: the W-8 owner moved the floor to 91 and pinned the departing
+route by name, so the directory is green at 105. The row was updated to the fresh measurement with an explicit
+snapshot caveat, because the tree is still being edited by another assignment.
+
+**Durable lesson for the review path.** Two mechanisms would each end this class of loop: **supersession** —
+the most recent `type: "test"` artifact for an assignment is authoritative and earlier ones are historical; or
+an **amend/withdraw** operation so a worker can retract an artifact it authored. Without one of them, "do not
+leave contradictory artifacts" is an instruction no worker can carry out.
 
 ### W-6 — Backfill profiles for existing memberships *(S · migration · shared → preflight)*
 
@@ -1950,17 +2043,25 @@ demonstrably configures scope restriction and expects it to hold — which makes
 live gap between configured and actual authority rather than a dormant setting nobody uses. That strengthens
 the case for W-8.
 
-**QA.** Tier B: `effectiveDepartmentScopeDimensions` returns the stored scope for every role, with the
-existing suite in `web/tests/admin/adminAccessScope.test.ts` extended rather than replaced. Tier C: an `admin`
-with `department_scope = restricted` sees only allowed departments.
+**QA.** Tier B: the stored scope survives every role, with the existing suites extended rather than replaced.
+Tier C: an `admin` with `department_scope = restricted` sees only allowed departments.
 **Exit.** No role literal appears in `accessScope.ts`; department scope is enforced for all roles.
 
-**The deletion is BLOCKED, and the second half of the exit criterion is the reason (2026-08-07,
-`asg_b94c9679108f0b`).** The bypass was **not** deleted. Removing it is a two-line change that would satisfy
-the first half of the exit criterion — *no role literal appears in `accessScope.ts`* — while making the second
-half, *department scope is enforced for all roles*, **false on the day it lands**. Shipping the first half
-alone would close `C8` on paper and leave the dimension unenforceable in practice, which is the precise
-failure mode this workstream exists to end.
+*QA as built (2026-08-07):* the planned tier B assertion outlived its subject —
+`effectiveDepartmentScopeDimensions` was **deleted**, not neutered, so there is no function left to assert
+"returns the stored scope for every role" against. The equivalent lock is `scopeDimensionsFromAccess`
+returning the stored dimensions unchanged across `admin`, `ops`, `admin+ops` and a custom role, plus a
+source-level assertion that no *executable* line of `accessScope.ts` contains a role literal at all. The suite
+landed in `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts` rather than
+`web/tests/admin/adminAccessScope.test.ts` — that is where the bypass's own tests lived, so the assertions
+that claimed the bypass are **inverted in place** and the regression they lock is the exact behaviour that
+shipped.
+
+**The deletion SHIPPED, whole, with the armed path closed in the same change (2026-08-07,
+`asg_b94c9679108f0b`, second issuance).** The first issuance withheld it — correctly, on the reasoning below.
+The second issuance found that one of the two stated blockers was not a blocker at all, and closed the other
+enough to hand it to the Director. Both halves of the exit criterion are now true together. What follows is
+kept in full: the pre-flight analysis is *why* the change has the shape it has, not a superseded draft.
 
 **The armed path, verified line by line.** `user_department_access` is the sixth authority table §5 records,
 and it has a **self-authority write path that only the bypass keeps latent**:
@@ -1996,32 +2097,121 @@ table: *"W-7 would have shipped the fail-open one table over."*
 
 **What W-8 is worth, so the block is not read as a reason to drop it.** `02…§15.6` finds
 `portalAdminBypassesDepartmentScope` to be *"the **only** place in the platform where a fifth layer actually
-exists"* (`02…:1106-1108`). W-8 is therefore not merely `C8`'s closure — it is the structural half of the
-operator's standing *"reduce the role hierarchy to four layers"* directive, and the one place where that
-directive is a code change rather than an IA change. The depth row at `03…:3812` records the model as already
-four-deep with W-8 named as what *protects* it. This should ship. It should ship **whole**.
+exists"* (`02…:1106-1108`). W-8 is therefore not merely `C8`'s closure — it is the one place where the
+operator's standing *"reduce the role hierarchy to four layers"* directive touches the **scope** axis as a
+code change rather than an IA change. The depth row at `03…:3812` records the model as already four-deep with
+W-8 named as what *protects* it. This should ship. It should ship **whole**.
 
-**Two remediations close the gap; they are not equivalent, and choosing between them is a product decision.**
+**Overstated on the second issuance, corrected here.** That paragraph originally called W-8 *"the structural
+half"* of the four-layer directive. The depth ledger it cites says something narrower and more useful: W-8
+**moves no count**. It is named against the count that is *already four*, as one of the two workstreams that
+**protect** it. Calling it "the structural half" invites the report that W-8 advanced the directive; it did
+not advance it, it stopped it regressing. §6 W-8 (third issuance) below states the ledger row by row.
 
-1. **Deny self-provisioning** — `ensureLifecycleDepartmentWorkspaceAccess` refuses when the subject is the
-   caller, extending the `selfAuthorityMutation` ban to its fourth path. The exit criterion becomes true.
-   Cost: a restricted admin who creates a department, or runs *Repair workspace visibility*, no longer gains
-   access to it and must be granted it by another administrator. The refusal string already written at
-   `repairLifecycleWorkspaceVisibility.ts:104-107` anticipates exactly this state.
-2. **Scope the provisioning to departments already inside the caller's allow-list** — the insert becomes a
-   no-op rather than a widening. Preserves the repair flow for departments the principal can already see,
-   but does **not** restore it for the case the feature was built for (a department the caller cannot yet
-   see), so it is a narrower fix that leaves the feature partly inert.
+**What W-8 does and does not do for the four-layer directive — the two claims in this file disagree, and
+neither is wrong.** §6 W-7 (`03…:1976-1982`) says the surviving fifth layer at runtime is `portalEligible`,
+computed from the hard-coded `PORTAL_ROLES` at `resolveAdminAccessCore.ts:18`, and that removing it is
+**W-13's** scope under **RL-9**. §6 W-8 says the bypass is the only place a fifth layer exists. They are
+describing different axes: the bypass was a role widening a **scope dimension** (role → data visibility),
+`portalEligible` is a role governing **admission** (role → can you enter the portal). W-8 has now removed the
+first. **The directive is not discharged**: `PORTAL_ROLES` still hard-codes `admin`/`ops`, and until W-13
+turns admission into a capability the model is four-deep in *scope* and still five-deep in *admission*. W-8 is
+the half of that directive that was a code change here; the remaining half is W-13's, not this workstream's,
+and should not be reported as closed by this commit.
 
-**The announcement required by W-0 Q6 cannot be produced by a worker.** §4 requires the affected principal be
-*identified and announced* before deletion. `wave0-authority-census.json` Q6 (`:488-505`) carries the **count
-only**, and names the remedy as *"run Q6's supporting detail form"* — a live query through the Director-side
-trusted host action `database.read_census`. **No worker-side channel to it exists by design** (§6 W-6, and
-`3e000209a`). This is the same class of block W-6 hit, and re-dispatching W-8 to a worker cannot move it.
+#### The carried revision request, answered against the ledger (third issuance, 2026-08-07)
 
-**Status: `unmet`, held on decision — not on effort.** Both blockers are external to the code change: one is
-a product decision about the repair flow, one is a channel only the Director holds. No file under
-`web/` was modified by this assignment.
+The assignment arrived a third time carrying the same open operator guidance — *"Role hierarchy is still too
+deep — reduce to four layers."* It has now ridden on three assignments (`asg_45c7bf402913d3` at W-7, this one
+twice), and each has correctly said *not mine*. Three deferrals in a row is a reason to state the arithmetic
+rather than defer a fourth time, so what follows is the ledger, not another referral.
+
+**First, where the ledger is.** §45.1 of the **product-source copy** — `docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md` — holds the five-count depth table, and §47 schedules the reduction as
+**wave 14** (`W-60`…`W-62`). That copy is 5544 lines; this QA copy is ~2900. **Every `03…:38xx` citation in
+this section resolves there and cannot resolve here.** `PRODUCT-SOURCE.md` says the copy direction is QA →
+planning, so a reader of this file reasonably expects the reverse; it is not true for the reopen material,
+which landed in the product-source copy only (`d6436ddb5`, *"re-sequence the plan against the reopen; schedule
+the four-layer split"*). Stated once so the citations are followable.
+
+**Second, what W-8 did to each count.** Verified against the tree at this issuance, not carried:
+
+| Count (`03…§45.1`) | Owner | Today | What W-8 changed | Instrument that moves it |
+|---|---|:--:|---|---|
+| Stores/mappings a grant traverses | `01…§38` `RM-2` | **8** | **nothing** — the bypass was a branch, not a store | `W-20`, `W-13`, `W-9`/`W-10`, `W-60` |
+| Layers of derivation in the model | `02…§1.3` | **4** (+2 branches) | **nothing — this is the count W-8 *protects*.** Already met before W-8; W-8 removed the one construct that made it false in practice | already met; `W-62` locks it |
+| Schema chain vs runtime chain | `04…§3.6` | **4 / 5** | **nothing.** `PORTAL_ROLES` is untouched and still hard-coded — in **two** definitions, `resolveAdminAccessCore.ts:18` and `resolveAdminPortalOrgCore.ts:7` | **`W-13`**, and only if `AD-22` answers both halves |
+| Everything the resolver consults | `05…§5A.2` | **14** | **nothing** | `W-20`, `W-13`, `W-9`/`W-10`, `W-60` |
+| Operator nouns | `05…§5A.5` | **4** | **nothing** — presentation, not enforcement | `W-54`…`W-59` (wave 13) |
+
+**So the honest answer to the revision request is: W-8 moves none of the five counts, and that is not a
+failure of W-8.** Two of the five are *already four*. The one the operator is reacting to at runtime is the
+third row, it is five, and the only instrument that moves it is `W-13` — which is gated on `AD-25` for scope
+and `AD-22` for its own half, both undecided. **No worker can discharge this directive from inside W-8**, and
+a fourth issuance carrying the same guidance will reach the same place. What would move it is a Director
+decision on `AD-22`/`AD-25`, or pulling `W-13` forward out of the long tail.
+
+**Third, a caveat on how the directive will be graded, found while verifying the above.** `RB-40`
+(`07…:1123`) makes `I-35`ᴮ checkable by **enumerating two** short-circuits — `canReadAnalytics.ts:32` and
+`canManageUsersAndRoles.ts:58` — and `T-24` adds a third, `canManageUsersAndRoles.ts:16`. A sweep of
+`web/lib` for a role literal admitting a capability on its own returns **more than that set**:
+`communications/communicationPermissions.ts:32` (`admin`/`ops` satisfies `communications.send` before any
+permission key is read) and `agent/configLayoutAssist/configurationProposalAccess.ts:53,57-59`. Both are
+already registered as role-literal sites in `02…`'s census (rows 9 and 12) — **they are not a new discovery,
+they are an unbound one**: registered as literals, not bound to the invariant that would delete them.
+`I-35`ᴮ is written as a universal (*"Every gate MUST read a permission key"*) and graded as a list of two. A
+lock that enumerates cannot discover, so W-13 could clear `RB-40` with the fifth layer still satisfying
+capability checks in at least two live gates — *"the fifth layer survives under a new name"* (`04…:752`), one
+level down from where that sentence expects it. **Raised as a follow-up against `W-13`/`RB-40`, not fixed
+here**: rewriting another workstream's exit clause from inside W-8 is the error this assignment has already
+been told twice not to make.
+
+**The product decision the first issuance raised does not exist. The two remediations are the same
+remediation.** They were stated as:
+
+1. **Deny self-provisioning** — refuse when the subject is the caller.
+2. **Scope the provisioning to departments already inside the caller's allow-list** — make the insert a no-op
+   rather than a widening.
+
+Option 2 cannot fire. For a restricted principal `allowedDepartmentIds` **is** the `user_department_access`
+row set, read straight out of that table (`resolveAdminAccessCore.ts:250-261`, and again in
+`refreshDepartmentScopeDimensions:184-195`). The insert is reached only when the existence check at
+`ensureLifecycleDepartmentWorkspaceAccess.ts:153-163` finds **no** row for `(user, org, dept)` — so at that
+exact point the department is necessarily *outside* `allowedDepartmentIds`, and option 2's guard is false by
+construction. **Option 2 is option 1 with a different return shape**, not a weaker security posture; the
+insert is unreachable under both.
+
+What actually differed was one refusal string, because either way `repairLifecycleWorkspaceVisibility` reaches
+`userHasAccess === false` and returns the message already written at `:103-108` for exactly this state. A
+choice between two spellings of a refusal is not a product decision, and holding W-8 for one was the first
+issuance's single error. **Option 1 shipped**, as the explicit form — it names the reason rather than
+returning a silent no-op that reads like success.
+
+**The one real behaviour change, stated plainly.** A department-restricted principal who creates a department
+or runs *Repair workspace visibility* no longer gains access to it and must be granted it by another
+administrator. That is not a side effect of W-8 — **it is W-8**. Self-provisioning access to a department your
+profile withholds is precisely the widening I-20 forbids.
+
+**The announcement required by W-0 Q6 still cannot be produced by a worker — but it is no longer unauthored.**
+§4 requires the affected principal be *identified and announced* before deletion. The census carried the
+**count only** and named the remedy as *"run Q6's supporting detail form"*, which **did not exist as SQL
+anywhere**. It does now: `wave0-authority-census.json` Q6 gains `identity_sql`, added as a **sibling field**
+so it does not touch `combined_query` and cannot disturb `query_hash` or the pinned census run
+(`trusted-host-action-registry.mjs:90-93` hashes `combined_query` alone). The Director runs it; no worker-side
+channel to `database.read_census` exists and none was invented.
+
+It also asks a question the count form could not. `allowed_department_count` distinguishes **narrowing** from
+**lockout**: if the affected principal is `restricted` with **zero** `user_department_access` rows, then after
+W-8 they see *no departments at all*, because the bypass was the only thing showing them any. That is an
+L-class outcome, it was not named by the first issuance, and it changes what the announcement has to say.
+
+**Status: code `met`, promotion `held`** — re-verified independently on the third issuance (§15.6: both exit
+claims re-derived from the tree, lock suites **82 passed / 0 failed**). Both halves of the exit criterion hold in the tree — no role literal
+in `accessScope.ts`, and department scope enforced for every role — and the self-authority write the deletion
+would have armed is gone in the same change. What is *not* discharged is §4's announcement gate, which is a
+Director action, not a code change. **The deletion is local and unpushed, so it reaches no live principal
+until promotion; the gate binds promotion, not this commit.** Do not promote before `identity_sql` has been
+run and the affected principal told — and if `allowed_department_count` comes back `0`, treat it as a lockout
+and decide the remedy before the switch, not after.
 
 ---
 
@@ -2446,12 +2636,12 @@ contributor deleting one has to do it on purpose.
 | **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
 | **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (**Passed — 16 passed / 0 failed**): no file under `web/app` or `web/lib` calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. **Widened 2026-08-07**: the subject was a hard-coded list of the three files W-5 had already fixed, so it could not catch a fourth writer — proven by a negative fixture, a probe route that sat in `app/api/` re-opening G4 with the old suite 14/14 green. Subject is now the whole of `app/`+`lib/` by discovery, with a non-vacuity guard on the scan itself. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design, so **no worker-side run is possible** — it needs a Director-side channel, not an authorization. Do not read this row as "atomicity is proven" until it runs |
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
-| **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | proposed |
+| **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
-| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5 |
+| **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5. **2026-08-07 — the `user_department_access` path is CLOSED, not armed:** W-8 deleted the insert in the same change that deleted the bypass, and `web/tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts` records every attempted insert through that module so the *absence of the write* is asserted, not just the returned shape. **The helper-mediated `user_roles` writer remains open** — RL-11's subject is still incomplete, one path rather than two |
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
 | **RL-14** | No `sort()` over `org_id` on an authority path | A | I-7 / W-22 | proposed |
@@ -2687,7 +2877,11 @@ the tree; the suite is green with it removed.
 schema, migration or UI was modified**; no request was issued, no browser opened, and no live query run. The
 findings recorded against W-2 are reported, not remediated — see §5 for why.
 
-### 15.4 W-8 pre-flight — deletion withheld (2026-08-07, assignment `asg_b94c9679108f0b`)
+### 15.4 W-8 pre-flight — deletion withheld (2026-08-07, assignment `asg_b94c9679108f0b`, first issuance)
+
+> **Superseded on the same day by §15.5**, which executed W-8. This entry is kept because its analysis of the
+> armed write path is what gave the shipped change its shape — and because one of the two blockers it raised
+> turned out not to exist, which is worth leaving legible rather than editing away.
 
 The assignment directed deletion of `portalAdminBypassesDepartmentScope`. **The bypass was not deleted**, and
 no file under `web/` was modified. The finding is in §6 W-8; this entry records how it was reached and what
@@ -2715,3 +2909,104 @@ attempted.
 commit is buildable today, but which closure lands (§6 W-8, remediations 1 and 2) changes the behaviour of a
 working operator feature in different ways. Guessing it here would ship an unannounced product change on top
 of an unannounced authority change, for the one principal least able to absorb a surprise.
+
+**Where this reasoning was wrong.** The two remediations are not two behaviours — §6 W-8 shows option 2's
+guard cannot fire, so both make the insert unreachable and differ only in the text of a refusal. There was
+nothing to guess. The correct move on the first issuance was to establish that and ship, not to hold.
+
+### 15.5 W-8 execution — bypass deleted, armed path closed with it (2026-08-07, assignment `asg_b94c9679108f0b`, second issuance)
+
+Changed (local only — **not pushed**):
+
+| File | Role |
+|---|---|
+| `web/lib/admin/accessScope.ts` | **W-8 proper.** `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES`, `portalAdminBypassesDepartmentScope` and `effectiveDepartmentScopeDimensions` deleted outright — not left as a role-independent identity function, so no parameter survives to pass a role through |
+| `web/lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts` | **the closure.** The `user_department_access` insert is removed; the module reads scope and never widens it. Adds `SELF_DEPARTMENT_PROVISIONING_MESSAGE`, the fourth path's parallel to `SELF_AUTHORITY_MUTATION_MESSAGE`. `inserted` leaves the result type — it could now only ever be `false` |
+| `web/lib/admin/adminRouteGate.ts` | `dimRaw` removed: with no widening there is no second answer, so a raw/effective split would be two names for one value |
+| `web/lib/lifecycle/repairLifecycleWorkspaceVisibility.ts` · `web/lib/lifecycle/validateLifecycleActivationRuntime.ts` | `roleKeys` pass-through dropped; validation detail no longer claims a portal-admin exemption that no longer exists |
+| 8 route files under `web/app/api/admin/` | `effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys)` → `scopeDimensionsFromAccess(access)`; `POST /api/admin/departments` returns **403** on refusal rather than 500 (it is a refusal, not a failure); `access-scope-debug` loses `portal_admin_bypasses_department_scope` along with the bypass it reported |
+| `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts` · `web/tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts` | the bypass's own suites, **inverted in place**. The mock now records every attempted `user_department_access` insert so tests assert on the *absence of the write*, not merely on the returned shape — a change that re-adds self-provisioning fails even if it keeps the result type |
+| `web/tests/access/analyticsRouteGates.test.ts` | RL-1 G2-class floor **92 → 91**, with the reason recorded inline |
+| `docs/…/wave0-authority-census.json` | Q6 gains `identity_sql` — the "supporting detail form" §4's announcement gate has always referenced and which never existed as SQL |
+| `docs/…/03-implementation-qa-sequence.md` | §6 W-8, §15.4 correction, this entry |
+
+**Verification run** in `wt6-director-experience-dx5-5-continuation`:
+`vac run typecheck` → **rc=0** (93s) · `vac run typecheck:tests` → **rc=0** (109s) · focused Vitest across
+`tests/access`, `tests/lifecycle/lifecycleWorkspaceDepartmentAccess`, `…/lifecycleAdminScopeAndPersistence`,
+`…/lifecyclePromoteExistingAndWorkspaceRepair`, `tests/admin/adminAccessScope`, `…/accessScopeFingerprint`,
+`…/routeFamilyHardening` → **156 passed, 6 skipped, 0 failed**.
+
+**The RL-1 floor moved down, which is a decision and is recorded as one.** `app/api/admin/departments/route.ts`
+left the G2 subject because it called `getAdminAccessContextCached` *only* to read `roleKeys` for the bypass.
+With nothing to read, the raw resolution is gone; GET still runs `loadAdminRouteGate` and POST
+`getAdminContextCached`, both of which require portal eligibility. The route lost a raw resolution, not a
+gate. A floor that drifts down silently locks nothing, so the count, the date and the cause are in the test.
+
+**Limits of this record — what was not done.**
+- **No live verification.** No request was issued, no browser opened, no query run against any tenant. The
+  refusal path is proven by unit test and by construction from source; it has **not** been exercised against
+  the one real principal, and W-8 is a behaviour change for exactly that person.
+- **Tier C and tier D are absent.** §10.4 asks for browser evidence on lockout-class switches. W-8 is not
+  named L1–L4, but the `allowed_department_count = 0` case in §6 W-8 is lockout-shaped, and nothing here
+  rules it out — only `identity_sql` can, and only the Director can run it.
+- **The announcement gate is open.** Not discharged, not dischargeable by a worker; it binds **promotion**.
+- **A concurrent writer was active in this worktree** during the assignment: this document and
+  `wave1-reissue-evidence.json` changed on disk mid-edit without this worker touching the latter. All edits
+  here were made through exact-anchor replacements, so no concurrent content was clobbered, but this record
+  cannot claim to describe the file's full diff — only its own changes.
+
+**The Wave 1 escalation at §5 is correct, and this record does not dispute it.** The concurrent
+evidence-repair assignment logged that W-8 edited `analyticsRouteGates.test.ts` — *its* named deliverable —
+while that file was under an evidence-repair reopen, and escalated rather than absorbed it. That is the right
+call and the account there is accurate. Two things are worth adding from this side:
+
+- **The floor could not have been left alone.** RL-1's subject count is a property of the tree, not of a wave.
+  Deleting the bypass removed the departments route's only raw resolution, so the count fell the moment the
+  source change landed; leaving the floor at 92 would have left the whole repo's access suite red on a change
+  that *tightened* the thing RL-1 measures. The alternatives were to move the floor or to abandon W-8 — there
+  was no version of this where the two files stayed independent.
+- **It nonetheless couples two approvals that were meant to be separate**, exactly as §5 says. Approving Wave
+  1's evidence and approving W-8 are now one decision at the file level. If the Director wants them split,
+  the clean cut is to revert *only* the `analyticsRouteGates.test.ts` hunk and hold W-8's source change with
+  it — not to keep the source change and restore the floor, which would leave a red lock asserting a subject
+  the tree no longer has.
+
+**Method:** source-grounded and test-backed. Both typecheck graphs executed through the broker; no raw `tsc`.
+The `identity_sql` addition is a **sibling field** — `combined_query` and `query_hash` are byte-identical, so
+the pinned census run is unaffected.
+
+### 15.6 W-8 third issuance — the shipped change re-verified, the carried directive answered (2026-08-07, assignment `asg_b94c9679108f0b`)
+
+The assignment was re-dispatched with the code change already in the tree from §15.5 and one open operator
+revision request: *"Role hierarchy is still too deep — reduce to four layers."* **No file under `web/` was
+modified by this issuance.**
+
+| File | Role |
+|---|---|
+| `docs/…/03-implementation-qa-sequence.md` | §6 W-8 — the depth ledger answering the carried revision request, the correction to the second issuance's *"structural half"* claim, the `RB-40` enumeration caveat; this entry |
+
+**The shipped state was re-verified rather than carried.** §15.5 is a record written by the assignment that
+made the change; this issuance re-derived its two exit-criterion claims from the tree:
+
+| Claim | How checked | Result |
+|---|---|---|
+| No role literal in `accessScope.ts` | full read of the file | **holds** — the only occurrences of `admin`/`ops` are in the W-8 comment block at `:45-56`, no executable line |
+| No role widens a scope dimension | swept `web/lib` for `roleKeys` tested against an `admin`/`ops` literal | **holds** — 6 hits, all capability or compatibility-role sites (`communicationPermissions.ts:32`, `configurationProposalAccess.ts:53,57-59`, `canManageUsersAndRoles.ts:16`, `adminPortalRolePick.ts:12`); none writes `departmentScope`, `siteScope` or either allow-list |
+| The locks still hold | `npx vitest run` over `lifecycleAdminScopeAndPersistence`, `lifecycleWorkspaceDepartmentAccess`, `analyticsRouteGates`, `adminAccessScope` | **Passed — 82 passed / 0 failed, 4 test files passed** |
+
+**Limits of this record — unchanged from §15.5 and worth restating rather than assuming inherited.** No live
+verification, no browser, no query against any tenant. Tier C and tier D remain absent. **The announcement
+gate at §4 is still open**: `identity_sql` exists but only the Director can run it, and if
+`allowed_department_count` returns `0` the affected principal is a lockout, not a narrowing. **Promotion
+remains held.** Nothing in this issuance changes that status — it re-proves the code half and answers a
+directive; it does not discharge a gate.
+
+**What this issuance deliberately did not do.** It did not touch `PORTAL_ROLES`, `canReadAnalytics.ts`,
+`canManageUsersAndRoles.ts` or `RB-40`'s exit clause, though the ledger above establishes that all four are
+where the operator's directive actually lands. Those are `W-13`'s under `AD-22`/`AD-25`. Acting on adjacent,
+convenient, correctly-diagnosed work belonging to another workstream is the specific error §15.4 was written
+about, and doing it while *reporting* on that error would be worse than doing it plainly.
+
+**Method:** source-grounded and test-backed; focused Vitest only, no brokered heavy check needed since no
+source file changed. Read-only against `docs/platform/planning/access-identity-v2/` (the product-source copy)
+to resolve the `§45.1` citations; that copy was **not** modified.
