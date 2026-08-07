@@ -1353,9 +1353,9 @@ body {
 }
 
 .marketing-display-headline {
-  /* Desktop target ~57–72px; 1280 ≈ 60px; mobile ≈ 38–44px */
-  font-size: clamp(2.375rem, 1.75rem + 2.5vw, 4.5rem);
-  line-height: 1.05;
+  /* Hero title + sub — both lines locked at 36px */
+  font-size: 36px;
+  line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.035em;
   color: var(--color-alloy-midnight-forge);

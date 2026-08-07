@@ -23,10 +23,10 @@ export const MARKETING_ASSETS = {
     ready: true,
   },
   disconnectedToUnified: {
-    key: "illustrations/disconnected-to-unified",
-    src: "/marketing/illustrations/disconnected-to-unified.webp",
-    alt: "Disconnected systems becoming one operating system",
-    aspect: "3/2" as const,
+    key: "illustrations/disconnected-to-unified-v2",
+    src: "/marketing/illustrations/disconnected-to-unified-v2.webp",
+    alt: "Disconnected vs Unified: people stitching CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets together, versus Alloy as one operating system that moves work forward",
+    aspect: "1024/456" as const,
     ready: true,
   },
   businessProcesses: {

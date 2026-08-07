@@ -126,17 +126,20 @@ export default function HomePage() {
 
       {/* C. Problem */}
       <SectionShell variant="muted" density="compact">
-        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)] lg:gap-8 xl:gap-10">
           <MarketingAssetImage
             src={MARKETING_ASSETS.disconnectedToUnified.src}
             alt={MARKETING_ASSETS.disconnectedToUnified.alt}
-            aspectClassName="aspect-[3/2]"
-            className="order-2 lg:order-1"
+            aspectClassName="aspect-[1024/456] w-full"
+            className="order-2 -mx-1 lg:order-1 lg:-ml-2 lg:-mr-0 xl:-ml-4"
+            sizes="(max-width: 1023px) 100vw, 65vw"
+            unoptimized
+            priority
           />
           <div className="order-1 lg:order-2">
             <SectionHeading
               title="Stop stitching software together"
-              subtitle="CRM, email, forms, tasks, documents, and reports often live apart. People become the integration layer. Alloy replaces that patchwork with one operating system that moves work forward."
+              subtitle="CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets often live apart. People become the integration layer. Alloy replaces that patchwork with one operating system that moves work forward."
             />
           </div>
         </div>
