@@ -217,7 +217,8 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                         person_id: input.person_id,
                         role_type: input.role_type || PERSON_HOUSEHOLD_ROLE,
                     },
-                    { onConflict: "org_id,customer_id,person_id", ignoreDuplicates: false },
+                    // Live unique: uq_customer_persons_unique (org_id, customer_id, person_id, role_type)
+                    { onConflict: "org_id,customer_id,person_id,role_type", ignoreDuplicates: false },
                 )
                 .select("id")
                 .maybeSingle();
@@ -309,7 +310,8 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                         role_type: input.role_type,
                         ...(input.role ? { metadata: { role: input.role } } : {}),
                     },
-                    { onConflict: "org_id,opportunity_id,person_id", ignoreDuplicates: false },
+                    // Live unique: uq_opportunity_persons_opp_person (opportunity_id, person_id)
+                    { onConflict: "opportunity_id,person_id", ignoreDuplicates: false },
                 )
                 .select("id")
                 .maybeSingle();
