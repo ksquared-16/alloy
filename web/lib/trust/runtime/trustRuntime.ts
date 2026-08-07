@@ -361,6 +361,13 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
                 disposition: t.disposition,
                 support: t.support,
             })),
+            // Projected for the same reason, and counts only — the removed
+            // substrings are precisely what must not persist.
+            text_minimizations: context.text_minimizations.map((m) => ({
+                detector_key: m.detector_key,
+                redaction_kind: m.redaction_kind,
+                replaced_count: m.replaced_count,
+            })),
         },
         economics: {
             strategy_key: selection.strategy.key,

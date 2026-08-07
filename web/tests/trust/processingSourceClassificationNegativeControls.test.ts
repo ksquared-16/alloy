@@ -273,6 +273,7 @@ describe("NC-5 — provider identity added to the recommendation would be caught
                 classes_present: ["operational"],
                 pii_mode: "strict",
                 transformations: [],
+                text_minimizations: [],
             },
             nowIso: FIXED_NOW,
         }) as { ok: true; proposal: { recommendation: Record<string, unknown> } };
