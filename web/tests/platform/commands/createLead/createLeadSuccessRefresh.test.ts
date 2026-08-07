@@ -49,7 +49,7 @@ describe("buildCreateLeadSuccess — refresh contract", () => {
                 status_key: "open",
             }),
         });
-        expect(success.focusPanelHref).toBe("/workspace/work-unit/fresh-prospects/opp-1");
+        expect(success.focusPanelHref).toBe("/workspace/work-unit/fresh-prospects?subject_id=opp-1");
         expect(success.workUnitKey).toBe("pipeline");
         expect(success.workViewId).toBe("fresh_prospects");
     });

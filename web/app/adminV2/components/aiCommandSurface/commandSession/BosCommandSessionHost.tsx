@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
@@ -63,6 +64,7 @@ export function BosCommandSessionHost() {
 function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession }) {
     const ctx = useBosCommandSessionOptional();
     const bosPresentation = useBosPresentationControllerOptional();
+    const router = useRouter();
     const layoutDensity = resolveBosCommandSessionLayoutDensity(
         bosPresentation?.derivation.effective
     );
@@ -281,6 +283,46 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                     <SuccessBody
                         session={session}
                         compact={compact}
+                        onOpenLead={(href) => {
+                            restoreWorkspaceWidth();
+                            ctx?.discardSession();
+                            bosPresentation?.closeToLauncher();
+                            const createdId =
+                                session.execution && session.execution.ok
+                                    ? String(session.execution.opportunityId ?? "")
+                                    : "";
+                            void (async () => {
+                                let target = href.trim();
+                                if (
+                                    (!target || target === "/workspace") &&
+                                    createdId &&
+                                    session.invocation.workspace.workUnitId
+                                ) {
+                                    try {
+                                        const res = await fetch(
+                                            `/api/admin/work-units/${encodeURIComponent(session.invocation.workspace.workUnitId)}`,
+                                            { credentials: "include" },
+                                        );
+                                        if (res.ok) {
+                                            const body = (await res.json()) as { key?: string | null };
+                                            const key =
+                                                typeof body.key === "string" && body.key.trim()
+                                                    ? body.key.trim()
+                                                    : null;
+                                            if (key) {
+                                                target = resolveCreatedRecordProcessContextHref({
+                                                    recordId: createdId,
+                                                    workUnitKey: key,
+                                                });
+                                            }
+                                        }
+                                    } catch {
+                                        /* keep target */
+                                    }
+                                }
+                                if (target) router.push(target);
+                            })();
+                        }}
                         onCreateAnother={() => {
                             restoreWorkspaceWidth();
                             ctx?.startSession(session.invocation);
@@ -530,6 +572,7 @@ function ReviewBody(props: {
 function SuccessBody(props: {
     session: BosCommandSession;
     compact: boolean;
+    onOpenLead: (href: string) => void;
     onCreateAnother: () => void;
     onReturnToBos: () => void;
     onReturn: () => void;
@@ -540,6 +583,12 @@ function SuccessBody(props: {
         success && typeof success === "object" && success !== null && "focusPanelHref" in success
             ? String((success as { focusPanelHref?: string }).focusPanelHref ?? "")
             : "";
+    const createdRecordId =
+        success && typeof success === "object" && success !== null && "createdRecordId" in success
+            ? String((success as { createdRecordId?: string }).createdRecordId ?? "")
+            : props.session.execution && props.session.execution.ok
+              ? String(props.session.execution.opportunityId ?? "")
+              : "";
     const copy =
         props.session.messages.filter((m) => m.kind === "success").at(-1)?.body ??
         (success && typeof success === "object" && success !== null && "successCopy" in success
@@ -574,19 +623,22 @@ function SuccessBody(props: {
                 ) : null}
             </WorkspaceCard>
             <div className={`flex flex-col gap-2 ${props.compact ? "" : "sm:flex-row sm:flex-wrap"}`}>
-                <a
-                    href={href || undefined}
+                <button
+                    type="button"
                     className={`${WS_ACTION_PRIMARY} inline-flex items-center justify-center ${
                         props.compact ? "min-h-[40px]" : ""
                     }`}
                     data-bos-command-session-open-lead
-                    onClick={(event) => {
+                    disabled={!href && !createdRecordId}
+                    onClick={() => {
                         // Explicit Open Lead only — never auto-navigate on success.
-                        if (!href) event.preventDefault();
+                        // Close BOS first (same ordering as Action Workspace handoff), then route
+                        // into the Work Unit Focus Panel for the created record.
+                        props.onOpenLead(href);
                     }}
                 >
                     Open Lead
-                </a>
+                </button>
                 <button
                     type="button"
                     className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
@@ -638,7 +690,7 @@ function ProcessingReviewBody(props: {
             </div>
             <IdentityReviewPanel
                 caseId={props.session.processingCaseId!}
-                onCommitted={({ operations }) => {
+                onCommitted={async ({ operations }) => {
                     const opportunityId = opportunityIdFromAttempt(
                         operations.map((o) => ({
                             commandKey: o.commandKey ?? "",
@@ -651,9 +703,28 @@ function ProcessingReviewBody(props: {
                         return;
                     }
                     const successCopy = "Lead created";
+                    let workUnitKey: string | null = null;
+                    const workUnitId = props.session.invocation.workspace.workUnitId?.trim() || null;
+                    if (workUnitId) {
+                        try {
+                            const res = await fetch(
+                                `/api/admin/work-units/${encodeURIComponent(workUnitId)}`,
+                                { credentials: "include" },
+                            );
+                            if (res.ok) {
+                                const body = (await res.json()) as { key?: string | null };
+                                workUnitKey =
+                                    typeof body.key === "string" && body.key.trim()
+                                        ? body.key.trim()
+                                        : null;
+                            }
+                        } catch {
+                            workUnitKey = null;
+                        }
+                    }
                     const focusPanelHref = resolveCreatedRecordProcessContextHref({
                         recordId: opportunityId,
-                        workUnitKey: null,
+                        workUnitKey,
                         workViewId: null,
                     });
                     props.onSuccess({ opportunityId, focusPanelHref, successCopy });

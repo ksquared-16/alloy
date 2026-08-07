@@ -275,6 +275,20 @@ describe("executeCreateLeadAction validation", () => {
                 if (table === "opportunity_customer_members") {
                     return { insert: ocmInsert };
                 }
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                eq: vi.fn().mockReturnValue({
+                                    maybeSingle: vi.fn().mockResolvedValue({
+                                        data: { key: "lifecycle_wu_lead" },
+                                        error: null,
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
                 return { select: vi.fn(), insert: vi.fn() };
             }),
             getCapturedOppInsert: () => capturedOppInsert,
