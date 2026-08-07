@@ -267,13 +267,13 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                             data-testid={`work-template-primary-select-${work.template_key}`}
                         />
                         <span className="min-w-0 flex-1">
-                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Direct Action</span>
+                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Direct Command</span>
                             <span className="stage-field__hint mb-1.5 block">
-                                Operators launch this action first, then may record an outcome.
+                                Operators launch this command first, then may record an outcome.
                             </span>
                             {executionMode === "direct_action" ?
                                 <AlloyConfigPicker
-                                    label="Primary Action"
+                                    label="Primary Command"
                                     value={primaryRef}
                                     options={primaryOptions}
                                     onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
@@ -294,7 +294,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                         <span>
                             <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Outcome Led</span>
                             <span className="stage-field__hint block">
-                                No Primary Action. Record Outcome is the main operator action.
+                                No Primary Command. Record Outcome is the main operator command.
                             </span>
                         </span>
                     </label>
@@ -302,10 +302,9 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             </section>
 
             <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
-                {/* "Helpful Actions support this work" restated the heading. The sentence about
-                    stage transitions now lives where they are configured — Ways out. */}
+                {/* Helpful Commands support this work. Stage transitions live under Ways out. */}
                 <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <h4 className="stage-section-label">Other actions available</h4>
+                    <h4 className="stage-section-label">Helpful Commands</h4>
                     <ConfigSourceBadge
                         source={helpfulActionsConfigSource(work)}
                         fallbackHint="Configure this section to take explicit control."
@@ -321,7 +320,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     </button>
                     <div className="w-44">
                         <AlloyConfigPicker
-                            label="Add helpful action"
+                            label="Add helpful command"
                             value=""
                             options={helpfulAddOptions}
                             onChange={(ref) => {
@@ -337,7 +336,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     </div>
                 </div>
                 <OrderedActionRows
-                    title="Helpful Actions"
+                    title="Helpful Commands"
                     refs={helpfulRefs}
                     resolveLabel={(ref) => optionByRef(options.helpfulActionOptions, ref)?.label ?? ref.replace(/_/g, " ")}
                     resolveDescription={(ref) => {
@@ -351,7 +350,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     }}
                     resolveInvalid={(ref) => {
                         const row = optionByRef(options.helpfulActionOptions, ref);
-                        if (!row) return "Unknown action";
+                        if (!row) return "Unknown command";
                         if (!row.supported) return row.disabledReason ?? "Unsupported";
                         return null;
                     }}

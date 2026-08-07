@@ -70,14 +70,19 @@ describe("Business Processes Settings V2 — operator UI", () => {
         expect(workspace).toContain("BUSINESS_PROCESS_SECTION_REQUIRED");
     });
 
-    it("renames lifecycle actions to process actions", () => {
+    it("renames lifecycle actions to process commands", () => {
         const matrix = read("components/adminV2/settings/lifecycle/LifecycleActionsMatrix.tsx");
-        expect(matrix).toContain("Process Actions");
+        expect(matrix).toContain("Process Commands");
         expect(matrix).not.toContain("Lifecycle Actions");
         expect(matrix).not.toContain("Save lifecycle actions");
-        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain("BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE");
-        expect(board).toContain("business-process-actions-section");
+        const actionsWorkspace = read(
+            "components/adminV2/settings/businessProcess/BusinessProcessActionsQueueWorkspace.tsx",
+        );
+        expect(actionsWorkspace).toContain("BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE");
+        expect(actionsWorkspace).toContain("business-process-actions-list-column");
+        const labels = read("lib/lifecycle/businessProcessUiLabels.ts");
+        expect(labels).toContain('BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE = "Process Commands"');
+        expect(labels).toContain('BUSINESS_PROCESS_NAV_ACTIONS = "Commands"');
     });
 
     it("renders Family Track and Child Track explainer for enrollment", () => {

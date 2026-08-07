@@ -73,6 +73,15 @@ const CATALOG: readonly PlatformActionEntry[] = [
         supportsMultiSubject: false,
         confirmationPolicy: "required",
     },
+    {
+        key: "send_tour_invitation",
+        defaultLabel: "Send Tour Invitation",
+        grain: "opportunity",
+        category: "communication",
+        runtimeCommandKey: null,
+        supportsMultiSubject: false,
+        confirmationPolicy: "required",
+    },
     // ─── Child enrollment grain ───────────────────────────────────────────────
     {
         key: "update_child_enrollment_status",

@@ -43,6 +43,7 @@ export const LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER: readonly LifecycleBaseA
     "add_child",
     "send_form",
     "schedule_tour",
+    "send_tour_invitation",
     "create_task",
 ] as const;
 
