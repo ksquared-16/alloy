@@ -23,6 +23,10 @@ found and tightened (§5)
 · **W-0 query amended 2026-08-06 under the Mission 2 reopen** (same mission and assignment) — the
 self-identifying target column is authored and grounded; **run 3 is not executed** and awaits one
 authorization (§4)
+· **W-0 re-issued 2026-08-07** (mission `msn_e7894cb7225bae3c2b`, assignment `asg_86eb0e4a95142e`) — counts
+not re-asserted; **run 3 still not executed**, same single authorization outstanding. The run-3 *preparation*
+was audited and two plumbing defects were found and recorded: the insertion anchor does not match the query
+it anchors to under `JSON.parse`, and the obvious execution route fails closed on a stale `query_hash` (§4)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
@@ -344,6 +348,50 @@ anyway, is exactly the mistake §4.1 warns against: *"asking for live access fou
 `W-0` Q6 already avoided once."* Whether run 3 goes alone or folds into W-23 is an operator decision, and it
 is recorded here rather than taken unilaterally — W-23 produces a **different** artifact
 (`wave0b-authority-census.json`) under a **different** workstream, and this assignment's scope is W-0.
+
+#### W-0 re-issued a fourth time — **2026-08-07**, assignment `asg_86eb0e4a95142e`, run 3 still NOT executed
+
+W-0 was re-issued again against exit criteria met on 2026-07-31, re-confirmed on 2026-08-04, and unchanged since.
+**The counts were not re-asserted and no fourth identical run was requested.** Run 3 remains the only item open
+inside W-0's own scope, and it is blocked on the same single operator authorization it has been blocked on since
+2026-08-06 — the trusted host action is executed by the Director host-side, and no worker-side channel to it
+exists by design. Nothing a worker can do moves that.
+
+What this pass did instead was audit the run-3 *preparation* for defects that would waste that authorization when
+it comes. It found two, both in the plumbing rather than the SQL, and both now recorded in the census file.
+
+**1. The insertion anchor does not match the query it anchors to.** `next_run_prepared.insertion_anchor` is
+written with a doubled escape while `combined_query` uses a single one, so after `JSON.parse` the anchor ends in
+a literal backslash-`n` and the query ends in a real newline. `combined_query.includes(insertion_anchor)` is
+therefore **false** — an executor assembling run 3 programmatically finds *zero* matches for an anchor the file
+tells it occurs exactly once. The adjacent `inserted_sql` field uses the opposite (correct) convention, which is
+how this survived two authoring passes. **This is measured, not argued:** `jq` is allowlisted in the worker even
+though `node` is not, and it parses the file with the same JSON semantics the registry uses — `contains(anchor)`
+= false, `contains(anchor_parsed)` = true, occurrences = **1**. The original value is deliberately **left
+unchanged** (re-escaping it would fix a parsed-string executor and break a raw-source-text one); a new
+`insertion_anchor_parsed` field carries the unambiguous form.
+
+**2. The obvious execution route fails closed on a stale hash.** `execution_mechanics` offered two routes without
+distinguishing them. Reading `trusted-host-action-registry.mjs:86-106`, they are not equivalent. `validateInputs`
+falls back to the artifact's own `query_hash` whenever no `expectedQueryHash` is supplied, then compares it to
+`sha256(sql)`. So **promoting the amended text into this file's `combined_query` while leaving `query_hash` at
+`743cd63b…` fails the run with `query_hash_mismatch`** — and correcting that hash in the same edit would destroy
+runs 1 and 2's verifiability against this file. The route that works is a **dedicated run-3 artifact carrying no
+`query_hash` key at all**: the comparison is then skipped and the registry computes the hash itself, so no
+precomputed `sha256` is needed — which matters, because the worker still cannot compute one. That artifact was
+**not created here**: it is a third file, this assignment's scope names two, and creating it would pre-empt the
+still-unanswered run-3-alone-vs-fold-into-W-23 decision above.
+
+**Worker tooling, re-tested and refined.** The 2026-08-06 claim that `node` and `shasum` are permission-walled
+**holds**, with one correction worth having: `node --version` *is* allowed (v22.21.1) while `node -e` and
+`node --input-type=module` are *not*, and `shasum -a 256` is not. Node is present but not executable for
+arbitrary code, so `readonly_validation` stays **by inspection** and the run-3 `query_hash` stays genuinely
+uncomputable in-worker. Neither is an authoring shortcut. The Director discharges both at execution —
+`validateReadOnlySql` is called unconditionally on every run (`registry.mjs:111`).
+
+**W-0's exit criteria are unaffected and remain met.** Q1–Q6 counts and query text stay committed; L1–L4 may
+still cite them, subject to the standing rule that every consumer re-derives rather than cites. The counts are
+now **eight days old**.
 
 ---
 
@@ -1146,6 +1194,23 @@ a worker by design**, which is the same dependency that has held run 3 since 202
 `awaiting_authorization` with `preflight` **absent** — not `ok: false` by judgment, but unexecuted. A
 shared-target migration with a missing preflight is **`unmet`, not `operator_review`**. W-6 cannot be accepted
 on this state, and Accept must not advance the spine.
+
+**W-6 was dispatched twice, and the second dispatch authored nothing.** Assignment `asg_5b1ea3f9a620c6` arrived
+a second time on 2026-08-07 at the same `contentHash` `3c36b58117e46b2363ef602b385409e7`, same objective, same
+scope, against the same base commit `7dc06920a` that its own first dispatch produced. The migration and this
+section were verified intact and left byte-unchanged; regenerating identical content would only reset the
+record's dates. The one real delta it closed was four uncommitted keys in `wave0-authority-census.json`
+(the `insertion_anchor` encoding trap authored by `asg_86eb0e4a95142e`), which were committed rather than left
+at risk in a dirty tree. **A re-dispatch cannot move W-6** — the blocker is a channel a worker does not have,
+not effort — so the loop is recorded here in `w6_m1_preflight.redispatch_2026_08_07` to stop the next dispatch
+paying for the same discovery.
+
+**The migration has never been parsed by a PostgreSQL.** No local stack was running on either dispatch, and the
+shared local stack is not the shared target §11 means, so applying there would prove little while mutating a
+resource other slots share. A syntax error in the `DO` block would therefore surface *after* the operator
+authorizes the apply. The four in-transaction post-conditions keep that failure safe — the migration
+transaction rolls back — but it would cost the authorization round trip. Recorded as residual risk, not
+discharged.
 
 **QA.** Tier A: post-apply anti-join returns zero. Evidence file per §11 —
 `w6-m1-preflight.json`, carrying the preflight census output and the migration's post-apply `NOTICE` block
