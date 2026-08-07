@@ -7,7 +7,7 @@
  *
  * The rule these tests hold: an addition must resolve through the canonical registry, and the
  * CANONICAL key is what gets stored. Raw-key fallback is how an unimplemented command gets
- * authorized by accident — `create_task` is the live example.
+ * authorized by accident — an unknown key is the live example; create_task maps to create_work_item.
  */
 
 import { describe, expect, it } from "vitest";
@@ -50,21 +50,19 @@ describe("adding capabilities", () => {
         expect(keysOf(r.config)).toContain("quick_message");
     });
 
-    it("REJECTS create_task, which the registry does not know", () => {
-        // The whole point: raw-key fallback would have silenced validation while authorizing a
-        // command with no canonical registration.
+    it("maps create_task onto create_work_item (Work Item, not an unknown Task command)", () => {
         const r = updateProcessCommandSet(config(), "p1", { addCapabilityKeys: ["create_task"] });
-        expect(r.rejected).toEqual([{ requested: "create_task", reason: "unregistered" }]);
-        expect(r.added).toEqual([]);
-        expect(keysOf(r.config)).toEqual(["update_lead_status"]);
+        expect(r.rejected).toEqual([]);
+        expect(r.added).toEqual(["create_work_item"]);
+        expect(keysOf(r.config)).toEqual(["update_lead_status", "create_work_item"]);
     });
 
-    it("rejects the unregistered key without dropping the valid ones from the same request", () => {
+    it("rejects an unregistered key without dropping the valid ones from the same request", () => {
         const r = updateProcessCommandSet(config(), "p1", {
-            addCapabilityKeys: ["add_child", "create_task"],
+            addCapabilityKeys: ["add_child", "totally_unknown_capability_xyz"],
         });
         expect(r.added).toEqual(["add_child"]);
-        expect(r.rejected.map((x) => x.requested)).toEqual(["create_task"]);
+        expect(r.rejected.map((x) => x.requested)).toEqual(["totally_unknown_capability_xyz"]);
         // The route refuses the whole request when anything is rejected; the model still reports
         // both halves so the blocker can name exactly what failed.
     });

@@ -48,7 +48,7 @@ export const LIFECYCLE_BASE_ACTIONS: readonly LifecycleBaseActionDefinition[] = 
     { key: "waitlist_child", label: "Waitlist Child", definition_key: "waitlist_child" },
     { key: "enroll_child", label: "Enroll Child", definition_key: "enroll_child" },
     { key: "close_lead", label: "Close Lead", definition_key: "close_lead" },
-    { key: "create_task", label: "Create Task", definition_key: "create_task" },
+    { key: "create_task", label: "Create Work Item", definition_key: "create_task" },
     { key: "quick_message", label: "Message", definition_key: "quick_message" },
 ] as const;
 

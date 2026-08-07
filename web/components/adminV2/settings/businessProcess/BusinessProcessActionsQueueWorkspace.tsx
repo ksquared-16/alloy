@@ -280,7 +280,7 @@ const ACTION_HELP: Partial<Record<LifecycleBaseActionKey, string>> = {
         "Moves a child to Waitlist. Enabling here writes placements immediately and drafts Move to Waitlist into the process command set for Stages → Operator work → Actions & Results (Helpful Actions). Publish Business Process configuration for runtime. Focus Panel Manage is the overflow menu — not What's Next.",
     enroll_child: "Confirms a child's enrollment with audit and workflow side effects.",
     close_lead: "Closes or loses this lead with audit and workflow side effects.",
-    create_task: "Creates an operator task tied to the record with due date and assignee.",
+    create_task: "Creates a Work Item tied to the record with due date and assignee.",
     quick_message: "Opens a quick message composer prefilled with record context.",
 };
 

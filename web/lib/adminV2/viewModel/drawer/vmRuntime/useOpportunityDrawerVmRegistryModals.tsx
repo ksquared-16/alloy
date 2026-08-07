@@ -282,7 +282,12 @@ export function useOpportunityDrawerVmRegistryModals({
             if (!oid) return;
             const formKey = opts.form_key.trim();
             const actionKey = opts.action.key.trim();
-            if (actionKey === "create_task" || formKey === "create_task") {
+            if (
+                actionKey === "create_task"
+                || actionKey === "create_work_item"
+                || formKey === "create_task"
+                || formKey === "create_work_item"
+            ) {
                 openCreateWorkDirect({ opportunity_id: oid });
                 return;
             }

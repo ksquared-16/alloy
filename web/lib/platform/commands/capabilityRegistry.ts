@@ -637,6 +637,22 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "partial",
     }),
     def({
+        capabilityKey: "create_work_item",
+        canonicalCommandKey: "create_work_item",
+        operatorLabel: "Create Work Item",
+        family: "workflow",
+        maturity: "adapted",
+        executionOwner: "admin_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["opportunity"],
+        supportsPreview: false,
+        confirmationPolicy: "none",
+        compatibilityAliases: ["create_task"],
+        implementationStatus: "partial",
+        reason:
+            "Opens Create Work Item modal. Process Actions / action_definitions may still use create_task as the placement key.",
+    }),
+    def({
         capabilityKey: "send_enrollment_packet",
         canonicalCommandKey: "send_enrollment_packet",
         operatorLabel: "Send enrollment packet",
