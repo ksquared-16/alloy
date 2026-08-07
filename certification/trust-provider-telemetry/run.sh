@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CERT_DIR="$ROOT/certification/trust-provider-telemetry"
 BASE_DIR="$ROOT/certification/trust-runtime-v1"
 CONTAINER="alloy-trust-cert-provider-telemetry"
-PORT="${TRUST_CERT_PORT:-54723}"
+PORT="${TRUST_PROVIDER_TELEMETRY_CERT_PORT:-54723}"
 
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
