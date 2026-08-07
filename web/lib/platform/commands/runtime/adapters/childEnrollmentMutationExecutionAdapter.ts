@@ -448,7 +448,6 @@ export async function executeChildEnrollmentMutationViaAdapter(
             orgId: input.orgId,
             departmentId: input.departmentId ?? null,
             workUnitId: input.workUnitId ?? null,
-            userId: input.userId ?? null,
         },
         intent,
         { previewOnly: input.mode === "preview" }

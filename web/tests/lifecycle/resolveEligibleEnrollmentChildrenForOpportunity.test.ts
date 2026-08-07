@@ -20,7 +20,9 @@ describe("resolveEligibleEnrollmentChildrenForOpportunity", () => {
             { id: "ocm-2", label: "Ben", grain: "opportunity_customer_member", customerMemberId: "cm-2" },
         ]);
         expect(many.status).toBe("multiple");
-        expect(many.message).toMatch(/more than one child/i);
+        if (many.status === "multiple") {
+            expect(many.message).toMatch(/more than one child/i);
+        }
     });
 
     it("auto-resolves exactly one OCM from opportunity", async () => {
