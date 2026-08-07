@@ -626,19 +626,24 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             expectedDraftRevision: loadedDraftRevision,
         });
         if (actionName === "reorder_stage") {
-            const deptRow = await loadDepartment(ctx.orgId, departmentId);
-            if (!deptRow) {
-                return NextResponse.json(
-                    { error: lifecycleBuilderDepartmentNotFoundError(departmentId) },
-                    { status: 404 }
-                );
-            }
-            const metadata =
-                deptRow.metadata !== null && typeof deptRow.metadata === "object" && !Array.isArray(deptRow.metadata)
-                    ? (deptRow.metadata as Record<string, unknown>)
-                    : {};
+            /**
+             * Order from the DRAFT THAT WAS JUST SAVED, not from `departments.metadata`.
+             *
+             * This block used to reload the department and sync from its metadata — the published
+             * projection. A reorder that had not been applied yet therefore synchronized Work Unit
+             * order from the PREVIOUS order, which is stale by exactly the change the operator just
+             * made. `savedDraft.builder` is the authoritative saved configuration, so the two can no
+             * longer disagree, and the projection stays untouched until Apply.
+             */
             const supabase = createAdminClient();
-            await syncWorkUnitSortOrderFromBuilderStages(supabase, ctx.orgId, departmentId, metadata);
+            // Read back from the PERSISTED draft rather than the in-memory candidate, so the
+            // synchronization uses exactly the ordering that was stored.
+            await syncWorkUnitSortOrderFromBuilderStages(
+                supabase,
+                ctx.orgId,
+                departmentId,
+                draftBuilder(savedDraft),
+            );
         }
         logLifecycleBuilderSaveTiming("lifecycle-builder-patch", saveStartedAt, { action: actionName });
         return NextResponse.json({

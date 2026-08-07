@@ -149,6 +149,8 @@ export async function POST(request: NextRequest) {
                 revision_number: result.revisionNumber,
                 publication_id: result.publicationId,
                 published_at: result.publishedAt,
+                // True when nothing changed because this exact configuration was already live.
+                already_published: result.alreadyPublished,
             },
             warnings: validation.warnings,
             ...(state

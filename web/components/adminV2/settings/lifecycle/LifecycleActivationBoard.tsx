@@ -880,21 +880,26 @@ export default function LifecycleActivationBoard({
             });
             const j = (await res.json().catch(() => ({}))) as {
                 error?: string;
-                published?: { revision_number?: number };
+                published?: { revision_number?: number; already_published?: boolean };
                 summary?: LifecycleStageBootstrapPayload["configuration_state"];
             };
             if (!res.ok) {
                 if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
                 else await refreshConfigurationState();
-                throw new Error(j.error ?? "Publish failed");
+                throw new Error(j.error ?? "Could not apply your changes.");
             }
             if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            // Says what CHANGED for the operator, not which revision number was cut. `already_published`
+            // means the request was a no-op because this exact configuration was already live —
+            // telling them "applied" would imply something happened.
             setPublicationNotice(
-                `Published revision ${j.published?.revision_number ?? "?"}. Runtime is now using it.`,
+                j.published?.already_published === true
+                    ? "These changes were already applied — nothing to do."
+                    : "Changes applied. Your team is now working from them.",
             );
             bumpWorkspaceCache();
         } catch (e) {
-            setPublicationNotice(e instanceof Error ? e.message : "Publish failed");
+            setPublicationNotice(e instanceof Error ? e.message : "Could not apply your changes.");
         } finally {
             setPublicationBusy(false);
         }
