@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import type { BosCommandMode, BosCommandSession } from "@/lib/bos/commandSession";
 import { resolveBosCommandSessionLayoutDensity } from "@/lib/bos/commandSession/commandSessionLayout";
 import {
@@ -149,18 +150,30 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
         bosPresentation?.closeToLauncher();
     }, [bosPresentation, discardWithRestore]);
 
+    const siteFilter = useWorkspaceSiteFilter();
     const optionLabels = useMemo(() => {
         const map = new Map<string, string>();
         const opts = controller.effectiveSpec?.fieldOptions;
-        if (!opts) return map;
-        for (const [key, options] of Object.entries(opts)) {
-            for (const opt of options ?? []) {
-                map.set(`${key}:${opt.value}`, opt.label);
-                map.set(opt.value, opt.label);
+        if (opts) {
+            for (const [key, options] of Object.entries(opts)) {
+                for (const opt of options ?? []) {
+                    map.set(`${key}:${opt.value}`, opt.label);
+                    map.set(opt.value, opt.label);
+                }
+            }
+        }
+        // Bootstrap sites as fallback so location UUIDs never render as raw ids in understanding.
+        for (const site of siteFilter?.bootstrap?.sites ?? []) {
+            if (!site.id || !site.label) continue;
+            if (!map.has(`location_id:${site.id}`)) {
+                map.set(`location_id:${site.id}`, site.label);
+            }
+            if (!map.has(site.id)) {
+                map.set(site.id, site.label);
             }
         }
         return map;
-    }, [controller.effectiveSpec?.fieldOptions]);
+    }, [controller.effectiveSpec?.fieldOptions, siteFilter?.bootstrap?.sites]);
 
     const understandingGroups = useMemo(
         () =>
@@ -291,14 +304,47 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                 session.execution && session.execution.ok
                                     ? String(session.execution.opportunityId ?? "")
                                     : "";
+                            const success =
+                                session.execution && session.execution.ok
+                                    ? session.execution.success
+                                    : null;
+                            const workViewId =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "workViewId" in success
+                                    ? String((success as { workViewId?: string }).workViewId ?? "")
+                                    : "";
+                            const workViewRouteKey =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "workViewRouteKey" in success
+                                    ? String(
+                                          (success as { workViewRouteKey?: string }).workViewRouteKey ??
+                                              "",
+                                      )
+                                    : "";
+                            const statusKey =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "statusKey" in success
+                                    ? String((success as { statusKey?: string }).statusKey ?? "")
+                                    : "";
                             void (async () => {
                                 // Prefer success href; when BOS was started from workspace home
-                                // (no session workUnitId), resolve from the created opportunity.
+                                // (no session workUnitId), resolve from the created opportunity /
+                                // Work View handoff — never lifecycle_wu_* stage keys.
                                 const target = await resolveOpenLeadFocusPanelHref({
                                     preferredHref: href,
                                     opportunityId: createdId,
                                     sessionWorkUnitId:
                                         session.invocation.workspace.workUnitId ?? null,
+                                    workViewId: workViewId || null,
+                                    workViewRouteKey: workViewRouteKey || null,
+                                    statusKey: statusKey || null,
+                                    stageKey: "lead",
                                 });
                                 if (target) router.push(target);
                             })();

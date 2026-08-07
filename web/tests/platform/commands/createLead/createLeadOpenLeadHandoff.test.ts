@@ -36,12 +36,32 @@ describe("Create Lead Open Lead handoff descriptor", () => {
         expect(success.createdRecordId).toBe("opp-created-1");
         expect(success.workUnitId).toBe("wu-lead-id");
         expect(success.workUnitKey).toBe("lifecycle_wu_lead");
-        // Canonical Focus Panel deep link: Work Unit slug + subject_id (path :recordId is retired).
+        // Canonical Focus Panel deep link: Work View label slug + work_view_id + subject_id.
         expect(success.focusPanelHref).toBe(
             "/workspace/work-unit/lifecycle-wu-lead?subject_id=opp-created-1",
         );
         expect(success.focusPanelHref).toContain("subject_id=opp-created-1");
         expect(success.focusPanelHref).not.toMatch(/drawer/i);
+    });
+
+    it("Open Lead prefers Work View route when create_lead detail includes handoff fields", () => {
+        const success = buildCreateLeadSuccess({
+            result: okResult({
+                opportunity_id: "opp-created-1",
+                work_unit_id: "wu-lead-id",
+                work_unit_key: "lifecycle_wu_lead",
+                work_view_id: "new_leads",
+                work_view_route_key: "leads",
+                status_key: "new",
+                stage_key: "lead",
+            }),
+            knownInputs: { first_name: "Ada", last_name: "Lovelace" },
+        });
+        expect(success.focusPanelHref).toBe(
+            "/workspace/work-unit/leads?work_view_id=new_leads&subject_id=opp-created-1",
+        );
+        expect(success.workViewId).toBe("new_leads");
+        expect(success.workViewRouteKey).toBe("leads");
     });
 
     it("BOS Open Lead closes the session then routes via the success focusPanelHref", () => {
@@ -77,9 +97,12 @@ describe("Create Lead Open Lead handoff descriptor", () => {
         expect(helper).toContain("subject_id");
     });
 
-    it("create_lead action detail carries work_unit_key into the success seam", () => {
+    it("create_lead action detail carries work_unit_key and Work View handoff into the success seam", () => {
         const execute = readFileSync(resolve(webRoot, "lib/admin/actions/executeAdminAction.ts"), "utf8");
         expect(execute).toContain("work_unit_key: created.work_unit_key");
+        expect(execute).toContain("work_view_id: workViewId");
+        expect(execute).toContain("work_view_route_key: workViewRouteKey");
+        expect(execute).toContain("resolveCreateLeadWorkViewForHandoff");
         const entry = readFileSync(resolve(webRoot, "lib/admin/actions/entryLifecycleActions.ts"), "utf8");
         expect(entry).toContain("work_unit_key: workUnitKey");
         const handlers = readFileSync(

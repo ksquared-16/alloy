@@ -103,4 +103,39 @@ describe("createLeadConversationIntakeAdapter", () => {
         expect(preview.draftFingerprint).toBeTruthy();
         expect(preview.summaryLines.length).toBeGreaterThan(0);
     });
+
+    it("summarizes location by option label, not raw site id", () => {
+        const effective = buildEffectiveCreateLeadIntakeSpec({
+            departmentId: "dept-1",
+            actionIntakeSpec: createLeadParserSpec("dept-1"),
+            fieldOptions: {
+                location_id: [{ value: "site-north-uuid", label: "North Campus" }],
+            },
+        });
+        const draft = {
+            ...emptyBosCommandDraft(),
+            values: [
+                {
+                    fieldKey: "location_id",
+                    value: "site-north-uuid",
+                    state: "confirmed" as const,
+                    optionResolved: true,
+                    evidence: [
+                        {
+                            kind: "system_default" as const,
+                            note: "From your location",
+                            at: new Date().toISOString(),
+                        },
+                    ],
+                },
+            ],
+        };
+        const summary = createLeadConversationIntakeAdapter.buildUnderstandingSummary({
+            draft,
+            effectiveSpec: effective,
+        });
+        expect(summary.lines.some((line) => line.includes("North Campus"))).toBe(true);
+        expect(summary.lines.some((line) => line.includes("site-north-uuid"))).toBe(false);
+        expect(summary.evidenceNotes.some((n) => n.value === "North Campus")).toBe(true);
+    });
 });
