@@ -1048,6 +1048,58 @@ the full set of writers. Any path found gets the same RPC.
 
 **Exit.** Q4's count cannot grow. This is the precondition for W-6 being a bounded, one-time job.
 
+#### W-5 execution record — 2026-08-07
+
+**The audit ran first, and by table.** Asking *which route files name `user_roles`* is the question that missed
+`createOrgAndAssignAdmin` twice (§5). This pass enumerated `.insert` / `.upsert` / `.update` against
+`user_roles` across `web/app` **and** `web/lib`. The membership-**writing** set is three, not one:
+
+| Writer | Was | Now |
+|---|---|---|
+| `app/api/admin/users/route.ts:102` — invite | `user_roles` insert, no profile | `create_membership_with_access_profile` |
+| `app/api/admin/users/[userId]/role/route.ts:44-47` — role change | **delete-then-insert, two statements** | `replace_membership_with_access_profile` |
+| `lib/dev/createOrgAndAssignAdmin.ts:71` — dev org spinup | `user_roles` upsert, no profile | `create_membership_with_access_profile` |
+
+Two writers that the earlier enumeration listed are **not** membership creators and were left alone:
+`users/[userId]/remove` deletes only, and `users/[userId]/access-scope` writes the profile side.
+`lib/admin/userRolesMembership.ts` is read-only helpers despite its name — it writes nothing.
+
+**A second defect was found in the role route, and fixed with the same change.** `PATCH …/role` deleted every
+membership row for the pair and then inserted the replacement as a *separate statement*. A failure between them
+left the principal with **no membership at all** — not a fail-open, a lockout, and one no test covered. Both
+statements are now inside `replace_membership_with_access_profile`. This is recorded rather than absorbed: it
+is a W-5-adjacent find, not something W-5 predicted.
+
+**Migration.** `supabase/migrations/20260807090000_membership_profile_atomic_create.sql` (M2). Two
+`SECURITY INVOKER` functions — every caller already holds `service_role`, so `SECURITY DEFINER` would add an
+escalation surface for no benefit. `EXECUTE` is revoked from `PUBLIC` before being granted, because Postgres
+grants `EXECUTE` on new functions to `PUBLIC` by default and revoking from `anon` alone is a no-op. Profiles
+are created at **both dimensions `all`** — identical to the W-6 backfill and to what the resolver infers today
+when the row is absent, so **no principal's effective access changes**. Function only; no data effect.
+
+**QA.**
+- Tier B — `web/tests/access/membershipAtomicWiring.test.ts`, **14 tests, green**. Half of it is a source-level
+  lock: no product membership writer may call `.insert`/`.upsert`/`.update` on `user_roles`. That is the half
+  that catches a *sixth* writer added later, which a behavioural test cannot. The regex was verified live — it
+  still matches three files (two seed scripts and a cert fixture), so it is not passing vacuously.
+- Tier C — `web/tests/access/membershipProfileInvariant.integration.test.ts`, 6 tests, `describe.skipIf(!hasEnv)`,
+  **skipped cleanly with no env; not yet executed against a live tenant** (see below).
+- `vac run typecheck` rc=0 · `vac run typecheck:tests` rc=0.
+
+**Not verified this run — the honest limit of this record.** The tier C test has **never been run green**;
+it needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `MEMBERSHIP_INVARIANT_INTEGRATION_ORG_ID`, and it
+creates and deletes real `auth.users` rows in a tenant every managed worktree shares. Running it was not
+authorized by this assignment. **Until it runs, RL-4's tier C half is authored, not proven**, and the exit
+criterion below is argued from the transaction boundary rather than demonstrated. No live database query was
+made, so Q4's count is not re-derived here — it remains M1's job to re-derive rather than cite.
+
+**One writer outside the product path is left uncovered, deliberately.**
+`tests/processing/cert/processingIdentityCertFixtures.ts:115` upserts `user_roles` with no profile row, so it
+can grow Q4 **in a certification tenant**. It is a fixture, not a product path, and W-5's mandate is product
+paths; fixing it inside this assignment would be a silent widening. Recorded for W-6's preflight, which must
+not be surprised by a cert-tenant count it cannot explain. The two seed scripts do write profiles of their own
+(`seedAccessValidationDemo.ts:550`, `seedRealisticChildcareDemoData.ts:2257`) and do not grow Q4.
+
 ### W-6 — Backfill profiles for existing memberships *(S · migration · shared → preflight)*
 
 One additive migration creating a profile row for every membership lacking one, at the scope the resolver
@@ -1465,7 +1517,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
 | M1 | W-6 | Backfill access profiles for memberships lacking one | shared | Row count == W-0 Q4 (**= 2** at census time, re-run before applying); no existing profile modified (**0 orphan profiles exist**) |
-| M2 | W-5 | Atomic membership+profile RPC | shared | Function only; no data effect |
+| M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | M3 | W-9 | Catalog consolidation — repoint grants to one FK | shared | Every grant satisfies the surviving FK; no unexpected incoming FKs or dependent views |
 | M4 | W-9 | Drop retired catalog tables (**separate, later**) | shared | Zero readers proven since M3 |
 | M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced | shared | Enumerated deletion list reviewed by the operator first |
@@ -1534,7 +1586,7 @@ contributor deleting one has to do it on purpose.
 | **RL-1** | No route gates on `access.ok` alone | A + B | G2 / W-1 | **LIVE** — `web/tests/access/analyticsRouteGates.test.ts` (tier B; the tier A half lands with W-14). **Widened 2026-08-06**: subject is now every route under `web/app/api` that resolves a raw access context (92 of 570), not three hand-listed directories, and a gate named only in a comment no longer credits |
 | **RL-2** | Every grid key exists in the catalog *(superseded by RL-3)* | B | C5 / W-3 | **LIVE** — `web/tests/admin/permissionGrid.test.ts` |
 | **RL-3** | The grid is generated; no literal key list in UI source | A | I-14 / W-10 | proposed |
-| **RL-4** | Membership creation writes a profile row atomically | C | G4 / W-5 | proposed |
+| **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (14 green): a source-level lock that no product membership writer calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; needs a live tenant this assignment was not authorized to write. Do not read this row as "atomicity is proven" until it runs |
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | proposed |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | proposed |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
@@ -1626,6 +1678,15 @@ Per the assignment constraints:
    that imports a service-role client, so any membership writer among the 539 routes is now mechanically
    findable rather than grep-findable. It still says nothing about server actions, scripts, seeds, RPCs or
    migrations.
+   **DISCHARGED 2026-08-07 by W-5's audit, with one carve-out.** The enumeration was re-run *by table* across
+   `web/app` and `web/lib` — the question change §5 asked for, not another grep over route files. Three
+   product writers exist, all now routed through the atomic RPC; the fourth and fifth "writers" this note
+   listed turn out to be a delete and a profile-side write. The carve-out: one **cert fixture**
+   (`tests/processing/cert/processingIdentityCertFixtures.ts:115`) still writes a membership with no profile
+   and can grow Q4 in a certification tenant. It is out of W-5's product-path mandate and was left in place
+   deliberately; **W-6's preflight must expect it.** Server actions and migrations were not separately swept —
+   the by-table sweep covers `web/lib` and `web/app`, which is where both live, but no migration authors a
+   membership today and that is a property nothing yet locks.
 5. **The observation window for dual-read is not specified.** It depends on real traffic to the authority path,
    which is a deployment fact this phase cannot see. Each lockout-class workstream sets its own and states it.
    **W-0 largely dissolves this:** at 6 `(user, org)` pairs the population is exhaustively enumerable, so
