@@ -136,6 +136,7 @@ const BUILDER_TYPE_META: Record<BuilderFieldType, string> = {
     number: "Number",
     date: "Date",
     select: "Dropdown",
+    multiselect: "Multi-select",
     boolean: "Yes / No",
     signature: "Signature",
     file_ref: "File upload",

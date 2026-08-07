@@ -178,7 +178,7 @@ describe("deferred requirements explain themselves", () => {
                         required: [],
                         recommended: [item("child:classroom", "Classroom", "recommended")],
                     },
-                } as FormsLifecycleCoverageResult["byEntity"],
+                } as unknown as FormsLifecycleCoverageResult["byEntity"],
             }),
         });
 
@@ -218,7 +218,7 @@ describe("deferred requirements explain themselves", () => {
                         required: [],
                         recommended: [item("child:first_name", "Child First Name", "recommended")],
                     },
-                } as FormsLifecycleCoverageResult["byEntity"],
+                } as unknown as FormsLifecycleCoverageResult["byEntity"],
             }),
         });
 
