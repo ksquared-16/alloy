@@ -258,7 +258,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; RL-7 live · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. **W-12 remains a proposal** |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; RL-7 live · **W-10 DONE 2026-08-07**; RL-3 and RL-48 live, RL-2 replaced · **W-11 MEASURED 2026-08-07** — the catalog is **57 keys, not 35**; 36 unenforced, deletion list delivered as an exit artifact, **M5 withheld pending operator review**; RL-3's subject repaired. · **W-12 AUTHORED 2026-08-07** — M6 written and **not applied**, RL-8 live over all 315 migrations (4 blanket grant seeds left, all superseded history), §11's width-vs-live preflight carried as a fail-closed assertion inside the migration because no worker channel to it exists. **Wave 3 is complete as far as a worker can take it: three of four exits turn on an operator authorization, not on effort** |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -2825,6 +2825,147 @@ receive a thinner set than today without that narrowing being the intended, revi
 enumerated grants.
 **Exit.** Grant seeds are a readable list; adding a catalog key grants nothing implicitly.
 
+#### W-12 execution record — **2026-08-07**, assignment `asg_6c9043d1ef0fd8`: the migration authored, and the function has no caller
+
+**Status: exit `partially met`.** M6 is authored and **not applied**;
+`supabase/migrations/20260807170000_w12_seed_default_rbac_enumerated_grants.sql`. RL-8 is **live** —
+`web/tests/access/grantSeedEnumeration.test.ts`, **15 passed / 0 failed**, proven red five ways and green after
+every fixture was removed. Tier C is unrun for the reason RL-4's and RL-5's are. Nothing pushed. Full record:
+[`w12-grant-enumeration.json`](w12-grant-enumeration.json).
+
+**The tier A invariant, as authored, condemns three seeds that are not the defect.** §13 states RL-8 as *"no
+`SELECT` over the catalog in a grant seed"*. Read literally, `20260505164000` fails it (it joins
+`permission_definitions` on a seventeen-key `IN` list), Phase 0's workflows backfill fails it (two keys), and so
+would any narrowing guard. None of those lets the catalog decide what is granted. The property the **exit
+criterion** names — *adding a catalog key grants nothing implicitly* — is about where the key set comes from,
+so RL-8 is implemented as:
+
+> Every statement that writes `role_permission_grants` must take its permission keys from literals in its own
+> text, or from an enclosing loop's literal `VALUES` list, and never from the contents of a catalog relation.
+
+That is **strictly stronger** where it matters — a blanket over a *non*-catalog relation passes the literal
+reading and fails this one — and weaker only where the literal reading was wrong. The restatement is raised
+here rather than edited into §13, on the same principle W-11 applied to lock numbering.
+
+**The inventory, because the exit criterion is a claim about every grant seed and not about one function.**
+Discovery finds **14 grant-writing statements across 9 migrations** of 315. Ten are bounded and always were:
+seven by a literal in the `SELECT` list, one by a seventeen-key `IN` list, one by a `CROSS JOIN (VALUES …)`, and
+one by a `FOR k, lbl, dsc IN VALUES` loop — the variable-driven form that W-11 found invisible to a
+tuple-shaped parser. **Four are blanket, and all four are `seed_default_rbac`**: the baseline's pair and Phase
+0's pair. After M6 all four are *superseded history* in applied migrations, which cannot be edited, so their
+count is a ratchet **enforced over and under** — W-4's finding was a ceiling that could only fail upward, and a
+breach sat latent three days because of it.
+
+**The `ops` blanket is the trap the instrument had to be built around.** It selects the entire catalog and then
+names two keys it withholds with `NOT IN`. A "does this statement mention a permission key?" test reads that as
+enumerated. `NOT IN`, `NOT EXISTS` and `<> ALL` are stripped before a bound is looked for, and a negative
+fixture asserts the baseline's `ops` statement still classifies as blanket.
+
+**M6 changes the grant half only, and says so because §11 required it to.** W-11's amendment to the M6 row
+established that `seed_default_rbac` is a catalog writer as well as a grant writer. The 57-key
+`permission_definitions` literal is reproduced **byte-for-byte** from Phase 0 — narrowing it is M5's, and M5 is
+gated on an operator review that has not happened. What changes is the two blanket `SELECT`s: `admin` becomes
+57 literal rows, `ops` becomes 55 — the same set less `admin.users.write` and `admin.roles.write`, which is the
+same exclusion the blanket carried, now visible as an absence from a list rather than as a `NOT IN` nobody
+reads.
+
+**`is_active` survives as a narrowing guard, and the reason is a finding.** The blanket filtered
+`WHERE pd.is_active = true`. `resolveAdminAccessCore.fetchPermissionKeys` reads grant rows by org and role with
+`allowed = true` and **never joins the catalog**, so `is_active` revokes nothing from anyone who already holds a
+grant; the only two places it does anything are this seed and the grant-write API
+(`rbac/grants/route.ts:60-68`). Dropping the predicate would therefore have been a **real widening** — a
+deactivated key would start reaching new organizations. It is kept as an `EXISTS` over the enumeration, which
+can only remove a key from the list and can never add one, so the key set is still decided by the list. This
+also bears on M5's third option: **under `deactivate_not_delete`, the deactivated keys stay effective for every
+principal that already holds them.**
+
+**§11's preflight is executed as a fail-closed assertion, because the channel to run it as a preflight does not
+exist.** The M6 row's focus is *"catalog width vs live — a new tenant must not silently get a thinner set"*, and
+W-11's P3 records that no live measurement has been taken and that `database.read_census` has no worker-reachable
+side. Every prior wave that hit this wall recorded the preflight `unrun`. Here the check runs **inside the
+migration**, against the database being migrated: it reads the enumeration back out of the *installed function*
+via `pg_get_functiondef` between sentinel markers, and raises if one active catalog key on the target is not
+named in it — rolling the function back with the transaction. It reads the function rather than repeating the
+list a third time, which is the direct answer to W-4's *"nothing binds a citation to the line it names"*. Two
+further assertions: the `ops` region must not name the two withheld keys, and a function without the sentinels
+is refused outright. **This is not a substitute for the §11 preflight** — the operator is still being asked to
+authorize an apply whose live catalog width is unmeasured. The difference is that a wrong answer aborts instead
+of landing.
+
+**The finding that outgrows the workstream: `seed_default_rbac` has no caller, and every authenticated principal
+can call it.** A full-tree census finds no trigger, no application call, no script — its only reachable caller is
+PostgREST RPC. The 2026-08-04 anon revocation states in its own header that *"it does not touch `authenticated`
+— not one grant, not one policy"*, so `authenticated` still holds `EXECUTE` on this `SECURITY DEFINER` function.
+Any signed-in user can call it **for an arbitrary org id**. Three consequences:
+
+1. **W-11's P2 is broader than it reads.** P2 states the durability problem as *"creating one organization after
+   M5 re-creates every key M5 deleted"*. No organization need be created. **Any authenticated RPC call does it.**
+2. **It restores revoked grants.** `ON CONFLICT DO NOTHING` means it cannot remove a revocation, but every grant
+   it names comes back — so an operator revoking through the grid can be undone by any principal in the org.
+3. **M6 shrinks the blast radius without closing it.** After enumeration such a call can restore only the
+   enumerated set, never whatever the catalog has since grown to.
+
+**It is not fixed here, deliberately.** Revoking `EXECUTE` is a privilege change, not grant enumeration; it needs
+its own register row, and `03…§33.1`/`DR-12` settles that minting one is the Director's. Authoring it inside M6
+would widen a shared apply past the row the operator authorized. It is recorded against **RL-11's subject
+completeness** — RL-11's subject is TypeScript routes, and a database function is invisible to it in exactly the
+way `user_department_access` was invisible to W-2's enumeration.
+
+**Proven red, five ways, each fixture removed and the suite green after.** A blanket in a *new* migration the
+instrument had never been told about, decorated with `NOT IN` (1 red — the ratchet); the blanket restored inside
+the enumerated function (2 red); `admin.users.write` added to the `ops` list (1 red); the admin sentinel renamed
+(5 red — sentinel presence, both enumeration comparisons, cross-instrument agreement, and the guard binding);
+the `is_active` guard dropped (1 red).
+
+**And one fixture found a defect in the instrument before any fixture was planted.** The first draft of M6
+carried the word *organization's* in a comment inside the admin enumeration. RL-8 read that 57-key enumeration
+as **zero keys** — one apostrophe shifted every subsequent quote pairing by one. It was caught only because the
+assertion compares against a width a second method produced rather than asserting "greater than zero". That is
+the **fourth** distinct way an enumerated subject has been quietly truncated in this workstream, after two file
+lists and one syntax pin, and the first inside this workstream's own new code.
+
+**Evidence.**
+
+| Item | Result |
+|---|---|
+| `web/tests/access/grantSeedEnumeration.test.ts` (RL-8) | **15 passed / 0 failed** |
+| `web/tests/access/` whole + `permissionGrid` | **158 passed / 6 skipped / 0 failed** — the 6 are RL-4's tier C, which needs the service-role key. Baseline before this pass was 143 + 6 skipped; the delta is this suite |
+| Red before / green after | Five negative fixtures, listed above; all removed, both suites green after |
+| Non-vacuity | The scan asserts >300 migration files, ≥12 grant statements and ≥8 carrying files before asserting anything, and pins the enumeration to a width W-11's independent instrument produced |
+| Cross-instrument agreement | The admin enumeration equals the catalog `permissionCatalogDiscovery` derives from the whole tree — 57, from two methods |
+| Tier A (as restated) | **met** — no grant statement in the end state sources its key set from a catalog relation |
+| Tier A (as literally worded in §13) | **not met, deliberately** — three pre-existing bounded seeds and M6's narrowing guard read the catalog. Restatement raised above |
+| Tier C | **Not run.** Needs an applied migration and a service-role round trip; the migration is unapplied and `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design — RL-4's and RL-5's boundary |
+| Tier D | **Not applicable** — no user-visible surface changes |
+| Parsed by a PostgreSQL | **No.** The shared local stack was started for exactly this and the `psql` invocation was declined by the session permission layer; the lease was released rather than routed around. A syntax error would surface only after the operator authorizes — the same exposure W-6's migration carries, stated rather than implied |
+
+**Exit criteria.**
+
+| Clause | Status |
+|---|---|
+| Grant seeds are a readable list | **met in the tree, unapplied** — 57 admin and 55 ops literal rows; the other nine grant statements were already bounded, and that is now asserted rather than assumed |
+| Adding a catalog key grants nothing implicitly | **met in the tree, unapplied** — no statement in the end state derives its key set from a catalog relation; RL-8 live |
+| A freshly seeded org has exactly the enumerated grants (tier C) | **not met — unrun.** Requires the apply |
+
+#### The carried revision request — **W-12 does not move it, and the ledger is now complete for wave 3** (2026-08-07)
+
+The assignment arrived carrying the same open guidance for the eighth time — *"Role hierarchy is still too deep
+— reduce to four layers."* **W-12's row is `no`, for the same structural reason as W-11's, and this is the last
+wave-3 row that can be written.**
+
+`03…§45.1` assigns W-9/W-10 the `L6` grid layer; W-11 and W-12 are unassigned against the five counts, and
+correctly so. Enumerating a grant seed changes *who decides what a new tenant receives* — it moves the decision
+from a `SELECT` to a list a person can read. It does not remove a hop from the path between a person and a
+decision. **W-12 moves none of the five counts.**
+
+What wave 3 as a whole has done for the directive is worth stating once, since W-12 closes it: it did not
+shorten the chain, and it made three of the numbers the directive is argued with **honest** — the catalog is 57
+and not 35 (W-11), 36 of those keys are enforced by nothing rather than 11 of 18, and the default grant set is
+now a list rather than a query, so *"what does an admin actually get"* is answerable by reading one file. The
+instrument for the count the operator feels at runtime is still `W-13`, still gated on `AD-22`/`AD-25`. That has
+been the answer five times and is unchanged; W-8's deletion of the fifth-layer bypass (`02…§15.6`) remains the
+one structural payment made against it so far.
+
 ---
 
 ## 8. Wave 4 — Admission and declaration
@@ -3109,7 +3250,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
 | M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced. **NOT AUTHORED 2026-08-07**, deliberately: the plan makes operator review of the deletion list a precondition of the migration, and the review has not happened. Subject is now **57 keys, not 35** — **36 deletions, 1 addition**, enumerated in [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json) | shared | Enumerated deletion list reviewed by the operator first. **Three preconditions established by W-11 and carried here:** (1) grants must be deleted **before** keys — the surviving FK is `ON DELETE RESTRICT` and `seed_default_rbac` grants `admin` every active key, so all 36 are expected to carry live grants on every org; (2) **the deletion is not durable** — the live `seed_default_rbac()` re-inserts all 57 keys on every call, so one org creation after M5 re-creates everything it deleted; M5 must rewrite that literal or land with M6; (3) live preflight unrun — catalog width, keys present live that no migration seeds, and grant counts per candidate are `database.read_census` subjects |
-| M6 | W-12 | `seed_default_rbac()` enumerates grants | shared | Catalog width vs live — a new tenant must not silently get a thinner set. **Amended 2026-08-07 by W-11:** the function this row targets is no longer the baseline's. Phase 0 rewrote it, and it now carries a hand-authored **57-key catalog literal** as well as the blanket grant — so `seed_default_rbac` is a *catalog writer*, not only a grant writer, and it is the vocabulary W-11 measured as widest. Preflight must state which half it is changing |
+| M6 | W-12 | `seed_default_rbac()` enumerates grants — **AUTHORED 2026-08-07**, `20260807170000_w12_seed_default_rbac_enumerated_grants.sql` (**not applied**) | shared | Catalog width vs live — a new tenant must not silently get a thinner set. **Amended 2026-08-07 by W-11:** the function this row targets is no longer the baseline's. Phase 0 rewrote it, and it now carries a hand-authored **57-key catalog literal** as well as the blanket grant — so `seed_default_rbac` is a *catalog writer*, not only a grant writer, and it is the vocabulary W-11 measured as widest. Preflight must state which half it is changing. **Answered 2026-08-07 by W-12: the GRANT half only** — the catalog literal is reproduced byte-for-byte and narrowing it stays M5's. **The width-vs-live preflight could not be run** (P3's wall: `database.read_census` has no worker-reachable side), so it is carried **inside the migration as a fail-closed assertion** — the guard reads the enumeration back out of the installed function via `pg_get_functiondef` and aborts if one active catalog key on the target is not named in it. That is not a substitute for a §11 preflight: the operator is still authorizing an apply whose live width is unmeasured, and **no PostgreSQL has parsed this file** |
 | M7 | W-13 | Seed `portal.access` and grant it | shared | Every org with an `admin`/`ops` membership receives the grant (**W-0 Q5 = 0**, so no org is missed) |
 | ~~M8~~ | ~~W-16~~ | ~~Remediate undefined `user_roles.role` values~~ **STRUCK — W-0 Q3 = 0, nothing to remediate** | — | — |
 | M9 | W-16 | FK `user_roles.role` → `role_definitions` | shared | Zero violating rows — re-run Q3 at preflight (M8 no longer precedes it) |
@@ -3181,7 +3322,7 @@ contributor deleting one has to do it on purpose.
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | **LIVE (2026-08-07)** — `web/tests/access/catalogConsolidationLock.test.ts` (**Passed — 8 passed / 0 failed**). Replays the whole migration tree in filename order and asserts the **end state**, rather than reading the consolidation migration and agreeing with it: one surviving FK, named, referencing `permission_definitions`, `ON DELETE RESTRICT`; exactly one catalog **table** with both deprecated names as views; no post-consolidation writer through a deprecated name; no `anon` re-grant on a catalog object; no product code reaching the catalog through a deprecated name; and **every** discovered writer of `role_permission_grants` validating against the table the FK names. Subject is discovery with non-vacuity guards on both scans — RL-1 was defeated twice by a pinned subject and RL-4 once. **Proven red in two negative-fixture rounds (4 red, then 2 red) covering six of six substantive assertions**, fixtures removed, green after. **Necessary because W-9's exit criterion was met by a migration from a track that does not own it** (§7) — nothing was watching this schema. Does **not** close the DB-level write surface on the two views: they are auto-updatable and `service_role` holds `ALL` by default privileges, which is `W-60`/`M20`'s |
-| **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
+| **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | **LIVE (2026-08-07)** — `web/tests/access/grantSeedEnumeration.test.ts` (**15 passed / 0 failed**). **Implemented as a restatement, and the restatement is the finding**: as literally worded this row condemns three seeds that are not the defect — `20260505164000` joins the catalog on a seventeen-key `IN` list, Phase 0's workflows backfill on a two-key list, and M6's own `is_active` narrowing guard reads it too. None lets the catalog decide what is granted. The property the *exit criterion* names is asserted instead: **every statement writing `role_permission_grants` takes its keys from literals in its own text or an enclosing loop's `VALUES` list, never from a catalog relation** — strictly stronger where it matters (a blanket over a non-catalog relation passes the literal reading and fails this one). Subject is discovery over all 315 migrations, not a file list: **14 grant statements in 9 files, 10 bounded, 4 blanket**, all four being superseded definitions of `seed_default_rbac` frozen in applied migrations. That count is a **ratchet enforced over *and* under**, per W-4. Asserts the *end state* after a filename-order replay — RL-7's discipline — plus admin ≡ the function's own catalog literal ≡ the catalog W-11's independent instrument discovers (57, two methods), ops ≡ that less exactly the two withheld keys, and the migration guard slicing on sentinels the function actually carries. `NOT IN` / `NOT EXISTS` / `<> ALL` are stripped before a bound is looked for — the baseline's `ops` blanket names two keys it withholds and would otherwise read as enumerated. **Proven red by five negative fixtures**, each removed and the suite green after. Reading it as "grants are enumerated on the target" would be wrong: **M6 is unapplied** |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
 | **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B), SUBJECT INCOMPLETE** — `web/tests/access/selfAuthorityMutation.test.ts` covers the three routes W-2 guarded. **2026-08-06:** two further self-authority paths exist that its enumeration could not see (a helper-mediated `user_roles` writer, and `user_department_access` — a sixth authority table). Both latent; **W-8 arms one.** See §5. **2026-08-07 — the `user_department_access` path is CLOSED, not armed:** W-8 deleted the insert in the same change that deleted the bypass, and `web/tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts` records every attempted insert through that module so the *absence of the write* is asserted, not just the returned shape. **The helper-mediated `user_roles` writer remains open** — RL-11's subject is still incomplete, one path rather than two |
@@ -3652,3 +3793,46 @@ handed forward in writing rather than acted on.
 **Method:** static, source-grounded, test-backed. Three test-tree files; focused Vitest only. Read-only
 against the product-source copy to resolve `§25`, `§33.1`/`DR-12` and W-11's M2 amendment; that copy was
 **not** modified. Nothing pushed.
+
+### 15.9 W-12 execution — the migration authored, and the seed nobody calls (2026-08-07, assignment `asg_6c9043d1ef0fd8`)
+
+Evidence: [`w12-grant-enumeration.json`](w12-grant-enumeration.json) — the full grant-seed inventory, the
+restated invariant, M6's behaviour claim, the three findings raised, and the operator decision.
+
+Changed (local only — not pushed):
+
+| File | Role |
+|---|---|
+| `supabase/migrations/20260807170000_w12_seed_default_rbac_enumerated_grants.sql` | **New — M6.** `seed_default_rbac()` rewritten: the two blanket grant `SELECT`s become 57 and 55 literal rows; the catalog literal is byte-for-byte Phase 0's. Carries a fail-closed guard that reads its own enumeration out of `pg_get_functiondef`. **Not applied. Not parsed by any PostgreSQL** |
+| `web/tests/access/grantSeedDiscovery.ts` | **New.** Discovery of every grant-writing statement in the migration tree and of what bounds each one's key set |
+| `web/tests/access/grantSeedEnumeration.test.ts` | **New — RL-8.** 15 tests |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/w12-grant-enumeration.json` | **New.** The inventory and the decision ask |
+| `docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md` | §3 wave map, §7 W-12 record and the eighth answer to the carried directive, §11 M6, §13 RL-8, this entry |
+
+| Claim | How it was established | Result |
+|---|---|---|
+| The blanket is the live one, not the baseline's | Read `…phase0…sql:292-304` | `select pd.key from permission_definitions where is_active` for `admin`, the same less two keys for `ops` |
+| Four blanket grant seeds exist in the tree, and no more | Region-based discovery over **315** migrations | **14 grant statements in 9 files; 10 bounded, 4 blanket** — the baseline pair and the Phase 0 pair, both inside `seed_default_rbac` |
+| The literal wording of RL-8 is wrong | Classified the three catalog-reading seeds that are nonetheless bounded | `20260505164000` (17-key `IN`), Phase 0's workflows backfill (2-key `IN`), the wave-C `FOR … IN VALUES` loop. Restatement raised, register row left as authored |
+| A `NOT IN` exclusion is not a bound | Negative fixture: a new-file blanket decorated with `NOT IN ('billing.read', 'billing.write')` | Classified **blanket**; ratchet **1 red**, fixture removed, green |
+| The enumeration preserves behaviour | Compared the admin list to the function's own catalog literal, and to the catalog W-11's instrument derives from the whole tree | **57 = 57 = 57**, two independent methods; ops is exactly that less `admin.users.write` and `admin.roles.write` |
+| Dropping `is_active` would widen | Read `resolveAdminAccessCore.fetchPermissionKeys` and `rbac/grants/route.ts:60-68` | The resolver **never joins the catalog**; `is_active` acts only at write time. Kept as a narrowing `EXISTS` |
+| `seed_default_rbac` has no caller | Full-tree census: no trigger, no product call, no script | Reachable only by PostgREST RPC — and `authenticated` still holds `EXECUTE` on it (the 2026-08-04 revocation touched only `anon`, by its own header) |
+| The lock is not vacuous | Five negative fixtures across five distinct assertions | 1, 2, 1, 5 and 1 red respectively; all removed, suite green after |
+| Neighbours hold | `npx vitest run tests/access tests/admin/permissionGrid.test.ts` | **158 passed / 6 skipped / 0 failed** — up from 143 + 6 by this suite alone |
+
+**Limits of this record.** Nothing was applied. No live query was run against any database: the shared local
+stack was started to parse-check M6 and the `psql` invocation was declined by the session permission layer, so
+the check was **abandoned rather than routed around** and the lease released. Tier C is unrun — it needs the
+apply and a service-role round trip, the same boundary RL-4's and RL-5's tier C sit behind. Tier D does not
+apply. `vac run typecheck:tests` — the stray `web/tests/tmpWave1EvidenceParse.test.ts` that W-9, W-10 and W-11
+each recorded is **still in the tree** and is still Wave 1's; the two new files here are test-tree only and
+import one new local module.
+
+**What this assignment deliberately did not do.** It did not narrow the catalog literal (M5's, gated on the
+operator review W-11 opened), did not author the `EXECUTE` revocation that finding **W12-F1** argues for
+(minting a migration register row is the Director's, per `DR-12`), and did not edit RL-8's wording in §13
+(same reason). Each is written down rather than acted on.
+
+**Method:** static, source-grounded, test-backed. One migration, two test-tree files, one evidence artifact.
+Focused Vitest only. Nothing pushed.
