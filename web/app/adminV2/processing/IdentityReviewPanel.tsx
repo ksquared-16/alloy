@@ -1,24 +1,23 @@
 "use client";
 
 /**
- * D3 — Identity Review panel (operator workflow).
+ * Identity Review panel (operator workflow) — Create Lead / Processing.
  *
- * Additive section inside the shared Processing case work surface. Drives the full
- * identity workflow through the canonical operator service via
- * /api/admin/processing/cases/[caseId]/identity/*:
- *   facts + corrections → resolution decisions → build plan (diff) → approve →
- *   explicit execute → attempt results.
+ * Drives the canonical identity path via /api/admin/processing/cases/[caseId]/identity/*:
+ * facts → resolution decisions → plan → approve → explicit execute.
  *
- * Nothing here is auto-invoked: execution requires a deliberate operator click on
- * an APPROVED plan. No intake source reaches these actions.
+ * Operator surface is exception-driven: clean-new shows a concise subject list and one
+ * Confirm and create. Ambiguous subjects expand into the existing resolution controls.
+ * Internal vocabulary (confirmed_new, person-1, opIds) stays out of the default view.
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
-    summarizeCommitPlan,
-    summarizeIdentityConfidence,
-} from "@/lib/pos/processingIdentity/operator/reviewSummary";
+    buildCreateLeadReviewPresentation,
+    type CreateLeadReviewSubjectRow,
+} from "@/lib/pos/processingIdentity/operator/createLeadReviewPresentation";
+import { summarizeCommitPlan } from "@/lib/pos/processingIdentity/operator/reviewSummary";
 
 type Readiness =
     | "needs_understanding_review"
@@ -119,6 +118,17 @@ const DECISION_OPTIONS: { value: string; label: string }[] = [
     { value: "request_information", label: "Request more information" },
 ];
 
+type TimingMarks = {
+    loadStartedAt: number;
+    loadMs: number | null;
+    planPrefetchMs: number | null;
+    confirmStartedAt: number | null;
+    planBuildMs: number | null;
+    approveMs: number | null;
+    executeMs: number | null;
+    reloadAfterConfirmMs: number | null;
+};
+
 function Eyebrow({ children }: { children: ReactNode }) {
     return <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">{children}</div>;
 }
@@ -132,6 +142,11 @@ async function postJson(url: string, body: unknown): Promise<{ ok: boolean; data
     });
     const parsed = (await res.json().catch(() => ({}))) as { data?: unknown; error?: string };
     return { ok: res.ok, data: parsed.data, error: parsed.error };
+}
+
+function logReviewTiming(phase: string, marks: TimingMarks, extra?: Record<string, unknown>) {
+    if (typeof console === "undefined" || typeof console.info !== "function") return;
+    console.info("[create-lead-identity-review]", phase, { ...marks, ...extra });
 }
 
 export default function IdentityReviewPanel({
@@ -149,9 +164,24 @@ export default function IdentityReviewPanel({
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+    const [expandedReviewIds, setExpandedReviewIds] = useState<Set<string>>(() => new Set());
+    const [showDiagnostics, setShowDiagnostics] = useState(false);
     const committedNotifiedRef = useRef<string | null>(null);
+    const planPrefetchRef = useRef<string | null>(null);
+    const timingRef = useRef<TimingMarks>({
+        loadStartedAt: 0,
+        loadMs: null,
+        planPrefetchMs: null,
+        confirmStartedAt: null,
+        planBuildMs: null,
+        approveMs: null,
+        executeMs: null,
+        reloadAfterConfirmMs: null,
+    });
 
     const load = useCallback(async () => {
+        const t0 = performance.now();
+        timingRef.current.loadStartedAt = t0;
         setLoading(true);
         setError(null);
         try {
@@ -161,6 +191,12 @@ export default function IdentityReviewPanel({
             if (!res.ok) throw new Error(`Request failed (${res.status})`);
             const body = (await res.json()) as { data: ReviewState };
             setState(body.data);
+            timingRef.current.loadMs = Math.round(performance.now() - t0);
+            logReviewTiming("review_loaded", timingRef.current, {
+                readiness: body.data.readiness,
+                planEligible: body.data.planEligible,
+                resolutionCount: body.data.resolutions?.length ?? 0,
+            });
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load identity review");
             setState(null);
@@ -189,6 +225,26 @@ export default function IdentityReviewPanel({
             })),
         });
     }, [onCommitted, state?.latestAttempt]);
+
+    // Prefetch plan for clean-new so Confirm and create does not wait on plan build serially.
+    useEffect(() => {
+        if (!state) return;
+        const presentation = buildCreateLeadReviewPresentation({
+            resolutions: state.resolutions as never,
+            subjectEligibility: state.subjectEligibility as never,
+        });
+        if (presentation.mode !== "ready_without_identity_review") return;
+        if (!state.planEligible) return;
+        if (state.plan && !state.plan.supersededBy) return;
+        if (planPrefetchRef.current === caseId) return;
+        planPrefetchRef.current = caseId;
+        const t0 = performance.now();
+        void postJson(`/api/admin/processing/cases/${caseId}/identity/plan`, {}).then((built) => {
+            timingRef.current.planPrefetchMs = Math.round(performance.now() - t0);
+            logReviewTiming("plan_prefetch", timingRef.current, { ok: built.ok });
+            if (built.ok) void load();
+        });
+    }, [caseId, load, state]);
 
     const run = useCallback(
         async (label: string, fn: () => Promise<{ ok: boolean; error?: string }>) => {
@@ -223,7 +279,7 @@ export default function IdentityReviewPanel({
             }),
         );
 
-    const decideWithPrompt = (r: ResolutionRow, decisionAction: string, selectedCandidateId?: string | null) => {
+    const decideWithPrompt = (r: CreateLeadReviewSubjectRow, decisionAction: string, selectedCandidateId?: string | null) => {
         const plausible = (r.candidates ?? []).filter((c) => c.recordId && c.recordId !== "none");
         if (decisionAction === "create_new" && plausible.length > 0) {
             const reason = window.prompt(
@@ -235,10 +291,10 @@ export default function IdentityReviewPanel({
                 setActionError("Create-new override requires a non-empty operator reason.");
                 return;
             }
-            void decide(r.id, decisionAction, null, reason.trim());
+            void decide(r.resolutionId, decisionAction, null, reason.trim());
             return;
         }
-        void decide(r.id, decisionAction, selectedCandidateId ?? null, null);
+        void decide(r.resolutionId, decisionAction, selectedCandidateId ?? null, null);
     };
 
     const correct = (originalFactId: string, correctedNormalizedValue: string) =>
@@ -251,10 +307,7 @@ export default function IdentityReviewPanel({
 
     /**
      * One operator gesture: reviewing this summary and confirming IS the approval, and the commit.
-     * Plan → approve → execute still each run and are still each recorded (the approval artifact,
-     * its plan version and content hash, and the attempt are unchanged) — what collapses is the
-     * number of times the operator has to say yes to the same reviewed thing, not the audit trail.
-     * Still explicit: nothing here runs without this click, and no intake source reaches it.
+     * Plan → approve → execute still each run and are still each recorded.
      */
     const confirmAndCommit = useCallback(
         async (current: {
@@ -266,44 +319,50 @@ export default function IdentityReviewPanel({
         }) => {
             setBusy("confirm");
             setActionError(null);
+            const tConfirm = performance.now();
+            timingRef.current.confirmStartedAt = tConfirm;
             try {
                 let planId = current.planId;
                 let contentHash = current.contentHash;
 
                 if (current.needsPlan) {
-                    const built = await postJson(
-                        `/api/admin/processing/cases/${caseId}/identity/plan`,
-                        {},
-                    );
+                    const tPlan = performance.now();
+                    const built = await postJson(`/api/admin/processing/cases/${caseId}/identity/plan`, {});
+                    timingRef.current.planBuildMs = Math.round(performance.now() - tPlan);
                     if (!built.ok) throw new Error(built.error || "Could not build the commit plan");
-                    const plan = (built.data as { plan?: { planId?: string; contentHash?: string } } | null)
-                        ?.plan;
+                    const plan = (built.data as { plan?: { planId?: string; contentHash?: string } } | null)?.plan;
                     planId = plan?.planId?.trim() || planId;
                     contentHash = plan?.contentHash?.trim() || contentHash;
                 }
                 if (!planId) throw new Error("Could not build the commit plan");
 
                 if (!current.approved) {
-                    const approved = await postJson(
-                        `/api/admin/processing/cases/${caseId}/identity/approve`,
-                        { planId, blockingConflicts: current.blockingConflicts },
-                    );
+                    const tApprove = performance.now();
+                    const approved = await postJson(`/api/admin/processing/cases/${caseId}/identity/approve`, {
+                        planId,
+                        blockingConflicts: current.blockingConflicts,
+                    });
+                    timingRef.current.approveMs = Math.round(performance.now() - tApprove);
                     if (!approved.ok) throw new Error(approved.error || "Could not approve the plan");
                 }
 
-                const committed = await postJson(
-                    `/api/admin/processing/cases/${caseId}/identity/execute`,
-                    {
-                        planId,
-                        executionIdempotencyKey: `exec:${planId}:${contentHash}`,
-                    },
-                );
+                const tExec = performance.now();
+                const committed = await postJson(`/api/admin/processing/cases/${caseId}/identity/execute`, {
+                    planId,
+                    executionIdempotencyKey: `exec:${planId}:${contentHash}`,
+                });
+                timingRef.current.executeMs = Math.round(performance.now() - tExec);
                 if (!committed.ok) throw new Error(committed.error || "Could not create the records");
             } catch (e) {
                 setActionError(e instanceof Error ? e.message : "Could not create the records");
             } finally {
-                setBusy(null);
+                const tReload = performance.now();
                 await load();
+                timingRef.current.reloadAfterConfirmMs = Math.round(performance.now() - tReload);
+                logReviewTiming("confirm_and_create_complete", timingRef.current, {
+                    totalConfirmMs: Math.round(performance.now() - tConfirm),
+                });
+                setBusy(null);
             }
         },
         [caseId, load],
@@ -312,7 +371,7 @@ export default function IdentityReviewPanel({
     if (loading) {
         return (
             <section className="mb-5 rounded-lg border border-stone-200 bg-white p-3.5 shadow-sm" aria-busy="true">
-                <Eyebrow>Identity review</Eyebrow>
+                <Eyebrow>Ready to create</Eyebrow>
                 <div className="h-16 animate-pulse rounded bg-stone-100" />
             </section>
         );
@@ -320,7 +379,7 @@ export default function IdentityReviewPanel({
     if (error || !state) {
         return (
             <section className="mb-5 rounded-lg border border-stone-200 bg-white p-3.5 shadow-sm">
-                <Eyebrow>Identity review</Eyebrow>
+                <Eyebrow>Review</Eyebrow>
                 <div className="text-[12px] text-amber-700">{error ?? "No identity data."}</div>
                 <button
                     type="button"
@@ -333,159 +392,173 @@ export default function IdentityReviewPanel({
         );
     }
 
-    const { readiness, plan, planDiff, approval, latestAttempt, resolutions, facts, blockingConflictCount } = state;
+    const { readiness, plan, planDiff, approval, latestAttempt, facts, blockingConflictCount } = state;
     const approvalStale = Boolean(plan && approval && approval.planContentHash !== plan.contentHash);
     const planEligible = state.planEligible !== false && (state.identityBlockers?.length ?? 0) === 0;
     const blockingConflictIds = blockingConflictCount > 0 ? ["unresolved"] : [];
-    const confidence = summarizeIdentityConfidence(resolutions);
     const planSummary = summarizeCommitPlan(planDiff?.entries ?? []);
-    // Confirm covers plan → approve → execute, so it is available whenever identity is settled;
-    // a committed case has nothing left to confirm.
+    const presentation = buildCreateLeadReviewPresentation({
+        resolutions: state.resolutions as never,
+        subjectEligibility: state.subjectEligibility as never,
+    });
     const canConfirm =
-        planEligible && readiness !== "committed" && readiness !== "committing";
-    const eligibilityByRef = new Map((state.subjectEligibility ?? []).map((e) => [e.subjectRef, e]));
+        planEligible &&
+        presentation.mode === "ready_without_identity_review" &&
+        readiness !== "committed" &&
+        readiness !== "committing";
+
+    const toggleReview = (id: string) => {
+        setExpandedReviewIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     return (
-        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-alloy-bend-pine">Review</span>
+        <section className="mb-5 rounded-lg border border-alloy-bend-pine/25 bg-white p-3.5 shadow-sm" data-create-lead-identity-review="true">
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-[14px] font-semibold text-stone-900">{presentation.headline}</h2>
                 <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        confidence.level === "needs_decision"
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        presentation.mode === "identity_review_required"
                             ? "bg-amber-100 text-amber-800"
                             : "bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
                     }`}
                 >
-                    {confidence.level === "needs_decision" ? "Needs your decision" : "Ready"}
+                    {presentation.mode === "identity_review_required" ? "Needs review" : "Ready"}
                 </span>
             </div>
-            <p className="mb-2.5 text-[12px] text-stone-600">{confidence.summary}</p>
+            <p className="mb-3 text-[12.5px] text-stone-600">{presentation.summary}</p>
 
             {actionError ? <div className="mb-2 text-[11.5px] text-amber-700">{actionError}</div> : null}
 
-            {/* Facts + operator correction (appends a new fact version) */}
-            <div className="mb-3">
-                <Eyebrow>Facts ({facts.length})</Eyebrow>
-                {facts.length === 0 ? (
-                    <div className="text-[12px] text-stone-400">No durable facts for this case.</div>
-                ) : (
-                    <ul className="space-y-1">
-                        {facts.map((f) => (
-                            <FactItem key={f.id} fact={f} disabled={busy !== null} onCorrect={correct} />
-                        ))}
-                    </ul>
-                )}
-            </div>
-
             {(state.identityBlockers?.length ?? 0) > 0 ? (
                 <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-[11.5px] text-amber-900">
-                    <div className="font-medium">Blocking identity review</div>
+                    <div className="font-medium">Identity decisions required</div>
                     <ul className="mt-1 list-disc pl-4">
                         {(state.identityBlockers ?? []).slice(0, 6).map((b) => (
-                            <li key={b}>{b}</li>
+                            <li key={b}>{b.replace(/^[a-z0-9_]+:\s*/i, "")}</li>
                         ))}
                     </ul>
-                    <div className="mt-1">
-                        You selected related records for this household. Review each subject — especially children —
-                        before creating a new record. Plausible matches require an explicit operator decision.
-                    </div>
                 </div>
             ) : null}
 
-            {/* Resolutions + candidate decisions */}
-            <div className="mb-3">
-                <Eyebrow>Household identity subjects ({resolutions.length})</Eyebrow>
-                {resolutions.length === 0 ? (
-                    <div className="text-[12px] text-stone-400">No resolutions yet.</div>
-                ) : (
-                    <ul className="space-y-2">
-                        {resolutions.map((r) => {
-                            const el = eligibilityByRef.get(r.subject_ref);
-                            const blocking = el && !el.eligibleForPlan;
-                            return (
-                            <li key={r.id} className={`rounded-md border p-2.5 ${blocking ? "border-amber-300 bg-amber-50/40" : "border-stone-200"}`}>
-                                <div className="flex items-center gap-2">
-                                    <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10.5px] text-stone-600">{r.subject_role}</span>
-                                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-stone-800">{r.subject_ref}</span>
-                                    {el?.state ? (
-                                        <span className={`text-[10.5px] ${blocking ? "text-amber-800" : "text-alloy-bend-pine"}`}>{el.state}</span>
-                                    ) : r.decision_action ? (
-                                        <span className="text-[10.5px] text-alloy-bend-pine">{r.decision_action}</span>
-                                    ) : (
-                                        <span className="text-[10.5px] text-amber-700">undecided</span>
-                                    )}
-                                </div>
-                                {el?.recommendationSummary ? (
-                                    <div className="mt-1 text-[11px] text-stone-700">{el.recommendationSummary}</div>
-                                ) : null}
-                                <div className="mt-1 space-y-1">
-                                    {(r.candidates ?? []).slice(0, 5).map((c) => (
-                                        <div key={`${r.id}:${c.recordId}`} className="rounded border border-stone-100 bg-white px-2 py-1 text-[11px] text-stone-600">
-                                            <div className="flex flex-wrap gap-2">
-                                                <span className="font-medium text-stone-800">{c.displayName ?? c.recordId}</span>
-                                                {c.confidenceBand ? <span>{c.confidenceBand}</span> : null}
-                                                {c.entityType ? <span>{c.entityType}</span> : null}
-                                            </div>
-                                            {c.explanation ? <div className="text-stone-500">{c.explanation}</div> : null}
-                                            {(c.blockingConflicts?.length ?? 0) > 0 ? (
-                                                <div className="text-amber-800">
-                                                    Contradictions: {(c.blockingConflicts ?? []).map((b) => b.explanation).filter(Boolean).join("; ") || "conflict"}
+            <ul className="mb-3 space-y-1.5" data-create-lead-subject-list="true">
+                {presentation.subjects.map((row) => {
+                    const expanded = expandedReviewIds.has(row.resolutionId);
+                    const showDecisionControls = expanded;
+                    return (
+                        <li
+                            key={row.resolutionId}
+                            className={`rounded-md border px-2.5 py-2 ${
+                                row.needsOperatorAction ? "border-amber-300 bg-amber-50/40" : "border-stone-200 bg-white"
+                            }`}
+                            data-needs-review={row.needsOperatorAction ? "true" : "false"}
+                        >
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="text-[12.5px] font-medium text-stone-900">{row.displayName}</span>
+                                <span className="text-[11px] text-stone-500">· {row.roleLabel}</span>
+                                <span
+                                    className={`text-[11px] font-medium ${
+                                        row.needsOperatorAction ? "text-amber-800" : "text-alloy-bend-pine"
+                                    }`}
+                                >
+                                    · {row.statusLabel}
+                                </span>
+                                {row.needsOperatorAction ? (
+                                    <button
+                                        type="button"
+                                        className="ml-auto text-[11.5px] font-medium text-alloy-bend-pine hover:underline"
+                                        onClick={() => toggleReview(row.resolutionId)}
+                                    >
+                                        {expanded ? "Hide" : "Review"}
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className="ml-auto text-[11px] text-stone-400 hover:text-stone-600 hover:underline"
+                                        onClick={() => toggleReview(row.resolutionId)}
+                                    >
+                                        {expanded ? "Hide" : "Edit"}
+                                    </button>
+                                )}
+                            </div>
+
+                            {showDecisionControls ? (
+                                <div className="mt-2 space-y-1.5 border-t border-stone-100 pt-2">
+                                    {row.recommendationSummary ? (
+                                        <div className="text-[11px] text-stone-700">{row.recommendationSummary}</div>
+                                    ) : null}
+                                    {(row.candidates ?? [])
+                                        .filter((c) => c.recordId && c.recordId !== "none")
+                                        .slice(0, 5)
+                                        .map((c) => (
+                                            <div
+                                                key={`${row.resolutionId}:${c.recordId}`}
+                                                className="rounded border border-stone-100 bg-white px-2 py-1 text-[11px] text-stone-600"
+                                            >
+                                                <div className="flex flex-wrap gap-2">
+                                                    <span className="font-medium text-stone-800">
+                                                        {c.displayName ?? "Existing record"}
+                                                    </span>
                                                 </div>
-                                            ) : null}
+                                                {c.explanation ? <div className="text-stone-500">{c.explanation}</div> : null}
+                                                {(c.blockingConflicts?.length ?? 0) > 0 ? (
+                                                    <div className="text-amber-800">
+                                                        Contradictions:{" "}
+                                                        {(c.blockingConflicts ?? [])
+                                                            .map((b) => b.explanation)
+                                                            .filter(Boolean)
+                                                            .join("; ") || "conflict"}
+                                                    </div>
+                                                ) : null}
+                                                <button
+                                                    type="button"
+                                                    disabled={busy !== null}
+                                                    className="mt-1 text-[10.5px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
+                                                    onClick={() => decideWithPrompt(row, "link_existing", c.recordId ?? null)}
+                                                >
+                                                    Choose this record
+                                                </button>
+                                            </div>
+                                        ))}
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {DECISION_OPTIONS.map((opt) => (
                                             <button
+                                                key={opt.value}
                                                 type="button"
                                                 disabled={busy !== null}
-                                                className="mt-1 text-[10.5px] font-medium text-alloy-bend-pine hover:underline disabled:opacity-50"
-                                                onClick={() => decideWithPrompt(r, "link_existing", c.recordId ?? null)}
+                                                onClick={() =>
+                                                    decideWithPrompt(
+                                                        row,
+                                                        opt.value,
+                                                        opt.value === "link_existing"
+                                                            ? row.candidates[0]?.recordId ?? row.selectedCandidateId
+                                                            : null,
+                                                    )
+                                                }
+                                                className={`rounded-md border px-2 py-0.5 text-[11px] font-medium disabled:opacity-50 ${
+                                                    row.decisionAction === opt.value
+                                                        ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
+                                                        : "border-stone-300 text-stone-600 hover:bg-stone-50"
+                                                }`}
                                             >
-                                                Choose this record
+                                                {opt.label}
                                             </button>
-                                        </div>
-                                    ))}
-                                    {(r.candidates ?? []).length === 0 ? (
-                                        <div className="text-[11px] text-stone-500">No candidates — create new is allowed after operator confirmation of empty match set.</div>
-                                    ) : null}
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                    {DECISION_OPTIONS.map((opt) => (
-                                        <button
-                                            key={opt.value}
-                                            type="button"
-                                            disabled={busy !== null}
-                                            onClick={() =>
-                                                decideWithPrompt(
-                                                    r,
-                                                    opt.value,
-                                                    opt.value === "link_existing"
-                                                        ? r.candidates[0]?.recordId ?? r.selected_candidate_id
-                                                        : null,
-                                                )
-                                            }
-                                            className={`rounded-md border px-2 py-0.5 text-[11px] font-medium disabled:opacity-50 ${
-                                                r.decision_action === opt.value
-                                                    ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/[0.08] text-alloy-bend-pine"
-                                                    : "border-stone-300 text-stone-600 hover:bg-stone-50"
-                                            }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </li>
-                            );
-                        })}
-                    </ul>
-                )}
-            </div>
+                            ) : null}
+                        </li>
+                    );
+                })}
+            </ul>
 
-            {/* What confirming will create — operator language, no plan ids or hashes. */}
-            <div className="mb-3">
-                <Eyebrow>What this creates</Eyebrow>
-                {planSummary.lines.length === 0 ? (
-                    <div className="text-[12px] text-stone-400">
-                        Nothing to create yet — settle the records above.
-                    </div>
-                ) : (
+            {planSummary.lines.length > 0 ? (
+                <div className="mb-3">
+                    <Eyebrow>What this creates</Eyebrow>
                     <ul className="mt-1 space-y-0.5">
                         {planSummary.lines.map((line, i) => (
                             <li key={`${line}-${i}`} className="text-[12px] text-stone-700">
@@ -493,49 +566,25 @@ export default function IdentityReviewPanel({
                             </li>
                         ))}
                     </ul>
-                )}
-            </div>
+                </div>
+            ) : null}
 
-            {/* Approval + stale warning */}
             {approvalStale ? (
                 <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
-                    The prior approval no longer matches this plan version — re-approve before executing.
+                    The prior approval no longer matches — confirm again to create.
                 </div>
             ) : null}
 
-            {/* Attempt results */}
-            {latestAttempt ? (
-                <div className="mb-3 rounded-md border border-stone-200 p-2.5">
-                    <div className="mb-1 flex items-center gap-2 text-[11.5px]">
-                        <span className="font-medium text-stone-700">Attempt #{latestAttempt.attemptNo}</span>
-                        <span
-                            className={
-                                latestAttempt.outcome === "committed"
-                                    ? "text-alloy-bend-pine"
-                                    : latestAttempt.outcome === "partially_committed"
-                                      ? "text-amber-700"
-                                      : "text-red-700"
-                            }
-                        >
-                            {latestAttempt.outcome}
-                        </span>
-                    </div>
+            {latestAttempt &&
+            (latestAttempt.outcome === "failed" || latestAttempt.outcome === "partially_committed") ? (
+                <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11.5px] text-amber-900">
+                    Creation did not finish completely. Review details below or try Confirm and create again.
                     {latestAttempt.preflightFailures.length > 0 ? (
-                        <div className="text-[11px] text-red-700">Preflight: {latestAttempt.preflightFailures.join(", ")}</div>
+                        <div className="mt-1">{latestAttempt.preflightFailures.join(", ")}</div>
                     ) : null}
-                    <ul className="space-y-0.5">
-                        {latestAttempt.operations.map((o) => (
-                            <li key={o.opId} className="flex items-center gap-2 text-[11px] text-stone-600">
-                                <span className="min-w-0 flex-1 truncate">{o.opId}</span>
-                                <span className={o.status === "committed" ? "text-alloy-bend-pine" : "text-amber-700"}>{o.status}</span>
-                                {o.error ? <span className="text-red-700">{o.error}</span> : null}
-                            </li>
-                        ))}
-                    </ul>
                 </div>
             ) : null}
 
-            {/* One deliberate operator gesture: reviewing this and confirming IS approve + commit. */}
             <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 pt-2.5">
                 <button
                     type="button"
@@ -550,17 +599,61 @@ export default function IdentityReviewPanel({
                         })
                     }
                     className="rounded-md bg-[#00A283] px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:cursor-not-allowed disabled:opacity-40"
+                    data-create-lead-confirm-create="true"
                     title={
                         canConfirm
                             ? "Create these records"
-                            : "Settle the records above before confirming"
+                            : presentation.mode === "identity_review_required"
+                              ? "Resolve possible matches before confirming"
+                              : "Settle identity before confirming"
                     }
                 >
                     {busy === "confirm" ? "Creating…" : "Confirm and create"}
                 </button>
-                <span className="text-[10px] leading-tight text-stone-400">
-                    Explicit action · no source auto-executes
-                </span>
+                <span className="text-[10px] leading-tight text-stone-400">Confirm once · Processing still commits</span>
+            </div>
+
+            <div className="mt-3 border-t border-stone-100 pt-2">
+                <button
+                    type="button"
+                    className="text-[11px] text-stone-400 hover:text-stone-600 hover:underline"
+                    onClick={() => setShowDiagnostics((v) => !v)}
+                >
+                    {showDiagnostics ? "Hide details" : "Technical details"}
+                </button>
+                {showDiagnostics ? (
+                    <div className="mt-2 space-y-2">
+                        <div>
+                            <Eyebrow>Facts ({facts.length})</Eyebrow>
+                            {facts.length === 0 ? (
+                                <div className="text-[12px] text-stone-400">No durable facts for this case.</div>
+                            ) : (
+                                <ul className="space-y-1">
+                                    {facts.map((f) => (
+                                        <FactItem key={f.id} fact={f} disabled={busy !== null} onCorrect={correct} />
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        {timingRef.current.loadMs != null ? (
+                            <div className="text-[10px] text-stone-400">
+                                Load {timingRef.current.loadMs}ms
+                                {timingRef.current.planPrefetchMs != null
+                                    ? ` · Plan prefetch ${timingRef.current.planPrefetchMs}ms`
+                                    : ""}
+                                {timingRef.current.planBuildMs != null
+                                    ? ` · Plan ${timingRef.current.planBuildMs}ms`
+                                    : ""}
+                                {timingRef.current.approveMs != null
+                                    ? ` · Approve ${timingRef.current.approveMs}ms`
+                                    : ""}
+                                {timingRef.current.executeMs != null
+                                    ? ` · Execute ${timingRef.current.executeMs}ms`
+                                    : ""}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </section>
     );

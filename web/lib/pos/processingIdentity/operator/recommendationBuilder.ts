@@ -267,12 +267,18 @@ export function buildRecommendations(set: IdentityResolutionSet): Recommendation
                             first_name: sub.values?.first_name ?? null,
                             last_name: sub.values?.last_name ?? null,
                             dob: sub.values?.dob ?? null,
+                            ...(typeof sub.values?.gender === "string" && sub.values.gender
+                                ? { gender: sub.values.gender }
+                                : {}),
                         },
                         after: {
                             display_name: sub.values?.display_name,
                             first_name: sub.values?.first_name,
                             last_name: sub.values?.last_name,
                             dob: sub.values?.dob,
+                            ...(typeof sub.values?.gender === "string" && sub.values.gender
+                                ? { gender: sub.values.gender }
+                                : {}),
                         },
                         dependsOnRefs: sub.householdRef ? [sub.householdRef] : [],
                         reason: "new child",

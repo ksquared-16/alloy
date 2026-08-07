@@ -9,7 +9,8 @@
 
 export type ParsedGender = "female" | "male" | null;
 
-const GENDER_WORDS: Record<string, ParsedGender> = {
+/** Shared gender value vocabulary (Girl/Female/… → female|male). */
+export const GENDER_WORDS: Record<string, ParsedGender> = {
     girl: "female",
     girls: "female",
     female: "female",
