@@ -16,8 +16,8 @@ export const campuses: Campus[] = [
     address: "123 Learning Lane",
     phone: "(555) 010-1000",
     embedUrl:
-      "https://staging.workwithalloy.com/forms/embed/Q6o4x1TadVU-rUFiJvk8ODKWZog89m5hZLGpiUh0l-k",
-    embedTitle: "Contact Us — West Campus",
+      "https://staging.workwithalloy.com/forms/embed/wj-2bcAUuJ_4fG4pLcvRdTnk2_sYEjmxo-LcI-2UogM",
+    embedTitle: "New Lead Generation Form — West Campus",
   },
   {
     slug: "north-campus",
@@ -26,8 +26,8 @@ export const campuses: Campus[] = [
     address: "456 Discovery Drive",
     phone: "(555) 010-2000",
     embedUrl:
-      "https://staging.workwithalloy.com/forms/embed/V4FSiX0FbNVEriy6NEyzs7UkJ-hRJRDM7vm2lr0f51w",
-    embedTitle: "Contact Us — North Campus",
+      "https://staging.workwithalloy.com/forms/embed/emVv8hMkZFFz_9Xz8pITA78579md-WQ2VQZXcrgYypQ",
+    embedTitle: "New Lead Generation Form — North Campus",
   },
   {
     slug: "south-campus",
@@ -36,10 +36,13 @@ export const campuses: Campus[] = [
     address: "789 Meadow Road",
     phone: "(555) 010-3000",
     embedUrl:
-      "https://staging.workwithalloy.com/forms/embed/XzvDxYD1CONv9w8MbKDkQDiXjojjndoUe_DVggVhVwY",
-    embedTitle: "Contact Us — South Campus",
+      "https://staging.workwithalloy.com/forms/embed/rH4qQvSIcGWLfuzZonUAaPpfUCRpLLLuN_io0hmhfiY",
+    embedTitle: "New Lead Generation Form — South Campus",
   },
 ];
+
+/** Single origin every campus embed is served from — preconnected in the root layout. */
+export const EMBED_ORIGIN = "https://staging.workwithalloy.com";
 
 export function getCampusBySlug(slug: string): Campus | undefined {
   return campuses.find((campus) => campus.slug === slug);
