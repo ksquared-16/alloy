@@ -247,7 +247,23 @@ function collectCandidateActionKeys(args: {
         keys.add(key);
     }
 
-    return [...keys].filter((key) => !isHiddenFromEditor(key) && !isNonCanonicalIntentAlias(key));
+    /**
+     * Promote grain-specific aliases (e.g. waitlist_child) to their operator intent
+     * (move_to_waitlist) instead of dropping them. mergeByIntent still dedupes.
+     */
+    const promoted = new Set<string>();
+    for (const key of keys) {
+        if (!key || isHiddenFromEditor(key)) continue;
+        if (isNonCanonicalIntentAlias(key)) {
+            const intentKey = normalizeActionRefToIntentKey(key);
+            if (intentKey && !isHiddenFromEditor(intentKey)) {
+                promoted.add(intentKey);
+            }
+            continue;
+        }
+        promoted.add(key);
+    }
+    return [...promoted];
 }
 
 function buildRawOption(

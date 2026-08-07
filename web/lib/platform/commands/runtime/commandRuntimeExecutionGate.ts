@@ -190,8 +190,11 @@ export function isCommandRuntimeFacadeExecutionSupported(commandKey: string): bo
         ) {
             return true;
         }
+        // move_to_waitlist is a compatibility alias of waitlist_child. Exact-key allowlist
+        // alone would leave family-context Move to Waitlist on the legacy opportunity path.
+        const childFacadeKey = key === "move_to_waitlist" ? "waitlist_child" : key;
         if (
-            isChildEnrollmentMutationFacadeSupported(key) &&
+            isChildEnrollmentMutationFacadeSupported(childFacadeKey) &&
             (cap.canonicalCommandKey === "update_child_enrollment_status" ||
                 cap.canonicalCommandKey === "waitlist_child" ||
                 cap.canonicalCommandKey === "enroll_child")

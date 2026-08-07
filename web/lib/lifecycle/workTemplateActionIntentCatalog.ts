@@ -32,15 +32,20 @@ export const WORK_TEMPLATE_ACTION_INTENT_SPECS: readonly WorkTemplateActionInten
     {
         intentKey: "move_to_waitlist",
         label: "Move to Waitlist",
-        description: "Move the configured process subject to waitlist status.",
+        description: "Move the eligible child Enrollment participation to Waitlist.",
         category: "lifecycle",
         aliases: ["move_to_waitlist", "waitlist_child", "move_family_to_waitlist"],
+        /**
+         * Waitlist is child-grain. Family-context Helpful Actions still store the intent
+         * `move_to_waitlist`, but execution is always the child capability `waitlist_child`
+         * (related-subject resolution), never the legacy opportunity status mutator.
+         */
         refBySubjectGrain: {
-            opportunity: "move_to_waitlist",
+            opportunity: "waitlist_child",
             opportunity_customer_member: "waitlist_child",
-            process_subject: "move_to_waitlist",
+            process_subject: "waitlist_child",
         },
-        defaultRef: "move_to_waitlist",
+        defaultRef: "waitlist_child",
     },
     {
         intentKey: "enroll_subject",
