@@ -65,8 +65,11 @@ export function useOpportunityDrawerVmHeaderActions(params: {
             clearPreflight();
             try {
                 if (
-                    (actionKey === "create_task" || intent === "create_task") &&
-                    host?.openCreateWork
+                    (actionKey === "create_task"
+                        || actionKey === "create_work_item"
+                        || intent === "create_task"
+                        || intent === "create_work_item")
+                    && host?.openCreateWork
                 ) {
                     host.openCreateWork({ opportunity_id: id });
                     return;
@@ -126,6 +129,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                         resolvedIntent === "send_form" ||
                         resolvedIntent === "send_enrollment_packet" ||
                         resolvedIntent === "create_task" ||
+                        resolvedIntent === "create_work_item" ||
                         resolvedIntent === "quick_message" ||
                         actionKey === "quick_message" ||
                         actionKey === "review_enrollment_packet" ||

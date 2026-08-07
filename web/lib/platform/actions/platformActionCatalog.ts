@@ -113,10 +113,10 @@ const CATALOG: readonly PlatformActionEntry[] = [
     },
     {
         key: "create_task",
-        defaultLabel: "Create Task",
+        defaultLabel: "Create Work Item",
         grain: "opportunity",
         category: "workflow",
-        runtimeCommandKey: null,
+        runtimeCommandKey: "create_work_item",
         supportsMultiSubject: false,
         confirmationPolicy: "none",
     },

@@ -26,13 +26,13 @@ function processWithCommands(
 }
 
 describe("upsertEnabledProcessActionsIntoCommandSet", () => {
-    it("adds Move to Waitlist intent when Waitlist Child is enabled", () => {
+    it("adds registry-canonical Waitlist Child when enabled", () => {
         const next = upsertEnabledProcessActionsIntoCommandSet(
             processWithCommands([{ capability_key: "schedule_tour", enabled: true }]),
             ["waitlist_child"],
         );
         expect(next).not.toBeNull();
-        expect(next!.command_set_v1!.commands.some((c) => c.capability_key === "move_to_waitlist" && c.enabled)).toBe(
+        expect(next!.command_set_v1!.commands.some((c) => c.capability_key === "waitlist_child" && c.enabled)).toBe(
             true,
         );
         expect(next!.command_set_v1!.commands.some((c) => c.capability_key === "schedule_tour")).toBe(true);
@@ -49,14 +49,31 @@ describe("upsertEnabledProcessActionsIntoCommandSet", () => {
         );
         expect(waitlistish).toHaveLength(1);
         expect(waitlistish[0]!.enabled).toBe(true);
+        expect(waitlistish[0]!.capability_key).toBe("waitlist_child");
     });
 
-    it("returns null when already present and enabled", () => {
+    it("canonicalizes move_to_waitlist alias onto waitlist_child", () => {
         const next = upsertEnabledProcessActionsIntoCommandSet(
             processWithCommands([{ capability_key: "move_to_waitlist", enabled: true }]),
             ["waitlist_child"],
         );
-        expect(next).toBeNull();
+        expect(next).not.toBeNull();
+        expect(next!.command_set_v1!.commands).toEqual([{ capability_key: "waitlist_child", enabled: true }]);
+    });
+
+    it("maps Create Task Process Action onto create_work_item", () => {
+        const next = upsertEnabledProcessActionsIntoCommandSet(processWithCommands([]), ["create_task"]);
+        expect(next).not.toBeNull();
+        expect(next!.command_set_v1!.commands).toEqual([{ capability_key: "create_work_item", enabled: true }]);
+    });
+
+    it("rewrites a legacy create_task command_set entry to create_work_item", () => {
+        const next = upsertEnabledProcessActionsIntoCommandSet(
+            processWithCommands([{ capability_key: "create_task", enabled: true }]),
+            ["create_task"],
+        );
+        expect(next).not.toBeNull();
+        expect(next!.command_set_v1!.commands).toEqual([{ capability_key: "create_work_item", enabled: true }]);
     });
 });
 

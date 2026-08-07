@@ -597,7 +597,12 @@ export async function applyRegistryResolvedActionClient(
             window.location.href = digits ? `tel:${digits}` : `tel:${phone}`;
             return { ok: true };
         }
-        if (actionKey === "create_task" || intent === "create_task") {
+        if (
+            actionKey === "create_task"
+            || actionKey === "create_work_item"
+            || intent === "create_task"
+            || intent === "create_work_item"
+        ) {
             if (eid) {
                 if (host.openCreateWork) {
                     host.openCreateWork({ opportunity_id: eid });

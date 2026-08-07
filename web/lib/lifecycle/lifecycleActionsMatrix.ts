@@ -21,6 +21,7 @@ import {
 } from "@/lib/lifecycle/lifecycleActionsMatrixOrder";
 import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
+import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import {
     lifecycleActivationBaseActionByKey,
     lifecycleActivationBaseActions,
@@ -243,6 +244,18 @@ async function deactivateBuilderPlacementsForDefinition(
 }
 
 /**
+ * Capability key to store in process command_set_v1 for a Process Action definition key.
+ * Prefer the registry canonical (create_task → create_work_item), then intent aliases.
+ */
+export function processActionCapabilityKeyForDefinitionKey(definitionKey: string): string {
+    const key = definitionKey.trim();
+    if (!key) return key;
+    const resolved = tryResolvePlatformCapability(key);
+    if (resolved.status === "known") return resolved.capability.canonicalCommandKey;
+    return normalizeActionRefToIntentKey(key);
+}
+
+/**
  * Ensure enabled Process Actions also appear in process command_set_v1 so Work Template Helpful
  * Actions can select them (e.g. Waitlist Child → Move to Waitlist).
  *
@@ -258,30 +271,29 @@ export function upsertEnabledProcessActionsIntoCommandSet(
 
     const existing = process.command_set_v1;
     const commands = existing?.commands ? [...existing.commands] : [];
-    const present = new Set(commands.map((c) => c.capability_key.trim()));
-    const presentIntents = new Set([...present].map((k) => normalizeActionRefToIntentKey(k)));
+    const presentCanonical = new Set(
+        commands.map((c) => processActionCapabilityKeyForDefinitionKey(c.capability_key)),
+    );
     let changed = false;
 
     for (const key of keys) {
-        const intent = normalizeActionRefToIntentKey(key);
-        if (present.has(key) || present.has(intent) || presentIntents.has(intent)) {
+        const capability_key = processActionCapabilityKeyForDefinitionKey(key);
+        if (presentCanonical.has(capability_key)) {
             const idx = commands.findIndex(
-                (c) =>
-                    c.capability_key.trim() === key
-                    || c.capability_key.trim() === intent
-                    || normalizeActionRefToIntentKey(c.capability_key) === intent,
+                (c) => processActionCapabilityKeyForDefinitionKey(c.capability_key) === capability_key,
             );
-            if (idx >= 0 && !commands[idx]!.enabled) {
-                commands[idx] = { ...commands[idx]!, enabled: true };
-                changed = true;
+            if (idx >= 0) {
+                const entry = commands[idx]!;
+                if (!entry.enabled || entry.capability_key.trim() !== capability_key) {
+                    // Re-enable and canonicalize (e.g. create_task → create_work_item).
+                    commands[idx] = { ...entry, capability_key, enabled: true };
+                    changed = true;
+                }
             }
             continue;
         }
-        // Prefer operator intent key when one exists (move_to_waitlist vs waitlist_child).
-        const capability_key = intent !== key ? intent : key;
         commands.push({ capability_key, enabled: true });
-        present.add(capability_key);
-        presentIntents.add(normalizeActionRefToIntentKey(capability_key));
+        presentCanonical.add(capability_key);
         changed = true;
     }
 
