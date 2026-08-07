@@ -642,9 +642,9 @@ function SummaryBody({
                 </p>
             :   null}
             <div className="alloy-os-currentwork__summary-controls">
-                <CurrentWorkContextStrip surface={surface} truth={truth} />
-                {dominant ?
-                    <div className="alloy-os-currentwork__primary-stack" data-work-primary-stack="true">
+                <div className="alloy-os-currentwork__context-action-row" data-work-context-action-row="true">
+                    <CurrentWorkContextStrip surface={surface} truth={truth} />
+                    {dominant ?
                         <button
                             type="button"
                             className="alloy-os-currentwork__primary-action"
@@ -656,6 +656,10 @@ function SummaryBody({
                         >
                             <CurrentWorkActionButtonContent action={dominant} />
                         </button>
+                    :   null}
+                </div>
+                {helpful.length > 0 || subordinateOutcome ?
+                    <div className="alloy-os-currentwork__primary-stack" data-work-primary-stack="true">
                         {helpful.length > 0 ?
                             <CurrentWorkTourGroupedActions
                                 actions={helpful}
@@ -676,27 +680,30 @@ function SummaryBody({
                         :   null}
                     </div>
                 :   null}
-                <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
-                {recentActivity.length > 0 ?
-                    <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
-                        <p className="alloy-os-currentwork__context-label">Recent activity</p>
-                        <ul className="alloy-os-currentwork__recent-activity-list">
-                            {recentActivity.map((item, index) => (
-                                <li key={`${item.label}-${item.occurredAt ?? index}`}>
-                                    <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
-                                        <CurrentWorkActivityKindIcon kind={item.kind} />
-                                    </span>
-                                    <span className="alloy-os-currentwork__recent-activity-body">
-                                        <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
-                                        {item.occurredAt ?
-                                            <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
-                                        :   null}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                :   null}
+                <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
+                    <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                    {recentActivity.length > 0 ?
+                        <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
+                            <p className="alloy-os-currentwork__context-label">Recent activity</p>
+                            <ul className="alloy-os-currentwork__recent-activity-list">
+                                {recentActivity.map((item, index) => (
+                                    <li key={`${item.label}-${item.occurredAt ?? index}`}>
+                                        <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
+                                            <CurrentWorkActivityKindIcon kind={item.kind} />
+                                        </span>
+                                        <span className="alloy-os-currentwork__recent-activity-body">
+                                            <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
+                                            {item.occurredAt ?
+                                                <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
+                                            :   null}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    :   null}
+                </div>
+
                 {workId ?
                     <div
                         className="mt-2 flex flex-wrap items-center gap-2"

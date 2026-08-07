@@ -126,16 +126,18 @@ describe("Contact Family → Communications loop", () => {
 
     it("What's Next presents dominant action separately from supporting commands", () => {
         const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
-        expect(card).toContain("alloy-os-currentwork__primary-stack");
+        expect(card).toContain("alloy-os-currentwork__context-action-row");
         expect(card).toContain("data-work-primary-action");
         expect(card).toContain("CurrentWorkTourGroupedActions");
         expect(card).toContain("CurrentWorkContextStrip");
         expect(card).toContain("View activity");
         expect(card).toContain("data-work-recent-activity");
+        expect(card).toContain("data-work-still-activity-row");
         expect(card).not.toContain("View details →");
         const strip = read("components/admin/focusPanel/cards/CurrentWorkContextStrip.tsx");
         expect(strip).toContain("formatTaskDueDate");
-        expect(strip).toContain("alloy-os-currentwork__context-label");
+        expect(strip).toContain("alloy-os-currentwork__context-card");
+        expect(strip).not.toContain("Results that advance");
         expect(strip).not.toContain("context-purpose");
         const focused = read("components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx");
         expect(focused).toContain("alloy-os-currentwork__primary-stack");

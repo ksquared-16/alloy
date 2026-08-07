@@ -6,6 +6,7 @@ import {
     isTourPresentationActionKey,
     partitionTourGroupedActions,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
+import { withTourInvitationCompanionRefs } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkTemplateConfig";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 
@@ -84,6 +85,20 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
         expect(card).toContain("CurrentWorkTourGroupedActions");
         expect(workspace).toContain("CurrentWorkTourGroupedActions");
         expect(read("components/admin/focusPanel/cards/CurrentWorkTourGroupedActions.tsx")).toContain("Tour ▾");
+    });
+
+    it("adds Send Tour Invitation beside Schedule Tour in helpful refs", () => {
+        expect(
+            withTourInvitationCompanionRefs([{ action_ref: "schedule_tour" }])?.map((r) => r.action_ref),
+        ).toEqual(["schedule_tour", "send_tour_invitation"]);
+        expect(
+            withTourInvitationCompanionRefs([
+                { action_ref: "schedule_tour" },
+                { action_ref: "send_tour_invitation" },
+            ])?.map((r) => r.action_ref),
+        ).toEqual(["schedule_tour", "send_tour_invitation"]);
+        const defaults = read("lib/lifecycle/defaultEnrollmentStageOperatingPlans.ts");
+        expect(defaults).toContain('action_ref: "send_tour_invitation"');
     });
 
     it("Send Tour Invitation opens QuickMessage compose", () => {

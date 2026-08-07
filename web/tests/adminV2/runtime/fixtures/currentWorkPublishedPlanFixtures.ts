@@ -14,6 +14,7 @@ function enrollmentLeadActionCatalog(): StageActionCatalogV1 {
         version: 1,
         candidate_actions: [
             { action_key: "schedule_tour", recommendation: "recommended" },
+            { action_key: "send_tour_invitation", recommendation: "ready" },
             { action_key: "close_lead", recommendation: "context_dependent" },
             { action_key: "quick_message", recommendation: "ready" },
         ],
@@ -32,6 +33,7 @@ export function applyEnrollmentLeadWorkTemplateActions(plan: StageOperatingPlanV
                 primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
                 helpful_actions: [
                     { action_ref: "schedule_tour" },
+                    { action_ref: "send_tour_invitation" },
                     { action_ref: "quick_message" },
                     { action_ref: "add_child" },
                     { action_ref: "send_form" },

@@ -6809,38 +6809,47 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__context {
   display: flex;
   flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.alloy-os-currentwork__context-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: 8px;
-  padding-bottom: 2px;
-  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
-  margin-bottom: 2px;
 }
 
-.alloy-os-currentwork__context-rows {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.alloy-os-currentwork__context-action-row > .alloy-os-currentwork__primary-action {
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 2.25rem;
+  white-space: nowrap;
 }
 
-/* Labeled context chips — soft fill + Bend Pine left rail. */
-.alloy-os-currentwork__context-row {
+.alloy-os-currentwork__context-card {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 10px;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px 18px;
+  min-width: 0;
+  flex: 1 1 12rem;
+  padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, var(--alloy-os-border, #dde3eb));
-  border-left: 3px solid var(--alloy-os-bend-pine, #00a283);
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, #fff);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  background: #fff;
   box-sizing: border-box;
 }
 
-.alloy-os-currentwork__context-rows > .alloy-os-currentwork__context-row:first-child {
-  margin-top: 0;
-}
-
-.alloy-os-currentwork__context > .alloy-os-currentwork__context-row[data-work-possible-outcomes="true"] {
-  margin: 0;
+.alloy-os-currentwork__context-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .alloy-os-currentwork__context-label {
@@ -6859,11 +6868,30 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
 
+.alloy-os-currentwork__still-activity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: start;
+  margin-top: 2px;
+}
+
+.alloy-os-currentwork__still-activity-row > :only-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .alloy-os-currentwork__still-activity-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .alloy-os-currentwork__recent-activity {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 4px;
+  min-width: 0;
+  margin-top: 0;
 }
 
 .alloy-os-currentwork__recent-activity-list {

@@ -78,6 +78,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 primary_action: { action_ref: "quick_message", override_label: "Contact Family" },
                 helpful_actions: [
                     { action_ref: "schedule_tour" },
+                    { action_ref: "send_tour_invitation" },
                     { action_ref: "send_form" },
                 ],
                 outcome_refs: [
