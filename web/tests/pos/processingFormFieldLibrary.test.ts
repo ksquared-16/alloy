@@ -192,6 +192,59 @@ describe("library composition", () => {
         expect(shown?.meta).toContain("cannot be captured by a form");
     });
 
+    it("never offers the same underlying field twice", () => {
+        // The palette speaks bare entity keys (`person`/`first_name`); the registry's own field_key
+        // is prefixed (`guardian_first_name`). Joining on entity+field_key silently missed, so every
+        // palette rule fell through to an unbound offer AND the curated overlay re-added the same
+        // field under a second label — two "first name" rows for parents, three for guardian email.
+        for (const stage of LIFECYCLE_STAGE_ORDER) {
+            const { groups } = libraryForStage(stage);
+            const items = groups.flatMap((g) => g.items);
+
+            const registryIds = items
+                .filter((i) => i.add.kind === "registry")
+                .map((i) => (i.add as { registryId: string }).registryId);
+            expect(new Set(registryIds).size, `${stage}: duplicate registry field offered twice`).toBe(
+                registryIds.length
+            );
+
+            const bindings = items
+                .filter((i) => i.add.kind === "bound")
+                .map((i) => {
+                    const a = i.add as { entityType: string; fieldKey: string };
+                    return `${a.entityType}:${a.fieldKey}`;
+                });
+            expect(new Set(bindings).size, `${stage}: duplicate entity binding offered twice`).toBe(
+                bindings.length
+            );
+
+            const labels = items.map((i) => i.label.toLowerCase());
+            expect(new Set(labels).size, `${stage}: duplicate label — ${labels.join(", ")}`).toBe(labels.length);
+        }
+    });
+
+    it("resolves platform rules to their registry field rather than an unbound guess", () => {
+        const { groups } = libraryForStage("lead");
+        const byRule = new Map(groups.flatMap((g) => g.items).map((i) => [i.ruleId, i]));
+
+        // The exact join that was broken: bare person/child keys → prefixed registry ids.
+        expect(byRule.get("person:first_name")?.add).toEqual({ kind: "registry", registryId: "guardian_first_name" });
+        expect(byRule.get("person:email")?.add).toEqual({ kind: "registry", registryId: "guardian_email" });
+        expect(byRule.get("child:first_name")?.add).toEqual({ kind: "registry", registryId: "child_first_name" });
+        expect(byRule.get("child:desired_schedule")?.add).toEqual({ kind: "registry", registryId: "schedule_type" });
+    });
+
+    it("a curated label may rename a field but never move it to another group", () => {
+        const { groups } = libraryForStage("lead");
+        const parent = groups.find((g) => g.group === "parent");
+        // guardian_email is curated as both "Parent email" (communication) and "Emergency email"
+        // (emergency_contacts). Neither framing may pull the parent-email requirement out of Parent.
+        expect(parent?.items.map((i) => i.ruleId)).toContain("person:email");
+        expect(groups.find((g) => g.group === "emergency_contacts")?.items.map((i) => i.ruleId) ?? []).not.toContain(
+            "person:email"
+        );
+    });
+
     it("does not emit duplicate picker ids", () => {
         for (const stage of LIFECYCLE_STAGE_ORDER) {
             const { groups } = libraryForStage(stage);

@@ -121,11 +121,11 @@ export default function ProcessingFormBuilderLibraryPanel({
             onClick={onClose}
         >
             <div
-                className="max-h-[min(70vh,560px)] w-full max-w-lg overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
+                className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
                 data-testid="processing-form-builder-library"
                 onClick={(e) => e.stopPropagation()}
             >
-                <header className="border-b border-alloy-stone/10 px-4 py-3">
+                <header className="shrink-0 border-b border-alloy-stone/10 px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                         <div>
                             <p className="text-sm font-semibold text-alloy-midnight">{sectionLabel}</p>
@@ -154,7 +154,7 @@ export default function ProcessingFormBuilderLibraryPanel({
                         </button>
                     </div>
                 </header>
-                <div className="border-b border-alloy-stone/10 px-4 py-2">
+                <div className="shrink-0 border-b border-alloy-stone/10 px-4 py-2">
                     <input
                         type="search"
                         value={search}
@@ -164,46 +164,56 @@ export default function ProcessingFormBuilderLibraryPanel({
                         data-testid="form-builder-library-search"
                     />
                 </div>
-                <div className="max-h-[min(50vh,420px)] overflow-y-auto p-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3" data-library-scroll>
                     {tab === "alloy-fields" ? (
                         derivedGroups ? (
                             derivedGroups.length === 0 ? (
-                                <p className="py-6 text-center text-[12px] text-alloy-midnight/45">No Alloy fields match your search.</p>
+                                <p className="px-2 py-4 text-[12px] text-alloy-midnight/45">No fields match your search.</p>
                             ) : (
                                 derivedGroups.map((group) => (
-                                    <section key={group.group} className="mb-4">
-                                        <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">{group.label}</h3>
-                                        <ul className="space-y-1">
-                                            {group.items.map((item) => (
-                                                <li key={item.id}>
-                                                    <button
-                                                        type="button"
-                                                        data-library-item={`alloy-${item.id}`}
-                                                        data-library-item-tier={item.tier ?? undefined}
-                                                        data-library-item-unsupported={item.captureUnsupported ? "true" : undefined}
-                                                        disabled={item.captureUnsupported}
-                                                        onClick={() => onPickLibraryField?.(item)}
-                                                        className="flex w-full flex-col rounded-lg border border-alloy-stone/15 px-3 py-2 text-left hover:border-alloy-bend-pine/30 hover:bg-alloy-bend-pine/[0.04] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:border-alloy-stone/15 disabled:hover:bg-transparent"
-                                                    >
-                                                        <span className="flex flex-wrap items-baseline gap-1.5">
-                                                            <span className="text-[12px] font-semibold text-alloy-midnight">{item.label}</span>
+                                    <section key={group.group} className="mb-4" data-library-category={group.group}>
+                                        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">{group.label}</p>
+                                        <ul className="space-y-0.5">
+                                            {group.items.map((item) =>
+                                                item.captureUnsupported ? (
+                                                    <li key={item.id}>
+                                                        <div
+                                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left opacity-60"
+                                                            data-library-unavailable={item.id}
+                                                            title={item.meta}
+                                                        >
+                                                            <span className="text-[11px] text-alloy-stone/50">—</span>
+                                                            <span className="flex-1 text-[12px] text-alloy-midnight/55">{item.label}</span>
+                                                            <span className="shrink-0 text-[9px] text-alloy-midnight/40">Not form-capturable</span>
+                                                        </div>
+                                                    </li>
+                                                ) : (
+                                                    <li key={item.id}>
+                                                        <button
+                                                            type="button"
+                                                            data-library-item={`alloy-${item.id}`}
+                                                            data-library-item-tier={item.tier ?? undefined}
+                                                            onClick={() => onPickLibraryField?.(item)}
+                                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-alloy-bend-pine/[0.06]"
+                                                        >
+                                                            <span className="text-[11px] text-alloy-bend-pine">+</span>
+                                                            <span className="flex-1 truncate text-[12px] text-alloy-midnight/80">{item.label}</span>
                                                             {item.tier ? (
                                                                 <span
-                                                                    className={
+                                                                    className={`shrink-0 rounded-full px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide ${
                                                                         item.tier === "required"
-                                                                            ? "rounded-full border border-alloy-ember/25 bg-alloy-ember/[0.07] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-alloy-ember"
-                                                                            : "rounded-full border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.07] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-alloy-bend-pine"
-                                                                    }
+                                                                            ? "bg-alloy-ember/[0.10] text-alloy-ember"
+                                                                            : "bg-alloy-bend-pine/[0.10] text-alloy-bend-pine"
+                                                                    }`}
                                                                     title={TIER_BADGE[item.tier]}
                                                                 >
                                                                     {item.tier}
                                                                 </span>
                                                             ) : null}
-                                                        </span>
-                                                        <span className="text-[10px] text-alloy-midnight/45">{item.meta}</span>
-                                                    </button>
-                                                </li>
-                                            ))}
+                                                        </button>
+                                                    </li>
+                                                )
+                                            )}
                                         </ul>
                                     </section>
                                 ))

@@ -1,5 +1,10 @@
 "use client";
 
+import {
+    registryEntryForOffer,
+    type ProcessingLibraryFieldOffer,
+    type ProcessingLibraryGroupOffer,
+} from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormFieldLayoutWidth, FormFieldSource, FormSchemaV1 } from "@/lib/forms/schema";
 import { updateField } from "@/lib/forms/formBuilderSchema";
 import {
@@ -76,11 +81,61 @@ function storeSubjectFromField(field: FormField): string {
     return "processing_only";
 }
 
-function canonicalFieldsForSubject(subject: string): ProcessingBuilderCanonicalField[] {
+/**
+ * Destination options for "Store answer in".
+ *
+ * Built from the stage-derived field library when it is available, so the dropdown can map to
+ * everything the process can require (including org custom fields). It used to read only
+ * PROCESSING_BUILDER_CANONICAL_FIELDS — 17 curated entries — so most fields simply could not be
+ * mapped, and a question added from the library resolved to no option and looked unlinked.
+ */
+function destinationOptionsForSubject(
+    subject: string,
+    fieldLibrary: ProcessingLibraryGroupOffer[] | null | undefined
+): { id: string; label: string; source: FormFieldSource | undefined }[] {
     const groups = STORE_GROUP_MAP[subject];
     if (!groups) return [];
     const allowed = new Set(groups);
-    return PROCESSING_BUILDER_CANONICAL_FIELDS.filter((f) => allowed.has(f.group));
+
+    if (fieldLibrary?.length) {
+        const out: { id: string; label: string; source: FormFieldSource | undefined }[] = [];
+        for (const group of fieldLibrary) {
+            if (!allowed.has(group.group)) continue;
+            for (const item of group.items) {
+                if (item.captureUnsupported) continue;
+                const source = fieldSourceFromOffer(item);
+                if (!source) continue;
+                if (out.some((o) => o.id === destinationIdForSource(source))) continue;
+                out.push({ id: destinationIdForSource(source), label: item.label, source });
+            }
+        }
+        if (out.length) return out;
+    }
+
+    return PROCESSING_BUILDER_CANONICAL_FIELDS.filter((f) => allowed.has(f.group)).map((c) => {
+        const source = fieldSourceFromCanonical(c);
+        return {
+            id: source ? destinationIdForSource(source) : c.id,
+            label: c.pickerLabel,
+            source,
+        };
+    });
+}
+
+/** Identity of a destination is its binding, not a picker id — two labels can share one field. */
+function destinationIdForSource(source: FormFieldSource): string {
+    return `${source.entity_type}.${source.field_key}`;
+}
+
+function fieldSourceFromOffer(offer: ProcessingLibraryFieldOffer): FormFieldSource | undefined {
+    if (offer.add.kind === "bound") {
+        return { entity_type: offer.add.entityType, field_key: offer.add.fieldKey };
+    }
+    const entry = registryEntryForOffer(offer);
+    if (!entry) return undefined;
+    return entry.shared_value_key
+        ? { entity_type: entry.entity_type, field_key: entry.field_key, shared_value_key: entry.shared_value_key }
+        : { entity_type: entry.entity_type, field_key: entry.field_key };
 }
 
 function fieldSourceFromCanonical(canonical: ProcessingBuilderCanonicalField): FormFieldSource | undefined {
@@ -91,20 +146,26 @@ function fieldSourceFromCanonical(canonical: ProcessingBuilderCanonicalField): F
         : { entity_type: entry.entity_type, field_key: entry.field_key };
 }
 
-function canonicalIdFromField(field: FormField): string {
-    const key = field.field_source?.field_key;
-    if (!key || key === "custom" || key === "unmapped") return "";
-    const match = PROCESSING_BUILDER_CANONICAL_FIELDS.find((c) => c.registryId === key || c.id === key);
-    return match?.id ?? "";
+/**
+ * A field added from the library is ALREADY bound — reflect that binding directly instead of
+ * hunting for a curated picker entry that may not exist. Matching on the binding is what makes
+ * "select an existing field" show as linked without a second mapping step.
+ */
+function selectedDestinationId(field: FormField): string {
+    const source = field.field_source;
+    const key = source?.field_key;
+    if (!source || !key || key === "custom" || key === "unmapped") return "";
+    return destinationIdForSource(source);
 }
 
-function fieldSourceForSubjectAndCanonical(
+function fieldSourceForSubjectAndDestination(
     field: FormField,
     subject: string,
-    canonicalId: string
+    destinationId: string,
+    options: { id: string; source: FormFieldSource | undefined }[]
 ): FormFieldSource | undefined {
     if (subject === "processing_only") return undefined;
-    if (!canonicalId) {
+    if (!destinationId) {
         const entity_type =
             subject === "child"
                 ? "child"
@@ -117,9 +178,7 @@ function fieldSourceForSubjectAndCanonical(
                       : "custom";
         return { entity_type, field_key: "custom" };
     }
-    const canonical = PROCESSING_BUILDER_CANONICAL_FIELDS.find((c) => c.id === canonicalId);
-    if (!canonical) return undefined;
-    return fieldSourceFromCanonical(canonical);
+    return options.find((o) => o.id === destinationId)?.source;
 }
 
 type Props = {
@@ -129,6 +188,8 @@ type Props = {
     mutate: (fn: (s: FormSchemaV1) => FormSchemaV1) => void;
     onRemove: () => void;
     onOpenDistribution?: () => void;
+    /** Stage-derived library so destinations cover everything the process can require. */
+    fieldLibrary?: ProcessingLibraryGroupOffer[] | null;
 };
 
 export default function ProcessingFormQuestionInspector({
@@ -138,10 +199,11 @@ export default function ProcessingFormQuestionInspector({
     mutate,
     onRemove,
     onOpenDistribution,
+    fieldLibrary,
 }: Props) {
     const storeSubject = storeSubjectFromField(field);
-    const storeFieldOptions = canonicalFieldsForSubject(storeSubject);
-    const selectedCanonicalId = canonicalIdFromField(field);
+    const storeFieldOptions = destinationOptionsForSubject(storeSubject, fieldLibrary);
+    const selectedCanonicalId = selectedDestinationId(field);
     const layoutWidth: FormFieldLayoutWidth =
         field.layout_width === "half" || field.layout_width === "third" || field.layout_width === "quarter"
             ? field.layout_width
@@ -238,7 +300,7 @@ export default function ProcessingFormQuestionInspector({
                                         mutate((s) => {
                                             const cur = s.fields.find((f) => f.id === field.id);
                                             if (!cur) return s;
-                                            const fs = fieldSourceForSubjectAndCanonical(cur, subject, "");
+                                            const fs = fieldSourceForSubjectAndDestination(cur, subject, "", storeFieldOptions);
                                             return updateField(s, field.id, { field_source: fs });
                                         })
                                     }
@@ -261,17 +323,17 @@ export default function ProcessingFormQuestionInspector({
                                             mutate((s) => {
                                                 const cur = s.fields.find((f) => f.id === field.id);
                                                 if (!cur) return s;
-                                                const fs = fieldSourceForSubjectAndCanonical(cur, storeSubject, canonicalId);
+                                                const fs = fieldSourceForSubjectAndDestination(cur, storeSubject, canonicalId, storeFieldOptions);
                                                 return updateField(s, field.id, { field_source: fs });
                                             })
                                         }
                                         placeholder="Choose a field…"
-                                        options={storeFieldOptions.map((c) => ({ value: c.id, label: c.pickerLabel }))}
+                                        options={storeFieldOptions.map((c) => ({ value: c.id, label: c.label }))}
                                         testId="form-builder-destination-field"
                                     />
                                 ) : (
                                     <p className="text-[12px] font-medium text-alloy-midnight">
-                                        {storeFieldOptions.find((c) => c.id === selectedCanonicalId)?.pickerLabel ?? "—"}
+                                        {storeFieldOptions.find((c) => c.id === selectedCanonicalId)?.label ?? "—"}
                                     </p>
                                 )}
                             </div>
