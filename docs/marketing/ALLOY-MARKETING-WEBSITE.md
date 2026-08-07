@@ -35,6 +35,15 @@ Actual Alloy product screenshots are used for product sections.
 
 Follow brand doctrine for expression. Follow this document for structure.
 
+## Diagram / banner rendering (2026-08-07)
+
+Audit: [`ALLOY-MARKETING-ASSET-RENDERING-AUDIT.md`](./ALLOY-MARKETING-ASSET-RENDERING-AUDIT.md)
+
+- **SVG / native HTML** for diagrams, process flows, banners, icon systems, line art, and anything with labels or small type.
+- **Raster** only for richer hero / photographic / composited scenes where thin-line fidelity is not critical.
+- Never bake small marketing copy into raster images.
+- If raster is unavoidable: export ~2× max CSS size; prefer lossless PNG for line art; never upscale above intrinsic size.
+
 ---
 
 # 2. BRAND ASSET PLACEMENT

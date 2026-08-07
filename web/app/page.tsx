@@ -1,11 +1,15 @@
 import CTAButton from "@/components/marketing/CTAButton";
+import BusinessProcessFlow from "@/components/marketing/BusinessProcessFlow";
 import HeroCapabilityStrip from "@/components/marketing/HeroCapabilityStrip";
-import MarketingAssetImage from "@/components/marketing/MarketingAssetImage";
+import HeroOrbitIllustration from "@/components/marketing/HeroOrbitIllustration";
 import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
+import ProcessBenefitsStrip from "@/components/marketing/ProcessBenefitsStrip";
 import SectionShell from "@/components/marketing/SectionShell";
+import ValuePropBanner from "@/components/marketing/ValuePropBanner";
 import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: {
@@ -23,7 +27,7 @@ function SectionHeading({
   className = "",
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   align?: "left" | "center";
   eyebrow?: string;
   className?: string;
@@ -33,7 +37,13 @@ function SectionHeading({
     <div className={`marketing-copy-measure ${alignClass} ${className}`.trim()}>
       {eyebrow ? <p className="marketing-eyebrow mb-2.5">{eyebrow}</p> : null}
       <h2 className="marketing-section-headline">{title}</h2>
-      {subtitle ? <p className="marketing-body-lg mt-3.5">{subtitle}</p> : null}
+      {subtitle ? (
+        typeof subtitle === "string" ? (
+          <p className="marketing-body-lg mt-3.5">{subtitle}</p>
+        ) : (
+          <div className="marketing-body-lg mt-3.5 space-y-2.5">{subtitle}</div>
+        )
+      ) : null}
     </div>
   );
 }
@@ -85,8 +95,8 @@ export default function HomePage() {
       {/* A. Hero */}
       <SectionShell
         density="compact"
-        className="!pt-8 md:!pt-10 lg:!pt-11 !pb-8 md:!pb-10"
-        innerClassName="grid items-center gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)] lg:gap-8 xl:gap-10"
+        className="!pt-6 md:!pt-8 lg:!pt-9 !pb-4 md:!pb-5 overflow-visible"
+        innerClassName="grid items-center gap-5 overflow-visible lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] lg:gap-5 xl:gap-6"
       >
         <div>
           <p className="marketing-eyebrow">The modern operating system for operations</p>
@@ -94,7 +104,7 @@ export default function HomePage() {
             Most software stores information.{" "}
             <span className="text-alloy-bend-pine">Alloy moves work forward.</span>
           </h1>
-          <div className="marketing-body-lg marketing-copy-measure mt-4 space-y-2.5">
+          <div className="marketing-body-lg mt-4 max-w-[50.375rem] space-y-2.5">
             <p>Work doesn&apos;t happen inside one application.</p>
             <p>
               It moves between people, decisions, communications, documents, approvals, and Business
@@ -105,63 +115,82 @@ export default function HomePage() {
               software.
             </p>
           </div>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <CTAButton href="/contact">Book a Demo</CTAButton>
-            <CTAButton href="/platform" variant="secondary">
-              Explore the Platform
+          <div className="mt-5 grid w-fit grid-cols-2 gap-3">
+            <CTAButton href="/contact" className="w-full">
+              Book a Demo
+            </CTAButton>
+            <CTAButton href="/platform" variant="secondary" className="w-full">
+              Explore
             </CTAButton>
           </div>
         </div>
-        <MarketingAssetImage
-          src={MARKETING_ASSETS.hero.src}
-          alt={MARKETING_ASSETS.hero.alt}
-          aspectClassName="aspect-[8/5] lg:min-h-[22rem] xl:min-h-[24rem]"
-          className="lg:-mr-2 xl:-mr-4"
-          priority
-        />
+        <HeroOrbitIllustration className="origin-center lg:scale-[1.18] lg:-mr-6 xl:scale-[1.2] xl:-mr-8" />
       </SectionShell>
 
       {/* B. Capability strip */}
       <HeroCapabilityStrip />
 
-      {/* C. Problem */}
-      <SectionShell variant="muted" density="compact">
-        <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)] lg:gap-8 xl:gap-10">
-          <MarketingAssetImage
-            src={MARKETING_ASSETS.disconnectedToUnified.src}
-            alt={MARKETING_ASSETS.disconnectedToUnified.alt}
-            aspectClassName="aspect-[1024/456] w-full"
-            className="order-2 -mx-1 lg:order-1 lg:-ml-2 lg:-mr-0 xl:-ml-4"
-            sizes="(max-width: 1023px) 100vw, 65vw"
-            unoptimized
-            priority
-          />
-          <div className="order-1 lg:order-2">
-            <SectionHeading
-              title="Stop stitching software together"
-              subtitle="CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets often live apart. People become the integration layer. Alloy replaces that patchwork with one operating system that moves work forward."
-            />
+      {/* C. Problem + value props — full-width copy + banner */}
+      <SectionShell
+        variant="default"
+        density="compact"
+        className="!bg-neutral-50 !py-4 md:!py-5"
+      >
+        <div className="flex flex-col items-center gap-5 overflow-visible">
+          <div className="w-full text-center">
+            <h2 className="marketing-section-headline mx-auto">
+              Stop stitching software together
+            </h2>
+            <div className="marketing-body-lg mx-auto mt-3.5 w-full space-y-2.5 text-left">
+              <p className="mx-auto max-w-2xl">
+                CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets often live
+                apart.
+              </p>
+              <p className="mx-auto max-w-3xl">
+                <strong className="font-semibold text-alloy-midnight-forge">
+                  People become the integration layer.
+                </strong>{" "}
+                <strong className="font-semibold text-alloy-bend-pine">
+                  Alloy replaces that patchwork with one operating system that moves work forward.
+                </strong>
+              </p>
+            </div>
+          </div>
+          <div className="mx-auto mt-3 w-full max-w-4xl md:mt-4">
+            <ValuePropBanner />
           </div>
         </div>
       </SectionShell>
 
       {/* D. Three primary pillars — one chapter */}
       <SectionShell density="compact">
-        <div className="mb-2 max-w-2xl md:mb-4">
-          <p className="marketing-eyebrow">How Alloy moves work forward</p>
-          <h2 className="marketing-section-headline mt-2.5">
-            Business Processes, Processing, and Operational Intelligence
-          </h2>
+        <p className="marketing-eyebrow mb-4 md:mb-5">How Alloy moves work forward</p>
+        <div className="marketing-pillar-row border-t border-alloy-midnight-forge/[0.06] first:border-t-0 first:pt-0">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="marketing-eyebrow">Business Processes</p>
+            <h3 className="marketing-section-headline mt-2.5">
+              Organize work from start to finish
+            </h3>
+            <p className="marketing-body-lg mt-3.5">
+              Stages guide the work. Decisions move it forward. Outcomes create the next step.
+            </p>
+            <p className="mt-5">
+              <Link href="/platform" className="text-sm font-semibold text-alloy-bend-pine hover:underline">
+                Explore Business Processes →
+              </Link>
+            </p>
+          </div>
+          <div className="mx-auto mt-5 w-full max-w-5xl">
+            <BusinessProcessFlow />
+            <div
+              aria-hidden
+              className="mx-auto mt-8 mb-6 h-px w-full max-w-4xl bg-alloy-stone"
+            />
+            <div className="rounded-xl bg-neutral-50/80 px-3 py-5 md:px-4 md:py-6">
+              <ProcessBenefitsStrip />
+            </div>
+          </div>
         </div>
-        <PillarRow
-          eyebrow="Business Processes"
-          title="Built around Business Processes"
-          body="Business Processes organize how work advances — stages, decisions, requirements, and outcomes — so every action has a place to land and a next step to take."
-          assetKey={MARKETING_ASSETS.businessProcesses.key}
-          alt={MARKETING_ASSETS.businessProcesses.alt}
-          linkHref="/platform"
-          linkLabel="Explore Business Processes →"
-        />
         <PillarRow
           eyebrow="Processing"
           title="Processing turns information into action"
@@ -210,7 +239,7 @@ export default function HomePage() {
       </SectionShell>
 
       {/* F. Operating-system statement */}
-      <SectionShell density="compact" className="!py-10 md:!py-12">
+      <SectionShell density="compact" className="!py-6 md:!py-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="marketing-statement-headline">One operating system, endless possibilities</h2>
           <p className="marketing-body-lg mx-auto mt-3 max-w-xl">
@@ -243,7 +272,7 @@ export default function HomePage() {
       </SectionShell>
 
       {/* H. Final CTA */}
-      <SectionShell variant="muted" density="compact" className="!pb-14 md:!pb-16">
+      <SectionShell variant="muted" density="compact" className="!pb-10 md:!pb-12">
         <div className="mx-auto max-w-lg text-center">
           <MarketingAssetPlaceholder
             assetKey={MARKETING_ASSETS.finalCta.key}
