@@ -104,6 +104,11 @@ export function FormLifecycleUsagePanel({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    /**
+     * Operator-opened state wins once they touch the toggle; until then a blocking coverage result
+     * opens itself. A gap the operator has to go looking for is a gap they will not fix.
+     */
+    const [detailsToggledByOperator, setDetailsToggledByOperator] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -215,6 +220,10 @@ export function FormLifecycleUsagePanel({
         presentation &&
         presentation.status !== "empty" &&
         presentation.entity_groups.some((g) => g.rows.length > 0);
+
+    // A blocking result opens its own detail — until the operator expresses a preference.
+    const detailsExpanded =
+        detailsToggledByOperator ? detailsOpen : detailsOpen || presentation?.status === "missing_required";
 
     // A brand-new form (no fields yet) shouldn't read as a record-blocking error. R1 now
     // configures the business process by default, so an empty form would otherwise show
@@ -339,6 +348,25 @@ export function FormLifecycleUsagePanel({
                         :   presentation.status_message}
                     </p>
 
+                    {/* Name the gaps. A warning that says "missing required fields" without saying
+                        which ones leaves the operator guessing at a list the engine already has. */}
+                    {!emptyForm && presentation.missing_required_labels.length ?
+                        <ul className="mt-2 space-y-1" data-testid="lifecycle-coverage-missing-required">
+                            {presentation.missing_required_labels.map((label) => (
+                                <li
+                                    key={label}
+                                    className="flex items-baseline gap-1.5 text-sm text-alloy-midnight"
+                                    data-lifecycle-missing-required-label={label}
+                                >
+                                    <span aria-hidden className="text-alloy-ember">
+                                        •
+                                    </span>
+                                    {label}
+                                </li>
+                            ))}
+                        </ul>
+                    :   null}
+
                     {!hasSchema && presentation.status === "empty" ?
                         null
                     : presentation.status === "no_schema" ?
@@ -351,11 +379,14 @@ export function FormLifecycleUsagePanel({
                                 type="button"
                                 className="text-xs font-semibold text-alloy-bend-pine hover:underline"
                                 data-testid="lifecycle-coverage-details-toggle"
-                                onClick={() => setDetailsOpen((v) => !v)}
+                                onClick={() => {
+                                    setDetailsToggledByOperator(true);
+                                    setDetailsOpen((v) => !v);
+                                }}
                             >
-                                {detailsOpen ? "Hide coverage details" : "Show coverage details"}
+                                {detailsExpanded ? "Hide coverage details" : "Show coverage details"}
                             </button>
-                            {detailsOpen ?
+                            {detailsExpanded ?
                                 <div className="mt-2 space-y-3" data-testid="lifecycle-coverage-details">
                                     {presentation.entity_groups.map((group) => (
                                         <div key={group.entity_label}>
@@ -375,6 +406,14 @@ export function FormLifecycleUsagePanel({
                                                                 {" "}
                                                                 · {row.tier_label}
                                                             </span>
+                                                            {row.deferred_note ?
+                                                                <span
+                                                                    className="block text-[11px] text-alloy-midnight/45"
+                                                                    data-lifecycle-coverage-row-deferred="true"
+                                                                >
+                                                                    {row.deferred_note}
+                                                                </span>
+                                                            :   null}
                                                         </span>
                                                         <span
                                                             className={clsx(
