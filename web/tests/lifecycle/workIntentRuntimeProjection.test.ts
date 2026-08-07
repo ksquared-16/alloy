@@ -120,12 +120,15 @@ describe("filterResidualOperationalTasks", () => {
 });
 
 describe("Work Intent Runtime Phase A integration contracts", () => {
-    it("compose wires stage work runtime and filters tasks", () => {
+    it("compose wires stage work runtime and keeps stage-work tasks for Activity Work Items", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
+        const deferred = read("lib/adminV2/viewModel/drawer/opportunity/deferredDetailResource.ts");
         // Stage-work projection ownership moved into the thin shared slice (runs
-        // projectStageWorkRuntime internally); compose still wires the runtime + task filter.
-        expect(compose).toContain("resolveOpportunityStageWorkSlice");
-        expect(compose).toContain("filterResidualOperationalTasks");
+        // projectStageWorkRuntime internally); compose keeps inquiry tasks unfiltered
+        // so Focus Panel Activity → Work Items includes Contact Family.
+        expect(deferred).toContain("resolveOpportunityStageWorkSlice");
+        expect(compose).toContain("tasks_raw");
+        expect(compose).not.toContain("filterResidualOperationalTasks");
         expect(compose).toContain("stage_work_runtime");
         const slice = read("lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice.ts");
         expect(slice).toContain("projectStageWorkRuntime");

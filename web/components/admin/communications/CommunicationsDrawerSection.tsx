@@ -127,6 +127,8 @@ export interface CommunicationsDrawerSectionProps {
     embeddedHeaderMode?: "full" | "description_only";
     /** Focus Panel Activity embed — compact thread-first layout; Command Center modal stays default. */
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    /** Current Work Contact Family: post-send returns to What's Next without opening the thread. */
+    entryContext?: "current_work" | null;
     className?: string;
     /** Opportunity-only: lightweight starter templates when there is no message history yet. */
     opportunityComposeContext?: OpportunityComposeContext | null;
@@ -1449,6 +1451,7 @@ export default function CommunicationsDrawerSection(props: CommunicationsDrawerS
                 initialPreviewVm={props.initialPreviewVm}
                 compactActivityLoading={props.embedded}
                 surfaceVariant={props.surfaceVariant}
+                entryContext={props.entryContext}
             />
         );
     }

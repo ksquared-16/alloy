@@ -26,16 +26,48 @@ describe("enrollment projection stitch — PI ⋈ opportunity ⋈ customer_membe
         expect(b.attributes.subjectActive).toBe(false); // is_active === false
     });
 
-    it("a PI whose context/subject is missing still yields a participant (context fields null)", () => {
-        const [p] = buildEnrollmentParticipants(
-            [{ id: "pi-x", org_id: "org-1", process_key: "enrollment", subject_type: "child", subject_id: "gone", context_id: "missing", stage_key: "tour", state: null, close_reason_key: null }],
+    it("drops PIs whose opportunity context is missing (no ghost Family Leads / Children)", () => {
+        const out = buildEnrollmentParticipants(
+            [
+                {
+                    id: "pi-x",
+                    org_id: "org-1",
+                    process_key: "enrollment",
+                    subject_type: "child",
+                    subject_id: "gone",
+                    context_id: "missing",
+                    stage_key: "tour",
+                    state: null,
+                    close_reason_key: null,
+                },
+            ],
             [],
             [],
         );
-        expect(p.contextStageKey).toBeNull();
-        expect(p.scopeId).toBeNull();
+        expect(out).toEqual([]);
+    });
+
+    it("keeps participants when opportunity exists even if the child member row is gone", () => {
+        const [p] = buildEnrollmentParticipants(
+            [
+                {
+                    id: "pi-x",
+                    org_id: "org-1",
+                    process_key: "enrollment",
+                    subject_type: "child",
+                    subject_id: "gone",
+                    context_id: "opp-1",
+                    stage_key: null,
+                    state: null,
+                    close_reason_key: null,
+                },
+            ],
+            [{ id: "opp-1", stage_key: "lead", status_key: "open", work_unit_id: "wu-1" }],
+            [],
+        );
+        expect(p.scopeId).toBe("wu-1");
         expect(p.attributes.subjectActive).toBe(true); // absent member ⇒ treated active
-        expect(p.participantStageKey).toBe("tour");
+        expect(p.attributes.contextStatusKey).toBe("open");
     });
 });
 

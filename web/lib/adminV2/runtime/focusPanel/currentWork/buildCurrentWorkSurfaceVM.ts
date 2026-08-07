@@ -455,7 +455,7 @@ export function alignTourScheduleActionForBookingState(
     };
 }
 
-/** Config-owned helpful actions: explicit template config first; legacy catalog/header fallback only when undefined. */
+/** Config-owned helpful actions only — never invent from record-header registry placement. */
 function resolveHelpfulActions(args: {
     explicitRefs: CurrentWorkTemplateConfigOverlay["helpful_actions"] | undefined;
     explicitConfigured: boolean;
@@ -467,7 +467,10 @@ function resolveHelpfulActions(args: {
     }
     const filteredConfig = args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
     if (filteredConfig.length > 0) return filteredConfig;
-    return args.fromRegistry.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+    // No Work Template helpful list and no config refs — stay empty rather than inventing
+    // Manage-menu / header placement actions into What's Next.
+    void args.fromRegistry;
+    return [];
 }
 
 /**
@@ -755,7 +758,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   "communications_inline",
                   intentCtx,
               )
-            : classified.communicationActions;
+            : [];
 
     const primaryProjection =
         runtime && actionableWorkItem

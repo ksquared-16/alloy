@@ -31,6 +31,18 @@ function toCreateLeadCtx(
     };
 }
 
+function resolveFieldOptionLabel(
+    fieldKey: string,
+    raw: string,
+    fieldOptions: EffectiveCreateLeadIntakeSpec["fieldOptions"] | undefined
+): string {
+    const options = fieldOptions?.[fieldKey];
+    if (!options?.length) return raw;
+    const hit = options.find((o) => String(o.value) === raw);
+    const label = hit?.label?.trim();
+    return label || raw;
+}
+
 function buildUnderstandingSummary(input: {
     draft: BosCommandDraft;
     effectiveSpec: EffectiveCreateLeadIntakeSpec;
@@ -50,8 +62,13 @@ function buildUnderstandingSummary(input: {
         const note =
             value.evidence.find((e) => e.note)?.note ??
             (value.state === "inferred" ? "Suggested" : "From your note");
-        const display = String(value.value ?? "").trim();
-        if (!display) continue;
+        const raw = String(value.value ?? "").trim();
+        if (!raw) continue;
+        const display = resolveFieldOptionLabel(
+            value.fieldKey,
+            raw,
+            input.effectiveSpec.fieldOptions
+        );
         evidenceNotes.push({
             fieldKey: value.fieldKey,
             label,

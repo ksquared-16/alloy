@@ -46,6 +46,21 @@ function isBlankAdult(record: CreateLeadCommitRecord): boolean {
     return !record.first_name.trim() && !record.last_name.trim() && !record.email.trim() && !record.phone.trim();
 }
 
+/** Incoming fills empty keys only — never clobber operator-entered extras. */
+function mergeExtraPayloadValues(
+    existing: Record<string, string> | null | undefined,
+    incoming: Record<string, string> | null | undefined,
+): Record<string, string> {
+    const out: Record<string, string> = { ...(existing ?? {}) };
+    for (const [key, raw] of Object.entries(incoming ?? {})) {
+        const value = typeof raw === "string" ? raw.trim() : "";
+        if (!value) continue;
+        if ((out[key] ?? "").trim()) continue;
+        out[key] = value;
+    }
+    return out;
+}
+
 function enrichRecordFromIncoming(
     existing: CreateLeadCommitRecord,
     incoming: CreateLeadCommitRecord
@@ -61,6 +76,10 @@ function enrichRecordFromIncoming(
         start_date: existing.start_date || incoming.start_date,
         program_room_cohort_key: existing.program_room_cohort_key || incoming.program_room_cohort_key,
         schedule_type: existing.schedule_type || incoming.schedule_type,
+        extra_payload_values: mergeExtraPayloadValues(
+            existing.extra_payload_values,
+            incoming.extra_payload_values,
+        ),
         source_fact_ids: [
             ...new Set([...(existing.source_fact_ids ?? []), ...(incoming.source_fact_ids ?? [])]),
         ],
@@ -99,6 +118,7 @@ export function mergeCreateLeadCommitSelections(
                 last_name: enriched.last_name,
                 email: enriched.email,
                 phone: enriched.phone,
+                extra_payload_values: enriched.extra_payload_values,
             });
             continue;
         }
@@ -131,6 +151,9 @@ export function mergeCreateLeadCommitSelections(
                 dob: enriched.dob,
                 program_interest: enriched.program_interest,
                 start_date: enriched.start_date,
+                program_room_cohort_key: enriched.program_room_cohort_key,
+                schedule_type: enriched.schedule_type,
+                extra_payload_values: enriched.extra_payload_values,
             });
             continue;
         }

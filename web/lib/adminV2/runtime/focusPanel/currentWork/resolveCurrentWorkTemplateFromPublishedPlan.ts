@@ -371,8 +371,11 @@ export function resolveCurrentWorkTemplateFromPublishedPlan(
             ...(row.override_label?.trim() ? { override_label: row.override_label.trim() } : {}),
         }));
         templateConfig.helpful_actions_explicit = true;
-    } else if (catalogActions.supporting.length) {
-        templateConfig.helpful_actions = catalogActions.supporting;
+    } else {
+        // Config fidelity: do not invent helpful commands from stage catalog when the Work
+        // Template omitted helpful_actions. Empty means empty.
+        templateConfig.helpful_actions = [];
+        templateConfig.helpful_actions_explicit = true;
     }
 
     // Legacy Work Template alternate_paths: parse safely for stored plans but do not

@@ -339,8 +339,17 @@ describe("Current Work operational surface", () => {
         expect(vm.checklist.find((item) => item.key === "program_selected")?.status).toBe("blocked");
     });
 
-    it("places supporting actions on the summary card", () => {
-        const vm = projectCurrentWork(
+    it("places supporting actions from Work Template config, not header invent", () => {
+        const withPublished = projectCurrentWork(
+            baseContext({
+                stageWorkRuntime: enrollmentContactRuntime(),
+                publishedStageInputs: enrollmentPublishedInputs(),
+            }),
+        );
+        expect(withPublished.surface.supportingActions.map((a) => a.key)).toContain("schedule_tour");
+
+        // Config fidelity: record-header secondary slots alone must not invent What's Next helpful.
+        const headerOnly = projectCurrentWork(
             baseContext({
                 stageWorkRuntime: enrollmentContactRuntime(),
                 recordHeaderActions: slots({
@@ -360,8 +369,7 @@ describe("Current Work operational surface", () => {
                 }),
             }),
         );
-
-        expect(vm.surface.supportingActions.map((a) => a.key)).toContain("schedule_tour");
+        expect(headerOnly.surface.supportingActions.map((a) => a.key)).not.toContain("schedule_tour");
     });
 
     it("keeps administrative actions out of operational progression", () => {
@@ -630,7 +638,10 @@ describe("Current Work operational surface", () => {
             "utf8",
         );
 
-        expect(builderSource).not.toMatch(/\bschedule_tour\b/);
+        // Tour booking alignment may rewrite schedule_tour → reschedule_tour (presentation truth),
+        // but the builder must not invent enrollment/billing action catalogs.
+        expect(builderSource).toMatch(/schedule_tour/);
+        expect(builderSource).toContain("alignTourScheduleActionForBookingState");
         expect(builderSource).not.toMatch(/\bclose_lead\b/);
         expect(builderSource).not.toMatch(/\bwaive_fee\b/);
         expect(resolverSource).not.toMatch(/\bschedule_tour\b/);

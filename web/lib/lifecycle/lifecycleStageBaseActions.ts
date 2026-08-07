@@ -7,6 +7,7 @@ export type LifecycleBaseActionKey =
     | "add_child"
     | "send_form"
     | "schedule_tour"
+    | "send_tour_invitation"
     | "waitlist_child"
     | "enroll_child"
     | "close_lead"
@@ -42,6 +43,7 @@ export const LIFECYCLE_BASE_ACTIONS: readonly LifecycleBaseActionDefinition[] = 
     { key: "add_child", label: "Add Child", definition_key: "add_child" },
     { key: "send_form", label: "Send Form", definition_key: "send_form" },
     { key: "schedule_tour", label: "Schedule Tour", definition_key: "schedule_tour" },
+    { key: "send_tour_invitation", label: "Send Tour Invitation", definition_key: "send_tour_invitation" },
     // Domain verbs — process owns available actions; operators never pick a generic
     // "Change Status". Each routes to its own outcome/mutation path (definition keys match
     // platformActionCatalog keys). The generic status commands remain runtime-internal only.

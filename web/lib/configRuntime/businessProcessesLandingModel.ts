@@ -27,7 +27,7 @@ export function buildBusinessProcessesLandingModel(): OrganizationDomainLandingM
             },
             {
                 id: "actions",
-                label: "Actions",
+                label: "Commands",
                 summary: "Action placement matrix for the selected process.",
                 capabilities: ["Action placement", "Process-bound actions"],
                 kind: "configuration",

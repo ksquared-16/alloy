@@ -259,9 +259,11 @@ function buildPrimaryContact(
         ? familyRows.find((r) => r.person_id === primaryPersonId)
         : null;
 
+    // Prefer the resolved primary person's family-row name over stale scalar display fields
+    // so flip-back (A→B→A) does not keep showing B's name after primary_person_id returns to A.
     const name =
-        trimOrNull(record["person.primary_contact_name"]) ??
         trimOrNull(familyPrimary?.name) ??
+        trimOrNull(record["person.primary_contact_name"]) ??
         null;
     if (!name) return null;
 

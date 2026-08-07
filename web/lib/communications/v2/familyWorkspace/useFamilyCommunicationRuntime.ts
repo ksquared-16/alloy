@@ -29,6 +29,12 @@ import {
     threadChannelToWorkspaceMode,
 } from "@/lib/communications/v2/familyWorkspace/threadTopicPresentation";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { dispatchOperationalWorkRefresh } from "@/lib/workItems/operationalWorkRefresh";
+import {
+    buildContactFamilySendSuccessMessage,
+    dispatchContactFamilySendComplete,
+} from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 
 export type FamilyRuntimeTimelineMessage = {
     id?: string | null;
@@ -169,6 +175,11 @@ export type FamilyCommunicationRuntimeInput = {
     initialThreadId?: string | null;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
     compactActivityLoading?: boolean;
+    /**
+     * When `current_work`, a successful confirm-send returns to What's Next
+     * (no auto thread open) and completes Contact Family via the server seam.
+     */
+    entryContext?: "current_work" | null;
 };
 
 export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeInput) {
@@ -425,18 +436,80 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
             if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
             setSending(true);
             setSendError(null);
+            const opportunityId =
+                input.entity?.entityType === "opportunities" ? input.entity.entityId.trim() : "";
+            const fromCurrentWork = input.entryContext === "current_work";
             try {
                 const res = await fetch("/api/admin/communications/family-send", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ customer_id: cust, recipient_person_ids: selectedRecipientIds, channel: liveChannel, subject: subjectDraft, body: bodyDraft, reply_to_thread_id: selectedThreadId, confirm }),
+                    body: JSON.stringify({
+                        customer_id: cust,
+                        recipient_person_ids: selectedRecipientIds,
+                        channel: liveChannel,
+                        subject: subjectDraft,
+                        body: bodyDraft,
+                        reply_to_thread_id: selectedThreadId,
+                        confirm,
+                        ...(opportunityId ? { opportunity_id: opportunityId } : {}),
+                    }),
                 });
-                const data = (await res.json()) as FamilySendResult & { error?: string };
+                const data = (await res.json()) as FamilySendResult & {
+                    error?: string;
+                    contact_attempt_association?: {
+                        associated?: boolean;
+                        task_id?: string;
+                    };
+                };
                 if (!res.ok) { setSendError(data.error ?? "Send failed"); return; }
                 setSendResult(data);
                 if (confirm) {
                     const scope = resolveFamilyRuntimeInvalidateScope(input);
                     if (scope) invalidateDrawerFamilyWorkspaceCache(scope);
+                    const sentRows = data.results.filter((r) => r.status === "sent");
+                    const rosterName =
+                        vm?.recipientGroups
+                            .flatMap((g) => g.recipients)
+                            .find((r) => selectedRecipientIds.includes(r.id))?.displayName
+                        ?? null;
+                    const recipientLabel =
+                        sentRows[0]?.display_name
+                        ?? rosterName
+                        ?? null;
+                    const successMessage = buildContactFamilySendSuccessMessage({
+                        channel: liveChannel,
+                        recipientLabel,
+                    });
+
+                    if (fromCurrentWork) {
+                        // Contact Family entry: stay on Focus Panel — do not open the thread.
+                        setBodyDraft("");
+                        if (!selectedThreadId) setSubjectDraft("");
+                        setSendResult(null);
+                        setSendError(null);
+                        setSendCompleteToken((n) => n + 1);
+                        if (opportunityId) {
+                            dispatchOperationalWorkRefresh({
+                                opportunity_id: opportunityId,
+                                task_id: data.contact_attempt_association?.task_id ?? null,
+                                kind: "complete",
+                            });
+                            dispatchOpportunityDrawerScopedUpdate(opportunityId, "communications_send", [
+                                "activity",
+                                "operational_tasks",
+                            ]);
+                            dispatchContactFamilySendComplete({
+                                opportunity_id: opportunityId,
+                                channel: liveChannel,
+                                recipient_label: recipientLabel,
+                                success_message: successMessage,
+                                task_id: data.contact_attempt_association?.task_id ?? null,
+                                associated: data.contact_attempt_association?.associated === true,
+                            });
+                        }
+                        return;
+                    }
+
                     const priorThreadId = selectedThreadId;
                     const createdThreadId =
                         data.results.find((r) => r.status === "sent" && r.thread_id)?.thread_id ?? null;
@@ -454,6 +527,17 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                     setSendResult(null);
                     setSendError(null);
                     setSendCompleteToken((n) => n + 1);
+                    if (opportunityId) {
+                        dispatchOperationalWorkRefresh({
+                            opportunity_id: opportunityId,
+                            task_id: data.contact_attempt_association?.task_id ?? null,
+                            kind: sentRows.length > 0 ? "complete" : "communications_reply",
+                        });
+                        dispatchOpportunityDrawerScopedUpdate(opportunityId, "communications_send", [
+                            "activity",
+                            "operational_tasks",
+                        ]);
+                    }
                 }
             } catch {
                 setSendError("Send failed");
@@ -461,7 +545,19 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                 setSending(false);
             }
         },
-        [vm, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel, load, input.customerId, input.entity?.entityType, input.entity?.entityId]
+        [
+            vm,
+            selectedRecipientIds,
+            subjectDraft,
+            bodyDraft,
+            selectedThreadId,
+            liveChannel,
+            load,
+            input.customerId,
+            input.entity?.entityType,
+            input.entity?.entityId,
+            input.entryContext,
+        ]
     );
 
     const workspaceModeAvailability = useMemo(

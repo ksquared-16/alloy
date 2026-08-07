@@ -23,6 +23,7 @@ import {
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
+import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -36,6 +37,10 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
+import {
+    ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE,
+    type ContactFamilySendCompleteDetail,
+} from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
@@ -189,6 +194,20 @@ export default function CurrentWorkCard({
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
     }, [openWorkspace, opportunityId]);
+
+    useEffect(() => {
+        const onContactFamilySend = (event: Event) => {
+            const detail = (event as CustomEvent<ContactFamilySendCompleteDetail>).detail;
+            if (!detail || detail.opportunity_id !== opportunityId) return;
+            setHandoffNotice(
+                detail.recipient_label ? `${detail.success_message} · just now` : detail.success_message,
+            );
+            closeActionPanel();
+        };
+        window.addEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
+        return () =>
+            window.removeEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
+    }, [closeActionPanel, opportunityId]);
 
     // Consume one-shot workspace intents (action panel / record outcome) after mount.
     const workspaceIntent = coordination?.currentWorkWorkspace?.intent ?? null;
@@ -610,19 +629,14 @@ function SummaryBody({
                         >
                             <CurrentWorkActionButtonContent action={dominant} />
                         </button>
-                        {helpful.map((action) => (
-                            <button
-                                key={action.key}
-                                type="button"
-                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                data-work-supporting-action={action.key}
-                                onClick={() => onAction(action)}
-                                onMouseEnter={() => onWarm(action)}
-                                onFocus={() => onWarm(action)}
-                            >
-                                <CurrentWorkActionButtonContent action={action} />
-                            </button>
-                        ))}
+                        {helpful.length > 0 ?
+                            <CurrentWorkTourGroupedActions
+                                actions={helpful}
+                                onAction={onAction}
+                                onWarm={onWarm}
+                                variant="summary"
+                            />
+                        :   null}
                         {subordinateOutcome ?
                             <button
                                 type="button"

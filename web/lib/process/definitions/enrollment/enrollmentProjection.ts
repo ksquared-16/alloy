@@ -37,7 +37,13 @@ type PiRow = {
 type OppRow = { id: string; stage_key: string | null; status_key: string | null; work_unit_id: string | null };
 type MemberRow = { id: string; is_active: boolean | null };
 
-/** Pure stitch: PI rows + their opportunity context + customer_member subject → participants. */
+/**
+ * Pure stitch: PI rows ⋈ opportunity context ⋈ customer_member subject → participants.
+ *
+ * Opportunity context is required (inner join). Orphan process_instances whose lead was
+ * deleted must not inflate dashboard Family Leads / Pipeline Children while Work Views
+ * (opportunity-grain queues) correctly show zero.
+ */
 export function buildEnrollmentParticipants(
     piRows: readonly PiRow[],
     opportunities: readonly OppRow[],
@@ -45,19 +51,24 @@ export function buildEnrollmentParticipants(
 ): ProcessParticipant<EnrollmentAttributes>[] {
     const oppById = new Map(opportunities.map((o) => [o.id, o]));
     const memberById = new Map(members.map((m) => [m.id, m]));
-    return piRows.map((pi) => {
+    const out: ProcessParticipant<EnrollmentAttributes>[] = [];
+    for (const pi of piRows) {
         const opp = pi.context_id ? oppById.get(pi.context_id) : undefined;
+        if (!opp) continue;
         const member = memberById.get(pi.subject_id);
-        return buildProcessParticipant<EnrollmentAttributes>(pi, {
-            contextStageKey: opp?.stage_key ?? null,
-            scopeId: opp?.work_unit_id ?? null,
-            attributes: {
-                contextStatusKey: opp?.status_key ?? null,
-                subjectActive: member?.is_active !== false,
-                waitlistRank: null,
-            },
-        });
-    });
+        out.push(
+            buildProcessParticipant<EnrollmentAttributes>(pi, {
+                contextStageKey: opp.stage_key ?? null,
+                scopeId: opp.work_unit_id ?? null,
+                attributes: {
+                    contextStatusKey: opp.status_key ?? null,
+                    subjectActive: member?.is_active !== false,
+                    waitlistRank: null,
+                },
+            }),
+        );
+    }
+    return out;
 }
 
 /** Chunked `.in(...)` so large id sets never silently truncate at PostgREST limits. */
