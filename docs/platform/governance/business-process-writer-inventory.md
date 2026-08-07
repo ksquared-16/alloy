@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-07
+supersedes: []
+---
+
 # Business Process configuration — writer inventory
 
 Law 4 completion. Every code path that can durably write `departments.metadata.lifecycle_builder_v1`,
