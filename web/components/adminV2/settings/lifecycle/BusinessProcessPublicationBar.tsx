@@ -1,15 +1,20 @@
 "use client";
 
 /**
- * Draft / published / runtime, said out loud (Law 4, editor slice 2).
+ * Saved / ready to apply / applied — the operator's three questions.
  *
- * Before this bar the editor had one indicator — "Saved" — covering three different claims:
- * your edit is stored, your edit is published, and runtime is using your edit. Saving now writes a
- * draft and leaves runtime alone, so a single "Saved" would be an outright lie. Each state here is
- * something an operator can act on, and the action set changes with it.
+ * Before this bar the editor had one indicator, "Saved", covering three different claims: your edit
+ * is stored, your edit is live, and the platform is using it. Saving writes a draft and leaves the
+ * running configuration alone, so one "Saved" was an outright lie.
  *
- * Deliberately minimal. This is the truthful publication workflow, not the Process Builder
- * redesign; it should be replaced wholesale when that lands, not extended.
+ * The draft/revision/projection architecture underneath is UNCHANGED and still valuable — an
+ * operator makes several individually incomplete edits before the whole process is safe to run. But
+ * a director should not have to learn its vocabulary to use it. "Publish" became "Apply changes",
+ * and revision numbers moved out of the operator's line of sight into data attributes, where
+ * diagnostics can still read them.
+ *
+ * Deliberately minimal. This is the truthful workflow, not the Process Builder redesign; it should
+ * be replaced wholesale when that lands, not extended.
  */
 
 import { AlertCircle, AlertTriangle, CheckCircle2, RefreshCw, Upload } from "lucide-react";
@@ -32,27 +37,27 @@ const STATUS_CHIP: Record<
     { label: string; className: string; icon: React.ReactNode }
 > = {
     published: {
-        label: "Published",
+        label: "Changes applied",
         className: "bg-alloy-juniper/10 text-alloy-juniper",
         icon: <CheckCircle2 size={11} strokeWidth={2.5} />,
     },
     never_published: {
-        label: "Not published",
+        label: "Not applied yet",
         className: "bg-alloy-forge/10 text-alloy-forge",
         icon: <AlertCircle size={11} strokeWidth={2.5} />,
     },
     unpublished_changes: {
-        label: "Unpublished changes",
+        label: "Changes saved · Ready to apply",
         className: "bg-alloy-ember/10 text-alloy-ember",
         icon: <AlertCircle size={11} strokeWidth={2.5} />,
     },
     publication_blocked: {
-        label: "Publication blocked",
+        label: "Changes saved · Not ready to apply",
         className: "bg-alloy-ember/15 text-alloy-ember",
         icon: <AlertTriangle size={11} strokeWidth={2.5} />,
     },
     draft_conflict: {
-        label: "Draft conflict",
+        label: "Someone else made changes",
         className: "bg-alloy-ember/15 text-alloy-ember",
         icon: <AlertTriangle size={11} strokeWidth={2.5} />,
     },
@@ -134,19 +139,9 @@ export default function BusinessProcessPublicationBar({
                         data-testid="bp-publication-publish"
                     >
                         <Upload size={11} />
-                        {busy ? "Publishing…" : "Publish"}
+                        {busy ? "Applying…" : "Apply changes"}
                     </button>
                 </div>
-            </div>
-
-            {/* Revision provenance: which revision is live, and which one this draft was based on. */}
-            <div className="flex flex-wrap items-center gap-3 text-[10px] text-alloy-midnight/45">
-                <span data-testid="bp-publication-published-revision">
-                    {state.published_revision_number
-                        ? `Runtime: revision ${state.published_revision_number}`
-                        : "Runtime: never published"}
-                </span>
-                <span data-testid="bp-publication-draft-revision">Draft edit #{state.draft_revision}</span>
             </div>
 
             {state.blocking_errors.length ? (

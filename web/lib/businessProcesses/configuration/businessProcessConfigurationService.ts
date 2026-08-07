@@ -58,6 +58,13 @@ export type PublishResult = {
     revisionNumber: number;
     publicationId: string;
     publishedAt: string;
+    /**
+     * True when the request changed nothing because this exact payload was ALREADY live from this
+     * publication lineage. The identity returned is the existing revision, and no revision,
+     * publication, audit event or projection write occurred. Callers use this to say "already
+     * applied" instead of implying a new version was cut.
+     */
+    alreadyPublished: boolean;
 };
 
 /** A stale-draft conflict. Carries both sides so the surface can tell the operator what happened. */
@@ -335,9 +342,11 @@ export async function publishDraft(
 
     if (error) throw translatePublishError(error, draft);
 
-    // The projection changed, so tenant config reads must not keep serving the previous revision.
-    invalidateTenantConfigReadCache(params.orgId);
-    return mapPublishResult(data);
+    const result = mapPublishResult(data);
+    // Only bust the cache when the projection actually moved. A no-op republish leaves the
+    // projection byte-identical, so invalidating would evict warm config for no reason.
+    if (!result.alreadyPublished) invalidateTenantConfigReadCache(params.orgId);
+    return result;
 }
 
 /** Republish a prior revision forward. History is never rewritten. */
@@ -357,8 +366,9 @@ export async function rollbackToRevision(
         p_actor_user_id: params.actorUserId ?? null,
     });
     if (error) throw new Error(error.message);
-    invalidateTenantConfigReadCache(params.orgId);
-    return mapPublishResult(data);
+    const result = mapPublishResult(data);
+    if (!result.alreadyPublished) invalidateTenantConfigReadCache(params.orgId);
+    return result;
 }
 
 /** The latest publication for a department, or null before the first publish. */
@@ -437,6 +447,7 @@ function mapPublishResult(data: unknown): PublishResult {
         revisionNumber: Number(d.revision_number ?? 0),
         publicationId: String(d.publication_id ?? ""),
         publishedAt: String(d.published_at ?? ""),
+        alreadyPublished: d.already_published === true,
     };
 }
 
