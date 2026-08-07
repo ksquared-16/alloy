@@ -357,6 +357,7 @@ BEGIN
             'department_id', p_department_id,
             'revision_id', v_target.id,
             'revision_number', v_target.revision_number,
+            'rolled_back_from_revision_id', v_target.id,
             'publication_id', v_existing_publication.id,
             'audit_event_id', v_existing_publication.audit_event_id,
             'published_at', v_existing_publication.published_at,
@@ -371,11 +372,11 @@ BEGIN
     BEGIN
         INSERT INTO public.business_process_revisions (
             org_id, department_id, revision_number, payload, payload_checksum,
-            source_draft_id, published_by, rolled_back_from_revision_id, published_from_revision_id
+            rolled_back_from_revision_id, published_by, published_from_revision_id
         )
         VALUES (
             p_org_id, p_department_id, v_revision_number, v_target.payload, v_target.payload_checksum,
-            v_target.source_draft_id, p_actor_user_id, v_target.id, v_current_revision_id
+            v_target.id, p_actor_user_id, v_current_revision_id
         )
         RETURNING * INTO v_revision;
     EXCEPTION WHEN unique_violation THEN
@@ -455,6 +456,8 @@ BEGIN
         'department_id', p_department_id,
         'revision_id', v_revision.id,
         'revision_number', v_revision.revision_number,
+        -- Preserved from the original contract: callers may read which revision was restored.
+        'rolled_back_from_revision_id', v_target.id,
         'publication_id', v_publication.id,
         'audit_event_id', v_event_id,
         'published_at', v_publication.published_at,
