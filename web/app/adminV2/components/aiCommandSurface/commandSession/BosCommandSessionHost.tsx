@@ -25,7 +25,7 @@ import { GenericBosCommandSessionBody } from "@/app/adminV2/components/aiCommand
 import { getBosCommandAdapterRegistration } from "@/lib/bos/commandSession/adapters/bosCommandAdapterRegistry";
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
-import { resolveCreatedRecordProcessContextHref } from "@/lib/platform/commands/createLead/resolveCreatedRecordProcessContextHref";
+import { resolveOpenLeadFocusPanelHref } from "@/lib/platform/commands/createLead/resolveOpenLeadFocusPanelHref";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import {
     WS_ACTION_PRIMARY,
@@ -292,34 +292,14 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                     ? String(session.execution.opportunityId ?? "")
                                     : "";
                             void (async () => {
-                                let target = href.trim();
-                                if (
-                                    (!target || target === "/workspace") &&
-                                    createdId &&
-                                    session.invocation.workspace.workUnitId
-                                ) {
-                                    try {
-                                        const res = await fetch(
-                                            `/api/admin/work-units/${encodeURIComponent(session.invocation.workspace.workUnitId)}`,
-                                            { credentials: "include" },
-                                        );
-                                        if (res.ok) {
-                                            const body = (await res.json()) as { key?: string | null };
-                                            const key =
-                                                typeof body.key === "string" && body.key.trim()
-                                                    ? body.key.trim()
-                                                    : null;
-                                            if (key) {
-                                                target = resolveCreatedRecordProcessContextHref({
-                                                    recordId: createdId,
-                                                    workUnitKey: key,
-                                                });
-                                            }
-                                        }
-                                    } catch {
-                                        /* keep target */
-                                    }
-                                }
+                                // Prefer success href; when BOS was started from workspace home
+                                // (no session workUnitId), resolve from the created opportunity.
+                                const target = await resolveOpenLeadFocusPanelHref({
+                                    preferredHref: href,
+                                    opportunityId: createdId,
+                                    sessionWorkUnitId:
+                                        session.invocation.workspace.workUnitId ?? null,
+                                });
                                 if (target) router.push(target);
                             })();
                         }}
@@ -703,29 +683,12 @@ function ProcessingReviewBody(props: {
                         return;
                     }
                     const successCopy = "Lead created";
-                    let workUnitKey: string | null = null;
-                    const workUnitId = props.session.invocation.workspace.workUnitId?.trim() || null;
-                    if (workUnitId) {
-                        try {
-                            const res = await fetch(
-                                `/api/admin/work-units/${encodeURIComponent(workUnitId)}`,
-                                { credentials: "include" },
-                            );
-                            if (res.ok) {
-                                const body = (await res.json()) as { key?: string | null };
-                                workUnitKey =
-                                    typeof body.key === "string" && body.key.trim()
-                                        ? body.key.trim()
-                                        : null;
-                            }
-                        } catch {
-                            workUnitKey = null;
-                        }
-                    }
-                    const focusPanelHref = resolveCreatedRecordProcessContextHref({
-                        recordId: opportunityId,
-                        workUnitKey,
-                        workViewId: null,
+                    // Resolve from created opportunity when session has no Work Unit
+                    // (Create Lead from workspace home) — same canonical Focus Panel seam.
+                    const focusPanelHref = await resolveOpenLeadFocusPanelHref({
+                        opportunityId,
+                        sessionWorkUnitId:
+                            props.session.invocation.workspace.workUnitId ?? null,
                     });
                     props.onSuccess({ opportunityId, focusPanelHref, successCopy });
                 }}
