@@ -42,6 +42,7 @@ import type {
     DecisionPackageV1,
 } from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
+import type { ReasoningCostReport } from "@/lib/trust/reasoning/reasoningStrategy";
 import type { ReasoningContextV1 } from "@/lib/trust/privacy/privacyEngine";
 import { resolvePrivacyPolicy, transformForReasoning } from "@/lib/trust/privacy/privacyEngine";
 import { selectStrategy } from "@/lib/trust/strategy/strategyEngine";
@@ -158,6 +159,19 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
      * `finish()` — the value is the canonical transform's own output.
      */
     let privacyEvidence: DecisionPackagePrivacyReport | null = null;
+
+    /**
+     * Provider execution facts, once a strategy has reported any (Phase 2.5).
+     *
+     * Same ownership shape as `privacyEvidence`: execution-local, assigned once
+     * at the moment the facts exist, read afterwards. `null` means no provider
+     * participated, and telemetry then records nothing rather than zero.
+     *
+     * The runtime does not assemble these — it forwards what the strategy
+     * forwarded from the normalized execution result. Trust persists; the
+     * adapter never writes telemetry itself.
+     */
+    let providerExecution: ReasoningCostReport["provider_execution"] | null = null;
 
     await repository.insertContract(contract);
     await emitTrustEvent({
@@ -430,6 +444,9 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     // existing deterministic strategy behaves exactly as before.
     trace.push("execute_reasoning");
     const reasoning = await selection.strategy.reason({ context, nowIso });
+    // Captured before the cost check below, so a strategy whose COST report is
+    // unusable still records which provider produced that unusable report.
+    providerExecution = reasoning.provider_execution ?? null;
     // A strategy reports what it spent; the runtime never derives a cost. An
     // unusable report is refused rather than repaired — silently recording 0
     // for a NaN would report a provider-backed execution as free.
@@ -602,6 +619,20 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             // the usage row is where provider economics are aggregated (ADR-2).
             provider_cost_units: p.economics.provider_cost_units,
             outcome: p.outcome,
+            // Provider identity and provider-reported usage, when a provider
+            // participated. Omitted entirely otherwise, so a deterministic row
+            // asserts no provider rather than an empty one.
+            ...(providerExecution
+                ? {
+                      provider_key: providerExecution.identity.provider_key,
+                      model_key: providerExecution.identity.model_key ?? null,
+                      model_version: providerExecution.identity.model_version ?? null,
+                      execution_location: providerExecution.identity.execution_location,
+                      input_units: providerExecution.usage?.input_units ?? null,
+                      output_units: providerExecution.usage?.output_units ?? null,
+                      provider_reported_cost_units: providerExecution.usage?.provider_cost_units ?? null,
+                  }
+                : {}),
         });
         await repository.advanceContractLifecycle({
             org_id: p.org_id,
