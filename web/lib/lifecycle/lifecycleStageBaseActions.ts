@@ -21,6 +21,22 @@ export type LifecycleBaseActionDefinition = {
     definition_key: string;
 };
 
+/**
+ * Process Actions may bind Lead (opportunity) or child Enrollment participation (OCM) grains.
+ * Filtering to opportunity-only dropped Waitlist Child / Enroll Child after a successful save.
+ */
+export function isLifecycleProcessActionDefinitionEntityType(
+    entityType: string | null | undefined,
+): boolean {
+    if (entityType == null || !String(entityType).trim()) return true;
+    const t = String(entityType).trim();
+    return (
+        t === "opportunity"
+        || t === "opportunity_customer_member"
+        || t === "opportunity_customer_members"
+    );
+}
+
 export const LIFECYCLE_BASE_ACTIONS: readonly LifecycleBaseActionDefinition[] = [
     { key: "add_person", label: "Add Parent", definition_key: "add_family_member" },
     { key: "add_child", label: "Add Child", definition_key: "add_child" },

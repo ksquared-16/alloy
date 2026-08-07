@@ -5,7 +5,7 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { settingsSlotLabel, settingsSurfaceLabel } from "@/lib/admin/actions/actionPlacementPresentation";
-import { LIFECYCLE_BASE_ACTIONS } from "@/lib/lifecycle/lifecycleStageBaseActions";
+import { LIFECYCLE_BASE_ACTIONS, isLifecycleProcessActionDefinitionEntityType } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import {
     parseLifecycleActionScopeFromConditionConfig,
     type LifecycleActionScope,
@@ -173,7 +173,7 @@ export function buildEnrollmentProcessStageActionRows(
     const byKey = new Map<string, EnrollmentProcessStageActionRow>();
 
     for (const item of items) {
-        if (item.definition.entity_type && item.definition.entity_type !== "opportunity") continue;
+        if (!isLifecycleProcessActionDefinitionEntityType(item.definition.entity_type)) continue;
         const catalog = parseCatalog(item.definition.payload_schema);
         const matchesStage = actionMatchesOperatorStage(stage, catalog);
         const hasPlacements = item.placements.some((p) => p.is_active);
