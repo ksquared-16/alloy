@@ -26,7 +26,11 @@ export default function CurrentWorkTourGroupedActions({
     const { tour, rest } = partitionTourGroupedActions(actions);
     const [open, setOpen] = useState(false);
     const menuId = useId();
+    // Shared click-outside root for both `<li>` (workspace) and `<div>` (summary) hosts.
     const rootRef = useRef<HTMLElement | null>(null);
+    const setRootEl = (el: HTMLElement | null) => {
+        rootRef.current = el;
+    };
 
     useEffect(() => {
         if (!open) return;
@@ -62,7 +66,7 @@ export default function CurrentWorkTourGroupedActions({
                     </li>
                 ))}
                 {tour.length > 0 ?
-                    <li className="relative" ref={(el) => { rootRef.current = el; }}>
+                    <li className="relative" ref={setRootEl}>
                         <button
                             type="button"
                             className="alloy-os-currentwork-workspace__action-row"
@@ -122,7 +126,7 @@ export default function CurrentWorkTourGroupedActions({
                 </button>
             ))}
             {tour.length > 0 ?
-                <div className="relative inline-flex" ref={rootRef as React.RefObject<HTMLDivElement | null>} data-work-tour-grouped="true">
+                <div className="relative inline-flex" ref={setRootEl} data-work-tour-grouped="true">
                     <button
                         type="button"
                         className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
