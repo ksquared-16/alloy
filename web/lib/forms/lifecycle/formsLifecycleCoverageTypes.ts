@@ -1,6 +1,7 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleRequirementsSource } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
+import type { RequirementTiming } from "@/lib/lifecycle/requirementTimingTypes";
 
 /** Forms-friendly entity grouping for coverage UI (Card 3+). */
 export type FormsLifecycleEntityType =
@@ -23,8 +24,19 @@ export type FormsLifecycleFieldRequirement = {
     entityType: FormsLifecycleEntityType;
     fieldKey: string;
     label: string;
+    /**
+     * Effective requiredness *for this form* — `required` means the form must capture it before it
+     * can create records. A process-required rule owned by a later moment lands here as
+     * `recommended` with `deferredTiming` set; see `formRequirementTiming.ts`.
+     */
     requiredness: "required" | "recommended";
     requirementSource: FormsLifecycleRequirementSource;
+    /**
+     * Set when the process configures this rule as required but a later moment owns it, so the form
+     * is not blocked. Carries the configured timing(s) so the UI can say which moment owns it
+     * instead of silently presenting it as merely "recommended".
+     */
+    deferredTiming?: readonly RequirementTiming[];
 };
 
 export type FormsLifecycleRequirementConstraint = {

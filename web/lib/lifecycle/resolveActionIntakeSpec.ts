@@ -23,6 +23,9 @@ import {
     validationRulesForIntakeField,
 } from "@/lib/lifecycle/createLeadIntakeFieldMap";
 import {
+    splitRequiredRulesByFormMoment,
+} from "@/lib/forms/lifecycle/formRequirementTiming";
+import {
     isValidCreateLeadEmail,
     isValidCreateLeadPhone,
 } from "@/lib/admin/actions/createLeadIntakeValidation";
@@ -146,7 +149,15 @@ function buildFieldSpec(
     };
 }
 
-/** create_lead: only explicit record_creation rules block capture; legacy child downgrade preserved. */
+/**
+ * create_lead: only rules whose configured timing includes `record_creation` block capture.
+ *
+ * Delegates to the shared form/action moment resolver (`formRequirementTiming.ts`) so create_lead
+ * and every stage form judge timing by one rule. This is behavior-preserving: at the
+ * `record_creation` moment the shared split reaches the same verdict the hand-rolled policy did —
+ * explicit `record_creation` rules stay required; child-entity rules, rules with any other explicit
+ * timing, and untagged rules (which default to `stage_progress`) all become recommended.
+ */
 function applyCreateLeadIntakePolicy(
     fields: {
         requiredIds: string[];
@@ -154,33 +165,20 @@ function applyCreateLeadIntakePolicy(
     },
     stored: import("@/lib/lifecycle/lifecycleStageRequirementLevels").LifecycleStageFieldRulesStored,
 ): { requiredIds: string[]; recommendedIds: string[] } {
-    const requiredIds: string[] = [];
+    const split = splitRequiredRulesByFormMoment({
+        requiredRuleIds: fields.requiredIds,
+        rules: stored,
+        ruleMeta: stored.rule_meta_v1 ?? null,
+        moment: { kind: "record_creation" },
+    });
+
+    const requiredIds = [...split.blockingRuleIds];
     const recommendedIds = [...fields.recommendedIds];
-    const ruleMeta = stored.rule_meta_v1 ?? null;
-
-    for (const id of fields.requiredIds) {
-        const meta = ruleMeta?.by_rule_id[id];
-        const timings = meta?.timing
-            ? Array.isArray(meta.timing)
-                ? meta.timing
-                : [meta.timing]
-            : null;
-        const isExplicitCreation = timings?.includes("record_creation") ?? false;
-
-        if (isExplicitCreation) {
-            if (!requiredIds.includes(id)) requiredIds.push(id);
-            continue;
-        }
-
-        const binding = lifecycleFieldRuleBinding(id);
-        if (binding?.entity === "child" || !timings) {
-            if (!recommendedIds.includes(id)) recommendedIds.push(id);
-            continue;
-        }
-
+    for (const id of split.deferredRuleIds) {
         if (!recommendedIds.includes(id)) recommendedIds.push(id);
     }
 
+    // Platform floor — a Lead is not a Lead without a name, whatever the tenant configured.
     for (const id of CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS) {
         if (!requiredIds.includes(id)) requiredIds.push(id);
     }
