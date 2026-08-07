@@ -108,9 +108,15 @@ function PreviewBanner() {
 export function FormEmbedClient({
     token,
     showPreviewBanner = false,
+    initialResolve = null,
 }: {
     token: string;
     showPreviewBanner?: boolean;
+    /**
+     * Resolve payload rendered by the server (same shape as `/resolve`), so the first paint already
+     * has the form. Null when the server could not resolve it — bootstrap then fetches as before.
+     */
+    initialResolve?: Record<string, unknown> | null;
 }) {
     const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
     const [message, setMessage] = useState<string | null>(null);
@@ -143,6 +149,9 @@ export function FormEmbedClient({
     }, [submitted]);
 
     const encToken = useMemo(() => encodeURIComponent(token), [token]);
+    // Server-provided payload is good for the FIRST bootstrap only. Re-bootstraps (retry, packet
+    // step advance) must hit the network so they observe current state.
+    const pendingInitialResolve = useRef<Record<string, unknown> | null>(initialResolve);
 
     const bootstrap = useCallback(async () => {
         try {
@@ -158,8 +167,13 @@ export function FormEmbedClient({
             setFamilyChildren([]);
             setChildSlices({});
             setFamilyStepIdx(0);
-            const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
-            const json = (await res.json()) as ResolveOk | ApiErr;
+            const seeded = pendingInitialResolve.current;
+            pendingInitialResolve.current = null;
+            const json = seeded
+                ? ({ ok: true, data: seeded } as unknown as ResolveOk)
+                : ((await (
+                      await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" })
+                  ).json()) as ResolveOk | ApiErr);
             if (!json.ok) {
                 setPhase("error");
                 const code = json.code ? ` [${json.code}]` : "";

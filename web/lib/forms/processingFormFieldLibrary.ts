@@ -182,9 +182,14 @@ function offerFromPalette(
     const curated = registry ? curatedLabelSourceFor(registry.id, group) : undefined;
     const builderType = builderTypeFor(entry, registry);
 
-    // No form field can satisfy it: the platform manages it on the record (`config_only`), it is
-    // explicitly outside form coverage, or it has no field binding at all.
-    const captureUnsupported = entry.config_only || !entry.form_coverage_supported || !entry.field_key;
+    // `form_coverage_supported` is the platform's OWN answer to "can a form capture this", and a
+    // resolvable registry entry is proof that it can. `config_only` is NOT part of this decision:
+    // it is derived from `runtime_enforced` (lifecycleFieldPaletteMerge.ts) and means "the runtime
+    // does not enforce this rule" — unrelated to capture. Reading it as "not form-capturable"
+    // mislabeled Date of birth and Location (both `form_coverage_supported: true`) and, because
+    // `orgRowToPalette` sets `config_only: true` on EVERY org custom field, mislabeled every custom
+    // field the tenant had defined.
+    const captureUnsupported = !entry.form_coverage_supported && !registry;
 
     return {
         id: entry.rule_id,
@@ -274,11 +279,10 @@ export function buildProcessingFormFieldLibrary(
     const seenIds = new Set<string>();
 
     for (const entry of input.palette) {
-        // `config_only` entries are NOT skipped when the stage requires them. Dropping a required
-        // rule from the picker is what produced a permanently unclearable "missing required": the
-        // operator is told a field is missing and given no way to add it. Show it, marked as not
-        // form-capturable, so the gap is explained rather than invisible.
-        if (entry.config_only && !required.has(entry.rule_id) && !recommended.has(entry.rule_id)) continue;
+        // Every palette entry is offered. The picker must mirror the field vocabulary `/fields` and
+        // `/surfaces` show — those apply no `config_only` filter either. Filtering on it here hid
+        // most of the platform catalog AND every org custom field (orgRowToPalette marks them all
+        // `config_only: true`), which is exactly what this library was built to stop doing.
         if (seenIds.has(entry.rule_id)) continue;
         seenIds.add(entry.rule_id);
         const tier = required.has(entry.rule_id) ? "required" : recommended.has(entry.rule_id) ? "recommended" : undefined;

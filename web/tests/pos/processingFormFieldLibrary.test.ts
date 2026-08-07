@@ -167,7 +167,11 @@ describe("library composition", () => {
         expect((byRule.get("child:custom_care_notes")?.add as { builderType: string }).builderType).toBe("long_text");
     });
 
-    it("hides a config-only field the stage does not ask for, but shows one it requires", () => {
+    it("`config_only` does not hide a field and does not mean 'not form-capturable'", () => {
+        // config_only is derived from `runtime_enforced` (lifecycleFieldPaletteMerge.ts) — "the
+        // runtime does not enforce this rule". It says nothing about capture. Treating it as
+        // uncapturable mislabeled Date of birth and Location, and because orgRowToPalette stamps
+        // config_only on EVERY org custom field, mislabeled all of those too.
         const entry = {
             rule_id: "child:internal_flag",
             entity: "child" as const,
@@ -179,17 +183,77 @@ describe("library composition", () => {
             config_only: true,
         };
 
-        const unreferenced = buildProcessingFormFieldLibrary({ palette: [entry] });
-        expect(unreferenced.flatMap((g) => g.items).some((i) => i.ruleId === "child:internal_flag")).toBe(false);
+        const groups = buildProcessingFormFieldLibrary({ palette: [entry] });
+        const shown = groups.flatMap((g) => g.items).find((i) => i.ruleId === "child:internal_flag");
+        expect(shown, "a config-only field must still be offered").toBeDefined();
+        expect(shown?.captureUnsupported).toBeUndefined();
+    });
 
-        // Required + config-only is the trap: never offerable, permanently "missing". Show it.
-        const required = buildProcessingFormFieldLibrary({
-            palette: [entry],
-            requiredRuleIds: ["child:internal_flag"],
+    it("only flags fields the platform says forms cannot cover", () => {
+        const groups = buildProcessingFormFieldLibrary({
+            palette: [
+                {
+                    rule_id: "child:date_of_birth",
+                    entity: "child",
+                    field_label: "Date of birth",
+                    field_key: "date_of_birth",
+                    field_source: "catalog",
+                    runtime_enforced: false,
+                    form_coverage_supported: true,
+                    config_only: true,
+                },
+                {
+                    rule_id: "opportunity:enrollment_packet",
+                    entity: "opportunity",
+                    field_label: "Enrollment Packet Reviewed",
+                    field_key: null,
+                    field_source: "catalog",
+                    runtime_enforced: false,
+                    form_coverage_supported: false,
+                    config_only: true,
+                },
+            ],
         });
-        const shown = required.flatMap((g) => g.items).find((i) => i.ruleId === "child:internal_flag");
-        expect(shown?.captureUnsupported).toBe(true);
-        expect(shown?.meta).toContain("cannot be captured by a form");
+        const byRule = new Map(groups.flatMap((g) => g.items).map((i) => [i.ruleId, i]));
+        // Date of birth has a registry field purpose-built for forms — never mark it uncapturable.
+        expect(byRule.get("child:date_of_birth")?.captureUnsupported).toBeUndefined();
+        expect(byRule.get("opportunity:enrollment_packet")?.captureUnsupported).toBe(true);
+    });
+
+    it("the real catalog marks nothing form-capturable as uncapturable", () => {
+        for (const stage of LIFECYCLE_STAGE_ORDER) {
+            const { palette, groups } = libraryForStage(stage);
+            const supported = new Set(
+                palette.filter((p) => p.form_coverage_supported).map((p) => p.rule_id)
+            );
+            const wronglyFlagged = groups
+                .flatMap((g) => g.items)
+                .filter((i) => i.captureUnsupported && i.ruleId && supported.has(i.ruleId))
+                .map((i) => `${i.label} (${i.ruleId})`);
+            expect(wronglyFlagged, `${stage}: flagged despite form_coverage_supported`).toEqual([]);
+        }
+    });
+
+    it("offers org custom fields as capturable, not as dead entries", () => {
+        const groups = buildProcessingFormFieldLibrary({
+            palette: [
+                {
+                    // Shape produced by orgRowToPalette for a tenant-defined field.
+                    rule_id: "custom:child:dietary_needs",
+                    entity: "child",
+                    field_label: "Dietary needs",
+                    field_key: "dietary_needs",
+                    field_source: "custom",
+                    runtime_enforced: false,
+                    form_coverage_supported: true,
+                    config_only: true,
+                },
+            ],
+        });
+        const item = groups.flatMap((g) => g.items).find((i) => i.ruleId === "custom:child:dietary_needs");
+        expect(item?.label).toBe("Dietary needs");
+        expect(item?.captureUnsupported).toBeUndefined();
+        expect(item?.add.kind).toBe("bound");
     });
 
     it("never offers the same underlying field twice", () => {
