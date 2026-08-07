@@ -122,7 +122,7 @@ export default function CurrentWorkTourGroupedActions({
                 </button>
             ))}
             {tour.length > 0 ?
-                <div className="relative inline-flex" ref={(el) => { rootRef.current = el; }} data-work-tour-grouped="true">
+                <div className="relative inline-flex" ref={rootRef as React.RefObject<HTMLDivElement | null>} data-work-tour-grouped="true">
                     <button
                         type="button"
                         className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
