@@ -50,14 +50,22 @@
 # keeps the gate meaningful.
 name: Trust Adoption certification
 
+# Deliberately UNFILTERED (Director decision D-13).
+#
+# This job was originally path-filtered to `web/**`, `supabase/migrations/**`
+# and this file. That is fine for an advisory check and fatal for a required
+# one: under branch protection a SKIPPED check never reports a conclusion, so a
+# pull request touching none of those paths — a docs-only change, for instance —
+# would wait forever for a status that can never arrive. The check would not be
+# "required"; it would be a deadlock.
+#
+# So the filter is removed rather than papered over with a skip-shim publishing
+# the same status name. A shim makes the green tick ambiguous — some ticks would
+# mean "1053 tests passed" and others "nothing ran" — and the whole point of
+# this gate is that its green means something specific. Roughly a minute of CI
+# on a docs PR is a smaller price than a status whose meaning varies.
 on:
   pull_request:
-    paths:
-      - "web/**"
-      # Trust invariants are certified against real DDL in places, so a migration
-      # can regress this gate without touching web/**.
-      - "supabase/migrations/**"
-      - ".github/workflows/trust-adoption-certification.yml"
 
 defaults:
   run:
