@@ -819,7 +819,6 @@ export default function HouseholdCard({
                 isOpen={Boolean(pendingPrimary)}
                 personName={pendingPrimary?.displayName ?? ""}
                 currentPrimaryName={evidence.primaryContact?.name ?? null}
-                scopeLabels={["This household", "Linked opportunities"]}
                 isLoading={primarySaving}
                 onClose={() => {
                     if (primarySaving) return;
