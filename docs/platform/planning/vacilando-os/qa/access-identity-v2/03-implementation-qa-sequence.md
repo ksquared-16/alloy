@@ -79,10 +79,24 @@ against the Director's own parser). This is the **third** instance
 of the RL-1 escape class in this workstream. Tier C remains unrun, and the reason is now evidenced: the
 service-role key is absent from every worktree env file by design, so it needs **a Director-side channel, not
 an authorization** (§6)
+· **W-9 executed 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment `asg_1316c1c2eaa615`) — **the exit
+criterion was already met, by a migration from another track.** `20260729120000_access_v2_phase0…sql` (live on
+the target 2026-07-30, vendored `555fa056a`) collapsed the three catalog tables to one, replaced the two
+disagreeing FKs with a single `ON DELETE RESTRICT`, and left the API validating the table the FK names — the
+follow-up §4 recorded for the W-9 owner on 2026-08-04. **W-9 therefore authored no migration; M3 is
+discharged and M4 is struck** (its subject, "retired catalog tables", does not exist — they are views, and
+`W-60`/`M20` owns them). What W-9 owed and nobody had built was **RL-7**, now live and **proven red in two
+negative-fixture rounds**: an invariant met by a track that does not own it is the one that reopens silently.
+Phase 0's *"read-only"* views are **auto-updatable and `service_role` holds `ALL`** — the stop-writing step was
+documented, not implemented; raised against `W-60` and bound to RL-7. **`W-10` landed in this worktree
+concurrently** during the pass, so `tests/access` and `typecheck:tests` both carry in-flight grid-projection
+failures that are not W-9's and were not repaired by it (§7)
 **Status** Proposed — a plan to be scheduled, not a record of work done. **Exceptions: Wave 0 (§4) is
 executed and complete**; its live counts are recorded and have been applied to §3, §6, §8, §9, §11 and §14.
 **Wave 1 (§5) is complete — W-1, W-2, W-3 and W-4 are implemented and green**; their execution records
-are in §5 and their locks are live in §13. Every other wave remains a proposal.
+are in §5 and their locks are live in §13. **W-9 (§7) has met its exit criterion and RL-7 is live**, but by a
+migration this programme did not author — read its record before scheduling W-10, W-11 or W-12, because two of
+its consequences land on them. Every other wave remains a proposal.
 
 ---
 
@@ -209,7 +223,7 @@ code never requires reverting data.
 | **0** | Facts before changes — read-only live verification | W-0 | — · **DONE 2026-07-31** |
 | **1** | Fail-closed quick wins, no schema | W-1 … W-4 | — · **DONE 2026-07-31** (W-1…W-4) |
 | **2** | The scope invariant (the confirmed fail-open) | W-5 … W-8 | ~~W-0~~ **satisfied** |
-| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) |
+| **3** | One catalog, one vocabulary | W-9 … W-12 | — (parallel with 2) · **W-9 exit met 2026-08-07**, by another track's migration; RL-7 live |
 | **4** | Admission and declaration | W-13 … W-15 | W-3, D2 |
 | **5** | Role-model coherence and the long tail | W-16 … W-22 | ~~W-0~~ **satisfied** · D3, D4 |
 
@@ -2239,6 +2253,137 @@ dependent views. Phase 1 records that migrations already hand-maintain all three
 and exactly one catalog table. Tier C: grant, revoke, and read-back round-trip through the API.
 **Exit.** One table, one FK, and the API validates against the same table the FK names.
 
+#### W-9 execution record — **2026-08-07**, assignment `asg_1316c1c2eaa615`: the exit criterion was already met, by another track's migration
+
+**Everything above this heading describes a schema that no longer exists.** Three catalog tables carrying two
+FKs on one column is the picture *before*
+`20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql`, which went live on the target on
+2026-07-30 (as version `20260730000602`) and was vendored into this repo on 2026-07-31 (`555fa056a`). §4's W-0
+re-run recorded exactly this on 2026-08-04, named it *"a premise now false on the deployed target"*, and
+deliberately left §7 unedited because that assignment's scope was W-0. **This assignment is the W-9 owner
+acting on that follow-up.**
+
+That migration satisfies all three clauses of W-9's exit criterion, verified against the tree rather than
+carried:
+
+| Exit clause | Where it is discharged |
+|---|---|
+| **One table** | `permissions` and `permission_keys` are `DROP TABLE`d and recreated as `security_invoker` views over `permission_definitions` (`…phase0…sql:147-156`). Legacy rows are unioned into the canonical table *first* (`:90-98`), so no catalog row is lost |
+| **One FK** | Both legacy FKs dropped (`:131-134`); one `role_permission_grants_permission_definitions_fkey` added `ON DELETE RESTRICT` (`:136-140`). The legacy pair **disagreed** — `permission_key_fkey` RESTRICT, `permissions_fkey` CASCADE — so deleting a catalog key could silently delete grants. RESTRICT is the survivor |
+| **The API validates against the table the FK names** | `grants/route.ts:61` and `rbac/permissions/route.ts:12` both read `permission_definitions` — the table the surviving FK references |
+
+**So W-9 ships no migration, and that is the finding, not an omission.** M3 is discharged. Authoring a second
+repoint would be a no-op against an already-consolidated schema at best, and conflicting DDL at worst.
+
+**What W-9 genuinely owed, and nobody had built, is RL-7.** §13 has carried it as `proposed` since this plan
+was authored. An invariant satisfied by a migration from a track that **does not own it** is precisely the
+invariant that reopens silently: no Access & Identity V2 workstream was watching this schema, and the
+consolidation could be undone by any future migration without a single test noticing. RL-7 is now **LIVE** —
+`web/tests/access/catalogConsolidationLock.test.ts`, **8 tests, Passed — 8 passed / 0 failed**.
+
+The lock replays the whole migration tree in filename order — every `ADD CONSTRAINT` / `DROP CONSTRAINT` on
+`role_permission_grants`, and every `CREATE`/`DROP` of the three catalog objects — and asserts the end state,
+rather than reading the consolidation migration and agreeing with it. Subject is **discovery, not
+enumeration**, with non-vacuity guards on both scans (>300 migrations, >500 product sources, ≥3 FK adds
+seen). That is this workstream's third-hand lesson, not a preference: RL-1 was defeated twice by a pinned
+subject and RL-4 once, and each time the suite was green while the defect was live.
+
+**Proven red in two rounds, then green with the fixtures removed** — six of six substantive assertions, the
+other two being the non-vacuity guards that exist to stop a vacuous pass:
+
+| Negative fixture | Assertions it turned red |
+|---|---|
+| Round 1 — a migration re-adding `role_permission_grants_permissions_fkey`, inserting into `permission_keys`, and re-granting to `anon`; plus a product file reading `.from("permissions")` | one-FK · no-post-consolidation-writer · no-anon-regrant · no-deprecated-product-access (**4 red**) |
+| Round 2 — a migration restoring `permissions` as a real table; plus a product file writing `role_permission_grants` without validating | one-catalog-table · every-grants-writer-validates (**2 red**) |
+
+Fixtures deleted; `tests/access` re-run whole at **113 passed / 6 skipped** (the 6 are RL-4's tier C, which
+needs the service-role key).
+
+**That suite number stopped being true during this assignment, and the reason matters more than the number.**
+A re-run at the end of the pass returned **111 passed / 2 failed / 6 skipped**. The two failures are in
+`tests/access/accessProductUi.test.ts`, and they are **`W-10` landing in this worktree concurrently**:
+`lib/admin/permissionGrid.ts` was rewritten from the hand-maintained `PERMISSION_GRID_ROWS` constant to a
+`buildPermissionGridRows(...)` projection while this assignment was running, and its consumers
+(`AccessRolesConfigurationPage.tsx`, `tests/admin/permissionGrid.test.ts`, `accessProductUi.test.ts`) have not
+yet been moved. **RL-7 is 8/8 green in both readings** and touches none of those files. This is the same
+concurrency §5 recorded for Wave 1's fourth and fifth issuances; it is noted rather than repaired, because
+repairing it would be executing `W-10` from inside `W-9`.
+
+**Tier C for W-9 — grant/revoke/read-back through the API — was not run**, and
+for the same reason RL-4's is not: `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by
+two-tier-env design. It needs a Director-side channel, not an authorization. Do not read this record as
+"round-trip proven".
+
+**M4 is superseded, not pending — and a W-9 owner must not author it.** §11's M4 reads *"drop retired catalog
+tables"*. There are **no retired catalog tables**; there are two views. Their retirement is scheduled in the
+product-source copy as **`W-60`** (wave 14, `…/access-identity-v2/03-implementation-qa-sequence.md` §47),
+which opens by **auditing the base table's own grants before `M20` drops anything** — because the views
+currently carry a contradiction that is resolving correctly by luck of layering, and dropping the object that
+carries a contradiction is not resolving it. Authoring a drop from inside W-9 would duplicate `W-60` and
+pre-empt that audit. §11's M4 row is restruck accordingly.
+
+**A finding raised against `W-60`, and bound rather than merely registered.** The two compatibility views are
+simple single-table selects, which makes them **auto-updatable** by PostgreSQL, and the baseline's
+`ALTER DEFAULT PRIVILEGES … GRANT ALL ON TABLES TO "service_role"` (`remote_schema.sql:9769-9772`) governs
+views created later. `service_role` is `BYPASSRLS` and is exactly what `createAdminClient()` holds. So
+`INSERT INTO public.permissions` still succeeds and rewrites onto the canonical table: the migration's
+`COMMENT … 'Read-only: write to permission_definitions'` (`:158-161`) is **a claim, not a control**.
+
+This does **not** breach W-9's exit criterion, which is why it is recorded rather than fixed here — a write
+through the deprecated name lands in the one catalog and satisfies the one FK. What it breaches is §7's own
+sequence, *stop writing → verify no reader → drop*: **Phase 0 documented the stop-writing step instead of
+implementing it.** `W-60`'s §47 record names only the `anon` **read** grant, so this is new to it.
+
+Per RB-40's lesson — a finding registered but not bound to an invariant is the failure mode, not the
+discovery — it is bound: RL-7 fails if any product code reaches the catalog through a deprecated name, and
+fails if any migration writes one after the consolidation. Neither closes the database-level surface; only
+`W-60`/`M20` does. Both fail the moment the tree starts using it.
+
+**Zero readers — `M20`'s precondition — is satisfiable statically today, and only statically.** Discovery over
+`web/app` + `web/lib` returns **zero** accesses through either deprecated name. The only occurrences anywhere
+in the tree are historical migration bodies and the baseline dump. That is not the whole precondition:
+DB-side dependents and any external PostgREST consumer need a live `pg_depend` check on the same trusted host
+channel as every other preflight. Recorded as `W-60` preflight input.
+
+**Two consequences handed forward, both of which bite a later workstream if left unstated:**
+
+1. **`M5`'s deletions will be refused by the FK this workstream just made single.** W-11 deletes
+   catalog-but-unenforced keys; the surviving FK is `ON DELETE RESTRICT`; and Phase 0 grants
+   `ops.workflows.read`/`ops.workflows.write` to **every org's `admin` role** (`:116-122`) for keys **no route
+   enforces**. So `M5` must delete the grants before the keys, or it aborts on live data. Under the *old*
+   `permissions_fkey` (CASCADE) it would have silently deleted the grants instead — which is the better
+   failure, and the reason RESTRICT was the right survivor.
+2. **The cross-track conflict at `permissionGrid.ts:44-46` is still open and is W-10/W-11's.** Phase 0's
+   header asserts *"the grid now writes `ops.workflows.*`"*; W-3 removed that grid row on the same day. The
+   grants are live on the target; the grid offers nothing. W-9 does not resolve it and did not touch it.
+
+#### The carried revision request, answered in W-9's unit (2026-08-07)
+
+The assignment arrived carrying the same open guidance — *"Role hierarchy is still too deep — reduce to four
+layers."* It has now ridden on four assignments. §6's W-8 record states the ledger and the arithmetic; that is
+not repeated here. What is new is W-9's own row.
+
+**§45.1 of the product-source copy assigns `W-9`/`W-10` the `L6` (grid) layer** of the eight-step store count,
+and rows 10–11 of the fourteen-row resolver census. **W-9 moves neither — and unlike W-8, that is because its
+reduction was already priced in.** The eight-layer enumeration is *post-consolidation*: it counts the two
+compatibility views as `L5`, and those views exist only because Phase 0 collapsed the three tables. The
+catalog triplication W-9 was written to remove is already absent from the count.
+
+**The instrument that moves `L6` is `W-10`** — the grid becomes a projection of the catalog — **and `W-10` is
+gated on nothing.** It needs no decision, no migration, and no live authorization. That is the concrete
+difference from the three prior answers: the directive's nearest actionable instrument is not blocked on
+`AD-22`/`AD-25` the way `W-13` is.
+
+**And it is already in flight.** `lib/admin/permissionGrid.ts` now exports `buildPermissionGridRows` over a
+`PermissionCatalogEntry` set instead of the `PERMISSION_GRID_ROWS` literal — `W-10`'s exit condition, being
+built in this worktree concurrently with this assignment (see the execution record above). So the honest
+answer to a fourth issuance of the directive is not *"dispatch W-10"*: **it is dispatched.** What remains
+unstarted is `W-13`, still the only instrument for the count the operator actually feels at runtime (the 4/5
+schema-vs-runtime chain), and still gated on `AD-22`/`AD-25`. **Those two decisions are now the whole of what
+stands between the directive and the layer it is aimed at.**
+
+**Status: exit criterion `met` (by another track), lock `live`, tier C `unrun`, no migration authored.**
+
 ### W-10 — The grid becomes a projection *(M · I-14 · closes C5 structurally)*
 
 `PERMISSION_GRID_ROWS` (`permissionGrid.ts:12-24`) is an independent hand-maintained list. Derive it from the
@@ -2566,8 +2711,8 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 |---|---|---|---|---|
 | M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**AUTHORIZED 2026-08-07, NOT YET APPLIED**) | shared | **PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`, evidence [`w6-m1-preflight.json`](w6-m1-preflight.json). Row count re-derived at **2** on the `pairs_without_profile` grain — not the 8 membership rows, not the 6 distinct pairs; **0 orphan profiles**. Operator authorized the apply; **no worker-reachable write channel exists to execute it** (see below). Post-apply rules **pending**; `status` is `authorized_awaiting_apply`, never `applied`, until the NOTICE block and Tier A anti-join are captured |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
-| M3 | W-9 | Catalog consolidation — repoint grants to one FK | shared | Every grant satisfies the surviving FK; no unexpected incoming FKs or dependent views |
-| M4 | W-9 | Drop retired catalog tables (**separate, later**) | shared | Zero readers proven since M3 |
+| ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
+| ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
 | M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced | shared | Enumerated deletion list reviewed by the operator first |
 | M6 | W-12 | `seed_default_rbac()` enumerates grants | shared | Catalog width vs live — a new tenant must not silently get a thinner set |
 | M7 | W-13 | Seed `portal.access` and grant it | shared | Every org with an `admin`/`ops` membership receives the grant (**W-0 Q5 = 0**, so no org is missed) |
@@ -2586,12 +2731,14 @@ Two rules from that document bear directly on this plan:
 - **Accept ≠ authorize-apply.** A gate of `needs_operator` must not complete a phase or advance the spine, even
   in autonomous mode. That bug shipped once on Access & Roles Phase 0 (2026-07-29).
 
-M3/M4 are deliberately split across migrations: repoint before drop. ~~M8/M9 likewise — remediate before
-constrain~~ — **M8 is struck, so M9 stands alone**; the remediate-before-constrain rule survives as a
-principle, and would return the moment Q3 becomes non-zero. Combining M3/M4 produces a migration that cannot
-be applied safely and cannot be reverted cleanly.
+~~M3/M4 are deliberately split across migrations: repoint before drop.~~ — **both are closed to W-9 as of
+2026-08-07**: M3 was discharged out-of-track and M4's subject turned out not to exist. The repoint-before-drop
+rule was nonetheless **honoured** by the migration that did the work: Phase 0 repointed and demoted the tables
+to views, and the drop of those views is deferred to a separate, later migration under `W-60`/`M20`. ~~M8/M9
+likewise — remediate before constrain~~ — **M8 is struck, so M9 stands alone**; the remediate-before-constrain
+rule survives as a principle, and would return the moment Q3 becomes non-zero.
 
-**Nine migrations remain, not ten.** Each still requires its own read-only preflight against the target
+**Seven migrations remain, not ten** — M8 struck, M3 discharged, M4 struck. Each still requires its own read-only preflight against the target
 immediately before the authorization ask — W-0's counts are a snapshot (last refreshed 2026-08-04), not a
 standing warrant. The trusted host action (`database.read_census`) is the channel for those preflights; none
 of them needs an operator to handle a credential, and it has now been exercised twice.
@@ -2637,7 +2784,7 @@ contributor deleting one has to do it on purpose.
 | **RL-4** | Membership creation writes a profile row atomically | **A + B + C** | G4 / W-5 | **LIVE (tier A+B), TIER C AUTHORED-NOT-RUN** — `web/tests/access/membershipAtomicWiring.test.ts` (**Passed — 16 passed / 0 failed**): no file under `web/app` or `web/lib` calls `.insert`/`.upsert`/`.update` on `user_roles`, plus outcome-mapping tests. **Widened 2026-08-07**: the subject was a hard-coded list of the three files W-5 had already fixed, so it could not catch a fourth writer — proven by a negative fixture, a probe route that sat in `app/api/` re-opening G4 with the old suite 14/14 green. Subject is now the whole of `app/`+`lib/` by discovery, with a non-vacuity guard on the scan itself. Tier C is `web/tests/access/membershipProfileInvariant.integration.test.ts` — **6 tests, never executed**; `SUPABASE_SERVICE_ROLE_KEY` is absent from every worktree env file by two-tier-env design, so **no worker-side run is possible** — it needs a Director-side channel, not an authorization. Do not read this row as "atomicity is proven" until it runs |
 | **RL-5** | Absent profile denies; never `all` | C | I-19 / W-7 | **LIVE AS A DUAL-READ LOCK, SWITCH NOT THROWN** — `web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts` (10 green) proves the `deny` answer at the decision layer: both named Tier C cases, denial distinguishable from a stored double-restriction, and a malformed scope value resolving `all` rather than becoming an L1 event. Enforcement is still `legacy-all` and one test **asserts that**, failing the build if the switch is thrown while M1 is unapplied. Pure-function tier, not fixture-principal integration — same authorization boundary as RL-4's Tier C. Do not read this row as "absent profiles deny"; they still resolve `all` |
 | **RL-6** | No role literal appears in `accessScope.ts` | A | C8 / W-8 | **LIVE (2026-08-07)** — `web/tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts`. Asserts on *executable* lines only (the W-8 comment block names the deleted symbols deliberately), so `portalAdminBypassesDepartmentScope`, `effectiveDepartmentScopeDimensions`, `PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES` and any `"admin"`/`"ops"` literal all fail the lock. Paired with a second assertion that the `user_department_access` self-insert is gone — the first half alone would have passed over an armed path. **Note the scope limit: this locks `accessScope.ts`, not the platform.** `PORTAL_ROLES` in `resolveAdminAccessCore.ts:18` is untouched and is RL-9's subject |
-| **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
+| **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | **LIVE (2026-08-07)** — `web/tests/access/catalogConsolidationLock.test.ts` (**Passed — 8 passed / 0 failed**). Replays the whole migration tree in filename order and asserts the **end state**, rather than reading the consolidation migration and agreeing with it: one surviving FK, named, referencing `permission_definitions`, `ON DELETE RESTRICT`; exactly one catalog **table** with both deprecated names as views; no post-consolidation writer through a deprecated name; no `anon` re-grant on a catalog object; no product code reaching the catalog through a deprecated name; and **every** discovered writer of `role_permission_grants` validating against the table the FK names. Subject is discovery with non-vacuity guards on both scans — RL-1 was defeated twice by a pinned subject and RL-4 once. **Proven red in two negative-fixture rounds (4 red, then 2 red) covering six of six substantive assertions**, fixtures removed, green after. **Necessary because W-9's exit criterion was met by a migration from a track that does not own it** (§7) — nothing was watching this schema. Does **not** close the DB-level write surface on the two views: they are auto-updatable and `service_role` holds `ALL` by default privileges, which is `W-60`/`M20`'s |
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
 | **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
@@ -3010,3 +3157,40 @@ about, and doing it while *reporting* on that error would be worse than doing it
 **Method:** source-grounded and test-backed; focused Vitest only, no brokered heavy check needed since no
 source file changed. Read-only against `docs/platform/planning/access-identity-v2/` (the product-source copy)
 to resolve the `§45.1` citations; that copy was **not** modified.
+
+### 15.7 W-9 execution — the exit criterion met out-of-track, and the lock that was missing (2026-08-07, assignment `asg_1316c1c2eaa615`)
+
+Wave 3's first workstream. The assignment asked for a migration-backed consolidation of
+`permission_keys` / `permissions` / `permission_definitions`. **The consolidation already exists**, and the
+correct execution was to prove that, lock it, and correct the register — not to author a second migration
+against an already-consolidated schema.
+
+| Claim | How it was established | Result |
+|---|---|---|
+| The three-table premise is false in the tree | Read `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` in full | Tables → views at `:147-156`; rows preserved first at `:90-98` |
+| One FK survives, `ON DELETE RESTRICT` | Replayed every `ADD`/`DROP CONSTRAINT` on `role_permission_grants` across all 314 migrations in filename order | Legacy pair (`…permission_key_fkey` RESTRICT, `…permissions_fkey` CASCADE) dropped at `:131-134`; `…permission_definitions_fkey` added at `:136-140` |
+| The API validates against the FK's table | `grants/route.ts:61`, `rbac/permissions/route.ts:12` | Both read `permission_definitions` |
+| Zero readers through a deprecated name | Discovery over `web/app` + `web/lib` (>500 sources) | **Zero.** Only historical migration bodies and the baseline dump reference either name |
+| The "read-only" views are writable | View shape (simple single-table select ⇒ auto-updatable) × `remote_schema.sql:9769-9772` (`ALTER DEFAULT PRIVILEGES … GRANT ALL ON TABLES TO "service_role"`) × `service_role` being `BYPASSRLS` | The `COMMENT` at `:158-161` is a claim, not a control. Raised against `W-60` |
+| RL-7 discriminates | Two negative-fixture rounds, then removal | **4 red, then 2 red — six of six substantive assertions**; green with fixtures gone |
+| The lock and its neighbours hold | `npx vitest run tests/access/catalogConsolidationLock.test.ts`, then `tests/access/` whole | **8 passed / 0 failed**; suite **113 passed / 6 skipped**, then **111 / 2 failed / 6 skipped** after `W-10` landed concurrently — the 2 are `accessProductUi.test.ts` against the in-flight grid projection, not RL-7 |
+| Typecheck | `vac run typecheck:tests` (brokered) | **rc=2 — failed, and not from this assignment.** Every error is `PERMISSION_GRID_ROWS` → `buildPermissionGridRows` in `W-10`'s in-flight surface, plus a stray `tests/tmpWave1EvidenceParse.test.ts` left by an earlier pass. **No error names `catalogConsolidationLock.test.ts`.** The broker labelled it `class=config` / *"the command never ran"*, which is a misclassification — `tsc` ran and emitted diagnostics |
+
+**Limits of this record.** No live verification, no browser, no query against any tenant. **W-9's tier C —
+grant/revoke/read-back through the API — was not run**, blocked by the same absent `SUPABASE_SERVICE_ROLE_KEY`
+that blocks RL-4's tier C; it needs a Director-side channel, not an authorization. The `pg_depend` half of
+`M20`'s zero-readers precondition is likewise Director-side and unrun. RL-7 is a **tier A** lock over the
+migration tree and the product tree: it proves what the tree says the schema is, not what the deployed
+database currently is. The two have agreed at every census so far, and the standing rule that every consumer
+re-derives rather than cites is unchanged.
+
+**What this assignment deliberately did not do.** It did not drop the two compatibility views, did not revoke
+their write privileges, and did not audit `permission_definitions`' own grants — all three are `W-60`'s, which
+§47 says opens with that audit *before* the drop. It did not touch the grid (`W-10`), the vocabulary
+reconciliation (`W-11`), or `seed_default_rbac`'s blanket grant (`W-12`), though W-9's findings land on all
+three and are handed to them in writing. Acting on adjacent, correctly-diagnosed work belonging to another
+workstream is the error §15.4 and §15.6 were both written about.
+
+**Method:** source-grounded and test-backed. One new test file; focused Vitest only. Read-only against the
+product-source copy to resolve `§45.1` and `§47`; that copy was **not** modified. No migration authored, none
+applied, nothing pushed.
