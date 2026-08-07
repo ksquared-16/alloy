@@ -8,6 +8,7 @@ import { BosRailActionIcon } from "@/app/adminV2/components/bos/identity/BosRail
 import type { BosRailAttentionPresentation } from "@/lib/bos/bosRailAttentionPresentation";
 import { parseBosRailContextChips, type BosRailContextChip } from "@/lib/bos/bosRailContextChips";
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
+import { dispatchBosCloseRequest } from "@/contexts/BosCommandSessionContext";
 import {
     readBosStartersExpanded,
     writeBosStartersExpanded,
@@ -139,7 +140,10 @@ export function BosRailHeader(props: {
                         <button
                             type="button"
                             data-bos-close
-                            onClick={() => bos.closeToLauncher()}
+                            onClick={() => {
+                                dispatchBosCloseRequest();
+                                bos.closeToLauncher();
+                            }}
                             className={chromeBtnClass}
                         >
                             Close
