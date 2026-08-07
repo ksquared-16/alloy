@@ -25,6 +25,7 @@ import {
     resolveWorkTemplateActionOptions,
     type WorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
+import { workTemplateActionAppliesToLabel } from "@/lib/lifecycle/workTemplateActionAppliesToLabel";
 import {
     helpfulActionsConfigSource,
     primaryActionConfigSource,
@@ -42,7 +43,7 @@ type Props = {
     stageOutcomes: StageCompletionOutcomeV1[];
     actionCatalog: StageActionCatalogV1 | null;
     configuredActions: LifecycleConfiguredActionRow[];
-    processStages: Array<{ key: string; label: string }>;
+    processStages: Array<{ key: string; label: string; grain?: string | null }>;
     stageOperatingPlan?: StageOperatingPlanV1 | null;
     processTracks?: ProcessTracksV1 | null;
     stageDefinition?: { journey_segment?: string } | null;
@@ -64,21 +65,26 @@ function optionByRef(options: WorkTemplateActionOption[], ref: string): WorkTemp
 }
 
 function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPickerOption[] {
-    return options.map((row) => ({
-        value: row.ref,
-        label: row.label,
-        description: row.description,
-        group:
-            row.category === "transition" ? "Recommended"
-            : row.category === "communication" ? "Communications"
-            : row.category === "workflow" ? "Workflow"
-            : row.category === "relationship" ? "Relationships"
-            : row.category === "lifecycle" || row.category === "status_lifecycle" ? "Lifecycle"
-            : row.category === "bos" || row.category === "bos_native" ? "BOS"
-            : "Record actions",
-        disabled: !row.supported,
-        disabledReason: row.disabledReason,
-    }));
+    return options.map((row) => {
+        const appliesTo = workTemplateActionAppliesToLabel(row.ref);
+        return {
+            value: row.ref,
+            label: row.label,
+            description: appliesTo
+                ? [appliesTo, row.description].filter(Boolean).join(" · ")
+                : row.description,
+            group:
+                row.category === "transition" ? "Recommended"
+                : row.category === "communication" ? "Communications"
+                : row.category === "workflow" ? "Workflow"
+                : row.category === "relationship" ? "Relationships"
+                : row.category === "lifecycle" || row.category === "status_lifecycle" ? "Lifecycle"
+                : row.category === "bos" || row.category === "bos_native" ? "BOS"
+                : "Record actions",
+            disabled: !row.supported,
+            disabledReason: row.disabledReason,
+        };
+    });
 }
 
 function ConfigSourceBadge({ source, fallbackHint }: { source: ReturnType<typeof helpfulActionsConfigSource>; fallbackHint?: string }) {
@@ -226,7 +232,17 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     );
 
     return (
-        <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
+        <div
+            className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3"
+            data-testid={`work-template-actions-${work.template_key}`}
+            data-stage-actions-results="true"
+        >
+            <div className="mb-1">
+                <h3 className="stage-section-label">Actions &amp; Results</h3>
+                <p className="stage-field__hint mt-0.5">
+                    What can happen here, which action is emphasized, who it applies to, and what result it produces.
+                </p>
+            </div>
             <section data-testid={`work-template-primary-action-${work.template_key}`}>
                 <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <h4 className="stage-section-label">How operators start this work</h4>
@@ -324,7 +340,15 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     title="Helpful Actions"
                     refs={helpfulRefs}
                     resolveLabel={(ref) => optionByRef(options.helpfulActionOptions, ref)?.label ?? ref.replace(/_/g, " ")}
-                    resolveDescription={(ref) => optionByRef(options.helpfulActionOptions, ref)?.description ?? null}
+                    resolveDescription={(ref) => {
+                        const appliesTo = workTemplateActionAppliesToLabel(ref);
+                        const description =
+                            optionByRef(options.helpfulActionOptions, ref)?.description ?? null;
+                        if (appliesTo && description && !description.includes(appliesTo)) {
+                            return `${appliesTo} · ${description}`;
+                        }
+                        return appliesTo ?? description;
+                    }}
                     resolveInvalid={(ref) => {
                         const row = optionByRef(options.helpfulActionOptions, ref);
                         if (!row) return "Unknown action";

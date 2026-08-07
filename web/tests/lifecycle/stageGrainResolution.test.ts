@@ -235,14 +235,27 @@ describe("editor destination filtering uses the same contract", () => {
         ),
         "utf8",
     );
+    const waysOut = readFileSync(
+        resolve(
+            __dirname,
+            "../../components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor.tsx",
+        ),
+        "utf8",
+    );
+    const filterHelper = readFileSync(
+        resolve(__dirname, "../../lib/lifecycle/filterGrainCompatibleStageDestinations.ts"),
+        "utf8",
+    );
 
     it("filters with the shared resolver rather than a private rule", () => {
-        expect(editor).toContain("resolveStageGrain");
+        expect(editor).toContain("filterGrainCompatibleStageDestinations");
         expect(editor).toContain("entityGrain");
+        expect(waysOut).toContain("filterGrainCompatibleStageDestinations");
+        expect(filterHelper).toContain("resolveStageGrain");
     });
 
     it("still excludes the current stage", () => {
-        expect(editor).toContain("stage.key !== stageKey");
+        expect(filterHelper).toContain("stage.key !== stageKey");
     });
 
     it("keeps find-before-create and the transition allocator intact", () => {

@@ -32,7 +32,7 @@ export const WORK_TEMPLATE_ACTION_INTENT_SPECS: readonly WorkTemplateActionInten
     {
         intentKey: "move_to_waitlist",
         label: "Move to Waitlist",
-        description: "Move the eligible child Enrollment participation to Waitlist.",
+        description: "Applies to: Child → Waitlist",
         category: "lifecycle",
         aliases: ["move_to_waitlist", "waitlist_child", "move_family_to_waitlist"],
         /**
