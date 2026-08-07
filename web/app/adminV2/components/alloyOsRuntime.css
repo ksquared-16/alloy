@@ -6771,10 +6771,10 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   gap: 8px;
 }
 
-/* Primary work action stands alone visually (Bend Pine); supporting commands share equal cell width. */
+/* Primary Bend Pine + supporting commands share equal cell widths (not a full-bleed primary). */
 .alloy-os-currentwork__primary-stack {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.25rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: stretch;
 }
@@ -6786,9 +6786,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .alloy-os-currentwork__primary-lead > .alloy-os-currentwork__primary-action,
 .alloy-os-currentwork__supporting-row > button,
-.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"],
-.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] > button {
-  width: 100%;
+.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] {
+  flex: 1 1 calc(50% - 6px);
+  max-width: calc(50% - 3px);
+  min-width: 7.5rem;
+  width: auto;
   min-height: 2.25rem;
   justify-content: center;
   box-sizing: border-box;
@@ -6796,7 +6798,13 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] {
   display: flex;
-  min-width: 0;
+  min-width: 7.5rem;
+}
+
+.alloy-os-currentwork__supporting-row > [data-work-tour-grouped="true"] > button {
+  width: 100%;
+  min-height: 2.25rem;
+  justify-content: center;
 }
 
 .alloy-os-currentwork__context {
@@ -6815,17 +6823,25 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   gap: 6px;
 }
 
+/* Labeled context chips — soft fill + Bend Pine left rail. */
 .alloy-os-currentwork__context-row {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 4px 0;
-  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, var(--alloy-os-border, #dde3eb));
+  border-left: 3px solid var(--alloy-os-bend-pine, #00a283);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 6%, #fff);
+  box-sizing: border-box;
 }
 
 .alloy-os-currentwork__context-rows > .alloy-os-currentwork__context-row:first-child {
-  border-top: 0;
-  padding-top: 0;
+  margin-top: 0;
+}
+
+.alloy-os-currentwork__context > .alloy-os-currentwork__context-row[data-work-possible-outcomes="true"] {
+  margin: 0;
 }
 
 .alloy-os-currentwork__context-label {
@@ -8253,37 +8269,40 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   color: var(--alloy-os-text-primary, #17211c);
 }
 
-/* Workspace top-nav site filter — custom AlloySelect (native option menus stay OS-gray on macOS). */
-[data-adminv2-site-filter] .alloy-select__trigger {
+/* Workspace top-nav site filter — white + Bend Pine on midnight header (not inherited white text). */
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__trigger {
   min-height: 2.375rem;
   padding: 0.5rem 0.75rem;
   font-size: 15px;
   font-weight: 500;
-  color: var(--alloy-os-bend-pine, #00a283);
-  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 35%, #d6d3d1);
-  background: #fff;
+  color: var(--alloy-os-bend-pine, #00a283) !important;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, #fff) !important;
+  background: #fff !important;
+  box-shadow: none;
 }
 
-[data-adminv2-site-filter] .alloy-select__chevron {
-  color: var(--alloy-os-bend-pine, #00a283);
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__value,
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__chevron {
+  color: var(--alloy-os-bend-pine, #00a283) !important;
 }
 
-[data-adminv2-site-filter] .alloy-select__list {
-  background: #fff;
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__list {
+  background: #fff !important;
   border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, #e5e7eb);
   box-shadow: 0 10px 28px rgba(0, 162, 131, 0.12);
 }
 
-[data-adminv2-site-filter] .alloy-select__option {
-  color: var(--alloy-os-bend-pine, #00a283);
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option {
+  color: var(--alloy-os-bend-pine, #00a283) !important;
   font-size: 14px;
   font-weight: 500;
+  background: #fff;
 }
 
-[data-adminv2-site-filter] .alloy-select__option:hover,
-[data-adminv2-site-filter] .alloy-select__option--selected {
-  background: rgba(0, 162, 131, 0.1);
-  color: var(--alloy-os-bend-pine, #00a283);
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option:hover,
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option--selected {
+  background: rgba(0, 162, 131, 0.1) !important;
+  color: var(--alloy-os-bend-pine, #00a283) !important;
 }
 
 /* AlloySelect custom listbox — white menu (native <option> ignores CSS on macOS). */
