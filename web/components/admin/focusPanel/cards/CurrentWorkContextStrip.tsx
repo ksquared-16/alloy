@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * Compact operational context for What's Next — purpose, last attempt, due, outcomes.
+ * Compact operational context for What's Next — labeled facts only (no boilerplate purpose).
  * Presentation only over existing CurrentWorkSurfaceVM fields (no new metadata).
  */
 
+import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
 import type { CurrentWorkSurfaceVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 
 type Props = {
     surface: CurrentWorkSurfaceVM;
+    truth?: Record<string, unknown> | null;
 };
 
 function primaryContactHint(truth: Record<string, unknown> | null | undefined): string | null {
@@ -19,59 +21,59 @@ function primaryContactHint(truth: Record<string, unknown> | null | undefined): 
     return name || null;
 }
 
-/** Dense context strip under the work purpose — answers who/what/recent/what remains. */
-export default function CurrentWorkContextStrip({
-    surface,
-    truth,
-}: Props & { truth?: Record<string, unknown> | null }) {
-    const purpose = surface.description?.trim() || surface.readiness.reasonLabel?.trim() || null;
+type ContextRow = { label: string; value: string };
+
+/** Dense labeled context under the work title — who / recent / due / outcomes. */
+export default function CurrentWorkContextStrip({ surface, truth }: Props) {
     const contact = primaryContactHint(truth ?? null);
     const work = surface.primaryWorkItem;
     const attemptCount = work?.attempt_count ?? 0;
     const lastOutcome = work?.last_outcome?.label?.trim() || null;
     const lastActivity = surface.lastActivity?.label?.trim() || null;
     const lastActivityWhen = surface.lastActivity?.occurredAt?.trim() || null;
-    const dueAt = work?.due_at?.trim() || null;
+    const dueRaw = work?.due_at?.trim() || null;
+    const dueAt = dueRaw ? formatTaskDueDate(dueRaw) || dueRaw : null;
     const outcomes = surface.showOutcomeCompletion
         ? surface.completionOutcomes.map((o) => o.label.trim()).filter(Boolean).slice(0, 4)
         : [];
 
-    const lines: string[] = [];
-    if (contact) lines.push(`Primary contact · ${contact}`);
+    const rows: ContextRow[] = [];
+    if (contact) rows.push({ label: "Primary contact", value: contact });
     if (attemptCount > 0 || lastOutcome) {
         const attemptBit =
             attemptCount > 0 ? `${attemptCount} attempt${attemptCount === 1 ? "" : "s"}` : null;
         const outcomeBit = lastOutcome ? `Last · ${lastOutcome}` : null;
-        lines.push([attemptBit, outcomeBit].filter(Boolean).join(" · "));
+        rows.push({
+            label: "Contact attempts",
+            value: [attemptBit, outcomeBit].filter(Boolean).join(" · "),
+        });
     } else if (lastActivity) {
-        lines.push(
-            lastActivityWhen ? `${lastActivity} · ${lastActivityWhen}` : lastActivity,
-        );
+        rows.push({
+            label: "Recent",
+            value: lastActivityWhen ? `${lastActivity} · ${lastActivityWhen}` : lastActivity,
+        });
     }
-    if (dueAt) lines.push(`Due · ${dueAt}`);
+    if (dueAt) rows.push({ label: "Due", value: dueAt });
 
-    if (!purpose && lines.length === 0 && outcomes.length === 0) return null;
+    if (rows.length === 0 && outcomes.length === 0) return null;
 
     return (
         <div className="alloy-os-currentwork__context" data-work-context="true">
-            {purpose ?
-                <p className="alloy-os-currentwork__context-purpose" data-work-purpose="true">
-                    {purpose}
-                </p>
-            :   null}
-            {lines.length > 0 ?
-                <ul className="alloy-os-currentwork__context-lines">
-                    {lines.map((line) => (
-                        <li key={line}>{line}</li>
+            {rows.length > 0 ?
+                <dl className="alloy-os-currentwork__context-rows">
+                    {rows.map((row) => (
+                        <div key={row.label} className="alloy-os-currentwork__context-row">
+                            <dt className="alloy-os-currentwork__context-label">{row.label}</dt>
+                            <dd className="alloy-os-currentwork__context-value">{row.value}</dd>
+                        </div>
                     ))}
-                </ul>
+                </dl>
             :   null}
             {outcomes.length > 0 ?
-                <p className="alloy-os-currentwork__context-outcomes" data-work-possible-outcomes="true">
-                    <span className="alloy-os-currentwork__context-outcomes-label">Results that advance</span>
-                    {" · "}
-                    {outcomes.join(" · ")}
-                </p>
+                <div className="alloy-os-currentwork__context-row" data-work-possible-outcomes="true">
+                    <p className="alloy-os-currentwork__context-label">Results that advance</p>
+                    <p className="alloy-os-currentwork__context-value">{outcomes.join(" · ")}</p>
+                </div>
             :   null}
         </div>
     );

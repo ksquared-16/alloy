@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
 import CurrentWorkActivityPreview, {
+    CurrentWorkActivityKindIcon,
     type CurrentWorkActivityPreviewItem,
 } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import CurrentWorkFocusedSurface from "@/components/admin/focusPanel/cards/CurrentWorkFocusedSurface";
@@ -125,6 +126,7 @@ export default function CurrentWorkCard({
             currentWorkId: vm.primaryWorkItem?.work_id ?? undefined,
             workTemplateKey: vm.primaryWorkItem?.template_key ?? undefined,
             timeZone: viewerTimeZone,
+            limit: 3,
         }),
         [context, vm.primaryWorkItem?.template_key, vm.primaryWorkItem?.work_id, viewerTimeZone],
     );
@@ -425,25 +427,33 @@ export default function CurrentWorkCard({
         : surface.status === "completed" ? "done"
         :   "neutral";
 
-    // #1: the drill-in to the focused surface is a CARD-LEVEL affordance, anchored in the card
-    // footer — never a second link stacked inside the "Still needed" requirement group (that
-    // group's own owner handoff is its navigation). Generic: shown for any configured work while
-    // the summary is presented, regardless of owner.
-    const canOpenFocused =
+    // Footer opens recent activity (same canonical preview as the Activity timeline), not a
+    // second work surface. Focused Current Work still opens via Work Items → Open work.
+    const canPreviewActivity =
         !isWorkspace
         && !stageWorkPending
         && !evidence.isEmpty
-        && completionPhase !== "complete"
-        && Boolean(coordination?.openCurrentWorkWorkspace);
-    const footerAction = canOpenFocused ? (
-        <button
-            type="button"
-            className="alloy-os-currentwork__summary-open"
-            data-work-action="open-focused"
-            onClick={() => openWorkspace({ kind: "drill_in" })}
-        >
-            View details →
-        </button>
+        && completionPhase !== "complete";
+    const footerAction = canPreviewActivity ? (
+        <div className="alloy-os-currentwork__activity-link-wrap relative">
+            <button
+                ref={openWorkspaceTriggerRef}
+                type="button"
+                className="alloy-os-currentwork__summary-open"
+                data-work-action="preview-activity"
+                aria-expanded={activityPreviewOpen}
+                onClick={() => setActivityPreviewOpen((open) => !open)}
+            >
+                View activity
+            </button>
+            <CurrentWorkActivityPreview
+                open={activityPreviewOpen}
+                items={activityPreviewItems}
+                onClose={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
+                triggerRef={openWorkspaceTriggerRef}
+            />
+        </div>
     ) : null;
     const stageLabel = context.businessProcess?.stageKey ?? null;
     const ownerLabel = null;
@@ -523,6 +533,7 @@ export default function CurrentWorkCard({
                 opportunityId={opportunityId}
                 focusedWorkItemId={focusedWorkItemId}
                 truth={context.truth as Record<string, unknown>}
+                activityItems={activityPreviewItems}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 onWarm={warmAction}
@@ -557,7 +568,7 @@ export default function CurrentWorkCard({
             <UniversalCard
                 title={vm.microLabel}
                 insight={surface.title}
-                supportingInsight={capabilityActive ? null : surface.description}
+                supportingInsight={null}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="status"
@@ -585,6 +596,7 @@ function SummaryBody({
     opportunityId,
     focusedWorkItemId,
     truth,
+    activityItems,
     onChecklistItem,
     onAction,
     onWarm,
@@ -593,6 +605,7 @@ function SummaryBody({
     opportunityId: string;
     focusedWorkItemId: string | null;
     truth?: Record<string, unknown> | null;
+    activityItems: CurrentWorkActivityPreviewItem[];
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
@@ -614,6 +627,7 @@ function SummaryBody({
         !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
 
     const hasSupporting = helpful.length > 0 || Boolean(subordinateOutcome);
+    const recentActivity = activityItems.slice(0, 3);
 
     return (
         <div
@@ -673,6 +687,26 @@ function SummaryBody({
                     </div>
                 :   null}
                 <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                {recentActivity.length > 0 ?
+                    <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
+                        <p className="alloy-os-currentwork__context-label">Recent activity</p>
+                        <ul className="alloy-os-currentwork__recent-activity-list">
+                            {recentActivity.map((item, index) => (
+                                <li key={`${item.label}-${item.occurredAt ?? index}`}>
+                                    <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
+                                        <CurrentWorkActivityKindIcon kind={item.kind} />
+                                    </span>
+                                    <span className="alloy-os-currentwork__recent-activity-body">
+                                        <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
+                                        {item.occurredAt ?
+                                            <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
+                                        :   null}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                :   null}
                 {workId ?
                     <div
                         className="mt-2 flex flex-wrap items-center gap-2"

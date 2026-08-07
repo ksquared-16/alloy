@@ -17,29 +17,17 @@ const KIND_CATEGORY: Record<LeadActivityPreviewKind, string> = {
     updated: "Record update",
 };
 
-const KIND_PRIORITY: Record<LeadActivityPreviewKind, number> = {
-    activity: 1,
-    communication: 2,
-    task: 3,
-    note: 4,
-    updated: 5,
-    created: 6,
-};
-
-function kindPriority(kind: LeadActivityPreviewKind): number {
-    return KIND_PRIORITY[kind] ?? 99;
-}
-
 function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPreviewItem {
     return {
         label: entry.detail ?? entry.label,
         detail: entry.detail && entry.label !== entry.detail ? entry.label : null,
         category: KIND_CATEGORY[entry.kind] ?? "Record update",
+        kind: entry.kind,
         occurredAt: entry.at,
     };
 }
 
-/** Prioritize Current Work-related events, then fall back to recent canonical record activity. */
+/** Prefer newest-first source order for What's Next / Recent activity (not kind priority). */
 export function buildCurrentWorkActivityPreviewItems(input: {
     activityItems?: CanonicalActivityItemVM[];
     context: OperationalContext;
@@ -49,13 +37,12 @@ export function buildCurrentWorkActivityPreviewItems(input: {
     /** Resolved operator timezone (canonical local-time doctrine); UTC only if absent. */
     timeZone?: string;
 }): CurrentWorkActivityPreviewItem[] {
-    const limit = input.limit ?? 5;
+    const limit = input.limit ?? 3;
     const canonical =
         input.activityItems
         ?? resolveLeadActivityPreview(input.context.truth as ProofRuntimeRecord, input.timeZone);
 
-    const sorted = [...canonical].sort((a, b) => kindPriority(a.kind) - kindPriority(b.kind));
-    const items = sorted.map(toPreviewItem);
+    const items = canonical.map(toPreviewItem);
 
     if (items.length > 0) {
         return items.slice(0, limit);
@@ -67,6 +54,7 @@ export function buildCurrentWorkActivityPreviewItems(input: {
                 label: "Tour scheduled",
                 detail: input.context.signals.tour.statusLabel ?? undefined,
                 category: "Scheduled actions",
+                kind: "task",
                 occurredAt:
                     formatActivityTimestamp(
                         input.context.signals.tour.startAt,

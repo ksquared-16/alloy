@@ -60,7 +60,7 @@ describe("Contact Family → Communications loop", () => {
                 state: "open",
             },
             additional: [],
-        } as StageWorkRuntimeProjection;
+        } as unknown as StageWorkRuntimeProjection;
         const residual = filterResidualOperationalTasks(preview, stageRuntime);
         expect(residual.open_tasks.map((t) => t.id)).toEqual(["adhoc-1"]);
         // Unfiltered preview retains Contact Family identity for Activity Work Items.
@@ -129,6 +129,13 @@ describe("Contact Family → Communications loop", () => {
         expect(card).toContain("alloy-os-currentwork__primary-stack");
         expect(card).toContain("alloy-os-currentwork__supporting-row");
         expect(card).toContain("CurrentWorkContextStrip");
+        expect(card).toContain("View activity");
+        expect(card).toContain("data-work-recent-activity");
+        expect(card).not.toContain("View details →");
+        const strip = read("components/admin/focusPanel/cards/CurrentWorkContextStrip.tsx");
+        expect(strip).toContain("formatTaskDueDate");
+        expect(strip).toContain("alloy-os-currentwork__context-label");
+        expect(strip).not.toContain("context-purpose");
         const focused = read("components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx");
         expect(focused).toContain("alloy-os-currentwork__primary-stack");
         expect(focused).toContain("data-work-supporting-row");
