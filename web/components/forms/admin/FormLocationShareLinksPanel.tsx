@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormPublicLinkRow } from "@/components/forms/workspace/FormDistributionPanel";
+import { readShareEmbedPath } from "@/lib/admin/forms/distributionLinkReuse";
 import { distributionIsPreviewLink } from "@/lib/forms/distributionPresentation";
 import { buildFormEmbedIframeSnippet } from "@/lib/forms/formSharePresentation";
 import { readLinkEmbedUrl } from "@/lib/forms/intakeRuntimeOrchestrationStorage";
@@ -13,7 +14,6 @@ import {
     type ShareByLocationSiteOption,
 } from "@/lib/forms/shareByLocationPresentation";
 import {
-    intakeWorkspaceBtnPrimary,
     intakeWorkspaceBtnSecondary,
 } from "@/components/forms/workspace/IntakeWorkspaceHubView";
 import { opMetadata, opMutedMeta } from "@/lib/operational/ui/operationalVisualTokens";
@@ -58,7 +58,6 @@ export function FormLocationShareLinksPanel({
     const [siteOptions, setSiteOptions] = useState<ShareByLocationSiteOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadErr, setLoadErr] = useState<string | null>(null);
-    const [locationId, setLocationId] = useState("");
     const [localErr, setLocalErr] = useState<string | null>(null);
     const [creatingSiteId, setCreatingSiteId] = useState<string | null>(null);
 
@@ -93,6 +92,16 @@ export function FormLocationShareLinksPanel({
         [links]
     );
 
+    /** Persisted path (any session, any operator) → session cache → nothing. */
+    const resolveLinkEmbedUrl = (link: FormPublicLinkRow): string | null => {
+        const persisted = readShareEmbedPath(link.metadata);
+        if (persisted) {
+            const origin = typeof window === "undefined" ? "" : window.location.origin;
+            return origin ? `${origin}${persisted}` : persisted;
+        }
+        return readLinkEmbedUrl(link.id);
+    };
+
     const handleCreate = (site: ShareByLocationSiteOption) => {
         setLocalErr(null);
         setCreatingSiteId(site.id);
@@ -104,19 +113,6 @@ export function FormLocationShareLinksPanel({
         ).finally(() => setCreatingSiteId(null));
     };
 
-    const handleCreateFromDropdown = () => {
-        setLocalErr(null);
-        if (!locationId.trim()) {
-            setLocalErr("Choose a school.");
-            return;
-        }
-        const selected = siteOptions.find((s) => s.id === locationId);
-        if (!selected) {
-            setLocalErr("Choose a valid school.");
-            return;
-        }
-        handleCreate(selected);
-    };
 
     if (!hasPublished) {
         return (
@@ -148,7 +144,11 @@ export function FormLocationShareLinksPanel({
             :   <ul className="mt-3 space-y-2" data-testid="location-share-link-rows">
                     {siteOptions.map((site) => {
                         const link = findLocationSpecificShareLinkForSite(operationalLinks, site.id);
-                        const embedUrl = link ? readLinkEmbedUrl(link.id) : null;
+                        // The API persists a reconstructable embed path on the link
+                        // (SHARE_EMBED_PATH_META_KEY) precisely so a link stays retrievable for any
+                        // operator in any session. Reading only the sessionStorage cache meant every
+                        // link created in an earlier session showed an uncopyable dead end.
+                        const embedUrl = link ? resolveLinkEmbedUrl(link) : null;
                         const iframeSnippet =
                             embedUrl ? buildFormEmbedIframeSnippet(embedUrl, `${formName} — ${site.label}`) : null;
                         const copyLinkKey = `location-link-${site.id}`;
@@ -185,9 +185,23 @@ export function FormLocationShareLinksPanel({
                                             :   null}
                                         </>
                                     : link ?
-                                        <span className={clsx("self-center text-sm", opMutedMeta)}>
-                                            Link created — copy embed right after creating a new link
-                                        </span>
+                                        // Legacy link: the token is hashed server-side and was never
+                                        // persisted, so this URL is genuinely unrecoverable. Offer the
+                                        // one action that helps — mint a fresh, retrievable link.
+                                        canMutate ?
+                                            <button
+                                                type="button"
+                                                className={intakeWorkspaceBtnSecondary}
+                                                disabled={creating || shareCreationBlocked}
+                                                data-testid={`location-link-regenerate-${site.id}`}
+                                                title="This link was created before links were retrievable. Regenerate to get a copyable URL."
+                                                onClick={() => handleCreate(site)}
+                                            >
+                                                {rowCreating ? "Regenerating…" : "Regenerate link"}
+                                            </button>
+                                        :   <span className={clsx("self-center text-sm", opMutedMeta)}>
+                                                Link created — not retrievable
+                                            </span>
                                     : canMutate ?
                                         <button
                                             type="button"
@@ -213,51 +227,10 @@ export function FormLocationShareLinksPanel({
                 </ul>
             }
 
-            {canMutate && siteOptions.length > 0 ?
-                <div
-                    className="mt-4 rounded-lg bg-white/95 px-3 py-3 ring-1 ring-alloy-midnight/[0.07]"
-                    data-testid="location-share-link-create"
-                >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/65">
-                        {SHARE_BY_LOCATION_COPY.createSectionTitle}
-                    </p>
-                    <label className="mt-2 block space-y-1">
-                        <span className="text-xs font-medium text-alloy-midnight">{SHARE_BY_LOCATION_COPY.createPrompt}</span>
-                        <select
-                            className="w-full rounded-lg border border-alloy-midnight/10 bg-white px-2.5 py-1.5 text-sm shadow-sm"
-                            value={locationId}
-                            disabled={loading || creating}
-                            data-testid="location-link-location"
-                            onChange={(e) => setLocationId(e.target.value)}
-                        >
-                            <option value="">{SHARE_BY_LOCATION_COPY.selectLocation}</option>
-                            {siteOptions.map((opt) => (
-                                <option key={opt.id} value={opt.id}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    {localErr || createErr ?
-                        <p className="mt-2 text-sm text-alloy-ember" role="alert">
-                            {localErr ?? createErr}
-                        </p>
-                    :   null}
-                    <button
-                        type="button"
-                        className={clsx(intakeWorkspaceBtnPrimary, "mt-3")}
-                        disabled={creating || loading || !locationId || shareCreationBlocked}
-                        data-testid="location-link-create-submit"
-                        title={shareCreationBlocked ? shareBlockMessage ?? undefined : undefined}
-                        onClick={handleCreateFromDropdown}
-                    >
-                        {creating ?
-                            "Creating…"
-                        : shareCreationBlocked ?
-                            shareBlockButtonLabel
-                        :   SHARE_BY_LOCATION_COPY.createButton}
-                    </button>
-                </div>
+            {localErr || createErr ?
+                <p className="mt-3 text-sm text-alloy-ember" role="alert" data-testid="location-share-link-error">
+                    {localErr ?? createErr}
+                </p>
             :   null}
         </div>
     );

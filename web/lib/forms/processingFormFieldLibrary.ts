@@ -26,6 +26,7 @@ import {
     type SystemFieldRegistryEntry,
 } from "@/lib/forms/systemFieldRegistry";
 import type { LifecycleFieldPaletteEntry } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
 /** How the builder should materialize a picked library entry. */
@@ -66,39 +67,54 @@ const ENTITY_GROUP: Record<LifecycleRequirementEntityKey | string, ProcessingBui
     child: "child",
     opportunity: "enrollment",
     customer: "household",
+    // Registry entity names, for collapsing curated duplicates back to a natural group.
+    guardian: "parent",
+    enrollment: "enrollment",
+    household: "household",
 };
 
-/** Registry lookup by (entity, field_key) — the palette speaks field keys, not registry ids. */
-const REGISTRY_BY_ENTITY_FIELD = new Map<string, SystemFieldRegistryEntry>();
+/**
+ * Registry lookup by capture key.
+ *
+ * The palette speaks bare entity field keys (`person` / `first_name`); the registry's own
+ * `field_key` is the prefixed form (`guardian_first_name`). Joining on `${entity}:${field_key}`
+ * therefore never matched, every palette rule fell through to an unbound "bound" offer, and the
+ * curated overlay re-added the same field under a second label — two "first name" entries for
+ * parents, three for guardian email/phone.
+ *
+ * `lifecycleFieldRuleBinding(ruleId).form_capture_keys` is the platform's own answer to "which form
+ * field satisfies this rule" (it is what `evaluateFormsLifecycleFieldCoverage` matches on), and its
+ * entries are exactly registry field keys. Join on that.
+ */
+const REGISTRY_BY_CAPTURE_KEY = new Map<string, SystemFieldRegistryEntry>();
 for (const entry of OPERATIONAL_FORM_SYSTEM_FIELDS) {
-    REGISTRY_BY_ENTITY_FIELD.set(`${entry.entity_type}:${entry.field_key}`, entry);
-    if (entry.shared_value_key) {
-        REGISTRY_BY_ENTITY_FIELD.set(`${entry.entity_type}:${entry.shared_value_key}`, entry);
+    for (const key of [entry.id, entry.field_key, entry.shared_value_key]) {
+        if (key && !REGISTRY_BY_CAPTURE_KEY.has(key)) REGISTRY_BY_CAPTURE_KEY.set(key, entry);
     }
-}
-
-/** Palette entities and registry entities do not use identical names for the same thing. */
-function registryEntityAliases(entity: string): string[] {
-    if (entity === "person") return ["person", "guardian", "parent"];
-    if (entity === "child") return ["child", "inquiry_child"];
-    if (entity === "opportunity") return ["opportunity", "inquiry"];
-    if (entity === "customer") return ["customer", "household"];
-    return [entity];
 }
 
 function registryEntryForPalette(entry: LifecycleFieldPaletteEntry): SystemFieldRegistryEntry | null {
-    if (!entry.field_key) return null;
-    for (const alias of registryEntityAliases(entry.entity)) {
-        const hit = REGISTRY_BY_ENTITY_FIELD.get(`${alias}:${entry.field_key}`);
+    const binding = lifecycleFieldRuleBinding(entry.rule_id);
+    for (const captureKey of binding?.form_capture_keys ?? []) {
+        const hit = REGISTRY_BY_CAPTURE_KEY.get(captureKey);
         if (hit) return hit;
     }
-    return null;
+    // Org custom fields have no binding; try the palette's own key before giving up.
+    return (entry.field_key && REGISTRY_BY_CAPTURE_KEY.get(entry.field_key)) || null;
 }
 
-/** Curated presentation overlay, keyed by the registry id a curated entry resolves to. */
-const CURATED_BY_REGISTRY_ID = new Map<string, (typeof PROCESSING_BUILDER_CANONICAL_FIELDS)[number]>();
-for (const curated of PROCESSING_BUILDER_CANONICAL_FIELDS) {
-    if (!CURATED_BY_REGISTRY_ID.has(curated.registryId)) CURATED_BY_REGISTRY_ID.set(curated.registryId, curated);
+/**
+ * Curated label overlay. Only borrow a curated label when that curated entry sits in the SAME group
+ * the palette rule belongs to — otherwise its framing is about a different use of the field
+ * (guardian_email as "Emergency email" vs "Parent email") and would mislabel the requirement.
+ */
+function curatedLabelSourceFor(
+    registryId: string,
+    group: ProcessingBuilderLibraryGroup
+): (typeof PROCESSING_BUILDER_CANONICAL_FIELDS)[number] | undefined {
+    return PROCESSING_BUILDER_CANONICAL_FIELDS.find(
+        (c) => c.registryId === registryId && c.group === group
+    );
 }
 
 const KIND_TO_BUILDER_TYPE: Record<string, BuilderFieldType> = {
@@ -158,8 +174,12 @@ function offerFromPalette(
     tier: "required" | "recommended" | undefined
 ): ProcessingLibraryFieldOffer {
     const registry = registryEntryForPalette(entry);
-    const curated = registry ? CURATED_BY_REGISTRY_ID.get(registry.id) : undefined;
-    const group = curated?.group ?? ENTITY_GROUP[entry.entity] ?? "system";
+    // A palette rule belongs to its OWN entity's group — the curated overlay may only lend a nicer
+    // label, never relocate it. Several curated entries share one registry field under different
+    // operator framings (guardian_email is both "Parent email" and "Emergency email"); letting the
+    // first match win filed the parent-email requirement under Emergency contacts.
+    const group = ENTITY_GROUP[entry.entity] ?? "system";
+    const curated = registry ? curatedLabelSourceFor(registry.id, group) : undefined;
     const builderType = builderTypeFor(entry, registry);
 
     // No form field can satisfy it: the platform manages it on the record (`config_only`), it is
@@ -188,20 +208,44 @@ function offerFromPalette(
     };
 }
 
-/** Curated entries that no palette rule covers — still worth offering (allergies, signature, …). */
+/**
+ * Curated entries that no palette rule covers — still worth offering (allergies, signature, …).
+ *
+ * Several curated entries describe the SAME registry field under different operator framings
+ * (`guardian_email` is both "Parent email" and "Emergency email"). Offering both would put two form
+ * fields on one underlying key, so a shared field collapses to a single offer that uses the
+ * registry's own label and its entity-natural group rather than arbitrarily picking one framing.
+ */
 function curatedExtras(claimedRegistryIds: ReadonlySet<string>): ProcessingLibraryFieldOffer[] {
-    const out: ProcessingLibraryFieldOffer[] = [];
+    const byRegistryId = new Map<string, (typeof PROCESSING_BUILDER_CANONICAL_FIELDS)[number][]>();
     for (const curated of PROCESSING_BUILDER_CANONICAL_FIELDS) {
         if (claimedRegistryIds.has(curated.registryId)) continue;
-        const registry = resolveProcessingBuilderRegistryEntry(curated);
-        if (!registry) continue;
+        if (!resolveProcessingBuilderRegistryEntry(curated)) continue;
+        byRegistryId.set(curated.registryId, [...(byRegistryId.get(curated.registryId) ?? []), curated]);
+    }
+
+    const out: ProcessingLibraryFieldOffer[] = [];
+    for (const [registryId, entries] of byRegistryId) {
+        const only = entries.length === 1 ? entries[0] : undefined;
+        if (only) {
+            out.push({
+                id: only.id,
+                ruleId: null,
+                label: only.pickerLabel,
+                meta: only.pickerMeta,
+                group: only.group,
+                add: { kind: "registry", registryId },
+            });
+            continue;
+        }
+        const registry = resolveProcessingBuilderRegistryEntry(entries[0]!)!;
         out.push({
-            id: curated.id,
+            id: registryId,
             ruleId: null,
-            label: curated.pickerLabel,
-            meta: curated.pickerMeta,
-            group: curated.group,
-            add: { kind: "registry", registryId: curated.registryId },
+            label: registry.default_label,
+            meta: entries[0]!.pickerMeta,
+            group: ENTITY_GROUP[registry.entity_type] ?? entries[0]!.group,
+            add: { kind: "registry", registryId },
         });
     }
     return out;

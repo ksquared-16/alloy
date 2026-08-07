@@ -213,9 +213,19 @@ export default function ProcessingFormBuilder({
             setLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, metadata } : l))),
         []
     );
-    const onCopy = useCallback((_key: string, text: string) => {
-        void navigator.clipboard?.writeText(text);
+    // The panel renders "Copied" from this key. It was never tracked, so every copy button looked
+    // inert even when the clipboard write succeeded.
+    const [copiedKey, setCopiedKey] = useState<string | null>(null);
+    const onCopy = useCallback((key: string, text: string) => {
+        void Promise.resolve(navigator.clipboard?.writeText(text))
+            .then(() => setCopiedKey(key))
+            .catch(() => setCopiedKey(null));
     }, []);
+    useEffect(() => {
+        if (!copiedKey) return;
+        const t = setTimeout(() => setCopiedKey(null), 1600);
+        return () => clearTimeout(t);
+    }, [copiedKey]);
     const onCreateLocationLink = useCallback(
         async ({ locationId, locationName }: { locationId: string; locationName: string }) => {
             const pv = await loadPublishedVersionId(formId);
@@ -446,7 +456,7 @@ export default function ProcessingFormBuilder({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-alloy-stone" data-testid="processing-form-builder">
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-alloy-midnight/[0.06] bg-white px-4 py-2.5" data-testid="surface-publish-toolbar">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-alloy-midnight/[0.06] bg-white py-2.5 pl-4 pr-14" data-testid="surface-publish-toolbar">
                 <button type="button" onClick={onBack} className="text-[12px] text-alloy-midnight/50 hover:text-alloy-midnight">
                     ← Forms
                 </button>
@@ -605,6 +615,7 @@ export default function ProcessingFormBuilder({
                                 schema={schema}
                                 editable={editable}
                                 mutate={mutate}
+                                fieldLibrary={fieldLibrary}
                                 onRemove={() => {
                                     mutate((s) => removeField(s, selectedField.id));
                                     setSelectedFieldId(null);
@@ -794,6 +805,7 @@ export default function ProcessingFormBuilder({
                                                 hasPublished={hasPublishedVersion}
                                                 canMutate={editable || hasPublishedVersion}
                                                 onCopy={onCopy}
+                                                copied={copiedKey}
                                                 onCreateLocationLink={onCreateLocationLink}
                                             />
                                         </div>
