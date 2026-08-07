@@ -36,6 +36,12 @@ the authorization on a byte-identical run. **That rename must not be reverted** 
 run** across all of Q1–Q6, and the census **identifies its own target for the first time**: org fingerprint
 `ab7e5dde…`. Query hash `743cd63b…` → `a3982ca5…`, which is the added key, not drift. The Supabase project ref
 is still unproven, so `target.confirmed_against_live` stays `false` (§4)
+· **W-6 preflight EXECUTED and the M1 gate MOVED 2026-08-07** (mission `msn_f74ed02c126c88d7ff`, assignment
+`asg_5b1ea3f9a620c6`, third dispatch) — riding run 3 rather than requesting its own census, so **one
+authorization discharged both**. Q4 re-derived at **2** on the `pairs_without_profile` grain, **0** orphans;
+`preflight.ok: true` with evidence [`w6-m1-preflight.json`](w6-m1-preflight.json). M1 moves **`unmet` →
+`operator_review`** — the first §11 migration to clear the shared-apply gate. **It is still not applied**, the
+exit criterion is still unmet, and **Accept must not advance the spine** (§6, §11)
 · **W-1…W-3 re-executed 2026-08-06 under the reopen** (same mission and assignment) — 55 suites green
 on arrival across a 192-commit interval; RL-1 widened from three directories to the whole of
 `web/app/api` and hardened against comment-only gates; **W-2's exit criterion is not met — two
@@ -1349,18 +1355,29 @@ alongside it: `asg_86eb0e4a95142e` was editing the same JSON artifact concurrent
 two assignments happened to touch different keys, so it was survivable — but concurrent writers on one
 artifact is a live collision risk in this worktree, not a hypothetical one.
 
-**The migration has never been parsed by a PostgreSQL.** No local stack was running on either dispatch, and the
-shared local stack is not the shared target §11 means, so applying there would prove little while mutating a
-resource other slots share. A syntax error in the `DO` block would therefore surface *after* the operator
-authorizes the apply. The four in-transaction post-conditions keep that failure safe — the migration
-transaction rolls back — but it would cost the authorization round trip. Recorded as residual risk, not
-discharged.
+**The migration has never been parsed by a PostgreSQL — and this is now the largest avoidable cost left in
+W-6.** No local stack was running on any of the three dispatches, and the shared local stack is not the shared
+target §11 means, so applying there would prove little while mutating a resource other slots share. A syntax
+error in the `DO` block would therefore surface *after* the operator authorizes the apply. The four
+in-transaction post-conditions keep that failure **safe** — the migration transaction rolls back and the
+database is left exactly as it was — but it would cost the authorization round trip. That mattered less while
+the preflight was the binding constraint; now that the gate reads `operator_review`, an unparsed `DO` block is
+the one remaining thing that can waste the apply authorization. Recorded as residual risk, not discharged.
 
 **QA.** Tier A: post-apply anti-join returns zero. Evidence file per §11 —
-`w6-m1-preflight.json`, carrying the preflight census output and the migration's post-apply `NOTICE` block
-verbatim (membership rows, distinct pairs, pairs-without-profile before/after, rows created, profile totals,
-orphans before/after, pre-existing rows mutated).
-**Exit.** Every membership has exactly one profile row, and W-0 Q4 re-run returns 0.
+[`w6-m1-preflight.json`](w6-m1-preflight.json), **created 2026-08-07 and half-populated**: it carries the
+preflight census output, the rule-by-rule verdicts and the gate checklist. The migration's post-apply `NOTICE`
+block (membership rows, distinct pairs, pairs-without-profile before/after, rows created, profile totals,
+orphans before/after, pre-existing rows mutated) is **still to be captured verbatim on apply** — the file names
+each field and the expected value, so capture is transcription rather than judgment.
+
+That file is also the **durable** home of the preflight numbers, deliberately and not for convenience. The
+census artifact's `results` block is *overwritten in place* by the Director on every run, a behaviour it
+predicts of itself; a run 4 would therefore silently replace the exact counts this `preflight.ok: true` rests
+on, leaving the gate pointing at numbers that no longer exist. Snapshotting them outside that block fixes it.
+
+**Exit.** Every membership has exactly one profile row, and W-0 Q4 re-run returns 0. **Still unmet** — it is a
+post-apply criterion and the migration is unapplied.
 
 ### W-7 — Absent scope denies *(M · I-19 · lockout class L1)*
 
