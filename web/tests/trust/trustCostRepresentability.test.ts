@@ -58,6 +58,12 @@ import type {
 import type { ReasoningOutcome, ReasoningStrategyV1 } from "@/lib/trust/reasoning/reasoningStrategy";
 import { attentionSuggestionEnrichmentDeterministicStrategy } from "@/lib/trust/reasoning/strategies/attentionSuggestionEnrichmentDeterministic";
 import { executeDecisionContract } from "@/lib/trust/runtime/trustRuntime";
+import {
+    buildEligibleReasoningInput,
+    buildInformationPackage,
+    type InformationPackageSpecV1,
+} from "@/lib/trust/information/informationPackage";
+import { ATTENTION_SUGGESTION_MINIMIZATION_V1 } from "@/lib/trust/platform/platformPrivacyPolicies";
 import { computeCostUnits } from "@/lib/metrics/resolvers/trustMetrics";
 
 const WEB_ROOT = join(__dirname, "..", "..");
@@ -111,6 +117,45 @@ const SEMANTIC_MAP = {
     draft_body: "communications",
 } as const;
 
+/**
+ * Phase 2.3.1: a `large_reasoning` strategy is provider-capable, so it may only
+ * proceed from a governed Trust Information Package. This suite drives exactly
+ * such a strategy through the REAL runtime, so it must now supply one — which is
+ * the new invariant doing its job rather than an inconvenience to work around.
+ *
+ * The package restates the same six elements this suite already declared, so the
+ * reasoning input is unchanged and every cost assertion below still measures
+ * what it always measured.
+ */
+const GOVERNED_SPEC: InformationPackageSpecV1<typeof RESOLVED_INFORMATION> = {
+    key: "cost_certification_attention_suggestion",
+    version: "1.0.0",
+    decision_class_key: ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY,
+    source_kind: "attention_suggestion",
+    elements: (Object.keys(SEMANTIC_MAP) as (keyof typeof SEMANTIC_MAP)[]).map((key) => ({
+        key,
+        information_class: SEMANTIC_MAP[key],
+        source_field: `attention_suggestion.${key}`,
+        select: (src: typeof RESOLVED_INFORMATION) =>
+            (src.deterministic_attention_suggestion as Record<string, unknown>)[key] as string | null,
+    })),
+};
+
+function governedInput() {
+    const built = buildInformationPackage({
+        spec: GOVERNED_SPEC,
+        source: RESOLVED_INFORMATION,
+        sourceRefs: { org_id: ORG },
+    });
+    if (!built.ok) throw new Error(`governed package failed: ${built.refusal_code}`);
+    const eligible = buildEligibleReasoningInput({
+        package: built.package,
+        policy: ATTENTION_SUGGESTION_MINIMIZATION_V1,
+    });
+    if (!eligible.ok) throw new Error(`governed eligibility failed: ${eligible.refusal_code}`);
+    return eligible.input;
+}
+
 async function runDecision(correlation: string) {
     const harness = createRepository();
     const built = createDecisionContract({
@@ -130,6 +175,9 @@ async function runDecision(correlation: string) {
         repository: harness.repository,
         nowIso: NOW,
         clock: () => 0,
+        // Supplied only when a provider-capable strategy is overridden in; the
+        // deterministic default path keeps the compatibility input untouched.
+        ...(override.strategy ? { eligibleReasoningInput: governedInput() } : {}),
     });
     return { ...harness, execution };
 }

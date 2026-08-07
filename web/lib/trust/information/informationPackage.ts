@@ -42,6 +42,7 @@
 // would defeat that scan for a cosmetic reason. Do not "simplify" this.
 import { hash as oneShotHash } from "node:crypto";
 
+import type { RedactionStep } from "@/lib/privacy/redactObject";
 import type { TextMinimizationClass } from "@/lib/privacy/minimizeTextContent";
 import { validateTextMinimizationRequest } from "@/lib/privacy/minimizeTextContent";
 import type { InformationClass } from "@/lib/trust/classification/informationClasses";
@@ -308,6 +309,13 @@ export type EligibleReasoningInputV1 = {
     readonly pii_mode: string;
     readonly transformations: readonly TransformationRecord[];
     readonly text_minimizations: readonly TextMinimizationRecord[];
+    /**
+     * Structural redaction steps, carried so a Decision Package built from this
+     * input reports the SAME privacy evidence as one built the compatibility
+     * way. Without it a governed package would understate what minimization
+     * occurred — a smaller version of the misstatement Phase 2.1 removed.
+     */
+    readonly redaction_steps: readonly RedactionStep[];
     readonly provenance: InformationPackageProvenanceV1;
     /** Deterministic over the eligible content. Distinct prefix from a package. */
     readonly content_hash: string;
@@ -373,6 +381,7 @@ export function buildEligibleReasoningInput(input: {
             pii_mode: context.pii_mode,
             transformations: context.transformations,
             text_minimizations: context.text_minimizations,
+            redaction_steps: context.redaction_steps,
             provenance: input.package.provenance,
             content_hash: `${ELIGIBLE_REASONING_INPUT_HASH_PREFIX}:${oneShotHash("sha256", stableStringify(material), "hex")}`,
         },
