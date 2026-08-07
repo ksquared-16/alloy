@@ -36,7 +36,11 @@ import type { KnowledgeProviderV1 } from "@/lib/trust/knowledge/knowledgeProvide
 import { createEmptyKnowledgeProvider } from "@/lib/trust/knowledge/knowledgeProvider";
 import { executionCapabilityRationale, isProviderCapableStrategyKind } from "@/lib/trust/reasoning/executionCapability";
 import { parseProviderCostUnits, ZERO_COST_UNITS } from "@/lib/trust/economics/providerCostUnits";
-import type { DecisionPackageOutcome, DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
+import type {
+    DecisionPackageOutcome,
+    DecisionPackagePrivacyReport,
+    DecisionPackageV1,
+} from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import type { ReasoningContextV1 } from "@/lib/trust/privacy/privacyEngine";
 import { resolvePrivacyPolicy, transformForReasoning } from "@/lib/trust/privacy/privacyEngine";
@@ -110,6 +114,25 @@ type PackageDraft = {
 };
 
 /**
+ * The privacy report for an execution in which privacy **never ran**.
+ *
+ * Truthful by omission rather than by assertion: no classes were present
+ * because none were classified, and no steps were taken because no transform
+ * executed. `transformations` is deliberately ABSENT — Phase 2.1 made that field
+ * optional precisely so "no record exists" and "a record exists and is empty"
+ * could stay distinguishable. Its absence is how a reader knows privacy did not
+ * execute, and that is the whole signal this constant carries.
+ *
+ * `pii_mode` is the platform's conservative default, not a claim that a mode was
+ * applied to anything.
+ */
+const PRIVACY_NOT_EXECUTED: DecisionPackagePrivacyReport = {
+    pii_mode: "strict",
+    classes_present: [],
+    redaction_steps: [],
+};
+
+/**
  * Executes one Decision Contract and returns exactly one Decision Package.
  */
 export async function executeDecisionContract(input: TrustRuntimeInput): Promise<TrustRuntimeExecution> {
@@ -119,6 +142,22 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     const startedAt = clock();
     const trace: TrustRuntimeStep[] = [];
     const knowledgeProvider = input.knowledgeProvider ?? createEmptyKnowledgeProvider();
+
+    /**
+     * Privacy evidence, once privacy has produced any.
+     *
+     * `null` means privacy never executed, and `finish()` then reports
+     * {@link PRIVACY_NOT_EXECUTED}. Assigned exactly once, at the moment real
+     * evidence exists, and only ever READ afterwards — so every terminal path
+     * downstream of privacy reports what privacy actually did, and no path
+     * upstream of it can claim anything.
+     *
+     * Deliberately an execution-local binding rather than a package threaded
+     * through the call chain: it is owned by this one invocation, it cannot
+     * escape, and nothing else can mutate it. Nothing is recomputed at
+     * `finish()` — the value is the canonical transform's own output.
+     */
+    let privacyEvidence: DecisionPackagePrivacyReport | null = null;
 
     await repository.insertContract(contract);
     await emitTrustEvent({
@@ -242,10 +281,72 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
         );
         const transformed = transformForReasoning({ classification, policy: privacyPolicy, knowledge: [] });
         if (!transformed.ok) {
+            // Privacy RAN here — it ran and refused. The per-element records it
+            // produced before refusing are real evidence, and the classes it
+            // classified are real, so a `refused_privacy` package reports them
+            // rather than the never-executed default. Steps stay empty because
+            // structural minimization genuinely never ran: the transform aborted
+            // first. Nothing here is fabricated or inferred.
+            privacyEvidence = {
+                pii_mode: privacyPolicy.pii_mode,
+                classes_present: classification.classes_present,
+                redaction_steps: [],
+                // The REFUSED element's record is deliberately excluded, and the
+                // reason is the whole of Phase 2.1's key-leak lesson: a record
+                // carries the element's key, and the element that refuses is
+                // exactly the one whose key is caller-supplied. Preserving it
+                // would let a smuggled `provider_key` or `proposed_command`
+                // write its own name into an immutable package through the
+                // evidence — the same back door the refusal explanation was
+                // already hardened against.
+                //
+                // Every record that survives describes an ADMITTED element, and
+                // an admitted element was mapped by the capability's semantic
+                // map, so its key is declared rather than caller-invented. An
+                // unmapped key defaults to `identity` and refuses at its own
+                // position, so it can never appear among these.
+                //
+                // Nothing is lost: the outcome is `refused_privacy` and the
+                // explanation already names the information class and the
+                // transformation that could not be performed.
+                transformations: transformed.transformations
+                    .filter((t) => t.disposition !== "refused")
+                    .map((t) => ({
+                        key: t.key,
+                        information_class: t.information_class,
+                        transformation: t.transformation,
+                        disposition: t.disposition,
+                        support: t.support,
+                    })),
+                text_minimizations: [],
+            };
             return finish({ outcome: "refused_privacy", explanation: transformed.detail });
         }
         baseContext = transformed.context;
     }
+
+    // Privacy has now executed and produced a full result. Captured ONCE, from
+    // the canonical transform's own output, so every terminal path after this
+    // line reports what privacy actually did. The success path below reads this
+    // same value, so a refusal and a recommendation cannot report differently.
+    privacyEvidence = {
+        pii_mode: baseContext.pii_mode,
+        classes_present: baseContext.classes_present,
+        redaction_steps: baseContext.redaction_steps.map((s) => ({ path: s.path, kind: s.kind })),
+        transformations: baseContext.transformations.map((t) => ({
+            key: t.key,
+            information_class: t.information_class,
+            transformation: t.transformation,
+            disposition: t.disposition,
+            support: t.support,
+        })),
+        text_minimizations: baseContext.text_minimizations.map((m) => ({
+            detector_key: m.detector_key,
+            redaction_kind: m.redaction_kind,
+            replaced_count: m.replaced_count,
+        })),
+    };
+
     await emitTrustEvent({
         org_id: contract.org_id,
         event_type: "trust_privacy_transformed",
@@ -446,28 +547,10 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
         trust_semantics_version: trust.semantics_version,
         review_requirement: trust.review_requirement,
         validation: validation.report,
-        privacy_report: {
-            pii_mode: context.pii_mode,
-            classes_present: context.classes_present,
-            redaction_steps: context.redaction_steps.map((s) => ({ path: s.path, kind: s.kind })),
-            // Projected, not spread: the record carries a rationale sentence the
-            // package has no reason to persist, and a spread would silently
-            // admit any field a future record gains.
-            transformations: context.transformations.map((t) => ({
-                key: t.key,
-                information_class: t.information_class,
-                transformation: t.transformation,
-                disposition: t.disposition,
-                support: t.support,
-            })),
-            // Projected for the same reason, and counts only — the removed
-            // substrings are precisely what must not persist.
-            text_minimizations: context.text_minimizations.map((m) => ({
-                detector_key: m.detector_key,
-                redaction_kind: m.redaction_kind,
-                replaced_count: m.replaced_count,
-            })),
-        },
+        // The SAME captured evidence a refusal would report. One source, so a
+        // recommendation and a refusal from the same execution can never
+        // describe different privacy.
+        privacy_report: privacyEvidence ?? PRIVACY_NOT_EXECUTED,
         economics: {
             strategy_key: selection.strategy.key,
             strategy_kind: selection.strategy.kind,
@@ -570,7 +653,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             trust_semantics_version: null,
             review_requirement: decisionClass?.review_requirement ?? "operator_review",
             validation: null,
-            privacy_report: { pii_mode: "strict", classes_present: [], redaction_steps: [] },
+            privacy_report: privacyEvidence ?? PRIVACY_NOT_EXECUTED,
             economics: {
                 strategy_key: econ?.strategy ?? null,
                 strategy_kind: econ?.strategyKind ?? null,
