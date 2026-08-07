@@ -56,12 +56,25 @@ describe("Create Lead Open Lead handoff descriptor", () => {
         expect(host).toContain("onOpenLead");
         expect(host).toContain("discardSession");
         expect(host).toContain("router.push");
-        expect(host).toContain("resolveCreatedRecordProcessContextHref");
+        expect(host).toContain("resolveOpenLeadFocusPanelHref");
         expect(host).toContain('type="button"');
         expect(host).toContain("data-bos-command-session-open-lead");
         expect(host.indexOf("data-bos-command-session-open-lead")).toBeGreaterThan(
             host.indexOf('type="button"'),
         );
+    });
+
+    it("Open Lead resolves Work Unit from the created opportunity when session has none", () => {
+        const helper = readFileSync(
+            resolve(
+                webRoot,
+                "lib/platform/commands/createLead/resolveOpenLeadFocusPanelHref.ts",
+            ),
+            "utf8",
+        );
+        expect(helper).toContain("/api/admin/entity/opportunities/");
+        expect(helper).toContain("resolveCreatedRecordProcessContextHref");
+        expect(helper).toContain("subject_id");
     });
 
     it("create_lead action detail carries work_unit_key into the success seam", () => {
