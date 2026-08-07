@@ -351,6 +351,16 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             pii_mode: context.pii_mode,
             classes_present: context.classes_present,
             redaction_steps: context.redaction_steps.map((s) => ({ path: s.path, kind: s.kind })),
+            // Projected, not spread: the record carries a rationale sentence the
+            // package has no reason to persist, and a spread would silently
+            // admit any field a future record gains.
+            transformations: context.transformations.map((t) => ({
+                key: t.key,
+                information_class: t.information_class,
+                transformation: t.transformation,
+                disposition: t.disposition,
+                support: t.support,
+            })),
         },
         economics: {
             strategy_key: selection.strategy.key,
