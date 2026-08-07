@@ -1,0 +1,259 @@
+{
+  "artifact": "wave1-reissue-evidence",
+  "plan": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_of_record": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+  "wave": 1,
+  "workstreams_reexecuted": ["W-1", "W-2", "W-3"],
+  "workstreams_out_of_scope": ["W-4", "W-5", "W-8"],
+  "mission": "msn_e7894cb7225bae3c2b",
+  "assignment": "asg_4360f505b75d48",
+  "context_version": "v1",
+  "content_hash": "88e75ca816890386948db891e8463798",
+  "protocol": "vacilando.worker.protocol.v1",
+  "worktree": "wt6-director-experience-dx5-5-continuation",
+  "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+  "commit": "3e000209a3e023a3c434101f70ed53be36fdc13b",
+  "commit_at_remeasure": "448ca9d9f",
+  "executed_utc": "2026-08-07T17:56:53Z",
+
+  "concurrency": {
+    "finding": "TWO assignments executed W-1…W-3 against the same base at the same time, neither aware of the other at dispatch.",
+    "other_assignment": "asg_9e868dd2d78c27",
+    "other_mission": "msn_bc33a72e3138ebc215",
+    "other_evidence": "wave1-dx7-reissue-evidence.json",
+    "other_record_committed_as": "7a623e7fe",
+    "issuance_number": "fifth, concurrent with the fourth",
+    "authorship": "The fourth-issuance record notes analyticsRouteGates.test.ts was 'edited concurrently while this run was in progress — not authored here.' It was authored HERE, by this assignment.",
+    "corrections_to_other_record": [
+      "It describes the change as adding 'loadAdminAccessBundleCached as a second exported name for the raw primitive'. That symbol was already listed on 2026-08-06 and is a distinct function, not an alias. The alias is getAdminAccessContext.",
+      "It reports +107 lines, which was a mid-edit snapshot."
+    ],
+    "corrections_change_its_conclusions": false,
+    "head_moved_mid_session": [
+      "7a623e7fe docs(access): Wave 1 fourth issuance",
+      "448ca9d9f feat(access): W-7 dual-read lands — Wave 2, L1 lockout class, authored by another assignment"
+    ],
+    "remeasured_after_head_moved": "66 green and subject counts 92/570 both re-derived at 448ca9d9f; unchanged.",
+    "prohibited_scope_untouched": "W-7 (Wave 2, L1) was committed by another worker during this session. This assignment prohibits Wave 2 lockout-class changes and made none.",
+    "escalation": "Dispatch, not this plan, is where concurrent same-scope assignments are fixed. Raised, not absorbed."
+  },
+
+  "posture": {
+    "rule_applied": "Plan §4 — counts are a snapshot; every consumer re-runs rather than cites. This is the FOURTH issuance of W-1…W-3, all three of which were already recorded DONE. Re-executed rather than re-asserted, and each lock's SUBJECT re-enumerated rather than its assertions merely re-run. Consistent with 2026-08-04 and 2026-08-06.",
+    "divergence_from_assignment_framing": "The assignment says 'Implement Wave 1 workstreams W-1…W-3'. They are implemented and green, and have been since 2026-07-31. Flagged to the operator rather than absorbed; the plan's own §4 rule supplied the correct posture.",
+    "prior_runs": [
+      {
+        "mission": "msn_2d054741a54698fa4c",
+        "assignment": "asg_d77353d7377647",
+        "commit": "41610954cdf1",
+        "executed_utc": "2026-07-31T17:52:37Z",
+        "evidence": "wave1-execution-evidence.json"
+      },
+      {
+        "mission": "msn_f74ed02c126c88d7ff",
+        "assignment": "asg_e9308076173af6",
+        "commit": "9e19c8736",
+        "executed_utc": "2026-08-04T17:13:22Z",
+        "evidence": "wave1-reverification-evidence.json"
+      },
+      {
+        "mission": "msn_f74ed02c126c88d7ff",
+        "assignment": "asg_e9308076173af6",
+        "commit": "c66d573056ae",
+        "executed_utc": "2026-08-06T23:15:28Z",
+        "evidence": "wave1-reopen-evidence.json"
+      }
+    ]
+  },
+
+  "base_drift_since_prior_run": {
+    "prior_commit": "c66d573056ae",
+    "web_commits_in_interval": 3,
+    "api_route_files": { "before": 570, "after": 570 },
+    "migrations": { "before": 312, "after": 314 },
+    "interval_contents": [
+      "a3e01ddb5 test(access): widen RL-1 to the G2 class; re-execute Wave 1 under the reopen — this run's own predecessor",
+      "0dd598e7a fix(access): W-4 re-execution — the ratchet was breached",
+      "ab9c5730b feat(access): W-5 — membership and access profile become one transaction (+2 migrations)"
+    ],
+    "note": "The smallest interval any Wave 1 run has crossed, and the first in which no route file was added. Both RL-1 ratchets were therefore expected to hold at their exact floors, and did. The material change is W-5, which altered the membership-writer topology that W-2's open finding is about."
+  },
+
+  "results": {
+    "suites_green_on_arrival": 61,
+    "suites_green_after_this_assignment": 66,
+    "matches_prior_record": true,
+    "suites": [
+      {
+        "path": "web/tests/access/analyticsRouteGates.test.ts",
+        "workstream": "W-1",
+        "lock": "RL-1",
+        "tests_before": 42,
+        "tests_after": 47,
+        "status": "green; subject widened by this assignment (alias completeness)"
+      },
+      {
+        "path": "web/tests/access/selfAuthorityMutation.test.ts",
+        "workstream": "W-2",
+        "lock": "RL-11",
+        "tests_before": 14,
+        "tests_after": 14,
+        "status": "green on arrival, unmodified — see w2_exit_criterion below"
+      },
+      {
+        "path": "web/tests/admin/permissionGrid.test.ts",
+        "workstream": "W-3",
+        "lock": "RL-2",
+        "tests_before": 5,
+        "tests_after": 5,
+        "status": "green on arrival, unmodified"
+      }
+    ]
+  },
+
+  "typecheck": {
+    "command": "vac run typecheck:tests",
+    "rc": 0,
+    "class": "ok",
+    "started_utc": "2026-08-07T17:52:12Z",
+    "finished_utc": "2026-08-07T17:56:53Z",
+    "note": "Brokered through the validation lease, not raw tsc. The 2026-08-04 run could not reach a typecheck at all (command-approval wall); this run reproduces rc=0 for the tests graph, which covers the only file changed."
+  },
+
+  "w1": {
+    "verdict": "holds; a THIRD defect found in the lock and fixed",
+    "family_subject": { "before": 27, "after": 27, "floor": 27, "drift": "none" },
+    "g2_class_subject": {
+      "routes_holding_primitive": 92,
+      "of_total_route_files": 570,
+      "floor": 92,
+      "drift": "none"
+    },
+    "ratchets_at_live_floor": true,
+    "defect_found": {
+      "id": "RL-1 subject completeness — the primitive list is hand-maintained and aliasable",
+      "description": "SUFFICIENT_GATES and RAW_RESOLUTIONS name implementations. The defining modules also export @deprecated aliases under a second name, and callsAny matches `symbol(`, so an alias matches neither list.",
+      "aliases_in_tree": [
+        {
+          "alias": "getAdminAccessContext",
+          "target": "getAdminAccessContextCached",
+          "module": "web/lib/admin/getAdminAccessContext.ts:119",
+          "class": "raw resolution",
+          "risk": "a route calling it holds the G2 shape but is NOT SELECTED — invisible to the class-wide scan, so it can be neither flagged nor excepted",
+          "live_route_callers": 0,
+          "status": "latent — zero callers today, one import away from live"
+        },
+        {
+          "alias": "getAdminContext",
+          "target": "getAdminContextCached",
+          "module": "web/lib/admin/getAdminContext.ts:73",
+          "class": "sufficient gate",
+          "risk": "a correctly gated route would be flagged — noisy, not unsafe",
+          "live_route_callers": 12,
+          "status": "live callers, but none currently in the 92-route subject, so the suite was green"
+        }
+      ],
+      "why_it_matters": "This is the 2026-08-06 subject defect one level up. That run moved the subject from three hand-listed DIRECTORIES to the primitive; the primitive list was itself still hand-listed. Same shape as W-0 Q1's handle_new_user() finding — defined, unreferenced, one change away from live.",
+      "repair": "Both aliases listed, and a new lock derives `export const A = B;` aliases from the three defining modules and fails if an alias of a listed symbol is not itself listed. A future alias forces the review rather than silently voiding the subject."
+    },
+    "red_runs_proving_non_vacuity": [
+      {
+        "mutation": "removed `getAdminAccessContext` from RAW_RESOLUTIONS",
+        "result": "2 failed / 45 passed",
+        "failing": [
+          "lists every alias of a raw access primitive",
+          "did not select an alias-only G2 route under the 2026-08-06 primitive list"
+        ]
+      },
+      {
+        "mutation": "removed `getAdminContext` from SUFFICIENT_GATES",
+        "result": "1 failed / 46 passed",
+        "failing": ["lists every alias of a sufficient gate"]
+      }
+    ],
+    "honest_limit": "Unchanged and still governing: this proves a sufficient gate is CALLED, never that its result is honoured. W-1's own two-resolution finding remains the error it cannot catch. RL-1's tier-A half is still W-14's declared table."
+  },
+
+  "w2": {
+    "verdict": "the three named guards hold; the exit criterion is STILL NOT MET",
+    "exit_criterion": "A principal cannot alter its own membership through any product path.",
+    "met": false,
+    "unchanged_since": "2026-08-06 — this run re-verified both open paths rather than citing them",
+    "guarded_paths_reproved": [
+      "PATCH /api/admin/users/[userId]/role",
+      "PATCH /api/admin/users/[userId]/access-scope",
+      "POST /api/admin/users/[userId]/remove"
+    ],
+    "open_paths": [
+      {
+        "path": "POST /api/admin/dev/create-org",
+        "table": "user_roles",
+        "self_naming_input": "admin_user_id from the REQUEST BODY (route.ts:9, :39)",
+        "still_open": true,
+        "changed_by_w5": "Yes — it now writes through createMembershipWithAccessProfile (createOrgAndAssignAdmin.ts:76). W-5 fixed the PROFILE side (G4); it did not add a self-authority guard.",
+        "severity_correction": "The 2026-08-06 record called this a self-naming vector without qualifying it. Re-read this run: the org is CREATED in the same call, so a caller naming themselves gains admin over an org that did not exist a moment earlier and that they already control. It is a self-membership write, but not an elevation over any pre-existing authority. Bounded further by DEV_TENANT_SPINUP_ENABLED === 'true' and ctx.role === 'admin'.",
+        "verdict": "in scope for the criterion as written; NOT an elevation vector"
+      },
+      {
+        "path": "POST /api/admin/lifecycle-catalog/repair",
+        "table": "user_department_access",
+        "writer": "repairLifecycleWorkspaceVisibility.ts:64-70 → ensureLifecycleDepartmentWorkspaceAccess.ts:165",
+        "self_naming_input": "department_id from the REQUEST BODY (repair/route.ts:21,:28); currentUserId is the caller",
+        "still_open": true,
+        "verdict": "a genuine self-scope-widening vector for an ARBITRARY caller-chosen department — the more severe of the two"
+      },
+      {
+        "path": "POST /api/admin/departments",
+        "table": "user_department_access",
+        "writer": "departments/route.ts:151-158 → ensureLifecycleDepartmentWorkspaceAccess.ts:165",
+        "self_naming_input": "currentUserId: ctx.userId (resolved context, not body); departmentId is the department just created in the same call",
+        "still_open": true,
+        "severity_correction": "The 2026-08-06 record described both user_department_access paths as taking 'a caller-supplied department_id'. That is accurate for repair and INACCURATE for this route — the id is one the caller just created. Still a self-write to an authority table; a weaker vector than repair.",
+        "verdict": "in scope for the criterion as written; bounded"
+      }
+    ],
+    "latency_gate_unchanged": {
+      "bypass": "ensureLifecycleDepartmentWorkspaceAccess.ts:122-124 returns before the insert whenever portalAdminBypassesDepartmentScope(roleKeys) holds",
+      "consequence": "both user_department_access paths are unreachable today by any principal who can call them",
+      "armed_by": "W-8 deletes exactly that bypass; W-13 arms it from the other side by admitting a non-admin/ops persona",
+      "unchanged_this_run": true
+    },
+    "w5_changed_the_durable_repair_picture": {
+      "asked_for_on_2026_08_06": "Enumerate authority writers BY TABLE across web/lib and web/app, not by name across route files. RL-11's subject should be that set.",
+      "what_w5_delivered": "Exactly that question, for user_roles / user_access_profiles only. Its commit message states the audit 'ran by table across web/app and web/lib, not by name across route files'. All three product membership writers now route through the createMembershipWithAccessProfile RPC, and tests/access/membershipAtomicWiring.test.ts:49 adds a source-level lock: no product membership writer may call .insert/.upsert/.update on user_roles.",
+      "what_remains_open": "That lock's regex is /from\\(\\s*[\"']user_roles[\"']\\s*\\)\\s*\\.\\s*(insert|upsert|update)\\b/ — user_roles ONLY. user_department_access, the sixth authority table, has NO writer lock of any kind. A new writer to it can land unseen.",
+      "conclusion": "The durable repair the 2026-08-06 record prescribed is HALF DONE, and the missing half is precisely the half W-8 arms."
+    },
+    "not_widened_here_and_why": "RL-11's lock is web/tests/access/selfAuthorityMutation.test.ts, outside this assignment's stated scope, and the same reasoning the 2026-08-06 record gave still applies: a widened lock should land with the guard it implies, not as a silent test edit that goes green by naming paths nobody fixed. The remedy belongs to W-8's scope."
+  },
+
+  "w3": {
+    "verdict": "green; premise unchanged by the interval",
+    "lock": "RL-2 parses every permission_definitions INSERT across the migration tree",
+    "migration_tree": { "before": 312, "after": 314 },
+    "new_migrations_examined": [
+      "20260807090000_membership_profile_atomic_create.sql",
+      "20260807140000_backfill_membership_access_profiles.sql"
+    ],
+    "new_migrations_touch_permission_catalog": false,
+    "note": "Neither new migration mentions `workflows` or `permission_definitions`, so W-3's catalog picture is unchanged. The dangling product decision remains bound to W-11 per the 2026-08-06 record (C13): the row returns iff W-11 seeds a workflows key that something enforces. Nothing for Wave 1 to do."
+  },
+
+  "changed_files": ["web/tests/access/analyticsRouteGates.test.ts"],
+  "behaviour_change": false,
+  "behaviour_change_note": "No route handler, library, schema or migration was modified. The only change is a regression lock widening its own subject.",
+
+  "not_verified_this_run": [
+    "No live database query. W-0's counts are now SEVEN days old (run 3 executed 2026-08-07T17:24:16Z for Q1–Q6, but the 2026-08-06 finding that Q4 can grow through a path §6 does not name still stands, and W-5 has since changed how memberships are written). M1 must re-derive rather than cite.",
+    "No tier D, per §14.3.7 and because the only change is a test file.",
+    "vac run typecheck (build graph) was not run — the changed file is a test, covered by typecheck:tests rc=0.",
+    "No browser verification — no user-visible change."
+  ],
+
+  "plan_of_record_divergence": {
+    "status": "unresolved, and deliberately not resolved here",
+    "registered_as": ["X-2", "DR-4", "QE-15"],
+    "description": "This assignment's scope names the 2026-07-30 plan of a different mission (msn_e9133cdade883793d2 · asg_c505e1d0d76acd). The live plan of record is docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md and contains none of the reopen's re-sequence. Wave 1's execution record now exists in two documents with different contents, and this run added a fourth entry to one of them.",
+    "action_taken": "None. Which document is canonical is a Director decision; a worker resolving it by duplication makes it harder, not easier. Escalated rather than absorbed — for the second consecutive run."
+  }
+}

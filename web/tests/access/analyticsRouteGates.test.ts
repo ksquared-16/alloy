@@ -306,6 +306,10 @@ const SUFFICIENT_GATES = [
     "requireAnalyticsV2AdminMutate",
     "requireAdminOrOps",
     "getAdminContextCached",
+    // `@deprecated` alias of `getAdminContextCached` (`lib/admin/getAdminContext.ts:73`) —
+    // identical behaviour, and **12 live route files call it**. Omitting it made the class-wide
+    // scan able to flag a genuinely gated route. See the alias-completeness lock below.
+    "getAdminContext",
     "loadAdminRouteGate",
 ] as const;
 
@@ -313,7 +317,15 @@ const SUFFICIENT_GATES = [
  * The G2 primitives. These resolve an access context that is `ok` for *any* authenticated org
  * member, so a route holding only these is the exposure W-1 closed.
  */
-const RAW_RESOLUTIONS = ["getAdminAccessContextCached", "loadAdminAccessBundleCached"] as const;
+const RAW_RESOLUTIONS = [
+    "getAdminAccessContextCached",
+    // `@deprecated` alias of the line above (`lib/admin/getAdminAccessContext.ts:119`). It is the
+    // **same primitive under a second exported name**, so a route calling it holds the G2 shape
+    // while escaping this selector entirely — invisible rather than flagged. Zero routes call it
+    // today: latent, one import away from live, and recorded rather than absorbed.
+    "getAdminAccessContext",
+    "loadAdminAccessBundleCached",
+] as const;
 
 /** Reviewed exceptions. Empty by design — an entry here is a security decision, per W-4's ratchet. */
 const FAMILY_GATE_EXCEPTIONS: { route: string; reason: string }[] = [];
@@ -539,4 +551,98 @@ describe("W-1 — routes already portal-gated stay gated (RL-1 regression lock)"
             expect(loadMetricDefinitionById).not.toHaveBeenCalled();
         });
     }
+});
+
+/* --------------------------------------------------------------------------------------------- *
+ * RL-1 subject completeness — a second exported name defeats a hand-maintained symbol list
+ * --------------------------------------------------------------------------------------------- */
+
+/**
+ * `SUFFICIENT_GATES` and `RAW_RESOLUTIONS` name *implementations*. The modules defining them also
+ * export `@deprecated` aliases (`export const getAdminContext = getAdminContextCached`), and
+ * `callsAny` matches `symbol(` — so an alias matches neither list.
+ *
+ * The two directions are not symmetric:
+ *
+ * - an alias of a **raw resolution** missing from `RAW_RESOLUTIONS` removes the route from the
+ *   subject entirely — a G2 exposure the class-wide scan cannot see. This is the dangerous one.
+ * - an alias of a **sufficient gate** missing from `SUFFICIENT_GATES` flags a correctly gated
+ *   route — noisy, not unsafe.
+ *
+ * This is the 2026-08-06 subject defect one level up. That run moved the subject from three
+ * hand-listed *directories* to the primitive; the primitive list is still hand-listed. The repair
+ * is the same change of question — ask the defining module what it exports, rather than
+ * maintaining a list beside it that a one-line `export const` silently invalidates.
+ */
+const ACCESS_PRIMITIVE_MODULES = [
+    "lib/admin/getAdminContext.ts",
+    "lib/admin/getAdminAccessContext.ts",
+    "lib/adminAuth.ts",
+] as const;
+
+/** `export const A = B;` — a re-export of an existing symbol under a second name. */
+function exportedAliases(source: string): { alias: string; target: string }[] {
+    const found: { alias: string; target: string }[] = [];
+    const re = /export\s+const\s+(\w+)\s*=\s*(\w+)\s*;/g;
+    const code = codeOnly(source);
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(code)) !== null) found.push({ alias: match[1], target: match[2] });
+    return found;
+}
+
+describe("W-1 — every alias of a listed symbol is listed too (RL-1 subject completeness)", () => {
+    const webRoot = path.resolve(__dirname, "../..");
+    const aliases = ACCESS_PRIMITIVE_MODULES.flatMap((mod) =>
+        exportedAliases(fs.readFileSync(path.join(webRoot, mod), "utf8"))
+    );
+
+    it("finds the aliases, so the assertions below are not vacuous", () => {
+        expect(aliases.length).toBeGreaterThanOrEqual(3);
+        expect(aliases).toContainEqual({ alias: "getAdminContext", target: "getAdminContextCached" });
+        expect(aliases).toContainEqual({ alias: "getAdminAccessContext", target: "getAdminAccessContextCached" });
+    });
+
+    it("lists every alias of a raw access primitive", () => {
+        const missing = aliases
+            .filter((a) => (RAW_RESOLUTIONS as readonly string[]).includes(a.target))
+            .filter((a) => !(RAW_RESOLUTIONS as readonly string[]).includes(a.alias))
+            .map((a) => a.alias);
+        expect(missing).toEqual([]);
+    });
+
+    it("lists every alias of a sufficient gate", () => {
+        const missing = aliases
+            .filter((a) => (SUFFICIENT_GATES as readonly string[]).includes(a.target))
+            .filter((a) => !(SUFFICIENT_GATES as readonly string[]).includes(a.alias))
+            .map((a) => a.alias);
+        expect(missing).toEqual([]);
+    });
+
+    it("did not select an alias-only G2 route under the 2026-08-06 primitive list", () => {
+        // The defect asserted against source rather than claimed in prose: a route holding the G2
+        // shape through the alias never entered the subject, so it could be neither flagged nor
+        // excepted — it was absent. Zero routes do this today; the point is that nothing stopped one.
+        const aliasOnlyG2Route = [
+            'import { getAdminAccessContext } from "@/lib/admin/getAdminAccessContext";',
+            "export async function GET() {",
+            "    const access = await getAdminAccessContext();",
+            "    if (!access.ok) return new Response(null, { status: access.status });",
+            "    return Response.json({ orgWideMetrics: [] });",
+            "}",
+        ].join("\n");
+
+        const PRIMITIVES_2026_08_06 = ["getAdminAccessContextCached", "loadAdminAccessBundleCached"];
+        expect(callsAny(aliasOnlyG2Route, PRIMITIVES_2026_08_06)).toBe(false);
+
+        // With the alias listed it is selected, and it is flagged: it gates on nothing else.
+        expect(resolvesRawAccessContext(aliasOnlyG2Route)).toBe(true);
+        expect(callsAny(aliasOnlyG2Route, [...SUFFICIENT_GATES, ...CAPABILITY_GATES])).toBe(false);
+    });
+
+    it("does not let the alias swallow the implementation it aliases", () => {
+        // `\bgetAdminAccessContext\s*\(` must not match `getAdminAccessContextCached(`, or the
+        // subject would be unchanged for the wrong reason and the 92 floor would go stale silently.
+        expect(callsAny("const a = await getAdminAccessContextCached();", ["getAdminAccessContext"])).toBe(false);
+        expect(callsAny("const a = await getAdminContextCached();", ["getAdminContext"])).toBe(false);
+    });
 });
