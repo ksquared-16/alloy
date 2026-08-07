@@ -358,16 +358,16 @@ anyway, is exactly the mistake §4.1 warns against: *"asking for live access fou
 is recorded here rather than taken unilaterally — W-23 produces a **different** artifact
 (`wave0b-authority-census.json`) under a **different** workstream, and this assignment's scope is W-0.
 
-#### W-0 re-issued a fourth time — **2026-08-07**, assignment `asg_86eb0e4a95142e`, run 3 still NOT executed
+#### W-0 re-issued a fourth time — **2026-08-07**, assignment `asg_86eb0e4a95142e`: auditing the run-3 preparation
 
-W-0 was re-issued again against exit criteria met on 2026-07-31, re-confirmed on 2026-08-04, and unchanged since.
-**The counts were not re-asserted and no fourth identical run was requested.** Run 3 remains the only item open
-inside W-0's own scope, and it is blocked on the same single operator authorization it has been blocked on since
-2026-08-06 — the trusted host action is executed by the Director host-side, and no worker-side channel to it
-exists by design. Nothing a worker can do moves that.
+W-0 was re-issued a fourth time against exit criteria met on 2026-07-31 and re-confirmed on 2026-08-04. **The
+counts were not re-asserted and no fourth identical run was requested.** Run 3 was the only item open inside
+W-0's own scope, and at the start of this pass it was blocked on the single operator authorization outstanding
+since 2026-08-06 — the trusted host action runs Director-side and no worker-side channel to it exists, by design.
 
-What this pass did instead was audit the run-3 *preparation* for defects that would waste that authorization when
-it comes. It found two, both in the plumbing rather than the SQL, and both now recorded in the census file.
+The pass was therefore spent auditing the run-3 *preparation* for defects that would have wasted that
+authorization when it arrived. It found two, both in the plumbing rather than the SQL. **The authorization then
+arrived mid-pass and run 3 executed** — recorded below at *W-0 run 3*.
 
 **1. The insertion anchor does not match the query it anchors to.** `next_run_prepared.insertion_anchor` is
 written with a doubled escape while `combined_query` uses a single one, so after `JSON.parse` the anchor ends in
@@ -393,11 +393,16 @@ precomputed `sha256` is needed — which matters, because the worker still canno
 `asg_f34761f0f418ee`, running concurrently in this worktree, promoted the amended SQL into `combined_query`
 *and* renamed the top-level `query_hash` to `runs_1_2_query_hash` in the same edit — reaching the safe
 end-state without a third file. Verified against the live artifact: `combined_query` now carries the
-`target_identity` block, and neither `query_hash` nor `combined_query_hash` exists at top level, so the
-registry computes the hash itself. Runs 1 and 2 stay verifiable against the git blob recorded in
-`runs_1_2_query_provenance`, which is a stronger anchor than an in-file copy would have been.
-**The hazard is now inverted:** re-introducing a top-level key named `query_hash` holding `743cd63b…` would
-silently re-arm the mismatch and fail every run-3 attempt. That key must not be "restored".
+`target_identity` block, and at the moment of execution neither `query_hash` nor `combined_query_hash` existed
+at top level, so the registry computed the hash itself. Runs 1 and 2 stay verifiable against the git blob
+recorded in `runs_1_2_query_provenance`, which is a stronger anchor than an in-file copy would have been.
+
+**Post-execution, a top-level `query_hash` has reappeared — and that is correct.** The Director's merge-back
+writes one back holding **run 3's** hash, `a3982ca5…`. It matches the amended `combined_query`, so it validates
+rather than traps. **Do not confuse it with `743cd63b…`**, which is runs 1/2's and now lives at
+`runs_1_2_query_hash`. The standing hazard is the inverse of the original one: writing `743cd63b…` back into a
+top-level key named `query_hash` would silently re-arm the mismatch and fail every future run. That key must
+not be "restored".
 
 **3. The dedicated-artifact route cannot execute at all — and this is the finding that settles the choice.**
 Recorded by `asg_f34761f0f418ee`. The two paragraphs above treat the two routes as alternatives, one tidier than
@@ -423,8 +428,10 @@ only executable one.
 
 This also re-dates the gap. Between 2026-08-06 and 2026-08-07 the improvement was authored but **unreachable**,
 sitting in `next_run_prepared.inserted_sql`, a key nothing reads. An authorization granted in that window would
-have produced the byte-identical run the plan explicitly names as the wrong outcome. That is now closed, and one
-operator authorization is the only remaining step.
+have produced the byte-identical run the plan explicitly names as the wrong outcome. That gap was closed by the
+promotion — and the authorization then arrived the same day, so run 3 executed against the amended query and
+returned `target_identity` as designed. Had the authorization landed one day earlier, it would have been spent
+on a fourth identical run.
 
 Consequently the run-3 *anchor* fields are now historical rather than pending — the insertion has been applied,
 and re-applying it would duplicate the `target_identity` key. They are retained because the encoding defect
@@ -437,9 +444,9 @@ arbitrary code, so `readonly_validation` stays **by inspection** and the run-3 `
 uncomputable in-worker. Neither is an authoring shortcut. The Director discharges both at execution —
 `validateReadOnlySql` is called unconditionally on every run (`registry.mjs:111`).
 
-**W-0's exit criteria are unaffected and remain met.** Q1–Q6 counts and query text stay committed; L1–L4 may
-still cite them, subject to the standing rule that every consumer re-derives rather than cites. The counts are
-now **eight days old**.
+**W-0's exit criteria were unaffected throughout and remain met.** Q1–Q6 counts and query text stay committed;
+L1–L4 may cite them, subject to the standing rule that every consumer re-derives rather than cites. The counts
+were eight days old when this audit began — run 3, below, made them current.
 
 #### W-0 run 3 — **EXECUTED 2026-08-07T17:24:16Z**, and the census finally identifies its own target
 
@@ -485,6 +492,17 @@ rather than confirming it backwards — their target remains inferential; every 
 unchanged and still governs: Q4 is the count that grows, and every §11 preflight must re-derive it rather than
 cite this one. Per the census file's `now_also_serves_w6_m1_preflight`, this run is *also* the fresh Q4 that
 W-6/M1 requires immediately before apply, and its `q4_pairs_without_profile = 2` is the number M1 must equal.
+
+**W-6's pre-apply rules pass on this run — with one that decays.** Rule 1 (sizing) is satisfied at 2; rule 2
+(grain) is satisfied because that figure is `q4_pairs_without_profile`, not the 8 membership rows or the 6
+distinct pairs, all three still distinct; rule 4 is clean because `q4_profiles_without_membership` = 0, so there
+are no orphan profiles to collide with. Neither abort condition fired — the 2 pairs are the same pre-existing
+ones, not newly created, so nothing suggests a sixth membership writer. Rule 3 (post-apply anti-join = 0) cannot
+be discharged before the apply. **Rule 5 — immediacy — is the one that expires:** these are a preflight only if
+the apply follows closely, and *an aged preflight is not a preflight*. W-0 supplies the numbers; **`preflight.ok`
+is W-6's to flip and is deliberately not set by the census file.** If time has passed, the correct move is
+another census — now a single authorization on a proven channel. Full rule-by-rule evaluation lives at the
+census file's `w6_m1_preflight.preflight_run_3_outcome`.
 
 ---
 
@@ -1276,17 +1294,39 @@ The in-transaction sizing check is a *backstop*, not the preflight. §11 still r
 before the operator is asked to authorize anything; the migration only guarantees that a stale number cannot
 silently size a wrong apply.
 
-**Preflight is specified and unexecuted.** It rides run 3 of the W-0 census artifact
-(`wave0-authority-census.json` → `w6_m1_preflight`), which already computes `q4_pairs_without_profile`,
-`q4_membership_rows`, `q4_distinct_user_org_pairs` and `q4_profiles_without_membership` — the same live read,
-so one operator authorization discharges both obligations. The census channel is the Director-side trusted
-host action `database.read_census`; **no worker-side channel to it exists and no privileged credential reaches
-a worker by design**, which is the same dependency that has held run 3 since 2026-08-06.
+**Preflight is EXECUTED — 2026-08-07T17:24:15Z.** It rode run 3 of the W-0 census artifact, exactly as
+designed: run 3's query already computes `q4_pairs_without_profile`, `q4_membership_rows`,
+`q4_distinct_user_org_pairs` and `q4_profiles_without_membership`, so binding W-6's preflight to it meant **one
+operator authorization discharged both obligations** rather than paying twice for a subset query.
 
-**Gate position.** Per [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md), M1 is
-`awaiting_authorization` with `preflight` **absent** — not `ok: false` by judgment, but unexecuted. A
-shared-target migration with a missing preflight is **`unmet`, not `operator_review`**. W-6 cannot be accepted
-on this state, and Accept must not advance the spine.
+**The numbers, re-derived and not cited:** **2** pairs without a profile, of **6** distinct pairs across **8**
+membership rows, with **0** orphan profiles. M1 is sized at **2**. That coincides with the 2026-08-04 figure,
+and the coincidence is precisely why the rule forbids citing — a cited 2 and a re-derived 2 look identical in
+the record and prove entirely different things. RULES 1, 2 and 5 pass; both abort conditions are clear; RULE 4's
+precondition is clean; RULES 3 and 4's post-apply halves are unreachable until the apply. Evidence:
+[`w6-m1-preflight.json`](w6-m1-preflight.json).
+
+**How it unblocked is the reusable lesson — and it was not worker effort.** Two dispatches diagnosed the
+blocker correctly and could not move it: the census channel is the Director-side trusted host action
+`database.read_census`, and **no worker-side channel to it exists by design**. It cleared when the operator
+authorized run 3 and the Director executed it host-side. For the eight remaining §11 preflights this means the
+gating resource is *the authorization*, not worker availability — dispatching a worker at a preflight-blocked
+workstream cannot move it, while **binding that workstream's preflight to a census already queued makes one
+authorization do two jobs**, which is what W-6 did and what saved a second round trip here.
+
+**Gate position — moved.** Per [`MIGRATION-APPLY-GATE.md`](../../MIGRATION-APPLY-GATE.md), M1 was
+`awaiting_authorization` with `preflight` **absent** — unexecuted rather than `ok: false` — which that
+document's table scores **`unmet`**. It is now `awaiting_authorization` with **`preflight.ok: true`** and an
+`evidence_path`, which is that table's condition for **`operator_review`** on a shared target. `ok` is scoped
+to the **pre-apply** rules and says so explicitly: RULES 3 and 4's post-apply halves sit on the far side of the
+authorization in the gate's own sequence (preflight → authorize → apply → `applied`), so withholding `ok` for
+them would make the gate unsatisfiable by construction — the worker would have to prove a post-apply fact to
+earn permission to apply.
+
+**What has not changed.** `preflight.ok: true` does **not** auto-apply and does **not** complete W-6. The
+migration's status is still `awaiting_authorization`, never `applied`; the exit criterion (post-apply anti-join
+= 0) is still unmet; the acceptance gate is still `needs_operator`. Per the gate's hard rule, **Accept must not
+run and must not advance the objective spine** — that exact bug shipped once on Access & Roles Phase 0.
 
 **W-6 was dispatched twice, and the second dispatch authored nothing.** Assignment `asg_5b1ea3f9a620c6` arrived
 a second time on 2026-08-07 at the same `contentHash` `3c36b58117e46b2363ef602b385409e7`, same objective, same
@@ -1297,6 +1337,17 @@ record's dates. The one real delta it closed was four uncommitted keys in `wave0
 at risk in a dirty tree. **A re-dispatch cannot move W-6** — the blocker is a channel a worker does not have,
 not effort — so the loop is recorded here in `w6_m1_preflight.redispatch_2026_08_07` to stop the next dispatch
 paying for the same discovery.
+
+**The third dispatch broke the loop, because the world had changed rather than the effort.** The same
+assignment arrived again on 2026-08-07 at the same `contentHash` — but census run 3 had executed in the
+interim, so for the first time the preflight's input existed. That dispatch evaluated the live numbers against
+the pass rules, wrote the evidence file, set `preflight.ok` and moved the gate. It again found real prior work
+**uncommitted in a dirty tree** — this time the Director's own merge-back of run 3's results — and committed it
+unmodified before authoring anything. **That is two consecutive dispatches finding unpushed work at risk**,
+which is worth fixing at the dispatch level rather than rediscovering a third time. A separate hazard surfaced
+alongside it: `asg_86eb0e4a95142e` was editing the same JSON artifact concurrently and committed mid-edit. The
+two assignments happened to touch different keys, so it was survivable — but concurrent writers on one
+artifact is a live collision risk in this worktree, not a hypothetical one.
 
 **The migration has never been parsed by a PostgreSQL.** No local stack was running on either dispatch, and the
 shared local stack is not the shared target §11 means, so applying there would prove little while mutating a
@@ -1703,7 +1754,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
-| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**not applied**) | shared | Row count == W-0 Q4 **as re-run at preflight**, never the **2** recorded on 2026-08-04; zero pairs uncovered after; no existing profile modified (**0 orphan profiles** at census). Preflight rides census **run 3** (`w6_m1_preflight`), **unexecuted** → `preflight` absent → **unmet** |
+| M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**not applied**) | shared | **PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`, evidence [`w6-m1-preflight.json`](w6-m1-preflight.json) → **`operator_review`** (was `unmet`). Row count re-derived at **2** on the `pairs_without_profile` grain — not the 8 membership rows, not the 6 distinct pairs; **0 orphan profiles**. Post-apply rules (zero pairs uncovered, no existing profile modified) **pending the apply**; `status` stays `awaiting_authorization` until then |
 | M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | M3 | W-9 | Catalog consolidation — repoint grants to one FK | shared | Every grant satisfies the surviving FK; no unexpected incoming FKs or dependent views |
 | M4 | W-9 | Drop retired catalog tables (**separate, later**) | shared | Zero readers proven since M3 |
