@@ -126,9 +126,21 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
     // End the command but stay in BOS — the operator is still working here and usually has a next
     // instruction. Distinct from returning to the workspace, which puts BOS away.
     const discardWithRestore = useCallback(() => {
+        const caseId =
+            session.phase === "processing_review" || session.phase === "executing"
+                ? session.processingCaseId
+                : null;
+        if (caseId) {
+            void fetch(`/api/admin/processing/cases/${caseId}/archive`, {
+                method: "POST",
+                credentials: "same-origin",
+            }).catch(() => {
+                /* best-effort */
+            });
+        }
         restoreWorkspaceWidth();
         ctx?.discardSession();
-    }, [ctx, restoreWorkspaceWidth]);
+    }, [ctx, restoreWorkspaceWidth, session.phase, session.processingCaseId]);
 
     const returnToWorkspace = useCallback(() => {
         discardWithRestore();
@@ -262,6 +274,8 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                 successMessage: `${payload.successCopy} Open Lead when you want to continue.`,
                             });
                         }}
+                        onCancel={discardWithRestore}
+                        onCloseOut={returnToWorkspace}
                     />
                 ) : session.phase === "completed" ? (
                     <SuccessBody
@@ -610,13 +624,16 @@ function ProcessingReviewBody(props: {
         focusPanelHref: string;
         successCopy: string;
     }) => void;
+    onCancel: () => void;
+    onCloseOut: () => void;
 }) {
     return (
         <div data-bos-command-session-processing="true" className="space-y-3">
             <div>
-                <p className={WS_EYEBROW}>Processing</p>
+                <p className={WS_EYEBROW}>Possible match</p>
                 <p className="mt-1 text-[13px] text-alloy-midnight/70">
-                    Confirm once to create the lead and related records.
+                    Review the highlighted people, then confirm to create — or cancel and leave
+                    without creating a lead.
                 </p>
             </div>
             <IdentityReviewPanel
@@ -642,6 +659,24 @@ function ProcessingReviewBody(props: {
                     props.onSuccess({ opportunityId, focusPanelHref, successCopy });
                 }}
             />
+            <div className="flex flex-wrap gap-2 border-t border-alloy-stone/20 pt-3">
+                <button
+                    type="button"
+                    className={WS_ACTION_SECONDARY}
+                    data-bos-command-session-cancel-create-lead
+                    onClick={props.onCancel}
+                >
+                    Cancel Create Lead
+                </button>
+                <button
+                    type="button"
+                    className={WS_ACTION_SECONDARY}
+                    data-bos-command-session-close-create-lead
+                    onClick={props.onCloseOut}
+                >
+                    Close
+                </button>
+            </div>
         </div>
     );
 }

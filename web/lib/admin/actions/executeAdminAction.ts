@@ -343,7 +343,7 @@ export async function executeAdminAction(
             correlationId,
             actionKey,
             entityTypeRaw,
-            created.processing_case_id,
+            created.mode === "committed" ? created.opportunity_id : created.processing_case_id,
             {
                 mode: created.mode,
                 processing_case_id: created.processing_case_id,
@@ -352,6 +352,9 @@ export async function executeAdminAction(
                 work_unit_id: created.work_unit_id,
                 status_key: created.status_key,
                 stage_key: created.stage_key,
+                ...(created.mode === "committed"
+                    ? { opportunity_id: created.opportunity_id }
+                    : {}),
             },
         );
     }

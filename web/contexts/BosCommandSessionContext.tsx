@@ -22,6 +22,8 @@ import {
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
 
 export const BOS_START_COMMAND_SESSION_EVENT = "alloy-bos:start-command-session";
+/** Header Close / launcher collapse — discard any active command so operators are not stuck. */
+export const BOS_CLOSE_REQUEST_EVENT = "alloy-bos:close-request";
 
 export type BosStartCommandSessionDetail = {
     invocation: BosCommandInvocation;
@@ -116,8 +118,32 @@ export function BosCommandSessionProvider({ children }: { children: ReactNode })
             if (!detail?.invocation?.actionKey) return;
             focusExistingOrStart(detail.invocation);
         };
+        const onCloseRequest = () => {
+            setSession((prev) => {
+                if (!prev) return null;
+                const caseId =
+                    prev.phase === "processing_review" || prev.phase === "executing"
+                        ? prev.processingCaseId
+                        : null;
+                if (caseId) {
+                    void fetch(`/api/admin/processing/cases/${caseId}/archive`, {
+                        method: "POST",
+                        credentials: "same-origin",
+                    }).catch(() => {
+                        /* best-effort — discard still clears the stuck session */
+                    });
+                }
+                const next = reduceBosCommandSession(prev, { type: "DISCARD" });
+                syncPersistedBosCommandSession(next);
+                return null;
+            });
+        };
         window.addEventListener(BOS_START_COMMAND_SESSION_EVENT, onStart as EventListener);
-        return () => window.removeEventListener(BOS_START_COMMAND_SESSION_EVENT, onStart as EventListener);
+        window.addEventListener(BOS_CLOSE_REQUEST_EVENT, onCloseRequest);
+        return () => {
+            window.removeEventListener(BOS_START_COMMAND_SESSION_EVENT, onStart as EventListener);
+            window.removeEventListener(BOS_CLOSE_REQUEST_EVENT, onCloseRequest);
+        };
     }, [focusExistingOrStart]);
 
     const value = useMemo(
@@ -155,4 +181,9 @@ export function dispatchStartBosCommandSession(invocation: BosCommandInvocation)
             detail: { invocation },
         })
     );
+}
+
+export function dispatchBosCloseRequest(): void {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event(BOS_CLOSE_REQUEST_EVENT));
 }

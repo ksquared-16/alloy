@@ -31,6 +31,7 @@ import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContex
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import type { IntakeSelectOption } from "@/lib/intake/types";
 import type { BosCommandResolutionState } from "@/lib/bos/commandSession/types";
 
@@ -421,6 +422,19 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             processingCaseId: result.processingCaseId ?? null,
             phase: result.processingCaseId ? "processing_review" : "completed",
         });
+        if (!result.processingCaseId && result.ok && result.success) {
+            const copy =
+                typeof result.success === "object" && result.success && "successCopy" in result.success
+                    ? String((result.success as { successCopy?: string }).successCopy ?? "Lead created")
+                    : "Lead created";
+            ctx.dispatch({
+                type: "COMPLETE",
+                successMessage: `${copy} Open Lead when you want to continue.`,
+            });
+            if (result.opportunityId) {
+                dispatchOpportunityQueueUpdated(result.opportunityId, "create_lead");
+            }
+        }
     }, [ctx, effectiveSpec, session, workspace]);
 
     return {
