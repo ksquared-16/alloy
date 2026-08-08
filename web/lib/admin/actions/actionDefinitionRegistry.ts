@@ -176,11 +176,12 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         category: "communication",
         settingsConfigurable: true,
         description:
-            "Open compose to send a tour invitation for this family. Appears on What's Next only when configured on the work template.",
+            "Open compose to review and send a tour invitation for this family. Appears on What's Next only when configured on the work template.",
         defaultSurface: "record_header",
         defaultSlot: "secondary",
-        // header_delegate → existing applyRegistryResolvedActionClient compose path (no parallel host).
-        interactionHost: "header_delegate",
+        // Centered Current Work communications composer — prepare draft, operator edits, confirm send.
+        // Do not use header_delegate: that fabricated a registry execute and silently sent.
+        interactionHost: "communications_composer",
         icon: "Send",
     },
     {

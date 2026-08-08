@@ -197,10 +197,10 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
         expect(defaults).toContain('action_ref: "send_tour_invitation"');
     });
 
-    it("Send Tour Invitation is registry-wired and projects as header_delegate when configured", () => {
+    it("Send Tour Invitation is registry-wired and projects as communications_composer when configured", () => {
         const def = canonicalActionDefinition("send_tour_invitation");
         expect(def?.runtimeWired).toBe(true);
-        expect(def?.interactionHost).toBe("header_delegate");
+        expect(def?.interactionHost).toBe("communications_composer");
         expect(
             resolveCurrentWorkActionSurface({
                 key: "send_tour_invitation",
@@ -209,16 +209,18 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
                 actionRef: "send_tour_invitation",
                 resolved: null,
             }),
-        ).toBe("header_delegate");
+        ).toBe("communications_composer");
     });
 
-    it("Send Tour Invitation opens QuickMessage compose", () => {
+    it("Send Tour Invitation opens QuickMessage compose after prepare (Manage path)", () => {
         const client = read("lib/admin/actions/applyRegistryResolvedActionClient.ts");
         const start = client.indexOf('actionKey === "send_tour_invitation"');
         expect(start).toBeGreaterThan(-1);
-        const branch = client.slice(start, start + 2200);
+        const branch = client.slice(start, start + 3200);
         expect(branch).toContain("launchContextualQuickMessage");
+        expect(branch).toContain('mode: "prepare"');
         expect(branch).toContain('defaultChannel: "email"');
+        expect(branch).toContain("draftBody");
         expect(branch).not.toMatch(/\bwindow\.confirm\b/);
         expect(branch).not.toMatch(/\bwindow\.alert\b/);
     });

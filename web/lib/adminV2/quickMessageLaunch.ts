@@ -15,6 +15,9 @@ export type QuickMessageLaunchSeed = {
     recordScoped?: boolean;
     /** Pre-select composer channel when opening from canonical send_email / send_sms actions. */
     defaultChannel?: "email" | "sms";
+    draftSubject?: string | null;
+    draftBody?: string | null;
+    tourInvitationId?: string | null;
 };
 
 export const ADMINV2_OPEN_QUICK_MESSAGE_EVENT = "adminv2:open-quick-message";

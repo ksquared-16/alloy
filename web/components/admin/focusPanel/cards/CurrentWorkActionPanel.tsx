@@ -30,6 +30,10 @@ const CurrentWorkSubjectSelectorPanel = dynamic(
     () => import("@/components/admin/focusPanel/cards/CurrentWorkSubjectSelectorPanel"),
     { ssr: false },
 );
+const CurrentWorkTourInvitationPanel = dynamic(
+    () => import("@/components/admin/focusPanel/cards/CurrentWorkTourInvitationPanel"),
+    { ssr: false },
+);
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -137,6 +141,18 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
     }
 
     if (surface === "communications_composer") {
+        const isTourInvitation =
+            (action.handlerKey ?? action.actionRef ?? action.key).trim() === "send_tour_invitation";
+        if (isTourInvitation) {
+            return (
+                <CurrentWorkTourInvitationPanel
+                    action={action}
+                    opportunityId={opportunityId}
+                    onClose={onClose}
+                    onComplete={onComplete}
+                />
+            );
+        }
         // #1: the communication host renders the REAL communications runtime inline in the centered
         // surface — reusing the SAME embedded section + fill/scroll/pinned-footer layout contract the
         // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-

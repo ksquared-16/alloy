@@ -49,6 +49,11 @@ export const sendTourInvitationAction: RegisteredAction = {
         // An operator note is optional; the invitation stands on its own without one.
         if (src.message_text != null) value.message_text = trimmed(src.message_text);
         if (src.location_id != null) value.location_id = trimmed(src.location_id);
+        if (src.mode === "prepare" || src.mode === "send" || src.mode === "mark_sent") {
+            value.mode = src.mode;
+        }
+        if (src.invitation_id != null) value.invitation_id = trimmed(src.invitation_id);
+        if (src.channel != null) value.channel = trimmed(src.channel);
         // Never accept a recipient from the caller — identity is resolved server-side.
         delete value.recipient_person_id;
         delete value.to;
@@ -65,8 +70,8 @@ export const sendTourInvitationAction: RegisteredAction = {
 
     async buildPreview() {
         return {
-            summary: "Email or text this family a link to choose a tour time.",
-            changes: ["Tour invitation → sent to the parent"],
+            summary: "Review and send a tour invitation so this family can choose a time.",
+            changes: ["Tour invitation draft → operator confirm → send"],
             before: null,
             after: null,
         };
@@ -85,6 +90,49 @@ export const sendTourInvitationAction: RegisteredAction = {
         }
 
         const src = (payload ?? {}) as Record<string, unknown>;
+        // Default prepare: operator compose must confirm before enqueue. Explicit mode:"send"
+        // remains for programmatic / confirmed delivery paths. mark_sent records activation
+        // after a successful Communications compose send of a prepared invitation.
+        const mode =
+            src.mode === "send" ? "send" : src.mode === "mark_sent" ? "mark_sent" : "prepare";
+
+        if (mode === "mark_sent") {
+            const invitationId = trimmed(src.invitation_id);
+            if (!invitationId) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: 422,
+                    error: "Invitation id is required to record a sent invitation.",
+                };
+            }
+            const { recordTourEvent } = await import("@/lib/tours/events/recordTourEvent");
+            await recordTourEvent(supabase, {
+                event: "tour_invitation_activated",
+                orgId: ctx.orgId,
+                invitationId,
+                recipientPersonId: null,
+                opportunityId: invocation.entityId,
+                detail: {
+                    channel: trimmed(src.channel) || "compose",
+                },
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: SEND_TOUR_INVITATION_ACTION_KEY,
+                    entityType: "opportunity",
+                    entityId: invocation.entityId,
+                    affectedId: invitationId,
+                    detail: {
+                        invitation_id: invitationId,
+                        mode: "mark_sent",
+                        sent_channels: trimmed(src.channel) ? [trimmed(src.channel)] : [],
+                    },
+                },
+            };
+        }
 
         // Idempotency is keyed on the record, not on the click. A double-submit, a retry
         // after a timeout, and a second operator pressing the same button all collapse
@@ -100,6 +148,7 @@ export const sendTourInvitationAction: RegisteredAction = {
             messageText: trimmed(src.message_text) || null,
             baseUrl,
             idempotencyKey,
+            mode,
         });
 
         if (!result.ok) {
@@ -125,6 +174,8 @@ export const sendTourInvitationAction: RegisteredAction = {
                     sent_channels: result.sentChannels,
                     idempotent_replay: result.idempotentReplay,
                     skipped: result.skippedReasons,
+                    mode,
+                    draft: result.draft ?? null,
                 },
             },
         };
