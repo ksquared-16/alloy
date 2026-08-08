@@ -1,14 +1,15 @@
-"use client";
-
 /**
  * Related-subject selector for Current Work (Command Surface subject_selector).
  *
  * Used when a family-context command (e.g. Move to Waitlist) must resolve an
- * enrollment child before execute. Exactly one eligible child auto-continues;
- * multiple require an explicit choice; zero shows an operator-safe block.
+ * enrollment child before execute. Always: select → preview → confirm → execute.
+ * Supports single and multi-select (select all eligible). Zero eligible shows a
+ * block — never auto-executes, never invents subjects.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
@@ -28,6 +29,8 @@ type LoadState =
     | { phase: "ready"; subjects: EligibleChildOption[] }
     | { phase: "error"; message: string };
 
+type Stage = "select" | "preview" | "success";
+
 export default function CurrentWorkSubjectSelectorPanel({
     action,
     opportunityId,
@@ -35,50 +38,63 @@ export default function CurrentWorkSubjectSelectorPanel({
     onComplete,
 }: Props) {
     const [load, setLoad] = useState<LoadState>({ phase: "loading" });
-    const [selectedId, setSelectedId] = useState("");
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [stage, setStage] = useState<Stage>("select");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const autoRan = useRef(false);
+    const [successCount, setSuccessCount] = useState(0);
+    const submitLock = useRef(false);
     const commandKey = (action.handlerKey ?? action.key).trim() || "waitlist_child";
+    const commandLabel = action.label?.trim() || "Move to Waitlist";
 
-    const executeForChild = useCallback(
-        async (ocmId: string) => {
+    const executeForChildren = useCallback(
+        async (ocmIds: string[]) => {
+            if (submitLock.current || ocmIds.length === 0) return;
+            submitLock.current = true;
             setBusy(true);
             setError(null);
             try {
-                const res = await fetch("/api/admin/actions/execute", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        action_key: commandKey,
-                        entity_type: "opportunity_customer_member",
-                        entity_id: ocmId,
-                        context: {
-                            surface: "focus_panel",
-                            origin: "operator",
-                        },
-                        confirmation: { confirmed: true },
-                    }),
-                });
-                const json = (await res.json().catch(() => ({}))) as {
-                    ok?: boolean;
-                    error?: { message?: string; code?: string };
-                    message?: string;
-                };
-                if (!res.ok || json.ok === false) {
-                    throw new Error(
-                        json.error?.message
-                            ?? json.message
-                            ?? "Could not complete this action.",
-                    );
+                for (const ocmId of ocmIds) {
+                    const res = await fetch("/api/admin/actions/execute", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action_key: commandKey,
+                            entity_type: "opportunity_customer_member",
+                            entity_id: ocmId,
+                            context: {
+                                surface: "focus_panel",
+                                origin: "operator",
+                            },
+                            confirmation: { confirmed: true },
+                        }),
+                    });
+                    const json = (await res.json().catch(() => ({}))) as {
+                        ok?: boolean;
+                        error?: { message?: string; code?: string };
+                        message?: string;
+                    };
+                    if (!res.ok || json.ok === false) {
+                        throw new Error(
+                            json.error?.message
+                                ?? json.message
+                                ?? "Could not complete this action.",
+                        );
+                    }
                 }
                 dispatchOpportunityDrawerScopedUpdate(opportunityId, commandKey, [
                     "activity",
                     "header_actions",
                 ]);
-                onComplete();
+                setSuccessCount(ocmIds.length);
+                setStage("success");
+                setBusy(false);
+                submitLock.current = false;
+                // Brief success acknowledgement, then close through the same surface.
+                window.setTimeout(() => onComplete(), 700);
             } catch (e) {
                 setBusy(false);
+                submitLock.current = false;
                 setError(e instanceof Error ? e.message : "Could not complete this action.");
             }
         },
@@ -116,14 +132,13 @@ export default function CurrentWorkSubjectSelectorPanel({
                         phase: "none",
                         message:
                             json.data?.message?.trim()
-                            || "Add a child to this family before moving them to Waitlist.",
+                            || "No eligible child is available for Waitlist on this family.",
                     });
                     return;
                 }
                 setLoad({ phase: "ready", subjects });
-                if (subjects.length === 1) {
-                    setSelectedId(subjects[0]!.id);
-                }
+                // Default: all eligible selected when multiple; single selected when one.
+                setSelectedIds(subjects.map((s) => s.id));
             } catch {
                 if (!cancelled) {
                     setLoad({
@@ -138,19 +153,32 @@ export default function CurrentWorkSubjectSelectorPanel({
         };
     }, [opportunityId]);
 
-    useEffect(() => {
-        if (load.phase !== "ready" || load.subjects.length !== 1 || autoRan.current) return;
-        autoRan.current = true;
-        void executeForChild(load.subjects[0]!.id);
-    }, [executeForChild, load]);
+    const subjects = load.phase === "ready" ? load.subjects : [];
+    const selectedSubjects = useMemo(
+        () => subjects.filter((s) => selectedIds.includes(s.id)),
+        [subjects, selectedIds],
+    );
+    const allSelected = subjects.length > 0 && selectedIds.length === subjects.length;
 
-    if (load.phase === "loading" || (load.phase === "ready" && load.subjects.length === 1 && busy)) {
+    const toggleChild = (id: string) => {
+        setSelectedIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+        );
+    };
+
+    const selectAllEligible = () => {
+        setSelectedIds(subjects.map((s) => s.id));
+    };
+
+    if (load.phase === "loading") {
         return (
             <div
                 className="alloy-os-currentwork__action-panel-body"
                 data-work-action-panel-state="resolving-subject"
+                data-command-surface-section="subject_selector"
             >
-                <p className="alloy-os-household__row-detail">Preparing {action.label}…</p>
+                <p className="text-sm font-medium text-alloy-midnight">Who should move to Waitlist?</p>
+                <p className="alloy-os-household__row-detail mt-1">Loading eligible children…</p>
             </div>
         );
     }
@@ -160,58 +188,149 @@ export default function CurrentWorkSubjectSelectorPanel({
             <div
                 className="alloy-os-currentwork__action-panel-body"
                 data-work-action-panel-state="subject-blocked"
+                data-command-surface-section="blocker"
             >
-                <p className="alloy-os-household__row-detail">{load.message}</p>
-                <button
-                    type="button"
-                    className="mt-3 text-sm font-semibold text-alloy-pine"
-                    onClick={onClose}
-                >
-                    Close
-                </button>
+                <p className="text-sm text-alloy-midnight/80">{load.message}</p>
+                <div className="mt-3 flex justify-end">
+                    <button
+                        type="button"
+                        className="text-sm font-semibold text-alloy-midnight/60"
+                        onClick={onClose}
+                    >
+                        Close
+                    </button>
+                </div>
             </div>
         );
     }
 
-    const subjects = load.subjects;
+    if (stage === "success") {
+        return (
+            <div
+                className="alloy-os-currentwork__action-panel-body space-y-2"
+                data-work-action-panel-state="subject-success"
+                data-command-surface-section="success"
+            >
+                <p className="text-sm font-medium text-alloy-midnight">
+                    {successCount === 1
+                        ? "Moved to Waitlist."
+                        : `Moved ${successCount} children to Waitlist.`}
+                </p>
+                <p className="text-xs text-alloy-midnight/60">Updating this record…</p>
+            </div>
+        );
+    }
+
+    if (stage === "preview") {
+        return (
+            <div
+                className="alloy-os-currentwork__action-panel-body space-y-3"
+                data-work-action-panel-state="subject-preview"
+                data-command-surface-section="preview"
+                data-testid="current-work-subject-preview"
+            >
+                <div className="space-y-1">
+                    <p className="text-sm font-medium text-alloy-midnight">Moving:</p>
+                    <ul className="list-inside list-disc space-y-0.5 text-sm text-alloy-midnight/80">
+                        {selectedSubjects.map((child) => (
+                            <li key={child.id}>{child.label.split(" · ")[0] ?? child.label}</li>
+                        ))}
+                    </ul>
+                </div>
+                <p className="text-sm text-alloy-midnight/80">
+                    Destination: <span className="font-semibold text-alloy-midnight">Waitlist</span>
+                </p>
+                {error ?
+                    <p className="text-sm text-red-700" role="alert">
+                        {error}
+                    </p>
+                :   null}
+                <div className="flex items-center justify-end gap-2 pt-1" data-command-surface-footer>
+                    <button
+                        type="button"
+                        className="rounded-md px-3 py-1.5 text-sm text-alloy-midnight/70 hover:bg-alloy-midnight/5"
+                        onClick={() => {
+                            setError(null);
+                            setStage("select");
+                        }}
+                        disabled={busy}
+                    >
+                        Back
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded-md bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                        disabled={busy || selectedSubjects.length === 0}
+                        data-testid="current-work-subject-selector-confirm"
+                        data-command-surface-primary
+                        onClick={() => void executeForChildren(selectedSubjects.map((s) => s.id))}
+                    >
+                        {busy ? "Working…" : `Confirm ${commandLabel}`}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div
             className="alloy-os-currentwork__action-panel-body space-y-3"
             data-work-action-panel-state="subject-selector"
+            data-command-surface-section="subject_selector"
             data-testid="current-work-subject-selector"
         >
-            <p className="text-sm text-alloy-midnight/70">
-                This family has more than one child. Choose which child to move to Waitlist.
-            </p>
+            <p className="text-sm font-medium text-alloy-midnight">Who should move to Waitlist?</p>
             <fieldset className="space-y-2" disabled={busy}>
-                <legend className="sr-only">Choose a child</legend>
-                {subjects.map((child) => (
-                    <label
-                        key={child.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg border border-alloy-stone/20 px-3 py-2 text-sm text-alloy-midnight hover:border-alloy-pine/40"
-                        data-testid={`current-work-subject-option-${child.id}`}
-                    >
-                        <input
-                            type="radio"
-                            name="enrollment-child-subject"
-                            value={child.id}
-                            checked={selectedId === child.id}
-                            onChange={() => setSelectedId(child.id)}
-                        />
-                        <span>{child.label}</span>
-                    </label>
-                ))}
+                <legend className="sr-only">Choose children</legend>
+                {subjects.map((child) => {
+                    const name = child.label.split(" · ")[0] ?? child.label;
+                    const context = child.label.includes(" · ")
+                        ? child.label.slice(child.label.indexOf(" · ") + 3)
+                        : null;
+                    return (
+                        <label
+                            key={child.id}
+                            className="flex cursor-pointer items-start gap-2 rounded-lg border border-alloy-stone/20 px-3 py-2 text-sm text-alloy-midnight hover:border-alloy-pine/40"
+                            data-testid={`current-work-subject-option-${child.id}`}
+                        >
+                            <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={selectedIds.includes(child.id)}
+                                onChange={() => toggleChild(child.id)}
+                            />
+                            <span>
+                                <span className="font-medium">{name}</span>
+                                {context ?
+                                    <span className="mt-0.5 block text-xs text-alloy-midnight/60">
+                                        {context}
+                                    </span>
+                                :   null}
+                            </span>
+                        </label>
+                    );
+                })}
             </fieldset>
+            {subjects.length > 1 ?
+                <button
+                    type="button"
+                    className="text-sm font-semibold text-alloy-pine"
+                    onClick={selectAllEligible}
+                    disabled={busy || allSelected}
+                    data-testid="current-work-subject-select-all"
+                >
+                    Select all eligible children
+                </button>
+            :   null}
             {error ?
                 <p className="text-sm text-red-700" role="alert">
                     {error}
                 </p>
             :   null}
-            <div className="flex items-center justify-end gap-2 pt-1">
+            <div className="flex items-center justify-end gap-2 pt-1" data-command-surface-footer>
                 <button
                     type="button"
-                    className="text-sm font-semibold text-alloy-midnight/60"
+                    className="rounded-md px-3 py-1.5 text-sm text-alloy-midnight/70 hover:bg-alloy-midnight/5"
                     onClick={onClose}
                     disabled={busy}
                 >
@@ -219,12 +338,16 @@ export default function CurrentWorkSubjectSelectorPanel({
                 </button>
                 <button
                     type="button"
-                    className="rounded-lg bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                    disabled={busy || !selectedId.trim()}
+                    className="rounded-md bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={busy || selectedIds.length === 0}
                     data-testid="current-work-subject-selector-continue"
-                    onClick={() => void executeForChild(selectedId.trim())}
+                    data-command-surface-primary
+                    onClick={() => {
+                        setError(null);
+                        setStage("preview");
+                    }}
                 >
-                    {busy ? "Working…" : action.label}
+                    Continue
                 </button>
             </div>
         </div>

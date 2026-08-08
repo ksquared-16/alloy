@@ -2,11 +2,15 @@
  * Related-subject resolution: family/opportunity context → eligible child Enrollment
  * participations (OCM rows) for commands such as waitlist_child.
  *
- * Exactly one eligible child → auto-resolve.
- * Zero or many → fail closed (never invent / never pick first of many).
+ * Household children (`customer_members.relationship = child`) are authoritative for
+ * "who belongs to this family." Missing OCM participation rows are ensured so Waitlist
+ * can execute against child Enrollment grain — never invent subjects, never pick first
+ * of many without operator choice.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 
 export type EligibleEnrollmentChildSubject = {
     /** opportunity_customer_members.id */
@@ -42,9 +46,20 @@ function childDisplayName(cm: {
     return joined || "Child";
 }
 
+function formatContextBits(stage: string | null, status: string | null): string[] {
+    return [stage, status]
+        .filter(Boolean)
+        .map((bit) =>
+            String(bit)
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, (c) => c.toUpperCase()),
+        );
+}
+
 /**
- * Load OCMs for an opportunity that can receive child Enrollment progression.
- * Eligibility for this slice: any linked opportunity_customer_member with a child identity.
+ * Load eligible child Enrollment subjects for an opportunity.
+ * Resolves household children first; ensures OCM participation so execute stays on
+ * opportunity_customer_member grain.
  */
 export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
     supabase: SupabaseClient;
@@ -60,15 +75,42 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
         };
     }
 
-    const { data, error } = await params.supabase
-        .from("opportunity_customer_members")
-        .select(
-            "id, customer_member_id, outcome_status_key, stage_key, customer_members(first_name, last_name, display_name)",
-        )
+    const { data: opportunity, error: oppError } = await params.supabase
+        .from("opportunities")
+        .select("id, customer_id, location_id, locations(label)")
         .eq("org_id", params.orgId)
-        .eq("opportunity_id", opportunityId);
+        .eq("id", opportunityId)
+        .maybeSingle();
 
-    if (error) {
+    if (oppError || !opportunity?.id) {
+        return {
+            status: "none",
+            subjects: [],
+            message: "Could not load this family record. Try again.",
+        };
+    }
+
+    const customerId = trimOrNull((opportunity as { customer_id?: string | null }).customer_id);
+    const locationLabel = trimOrNull(
+        (opportunity as { locations?: { label?: string | null } | null }).locations?.label,
+    );
+    if (!customerId) {
+        return {
+            status: "none",
+            subjects: [],
+            message: "This family record has no household yet. Add a child before moving to Waitlist.",
+        };
+    }
+
+    const { data: householdChildren, error: childrenError } = await params.supabase
+        .from("customer_members")
+        .select("id, first_name, last_name, display_name, relationship, is_active")
+        .eq("org_id", params.orgId)
+        .eq("customer_id", customerId)
+        .eq("relationship", "child")
+        .eq("is_active", true);
+
+    if (childrenError) {
         return {
             status: "none",
             subjects: [],
@@ -76,41 +118,8 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
         };
     }
 
-    const subjects: EligibleEnrollmentChildSubject[] = [];
-    for (const row of data ?? []) {
-        const rec = row as {
-            id?: string;
-            customer_member_id?: string | null;
-            outcome_status_key?: string | null;
-            stage_key?: string | null;
-            customer_members?: {
-                first_name?: string | null;
-                last_name?: string | null;
-                display_name?: string | null;
-            } | null;
-        };
-        const ocmId = trimOrNull(rec.id);
-        const customerMemberId = trimOrNull(rec.customer_member_id);
-        if (!ocmId || !customerMemberId) continue;
-        const name = childDisplayName(rec.customer_members);
-        const status = trimOrNull(rec.outcome_status_key);
-        const stage = trimOrNull(rec.stage_key);
-        const contextBits = [stage, status]
-            .filter(Boolean)
-            .map((bit) =>
-                String(bit)
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase()),
-            );
-        subjects.push({
-            id: ocmId,
-            label: contextBits.length > 0 ? `${name} · ${contextBits.join(" · ")}` : name,
-            grain: "opportunity_customer_member",
-            customerMemberId,
-        });
-    }
-
-    if (subjects.length === 0) {
+    const childMembers = (householdChildren ?? []).filter((row) => trimOrNull((row as { id?: string }).id));
+    if (childMembers.length === 0) {
         return {
             status: "none",
             subjects: [],
@@ -118,16 +127,119 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
         };
     }
 
-    if (subjects.length === 1) {
-        return { status: "single", subject: subjects[0]!, subjects: [subjects[0]!] };
+    const { data: existingOcms, error: ocmError } = await params.supabase
+        .from("opportunity_customer_members")
+        .select(
+            "id, customer_member_id, outcome_status_key, stage_key, location_id, customer_members(first_name, last_name, display_name)",
+        )
+        .eq("org_id", params.orgId)
+        .eq("opportunity_id", opportunityId);
+
+    if (ocmError) {
+        return {
+            status: "none",
+            subjects: [],
+            message: "Could not load children for this family. Try again.",
+        };
     }
 
-    return {
-        status: "multiple",
-        subjects,
-        message:
-            "This family has more than one child. Choose which child to move to Waitlist.",
-    };
+    const ocmByMemberId = new Map<
+        string,
+        {
+            id: string;
+            outcome_status_key?: string | null;
+            stage_key?: string | null;
+            location_id?: string | null;
+            customer_members?: {
+                first_name?: string | null;
+                last_name?: string | null;
+                display_name?: string | null;
+            } | null;
+        }
+    >();
+    for (const row of existingOcms ?? []) {
+        const rec = row as {
+            id?: string;
+            customer_member_id?: string | null;
+            outcome_status_key?: string | null;
+            stage_key?: string | null;
+            location_id?: string | null;
+            customer_members?: {
+                first_name?: string | null;
+                last_name?: string | null;
+                display_name?: string | null;
+            } | null;
+        };
+        const memberId = trimOrNull(rec.customer_member_id);
+        const ocmId = trimOrNull(rec.id);
+        if (!memberId || !ocmId) continue;
+        ocmByMemberId.set(memberId, {
+            id: ocmId,
+            outcome_status_key: rec.outcome_status_key,
+            stage_key: rec.stage_key,
+            location_id: rec.location_id,
+            customer_members: rec.customer_members,
+        });
+    }
+
+    const subjects: EligibleEnrollmentChildSubject[] = [];
+    for (const member of childMembers) {
+        const memberRec = member as {
+            id?: string;
+            first_name?: string | null;
+            last_name?: string | null;
+            display_name?: string | null;
+        };
+        const customerMemberId = trimOrNull(memberRec.id);
+        if (!customerMemberId) continue;
+
+        let ocm = ocmByMemberId.get(customerMemberId) ?? null;
+        if (!ocm) {
+            try {
+                const ensured = await ensureOpportunityCustomerMemberParticipation({
+                    supabase: params.supabase,
+                    orgId: params.orgId,
+                    opportunityId,
+                    customerMemberId,
+                    source: "eligible_enrollment_children",
+                });
+                ocm = {
+                    id: ensured.ocmId,
+                    outcome_status_key: null,
+                    stage_key: null,
+                    location_id: null,
+                    customer_members: {
+                        first_name: memberRec.first_name,
+                        last_name: memberRec.last_name,
+                        display_name: memberRec.display_name,
+                    },
+                };
+            } catch {
+                return {
+                    status: "none",
+                    subjects: [],
+                    message: "Could not prepare enrollment for a child on this family. Try again.",
+                };
+            }
+        }
+
+        const name = childDisplayName(ocm.customer_members ?? memberRec);
+        const contextBits = [
+            locationLabel,
+            ...formatContextBits(
+                trimOrNull(ocm.stage_key),
+                trimOrNull(ocm.outcome_status_key),
+            ),
+        ].filter(Boolean) as string[];
+        subjects.push({
+            id: ocm.id,
+            label: contextBits.length > 0 ? `${name} · ${contextBits.join(" · ")}` : name,
+            grain: "opportunity_customer_member",
+            customerMemberId,
+        });
+    }
+
+    return classifyEligibleEnrollmentChildren(subjects);
 }
 
 /** Pure classification for tests / intent plans that already have subject lists. */
@@ -147,7 +259,6 @@ export function classifyEligibleEnrollmentChildren(
     return {
         status: "multiple",
         subjects: [...subjects],
-        message:
-            "This family has more than one child. Choose which child to move to Waitlist.",
+        message: "Who should move to Waitlist?",
     };
 }

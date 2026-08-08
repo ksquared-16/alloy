@@ -168,7 +168,7 @@ export default function CommandSurfaceShell(props: CommandSurfaceShellProps) {
                 ) : null}
                 <button
                     type="button"
-                    className="rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+                    className="rounded-md bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
                     disabled={!state.footer.primary.enabled}
                     onClick={onPrimary}
                     data-command-surface-primary

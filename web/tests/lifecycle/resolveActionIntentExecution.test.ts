@@ -78,10 +78,11 @@ describe("resolveActionIntentExecution", () => {
             },
         });
         expect(plan.requiresSubjectPicker).toBe(true);
+        expect(plan.selectionMode).toBe("one_or_more");
         expect(plan.applicableSubjects).toHaveLength(2);
     });
 
-    it("does not require picker for exactly one eligible child", () => {
+    it("requires picker for exactly one eligible child (confirm before execute)", () => {
         const plan = resolveActionIntentExecution({
             actionRef: "move_to_waitlist",
             stageDefinition: { journey_segment: "family" },
@@ -91,7 +92,8 @@ describe("resolveActionIntentExecution", () => {
                 ],
             },
         });
-        expect(plan.requiresSubjectPicker).toBe(false);
+        expect(plan.requiresSubjectPicker).toBe(true);
+        expect(plan.selectionMode).toBe("one_or_more");
         expect(plan.applicableSubjects).toHaveLength(1);
     });
 
@@ -123,6 +125,9 @@ describe("resolveActionIntentExecution", () => {
                 ],
                 "one_or_more",
             ),
+        ).toBe(true);
+        expect(
+            evaluateRequiresSubjectPicker([{ id: "sub-1", label: "Subject A" }], "one_or_more"),
         ).toBe(true);
         expect(
             evaluateRequiresSubjectPicker(

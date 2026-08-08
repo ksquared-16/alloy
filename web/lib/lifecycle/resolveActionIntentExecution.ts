@@ -43,8 +43,8 @@ export type ActionIntentExecutionPlan = {
 
 function selectionModeForExecutionKey(executionKey: string): ActionIntentSelectionMode {
     if (executionKey === "waitlist_child" || executionKey === "enroll_child") {
-        // Related-subject: exactly one child at a time; multi must pick.
-        return "single";
+        // Related-subject: operator may select one or more eligible children.
+        return "one_or_more";
     }
     const platform = getPlatformAction(executionKey);
     if (platform?.supportsMultiSubject) return "one_or_more";
@@ -55,12 +55,13 @@ export function evaluateRequiresSubjectPicker(
     applicableSubjects: ActionIntentApplicableSubject[],
     selectionMode: ActionIntentSelectionMode,
 ): boolean {
+    // Waitlist / enroll related-subject always opens the selector (even for one child)
+    // so the operator reviews and confirms before execute.
+    if (selectionMode === "one_or_more" || selectionMode === "all") {
+        return applicableSubjects.length >= 1;
+    }
     if (applicableSubjects.length <= 1) return false;
-    return (
-        selectionMode === "one_or_more"
-        || selectionMode === "all"
-        || selectionMode === "single"
-    );
+    return selectionMode === "single";
 }
 
 /** True when Focus Panel / runtime truth already projected an enrollment-child list (even if empty). */
