@@ -116,7 +116,7 @@ export default function CurrentWorkTourGroupedActions({
                 <button
                     key={action.key}
                     type="button"
-                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                    className="alloy-os-currentwork__helpful-action"
                     data-work-supporting-action={action.key}
                     onClick={() => onAction(action)}
                     onMouseEnter={() => onWarm?.(action)}
@@ -129,7 +129,7 @@ export default function CurrentWorkTourGroupedActions({
                 <div className="relative inline-flex" ref={setRootEl} data-work-tour-grouped="true">
                     <button
                         type="button"
-                        className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                        className="alloy-os-currentwork__helpful-action"
                         data-work-tour-menu-trigger="true"
                         aria-expanded={open}
                         aria-controls={menuId}

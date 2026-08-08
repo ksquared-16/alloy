@@ -2,7 +2,7 @@
 
 /**
  * Compact operational context facts for What's Next — presentation only.
- * Prefers the Card V2 contextFacts DTO; falls back to contact + due from surface/truth.
+ * Inline fact row (no oversized bordered box). Grows only when facts exist.
  */
 
 import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
@@ -37,26 +37,48 @@ function legacyFacts(
     return out;
 }
 
-/** Dense labeled context facts — omit entirely when empty. */
+function formatFact(fact: WhatsNextContextFact): { primary: string; secondary: string | null } {
+    // Prefer "Kelly Kurzman · Primary contact" / "Due Sat, Aug 8" when a label exists.
+    if (fact.key === "primary_contact" && fact.label) {
+        return { primary: fact.value, secondary: fact.label };
+    }
+    if (fact.key === "due" && fact.label) {
+        return { primary: `${fact.label} ${fact.value}`, secondary: null };
+    }
+    if (fact.label) {
+        return { primary: fact.value, secondary: fact.label };
+    }
+    return { primary: fact.value, secondary: null };
+}
+
+/** Dense inline context facts — omit entirely when empty. */
 export default function CurrentWorkContextStrip({ surface, truth, facts }: Props) {
     const resolved = (facts && facts.length > 0 ? facts : legacyFacts(surface, truth)).slice(0, 4);
     if (resolved.length === 0) return null;
 
     return (
         <div className="alloy-os-currentwork__context" data-work-context="true">
-            <div className="alloy-os-currentwork__context-card" data-work-context-card="true">
-                {resolved.map((fact) => (
-                    <div
-                        key={fact.key}
-                        className="alloy-os-currentwork__context-fact"
-                        data-work-context-fact={fact.key}
-                    >
-                        {fact.label ?
-                            <span className="alloy-os-currentwork__context-label">{fact.label}</span>
-                        :   null}
-                        <span className="alloy-os-currentwork__context-value">{fact.value}</span>
-                    </div>
-                ))}
+            <div className="alloy-os-currentwork__context-inline" data-work-context-card="true">
+                {resolved.map((fact, index) => {
+                    const { primary, secondary } = formatFact(fact);
+                    return (
+                        <span
+                            key={fact.key}
+                            className="alloy-os-currentwork__context-fact"
+                            data-work-context-fact={fact.key}
+                        >
+                            {index > 0 ?
+                                <span className="alloy-os-currentwork__context-sep" aria-hidden>
+                                    ·
+                                </span>
+                            :   null}
+                            <span className="alloy-os-currentwork__context-value">{primary}</span>
+                            {secondary ?
+                                <span className="alloy-os-currentwork__context-label">{secondary}</span>
+                            :   null}
+                        </span>
+                    );
+                })}
             </div>
         </div>
     );

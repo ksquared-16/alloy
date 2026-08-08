@@ -130,13 +130,14 @@ describe("Contact Family → Communications loop", () => {
         expect(card).toContain("data-work-primary-action");
         expect(card).toContain("CurrentWorkTourGroupedActions");
         expect(card).toContain("CurrentWorkContextStrip");
-        expect(card).toContain("View activity");
+        expect(card).toContain("View all activity →");
         expect(card).toContain("data-work-recent-activity");
         expect(card).toContain("data-work-still-activity-row");
+        expect(card).toContain("alloy-os-currentwork__record-outcome-link");
         expect(card).not.toContain("View details →");
         const strip = read("components/admin/focusPanel/cards/CurrentWorkContextStrip.tsx");
         expect(strip).toContain("formatTaskDueDate");
-        expect(strip).toContain("alloy-os-currentwork__context-card");
+        expect(strip).toContain("alloy-os-currentwork__context-inline");
         expect(strip).not.toContain("Results that advance");
         expect(strip).not.toContain("context-purpose");
         const focused = read("components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx");

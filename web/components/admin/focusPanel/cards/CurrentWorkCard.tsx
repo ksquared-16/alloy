@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
@@ -429,34 +429,13 @@ export default function CurrentWorkCard({
         : surface.status === "completed" ? "done"
         :   "neutral";
 
-    // Footer opens recent activity (same canonical preview as the Activity timeline), not a
-    // second work surface. Focused Current Work still opens via Work Items → Open work.
+    // Activity preview + "View all activity →" live under Recent Activity on the summary card.
     const canPreviewActivity =
         !isWorkspace
         && !stageWorkPending
         && !evidence.isEmpty
         && completionPhase !== "complete";
-    const footerAction = canPreviewActivity ? (
-        <div className="alloy-os-currentwork__activity-link-wrap relative">
-            <button
-                ref={openWorkspaceTriggerRef}
-                type="button"
-                className="alloy-os-currentwork__summary-open"
-                data-work-action="preview-activity"
-                aria-expanded={activityPreviewOpen}
-                onClick={() => setActivityPreviewOpen((open) => !open)}
-            >
-                View activity
-            </button>
-            <CurrentWorkActivityPreview
-                open={activityPreviewOpen}
-                items={activityPreviewItems}
-                onClose={handleCloseActivityPreview}
-                onViewFullActivity={handleViewFullActivity}
-                triggerRef={openWorkspaceTriggerRef}
-            />
-        </div>
-    ) : null;
+    const footerAction = null;
     const stageLabel = context.businessProcess?.stageKey ?? null;
     const ownerLabel = null;
 
@@ -538,6 +517,12 @@ export default function CurrentWorkCard({
                 truth={context.truth as Record<string, unknown>}
                 activityItems={activityPreviewItems}
                 timeZone={viewerTimeZone}
+                activityPreviewOpen={activityPreviewOpen}
+                canPreviewActivity={canPreviewActivity}
+                activityTriggerRef={openWorkspaceTriggerRef}
+                onToggleActivityPreview={() => setActivityPreviewOpen((open) => !open)}
+                onCloseActivityPreview={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 onWarm={warmAction}
@@ -603,6 +588,12 @@ function SummaryBody({
     truth,
     activityItems,
     timeZone,
+    activityPreviewOpen,
+    canPreviewActivity,
+    activityTriggerRef,
+    onToggleActivityPreview,
+    onCloseActivityPreview,
+    onViewFullActivity,
     onChecklistItem,
     onAction,
     onWarm,
@@ -614,6 +605,12 @@ function SummaryBody({
     truth?: Record<string, unknown> | null;
     activityItems: CurrentWorkActivityPreviewItem[];
     timeZone?: string | null;
+    activityPreviewOpen: boolean;
+    canPreviewActivity: boolean;
+    activityTriggerRef: RefObject<HTMLButtonElement | null>;
+    onToggleActivityPreview: () => void;
+    onCloseActivityPreview: () => void;
+    onViewFullActivity: () => void;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
@@ -641,6 +638,7 @@ function SummaryBody({
         !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
 
     const recentActivity = card.recentActivity;
+    const showRecentActivity = recentActivity.length > 0 || canPreviewActivity;
 
     return (
         <div
@@ -695,48 +693,73 @@ function SummaryBody({
                         {subordinateOutcome ?
                             <button
                                 type="button"
-                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                                className="alloy-os-currentwork__record-outcome-link"
                                 data-work-action="record-outcome"
                                 onClick={() => onAction(subordinateOutcome)}
                             >
-                                <CurrentWorkActionButtonContent action={subordinateOutcome} />
+                                Record outcome →
                             </button>
                         :   null}
                     </div>
                 :   null}
                 <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
                     <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
-                    {recentActivity.length > 0 ?
+                    {showRecentActivity ?
                         <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
-                            <p className="alloy-os-currentwork__context-label">Recent activity</p>
-                            <ul className="alloy-os-currentwork__recent-activity-list">
-                                {recentActivity.map((item) => (
-                                    <li key={item.key}>
-                                        <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
-                                            <CurrentWorkActivityKindIcon
-                                                kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
-                                            />
-                                        </span>
-                                        <span className="alloy-os-currentwork__recent-activity-body">
-                                            <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
-                                            {item.occurredAt ?
-                                                <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
-                                            :   null}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
+                            {recentActivity.length > 0 ?
+                                <>
+                                    <p className="alloy-os-currentwork__context-label">Recent activity</p>
+                                    <ul className="alloy-os-currentwork__recent-activity-list">
+                                        {recentActivity.map((item) => (
+                                            <li key={item.key}>
+                                                <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
+                                                    <CurrentWorkActivityKindIcon
+                                                        kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
+                                                    />
+                                                </span>
+                                                <span className="alloy-os-currentwork__recent-activity-body">
+                                                    <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
+                                                    {item.occurredAt ?
+                                                        <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
+                                                    :   null}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
+                            :   null}
+                            {canPreviewActivity ?
+                                <div className="alloy-os-currentwork__activity-link-wrap relative">
+                                    <button
+                                        ref={activityTriggerRef}
+                                        type="button"
+                                        className="alloy-os-currentwork__view-all-activity"
+                                        data-work-action="preview-activity"
+                                        aria-expanded={activityPreviewOpen}
+                                        onClick={onToggleActivityPreview}
+                                    >
+                                        View all activity →
+                                    </button>
+                                    <CurrentWorkActivityPreview
+                                        open={activityPreviewOpen}
+                                        items={activityItems}
+                                        onClose={onCloseActivityPreview}
+                                        onViewFullActivity={onViewFullActivity}
+                                        triggerRef={activityTriggerRef}
+                                    />
+                                </div>
+                            :   null}
                         </div>
                     :   null}
                 </div>
 
                 {workId ?
                     <div
-                        className="mt-2 flex flex-wrap items-center gap-2"
+                        className="alloy-os-currentwork__work-items-link"
                         data-current-work-work-items-link="true"
                         data-work-items-link-active={workItemsLinkActive ? "true" : undefined}
                     >
-                        <span className="text-[10px] text-alloy-midnight/50">Also in Work Items</span>
+                        <span className="alloy-os-currentwork__work-items-meta">Also in Work Items</span>
                         <ViewInWorkItemsLink
                             taskId={workId}
                             opportunityId={opportunityId}
