@@ -124,7 +124,7 @@ function buildDueChip(surface: CurrentWorkSurfaceVM): string | null {
     if (!dueRaw) return null;
     const urgency = surface.primaryWorkItem?.due_urgency ?? null;
     if (urgency === "overdue") return "OVERDUE";
-    if (urgency === "today") return "DUE TODAY";
+    if (urgency === "due_today") return "DUE TODAY";
     const formatted = formatTaskDueDate(dueRaw);
     if (!formatted) return null;
     return `DUE ${formatted}`.toUpperCase();
