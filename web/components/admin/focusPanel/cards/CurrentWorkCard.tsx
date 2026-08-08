@@ -26,6 +26,8 @@ import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPane
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
 import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
+import CurrentWorkProgressSummary from "@/components/admin/focusPanel/cards/CurrentWorkProgressSummary";
+import { buildWhatsNextCardPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildWhatsNextCardPresentation";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -530,10 +532,12 @@ export default function CurrentWorkCard({
         : isWorkspace ? focusedBody
         :   <SummaryBody
                 surface={surface}
+                context={context}
                 opportunityId={opportunityId}
                 focusedWorkItemId={focusedWorkItemId}
                 truth={context.truth as Record<string, unknown>}
                 activityItems={activityPreviewItems}
+                timeZone={viewerTimeZone}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 onWarm={warmAction}
@@ -593,19 +597,23 @@ export { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWor
 
 function SummaryBody({
     surface,
+    context,
     opportunityId,
     focusedWorkItemId,
     truth,
     activityItems,
+    timeZone,
     onChecklistItem,
     onAction,
     onWarm,
 }: {
     surface: CurrentWorkSurfaceVM;
+    context: OperationalContext;
     opportunityId: string;
     focusedWorkItemId: string | null;
     truth?: Record<string, unknown> | null;
     activityItems: CurrentWorkActivityPreviewItem[];
+    timeZone?: string | null;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
@@ -614,6 +622,12 @@ function SummaryBody({
     // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
     // Record outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+    const card = buildWhatsNextCardPresentation({
+        surface,
+        context,
+        activityItems,
+        timeZone,
+    });
     const workId = surface.primaryWorkItem?.work_id?.trim() || "";
     const workItemsLinkActive =
         Boolean(workId) && (!focusedWorkItemId || focusedWorkItemId === workId);
@@ -626,24 +640,34 @@ function SummaryBody({
     const outcomeBlockReason =
         !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
 
-    const recentActivity = activityItems.slice(0, 3);
+    const recentActivity = card.recentActivity;
 
     return (
         <div
             className="alloy-os-currentwork__summary"
             data-work-summary="true"
+            data-whats-next-card="v2"
+            data-summary-source={card.summarySource}
             data-focused-work-id={focusedWorkItemId ?? undefined}
             role="group"
             aria-label="What's Next summary"
         >
+            {card.summaryLine ?
+                <p className="alloy-os-currentwork__summary-line" data-work-summary-line="true">
+                    {card.summaryLine}
+                </p>
+            :   null}
             {outcomeBlockReason ?
                 <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
                     {outcomeBlockReason}
                 </p>
             :   null}
+            {card.progress ?
+                <CurrentWorkProgressSummary progress={card.progress} />
+            :   null}
             <div className="alloy-os-currentwork__summary-controls">
                 <div className="alloy-os-currentwork__context-action-row" data-work-context-action-row="true">
-                    <CurrentWorkContextStrip surface={surface} truth={truth} />
+                    <CurrentWorkContextStrip surface={surface} truth={truth} facts={card.contextFacts} />
                     {dominant ?
                         <button
                             type="button"
@@ -686,10 +710,12 @@ function SummaryBody({
                         <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
                             <p className="alloy-os-currentwork__context-label">Recent activity</p>
                             <ul className="alloy-os-currentwork__recent-activity-list">
-                                {recentActivity.map((item, index) => (
-                                    <li key={`${item.label}-${item.occurredAt ?? index}`}>
+                                {recentActivity.map((item) => (
+                                    <li key={item.key}>
                                         <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
-                                            <CurrentWorkActivityKindIcon kind={item.kind} />
+                                            <CurrentWorkActivityKindIcon
+                                                kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
+                                            />
                                         </span>
                                         <span className="alloy-os-currentwork__recent-activity-body">
                                             <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>

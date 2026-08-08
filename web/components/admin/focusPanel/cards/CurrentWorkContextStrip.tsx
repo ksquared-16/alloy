@@ -1,16 +1,19 @@
 "use client";
 
 /**
- * Compact operational context for What's Next — primary contact + due on one card row.
- * Presentation only over existing CurrentWorkSurfaceVM fields (no new metadata).
+ * Compact operational context facts for What's Next — presentation only.
+ * Prefers the Card V2 contextFacts DTO; falls back to contact + due from surface/truth.
  */
 
 import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
 import type { CurrentWorkSurfaceVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
+import type { WhatsNextContextFact } from "@/lib/adminV2/runtime/focusPanel/currentWork/whatsNextCardTypes";
 
 type Props = {
     surface: CurrentWorkSurfaceVM;
     truth?: Record<string, unknown> | null;
+    /** Card V2 context facts — when provided, replaces the legacy contact/due-only strip. */
+    facts?: WhatsNextContextFact[] | null;
 };
 
 function primaryContactHint(truth: Record<string, unknown> | null | undefined): string | null {
@@ -21,30 +24,39 @@ function primaryContactHint(truth: Record<string, unknown> | null | undefined): 
     return name || null;
 }
 
-/** Dense labeled context — contact + due share one quiet card. */
-export default function CurrentWorkContextStrip({ surface, truth }: Props) {
-    const contact = primaryContactHint(truth ?? null);
-    const work = surface.primaryWorkItem;
-    const dueRaw = work?.due_at?.trim() || null;
+function legacyFacts(
+    surface: CurrentWorkSurfaceVM,
+    truth: Record<string, unknown> | null | undefined,
+): WhatsNextContextFact[] {
+    const out: WhatsNextContextFact[] = [];
+    const contact = primaryContactHint(truth);
+    if (contact) out.push({ key: "primary_contact", label: "Primary contact", value: contact });
+    const dueRaw = surface.primaryWorkItem?.due_at?.trim() || null;
     const dueAt = dueRaw ? formatTaskDueDate(dueRaw) || dueRaw : null;
+    if (dueAt) out.push({ key: "due", label: "Due", value: dueAt });
+    return out;
+}
 
-    if (!contact && !dueAt) return null;
+/** Dense labeled context facts — omit entirely when empty. */
+export default function CurrentWorkContextStrip({ surface, truth, facts }: Props) {
+    const resolved = (facts && facts.length > 0 ? facts : legacyFacts(surface, truth)).slice(0, 4);
+    if (resolved.length === 0) return null;
 
     return (
         <div className="alloy-os-currentwork__context" data-work-context="true">
             <div className="alloy-os-currentwork__context-card" data-work-context-card="true">
-                {contact ?
-                    <div className="alloy-os-currentwork__context-fact" data-work-context-fact="contact">
-                        <span className="alloy-os-currentwork__context-label">Primary contact</span>
-                        <span className="alloy-os-currentwork__context-value">{contact}</span>
+                {resolved.map((fact) => (
+                    <div
+                        key={fact.key}
+                        className="alloy-os-currentwork__context-fact"
+                        data-work-context-fact={fact.key}
+                    >
+                        {fact.label ?
+                            <span className="alloy-os-currentwork__context-label">{fact.label}</span>
+                        :   null}
+                        <span className="alloy-os-currentwork__context-value">{fact.value}</span>
                     </div>
-                :   null}
-                {dueAt ?
-                    <div className="alloy-os-currentwork__context-fact" data-work-context-fact="due">
-                        <span className="alloy-os-currentwork__context-label">Due</span>
-                        <span className="alloy-os-currentwork__context-value">{dueAt}</span>
-                    </div>
-                :   null}
+                ))}
             </div>
         </div>
     );
