@@ -528,9 +528,10 @@ function contextAllowedActionKeys(args: {
     commandProjection?: import("@/lib/lifecycle/processRuntimeCommandProjection").ProcessRuntimeCommandProjection | null;
 }): { keys: ReadonlySet<string>; enforce: boolean } {
     const template = args.templateConfig;
+    const helpfulForAllowlist = resolvedHelpfulActionRefs(template) ?? [];
     const explicitTemplateRefs = [
         template?.primary_action?.action_ref,
-        ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
+        ...helpfulForAllowlist.map((row) => row.action_ref),
         ...(template?.alternate_paths ?? []).flatMap((row) =>
             "action_ref" in row ? [row.action_ref] : [],
         ),

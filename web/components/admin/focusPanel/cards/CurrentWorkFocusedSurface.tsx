@@ -25,6 +25,8 @@ import clsx from "clsx";
 
 import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWorkReadinessSummary";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
+import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
+import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
 import type { CurrentWorkActivityPreviewItem } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import { isCurrentWorkActionExecutable } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
@@ -46,6 +48,7 @@ type Props = {
     error: string | null;
     handoffNotice: string | null;
     activityItems: CurrentWorkActivityPreviewItem[];
+    truth?: Record<string, unknown> | null;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
@@ -65,6 +68,7 @@ export default function CurrentWorkFocusedSurface({
     error,
     handoffNotice,
     activityItems,
+    truth = null,
     onChecklistItem,
     onAction,
     onWarm,
@@ -219,34 +223,32 @@ export default function CurrentWorkFocusedSurface({
                     :   null}
                 </div>
             :   <>
-                    {dominant || helpful.length > 0 ?
-                        <div className="alloy-os-currentwork__focused-actions" data-work-focused-actions="true">
-                            {dominant ?
-                                <button
-                                    type="button"
-                                    className="alloy-os-currentwork__primary-action"
-                                    data-work-primary-action={dominant.key}
-                                    data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
-                                    onClick={() => onActionButton(dominant)}
-                                    onMouseEnter={() => onWarm(dominant)}
-                                    onFocus={() => onWarm(dominant)}
-                                >
-                                    <CurrentWorkActionButtonContent action={dominant} />
-                                </button>
+                    <div className="alloy-os-currentwork__context-action-row" data-work-context-action-row="true">
+                        <CurrentWorkContextStrip surface={surface} truth={truth} />
+                        {dominant ?
+                            <button
+                                type="button"
+                                className="alloy-os-currentwork__primary-action"
+                                data-work-primary-action={dominant.key}
+                                data-work-action={dominantIsOutcome ? "record-outcome" : undefined}
+                                onClick={() => onActionButton(dominant)}
+                                onMouseEnter={() => onWarm(dominant)}
+                                onFocus={() => onWarm(dominant)}
+                            >
+                                <CurrentWorkActionButtonContent action={dominant} />
+                            </button>
+                        :   null}
+                    </div>
+                    {helpful.length > 0 || subordinateOutcome ?
+                        <div className="alloy-os-currentwork__primary-stack" data-work-focused-actions="true" data-work-supporting-row="true">
+                            {helpful.length > 0 ?
+                                <CurrentWorkTourGroupedActions
+                                    actions={helpful}
+                                    onAction={onActionButton}
+                                    onWarm={onWarm}
+                                    variant="summary"
+                                />
                             :   null}
-                            {helpful.map((action) => (
-                                <button
-                                    key={action.key}
-                                    type="button"
-                                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                    data-work-supporting-action={action.key}
-                                    onClick={() => onActionButton(action)}
-                                    onMouseEnter={() => onWarm(action)}
-                                    onFocus={() => onWarm(action)}
-                                >
-                                    <CurrentWorkActionButtonContent action={action} />
-                                </button>
-                            ))}
                             {subordinateOutcome ?
                                 <button
                                     type="button"
@@ -268,7 +270,24 @@ export default function CurrentWorkFocusedSurface({
                         </p>
                     :   null}
 
-                    <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                    <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
+                        <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                        {activity.length > 0 ?
+                            <div className="alloy-os-currentwork__focused-activity" data-work-focused-activity="true">
+                                <p className="alloy-os-currentwork__focused-section-title">Recent activity</p>
+                                <ul className="alloy-os-currentwork__focused-activity-list">
+                                    {activity.map((item, index) => (
+                                        <li key={`${item.label}-${index}`} className="alloy-os-currentwork__focused-activity-item">
+                                            <span>{item.label}</span>
+                                            {item.occurredAt ?
+                                                <span className="alloy-os-currentwork__focused-activity-when">{item.occurredAt}</span>
+                                            :   null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        :   null}
+                    </div>
 
                     {transitions.length > 0 ?
                         <div className="alloy-os-currentwork__focused-transitions" data-work-focused-transitions="true">
@@ -286,22 +305,6 @@ export default function CurrentWorkFocusedSurface({
                                     </button>
                                 ))}
                             </div>
-                        </div>
-                    :   null}
-
-                    {activity.length > 0 ?
-                        <div className="alloy-os-currentwork__focused-activity" data-work-focused-activity="true">
-                            <p className="alloy-os-currentwork__focused-section-title">Recent activity</p>
-                            <ul className="alloy-os-currentwork__focused-activity-list">
-                                {activity.map((item, index) => (
-                                    <li key={`${item.label}-${index}`} className="alloy-os-currentwork__focused-activity-item">
-                                        <span>{item.label}</span>
-                                        {item.occurredAt ?
-                                            <span className="alloy-os-currentwork__focused-activity-when">{item.occurredAt}</span>
-                                        :   null}
-                                    </li>
-                                ))}
-                            </ul>
                         </div>
                     :   null}
                 </>

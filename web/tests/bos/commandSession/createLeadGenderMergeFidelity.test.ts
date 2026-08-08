@@ -23,21 +23,41 @@ function person(partial: Partial<IntakePersonCandidate> & Pick<IntakePersonCandi
     };
 }
 
-function selectionFromHousehold(household: IntakeHouseholdCandidate): CreateLeadCommitSelection {
-    return buildCreateLeadCommitSelection({
+function household(partial: {
+    parents_guardians?: IntakePersonCandidate[];
+    children?: IntakePersonCandidate[];
+}): IntakeHouseholdCandidate {
+    const parents_guardians = partial.parents_guardians ?? [];
+    return {
+        household_id: "household:test",
+        parents_guardians,
+        parents: parents_guardians,
+        children: partial.children ?? [],
         household_contacts: [],
-        parents_guardians: [],
-        parents: [],
-        children: [],
-        ...household,
-    });
+        address: null,
+        location: null,
+        source: null,
+        notes: null,
+        program_interest: null,
+        start_date: null,
+        relationships: [],
+        unassigned_fact_ids: [],
+        unmapped_facts: [],
+        review_warnings: [],
+    };
+}
+
+function selectionFromHousehold(partial: {
+    parents_guardians?: IntakePersonCandidate[];
+    children?: IntakePersonCandidate[];
+}): CreateLeadCommitSelection {
+    return buildCreateLeadCommitSelection(household(partial));
 }
 
 describe("Create Lead BOS merge preserves child gender", () => {
     it("keeps explicit gender when Conversation re-merges onto an existing Form child", () => {
         // Form already has the named child (no gender yet).
         const existing = selectionFromHousehold({
-            household_contacts: [],
             parents_guardians: [
                 person({
                     candidate_id: "parent:1",
@@ -61,7 +81,6 @@ describe("Create Lead BOS merge preserves child gender", () => {
 
         // Conversation parse supplies gender on the same child name.
         const incoming = selectionFromHousehold({
-            household_contacts: [],
             parents_guardians: [
                 person({
                     candidate_id: "parent:parsed",
@@ -89,14 +108,12 @@ describe("Create Lead BOS merge preserves child gender", () => {
         expect(child!.extra_payload_values.gender).toBe("female");
 
         // Downstream Processing source must still see gender on the household candidate.
-        const household = householdFromCommitSelection(merged);
-        expect(household.children[0]?.gender).toBe("female");
+        const asHousehold = householdFromCommitSelection(merged);
+        expect(asHousehold.children[0]?.gender).toBe("female");
     });
 
     it("does not clobber an operator-entered gender with a later empty parse", () => {
         const existing = selectionFromHousehold({
-            household_contacts: [],
-            parents_guardians: [],
             children: [
                 person({
                     candidate_id: "child:1",
@@ -108,8 +125,6 @@ describe("Create Lead BOS merge preserves child gender", () => {
             ],
         });
         const incoming = selectionFromHousehold({
-            household_contacts: [],
-            parents_guardians: [],
             children: [
                 person({
                     candidate_id: "child:2",
@@ -120,7 +135,9 @@ describe("Create Lead BOS merge preserves child gender", () => {
                 }),
             ],
         });
+
         const merged = mergeCreateLeadCommitSelections(existing, incoming);
-        expect(merged.children[0]!.extra_payload_values.gender).toBe("male");
+        const child = merged.children.find((c) => c.first_name === "Lennon");
+        expect(child!.extra_payload_values.gender).toBe("male");
     });
 });

@@ -24,6 +24,7 @@ import {
     commitApprovedLeadForCase,
     loadCaseReview,
     OperatorServiceError,
+    type CaseReviewState,
 } from "@/lib/pos/processingIdentity/operator/operatorReviewService";
 import { buildCreateLeadReviewPresentation } from "@/lib/pos/processingIdentity/operator/createLeadReviewPresentation";
 
@@ -267,8 +268,10 @@ export async function executeCreateLeadAction(
 
     // Reuse the review already loaded during ingest — a second loadCaseReview was a clean-new
     // latency tax with no semantic benefit (case has not changed between the two calls).
-    let review: Awaited<ReturnType<typeof loadCaseReview>> = ingested.caseReview;
-    if (!review) {
+    let review: CaseReviewState;
+    if (ingested.caseReview) {
+        review = ingested.caseReview;
+    } else {
         try {
             review = await loadCaseReview(reviewDeps, ingested.processingCaseId);
         } catch {

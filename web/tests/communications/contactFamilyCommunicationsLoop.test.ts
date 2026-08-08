@@ -9,6 +9,7 @@ import {
 } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
 import {
     buildContactFamilySendSuccessMessage,
+    buildContactFamilySendFollowOnNotice,
     ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE,
 } from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
@@ -59,7 +60,7 @@ describe("Contact Family → Communications loop", () => {
                 state: "open",
             },
             additional: [],
-        } as StageWorkRuntimeProjection;
+        } as unknown as StageWorkRuntimeProjection;
         const residual = filterResidualOperationalTasks(preview, stageRuntime);
         expect(residual.open_tasks.map((t) => t.id)).toEqual(["adhoc-1"]);
         // Unfiltered preview retains Contact Family identity for Activity Work Items.
@@ -95,9 +96,63 @@ describe("Contact Family → Communications loop", () => {
     it("send review replaces Send footer with Confirm send only", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         expect(view).toContain('sendResult?.mode === "preflight"');
-        expect(view).toContain("Confirm send (");
+        expect(view).toContain("Ready to send");
+        expect(view).toContain("Confirm send");
+        expect(view).toContain("Back to edit");
+        expect(view).toContain("data-cc-send-confirm=");
+        expect(view).toContain("data-cc-send-confirm-preview");
         expect(view).toContain('data-cc-composer-footer');
         expect(view).toMatch(/!\(LIVE_WORKSPACE && sendResult\?\.mode === "preflight"\)/);
+        // Preflight must not leave the normal Send / Send later / BOS footer visible.
+        expect(view).not.toMatch(/preflight[\s\S]{0,200}Send SMS/);
+    });
+
+    it("success copy names channel and recipient without inferring outcomes", () => {
+        expect(
+            buildContactFamilySendSuccessMessage({ channel: "email", recipientLabel: "Kelly Kurzman" }),
+        ).toBe("Email sent to Kelly Kurzman");
+        expect(buildContactFamilySendSuccessMessage({ channel: "sms", recipientLabel: null })).toBe("SMS sent");
+        expect(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE).toBe("adminv2:contact-family-send-complete");
+    });
+
+    it("post-send follow-on explains attempt-only when associated as left_message", () => {
+        expect(
+            buildContactFamilySendFollowOnNotice({ associated: true, outcome_key: "left_message" }),
+        ).toMatch(/stays open/i);
+        expect(buildContactFamilySendFollowOnNotice({ associated: false })).toBeNull();
+        const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
+        expect(card).toContain("buildContactFamilySendFollowOnNotice");
+    });
+
+    it("What's Next presents dominant action separately from supporting commands", () => {
+        const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
+        expect(card).toContain("alloy-os-currentwork__context-action-row");
+        expect(card).toContain("data-work-primary-action");
+        expect(card).toContain("CurrentWorkTourGroupedActions");
+        expect(card).toContain("CurrentWorkContextStrip");
+        expect(card).toContain("View activity");
+        expect(card).toContain("data-work-recent-activity");
+        expect(card).toContain("data-work-still-activity-row");
+        expect(card).not.toContain("View details →");
+        const strip = read("components/admin/focusPanel/cards/CurrentWorkContextStrip.tsx");
+        expect(strip).toContain("formatTaskDueDate");
+        expect(strip).toContain("alloy-os-currentwork__context-card");
+        expect(strip).not.toContain("Results that advance");
+        expect(strip).not.toContain("context-purpose");
+        const focused = read("components/admin/focusPanel/cards/CurrentWorkFocusedSurface.tsx");
+        expect(focused).toContain("alloy-os-currentwork__primary-stack");
+        expect(focused).toContain("data-work-supporting-row");
+    });
+
+    it("Activity Work Items expose Open work → Focus Current Work", () => {
+        const popover = read("components/layout/queueRecord/LayoutRuntimeTaskDetailPopover.tsx");
+        expect(popover).toContain("dispatchFocusCurrentWork");
+        expect(popover).toContain("Open work");
+        expect(popover).toContain("data-layout-runtime-task-open-work");
+        expect(popover).not.toMatch(/Source:\s*\{/);
+        const widget = read("components/layout/LayoutRuntimeTasksWidget.tsx");
+        expect(widget).toContain("opportunityId");
+        expect(widget).toContain("min-w-0");
     });
 
     it("renames BOS Assist to BOS and keeps footer button sizing aligned", () => {
@@ -128,14 +183,6 @@ describe("Contact Family → Communications loop", () => {
         const emailDisplay = formatComposerBodyForDisplay("**Hello**", "email");
         expect(emailDisplay.kind).toBe("html");
         if (emailDisplay.kind === "html") expect(emailDisplay.html).toContain("<strong>Hello</strong>");
-    });
-
-    it("success copy names channel and recipient without inferring outcomes", () => {
-        expect(
-            buildContactFamilySendSuccessMessage({ channel: "email", recipientLabel: "Kelly Kurzman" }),
-        ).toBe("Email sent to Kelly Kurzman");
-        expect(buildContactFamilySendSuccessMessage({ channel: "sms", recipientLabel: null })).toBe("SMS sent");
-        expect(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE).toBe("adminv2:contact-family-send-complete");
     });
 
     it("email composer uses contenteditable; SMS uses plain textarea", () => {
