@@ -1,11 +1,12 @@
 import CTAButton from "@/components/marketing/CTAButton";
 import BusinessProcessFlow from "@/components/marketing/BusinessProcessFlow";
+import FragmentedWorkMap from "@/components/marketing/FragmentedWorkMap";
 import HeroCapabilityStrip from "@/components/marketing/HeroCapabilityStrip";
 import HeroOrbitIllustration from "@/components/marketing/HeroOrbitIllustration";
 import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
+import MarketingReveal from "@/components/marketing/MarketingReveal";
 import ProcessBenefitsStrip from "@/components/marketing/ProcessBenefitsStrip";
 import SectionShell from "@/components/marketing/SectionShell";
-import ValuePropBanner from "@/components/marketing/ValuePropBanner";
 import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -96,15 +97,16 @@ export default function HomePage() {
       <SectionShell
         density="compact"
         className="!pt-6 md:!pt-8 lg:!pt-9 !pb-4 md:!pb-5 overflow-visible"
-        innerClassName="grid items-center gap-5 overflow-visible lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] lg:gap-5 xl:gap-6"
+        innerClassName="grid items-center gap-5 overflow-visible lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.3fr)] lg:gap-6 xl:gap-8"
       >
-        <div>
+        {/* z-10 keeps copy above scaled hub art; pr keeps last glyphs clear of orbit bleed */}
+        <div className="relative z-10 min-w-0 lg:pr-3">
           <p className="marketing-eyebrow">The modern operating system for operations</p>
           <h1 className="marketing-display-headline mt-3">
             Most software stores information.{" "}
             <span className="text-alloy-bend-pine">Alloy moves work forward.</span>
           </h1>
-          <div className="marketing-body-lg mt-4 max-w-[50.375rem] space-y-2.5">
+          <div className="marketing-body-lg mt-4 w-full max-w-[50.375rem] space-y-2.5">
             <p>Work doesn&apos;t happen inside one application.</p>
             <p>
               It moves between people, decisions, communications, documents, approvals, and Business
@@ -124,47 +126,52 @@ export default function HomePage() {
             </CTAButton>
           </div>
         </div>
-        <HeroOrbitIllustration className="origin-center lg:scale-[1.18] lg:-mr-6 xl:scale-[1.2] xl:-mr-8" />
+        {/* Flow fills the column — modest scale, no hub bleed */}
+        <div className="relative min-w-0">
+          <HeroOrbitIllustration className="w-full lg:scale-[1.04] lg:origin-center" />
+        </div>
       </SectionShell>
 
       {/* B. Capability strip */}
       <HeroCapabilityStrip />
 
-      {/* C. Problem + value props — full-width copy + banner */}
+      {/* C. Stop stitching — fragmented work story → resolution handoff */}
       <SectionShell
-        variant="default"
+        variant="muted"
         density="compact"
-        className="!bg-neutral-50 !py-4 md:!py-5"
+        className="border-t border-alloy-midnight-forge/[0.06] !pt-5 !pb-3 md:!pt-6 md:!pb-4"
       >
-        <div className="flex flex-col items-center gap-5 overflow-visible">
-          <div className="w-full text-center">
-            <h2 className="marketing-section-headline mx-auto">
-              Stop stitching software together
-            </h2>
-            <div className="marketing-body-lg mx-auto mt-3.5 w-full space-y-2.5 text-left">
-              <p className="mx-auto max-w-2xl">
-                CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets often live
-                apart.
-              </p>
-              <p className="mx-auto max-w-3xl">
-                <strong className="font-semibold text-alloy-midnight-forge">
-                  People become the integration layer.
-                </strong>{" "}
-                <strong className="font-semibold text-alloy-bend-pine">
-                  Alloy replaces that patchwork with one operating system that moves work forward.
-                </strong>
-              </p>
-            </div>
+        <div className="mx-auto flex w-full max-w-full flex-col items-center">
+          <h2 className="marketing-section-headline text-center text-alloy-midnight-forge">
+            Stop stitching software together
+          </h2>
+
+          <div className="marketing-body-lg mx-auto mt-2 w-full max-w-[42rem] space-y-1.5 text-center md:mt-2.5">
+            <p className="text-alloy-midnight-forge/60">
+              CRM, email, forms, tasks, documents, reports, approvals, and spreadsheets often live
+              apart.
+            </p>
+            <p className="font-semibold text-alloy-midnight-forge">
+              People become the integration layer.
+            </p>
+            <p className="font-semibold text-alloy-bend-pine">
+              Alloy connects the work, so your team can focus on moving it forward.
+            </p>
           </div>
-          <div className="mx-auto mt-3 w-full max-w-4xl md:mt-4">
-            <ValuePropBanner />
+
+          <div className="mt-3.5 w-full max-w-3xl md:mt-4">
+            <FragmentedWorkMap />
           </div>
         </div>
       </SectionShell>
 
-      {/* D. Three primary pillars — one chapter */}
-      <SectionShell density="compact">
-        <p className="marketing-eyebrow mb-4 md:mb-5">How Alloy moves work forward</p>
+      {/* D. How Alloy moves work forward — continuity from resolution stem */}
+      <SectionShell density="compact" className="relative !pt-4 md:!pt-5">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 h-4 w-px -translate-x-1/2 bg-gradient-to-b from-alloy-bend-pine/35 to-transparent md:h-5"
+        />
+        <p className="marketing-eyebrow mb-3 md:mb-4">How Alloy moves work forward</p>
         <div className="marketing-pillar-row border-t border-alloy-midnight-forge/[0.06] first:border-t-0 first:pt-0">
           <div className="mx-auto max-w-3xl text-center">
             <p className="marketing-eyebrow">Business Processes</p>
@@ -186,9 +193,9 @@ export default function HomePage() {
               aria-hidden
               className="mx-auto mt-8 mb-6 h-px w-full max-w-4xl bg-alloy-stone"
             />
-            <div className="rounded-xl bg-neutral-50/80 px-3 py-5 md:px-4 md:py-6">
+            <MarketingReveal delayMs={420} className="marketing-bp-benefits rounded-xl bg-alloy-stone/70 px-3 py-5 md:px-4 md:py-6">
               <ProcessBenefitsStrip />
-            </div>
+            </MarketingReveal>
           </div>
         </div>
         <PillarRow

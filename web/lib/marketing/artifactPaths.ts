@@ -16,10 +16,10 @@ export const MARKETING_BRAND = {
 
 export const MARKETING_ASSETS = {
   hero: {
-    key: "hero/alloy-work-forward-hero-v4",
-    src: "/marketing/hero/alloy-work-forward-hero-v4.png",
-    alt: "Alloy at the center connecting people, documents, communications, work, intelligence, automation, security, and integrations",
-    aspect: "1024/564" as const,
+    key: "hero/work-moves-forward-flow",
+    src: "/marketing/brand/alloy-gradient-brandmark.svg",
+    alt: "Work moving forward: information becomes organized work and resolves into a clear outcome",
+    aspect: "1024/520" as const,
     ready: true,
   },
   disconnectedToUnified: {
