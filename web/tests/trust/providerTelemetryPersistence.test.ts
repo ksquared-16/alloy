@@ -476,8 +476,14 @@ describe("P25-5 — no provider activated, OI still reads, Processing untouched"
         }
     });
 
-    it("D-19 remains an open activation gate — no timeout wall was added", () => {
+    it("Phase 2.6 CLOSED D-19 — the seam now enforces its own deadline", () => {
+        // This control asserted the ABSENCE of a timeout wall while D-19 was an
+        // open activation gate. Phase 2.6 closed it, so the assertion is
+        // inverted rather than deleted: the guarantee is now that the wall
+        // exists, and telemetry semantics below are unchanged by it.
         const seam = readFileSync(join(WEB_ROOT, "lib/trust/provider/governedProviderExecution.ts"), "utf8");
-        expect(seam).not.toMatch(/Promise\.race|setTimeout|AbortController/);
+        expect(seam).toMatch(/Promise\.race/);
+        expect(seam).toMatch(/AbortController/);
+        expect(seam).toContain("clearTimeout(timer)");
     });
 });
