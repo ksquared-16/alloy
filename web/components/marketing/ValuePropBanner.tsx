@@ -1,34 +1,40 @@
-import { ArrowRight, Clock3, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowRight, Check, Clock3, Shield, TrendingUp } from "lucide-react";
 import MarketingSupportBanner from "@/components/marketing/MarketingSupportBanner";
 
 /**
- * Stop-stitching benefit row — shared banner typography + restrained Bend Pine signal.
- * Icons ~18px for presence; headings stay Midnight Forge.
+ * Stop-stitching benefits — same visual language as hero principles
+ * (typography/dividers via MarketingSupportBanner) with restrained Bend Pine signal.
  */
 
-const iconClass = "h-[1.125rem] w-[1.125rem]"; // 18px
+const iconWrap =
+  "relative inline-flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center text-alloy-midnight-forge";
 
 const ITEMS = [
   {
     title: "From siloed to streamlined",
     body: "All your work, people, and data connected in one place—so your team can focus on what matters.",
     icon: (
-      <ArrowRight
-        aria-hidden
-        className={`${iconClass} text-alloy-bend-pine`}
-        strokeWidth={1.75}
-      />
+      <span className={iconWrap}>
+        <ArrowRight aria-hidden className="h-[1.125rem] w-[1.125rem]" strokeWidth={1.5} />
+        {/* Pine progress tip on the arrow head */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-[1px] top-1/2 h-0 w-0 -translate-y-1/2 border-y-[3.5px] border-y-transparent border-l-[5px] border-l-alloy-bend-pine"
+        />
+      </span>
     ),
   },
   {
     title: "Save time",
     body: "One system. Less switching. More getting done.",
     icon: (
-      <span className={`relative inline-flex ${iconClass} text-alloy-midnight-forge`}>
-        <Clock3 aria-hidden className={iconClass} strokeWidth={1.75} />
+      <span className={iconWrap}>
+        <Clock3 aria-hidden className="h-[1.125rem] w-[1.125rem]" strokeWidth={1.5} />
+        {/* Pine minute hand */}
         <span
           aria-hidden
-          className="absolute left-1/2 top-[28%] h-[32%] w-[1.5px] origin-bottom -translate-x-1/2 rotate-[28deg] rounded-full bg-alloy-bend-pine"
+          className="pointer-events-none absolute left-[calc(50%-0.75px)] top-[4px] h-[6px] w-[1.5px] origin-bottom rounded-full bg-alloy-bend-pine"
+          style={{ transform: "rotate(28deg)" }}
         />
       </span>
     ),
@@ -37,8 +43,13 @@ const ITEMS = [
     title: "Reduce risk",
     body: "Secure by design. Built for compliance from day one.",
     icon: (
-      <span className={`relative inline-flex ${iconClass} text-alloy-midnight-forge`}>
-        <ShieldCheck aria-hidden className={iconClass} strokeWidth={1.75} />
+      <span className={iconWrap}>
+        <Shield aria-hidden className="h-[1.125rem] w-[1.125rem]" strokeWidth={1.5} />
+        <Check
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-[45%] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 text-alloy-bend-pine"
+          strokeWidth={2.75}
+        />
       </span>
     ),
   },
@@ -46,11 +57,14 @@ const ITEMS = [
     title: "Drive impact",
     body: "Clear insights. Better decisions. Stronger outcomes.",
     icon: (
-      <TrendingUp
-        aria-hidden
-        className={`${iconClass} text-alloy-bend-pine`}
-        strokeWidth={1.75}
-      />
+      <span className={iconWrap}>
+        <TrendingUp aria-hidden className="h-[1.125rem] w-[1.125rem]" strokeWidth={1.5} />
+        {/* Pine rising tip */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-[0.5px] top-[1.5px] h-[4px] w-[4px] rounded-[1px] bg-alloy-bend-pine"
+        />
+      </span>
     ),
   },
 ] as const;

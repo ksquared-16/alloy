@@ -1419,6 +1419,189 @@ body {
   padding: 0;
 }
 
+/* ==========================================================================
+   Marketing motion — restrained continuity / progression / resolution
+   ========================================================================== */
+
+@keyframes marketing-hero-moment-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0);
+  }
+}
+
+@keyframes marketing-hero-mark-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes marketing-hero-flow-draw {
+  from {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes marketing-hero-arrow-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes marketing-bp-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-bp-connector-in {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes marketing-reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Hero continuous flow --- */
+.marketing-hero-moment {
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: marketing-hero-moment-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.marketing-hero-moment--input {
+  animation-delay: calc(0.05s + var(--hero-glyph-delay, 0ms));
+}
+
+.marketing-hero-moment--work {
+  animation-delay: 0.42s;
+}
+
+.marketing-hero-moment--outcome {
+  animation-delay: 0.72s;
+}
+
+.marketing-hero-mark {
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: marketing-hero-mark-in 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.38s forwards;
+}
+
+.marketing-hero-flow {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0;
+  animation: marketing-hero-flow-draw 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards;
+}
+
+.marketing-hero-arrow {
+  opacity: 0;
+  animation: marketing-hero-arrow-in 0.35s ease 0.78s forwards;
+}
+
+/* --- Business Process flow --- */
+.marketing-bp-flow[data-armed="true"]:not([data-ready="true"]) .marketing-bp-step {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.marketing-bp-flow[data-ready="true"] .marketing-bp-step {
+  animation: marketing-bp-step-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--bp-step, 0) * 110ms);
+}
+
+.marketing-bp-connector__line {
+  transform-origin: left center;
+}
+
+.marketing-bp-flow[data-armed="true"]:not([data-ready="true"]) .marketing-bp-connector__line {
+  transform: scaleX(0);
+  opacity: 0;
+}
+
+.marketing-bp-flow[data-ready="true"] .marketing-bp-connector__line {
+  animation: marketing-bp-connector-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.marketing-bp-flow[data-ready="true"] .marketing-bp-step:nth-child(1) .marketing-bp-connector__line {
+  animation-delay: 80ms;
+}
+.marketing-bp-flow[data-ready="true"] .marketing-bp-step:nth-child(2) .marketing-bp-connector__line {
+  animation-delay: 190ms;
+}
+.marketing-bp-flow[data-ready="true"] .marketing-bp-step:nth-child(3) .marketing-bp-connector__line {
+  animation-delay: 300ms;
+}
+.marketing-bp-flow[data-ready="true"] .marketing-bp-step:nth-child(4) .marketing-bp-connector__line {
+  animation-delay: 410ms;
+}
+
+/* --- Generic reveal --- */
+.marketing-reveal[data-armed="true"]:not([data-ready="true"]) {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.marketing-reveal[data-ready="true"] {
+  animation: marketing-reveal-in 0.45s cubic-bezier(0.22, 1, 0.36, 1)
+    var(--marketing-reveal-delay, 0ms) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-hero-mark,
+  .marketing-hero-moment,
+  .marketing-hero-flow,
+  .marketing-hero-arrow,
+  .marketing-bp-step,
+  .marketing-bp-connector__line,
+  .marketing-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
+
+  .marketing-hero-mark,
+  .marketing-hero-moment {
+    transform: translate(-50%, -50%) !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .marketing-site-chrome * {
     transition-duration: 0.01ms !important;
