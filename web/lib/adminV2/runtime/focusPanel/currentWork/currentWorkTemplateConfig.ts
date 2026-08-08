@@ -74,29 +74,15 @@ export function actionFromRef(
     return { key: ref, label: ref.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) };
 }
 
-const TOUR_SCHEDULE_ACTION_REFS = new Set(["schedule_tour", "reschedule_tour"]);
-
 /**
- * When Schedule/Reschedule Tour is already configured as helpful, also surface
- * Send Tour Invitation under Tour ▾ — same Tour action family, not a new command system.
+ * Helpful action refs are config-owned. Do not invent Tour companions here —
+ * Send Tour Invitation must be authored on the work template (or defaults) to appear.
  */
-export function withTourInvitationCompanionRefs(
-    refs: CurrentWorkTemplateActionRefConfig[] | undefined,
-): CurrentWorkTemplateActionRefConfig[] | undefined {
-    if (!refs || refs.length === 0) return refs;
-    const hasSchedule = refs.some((row) => TOUR_SCHEDULE_ACTION_REFS.has(row.action_ref.trim()));
-    const hasInvite = refs.some((row) => row.action_ref.trim() === "send_tour_invitation");
-    if (!hasSchedule || hasInvite) return refs;
-    return [...refs, { action_ref: "send_tour_invitation" }];
-}
-
 export function resolvedHelpfulActionRefs(
     config: CurrentWorkTemplateConfigOverlay | null | undefined,
 ): CurrentWorkTemplateActionRefConfig[] | undefined {
     if (!config) return undefined;
-    const base =
-        config.helpful_actions_explicit ? (config.helpful_actions ?? [])
-        : config.helpful_actions !== undefined ? config.helpful_actions
-        : config.supporting_actions;
-    return withTourInvitationCompanionRefs(base);
+    if (config.helpful_actions_explicit) return config.helpful_actions ?? [];
+    if (config.helpful_actions !== undefined) return config.helpful_actions;
+    return config.supporting_actions;
 }

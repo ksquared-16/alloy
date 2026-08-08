@@ -6,8 +6,10 @@ import {
     isTourPresentationActionKey,
     partitionTourGroupedActions,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
-import { withTourInvitationCompanionRefs } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkTemplateConfig";
+import { resolvedHelpfulActionRefs } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkTemplateConfig";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
+import { resolveCurrentWorkActionSurface } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionSurface";
+import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 
 const webRoot = resolve(__dirname, "../../..");
@@ -87,18 +89,45 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
         expect(read("components/admin/focusPanel/cards/CurrentWorkTourGroupedActions.tsx")).toContain("Tour ▾");
     });
 
-    it("adds Send Tour Invitation beside Schedule Tour in helpful refs", () => {
+    it("does not invent Send Tour Invitation beside Schedule Tour", () => {
         expect(
-            withTourInvitationCompanionRefs([{ action_ref: "schedule_tour" }])?.map((r) => r.action_ref),
-        ).toEqual(["schedule_tour", "send_tour_invitation"]);
+            resolvedHelpfulActionRefs({
+                work_key: "contact_family",
+                helpful_actions: [{ action_ref: "schedule_tour" }],
+                helpful_actions_explicit: true,
+            })?.map((r) => r.action_ref),
+        ).toEqual(["schedule_tour"]);
         expect(
-            withTourInvitationCompanionRefs([
-                { action_ref: "schedule_tour" },
-                { action_ref: "send_tour_invitation" },
-            ])?.map((r) => r.action_ref),
+            resolvedHelpfulActionRefs({
+                work_key: "contact_family",
+                helpful_actions: [
+                    { action_ref: "schedule_tour" },
+                    { action_ref: "send_tour_invitation" },
+                ],
+                helpful_actions_explicit: true,
+            })?.map((r) => r.action_ref),
         ).toEqual(["schedule_tour", "send_tour_invitation"]);
+        const templateConfig = read(
+            "lib/adminV2/runtime/focusPanel/currentWork/currentWorkTemplateConfig.ts",
+        );
+        expect(templateConfig).not.toContain("withTourInvitationCompanionRefs");
         const defaults = read("lib/lifecycle/defaultEnrollmentStageOperatingPlans.ts");
         expect(defaults).toContain('action_ref: "send_tour_invitation"');
+    });
+
+    it("Send Tour Invitation is registry-wired and projects as header_delegate when configured", () => {
+        const def = canonicalActionDefinition("send_tour_invitation");
+        expect(def?.runtimeWired).toBe(true);
+        expect(def?.interactionHost).toBe("header_delegate");
+        expect(
+            resolveCurrentWorkActionSurface({
+                key: "send_tour_invitation",
+                handlerKey: "send_tour_invitation",
+                category: "supporting",
+                actionRef: "send_tour_invitation",
+                resolved: null,
+            }),
+        ).toBe("header_delegate");
     });
 
     it("Send Tour Invitation opens QuickMessage compose", () => {

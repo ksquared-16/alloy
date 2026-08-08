@@ -73,7 +73,7 @@ Requirement timing affects checklist truth as follows:
 `/processes` owns operational behavior. Each work template in `stage_operating_plan_v1` may configure:
 
 - `primary_action` — optional execution affordance (distinct from work-card expand and Record Outcome)
-- `helpful_actions` — ordered supporting actions on the summary card
+- `helpful_actions` — ordered supporting actions on the summary card (config-owned; Tour companions such as Send Tour Invitation appear only when authored here — never invented by the presentation layer)
 - `alternate_paths` — transition refs (`move_to_stage:{stage_key}`) or action refs
 - `outcome_refs` — ordered references to canonical stage outcomes (definitions remain stage-owned)
 
@@ -87,6 +87,8 @@ Resolution order at runtime:
 Explicit empty arrays disable fallback for that bucket (`undefined` = legacy fallback allowed; `[]` = explicitly none).
 
 Generic umbrella status actions (`update_enrollment_status`, `update_lead_status`, etc.) are never surfaced. Runtime-internal mutation commands are not operator-selectable.
+
+Configured helpful refs must resolve to a runtime-wired capability (`ACTION_BUTTON_LIBRARY` / canonical registry) to appear as executable controls. Unwired refs are treated as configuration errors and are not shown to operators.
 
 **Summary card:** checklist + progress + primary + helpful actions visible without opening Details. Expanded view is inline — no navigation detour.
 

@@ -527,7 +527,7 @@ export default function CurrentWorkWorkspace({
                                     onClick={onViewFullActivity}
                                     data-work-action="view-all-activity"
                                 >
-                                    View all activity →
+                                    View all activity
                                 </button>
                             :   null}
                             <CurrentWorkActivityPreview

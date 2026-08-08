@@ -171,6 +171,19 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         icon: "Calendar",
     },
     {
+        key: "send_tour_invitation",
+        label: "Send Tour Invitation",
+        category: "communication",
+        settingsConfigurable: true,
+        description:
+            "Open compose to send a tour invitation for this family. Appears on What's Next only when configured on the work template.",
+        defaultSurface: "record_header",
+        defaultSlot: "secondary",
+        // header_delegate → existing applyRegistryResolvedActionClient compose path (no parallel host).
+        interactionHost: "header_delegate",
+        icon: "Send",
+    },
+    {
         key: "send_form",
         label: "Send form",
         category: "workflow",

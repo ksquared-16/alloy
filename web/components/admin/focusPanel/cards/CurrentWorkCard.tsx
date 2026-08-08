@@ -429,7 +429,7 @@ export default function CurrentWorkCard({
         : surface.status === "completed" ? "done"
         :   "neutral";
 
-    // Activity preview + "View all activity →" live under Recent Activity on the summary card.
+    // Activity preview + "View all activity" live under Recent Activity on the summary card.
     const canPreviewActivity =
         !isWorkspace
         && !stageWorkPending
@@ -697,7 +697,7 @@ function SummaryBody({
                                 data-work-action="record-outcome"
                                 onClick={() => onAction(subordinateOutcome)}
                             >
-                                Record outcome →
+                                Record outcome
                             </button>
                         :   null}
                     </div>
@@ -738,7 +738,7 @@ function SummaryBody({
                                         aria-expanded={activityPreviewOpen}
                                         onClick={onToggleActivityPreview}
                                     >
-                                        View all activity →
+                                        View all activity
                                     </button>
                                     <CurrentWorkActivityPreview
                                         open={activityPreviewOpen}

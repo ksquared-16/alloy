@@ -44,7 +44,7 @@ function groupStillNeededByOwner(items: CurrentWorkChecklistItemVM[]): Readiness
     return groups;
 }
 
-/** Synthetic navigation target so the group-level "Open {owner} →" reuses the checklist handoff. */
+/** Synthetic navigation target so the group-level owner heading reuses the checklist handoff. */
 function ownerHandoffItem(owner: CurrentWorkRequirementOwner): CurrentWorkChecklistItemVM {
     return { key: `owner:${owner.key}`, label: owner.label, status: "missing", owner };
 }
@@ -96,7 +96,6 @@ export function ReadinessSummary({
                             onClick={() => onNavigate(ownerHandoffItem(group.owner))}
                         >
                             {group.owner.label}
-                            <span className="alloy-os-currentwork__readiness-owner-arrow" aria-hidden>→</span>
                         </button>
                     :   <p className="alloy-os-currentwork__readiness-owner">{group.owner.label}</p>}
                     <div className="alloy-os-currentwork__readiness-inline" data-work-checklist="true">
