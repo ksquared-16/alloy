@@ -128,6 +128,8 @@ describe("Contact Family → Communications loop", () => {
         const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
         expect(card).toContain("alloy-os-currentwork__context-action-row");
         expect(card).toContain("data-work-primary-action");
+        expect(card).toContain("alloy-os-currentwork__helpful-row");
+        expect(card).toContain("data-work-helpful-row");
         expect(card).toContain("CurrentWorkTourGroupedActions");
         expect(card).toContain("CurrentWorkContextStrip");
         expect(card).toContain("View all activity");

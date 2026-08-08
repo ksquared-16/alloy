@@ -95,6 +95,25 @@ describe("resolveActionIntentExecution", () => {
         expect(plan.applicableSubjects).toHaveLength(1);
     });
 
+    it("does not block Move to Waitlist when truth omits enrollment-child projection", () => {
+        const plan = resolveActionIntentExecution({
+            actionRef: "move_to_waitlist",
+            stageDefinition: { journey_segment: "family" },
+            truth: { opportunity_id: "opp-1" },
+        });
+        expect(plan.blockedReason).toBeUndefined();
+        expect(plan.executionKey).toBe("waitlist_child");
+    });
+
+    it("blocks Move to Waitlist only when truth projected an empty child list", () => {
+        const plan = resolveActionIntentExecution({
+            actionRef: "move_to_waitlist",
+            stageDefinition: { journey_segment: "family" },
+            truth: { eligible_enrollment_children: [] },
+        });
+        expect(plan.blockedReason).toMatch(/child/i);
+    });
+
     it("evaluates multi-subject selection requirement without enrollment conditionals", () => {
         expect(
             evaluateRequiresSubjectPicker(

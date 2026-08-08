@@ -101,6 +101,33 @@ const planReplyRequired = {
     outcomes: [{ outcome_key: "reached_family", label: "Reached Family" }],
 };
 
+/** Firefly footgun: authored tour sufficiency only — communications must still use platform default. */
+const planTourOnlySufficiency = {
+    journey_segment: "family",
+    stage_key: "lead",
+    work_templates: [
+        {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: {
+                min_attempts: 3,
+                window_days: 7,
+                sufficient_command_results: [
+                    {
+                        capability: "schedule_tour",
+                        result: "confirmed",
+                        satisfies_outcome_key: "tour_scheduled",
+                    },
+                ],
+            },
+        },
+    ],
+    outcomes: [
+        { outcome_key: "left_message", label: "Left Message" },
+        { outcome_key: "tour_scheduled", label: "Tour Scheduled" },
+    ],
+};
+
 /** Unknown/custom work — no platform default; no inference. */
 const planCustomWorkNoPolicy = {
     journey_segment: "family",
@@ -204,6 +231,14 @@ describe("integrated contact — effective sufficiency + integrated provenance",
         const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "failed" });
         expect(res.associated).toBe(false);
         expect(complete).not.toHaveBeenCalled();
+    });
+
+    it("partial tour-only sufficient_command_results still associates a successful send via platform default", async () => {
+        currentPlan = planTourOnlySufficiency;
+        const res = await associateOutboundCommunicationToContactAttempt({ ...baseIntegrated, result: "sent" });
+        expect(res.associated).toBe(true);
+        expect(res.outcome_key).toBe("left_message");
+        expect(complete).toHaveBeenCalledTimes(1);
     });
 
     it("no open work → nothing completed", async () => {

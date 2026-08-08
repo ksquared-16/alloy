@@ -63,6 +63,16 @@ export function evaluateRequiresSubjectPicker(
     );
 }
 
+/** True when Focus Panel / runtime truth already projected an enrollment-child list (even if empty). */
+export function truthProjectsEnrollmentChildren(truth: Record<string, unknown> | undefined): boolean {
+    if (!truth) return false;
+    return (
+        Array.isArray(truth.eligible_enrollment_children)
+        || Array.isArray(truth.eligibleEnrollmentChildren)
+        || Array.isArray(truth.opportunity_customer_members)
+    );
+}
+
 function subjectsFromTruth(truth: Record<string, unknown> | undefined): EligibleEnrollmentChildSubject[] {
     if (!truth) return [];
     const raw =
@@ -181,8 +191,12 @@ export function resolveActionIntentExecution(input: {
             });
 
     const requiresSubjectPicker = evaluateRequiresSubjectPicker(applicableSubjects, selectionMode);
+    // Block only when truth already projected children and found none. Missing projection means
+    // related-subject resolution runs at execute time — do not hide Move to Waitlist on family grain.
     const blockedReason =
-        classified?.status === "none" && eligible.length === 0 && input.truth != null
+        classified?.status === "none"
+        && eligible.length === 0
+        && truthProjectsEnrollmentChildren(input.truth)
             ? classified.message
             : undefined;
 

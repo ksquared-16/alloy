@@ -8,7 +8,10 @@
  * from the surface's configured action collections, with no action-name / stage-key / process-key
  * branching.
  */
-import { isCurrentWorkActionExecutable } from "./executeCurrentWorkAction";
+import {
+    isCurrentWorkActionExecutable,
+    isCurrentWorkActionOperatorVisible,
+} from "./executeCurrentWorkAction";
 import type { CurrentWorkActionVM, CurrentWorkSurfaceVM } from "./currentWorkSurfaceTypes";
 
 export type CurrentWorkActionButtons = {
@@ -41,8 +44,9 @@ export function resolveCurrentWorkActionButtons(
     // (no command), declaring the outcome IS the obligation, so it leads.
     const dominant = primary ?? recordOutcome;
     const subordinateOutcome = primary ? recordOutcome : null;
-    // Config fidelity: show every configured helpful command (summary and details must agree).
-    const helpful = surface.supportingActions.filter(isCurrentWorkActionExecutable);
+    // Config fidelity: project every operator-visible configured helpful command (executable or
+    // blocked/disabled with reason). Do not silently drop blocked related-subject commands.
+    const helpful = surface.supportingActions.filter(isCurrentWorkActionOperatorVisible);
     return {
         dominant,
         helpful,

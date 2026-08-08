@@ -143,3 +143,13 @@ export function isCurrentWorkActionExecutable(action: CurrentWorkActionVM): bool
     const status = action.execution?.status ?? resolveCurrentWorkActionExecution(action).status;
     return status === "executable";
 }
+
+/**
+ * Helpful-command fidelity: operators see executable + disabled/blocked-with-reason.
+ * Config/runtime errors stay engineer-only (never silently drop a configured helpful command
+ * merely because it is currently blocked).
+ */
+export function isCurrentWorkActionOperatorVisible(action: CurrentWorkActionVM): boolean {
+    const status = action.execution?.status ?? resolveCurrentWorkActionExecution(action).status;
+    return isOperatorVisibleActionStatus(status);
+}

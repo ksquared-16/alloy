@@ -3,9 +3,9 @@
  * Work requirement when effective command-result sufficiency maps the objective
  * result to an authored outcome.
  *
- * Precedence (product decision, July 2026):
- * 1. Explicit work-item `sufficient_command_results` wins.
- * 2. Else platform default for recognized canonical templates (contact_family).
+ * Precedence (product decision, July 2026; capability-scoped Aug 2026):
+ * 1. Explicit work-item `sufficient_command_results` for this capability win.
+ * 2. Else platform default for that capability on recognized canonical templates (contact_family).
  * 3. Else no inference — unknown/custom work never auto-completes from a send.
  *
  * The integrated communication capability publishes what objectively occurred
