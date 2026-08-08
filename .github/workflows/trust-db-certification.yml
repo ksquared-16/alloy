@@ -1,0 +1,46 @@
+# Trust database certification — migrations and invariants, executed against Postgres.
+#
+# Why this exists. Through Phase 2.5 the Trust DB suites ran only on a developer
+# machine and were quoted in PR descriptions. No repository-owned CI job applied
+# a migration. The `Supabase Preview` check is an external, unconfigured
+# integration that reported `cancelled` on the one PR carrying a migration, so it
+# was never a dependable gate — and a gate nobody owns is not a gate.
+#
+# What a green run means, precisely: four Trust DB suites each provisioned a
+# disposable Postgres, applied the migrations their invariants need, and their
+# assertions passed. `scripts/certify-trust-db.sh` counts the assertions each
+# suite reported and FAILS a suite that exits 0 without executing any — so green
+# cannot mean "nothing ran".
+#
+# Bounded on purpose. Each suite applies the migrations it needs rather than the
+# whole 307-migration chain. The full replay
+# (`certification/trust-runtime-v1/run-fullchain.sh`) answers a different
+# question — whole-repository migration health — and its cost would make this
+# job too slow to run on every pull request, which is exactly what lets it be a
+# required check.
+#
+# Deliberately UNFILTERED, for the reason Phase 2.2.2 established: under branch
+# protection a SKIPPED check never reports a conclusion, so a required
+# path-filtered job deadlocks any PR that misses its paths. ~15s locally, and
+# GitHub runners provide Docker, so every PR pays a small, predictable cost and
+# the status always reports.
+#
+# No `|| true`, no continue-on-error, no failure allowlist. Proven by negative
+# control: weakening the `execution_location` CHECK in the Phase 2.5 migration
+# drops the suite to exit 1 with 49 of 58 assertions and names the defect.
+name: Trust DB certification
+
+on:
+  pull_request:
+
+jobs:
+  trust-db-certification:
+    name: Trust DB certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The canonical command lives in package.json and the composer in
+      # scripts/, so the local run and the gate cannot drift into certifying
+      # different things. No npm install: the script is bash + docker only.
+      - name: Run Trust DB certification suites
+        run: npm run test:trust-db-certification
