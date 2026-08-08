@@ -1,7 +1,6 @@
-/**
- * Business Processes progression — SVG icons/connectors + HTML labels.
- * No baked marketing copy in raster. See ALLOY-MARKETING-ASSET-RENDERING-AUDIT.md.
- */
+"use client";
+
+import { useMarketingInView } from "@/components/marketing/useMarketingInView";
 
 const STEPS = [
   {
@@ -142,10 +141,10 @@ function Connector({ dotted = false }: { dotted?: boolean }) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute top-[1.375rem] left-[calc(50%+1.75rem)] hidden h-px w-[calc(100%-3.5rem)] md:block"
+      className="marketing-bp-connector pointer-events-none absolute top-[1.375rem] left-[calc(50%+1.75rem)] hidden h-px w-[calc(100%-3.5rem)] md:block"
     >
       <div
-        className={`h-px w-full ${
+        className={`marketing-bp-connector__line h-px w-full origin-left ${
           dotted
             ? "bg-[repeating-linear-gradient(90deg,rgba(39,63,82,0.28)_0_4px,transparent_4px_8px)]"
             : "bg-alloy-midnight-forge/25"
@@ -157,17 +156,26 @@ function Connector({ dotted = false }: { dotted?: boolean }) {
 }
 
 export default function BusinessProcessFlow() {
+  const { ref, ready, armed, reducedMotion } = useMarketingInView<HTMLOListElement>({
+    threshold: 0.2,
+  });
+
   return (
     <ol
+      ref={ref}
       aria-label="Business Process stages"
-      className="flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:gap-0 md:overflow-visible md:pb-0"
+      data-ready={ready ? "true" : "false"}
+      data-armed={armed ? "true" : "false"}
+      data-reduced={reducedMotion ? "true" : "false"}
+      className="marketing-bp-flow flex w-full snap-x snap-mandatory gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:gap-0 md:overflow-visible md:pb-0"
     >
       {STEPS.map((step, index) => (
         <li
           key={step.key}
-          className="relative w-[42%] shrink-0 snap-center text-center sm:w-[36%] md:w-auto md:shrink md:px-2"
+          className="marketing-bp-step relative w-[42%] shrink-0 snap-center text-center sm:w-[36%] md:w-auto md:shrink md:px-2"
+          style={{ ["--bp-step" as string]: index }}
         >
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-alloy-midnight-forge/[0.1] bg-white shadow-[0_1px_4px_rgba(24,39,58,0.06)]">
+          <div className="marketing-bp-step__icon mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-alloy-midnight-forge/[0.1] bg-white shadow-[0_1px_4px_rgba(24,39,58,0.06)]">
             <StepIcon name={step.icon} />
           </div>
           {index < STEPS.length - 1 ? <Connector dotted={index === STEPS.length - 2} /> : null}

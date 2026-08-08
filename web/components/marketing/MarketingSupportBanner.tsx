@@ -1,4 +1,3 @@
-import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -10,7 +9,7 @@ import type { ReactNode } from "react";
 export type MarketingSupportItem = {
   title: string;
   body: string;
-  /** Rendered icon — keep h-4 w-4; use Midnight stroke + optional Pine detail */
+  /** Rendered icon — target ~18px; Midnight stroke + optional Pine detail */
   icon: ReactNode;
 };
 
@@ -25,24 +24,6 @@ const dividerBreakpoint: Record<Columns, string> = {
   4: "md:border-l md:border-alloy-midnight-forge/[0.08] md:px-4",
   6: "lg:border-l lg:border-alloy-midnight-forge/[0.08] lg:px-4",
 };
-
-export function MarketingSupportIcon({
-  Icon,
-  accent,
-}: {
-  Icon: LucideIcon;
-  /** Optional Bend Pine accent glyph drawn as a sibling */
-  accent?: ReactNode;
-}) {
-  return (
-    <span className="relative inline-flex h-4 w-4 shrink-0 text-alloy-midnight-forge">
-      <Icon aria-hidden className="h-4 w-4" strokeWidth={1.5} />
-      {accent ? (
-        <span className="pointer-events-none absolute inset-0 text-alloy-bend-pine">{accent}</span>
-      ) : null}
-    </span>
-  );
-}
 
 export default function MarketingSupportBanner({
   items,
@@ -62,7 +43,7 @@ export default function MarketingSupportBanner({
   return (
     <ul
       aria-label={ariaLabel}
-      className={`grid gap-x-6 gap-y-6 ${columnClasses[columns]} ${className}`.trim()}
+      className={`grid items-start gap-x-6 gap-y-6 ${columnClasses[columns]} ${className}`.trim()}
     >
       {items.map((item, index) => (
         <li
