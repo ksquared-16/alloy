@@ -301,9 +301,13 @@ export function buildChildrenCardEvidence(
         // gone). Sourced from stage_key where present, else mapped from the stage-equivalent
         // disposition. `statusKey` is retained ONLY to drive tone + the declined attention gate.
         const statusKey = trimOrNull(row.outcome_status_key);
+        const familyStageKey =
+            trimOrNull(context.truth.stage_key)
+            ?? trimOrNull((context.truth as { lifecycle_stage_key?: unknown }).lifecycle_stage_key);
         const processStageLabel = resolveChildProcessStageLabel({
             stageKey: trimOrNull((row as { stage_key?: unknown }).stage_key),
             dispositionKey: statusKey,
+            familyStageKey,
         });
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;
         // Active children need the enrollment essentials; declined children do not.

@@ -7,6 +7,7 @@ import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/
 import {
     buildFocusPanelContextChips,
     formatFocusPanelDisplayLabel,
+    resolveFocusPanelEffectiveStageChip,
     resolveFocusPanelLocationChip,
     resolveFocusPanelProcessLabel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
@@ -78,6 +79,13 @@ export default function OpportunityFocusPanelHeader({
         [statusLabel],
     );
 
+    // Effective Process Position stage rollup — prefer over raw status when participants diverge
+    // or have branched (e.g. both Waitlist while family status still reads New Lead).
+    const effectiveStageLabel = useMemo(
+        () => resolveFocusPanelEffectiveStageChip(record),
+        [record],
+    );
+
     const processLabel = useMemo(() => resolveFocusPanelProcessLabel(record), [record]);
 
     const locationLabel = useMemo(() => resolveFocusPanelLocationChip(record), [record]);
@@ -85,12 +93,12 @@ export default function OpportunityFocusPanelHeader({
     const contextChips = useMemo(
         () =>
             buildFocusPanelContextChips({
-                statusLabel: readOnlyStatusLabel,
+                statusLabel: effectiveStageLabel ?? readOnlyStatusLabel,
                 statusKey: currentStatusKey,
                 processLabel,
                 locationLabel,
             }),
-        [currentStatusKey, locationLabel, processLabel, readOnlyStatusLabel],
+        [currentStatusKey, effectiveStageLabel, locationLabel, processLabel, readOnlyStatusLabel],
     );
 
     const secondaryActions = (
