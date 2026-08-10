@@ -34,8 +34,19 @@ type PiRow = {
     state: string | null;
     close_reason_key: string | null;
 };
-type OppRow = { id: string; stage_key: string | null; status_key: string | null; work_unit_id: string | null };
+type OppRow = {
+    id: string;
+    stage_key: string | null;
+    status_key: string | null;
+    work_unit_id: string | null;
+    location_id: string | null;
+};
 type MemberRow = { id: string; is_active: boolean | null };
+type OcmLocationRow = {
+    opportunity_id: string;
+    customer_member_id: string;
+    location_id: string | null;
+};
 
 /**
  * Pure stitch: PI rows ⋈ opportunity context ⋈ customer_member subject → participants.
@@ -48,14 +59,22 @@ export function buildEnrollmentParticipants(
     piRows: readonly PiRow[],
     opportunities: readonly OppRow[],
     members: readonly MemberRow[],
+    ocmLocations: readonly OcmLocationRow[] = [],
 ): ProcessParticipant<EnrollmentAttributes>[] {
     const oppById = new Map(opportunities.map((o) => [o.id, o]));
     const memberById = new Map(members.map((m) => [m.id, m]));
+    const ocmLocationByPair = new Map(
+        ocmLocations.map((row) => [`${row.opportunity_id}:${row.customer_member_id}`, row.location_id] as const),
+    );
     const out: ProcessParticipant<EnrollmentAttributes>[] = [];
     for (const pi of piRows) {
         const opp = pi.context_id ? oppById.get(pi.context_id) : undefined;
         if (!opp) continue;
         const member = memberById.get(pi.subject_id);
+        const subjectLocationId =
+            (pi.context_id
+                ? ocmLocationByPair.get(`${pi.context_id}:${pi.subject_id}`)
+                : null) ?? null;
         out.push(
             buildProcessParticipant<EnrollmentAttributes>(pi, {
                 contextStageKey: opp.stage_key ?? null,
@@ -64,6 +83,8 @@ export function buildEnrollmentParticipants(
                     contextStatusKey: opp.status_key ?? null,
                     subjectActive: member?.is_active !== false,
                     waitlistRank: null,
+                    contextLocationId: opp.location_id?.trim() || null,
+                    subjectLocationId: subjectLocationId?.trim() || null,
                 },
             }),
         );
@@ -119,7 +140,7 @@ async function loadEnrollmentParticipants(
         // Scope at the source: this work unit's opportunities, then their enrollment instances.
         const { data: oppData, error: oppErr } = await supabase
             .from("opportunities")
-            .select("id, stage_key, status_key, work_unit_id")
+            .select("id, stage_key, status_key, work_unit_id, location_id")
             .eq("org_id", orgId)
             .eq("work_unit_id", scopeId);
         if (oppErr) throw new Error(oppErr.message);
@@ -139,7 +160,7 @@ async function loadEnrollmentParticipants(
         opportunities = await fetchIn<OppRow>(
             supabase,
             "opportunities",
-            "id, stage_key, status_key, work_unit_id",
+            "id, stage_key, status_key, work_unit_id, location_id",
             "id",
             piRows.map((pi) => pi.context_id ?? "").filter(Boolean),
             orgId,
@@ -155,7 +176,15 @@ async function loadEnrollmentParticipants(
         piRows.map((pi) => pi.subject_id),
         orgId,
     );
-    return buildEnrollmentParticipants(piRows, opportunities, members);
+    const ocmLocations = await fetchIn<OcmLocationRow>(
+        supabase,
+        "opportunity_customer_members",
+        "opportunity_id, customer_member_id, location_id",
+        "opportunity_id",
+        opportunities.map((o) => o.id),
+        orgId,
+    );
+    return buildEnrollmentParticipants(piRows, opportunities, members, ocmLocations);
 }
 
 /** The Enrollment projection — contract + loader, satisfying the engine port. */

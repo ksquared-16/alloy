@@ -42,4 +42,11 @@ export type EnrollmentAttributes = {
     subjectActive: boolean;
     /** Waitlist rank when the participant is a placement candidate (null otherwise). */
     waitlistRank: number | null;
+    /** opportunities.location_id — family/case site authority. */
+    contextLocationId: string | null;
+    /**
+     * Child site authority from opportunity_customer_members.location_id when present.
+     * Null falls back to `contextLocationId` for location-scoped participant metrics.
+     */
+    subjectLocationId: string | null;
 };

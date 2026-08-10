@@ -16,16 +16,38 @@ vi.mock("@/lib/process/definitions/enrollment", async (importOriginal) => {
     return { ...actual, enrollmentProjection: { ...actual.enrollmentProjection, load: () => loadMock() } };
 });
 
+const resolveMetricScopeFilterMock = vi.fn();
+vi.mock("@/lib/metrics/scopeFilter", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/metrics/scopeFilter")>();
+    return {
+        ...actual,
+        resolveMetricScopeFilter: (...args: unknown[]) => resolveMetricScopeFilterMock(...args),
+    };
+});
+
 import {
     resolveEnrollmentActiveLeads,
     resolveEnrollmentActiveFamilies,
     resolveEnrollmentNewLeads,
     resolveEnrollmentWaitlisted,
     resolveEnrollmentLeadCountCompat,
+    enrollmentParticipantMatchesLocationScope,
 } from "@/lib/metrics/resolvers/enrollmentParticipantMetrics";
 
-function child(over: { id: string; stageKey?: string | null; state?: string | null }): EnrollmentParticipant {
-    const attributes: EnrollmentAttributes = { contextStatusKey: "open", subjectActive: true, waitlistRank: null };
+function child(over: {
+    id: string;
+    stageKey?: string | null;
+    state?: string | null;
+    contextLocationId?: string | null;
+    subjectLocationId?: string | null;
+}): EnrollmentParticipant {
+    const attributes: EnrollmentAttributes = {
+        contextStatusKey: "open",
+        subjectActive: true,
+        waitlistRank: null,
+        contextLocationId: over.contextLocationId ?? "site-north",
+        subjectLocationId: over.subjectLocationId ?? over.contextLocationId ?? "site-north",
+    };
     return buildProcessParticipant<EnrollmentAttributes>(
         {
             id: over.id,
@@ -52,7 +74,10 @@ async function counts() {
 }
 
 describe("Lyons scenario — metrics count participants", () => {
-    beforeEach(() => loadMock.mockReset());
+    beforeEach(() => {
+        loadMock.mockReset();
+        resolveMetricScopeFilterMock.mockReset();
+    });
 
     it("two children both at Lead → Active 2 / New 2 / Waitlisted 0 / Families 1", async () => {
         // Both children ride the family track (stage null → effective 'lead' from the household).
@@ -78,5 +103,48 @@ describe("Lyons scenario — metrics count participants", () => {
             child({ id: "e", stageKey: "enrolled", state: "enrolled" }),
         ]);
         expect((await resolveEnrollmentActiveLeads(ctx)).value).toBe(1); // only child a
+    });
+});
+
+describe("Workspace Site Filter — enrollment participant metrics", () => {
+    beforeEach(() => {
+        loadMock.mockReset();
+        resolveMetricScopeFilterMock.mockReset();
+    });
+
+    it("zeros Family Leads / Children when the selected site has no matching subjects", async () => {
+        resolveMetricScopeFilterMock.mockResolvedValue({
+            constraints: {},
+            locationIds: ["site-south"],
+            impossible: false,
+        });
+        loadMock.mockResolvedValue([
+            child({ id: "a", contextLocationId: "site-north", subjectLocationId: "site-north" }),
+            child({ id: "b", contextLocationId: "site-north", subjectLocationId: "site-north" }),
+        ]);
+        const siteCtx = { ...ctx, siteLocationId: "site-south", workUnitId: null } as MetricResolveContext;
+        expect((await resolveEnrollmentActiveFamilies(siteCtx)).value).toBe(0);
+        expect((await resolveEnrollmentActiveLeads(siteCtx)).value).toBe(0);
+        expect((await resolveEnrollmentActiveFamilies(siteCtx)).meta).toMatchObject({
+            scope: "site",
+            site_id: "site-south",
+        });
+    });
+
+    it("respects child OCM location for participant grain vs opportunity location for case grain", () => {
+        const northChildSouthOcm = child({
+            id: "mixed",
+            contextLocationId: "site-north",
+            subjectLocationId: "site-south",
+        });
+        expect(
+            enrollmentParticipantMatchesLocationScope(northChildSouthOcm, ["site-south"], "participant"),
+        ).toBe(true);
+        expect(
+            enrollmentParticipantMatchesLocationScope(northChildSouthOcm, ["site-south"], "case"),
+        ).toBe(false);
+        expect(
+            enrollmentParticipantMatchesLocationScope(northChildSouthOcm, ["site-north"], "case"),
+        ).toBe(true);
     });
 });

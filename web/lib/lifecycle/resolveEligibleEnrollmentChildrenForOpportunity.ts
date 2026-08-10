@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 
 export type EligibleEnrollmentChildSubject = {
     /** opportunity_customer_members.id */
@@ -46,14 +47,20 @@ function childDisplayName(cm: {
     return joined || "Child";
 }
 
-function formatContextBits(stage: string | null, status: string | null): string[] {
-    return [stage, status]
-        .filter(Boolean)
-        .map((bit) =>
-            String(bit)
-                .replace(/_/g, " ")
-                .replace(/\b\w/g, (c) => c.toUpperCase()),
-        );
+/**
+ * Operator-facing context after the child name: location + Process Stage label.
+ * Never title-case raw keys — `new_inquiry` must render as New Lead (stage), never "New Inquiry".
+ */
+function formatChildContextBits(args: {
+    locationLabel: string | null;
+    stageKey: string | null;
+    outcomeStatusKey: string | null;
+}): string[] {
+    const stageLabel = resolveChildProcessStageLabel({
+        stageKey: args.stageKey,
+        dispositionKey: args.outcomeStatusKey,
+    });
+    return [args.locationLabel, stageLabel].filter(Boolean) as string[];
 }
 
 /**
@@ -224,13 +231,11 @@ export async function resolveEligibleEnrollmentChildrenForOpportunity(params: {
         }
 
         const name = childDisplayName(ocm.customer_members ?? memberRec);
-        const contextBits = [
+        const contextBits = formatChildContextBits({
             locationLabel,
-            ...formatContextBits(
-                trimOrNull(ocm.stage_key),
-                trimOrNull(ocm.outcome_status_key),
-            ),
-        ].filter(Boolean) as string[];
+            stageKey: trimOrNull(ocm.stage_key),
+            outcomeStatusKey: trimOrNull(ocm.outcome_status_key),
+        });
         subjects.push({
             id: ocm.id,
             label: contextBits.length > 0 ? `${name} · ${contextBits.join(" · ")}` : name,

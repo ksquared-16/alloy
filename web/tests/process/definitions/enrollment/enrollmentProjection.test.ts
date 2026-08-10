@@ -10,20 +10,30 @@ describe("enrollment projection stitch — PI ⋈ opportunity ⋈ customer_membe
         { id: "pi-a", org_id: "org-1", process_key: "enrollment", subject_type: "child", subject_id: "cm-a", context_id: "opp-1", stage_key: null, state: null, close_reason_key: null },
         { id: "pi-b", org_id: "org-1", process_key: "enrollment", subject_type: "child", subject_id: "cm-b", context_id: "opp-1", stage_key: "waitlist", state: "waitlisted", close_reason_key: null },
     ];
-    const opps = [{ id: "opp-1", stage_key: "lead", status_key: "open", work_unit_id: "wu-1" }];
+    const opps = [{ id: "opp-1", stage_key: "lead", status_key: "open", work_unit_id: "wu-1", location_id: "site-north" }];
     const members = [
         { id: "cm-a", is_active: true },
         { id: "cm-b", is_active: false },
     ];
 
     it("resolves scopeId from the opportunity work unit and fills the enrollment attributes", () => {
-        const [a, b] = buildEnrollmentParticipants(piRows, opps, members);
+        const [a, b] = buildEnrollmentParticipants(piRows, opps, members, [
+            { opportunity_id: "opp-1", customer_member_id: "cm-a", location_id: "site-north" },
+            { opportunity_id: "opp-1", customer_member_id: "cm-b", location_id: "site-south" },
+        ]);
         expect(a.scopeId).toBe("wu-1"); // from opportunity.work_unit_id
         expect(a.contextStageKey).toBe("lead"); // from opportunity.stage_key (family track)
         expect(a.participantStageKey).toBeNull();
-        expect(a.attributes).toEqual({ contextStatusKey: "open", subjectActive: true, waitlistRank: null });
+        expect(a.attributes).toEqual({
+            contextStatusKey: "open",
+            subjectActive: true,
+            waitlistRank: null,
+            contextLocationId: "site-north",
+            subjectLocationId: "site-north",
+        });
         expect(b.participantStageKey).toBe("waitlist");
         expect(b.attributes.subjectActive).toBe(false); // is_active === false
+        expect(b.attributes.subjectLocationId).toBe("site-south");
     });
 
     it("drops PIs whose opportunity context is missing (no ghost Family Leads / Children)", () => {
@@ -62,12 +72,14 @@ describe("enrollment projection stitch — PI ⋈ opportunity ⋈ customer_membe
                     close_reason_key: null,
                 },
             ],
-            [{ id: "opp-1", stage_key: "lead", status_key: "open", work_unit_id: "wu-1" }],
+            [{ id: "opp-1", stage_key: "lead", status_key: "open", work_unit_id: "wu-1", location_id: null }],
             [],
         );
         expect(p.scopeId).toBe("wu-1");
         expect(p.attributes.subjectActive).toBe(true); // absent member ⇒ treated active
         expect(p.attributes.contextStatusKey).toBe("open");
+        expect(p.attributes.contextLocationId).toBeNull();
+        expect(p.attributes.subjectLocationId).toBeNull();
     });
 });
 

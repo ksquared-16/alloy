@@ -4,6 +4,7 @@ import {
     classifyEligibleEnrollmentChildren,
     type EligibleEnrollmentChildSubject,
 } from "@/lib/lifecycle/resolveEligibleEnrollmentChildrenForOpportunity";
+import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 import { dedupeTourOptionsForRecipient, buildTourOptionsBlock } from "@/lib/tours/invitation/sendTourInvitation";
 import type { TourInvitationContent, TourOption } from "@/lib/tours/invitation/tourInvitationContent";
 import {
@@ -42,6 +43,21 @@ describe("classifyEligibleEnrollmentChildren", () => {
         if (out.status === "multiple") {
             expect(out.message).toMatch(/Who should move/i);
         }
+    });
+
+    it("maps legacy new_inquiry disposition to New Lead — never New Inquiry", () => {
+        expect(
+            resolveChildProcessStageLabel({
+                stageKey: null,
+                dispositionKey: "new_inquiry",
+            }),
+        ).toBe("New Lead");
+        expect(
+            resolveChildProcessStageLabel({
+                stageKey: "lead",
+                dispositionKey: "new_inquiry",
+            }),
+        ).toBe("New Lead");
     });
 });
 
