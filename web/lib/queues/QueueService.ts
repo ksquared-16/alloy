@@ -1150,6 +1150,8 @@ async function attachEffectiveEnrollmentStagesToOpportunityRows(params: {
     supabase: ReturnType<typeof createAdminClient>;
     orgId: string;
     rows: Array<Record<string, unknown>>;
+    /** Access / workspace location scope — filter participants before EPP rollup. */
+    allowedLocationIds?: readonly string[] | null;
 }): Promise<Array<Record<string, unknown>>> {
     const { rows } = params;
     if (!rows.length) return rows;
@@ -1168,11 +1170,16 @@ async function attachEffectiveEnrollmentStagesToOpportunityRows(params: {
                     : null);
             contextStageByOpportunityId.set(id, stage);
         }
+        const allowed =
+            params.allowedLocationIds && params.allowedLocationIds.length > 0
+                ? new Set(params.allowedLocationIds.map((id) => id.trim()).filter(Boolean))
+                : null;
         const loaded = await loadEffectiveEnrollmentStagesByOpportunity({
             supabase: params.supabase,
             orgId: params.orgId,
             opportunityIds,
             contextStageByOpportunityId,
+            allowedLocationIds: allowed && allowed.size > 0 ? allowed : null,
         });
         return attachEffectiveParticipantStagesToContextRows(rows, loaded.stagesByOpportunityId, {
             markMissingAsEmpty: true,
@@ -1226,6 +1233,8 @@ async function enrichOpportunityRows(params: {
     } | null;
     /** Builder stage key for stage-scoped queue lanes (used for stage work runtime projection). */
     queueStageKey?: string | null;
+    /** Access / workspace location scope for Effective Process Position rollup. */
+    allowedLocationIds?: readonly string[] | null;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
     const {
         supabase,
@@ -1950,6 +1959,7 @@ async function enrichOpportunityRows(params: {
                 supabase,
                 orgId,
                 rows: withStageRuntime,
+                allowedLocationIds: params.allowedLocationIds,
             }),
             queueListSubtimings,
         };
@@ -1960,6 +1970,7 @@ async function enrichOpportunityRows(params: {
             supabase,
             orgId,
             rows: mapped,
+            allowedLocationIds: params.allowedLocationIds,
         }),
         queueListSubtimings,
     };
@@ -2970,6 +2981,7 @@ export async function getWorkUnitQueueSummaries(params: {
             withOpportunityQueueRowContext(
                 preview,
                 opportunityRowContextLaneWithBuilderMembership(rowContextLane, laneRouting.builderMembership),
+                { allowedLocationIds: scopeFilter?.locationIds ?? null },
             );
         const ocmTrackLaneCtx = laneRouting.ocmTrackLaneCtx;
         if (ocmTrackLaneCtx) {
@@ -3018,6 +3030,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
                             viewerDisplayTimeZoneIana: viewerPreviewIana,
@@ -3113,6 +3126,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
                             viewerDisplayTimeZoneIana: viewerPreviewIana,
@@ -3195,6 +3209,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
                             viewerDisplayTimeZoneIana: viewerPreviewIana,
@@ -3319,6 +3334,7 @@ export async function getWorkUnitQueueSummaries(params: {
             const { rows: preview } = await enrichOpportunityRows({
                 supabase,
                 orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                 rows: previewRows,
                 effectiveStatusDefs: preloadStatusDefs,
                 enrichment: "queue_preview",
@@ -3431,6 +3447,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const { rows: preview } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: previewRows,
             effectiveStatusDefs,
             enrichment: "queue_preview",
@@ -3882,7 +3899,7 @@ export async function getWorkUnitQueueItems(params: {
     const scopeFilter = params.recordScopeConstraints ?? null;
     const rowContextAttach = {
         attachCaseGrainRowContext: opportunityEnrichmentPlan?.attachCaseGrainRowContext ?? true,
-        allowedLocationIds: scopeFilter?.locationIds ?? null,
+                            allowedLocationIds: scopeFilter?.locationIds ?? null,
     };
     const rowContextLane: OpportunityQueueRowContextLaneParams = {
         entityType: def.entity_type,
@@ -4143,6 +4160,7 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
@@ -4225,6 +4243,7 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
@@ -4302,6 +4321,7 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
@@ -4422,6 +4442,7 @@ export async function getWorkUnitQueueItems(params: {
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: slice,
             effectiveStatusDefs,
             enrichment: enrichMode,
@@ -4532,6 +4553,7 @@ export async function getWorkUnitQueueItems(params: {
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: itemRows,
             effectiveStatusDefs,
             enrichment: enrichMode,
@@ -4661,6 +4683,7 @@ export async function getWorkUnitQueueItems(params: {
     const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
         supabase,
         orgId: params.orgId,
+                            allowedLocationIds: scopeFilter?.locationIds ?? null,
         rows: itemRows,
         effectiveStatusDefs,
         enrichment: enrichMode,
