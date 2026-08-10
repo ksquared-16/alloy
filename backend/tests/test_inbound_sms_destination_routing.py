@@ -140,3 +140,99 @@ def test_resolved_delivery_keeps_writing_legacy_during_parity(monkeypatch):
     _deliver(rec)
 
     assert len(rec.legacy_calls) == 1
+
+
+# --- pre-tenancy ingress: received, but not yet anyone's -----------------------
+
+
+class IngressRecorder(Recorder):
+    def __init__(self):
+        super().__init__()
+        self.ingress_calls = []
+        self.activity_emitted = []
+
+    def retain(self, **kwargs):
+        self.ingress_calls.append(kwargs)
+        return {"id": "ingress-1"}
+
+    def legacy(self, **kwargs):
+        self.legacy_calls.append(kwargs)
+        if kwargs.get("emit_activity", True):
+            self.activity_emitted.append(kwargs.get("message_sid"))
+        return {"id": "legacy-1"}
+
+
+def _wire_ingress(monkeypatch, rec, bindings, canonical=True):
+    _wire(monkeypatch, rec, bindings)
+    monkeypatch.setattr(si, "retain_unattributed_inbound_sms", rec.retain)
+    if not canonical:
+        monkeypatch.setattr(si, "persist_inbound_communication_sms", lambda **k: None)
+
+
+def test_no_binding_is_retained_at_ingress(monkeypatch):
+    # The message was really received. It must survive even though no tenant owns it.
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [])
+
+    _deliver(rec)
+
+    assert len(rec.ingress_calls) == 1
+    assert rec.ingress_calls[0]["routing_disposition"] == si.NO_ATTRIBUTABLE_ORG
+    assert rec.ingress_calls[0]["external_sid"] == "SM_ROUTING_1"
+
+
+def test_cross_org_ambiguity_is_retained_at_ingress(monkeypatch):
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [{"id": "b1", "org_id": ORG_A}, {"id": "b2", "org_id": ORG_B}])
+
+    _deliver(rec)
+
+    assert len(rec.ingress_calls) == 1
+    assert rec.ingress_calls[0]["routing_disposition"] == si.CROSS_ORG_AMBIGUOUS
+
+
+def test_resolved_delivery_never_touches_ingress(monkeypatch):
+    # Ingress is strictly the pre-tenancy case; it must not shadow normal traffic.
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [{"id": "b1", "org_id": ORG_A}])
+
+    _deliver(rec)
+
+    assert rec.ingress_calls == []
+
+
+def test_ambiguous_same_org_never_touches_ingress(monkeypatch):
+    # Org is known, so this is tenant truth — not pre-tenancy retention.
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [{"id": "b1", "org_id": ORG_A}, {"id": "b2", "org_id": ORG_A}])
+
+    _deliver(rec)
+
+    assert rec.ingress_calls == []
+    assert rec.persist_calls
+
+
+# --- Activity ownership: exactly one receive event ----------------------------
+
+
+def test_canonical_success_suppresses_the_legacy_activity_event(monkeypatch):
+    # Both paths emitted `message_received`, so every canonicalized reply fired
+    # TWO receive events. Canonical is now the single authority.
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [{"id": "b1", "org_id": ORG_A}])
+
+    _deliver(rec)
+
+    assert len(rec.legacy_calls) == 1, "legacy row still written during parity"
+    assert rec.activity_emitted == [], "legacy must not emit once canonical owns the event"
+
+
+def test_unattributed_message_still_gets_a_durable_receive_event(monkeypatch):
+    # No canonical message exists, so the legacy path remains the only emitter.
+    # An unroutable reply must not become silent.
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [], canonical=False)
+
+    _deliver(rec)
+
+    assert rec.activity_emitted == ["SM_ROUTING_1"]

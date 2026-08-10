@@ -21,6 +21,11 @@ from ..services.communication_inbound import (
     persist_inbound_communication_sms,
 )
 from ..services.inbound_keyword_handler import handle_inbound_keyword
+from ..services.communication_inbound_ingress import (
+    CROSS_ORG_AMBIGUOUS,
+    NO_ATTRIBUTABLE_ORG,
+    retain_unattributed_inbound_sms,
+)
 from ..services.communications.binding_resolver import (
     find_binding_by_id,
     find_sms_bindings_by_inbound_to,
@@ -83,8 +88,17 @@ def _insert_legacy_messages(
     to_num: str,
     body: str,
     message_sid: str,
+    emit_activity: bool = True,
 ) -> Optional[Dict[str, Any]]:
-    """Insert into public.messages (unchanged semantics)."""
+    """
+    Insert into public.messages.
+
+    `emit_activity` exists because Activity ownership moved. Canonical inbound
+    persistence emits `message_received`; this path emitted its own, so a
+    successfully-canonicalized reply produced TWO receive events. The row is still
+    written during the parity period, but it only emits when canonical persistence
+    did not happen — otherwise the canonical event is the single authority.
+    """
     payload = {
         "direction": "inbound",
         "channel": "sms",
@@ -118,6 +132,8 @@ def _insert_legacy_messages(
             from_num[:12] if from_num else "—",
         )
         try:
+            if not emit_activity:
+                return inserted
             emit_message_lifecycle_event(
                 event_purpose="message_received",
                 message_row=inserted if isinstance(inserted, dict) else {},
@@ -140,6 +156,7 @@ def _handle_inbound_with_optional_binding(
 ) -> Response:
     base_url = _get_base_url()
     headers = _get_headers()
+    canonical_persisted = False
 
     eff_row = binding_row
     eff_uuid: Optional[str] = binding_id.strip() if binding_id and binding_id.strip() else None
@@ -224,6 +241,8 @@ def _handle_inbound_with_optional_binding(
                     primary_entity_hint=None,
                     destination_routing=destination_routing,
                 )
+                if row and row.get("id"):
+                    canonical_persisted = True
                 if row and row.get(IDEMPOTENT_REPLAY_KEY):
                     # Already recorded. Every effect of this provider message —
                     # canonical persistence, Activity, unread, thread state, and
@@ -265,12 +284,44 @@ def _handle_inbound_with_optional_binding(
                     )
         except Exception as e:
             logger.warning("sms_inbound: communication inbound persist skipped %s", e)
+    # No attributable organization. The message was really received and must not
+    # be lost, but it cannot become tenant conversation truth without guessing a
+    # tenant — so it is retained at provider-ingress authority until ownership is
+    # established. STOP is classified here, because the canonical preference
+    # authority requires org_id AND person_id and cannot represent an
+    # unattributed opt-out.
+    if not eff_row:
+        state = destination_routing.get("destination_routing_state")
+        if state == "unresolved":
+            try:
+                retain_unattributed_inbound_sms(
+                    from_num=from_num,
+                    to_num=to_num,
+                    body=body,
+                    external_sid=message_sid,
+                    routing_disposition=(
+                        CROSS_ORG_AMBIGUOUS
+                        if destination_routing.get("destination_routing_reason")
+                        == "ambiguous_destination_across_organizations"
+                        else NO_ATTRIBUTABLE_ORG
+                    ),
+                    candidate_binding_ids=destination_routing.get("candidate_binding_ids") or [],
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.exception("sms_inbound: ingress retention failed %s", e)
+
     try:
+        # Activity ownership: canonical inbound persistence emits the receive
+        # event. The legacy insert emits its own, so letting both run double-fired
+        # `message_received` for every successfully-canonicalized reply. The row is
+        # still written for parity — retirement is the end of convergence — but it
+        # no longer owns the event.
         _insert_legacy_messages(
             from_num=from_num,
             to_num=to_num,
             body=body,
             message_sid=message_sid,
+            emit_activity=not canonical_persisted,
         )
     except Exception as e:
         logger.exception("sms_inbound: Supabase legacy insert failed %s", e)
