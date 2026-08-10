@@ -19,6 +19,8 @@ DECLARE
     v_org    uuid;
     v_user   uuid := '00000000-0000-4000-8000-000050000099'::uuid;
     v_site_a uuid;
+    v_cols   text;
+    v_vals   text;
 BEGIN
     SELECT id INTO v_org FROM public.orgs WHERE slug = 'northwind-early-learning';
     IF v_org IS NULL THEN
@@ -33,19 +35,54 @@ BEGIN
         RAISE EXCEPTION 'Riverside campus not found — cannot build a restricted site scope.';
     END IF;
 
-    -- Auth identity. `confirmed_at` is generated; setting email_confirmed_at is enough.
-    INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
-                            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-                            created_at, updated_at)
-    VALUES (v_user, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-            'qa.restricted@northwind.invalid', crypt('alloy-local-cert', gen_salt('bf')),
-            now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now())
-    ON CONFLICT (id) DO UPDATE
-        SET encrypted_password = EXCLUDED.encrypted_password,
-            email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now());
+    -- Auth identity — CLONED from the seeded operator row rather than hand-built.
+    --
+    -- A hand-written INSERT with only the obvious columns produced a login that
+    -- failed with "Database error querying schema": GoTrue reads columns this
+    -- fixture had left NULL. Copying the seeded operator's own row guarantees
+    -- every column GoTrue expects is populated exactly as the platform populates
+    -- it, and only identity-specific fields are overridden.
+    --
+    -- The column list is built dynamically and EXCLUDES generated columns —
+    -- auth.users.confirmed_at is generated from the confirmation timestamps and
+    -- rejects any explicit value.
+    -- Rebuild from scratch. `ON CONFLICT (id) DO NOTHING` silently PRESERVES a
+    -- malformed row from an earlier attempt, which is exactly how a row with NULL
+    -- `confirmation_token`/`email_change` survived and made GoTrue answer
+    -- "Database error querying schema" — its Go scanner cannot read NULL into a
+    -- non-pointer string. On a disposable tenant, delete-then-clone is both safe
+    -- and the only way to guarantee the row really matches the seeded operator.
+    DELETE FROM auth.identities WHERE user_id = v_user;
+    DELETE FROM auth.users WHERE id = v_user;
+
+    -- Per-column expressions: a blunt string replace on the column list corrupts
+    -- names that merely CONTAIN an overridden name (instance_id contains id).
+    SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position),
+           string_agg(
+               CASE column_name
+                   WHEN 'id'                 THEN quote_literal(v_user) || '::uuid'
+                   WHEN 'email'              THEN quote_literal('qa.restricted@northwind.invalid')
+                   WHEN 'raw_user_meta_data' THEN quote_literal('{}') || '::jsonb'
+                   ELSE quote_ident(column_name)
+               END, ', ' ORDER BY ordinal_position)
+      INTO v_cols, v_vals
+      FROM information_schema.columns
+     WHERE table_schema = 'auth' AND table_name = 'users'
+       AND is_generated = 'NEVER' AND identity_generation IS NULL;
+
+    EXECUTE format(
+        'INSERT INTO auth.users (%s) SELECT %s FROM auth.users WHERE email = %L LIMIT 1
+         ON CONFLICT (id) DO NOTHING',
+        v_cols, v_vals, 'qa.operator@northwind.invalid'
+    );
+
+    UPDATE auth.users
+       SET encrypted_password = crypt('alloy-local-cert', gen_salt('bf')),
+           email_confirmed_at = COALESCE(email_confirmed_at, now())
+     WHERE id = v_user;
 
     INSERT INTO auth.identities (id, user_id, provider_id, provider, identity_data, created_at, updated_at)
-    VALUES (v_user, v_user, v_user::text, 'email',
+    VALUES (gen_random_uuid(), v_user, v_user::text, 'email',
             jsonb_build_object('sub', v_user::text, 'email', 'qa.restricted@northwind.invalid', 'email_verified', true),
             now(), now())
     ON CONFLICT (provider, provider_id) DO NOTHING;

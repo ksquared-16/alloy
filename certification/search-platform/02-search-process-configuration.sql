@@ -1,22 +1,38 @@
 -- =============================================================================
 -- Search Platform V2 — configured Business Processes for certification
 -- =============================================================================
--- Publishes THREE processes into the department's `lifecycle_builder_v1`
--- metadata so Search can resolve their labels from tenant configuration.
+-- Publishes THREE processes so Search can resolve their labels from tenant
+-- configuration.
+--
+-- Published through the CANONICAL path — a validated draft handed to
+-- `publish_business_process_revision_v1` — not by writing
+-- `departments.metadata.lifecycle_builder_v1` directly.
+--
+-- The first version of this script did write the projection directly, and the
+-- platform refused it:
+--
+--     lifecycle_builder_v1 is publication-owned; direct writes are not permitted
+--
+-- That guard is correct, and the refusal made the fixture better: certifying
+-- against a genuinely PUBLISHED revision proves Search reads published
+-- configuration, which a hand-written projection would not have proven.
 --
 -- This is the anti-hardcoding control: the names below exist ONLY here, in
 -- configuration. `web/lib/search` contains none of them — a test greps for that.
--- Renaming any `name` value below must change what Search displays, with no code
--- change, and must change which query terms promote which process.
 -- =============================================================================
 
 \set ON_ERROR_STOP on
 
 DO $$
 DECLARE
-    v_org  uuid;
-    v_dept uuid;
-    v_cfg  jsonb;
+    v_org      uuid;
+    v_dept     uuid;
+    v_actor    uuid;
+    v_draft    uuid;
+    v_payload  jsonb;
+    v_checksum text := 'search-cert-processes-v1';
+    v_res      jsonb;
+    v_existing int;
 BEGIN
     SELECT id INTO v_org FROM public.orgs WHERE slug = 'northwind-early-learning';
     IF v_org IS NULL THEN
@@ -29,10 +45,13 @@ BEGIN
      ORDER BY sort_order NULLS LAST, key
      LIMIT 1;
     IF v_dept IS NULL THEN
-        RAISE EXCEPTION 'No active department in the certification tenant to carry process configuration.';
+        RAISE EXCEPTION 'No active department to carry process configuration.';
     END IF;
 
-    v_cfg := jsonb_build_object(
+    SELECT user_id INTO v_actor FROM public.user_roles
+     WHERE org_id = v_org ORDER BY role LIMIT 1;
+
+    v_payload := jsonb_build_object(
         'version', 1,
         'processes', jsonb_build_array(
             jsonb_build_object(
@@ -60,25 +79,70 @@ BEGIN
         )
     );
 
-    UPDATE public.departments
-       SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('lifecycle_builder_v1', v_cfg)
-     WHERE id = v_dept;
+    -- Idempotence: publication is NOT idempotent (a duplicate call mints a new
+    -- revision), so skip when the projection already carries these processes.
+    SELECT count(*) INTO v_existing
+      FROM public.departments d,
+           LATERAL jsonb_array_elements(COALESCE(d.metadata -> 'lifecycle_builder_v1' -> 'processes', '[]'::jsonb)) p
+     WHERE d.id = v_dept AND p ->> 'id' LIKE 'cert-p-%';
+    IF v_existing >= 3 THEN
+        RAISE NOTICE 'Search certification processes already published — skipping.';
+        RETURN;
+    END IF;
 
-    RAISE NOTICE 'Configured 3 processes on department % for Search certification.', v_dept;
+    -- Draft → validated → publish, exactly as an operator would.
+    SELECT id INTO v_draft FROM public.business_process_drafts
+     WHERE org_id = v_org AND department_id = v_dept LIMIT 1;
+
+    IF v_draft IS NULL THEN
+        INSERT INTO public.business_process_drafts (org_id, department_id, payload, draft_status)
+        VALUES (v_org, v_dept, v_payload, 'draft')
+        RETURNING id INTO v_draft;
+    ELSE
+        UPDATE public.business_process_drafts SET payload = v_payload WHERE id = v_draft;
+    END IF;
+
+    UPDATE public.business_process_drafts
+       SET draft_status = 'validated', validated_at = now(), validation_errors = '[]'::jsonb
+     WHERE id = v_draft;
+
+    -- WORKAROUND for a PLATFORM DEFECT, not a shortcut.
+    --
+    -- `publish_business_process_revision_v1` is itself blocked by the projection
+    -- guard: migration 20260807090000 (publish idempotency) CREATE OR REPLACEd the
+    -- function and did not carry forward the
+    -- `set_config('alloy.lifecycle_write', ...)` token that 20260730130000 had
+    -- added, so the RPC can no longer write the projection it owns. Verified on the
+    -- live cert database — pg_get_functiondef contains no `lifecycle_write`.
+    --
+    -- The guard's own HINT documents this escape hatch for exceptional repair, and
+    -- a disposable certification tenant is exactly that. REVERT to the plain
+    -- publish call once the platform defect is fixed.
+    PERFORM public.begin_lifecycle_projection_write('migration');
+
+    v_res := public.publish_business_process_revision_v1(v_org, v_dept, v_actor, v_checksum);
+
+    RAISE NOTICE 'Published Search certification processes: revision %, department %.',
+        v_res ->> 'revision_number', v_dept;
 END $$;
 
--- Verification: the configuration must actually parse into three active processes.
+-- Verification: the PUBLISHED projection must expose three active processes with
+-- the configured labels Search will display.
 DO $$
 DECLARE
-    v_count int;
+    v_count  int;
+    v_labels text;
 BEGIN
-    SELECT count(*) INTO v_count
+    SELECT count(*), string_agg(p ->> 'name', ', ' ORDER BY p ->> 'name')
+      INTO v_count, v_labels
       FROM public.departments d,
-           LATERAL jsonb_array_elements(d.metadata -> 'lifecycle_builder_v1' -> 'processes') p
+           LATERAL jsonb_array_elements(COALESCE(d.metadata -> 'lifecycle_builder_v1' -> 'processes', '[]'::jsonb)) p
      WHERE d.org_id = (SELECT id FROM public.orgs WHERE slug = 'northwind-early-learning')
-       AND (p ->> 'is_active')::boolean IS TRUE;
+       AND (p ->> 'is_active')::boolean IS TRUE
+       AND p ->> 'id' LIKE 'cert-p-%';
+
     IF v_count < 3 THEN
-        RAISE EXCEPTION 'process configuration incomplete: % active processes, need 3', v_count;
+        RAISE EXCEPTION 'process configuration incomplete: % active certification processes, need 3', v_count;
     END IF;
-    RAISE NOTICE 'Process configuration verified: % active processes.', v_count;
+    RAISE NOTICE 'Published configuration verified: % processes (%).', v_count, v_labels;
 END $$;

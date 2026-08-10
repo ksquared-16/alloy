@@ -81,10 +81,10 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- -----------------------------------------------------------------------------
 INSERT INTO public.persons (id, org_id, first_name, last_name, full_name, email, phone, date_of_birth)
 SELECT :'JANE_PERSON'::uuid, org_id, 'Jane', 'Smith', 'Jane Smith',
-       'jane.smith@northwind.invalid', '555-0101', NULL FROM _ctx
-UNION ALL SELECT :'JOE_PERSON'::uuid, org_id, 'Joe', 'Smith', 'Joe Smith', NULL, NULL, '2021-04-12' FROM _ctx
-UNION ALL SELECT :'EMMA_PERSON'::uuid, org_id, 'Emma', 'Smith', 'Emma Smith', NULL, NULL, '2019-09-03' FROM _ctx
-UNION ALL SELECT :'JOE2_PERSON'::uuid, org_id, 'Joe', 'Smith', 'Joe Smith', NULL, NULL, '2020-02-20' FROM _ctx
+       'jane.smith@northwind.invalid', '555-0101', NULL::date FROM _ctx
+UNION ALL SELECT :'JOE_PERSON'::uuid, org_id, 'Joe', 'Smith', 'Joe Smith', NULL, NULL, '2021-04-12'::date FROM _ctx
+UNION ALL SELECT :'EMMA_PERSON'::uuid, org_id, 'Emma', 'Smith', 'Emma Smith', NULL, NULL, '2019-09-03'::date FROM _ctx
+UNION ALL SELECT :'JOE2_PERSON'::uuid, org_id, 'Joe', 'Smith', 'Joe Smith', NULL, NULL, '2020-02-20'::date FROM _ctx
 ON CONFLICT (id) DO UPDATE
     SET first_name = EXCLUDED.first_name,
         last_name  = EXCLUDED.last_name,
@@ -107,10 +107,10 @@ ON CONFLICT DO NOTHING;
 -- -----------------------------------------------------------------------------
 INSERT INTO public.customer_members
     (id, org_id, customer_id, person_id, display_name, first_name, last_name, relationship, dob)
-SELECT :'JOE_MEMBER'::uuid,  org_id, :'SMITH_HH'::uuid,    :'JOE_PERSON'::uuid,  'Joe Smith',  'Joe',  'Smith', 'child', '2021-04-12' FROM _ctx
-UNION ALL SELECT :'EMMA_MEMBER'::uuid, org_id, :'SMITH_HH'::uuid,    :'EMMA_PERSON'::uuid, 'Emma Smith', 'Emma', 'Smith', 'child', '2019-09-03' FROM _ctx
-UNION ALL SELECT :'JOE2_MEMBER'::uuid, org_id, :'RIVERS_HH'::uuid,   :'JOE2_PERSON'::uuid, 'Joe Smith',  'Joe',  'Smith', 'child', '2020-02-20' FROM _ctx
-UNION ALL SELECT :'JOE3_MEMBER'::uuid, org_id, :'LAKESIDE_HH'::uuid, NULL,                 'Joe Smith',  'Joe',  'Smith', 'child', '2020-07-07' FROM _ctx
+SELECT :'JOE_MEMBER'::uuid,  org_id, :'SMITH_HH'::uuid,    :'JOE_PERSON'::uuid,  'Joe Smith',  'Joe',  'Smith', 'child', '2021-04-12'::date FROM _ctx
+UNION ALL SELECT :'EMMA_MEMBER'::uuid, org_id, :'SMITH_HH'::uuid,    :'EMMA_PERSON'::uuid, 'Emma Smith', 'Emma', 'Smith', 'child', '2019-09-03'::date FROM _ctx
+UNION ALL SELECT :'JOE2_MEMBER'::uuid, org_id, :'RIVERS_HH'::uuid,   :'JOE2_PERSON'::uuid, 'Joe Smith',  'Joe',  'Smith', 'child', '2020-02-20'::date FROM _ctx
+UNION ALL SELECT :'JOE3_MEMBER'::uuid, org_id, :'LAKESIDE_HH'::uuid, NULL,                 'Joe Smith',  'Joe',  'Smith', 'child', '2020-07-07'::date FROM _ctx
 ON CONFLICT (id) DO UPDATE
     SET display_name = EXCLUDED.display_name,
         customer_id  = EXCLUDED.customer_id,

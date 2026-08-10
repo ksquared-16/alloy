@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     allowListIsImpossible,
     applySearchAllowList,
+    chunkSearchAllowList,
     type SearchAccessEnvelope,
 } from "@/lib/search/searchAccessEnvelope";
 import { SEARCH_PER_KIND_CANDIDATE_CAP, type SearchSubjectKind } from "@/lib/search/searchContracts";
@@ -24,6 +25,30 @@ import type { SearchIntent } from "@/lib/search/searchQueryIntent";
 
 /** Retrieval cap before in-process AND-filtering. Bounded so search stays interactive. */
 const RETRIEVAL_FETCH_CAP = 60;
+
+/**
+ * Run a scoped query once per allow-list chunk and merge the rows.
+ *
+ * A restricted operator's allow-list can hold thousands of ids, and PostgREST
+ * serialises `.in(...)` into the URI — one query would be rejected with 414
+ * ("URI too long"), which is precisely what browser certification observed.
+ *
+ * Chunking preserves the security property that matters: every row is still
+ * constrained AT QUERY TIME, never filtered after the fact. It stops as soon as
+ * enough candidates exist, so the common (small reach) case costs one query.
+ */
+async function collectAcrossAllowList<T>(
+    allowed: string[] | null,
+    cap: number,
+    run: (chunk: string[] | null) => Promise<T[]>
+): Promise<T[]> {
+    const out: T[] = [];
+    for (const chunk of chunkSearchAllowList(allowed)) {
+        out.push(...(await run(chunk)));
+        if (out.length >= cap) break;
+    }
+    return out;
+}
 
 /**
  * A matched subject before enrichment.
@@ -100,27 +125,29 @@ async function retrievePersons(ctx: SearchRetrievalContext): Promise<SearchCandi
     if (allowListIsImpossible(ctx.envelope.allowedPersonIds)) return [];
 
     const pattern = `%${token}%`;
-    let q = ctx.supabase
-        .from("persons")
-        .select("id, first_name, last_name, full_name, email, phone")
-        .eq("org_id", ctx.orgId);
-    q = applySearchAllowList(q, "id", ctx.envelope.allowedPersonIds);
-
-    const { data, error } = await q
-        .or(
-            [
-                `full_name.ilike.${pattern}`,
-                `first_name.ilike.${pattern}`,
-                `last_name.ilike.${pattern}`,
-                `email.ilike.${pattern}`,
-                `phone.ilike.${pattern}`,
-            ].join(",")
-        )
-        .limit(RETRIEVAL_FETCH_CAP);
-    if (error) throw new Error(error.message);
+    const rows = await collectAcrossAllowList(ctx.envelope.allowedPersonIds, RETRIEVAL_FETCH_CAP, async (chunk) => {
+        let q = ctx.supabase
+            .from("persons")
+            .select("id, first_name, last_name, full_name, email, phone")
+            .eq("org_id", ctx.orgId);
+        q = applySearchAllowList(q, "id", chunk);
+        const { data, error } = await q
+            .or(
+                [
+                    `full_name.ilike.${pattern}`,
+                    `first_name.ilike.${pattern}`,
+                    `last_name.ilike.${pattern}`,
+                    `email.ilike.${pattern}`,
+                    `phone.ilike.${pattern}`,
+                ].join(",")
+            )
+            .limit(RETRIEVAL_FETCH_CAP);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+    });
 
     const out: SearchCandidate[] = [];
-    for (const row of (data ?? []) as Array<{
+    for (const row of rows as Array<{
         id: string;
         first_name?: string | null;
         last_name?: string | null;
@@ -154,25 +181,27 @@ async function retrieveChildren(ctx: SearchRetrievalContext): Promise<SearchCand
     if (allowListIsImpossible(ctx.envelope.allowedCustomerIds)) return [];
 
     const pattern = `%${token}%`;
-    let q = ctx.supabase
-        .from("customer_members")
-        .select("id, customer_id, person_id, display_name, first_name, last_name, relationship")
-        .eq("org_id", ctx.orgId);
-    q = applySearchAllowList(q, "customer_id", ctx.envelope.allowedCustomerIds);
-
-    const { data, error } = await q
-        .or(
-            [
-                `display_name.ilike.${pattern}`,
-                `first_name.ilike.${pattern}`,
-                `last_name.ilike.${pattern}`,
-            ].join(",")
-        )
-        .limit(RETRIEVAL_FETCH_CAP);
-    if (error) throw new Error(error.message);
+    const rows = await collectAcrossAllowList(ctx.envelope.allowedCustomerIds, RETRIEVAL_FETCH_CAP, async (chunk) => {
+        let q = ctx.supabase
+            .from("customer_members")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship")
+            .eq("org_id", ctx.orgId);
+        q = applySearchAllowList(q, "customer_id", chunk);
+        const { data, error } = await q
+            .or(
+                [
+                    `display_name.ilike.${pattern}`,
+                    `first_name.ilike.${pattern}`,
+                    `last_name.ilike.${pattern}`,
+                ].join(",")
+            )
+            .limit(RETRIEVAL_FETCH_CAP);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+    });
 
     const out: SearchCandidate[] = [];
-    for (const row of (data ?? []) as Array<{
+    for (const row of rows as Array<{
         id: string;
         customer_id: string;
         person_id?: string | null;
@@ -210,14 +239,16 @@ async function retrieveHouseholds(ctx: SearchRetrievalContext): Promise<SearchCa
     if (allowListIsImpossible(ctx.envelope.allowedCustomerIds)) return [];
 
     const pattern = `%${token}%`;
-    let q = ctx.supabase.from("customers").select("id, name").eq("org_id", ctx.orgId);
-    q = applySearchAllowList(q, "id", ctx.envelope.allowedCustomerIds);
-
-    const { data, error } = await q.ilike("name", pattern).limit(RETRIEVAL_FETCH_CAP);
-    if (error) throw new Error(error.message);
+    const rows = await collectAcrossAllowList(ctx.envelope.allowedCustomerIds, RETRIEVAL_FETCH_CAP, async (chunk) => {
+        let q = ctx.supabase.from("customers").select("id, name").eq("org_id", ctx.orgId);
+        q = applySearchAllowList(q, "id", chunk);
+        const { data, error } = await q.ilike("name", pattern).limit(RETRIEVAL_FETCH_CAP);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+    });
 
     const out: SearchCandidate[] = [];
-    for (const row of (data ?? []) as Array<{ id: string; name?: string | null }>) {
+    for (const row of rows as Array<{ id: string; name?: string | null }>) {
         const matchText = joinSignals(row.name);
         if (!matchesAllTerms(matchText, ctx.intent)) continue;
         out.push({
@@ -238,19 +269,21 @@ async function retrieveLocations(ctx: SearchRetrievalContext): Promise<SearchCan
     if (allowListIsImpossible(ctx.envelope.allowedSiteLocationIds)) return [];
 
     const pattern = `%${token}%`;
-    let q = ctx.supabase
-        .from("locations")
-        .select("id, label, city")
-        .eq("org_id", ctx.orgId)
-        .eq("location_type", "site")
-        .or("is_active.is.null,is_active.eq.true");
-    q = applySearchAllowList(q, "id", ctx.envelope.allowedSiteLocationIds);
-
-    const { data, error } = await q.ilike("label", pattern).limit(RETRIEVAL_FETCH_CAP);
-    if (error) throw new Error(error.message);
+    const rows = await collectAcrossAllowList(ctx.envelope.allowedSiteLocationIds, RETRIEVAL_FETCH_CAP, async (chunk) => {
+        let q = ctx.supabase
+            .from("locations")
+            .select("id, label, city")
+            .eq("org_id", ctx.orgId)
+            .eq("location_type", "site")
+            .or("is_active.is.null,is_active.eq.true");
+        q = applySearchAllowList(q, "id", chunk);
+        const { data, error } = await q.ilike("label", pattern).limit(RETRIEVAL_FETCH_CAP);
+        if (error) throw new Error(error.message);
+        return data ?? [];
+    });
 
     const out: SearchCandidate[] = [];
-    for (const row of (data ?? []) as Array<{ id: string; label?: string | null; city?: string | null }>) {
+    for (const row of rows as Array<{ id: string; label?: string | null; city?: string | null }>) {
         const matchText = joinSignals(row.label, row.city);
         if (!matchesAllTerms(matchText, ctx.intent)) continue;
         out.push({
@@ -279,14 +312,19 @@ export async function expandChildrenFromHouseholds(
     if (!ids.length) return [];
     if (allowListIsImpossible(ctx.envelope.allowedCustomerIds)) return [];
 
-    let q = ctx.supabase
+    // Intersect in memory rather than adding a second `.in(...)`: the household
+    // ids are already bounded by what matched, while the allow-list is not, and
+    // both would land in the same URI.
+    const allowed = ctx.envelope.allowedCustomerIds;
+    const scopedIds = allowed === null ? ids : ids.filter((id) => allowed.includes(id));
+    if (!scopedIds.length) return [];
+
+    const { data, error } = await ctx.supabase
         .from("customer_members")
         .select("id, customer_id, person_id, display_name, first_name, last_name")
         .eq("org_id", ctx.orgId)
-        .in("customer_id", ids);
-    q = applySearchAllowList(q, "customer_id", ctx.envelope.allowedCustomerIds);
-
-    const { data, error } = await q.limit(RETRIEVAL_FETCH_CAP);
+        .in("customer_id", scopedIds)
+        .limit(RETRIEVAL_FETCH_CAP);
     if (error) throw new Error(error.message);
 
     return ((data ?? []) as Array<{
