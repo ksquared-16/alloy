@@ -570,8 +570,11 @@ describe("global search implementation guards", () => {
     it("GlobalSearchBox never opens drawer via legacy entity_type", () => {
         const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
         const src = readFileSync(boxPath, "utf8");
-        expect(src).toContain("resolveGlobalSearchOpenFromHit");
-        expect(src).not.toMatch(/launchGlobalRecordSearchOpen\(\{\s*entity_type:\s*hit\.entity_type/);
+        // Search V2 resolves destinations server-side, so the control validates the
+        // already-resolved entity type against the AdminV2 allow-list instead of
+        // re-resolving a hit. The invariant is unchanged: legacy member/contact
+        // drawers are never an open target.
+        expect(src).toContain("isGlobalSearchAdminV2DrawerEntityType");
         for (const legacy of GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES) {
             expect(src).not.toContain(`entity_type: "${legacy}"`);
         }
@@ -606,11 +609,24 @@ describe("global search implementation guards", () => {
         expect(src).not.toContain("bg-alloy-blue");
     });
 
-    it("GlobalSearchBox renders clusters as grouped card containers", () => {
+    /**
+     * Search V2 replaced household CLUSTERS with subject-centred rows: one row per
+     * canonical subject, carrying its own recognition context and destinations.
+     * The V1 cluster DOM guard is obsolete by design — this asserts the product
+     * property that replaced it.
+     */
+    it("GlobalSearchBox renders subject rows with recognition context and inline destinations", () => {
         const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
         const src = readFileSync(boxPath, "utf8");
-        expect(src).toContain('data-global-search-cluster="true"');
-        expect(src).toContain("children_overflow");
+        expect(src).toContain("recognitionLine");
+        expect(src).toContain('data-search-subject-button="true"');
+        expect(src).toContain("data-search-destination");
+        expect(src).toContain("splitInlineDestinations");
+        // No intermediate search-detail page — the subject button opens the
+        // canonical surface directly, never a search-owned route.
+        expect(src).not.toMatch(/router\.push\(\s*["'`]\/search/);
+        // Destinations carry resolved hrefs; the control builds no URLs itself.
+        expect(src).toContain("destination.href");
     });
 
     it("AdminDrawerContext swaps drawer in place for global search source", () => {

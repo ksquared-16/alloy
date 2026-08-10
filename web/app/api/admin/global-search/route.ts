@@ -3,21 +3,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
-import { CRM_ENTITY_SEARCH_UUID_RE, sanitizeCrmSearchToken } from "@/lib/admin/forms/crmEntitySearchShared";
-import { runGlobalRecordSearch } from "@/lib/admin/globalSearch/globalRecordSearchService";
-import {
-    GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT,
-    GLOBAL_RECORD_SEARCH_MIN_Q_LEN,
-} from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+import { runSearch } from "@/lib/search/runSearch";
+import { SEARCH_DEFAULT_LIMIT, SEARCH_MIN_Q_LEN } from "@/lib/search/searchContracts";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
  * GET `/api/admin/global-search?q=&limit=`
  *
- * Phase 1 — deterministic org-scoped record lookup (people, leads, campuses).
- * Household name is context-only in V1 — not a standalone result group.
- * Not BOS / semantic search.
+ * Alloy Search Platform V2 — subject-centred discovery.
+ *
+ * Returns canonical SUBJECTS with recognition context, relevant operational
+ * contexts, and navigable destinations. This is the one search system: there is
+ * no separate enrollment/schedule/staff search, and no BOS/semantic path here.
+ *
+ * Authorization is enforced BEFORE retrieval — see `searchAccessEnvelope`. A
+ * subject the operator may not know about is never retrieved, so it can never be
+ * revealed and then blocked on click.
+ *
+ * Results are previews/selections. They are never authoritative truth and must
+ * never be used as mutation input.
  */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -33,11 +38,7 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url);
     const rawQ = (url.searchParams.get("q") ?? "").trim();
-    const limitRaw = Number(url.searchParams.get("limit") ?? GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT);
-    const limit = Math.min(
-        Math.max(Number.isFinite(limitRaw) ? Math.floor(limitRaw) : GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT, 1),
-        GLOBAL_RECORD_SEARCH_DEFAULT_LIMIT
-    );
+    const limitRaw = Number(url.searchParams.get("limit") ?? SEARCH_DEFAULT_LIMIT);
 
     if (rawQ.length === 0) {
         return NextResponse.json(
@@ -46,13 +47,12 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    const token = sanitizeCrmSearchToken(rawQ);
-    if (token.length < GLOBAL_RECORD_SEARCH_MIN_Q_LEN && !CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
+    if (rawQ.length < SEARCH_MIN_Q_LEN) {
         return NextResponse.json(
             {
                 ok: false,
                 error: "Q_TOO_SHORT",
-                message: `q must be at least ${GLOBAL_RECORD_SEARCH_MIN_Q_LEN} characters (after sanitizing), or a valid record UUID.`,
+                message: `q must be at least ${SEARCH_MIN_Q_LEN} characters.`,
             },
             { status: 400 }
         );
@@ -62,12 +62,12 @@ export async function GET(request: NextRequest) {
     const t0 = Date.now();
 
     try {
-        const { q, groups, clusters, results } = await runGlobalRecordSearch({
+        const { q, intent, results } = await runSearch({
             supabase,
             orgId: ctx.orgId,
-            accessDim: scopeDimensionsFromAccess(access),
+            dimensions: scopeDimensionsFromAccess(access),
             rawQ,
-            limit,
+            limit: Number.isFinite(limitRaw) ? limitRaw : SEARCH_DEFAULT_LIMIT,
         });
 
         const totalMs = Date.now() - t0;
@@ -76,11 +76,12 @@ export async function GET(request: NextRequest) {
                 total_ms: totalMs,
                 q_len: q.length,
                 result_count: results.length,
-                group_count: groups.length,
+                subject_terms: intent.subject_terms.length,
+                context_terms: intent.context_terms.length,
             });
         }
 
-        return NextResponse.json({ ok: true, q, groups, clusters, results });
+        return NextResponse.json({ ok: true, q, intent, results });
     } catch (e) {
         console.error("[global-search]", e);
         return NextResponse.json(
