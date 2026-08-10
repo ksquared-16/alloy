@@ -42,8 +42,16 @@ export const MARKETING_ASSETS = {
     src: "/marketing/illustrations/business-processes-v3.webp",
     alt: "Business process stages from start through requirements, decision, outcome, and next step",
     aspect: "1024/444" as const,
-    /** Replaced by native BusinessProcessFlow component — keep file for reference only */
+    /** Homepage only — native BusinessProcessFlow. Do not reuse on /platform. */
     ready: false,
+  },
+  platformFoundation: {
+    key: "platform-foundation",
+    src: "/marketing/brand/alloy-gradient-brandmark.svg",
+    alt: "Shared Alloy foundation supporting Business Processes, Processing, Communications, Operational Intelligence, records, actions, permissions, and work",
+    aspect: "16/9" as const,
+    /** Native PlatformFoundationVisual on /platform — not a raster illustration */
+    ready: true,
   },
   processBenefits: {
     key: "illustrations/process-benefits-icons-v1",
@@ -86,6 +94,7 @@ export const MARKETING_ASSETS = {
     src: "/marketing/illustrations/platform-expansion.webp",
     alt: "Alloy platform expansion vision",
     aspect: "16/10" as const,
+    /** Replaced by native VisionExpansionVisual on /vision */
     ready: false,
   },
   finalCta: {

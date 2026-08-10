@@ -167,7 +167,7 @@ export default function FragmentedWorkMap() {
       aria-label="Unstructured work objects organize into a clear progression"
     >
       {/* Desktop — horizontal organize */}
-      <div className="relative mx-auto hidden aspect-[840/220] w-full max-w-3xl md:block">
+      <div className="relative mx-auto hidden aspect-[840/185] w-full max-w-3xl md:block">
         <svg
           className="absolute inset-0 h-full w-full overflow-visible"
           viewBox="0 0 840 220"
@@ -236,7 +236,7 @@ export default function FragmentedWorkMap() {
       </div>
 
       {/* Mobile — staggered → vertical progression */}
-      <div className="relative mx-auto aspect-[360/330] w-full max-w-sm md:hidden">
+      <div className="relative mx-auto aspect-[360/270] w-full max-w-sm md:hidden">
         <svg
           className="absolute inset-0 h-full w-full overflow-visible"
           viewBox="0 0 360 330"
@@ -301,7 +301,7 @@ export default function FragmentedWorkMap() {
       </div>
 
       <div
-        className="mt-2.5 flex flex-col items-center gap-1.5 md:mt-3"
+        className="mt-1.5 flex flex-col items-center gap-1 md:mt-2"
         style={{ opacity: Math.max(resolveOpacity, reduced ? 1 : 0) }}
       >
         <div className="h-px w-full max-w-xl bg-alloy-bend-pine/65" />
@@ -310,7 +310,7 @@ export default function FragmentedWorkMap() {
         </p>
         <div
           aria-hidden
-          className="h-5 w-px bg-gradient-to-b from-alloy-bend-pine/50 to-transparent md:h-6"
+          className="h-3.5 w-px bg-gradient-to-b from-alloy-bend-pine/50 to-transparent md:h-4"
         />
       </div>
     </div>

@@ -1583,6 +1583,245 @@ body {
     var(--marketing-reveal-delay, 0ms) forwards;
 }
 
+/* --- Platform foundation (shared base → capabilities → intelligence) --- */
+@keyframes marketing-pf-plinth-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-pf-pillar-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-pf-capability-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-pf-riser-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes marketing-pf-oi-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-pf-oi-draw {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__plinth,
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__pillar,
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__capability,
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__riser,
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__oi,
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__oi-stroke,
+.marketing-platform-foundation[data-armed="true"]:not([data-ready="true"])
+  .marketing-platform-foundation__mark {
+  opacity: 0;
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__plinth {
+  animation: marketing-pf-plinth-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__mark {
+  animation: marketing-pf-pillar-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) 80ms forwards;
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__pillar {
+  animation: marketing-pf-pillar-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(140ms + var(--pf-pillar, 0) * 70ms);
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__riser {
+  transform-origin: bottom center;
+  animation: marketing-pf-riser-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(360ms + var(--pf-cap, 0) * 80ms);
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__capability {
+  animation: marketing-pf-capability-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(420ms + var(--pf-cap, 0) * 90ms);
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__oi {
+  animation: marketing-pf-oi-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) 720ms forwards;
+}
+
+.marketing-platform-foundation[data-ready="true"] .marketing-platform-foundation__oi-stroke {
+  transform-origin: center;
+  animation: marketing-pf-oi-draw 0.5s cubic-bezier(0.22, 1, 0.36, 1) 780ms forwards;
+}
+
+/* --- Vision roadmap V2 --- */
+@keyframes marketing-rm-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-rm-rail-in {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes marketing-rm-band-in {
+  from {
+    transform: scaleX(0.72);
+    opacity: 0.35;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes marketing-rm-foundation-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.marketing-roadmap-evolution[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-evolution__period,
+.marketing-roadmap-evolution[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-evolution__rail,
+.marketing-roadmap-evolution[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-evolution__dot,
+.marketing-roadmap-evolution[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-evolution__item,
+.marketing-roadmap-maturity[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-maturity__lane,
+.marketing-roadmap-building[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-building__item,
+.marketing-roadmap-expansion[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-expansion__domain,
+.marketing-roadmap-expansion[data-armed="true"]:not([data-ready="true"])
+  .marketing-roadmap-expansion__foundation {
+  opacity: 0;
+}
+
+.marketing-roadmap-evolution[data-ready="true"] .marketing-roadmap-evolution__rail {
+  transform-origin: left center;
+  animation: marketing-rm-rail-draw 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.marketing-roadmap-evolution[data-ready="true"] .marketing-roadmap-evolution__dot {
+  animation: marketing-rm-item-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(120ms + var(--rm-period, 0) * 70ms);
+}
+
+.marketing-roadmap-evolution[data-ready="true"] .marketing-roadmap-evolution__period {
+  animation: marketing-rm-item-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(100ms + var(--rm-period, 0) * 70ms);
+}
+
+.marketing-roadmap-evolution[data-ready="true"] .marketing-roadmap-evolution__item {
+  animation: marketing-rm-item-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(
+    180ms + var(--rm-period, 0) * 70ms + var(--rm-item, 0) * 30ms
+  );
+}
+
+.marketing-roadmap-maturity[data-ready="true"] .marketing-roadmap-maturity__lane {
+  animation: marketing-rm-item-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--rm-step, 0) * 80ms);
+}
+
+.marketing-roadmap-building[data-ready="true"] .marketing-roadmap-building__item {
+  animation: marketing-rm-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--rm-step, 0) * 90ms);
+}
+
+.marketing-roadmap-expansion[data-ready="true"] .marketing-roadmap-expansion__domain {
+  animation: marketing-rm-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(var(--rm-step, 0) * 80ms);
+}
+
+.marketing-roadmap-expansion[data-ready="true"] .marketing-roadmap-expansion__band-fill {
+  transform-origin: left center;
+  animation: marketing-rm-band-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: calc(120ms + var(--rm-step, 0) * 80ms);
+}
+
+.marketing-roadmap-expansion[data-ready="true"] .marketing-roadmap-expansion__foundation {
+  animation: marketing-rm-foundation-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) 420ms forwards;
+}
+
+@keyframes marketing-rm-rail-draw {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .marketing-hero-mark,
   .marketing-hero-moment,
@@ -1590,10 +1829,27 @@ body {
   .marketing-hero-arrow,
   .marketing-bp-step,
   .marketing-bp-connector__line,
-  .marketing-reveal {
+  .marketing-reveal,
+  .marketing-platform-foundation__plinth,
+  .marketing-platform-foundation__pillar,
+  .marketing-platform-foundation__capability,
+  .marketing-platform-foundation__riser,
+  .marketing-platform-foundation__oi,
+  .marketing-platform-foundation__oi-stroke,
+  .marketing-platform-foundation__mark,
+  .marketing-roadmap-evolution__period,
+  .marketing-roadmap-evolution__rail,
+  .marketing-roadmap-evolution__dot,
+  .marketing-roadmap-evolution__item,
+  .marketing-roadmap-maturity__lane,
+  .marketing-roadmap-building__item,
+  .marketing-roadmap-expansion__domain,
+  .marketing-roadmap-expansion__band-fill,
+  .marketing-roadmap-expansion__foundation {
     animation: none !important;
     opacity: 1 !important;
     stroke-dashoffset: 0 !important;
+    transform: none !important;
   }
 
   .marketing-hero-mark,
