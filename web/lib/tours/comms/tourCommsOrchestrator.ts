@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
+import { classifyTourComms, TOUR_COMMS_CALL_SITE } from "@/lib/tours/comms/tourCommsClassification";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import {
@@ -313,11 +314,20 @@ async function sendImmediateTourComms(params: {
         lifecycleAction: params.lifecycleAction,
     });
 
+    // Classification is declared per event kind, never defaulted. Omitting it put
+    // every tour message through the counted `…:unspecified` category fallback —
+    // and category is what decides opt-out and quiet-hours policy, not a label.
+    // See tourCommsClassification for what each value means and what it costs.
+    const classification = classifyTourComms(params.eventKey);
+
     const enqueued = await params.deps.enqueueImmediate({
         supabase: params.supabase,
         orgId: params.orgId,
         primaryEntityType: "opportunities",
         primaryEntityId: params.subject.opportunityId,
+        audience: classification.audience,
+        category: classification.category,
+        callSite: TOUR_COMMS_CALL_SITE,
         // THE recipient identity, carried as a typed canonical field — not merely
         // telemetry. It was previously recorded in `metadata` only, so canonical
         // eligibility received `null` and correctly failed closed with

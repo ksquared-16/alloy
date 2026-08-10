@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TOUR_COMMS_EVENT_KEYS, TOUR_COMMS_OUTBOUND_METADATA } from "@/lib/tours/comms/tourCommsConfig";
 import { getDefaultTourCommsTemplateSet, normalizeTourCommsEventKey, renderTourCommsTemplate } from "@/lib/tours/comms/tourCommsTemplates";
 import { orchestrateTourInvitationComms } from "@/lib/tours/comms/tourCommsOrchestrator";
+import { TOUR_COMMS_CALL_SITE } from "@/lib/tours/comms/tourCommsClassification";
 import type { TourCommsParentRecipient } from "@/lib/tours/comms/resolveTourCommsRecipient";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -81,6 +82,41 @@ async function run() {
 
 beforeEach(() => {
     enqueueCalls = [];
+});
+
+describe("canonical classification reaches the enqueue", () => {
+    it("classifies every send explicitly, on every channel", async () => {
+        await run();
+
+        expect(enqueueCalls.length).toBeGreaterThan(0);
+        for (const call of enqueueCalls) {
+            const where = `channel ${String(call.channelRaw)}`;
+            // Passing neither is what put every tour message through the counted
+            // `canonicalOutboundEnqueue:unspecified` category fallback — and
+            // category is what decides whether opt-out and quiet hours apply.
+            expect(call.category, `${where} was not classified`).toBe("operational");
+            expect(call.audience, `${where} had no declared audience`).toBe("external");
+        }
+    });
+
+    it("names its call site, so any residual fallback is attributable", async () => {
+        await run();
+
+        for (const call of enqueueCalls) {
+            expect(call.callSite).toBe(TOUR_COMMS_CALL_SITE);
+        }
+    });
+
+    it("passes no purpose while the declared one contradicts the category", async () => {
+        // `tour_coordination` names this call site but declares `transactional`
+        // only. Sending it would make validatePurpose reject every tour send the
+        // moment purpose validation reaches this path.
+        await run();
+
+        for (const call of enqueueCalls) {
+            expect(call.purpose ?? null).toBeNull();
+        }
+    });
 });
 
 describe("canonical recipient identity reaches the enqueue", () => {
