@@ -2,11 +2,14 @@
 
 /**
  * Access → Roles. Collection rail (role catalog) + Selected workspace (Overview / Permissions /
- * Users / Experience Access / History). Permission grants render through the operator-facing
- * `PERMISSION_GRID_ROWS` grid — raw `permission_key` strings never appear as primary UI text.
+ * Users / Experience Access / History). Permission grants render through an operator-facing grid
+ * **projected from the permission catalog** (W-10) — raw `permission_key` strings never appear as
+ * primary UI text, and no permission key is named in this file. The grid's rows are whatever
+ * `GET /api/admin/rbac/permissions` returns, so a capability added to the catalog appears here with
+ * no change to this component.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, ShieldCheck } from "lucide-react";
@@ -24,9 +27,10 @@ import {
     QUEUE_ROW_SELECTED_RAIL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
 import {
-    PERMISSION_GRID_ROWS,
     applyGridRowSelection,
+    buildPermissionGridRows,
     levelFromGrantedKeys,
+    levelsForRow,
     type PermissionGridLevel,
 } from "@/lib/admin/permissionGrid";
 import { accessWorkspaceChapterHref } from "@/lib/access/accessChapterRoutes";
@@ -153,12 +157,21 @@ export default function AccessRolesConfigurationPage() {
         return map;
     }, [permissions]);
 
+    /**
+     * W-10 — the grid *is* the catalog. No row is authored here; every row is derived from what the
+     * permissions endpoint returned, so the grid cannot name a key that does not exist.
+     */
+    const gridRows = useMemo(() => buildPermissionGridRows(permissions), [permissions]);
+
     const capabilitySummary = useMemo(() => {
-        return PERMISSION_GRID_ROWS.filter((row) => levelFromGrantedKeys(row, grantKeys) !== "none").map((row) => ({
-            label: row.label,
-            level: levelFromGrantedKeys(row, grantKeys),
-        }));
-    }, [grantKeys]);
+        return gridRows
+            .filter((row) => levelFromGrantedKeys(row, grantKeys) !== "none")
+            .map((row) => ({
+                id: row.id,
+                label: row.label,
+                level: levelFromGrantedKeys(row, grantKeys),
+            }));
+    }, [gridRows, grantKeys]);
 
     const selectRole = (roleKey: string) => {
         setSelectedRoleKey(roleKey);
@@ -241,7 +254,7 @@ export default function AccessRolesConfigurationPage() {
     };
 
     const setGridLevel = (rowId: string, level: PermissionGridLevel) => {
-        const row = PERMISSION_GRID_ROWS.find((r) => r.id === rowId);
+        const row = gridRows.find((r) => r.id === rowId);
         if (!row) return;
         setGrantKeys((prev) => applyGridRowSelection({ row, level, granted: prev }));
     };
@@ -422,7 +435,7 @@ export default function AccessRolesConfigurationPage() {
                                                     </p>
                                                 :   <ul className="space-y-1.5 text-sm">
                                                         {capabilitySummary.map((c) => (
-                                                            <li key={c.label} className="flex items-center justify-between gap-2">
+                                                            <li key={c.id} className="flex items-center justify-between gap-2">
                                                                 <span className="text-alloy-midnight/80">{c.label}</span>
                                                                 <span className="text-[11px] font-medium uppercase tracking-wide text-alloy-bend-pine/80">
                                                                     {c.level === "write" ? "Write" : "Read"}
@@ -447,6 +460,8 @@ export default function AccessRolesConfigurationPage() {
                                         <ConfigWorkspaceCard testId="access-role-permissions" title="Permissions">
                                             <p className="text-sm text-alloy-midnight/55">
                                                 No access, Read, or Write/Manage per capability area. Write includes Read.
+                                                Every area below is a capability the platform defines — this grid is
+                                                generated from the permission catalog, not maintained by hand.
                                             </p>
                                             <div className="mt-3 overflow-hidden rounded-lg border border-alloy-stone/20 bg-white/40">
                                                 <table className="w-full min-w-[640px] text-left text-xs">
@@ -459,8 +474,20 @@ export default function AccessRolesConfigurationPage() {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {PERMISSION_GRID_ROWS.map((row) => {
+                                                        {gridRows.length === 0 ?
+                                                            <tr>
+                                                                <td
+                                                                    colSpan={4}
+                                                                    className="px-3 py-3 text-sm text-alloy-midnight/55"
+                                                                    data-testid="access-role-permissions-empty"
+                                                                >
+                                                                    No capabilities are defined in the permission catalog.
+                                                                </td>
+                                                            </tr>
+                                                        :   null}
+                                                        {gridRows.map((row, index) => {
                                                             const level = levelFromGrantedKeys(row, grantKeys);
+                                                            const offered = levelsForRow(row);
                                                             const readHint = row.readKeys
                                                                 .map((k) => permissionLabelByKey.get(k) ?? "")
                                                                 .filter(Boolean)
@@ -469,41 +496,76 @@ export default function AccessRolesConfigurationPage() {
                                                                 .map((k) => permissionLabelByKey.get(k) ?? "")
                                                                 .filter(Boolean)
                                                                 .join(", ");
+                                                            const startsGroup =
+                                                                index === 0 || gridRows[index - 1]!.groupLabel !== row.groupLabel;
                                                             return (
-                                                                <tr key={row.id} className="border-t border-alloy-stone/15" data-permission-row={row.id}>
-                                                                    <td className="px-3 py-2">
-                                                                        <div className="font-medium text-alloy-midnight">{row.label}</div>
-                                                                        {readHint || writeHint ?
-                                                                            <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
-                                                                                {readHint ? `Read: ${readHint}` : null}
-                                                                                {readHint && writeHint ? " · " : null}
-                                                                                {writeHint ? `Write: ${writeHint}` : null}
-                                                                            </div>
-                                                                        :   null}
-                                                                    </td>
-                                                                    {(["none", "read", "write"] as const).map((opt) => (
-                                                                        <td key={opt} className="px-3 py-2 align-top">
-                                                                            <label className="inline-flex items-center gap-2">
-                                                                                <input
-                                                                                    type="radio"
-                                                                                    name={`access-perm-${row.id}`}
-                                                                                    checked={level === opt}
-                                                                                    onChange={() => setGridLevel(row.id, opt)}
-                                                                                    data-testid={`access-role-permission-${row.id}-${opt}`}
-                                                                                />
-                                                                                <span className="sr-only">{opt}</span>
-                                                                            </label>
+                                                                <Fragment key={row.id}>
+                                                                    {startsGroup ?
+                                                                        <tr
+                                                                            className="border-t border-alloy-stone/15 bg-alloy-stone/5"
+                                                                            data-permission-group={row.groupKey}
+                                                                        >
+                                                                            <th
+                                                                                colSpan={4}
+                                                                                scope="colgroup"
+                                                                                className="px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50"
+                                                                            >
+                                                                                {row.groupLabel}
+                                                                            </th>
+                                                                        </tr>
+                                                                    :   null}
+                                                                    <tr className="border-t border-alloy-stone/15" data-permission-row={row.id}>
+                                                                        <td className="px-3 py-2">
+                                                                            <div className="font-medium text-alloy-midnight">{row.label}</div>
+                                                                            {readHint || writeHint ?
+                                                                                <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                                                                    {readHint ? `Read: ${readHint}` : null}
+                                                                                    {readHint && writeHint ? " · " : null}
+                                                                                    {writeHint ? `Write: ${writeHint}` : null}
+                                                                                </div>
+                                                                            :   null}
                                                                         </td>
-                                                                    ))}
-                                                                </tr>
+                                                                        {(["none", "read", "write"] as const).map((opt) => (
+                                                                            <td key={opt} className="px-3 py-2 align-top">
+                                                                                {offered.includes(opt) ?
+                                                                                    <label className="inline-flex items-center gap-2">
+                                                                                        <input
+                                                                                            type="radio"
+                                                                                            name={`access-perm-${row.id}`}
+                                                                                            checked={level === opt}
+                                                                                            onChange={() => setGridLevel(row.id, opt)}
+                                                                                            data-testid={`access-role-permission-${row.id}-${opt}`}
+                                                                                        />
+                                                                                        <span className="sr-only">{opt}</span>
+                                                                                    </label>
+                                                                                :   <span
+                                                                                        className="text-alloy-midnight/30"
+                                                                                        aria-label="Not available for this capability"
+                                                                                        data-testid={`access-role-permission-${row.id}-${opt}-unavailable`}
+                                                                                    >
+                                                                                        —
+                                                                                    </span>
+                                                                                }
+                                                                            </td>
+                                                                        ))}
+                                                                    </tr>
+                                                                </Fragment>
                                                             );
                                                         })}
                                                     </tbody>
                                                 </table>
                                             </div>
+                                            {/*
+                                              * The grid is now a projection, so a failed catalog read renders an
+                                              * empty grid rather than a stale one. H2 keeps that non-destructive —
+                                              * an untouched save PUTs the grants exactly as fetched — but an
+                                              * operator must not be invited to save a surface showing nothing.
+                                              * The full S-11 remedy (surface the read failure, disable on unknown
+                                              * state) is T-22's and is not taken here.
+                                              */}
                                             <ConfigurationPrimaryButton
                                                 className="mt-3"
-                                                disabled={grantsSaving}
+                                                disabled={grantsSaving || gridRows.length === 0}
                                                 onClick={() => void saveGrants()}
                                                 data-testid="access-role-permissions-save"
                                             >

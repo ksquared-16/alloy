@@ -273,6 +273,25 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     });
     return { status: out.ok ? 200 : 409, body: out };
   }
+  if (path === "/api/v2/missions/open-next-wave" || path === "/api/v2/missions/next-wave") {
+    const { ensureNextImplementationWave } = await import("./mission-advance.mjs");
+    const mid = v.mission_id || v.missionId;
+    const opened = ensureNextImplementationWave(mid, {
+      actor: v.actor || "operator",
+      waveHint: { wave: "next", workstream: v.workstream ?? null },
+      response: v.response || v.note || "Accept and continue to next implementation phase",
+    });
+    if (!opened?.ok) {
+      return { status: 409, body: opened };
+    }
+    try {
+      const { scheduleDispatchAfterKickoff } = await import("./assignment-dispatch.mjs");
+      const dispatched = scheduleDispatchAfterKickoff(mid, { actor: v.actor || "director" });
+      return { status: 200, body: { ...opened, dispatch: dispatched } };
+    } catch (e) {
+      return { status: 200, body: { ...opened, dispatch: { ok: false, error: String(e?.message || e) } } };
+    }
+  }
   if (path === "/api/v2/missions/dispatch") {
     try {
       if (v.provider) process.env.VACILANDO_EXECUTION_PROVIDER = String(v.provider);
@@ -555,6 +574,33 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     } catch (e) {
       return { status: 400, body: { ok: false, error: String(e && e.message || e) } };
     }
+  }
+  if (path === "/api/v2/workspace/reply" || path === "/api/v2/views/workspace/reply") {
+    const { postWorkspaceReply } = await import("./presentation/workspace-runtime.mjs");
+    const workspaceId = v.workspace_id || v.workspaceId || v.id || "ws_identity";
+    const text = v.text || v.message || v.body || "";
+    const out = postWorkspaceReply(workspaceId, { text, actor: actorDefault });
+    if (!out.ok) {
+      const status = out.error === "workspace_not_found" ? 404
+        : out.error === "empty_message" ? 400
+          : out.error === "message_too_long" ? 400
+            : 400;
+      return { status, body: out };
+    }
+    return { status: 200, body: out };
+  }
+  if (path === "/api/v2/workspace/last-seen" || path === "/api/v2/views/workspace/last-seen") {
+    const { setWorkspaceLastSeen, resolveV31Workspace } = await import("./presentation/workspace-runtime.mjs");
+    const workspaceId = v.workspace_id || v.workspaceId || v.id || "ws_identity";
+    if (!resolveV31Workspace(workspaceId)) {
+      return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    }
+    const out = setWorkspaceLastSeen(workspaceId, {
+      eventId: v.event_id || v.eventId || null,
+      at: v.at || null,
+      operatorId: v.operator_id || v.operatorId || "kelly",
+    });
+    return { status: out.ok ? 200 : 400, body: out };
   }
   if (path === "/api/v2/director/message") {
     try {
@@ -872,6 +918,59 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     const vm = improvementDetailVm(id);
     if (!vm) return { status: 404, body: { ok: false, error: "not_found" } };
     return { status: 200, body: { ok: true, improvement: vm } };
+  }
+  if (
+    path === "/api/v2/views/workspace-runtime"
+    || path === "/api/v2/views/workspace"
+    || path === "/api/v2/workspace"
+  ) {
+    const {
+      workspaceRuntimeVm,
+      workspaceShellVm,
+      workspaceMessagesVm,
+      listV31Workspaces,
+    } = await import("./presentation/workspace-runtime.mjs");
+    const id = q("id") || q("workspace_id") || q("workspaceId") || "ws_identity";
+    if (q("list") === "1") {
+      return { status: 200, body: { ok: true, workspaces: listV31Workspaces() } };
+    }
+    const mode = q("mode") || "full";
+    if (mode === "shell") {
+      const shell = workspaceShellVm(id);
+      if (!shell) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+      return { status: 200, body: { ok: true, shell, workspaces: listV31Workspaces() } };
+    }
+    if (mode === "messages") {
+      const before = q("before") || q("before_event_id") || null;
+      const limit = Math.min(100, Math.max(1, Number(q("limit") || 40) || 40));
+      const page = workspaceMessagesVm(id, { limit, beforeEventId: before });
+      if (!page) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+      return { status: 200, body: { ok: true, ...page } };
+    }
+    const runtime = workspaceRuntimeVm(id);
+    if (!runtime) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    return { status: 200, body: { ok: true, runtime, workspaces: listV31Workspaces() } };
+  }
+  if (path === "/api/v2/views/workspace-shell") {
+    const { workspaceShellVm, listV31Workspaces } = await import("./presentation/workspace-runtime.mjs");
+    const id = q("id") || q("workspace_id") || "ws_identity";
+    const shell = workspaceShellVm(id);
+    if (!shell) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    return { status: 200, body: { ok: true, shell, workspaces: listV31Workspaces() } };
+  }
+  if (path === "/api/v2/views/mission-rail") {
+    const { missionConversationListVm } = await import("./presentation/mission-conversation.mjs");
+    const list = missionConversationListVm({ filter: "active" });
+    return { status: 200, body: { ok: true, ...list } };
+  }
+  if (path === "/api/v2/views/workspace-messages") {
+    const { workspaceMessagesVm } = await import("./presentation/workspace-runtime.mjs");
+    const id = q("id") || q("workspace_id") || "ws_identity";
+    const before = q("before") || q("before_event_id") || null;
+    const limit = Math.min(100, Math.max(1, Number(q("limit") || 40) || 40));
+    const page = workspaceMessagesVm(id, { limit, beforeEventId: before });
+    if (!page) return { status: 404, body: { ok: false, error: "workspace_not_found" } };
+    return { status: 200, body: { ok: true, ...page } };
   }
   if (path === "/api/v2/views/mission/timeline") {
     const id = q("id") || q("mission_id");

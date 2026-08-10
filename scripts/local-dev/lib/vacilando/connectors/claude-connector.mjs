@@ -147,6 +147,8 @@ export async function runClaudeExecutionSession(session, {
   const prompt = buildClaudeSessionPrompt({ assignment, context, envelope, brief });
   let filesInspected = session.progress?.filesInspected || 0;
   let lastStoryActivity = null;
+  let lastStoryAt = 0;
+  const STORY_MIN_MS = 90_000;
   let handle = null;
   const headBefore = gitHead(workCwd);
 
@@ -180,18 +182,27 @@ export async function runClaudeExecutionSession(session, {
         onProgress?.({ sessionId: session.sessionId, pid: handle?.pid ?? null });
       } catch { /* */ }
 
+      // Timeline stories are for audit — throttle so conversation isn't a heartbeat feed.
+      // The live progress card reads session heartbeats directly.
       if (classified.activity !== lastStoryActivity && classified.activity !== "Executing") {
-        lastStoryActivity = classified.activity;
-        story(missionId, {
-          type: "progress",
-          headline: `Claude is ${classified.activity.toLowerCase()}`,
-          summary: classified.detail || classified.activity,
-          assignmentId,
-          phaseId: assignment.phaseId,
-          actor: "claude",
-          detail: { sessionId: session.sessionId, tool: a.tool || null },
-          nowMs,
-        });
+        const stamp = Date.now();
+        const materialPause = /waiting for approval/i.test(classified.activity);
+        if (materialPause || stamp - lastStoryAt >= STORY_MIN_MS) {
+          lastStoryActivity = classified.activity;
+          lastStoryAt = stamp;
+          story(missionId, {
+            type: "progress",
+            headline: `Claude is ${classified.activity.toLowerCase()}`,
+            summary: classified.detail || classified.activity,
+            assignmentId,
+            phaseId: assignment.phaseId,
+            actor: "claude",
+            detail: { sessionId: session.sessionId, tool: a.tool || null },
+            nowMs,
+          });
+        } else {
+          lastStoryActivity = classified.activity;
+        }
       }
     },
   });

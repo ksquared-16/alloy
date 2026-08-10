@@ -263,8 +263,10 @@ async function main() {
     );
     console.log("repair result", repair);
     if (!repair.ok) fail("repair", repair);
-    if (!repair.actions.includes("provisioned_user_department_access")) {
-        console.warn("WARN: repair did not insert UDA (may already exist or scope=all)");
+    // W-8 removed self-provisioning: repair never inserts a user_department_access row for the
+    // caller. A department-restricted principal must already hold the department, or repair refuses.
+    if (!repair.actions.includes("already_visible_in_workspace_api")) {
+        console.warn("WARN: repair did not confirm existing workspace visibility for this principal");
     }
 
     dim = await refreshDepartmentScopeDimensions(supabase, ORG_ID, RESTRICTED_USER, dim);

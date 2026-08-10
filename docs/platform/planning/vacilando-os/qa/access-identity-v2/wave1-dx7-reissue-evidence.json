@@ -1,0 +1,150 @@
+{
+  "artifact": "wave1-dx7-reissue-evidence",
+  "generated_on": "2026-08-07",
+  "mission": "msn_bc33a72e3138ebc215",
+  "mission_title": "DX7 Fixture — Ready Promotion",
+  "assignment": "asg_9e868dd2d78c27",
+  "context_version": "v1",
+  "content_hash": "187f0bd57d82c05d11aed0f3b4f06d1d",
+  "workstreams": ["W-1", "W-2", "W-3"],
+  "issuance_ordinal": 4,
+  "rule_applied": "§4 — re-execute rather than re-assert",
+
+  "base": {
+    "head": "3e000209a",
+    "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+    "prior_base": "c66d57305",
+    "web_commits_since_prior_base": 3,
+    "web_commits": [
+      { "sha": "a3e01ddb5", "subject": "test(access): widen RL-1 to the G2 class; re-execute Wave 1 under the reopen" },
+      { "sha": "0dd598e7a", "subject": "fix(access): W-4 re-execution — the ratchet was breached, and only the lock could see it" },
+      { "sha": "ab9c5730b", "subject": "feat(access): W-5 — membership and access profile become one transaction" }
+    ],
+    "api_route_files": { "prior": 570, "now": 570, "delta": 0 },
+    "migrations": { "prior": 312, "now": 314, "delta": 2 }
+  },
+
+  "suites": {
+    "total_passed": 66,
+    "total_failed": 0,
+    "files": [
+      { "path": "web/tests/access/analyticsRouteGates.test.ts", "tests": 47, "status": "passed" },
+      { "path": "web/tests/access/selfAuthorityMutation.test.ts", "tests": 14, "status": "passed" },
+      { "path": "web/tests/admin/permissionGrid.test.ts", "tests": 5, "status": "passed" }
+    ],
+    "runner": "vitest 4.1.2, focused run",
+    "note": "61 on arrival; 66 after a concurrent, non-assignment edit added 5 tests to analyticsRouteGates mid-session"
+  },
+
+  "w1": {
+    "lock": "RL-1",
+    "verdict": "holds; subject unchanged",
+    "analytics_family_routes": { "live": 27, "floor": 27, "slack": 0 },
+    "g2_class_subject": { "live": 92, "of_total_routes": 570, "floor": 92, "slack": 0 },
+    "ratchet_update_owed": false,
+    "method": "each floor assertion temporarily inverted to observe the live value, then restored; lock's committed state unchanged by this run",
+    "honest_limit": "proves a sufficient gate is CALLED, never that its result is honoured; RL-1's tier-A half remains W-14's declared route→capability table"
+  },
+
+  "w2": {
+    "lock": "RL-11",
+    "verdict": "guard holds; prescribed subject definition is obsolete",
+    "guard_call_sites_verified": [
+      "app/api/admin/users/[userId]/role/route.ts:23",
+      "app/api/admin/users/[userId]/remove/route.ts:22",
+      "app/api/admin/users/[userId]/access-scope/route.ts:82"
+    ],
+    "behaviour_regression": false,
+    "finding": {
+      "id": "W-2/DX7-1",
+      "summary": "W-5 moved membership writes behind two Postgres RPCs, so the by-table census prescribed on 2026-08-06 as the durable repair now misses W-2's own headline route.",
+      "rpcs": [
+        "create_membership_with_access_profile",
+        "replace_membership_with_access_profile"
+      ],
+      "helper": "web/lib/admin/membershipWithProfile.ts",
+      "routes_invisible_to_by_table_census": [
+        "app/api/admin/users/[userId]/role/route.ts",
+        "app/api/admin/users/route.ts",
+        "web/lib/dev/createOrgAndAssignAdmin.ts"
+      ],
+      "role_route_mentions_user_roles": false,
+      "durable_key_now": "RPC names plus table names — and this will break again on the next consolidation"
+    },
+    "newly_enumerated_writer": {
+      "path": "app/api/admin/users/route.ts:105",
+      "guarded": false,
+      "self_elevation_today": false,
+      "why_not": "target user id comes from inviteUserByEmail's result, not the request body; inviting an already-registered address errors before the write",
+      "caveat": "protection is incidental to Supabase invite semantics, not a guard; not exercised live in this run"
+    },
+    "exit_criterion_met": false,
+    "exit_criterion": "a principal cannot alter its own membership through any product path",
+    "unmet_paths": [
+      "lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts:165 (via POST /api/admin/lifecycle-catalog/repair)",
+      "app/api/admin/departments/route.ts:153 (now delegates to the same helper rather than inserting directly)"
+    ],
+    "remedy_owner": "W-8"
+  },
+
+  "w3": {
+    "lock": "RL-2",
+    "verdict": "green",
+    "migration_tree": { "prior": 312, "now": 314 },
+    "new_migrations_seed_permission_keys": false,
+    "new_migrations": [
+      "20260807090000_membership_profile_atomic_create.sql",
+      "20260807140000_backfill_membership_access_profiles.sql"
+    ],
+    "open_question_owner": "C13 → W-11"
+  },
+
+  "tree_state_not_this_assignment": {
+    "note": "recorded, not resolved; none of this was authored or reverted by this assignment",
+    "uncommitted": [
+      {
+        "path": "web/lib/admin/resolveAdminAccessCore.ts",
+        "what": "W-7 dual-read absent-profile instrument",
+        "enforcement_constant": "ABSENT_PROFILE_ENFORCEMENT = \"legacy-all\"",
+        "behaviour_preserving_today": true,
+        "wave": 2,
+        "lockout_class": "L1",
+        "prohibited_by_this_assignment": true
+      },
+      {
+        "path": "web/tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts",
+        "what": "untracked W-7 companion test",
+        "wave": 2
+      },
+      {
+        "path": "web/tests/access/analyticsRouteGates.test.ts",
+        "what": "+107 lines — RL-1 alias-completeness lock",
+        "concurrent_with_this_run": true,
+        "is_this_assignments_named_deliverable": true
+      }
+    ],
+    "consequence": "the 66 green were measured on a working tree, not on 3e000209a"
+  },
+
+  "not_run": {
+    "typecheck": "not executed — same as 2026-08-04 and 2026-08-06; this record claims no typecheck",
+    "live_database_query": "none — W-0 counts are seven days old; M1 must re-derive Q4 rather than cite it",
+    "tier_d": "none — no source change was made by this assignment"
+  },
+
+  "divergences_raised": [
+    {
+      "id": "X-2 / DR-4 / QE-15",
+      "existing": "this file is not the live plan of record (docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md)"
+    },
+    {
+      "id": "DX7-mission-identity",
+      "new": "Wave 1 was issued by mission msn_bc33a72e3138ebc215 titled 'DX7 Fixture — Ready Promotion', against a file headed msn_e9133cdade883793d2; whether Wave 1 should be re-issued a fourth time is a Director question"
+    }
+  ],
+
+  "deliverables": [
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave1-dx7-reissue-evidence.json"
+  ]
+}

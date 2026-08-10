@@ -82,15 +82,28 @@ export function createAssignmentsFromCompiled(missionId, compiled, { slot = null
 
   const plan = (compiled.executionPhases || []).slice().sort((a, c) => a.order - c.order);
 
+  // Resolve deps against already-persisted phases (next-wave opens), not only this batch.
   const phaseToAssignment = new Map();
+  for (const existing of store.assignments || []) {
+    if (existing.phaseId && existing.assignmentId) {
+      phaseToAssignment.set(existing.phaseId, existing.assignmentId);
+    }
+  }
   const created = [];
   for (const phase of plan) {
+    if (phaseToAssignment.has(phase.phaseId)) continue; // already present
     const assignmentId = "asg_" + createHash("sha256")
       .update(`${missionId}:${phase.phaseId}:${compiled.compiledMissionId}:${Math.random()}`)
       .digest("hex").slice(0, 14);
     const deps = (phase.dependencies || [])
       .map((depPhaseId) => phaseToAssignment.get(depPhaseId))
       .filter(Boolean);
+    const depsComplete = (phase.dependencies || []).every((depPhaseId) => {
+      const depId = phaseToAssignment.get(depPhaseId);
+      if (!depId) return false;
+      const depAsg = (store.assignments || []).find((a) => a.assignmentId === depId);
+      return depAsg && ["complete", "accepted"].includes(String(depAsg.status || "").toLowerCase());
+    });
     const outputs = phase.requiredOutputs
       || (compiled.deliverables || [])
         .filter((d) => (phase.deliverableIds || []).includes(d.id) && d.status === "to_execute")
@@ -129,7 +142,7 @@ export function createAssignmentsFromCompiled(missionId, compiled, { slot = null
         evidenceProfile: "code_only",
         requireContextAck: true,
       },
-      status: deps.length ? "waiting" : "ready",
+      status: (!deps.length || depsComplete) ? "ready" : "waiting",
       workerId: null,
       provider: null,
       contextAcknowledgement: null,
@@ -315,6 +328,11 @@ export function serializeAssignmentPrompt(assignment, context) {
     ...(assignment.reopen_reason ? [
       `## Operator change request (reopen)`,
       assignment.reopen_reason,
+      "",
+    ] : []),
+    ...((context?.operatorGuidance || []).length ? [
+      `## Open operator guidance (from mission conversation)`,
+      ...(context.operatorGuidance.map((g) => `- [${g.type}] ${g.body}`)),
       "",
     ] : []),
     `## Completion contract`,
@@ -600,7 +618,7 @@ export function validateAssignmentCompletion(missionId, assignmentId, { actor = 
     appendTimelineEvent(missionId, {
       type: "assignment_completed",
       headline: `Claude completed ${short}`,
-      summary: `Worker finished ${a.title}. Director will verify before operator approval.`,
+      summary: `Worker finished ${a.title}. Director continues the implementation chain unless a decision is required.`,
       visibility: "summary",
       phaseId: a.phaseId,
       assignmentId,
@@ -710,6 +728,95 @@ export function reopenAssignmentsForMoreWork(missionId, {
   }
   writeStore(store);
   return { ok: true, missionId, reopened: touched, assignments: listAssignments(missionId) };
+}
+
+/**
+ * Create one ready assignment from a freeform operator/Director objective
+ * when the implementation register has no remaining phases.
+ */
+export function createOperatorObjectiveAssignment(missionId, {
+  title = "Beyond-register objective",
+  objective,
+  actor = "operator",
+  phaseId = null,
+  nowMs,
+} = {}) {
+  const text = String(objective || "").trim();
+  if (!missionId || !text) return { ok: false, error: "missing_objective" };
+  const brief = getBrief(missionId);
+  const store = readStore(missionId);
+  // Reuse an existing ready/running beyond-register row with the same title prefix.
+  const existing = (store.assignments || []).find((a) =>
+    String(a.phaseId || "").startsWith("impl_obj_")
+    && ["ready", "running", "waiting", "verification"].includes(a.status));
+  if (existing) {
+    existing.objective = text.slice(0, 12000);
+    existing.title = String(title || existing.title).slice(0, 160);
+    existing.updated_at = iso(nowMs);
+    writeStore(store);
+    return { ok: true, reused: true, assignment: existing };
+  }
+  const pid = phaseId || `impl_obj_${createHash("sha256").update(`${missionId}:${Date.now()}`).digest("hex").slice(0, 10)}`;
+  const assignmentId = "asg_" + createHash("sha256")
+    .update(`${missionId}:${pid}:${Math.random()}`)
+    .digest("hex")
+    .slice(0, 14);
+  const assignment = {
+    schema_version: "vacilando.worker_assignment.v1",
+    assignmentId,
+    missionId,
+    missionVersion: brief?.version || null,
+    missionContentHash: brief?.contentHash || null,
+    compiledMissionId: null,
+    phaseId: pid,
+    title: String(title || "Beyond-register objective").slice(0, 160),
+    objective: text.slice(0, 12000),
+    scope: ["promotion", "certification", "remaining plan"],
+    prohibitedChanges: [
+      "Escalate only for genuine operator-owned product/security decisions",
+      "Do not declare Access & Identity V2 complete from assignment labels alone",
+    ],
+    expectedDeliverables: [
+      "Authoritative progress report",
+      "Promotion / migration evidence",
+      "Certification matrix against shared environment",
+    ],
+    acceptanceCriteriaIds: [],
+    dependencies: [],
+    repository: {
+      mergeTarget: brief?.executionPreferences?.mergeTarget || "staging",
+    },
+    branch: null,
+    slot: brief?.executionPreferences?.preferredSlots?.[0] || null,
+    port: null,
+    requiredValidation: [],
+    requiredEvidence: ["log", "document"],
+    evidenceProfile: "execution_v1",
+    escalationRules: [{ kind: "product_behavior", escalate: true }],
+    completionContract: {
+      requireEvidence: true,
+      evidenceProfile: "execution_v1",
+      requireContextAck: true,
+    },
+    status: "ready",
+    stage: "implementation",
+    workerId: null,
+    provider: null,
+    contextAcknowledgement: null,
+    startReport: null,
+    progress: [],
+    blockers: [],
+    completionReport: null,
+    validation: null,
+    paused_reason: null,
+    created_at: iso(nowMs),
+    updated_at: iso(nowMs),
+    created_by: actor,
+    operator_objective: true,
+  };
+  store.assignments.push(assignment);
+  writeStore(store);
+  return { ok: true, reused: false, assignment };
 }
 
 /**

@@ -1,9 +1,16 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 05 — Surface & capability access catalog
 
-> **Required output #2.** Catalogs the three things the brief's threat statement puts in tension:
-> the **capabilities** the product defines, the **surfaces** an operator can reach, and the
-> **commands** an actor can call — then asks whether a change to the first constrains the second
-> or the third.
+> **Required output #2.** Catalogs the four things the brief's threat statement puts in tension:
+> the **capabilities** the product defines, the **surfaces** an operator can reach, the
+> **commands** an actor can call, and — added in the 2026-08-06 reopen — the **roles** that are
+> supposed to bind the other three (§5A). It then asks whether a change to one constrains the rest.
 >
 > The brief's stated threat — *"A user could be blocked from seeing the Billing workspace while
 > still calling a billing API"* — is the question this document answers. **The measured answer is
@@ -14,8 +21,8 @@
 
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Surface and capability access catalog* · assignment `asg_86987746143432`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
-**Worktree** `wt6-vacilando-os-product-def`
-**Date** 2026-08-03
+**Worktree** `wt6-vacilando-os-product-def` (§1–§11) · `wt6-director-experience-dx5-5-continuation` (§5A, reopen)
+**Date** 2026-08-03 · **reopened and extended** 2026-08-06
 **Method** static, file-grounded. Counts reproduce with §10.
 
 **Revision note.** This file previously held only *§6 Command & action enforcement census*
@@ -24,6 +31,20 @@ and is not re-derived. §2–§5 and §7 are new and supply output #2's missing 
 **capability** halves — the parts `00-mission-intake-and-coverage.md:§3` recorded as covered by a
 route census that, by its own title, censused commands only. The filename is retained because
 downstream documents link to it.
+
+**Reopen note (2026-08-06).** The operator reopened this phase with three pieces of guidance —
+*"role hierarchy is still too deep — reduce to four layers"* and, twice, *"I want the role editor
+simplified without changing the access architecture."* All three concern the **role** layer, which
+sits between the capability catalog (§2) and the surface catalog (§3) and which this document did
+not census. [§5A](#5a--the-role-layer) is new: it measures the depth that is being called too deep,
+on both axes the guidance touches (the resolution model and the editor), then specifies the
+four-layer target and the simplified editor against that measurement. **§5A.6 is the honest
+boundary** — what the four-layer reduction can deliver without touching the access architecture,
+and the one item that cannot.
+
+*Numbering:* §6–§11 are deliberately **not** renumbered. `07-director-acceptance-rubric.md` and
+`06-product-ia-and-flows.md` cite this file by section number, so the new material is inserted as
+§5A rather than shifting every downstream reference.
 
 ---
 
@@ -49,6 +70,19 @@ So the brief's threat does not describe the system. The system has **no surface-
 gate to be inconsistent with**. Surface access and command access are not divergent; they are
 both, independently, coarse role checks — and the capability layer that was supposed to unify them
 is largely disconnected from both.
+
+**And the role layer between them is the deepest thing here** (§5A, added in the reopen). Three more
+measured facts:
+
+| Measure | Count | Of |
+|---|---|---|
+| Stores + derivations between a person and a permission decision | **9 + 3** | §5A.2 |
+| Independent sources that can each establish a role | **4** | of those 12 |
+| Role-editor tabs that carry an authoring surface | **2** | of 5 |
+
+The consequence of the first two is §5A.3: **removing an operator's last role through the product
+deletes only the `user_roles` row, and the resolver falls back to legacy role sources precisely when
+that row is gone.**
 
 ## 2. The capability catalog
 
@@ -268,6 +302,177 @@ therefore no RLS backstop either.
 This is not asserted as an exploited vulnerability — no request was issued (§9). It is the
 structure the code describes.
 
+## 5A — The role layer
+
+> **New in the 2026-08-06 reopen.** §2–§5 measured capabilities, surfaces and commands and found no
+> edge between them. The operator's guidance points at the layer those three were measured *around*:
+> the role. This section measures it, and specifies the four-layer target.
+
+### 5A.1 Why "too deep" is a measurement, not a taste
+
+"Role hierarchy" names two different depths in this product, and the operator's three guidance items
+touch both: the **resolution model** (what the system traverses to answer *what may this person
+do*) and the **editor** (what the operator traverses to change the answer). Both are measured below.
+They are different numbers with the same cause — nothing ever collapsed the layers that
+accumulated, so each new access concept was added beside the previous one rather than inside it.
+
+### 5A.2 Resolution depth — 9 stores and 3 derivations
+
+`lib/admin/resolveAdminAccessCore.ts` is the single canonical resolver (`getAdminAccessContext.ts:54`
+is its only caller of consequence). Everything it consults, in order:
+
+| # | Layer | Store or derivation | Site |
+|---|---|---|---|
+| 1 | Authenticated principal | `auth.users` via `getCachedAuthUserId()` | `getAdminAccessContext.ts:43` |
+| 2 | Org membership + roles | `user_roles(org_id, role)` | `resolveAdminAccessCore.ts:111-114` |
+| 3 | Primary-org election | *derivation* — admin/ops rows preferred, then lexicographically smallest `org_id` | `:26-38` |
+| 4 | Legacy role source A | `user_profiles.role` | `:44-51` |
+| 5 | Legacy role source B | `app_users.role` keyed by `id` | `:54-60` |
+| 6 | Legacy role source C | `app_users.role` keyed by `auth_user_id` | `:62-68` |
+| 7 | Portal eligibility | *derivation* — `roleKeys ∩ {admin, ops}` | `:18`, `:142` |
+| 8 | Role catalog | `role_definitions(role_key, role_label, is_system, is_active)` | `20260505153000_backfill_default_role_definitions.sql:14-17` |
+| 9 | Capability grants | `role_permission_grants(org_id, role_key, permission_key, allowed)` | `:89-94` |
+| 10 | Capability catalog | `permission_definitions` (formerly dual-FK to `permissions` **and** `permission_keys`) | `20260505120100…:4-6`; both FKs dropped for one at `20260729120000…:131-138` |
+| 11 | Grid vocabulary | *derivation* — the 9-row `PERMISSION_GRID_ROWS` literal | `lib/admin/permissionGrid.ts:12-35` |
+| 12 | Scope mode | `user_access_profiles(department_scope, site_scope)` | `:145-150` |
+| 13 | Department scope | `user_department_access` | `:165-169` |
+| 14 | Site scope | `user_site_access` | `:180-184` |
+
+**Nine persisted stores and three in-code derivations stand between a person and a permission
+decision.** Four of the fourteen rows — 2, 4, 5, 6 — can each independently establish a role.
+
+The default role catalog is already four roles (`admin`, `ops`, `regional_lead`, `school_director`,
+`20260505153000…:14-17`). **The role *vocabulary* is not what is deep. The machinery under it is.**
+
+### 5A.3 The cost of that depth: removing a role need not remove access
+
+The legacy sources at rows 4–6 are not dead code. `chooseOrgAndRoleKeysFromMembershipRows` returns
+`null` exactly when the user has no `user_roles` rows (`:27`, `:37`), and *that* is when
+`fetchLegacyAdminOpsOrgAndRole` runs (`:135-140`) and may return `admin` or `ops`.
+
+Now read the editor's removal path:
+
+```ts
+// app/api/admin/users/[userId]/remove/route.ts:6, 27-28
+/** POST: remove user from org (delete user_roles row). … Does not delete auth.users. */
+  .from("user_roles")
+  .delete()
+```
+
+It deletes the `user_roles` row and nothing else. `user_profiles.role` and `app_users.role` are not
+cleared, and no other route in the RBAC surface writes them — the role-change route
+(`app/api/admin/users/[userId]/role/route.ts:44-47`) also confines itself to `user_roles`.
+
+**So the structure describes this: removing an operator's last role through the product returns them
+to the legacy fallback, which grants `admin` or `ops` if either shadow row still says so.** The
+editor's most consequential control is the one whose effect the depth can silently invert.
+
+Stated with the same discipline as the rest of this document: this is what the code paths compose
+to. **No request was issued and no row was inspected in any database** (§9). It is a structural
+finding and the first thing a live check should confirm or refute.
+
+### 5A.4 Editor depth — six levels of nesting, five tabs, two authoring surfaces
+
+The operator's path to change one capability for one role:
+
+| Level | Control | Choices | Site |
+|---|---|---|---|
+| 1 | Access workspace | — | `AccessWorkspaceSurface.tsx:66-93` |
+| 2 | Chapter tab bar | 4 — Users · Roles · Access Scopes · Security | `accessChapterRoutes.ts:10` |
+| 3 | Role collection rail | *n* roles | `AccessRolesConfigurationPage.tsx:294-309` |
+| 4 | Role sub-tab bar | 5 — Overview · Permissions · Users · Experience Access · History | `:254-260`, rendered `:373-378` |
+| 5 | Permission grid row | 9 | `permissionGrid.ts:12-35` |
+| 6 | Level control | 3 — None · Read · Write | `keysForLevel`, `permissionGrid.ts:49-53` |
+
+**Two tab bars nested inside each other, six levels deep.** And the inner tab bar does not earn its
+five tabs:
+
+| Role sub-tab | What it renders | Authoring? |
+|---|---|---|
+| Overview | Label input + Active checkbox | **Yes** |
+| Permissions | The 9-row grid | **Yes** |
+| Users | Read-only list of assigned users (`:513-519`) | No |
+| Experience Access | *"Derived from permission grants. Planned projection."* (`:533-538`) | **Placeholder** |
+| History | *"A verified change history for this role is planned. No events are fabricated for display."* (`:539-543`) | **Placeholder** |
+
+**Five tabs carry two authoring surfaces.** Two are honest placeholders — correctly labelled
+`data-capability="planned"`, and to the prior phase's credit, *not* fabricating data — but they are
+still two of the five things the operator must read past. `AccessRolesConfigurationPage.tsx` is 607
+lines with 19 `useState` hooks and a modal to reach that.
+
+### 5A.5 The four-layer target
+
+Four layers, and the same four in the model and in the editor:
+
+| # | Layer | The operator's question | Owns |
+|---|---|---|---|
+| **1** | **Person** | Who can sign in? | account, org membership, assigned role |
+| **2** | **Role** | What is this job? | a named, org-owned set of capabilities |
+| **3** | **Capability** | What may that job do? | permission keys, one vocabulary |
+| **4** | **Scope** | Where does it apply? | sites and departments |
+
+Every one of §5A.2's fourteen rows folds into one of the four. **The map is the proof that reducing
+depth removes no authority** — nothing in the right-hand column stops being consulted:
+
+| §5A.2 rows | Folds into | How |
+|---|---|---|
+| 1, 2 | **1 Person** | `user_roles` becomes the sole *presented* assignment |
+| 3 | 1 Person | election survives in the resolver; never operator-visible |
+| 4, 5, 6 | 1 Person | **cannot fold without a resolver change — see §5A.6** |
+| 7, 8 | **2 Role** | `portalEligible` and the `admin` short-circuit (§3.3) become capabilities the `admin` role *holds*, not branches beside the role model |
+| 9, 10 | **3 Capability** | unchanged; the catalog becomes the single vocabulary |
+| 11 | 3 Capability | the grid literal stops being a vocabulary and is regenerated from the catalog — already W-10 (§7.6) |
+| 12, 13, 14 | **4 Scope** | unchanged |
+| §6.2 gate families | — | out of this section's scope; §7.1 owns them |
+
+The four chapters the Access workspace already ships — Users · Roles · Access Scopes · Security —
+are **three of these four layers plus Security**. Capability has no chapter of its own; it is the
+grid buried at level 5. The target is not a new information architecture, it is the one already on
+screen, made to carry the model.
+
+### 5A.6 What this costs, and the one thing it cannot do without architecture change
+
+The guidance says *simplify the role editor **without changing the access architecture***. That
+constraint is satisfiable for most of the reduction and not for all of it. The split, stated plainly
+so the boundary is not crossed by accident:
+
+**Presentation-only — no resolver, gate, route, or migration change:**
+
+1. **Collapse the inner tab bar.** Overview and Permissions are the only authoring surfaces; they
+   become one page for the selected role. Level 4 disappears — **six levels become four**, matching
+   the model.
+2. **Drop the two placeholder tabs from the editor.** Experience Access and History are commitments
+   rendered as navigation. They return as sections when something derives them; until then they cost
+   the operator two of five tabs to learn nothing. (Removing a *placeholder* is not removing a
+   capability — contrast W-3's grid-row removal, `permissionGrid.ts:23-34`, which had to argue that
+   no authority was lost.)
+3. **Fold "Users with this role" into the role header.** It is already summarised there
+   (`:367-369`, *"n users assigned"*); the tab adds a list, not a decision.
+4. **Name the capability layer.** The grid is layer 3 of the model and level 5 of the UI. Presenting
+   it as the role's capability set — rather than a table inside a tab — is what makes the four
+   layers legible without changing what any control writes.
+
+Each of these changes what the operator traverses. **None changes what `PUT /api/admin/rbac/grants`
+receives, what `resolveAdminAccessCore` reads, or what any gate decides.**
+
+**Requires an architecture change — therefore NOT part of the editor simplification:**
+
+5. **Retiring the legacy role sources (rows 4–6).** This is the depth that produces §5A.3, and it is
+   the one layer the editor cannot flatten by presenting differently: the resolver would have to stop
+   consulting `user_profiles.role` and `app_users.role`, which is a change to how authority is
+   established. It belongs to the §7.1 single-admission-point work, with a migration to reconcile the
+   shadow rows first.
+
+   **Until it is done, the four-layer editor is a true picture of what the operator authors and an
+   incomplete picture of what the system enforces.** That gap is the reason to sequence 5 with
+   §7.1 rather than defer it indefinitely — and the reason this section refuses to claim the
+   reduction is complete without it.
+
+**Explicitly unchanged by all of the above:** the ten-plus gate families (§6.2), the 507
+service-role routes (§6.1), the action registry's missing authorization metadata (§6.3), and the
+absence of any surface-level capability gate (§3.2, §4). **The role editor is not where those are
+fixed, and simplifying it must not be read as having addressed them.**
+
 ## 6. Command & action enforcement census
 
 > *Preserved verbatim from the `msn_2d054741a54698fa4c` delivery (`c8120d550`). Not re-derived.*
@@ -376,8 +581,8 @@ added without enforcement evidence."*
 
 ## 7. What this means for V2
 
-Ordered by risk, not by effort. Items 1–4 are carried forward from the command census; 5–7 are new
-and follow from the surface and capability halves.
+Ordered by risk, not by effort. Items 1–4 are carried forward from the command census; 5–7 follow
+from the surface and capability halves; **8–10 are new in the reopen and follow from §5A**.
 
 1. **One admission point.** Every `/api/*` route passes through a single gate that resolves
    principal, org, account state ([`04`](./04-authentication-model.md) §3.2), roles, permissions,
@@ -407,6 +612,20 @@ and follow from the surface and capability halves.
    so that "blocked from seeing the Billing workspace" becomes true, and true for the same reason
    the billing commands are blocked. This is what makes the brief's threat statement testable
    rather than moot.
+8. **One role source.** Four things can establish a role (§5A.2), and the product's own removal path
+   clears only one of them (§5A.3). Until `user_profiles.role` and `app_users.role` are reconciled
+   and retired, no statement about what an operator can do survives contact with a user whose
+   `user_roles` rows are absent. **Sequence this with item 1** — it is the same admission-point work
+   seen from the identity side, and it is the one part of the four-layer reduction that the editor
+   cannot deliver on its own (§5A.6.5).
+9. **Four layers, in the model and on screen.** Person → Role → Capability → Scope (§5A.5). The
+   Access workspace already ships three of the four as chapters; the missing one, Capability, is the
+   grid buried at level 5 of a six-level path. Making the presented model and the authored model the
+   same four layers is what turns items 5 and 6 from cleanups into a legible product.
+10. **Nothing planned may occupy navigation.** Two of the role editor's five tabs render *"planned"*
+    (§5A.4). Marking them honestly was right; shipping them as tabs was not. A section earns
+    navigation when it derives something. This is the display-side twin of item 5 — an inert tab is
+    the same false statement to the operator as an inert permission key.
 
 ## 8. Bearing on the brief's rejection conditions
 
@@ -415,6 +634,12 @@ and follow from the surface and capability halves.
 | *"A permission exists but is not connected to a meaningful operator concept."* | **Triggered** | 11 of 18 grantable keys inert (§2.1); 14 seeded keys have no operator control (§2.2) |
 | *"A UI checkbox is added without enforcement evidence."* | **Triggered** | The permission grid is a checkbox surface for 11 keys that enforce nothing (§2.3); action registry carries no authorization metadata (§6.3) |
 | *"A user could be blocked from seeing the Billing workspace while still calling a billing API."* | **Triggered, in a stronger form** | Neither the workspace nor the API consults the Billing capability (§5) |
+
+The reopen adds evidence to the first two, from the role side. *"Not connected to a meaningful
+operator concept"* is not only about keys: **the role editor presents two tabs that derive nothing**
+(§5A.4), which is the same false statement in navigation form. And the sharpest instance of *"added
+without enforcement evidence"* is now §5A.3 — **a control whose stated effect is removal, over a
+resolver that falls back to a different role source exactly when that removal succeeds.**
 
 ## 9. Limits — read before citing
 
@@ -440,6 +665,18 @@ and follow from the surface and capability halves.
 - **Grep cannot see intent.** A route calling a gate but ignoring its result reads as gated.
 - **No route was executed.** No request was issued, authenticated or otherwise. Nothing here is a
   demonstrated vulnerability; it is a description of structure.
+- **§5A.3 is composed from code paths, not observed.** The fallback condition
+  (`resolveAdminAccessCore.ts:135-140`) and the removal path (`remove/route.ts:27-28`) were each read;
+  that a real user retains `admin` after removal was **not executed and no database row was
+  inspected**. Whether any live `user_profiles.role` / `app_users.role` row still says `admin` or
+  `ops` for a user with no `user_roles` row is unmeasured here — it is a one-query check and should
+  be the first thing done with §5A.3.
+- **§5A.2's "9 stores + 3 derivations" counts `resolveAdminAccessCore` only.** It is the canonical
+  resolver, but a route that reads a role table directly would not appear. `app_users` is counted
+  once though queried on two keys.
+- **Editor depth is the shipped adminV2 path.** `legacy-admin` has its own users/roles surface which
+  was not measured (consistent with `legacy-admin` being inventoried, not censused, above).
+  Level counts are navigation steps, not clicks.
 - **Public routes were not assessed.** `public`, `book-v2`, `webhooks`, `action-links`, `marketing`
   are presumably intentionally unauthenticated (middleware explicitly exempts two webhooks,
   `web/middleware.ts:28-33`); confirming each is intentional is separate work.
@@ -484,6 +721,30 @@ grep -nE 'PERMISSION_GRID_ROWS|rbac/(grants|permissions|roles)' \
 grep -rnE 'permission|role|billing|canRead' app/adminV2/finance/page.tsx   # expect: no output
 sed -n '39,45p;93,99p' app/api/admin/commercial/tuition-rates/route.ts
 
+# ---- §5A role layer --------------------------------------------------------
+# 9 persisted stores the resolver consults (expect: app_users, role_permission_grants,
+# user_access_profiles, user_department_access, user_profiles, user_roles, user_site_access
+# — plus role_definitions and the permission catalog, reached via migration/FK)
+grep -oE 'from\("[a-z_]+"\)' lib/admin/resolveAdminAccessCore.ts | sort -u
+# 4 role sources: user_roles, then the three legacy fallbacks
+sed -n '26,38p;40,71p;131,141p' lib/admin/resolveAdminAccessCore.ts
+# 4 seeded default roles
+grep -nE "\('[a-z_]+'," ../supabase/migrations/20260505153000_backfill_default_role_definitions.sql
+# scope tables
+grep -nE 'CREATE TABLE' ../supabase/migrations/20260504103000_user_access_scope_tables_v1.sql
+
+# §5A.3 — removal clears user_roles only (expect: no user_profiles / app_users write)
+grep -nE 'from\(|delete|update' 'app/api/admin/users/[userId]/remove/route.ts'
+grep -nE 'from\(|\.delete\(|\.insert\(' 'app/api/admin/users/[userId]/role/route.ts'
+
+# §5A.4 — editor depth
+grep -n 'ACCESS_WORKSPACE_CHAPTERS =' lib/access/accessChapterRoutes.ts          # 4 chapters
+sed -n '254,260p' components/adminV2/settings/access/AccessRolesConfigurationPage.tsx  # 5 role tabs
+grep -c 'useState' components/adminV2/settings/access/AccessRolesConfigurationPage.tsx # 19
+wc -l components/adminV2/settings/access/AccessRolesConfigurationPage.tsx              # 607
+# the two placeholder tabs
+grep -n 'data-capability="planned"' components/adminV2/settings/access/AccessRolesConfigurationPage.tsx
+
 # ---- §6 command census (unchanged) ----------------------------------------
 # 539 — API route files
 find app/api -name route.ts | wc -l
@@ -518,4 +779,16 @@ grep -rnE 'permission|authorize|access|canManage|role' \
 - **Inputs:** `01-existing-state-inventory.md` (C1 gate-vs-resolver; route census `:478-527`),
   `02-canonical-access-identity-model.md` (§10 where authority is decided, D4, W-10),
   `00-mission-intake-and-coverage.md` §3 (output #2 coverage claim this document completes).
+- **Added by the 2026-08-06 reopen (§5A, §1, §7.8-10, §9, §10).** Read in full:
+  `lib/admin/resolveAdminAccessCore.ts`, `lib/admin/getAdminAccessContext.ts`,
+  `lib/access/accessChapterRoutes.ts`, `components/adminV2/settings/access/AccessWorkspaceSurface.tsx`,
+  `app/api/admin/users/[userId]/remove/route.ts`. Read in part:
+  `components/adminV2/settings/access/AccessRolesConfigurationPage.tsx`,
+  `components/adminV2/settings/access/AccessScopesPage.tsx`,
+  `app/api/admin/users/[userId]/role/route.ts`,
+  `supabase/migrations/20260505153000_backfill_default_role_definitions.sql`,
+  `supabase/migrations/20260504103000_user_access_scope_tables_v1.sql`.
+  **Operator guidance addressed:** *"reduce to four layers"* → §5A.5; *"simplify the role editor
+  without changing the access architecture"* → §5A.6, whose presentation-only/architecture split is
+  the direct answer to that constraint.
 - **No source, schema, migration, or UI changed by this phase.**

@@ -10,6 +10,7 @@ import {
   listExecutionSessions,
   updateExecutionSession,
   getExecutionSession,
+  isSessionActuallyLive,
 } from "./execution-session.mjs";
 import { getAssignment } from "./worker-assignment.mjs";
 
@@ -195,11 +196,9 @@ export function reconcileExecutionSessionsOnBoot({ nowMs } = {}) {
   return result;
 }
 
-/** True if an assignment already has a non-terminal session — skip re-dispatch. */
+/** True if an assignment already has a non-terminal live session — skip re-dispatch. */
 export function hasActiveOrRecoverableSession(missionId, assignmentId) {
-  return listExecutionSessions({ missionId, assignmentId }).some((s) =>
-    ["queued", "starting", "running", "recovering", "recovered", "awaiting_decision",
-      "awaiting_operator", "producing_evidence", "retrying", "interrupted", "paused"].includes(s.status));
+  return listExecutionSessions({ missionId, assignmentId }).some((s) => isSessionActuallyLive(s));
 }
 
 export function getResumableSession(missionId, assignmentId) {

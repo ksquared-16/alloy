@@ -15,6 +15,10 @@ const {
   classifyProgressActivity,
   parseExecutionOutcome,
   sessionLiveVm,
+  isSessionActuallyLive,
+  reconcileZombieSessions,
+  updateExecutionSession,
+  getActiveSessionForAssignment,
 } = await import("../lib/vacilando/execution-session.mjs");
 
 function assert(cond, msg) {
@@ -68,5 +72,30 @@ const decision = parseExecutionOutcome(`
 `);
 assert(decision.status === "waiting_for_operator", "decision status");
 assert(decision.decision.title === "Scope call", "decision title");
+
+// Zombie: status still running but completed_at set — must not count as live.
+const zombie = createExecutionSession({
+  missionId: "msn_zombie",
+  assignmentId: "asg_zombie",
+  connector: "claude",
+  slot: 6,
+});
+updateExecutionSession(zombie.sessionId, {
+  status: "running",
+  started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+  completed_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  progress: {
+    activity: "Dead",
+    lastHeartbeatAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  },
+  recovery: { lastError: "provider error" },
+});
+const z = getExecutionSession(zombie.sessionId);
+assert(isSessionActuallyLive(z) === false, "zombie not live");
+assert(sessionLiveVm(z) === null, "zombie live vm null");
+assert(getActiveSessionForAssignment("msn_zombie", "asg_zombie") === null, "active skips zombie");
+const fixed = reconcileZombieSessions({ missionId: "msn_zombie" });
+assert(fixed.some((f) => f.sessionId === zombie.sessionId), "reconcile finds zombie");
+assert(getExecutionSession(zombie.sessionId).status === "failed", "zombie flipped to failed");
 
 console.log("execution-session.test.mjs OK");

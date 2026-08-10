@@ -1,0 +1,219 @@
+{
+  "artifact": "wave1-reopen-evidence",
+  "plan": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_of_record": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+  "wave": 1,
+  "workstreams_reexecuted": ["W-1", "W-2", "W-3"],
+  "workstreams_out_of_scope": ["W-4"],
+  "mission": "msn_f74ed02c126c88d7ff",
+  "assignment": "asg_e9308076173af6",
+  "context_version": "v1",
+  "content_hash": "3c36b58117e46b2363ef602b385409e7",
+  "protocol": "vacilando.worker.protocol.v1",
+  "worktree": "wt6-director-experience-dx5-5-continuation",
+  "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+  "commit": "c66d573056aedb26ec5d1cbcd279a111da8d1d89",
+  "executed_utc": "2026-08-06T23:15:28Z",
+
+  "posture": {
+    "rule_applied": "Plan §4 — counts are a snapshot; every consumer re-runs rather than cites. The reopen re-issued three workstreams already recorded DONE and re-verified once. They were re-executed, and each lock's SUBJECT was re-enumerated rather than its assertions merely re-run. The subject is what failed this time.",
+    "prior_runs": [
+      {
+        "mission": "msn_2d054741a54698fa4c",
+        "assignment": "asg_d77353d7377647",
+        "commit": "41610954cdf1",
+        "executed_utc": "2026-07-31T17:52:37Z",
+        "evidence": "wave1-execution-evidence.json"
+      },
+      {
+        "mission": "msn_f74ed02c126c88d7ff",
+        "assignment": "asg_e9308076173af6",
+        "commit": "9e19c8736",
+        "executed_utc": "2026-08-04T17:13:22Z",
+        "evidence": "wave1-reverification-evidence.json"
+      }
+    ]
+  },
+
+  "base_drift_since_prior_run": {
+    "prior_commit": "9e19c8736",
+    "web_commits_in_interval": 192,
+    "api_route_files": { "before": 559, "after": 570 },
+    "migrations": { "before": 302, "after": 312 },
+    "note": "The largest interval any Wave 1 run has crossed. The three suites were green on arrival without modification; the defects found are in how the locks choose their subject, not in the locks' assertions."
+  },
+
+  "results": {
+    "suites_green_on_arrival": 55,
+    "suites_green_after_this_assignment": 61,
+    "matches_prior_record": true,
+    "suites": [
+      {
+        "path": "web/tests/access/analyticsRouteGates.test.ts",
+        "workstream": "W-1",
+        "lock": "RL-1",
+        "tests_before": 36,
+        "tests_after": 42,
+        "status": "green; widened and hardened by this assignment"
+      },
+      {
+        "path": "web/tests/access/selfAuthorityMutation.test.ts",
+        "workstream": "W-2",
+        "lock": "RL-11",
+        "tests": 14,
+        "status": "green, unchanged — but its SUBJECT is incomplete; see findings"
+      },
+      {
+        "path": "web/tests/admin/permissionGrid.test.ts",
+        "workstream": "W-3",
+        "lock": "RL-2",
+        "tests": 5,
+        "status": "green, unchanged across 302 -> 312 migrations"
+      }
+    ]
+  },
+
+  "w1": {
+    "family_subject": {
+      "dirs": ["app/api/admin/analytics", "app/api/admin/metrics", "app/api/admin/intelligence"],
+      "route_files": { "2026-07-31": null, "2026-08-04": 26, "2026-08-06": 27 },
+      "new_since_prior_run": [
+        {
+          "route": "web/app/api/admin/metrics/oi-config/route.ts",
+          "gate": "getAdminContextCached() at :88 (GET) and :107 (PATCH); PATCH additionally requires ctx.role === 'admin' at :111-113",
+          "verified": "by hand as well as by the lock — the lock alone proves only that a gate is named",
+          "significance": "First real arrival the family census has been exercised by. It held."
+        }
+      ],
+      "floor_ratcheted": { "from": 20, "to": 27, "reason": "W-4's rule — a ratchet left below its floor hands out free slack; a floor of 20 against 27 files would let seven routes be deleted unnoticed." }
+    },
+    "lock_defects_found_and_fixed": [
+      {
+        "id": "W1-D1",
+        "defect": "The predicate was `source.includes(gate)` over the raw file, so a gate named in a comment credited the route.",
+        "class": "§10.2 — mention versus branch, inside the lock added to retire a hand census.",
+        "fix": "Comments stripped; the gate must be CALLED (`gate(`), not named. Line comments stripped only when `//` is not preceded by `:`, so a URL in a string literal cannot truncate a line.",
+        "red_run": "Probe route carrying the G2 shape plus `// TODO: gate this with requireAdminOrOps()` — flagged under the new predicate; credited under the old one. Asserted in-suite against the same source rather than claimed in prose."
+      },
+      {
+        "id": "W1-D2",
+        "defect": "The scan's subject was three hand-listed directories. G2 is a shape, not a property of a directory — an analytics-shaped route under a fourth directory reopens it unseen.",
+        "fix": "Subject is now every route file under `web/app/api` that resolves a raw access context (selected by the primitive, not the folder).",
+        "subject_size": { "routes_resolving_raw_context": 92, "of_total_route_files": 570 },
+        "sufficient_gates": ["requireAnalyticsReadAccess", "requireAnalyticsV2AdminContext", "requireAnalyticsV2AdminMutate", "requireAdminOrOps", "getAdminContextCached", "loadAdminRouteGate"],
+        "capability_gates": ["canReadProgramPublication", "canManageProgramPublication"],
+        "capability_gate_justification": "configuration/programs/route.ts:49-57 is this plan's own named reference shape for W-1. A route gating on a granted capability is not gating on `access.ok` alone, which is what RL-1 asserts.",
+        "reviewed_exceptions": [],
+        "red_run": "A new ungated route added anywhere under app/api is flagged BY PATH. Both probes were removed before the final run; the suite is green with the tree clean."
+      }
+    ],
+    "limit_unchanged": "Proves a sufficient gate is CALLED, never that its result is honoured. W-1's own two-resolution finding remains uncatchable here. RL-1's tier-A half is still W-14's declared (route -> capability) table."
+  },
+
+  "w2": {
+    "verdict": "The guard holds on all three routes it covers. Its SUBJECT is incomplete, and the exit criterion as written is not met.",
+    "exit_criterion": "A principal cannot alter its own membership through any product path.",
+    "met": false,
+    "why_missed": "Both prior enumerations asked which route FILES name `user_roles` or `user_access_profiles`. That question cannot see a write performed in a helper, and cannot see an authority table it did not name. Both misses were already present on 2026-08-04.",
+    "findings": [
+      {
+        "id": "W2-F1",
+        "title": "A fifth membership writer, reached through a helper",
+        "route": "web/app/api/admin/dev/create-org/route.ts",
+        "writer": "web/lib/dev/createOrgAndAssignAdmin.ts:71-78 — upsert into user_roles",
+        "why_invisible": "The route file names `user_roles` only in a doc comment (:18); the write is in the helper. A route-file text census misses it by construction.",
+        "self_authority": "admin_user_id is taken from the REQUEST BODY, so a caller may name themselves.",
+        "bounded_by": "DEV_TENANT_SPINUP_ENABLED === 'true' and ctx.role === 'admin' (:22-30). Exposure is limited to environments that set the flag.",
+        "second_consequence": "Also a G4/W-5 instance — it writes a membership and no user_access_profiles row, so it can grow W-0 Q4 through a path §6 does not name. M1 must re-derive Q4 rather than cite 2."
+      },
+      {
+        "id": "W2-F2",
+        "title": "A sixth authority table — user_department_access",
+        "authority_link": "Read by lib/admin/resolveAdminAccessCore.ts:166 to build allowedDepartmentIds. It IS the restricted-department allow-list.",
+        "self_writing_paths": [
+          "POST /api/admin/lifecycle-catalog/repair -> repairLifecycleWorkspaceVisibility.ts:64-70 -> ensureLifecycleDepartmentWorkspaceAccess.ts:165 (caller-supplied department_id, currentUserId = the caller)",
+          "POST /api/admin/departments:151-158 (for the department the caller just created)"
+        ],
+        "precedent": "W-2's own record counted 'widen your own department/site scope' as a self-elevation vector and guarded it on PATCH .../access-scope. This is the same vector on a table the enumeration never named.",
+        "latent_today": "ensureLifecycleDepartmentWorkspaceAccess returns before its insert when portalAdminBypassesDepartmentScope(roleKeys) holds (:122-124), and both routes admit `admin` only. No principal who can reach them can currently execute the insert.",
+        "what_arms_it": [
+          "W-8 deletes exactly that bypass. Its exit criterion — 'department scope is enforced for all roles' — would be FALSE on the day it lands: a restricted principal could restore access to any department carrying a lifecycle process by calling repair with its id.",
+          "W-13 arms it from the other side, by admitting a persona that is not admin/ops."
+        ],
+        "shape": "Same as W-0 Q1's finding about handle_new_user(): defined, unattached, one change away from live."
+      }
+    ],
+    "durable_repair_not_done_here": {
+      "change_of_question": "Enumerate authority writers BY TABLE across web/lib and web/app, not by name across route files.",
+      "set_this_pass": {
+        "user_roles_and_user_access_profiles": [
+          "app/api/admin/users/route.ts:102 (create)",
+          "app/api/admin/users/[userId]/role/route.ts:44,47",
+          "app/api/admin/users/[userId]/remove/route.ts:27",
+          "app/api/admin/users/[userId]/access-scope/route.ts:149",
+          "lib/dev/createOrgAndAssignAdmin.ts:71 (UNGUARDED)"
+        ],
+        "user_department_access": [
+          "lib/lifecycle/ensureLifecycleDepartmentWorkspaceAccess.ts:165 (insert, UNGUARDED)",
+          "lib/lifecycle/lifecycleActivationOwned.ts:111 (delete)"
+        ]
+      },
+      "why_not_done": "RL-11's lock is web/tests/access/selfAuthorityMutation.test.ts, outside this assignment's stated scope. The widened lock should land with the guard it implies rather than as a test edit that goes green by naming paths nobody fixed. Raised, not absorbed — the remedy is W-8's scope, not W-1..W-3's."
+    }
+  },
+
+  "w3": {
+    "lock": "RL-2 green — still parses every permission_definitions INSERT across a tree that grew 302 -> 312 migrations, and still reports every grid key as seeded.",
+    "dangling_decision_closed_by_reference": {
+      "question": "§14.3.10 — restore and repoint the workflows.* grid row, or leave it removed?",
+      "bound_to": "C13 -> W-11 in the plan of record: 'the row returns iff W-11 seeds a workflows key that something enforces'.",
+      "action_for_wave_1": "None. Recorded so the next reader does not re-raise a question answered elsewhere."
+    }
+  },
+
+  "verification": {
+    "focused_suites": {
+      "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+      "result": "3 files passed, 61 tests passed",
+      "cwd": "web"
+    },
+    "typecheck": {
+      "command": "vac run typecheck:tests",
+      "broker_request_id": "req_1786057933429001_22260",
+      "underlying": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+      "started_utc": "2026-08-06T23:12:14Z",
+      "finished_utc": "2026-08-06T23:15:15Z",
+      "rc": 0,
+      "class": "ok",
+      "note": "First Wave 1 run in which a typecheck was actually reproduced. Both prior runs recorded it as unavailable behind a command-approval wall. A direct `npm run typecheck:tests` was SIGTERM-killed (rc=144) before this; the broker path is the one that completes."
+    },
+    "not_performed": [
+      "Tier D / browser — per §14.3.7, and because the only change is a test file.",
+      "Live database query — W-0's counts are six days old. W2-F1 means Q4 can grow through a path §6 does not name.",
+      "Full Vitest suite — focused runs only, per the slot's operating constraints."
+    ]
+  },
+
+  "scope_divergence": {
+    "id": "QE-15 / X-2 / DR-4",
+    "observed": "This assignment's scope and expectedDeliverables name docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md, whose header is msn_e9133cdade883793d2 / asg_c505e1d0d76acd — the 2026-07-30 plan of a different mission.",
+    "plan_of_record": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md — Parts I-V, waves 0-14, W-0..W-62.",
+    "action_taken": "The record was written where the assignment points. It was deliberately NOT copied into the plan of record: which document is canonical is a Director decision, and a worker resolving it by duplication makes it harder, not easier.",
+    "consequence": "Wave 1's execution record now exists in two documents with different contents."
+  },
+
+  "changed_files": [
+    "web/tests/access/analyticsRouteGates.test.ts",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave1-reopen-evidence.json"
+  ],
+
+  "operator_guidance_not_actionable_here": {
+    "guidance": [
+      "Role hierarchy is still too deep — reduce to four layers.",
+      "I want the role editor simplified without changing the access architecture."
+    ],
+    "where_it_lands": "Waves 13 and 14 (W-54..W-62) in the plan of record, Part IV — the role editor and the depth reduction. Both are already specified there.",
+    "why_not_here": "This assignment is scoped to W-1..W-3, which are fail-closed API route gates and carry no role-editor surface. Executing wave 13 under a Wave 1 assignment would be reinterpreting the compiled mission's intent, which the assignment's constraints forbid. QE-16 records that waves 2-14 have no execution vehicle; that is the gap this guidance is blocked on."
+  }
+}

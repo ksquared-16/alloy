@@ -6,7 +6,6 @@ import {
 } from "@/lib/admin/adminRouteGate";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
-import { portalAdminBypassesDepartmentScope } from "@/lib/admin/accessScope";
 
 export const dynamic = "force-dynamic";
 
@@ -23,16 +22,16 @@ export async function GET() {
         .eq("org_id", gate.orgId)
         .maybeSingle();
 
-    const bypass = portalAdminBypassesDepartmentScope(gate.roleKeys);
-    const rawAllowed = gate.dimRaw.allowedDepartmentIds ?? [];
-    const effectiveAllowed = gate.dim.allowedDepartmentIds ?? [];
+    // W-8: there is no longer a raw/effective split to debug — role does not widen department
+    // scope, so the stored dimensions are the enforced ones. The former
+    // `portal_admin_bypasses_department_scope` field is gone with the bypass it reported.
+    const allowed = gate.dim.allowedDepartmentIds ?? [];
 
     return NextResponse.json({
         user_id: gate.userId,
         org_id: gate.orgId,
         role: gate.role,
         role_keys: gate.roleKeys,
-        is_portal_admin_or_ops: bypass,
         is_portal_admin_mutate: hasPortalAdminMutateAccess(gate.roleKeys),
         compatibility_portal_role: compatibilityPortalRole(gate.roleKeys),
         user_access_profiles: profile
@@ -41,17 +40,12 @@ export async function GET() {
                   site_scope: (profile as { site_scope?: string }).site_scope ?? "all",
               }
             : null,
-        department_scope_raw: gate.dimRaw.departmentScope,
         department_scope_effective: gate.dim.departmentScope,
-        allowed_department_ids_count_raw: gate.dimRaw.departmentScope === "restricted" ? rawAllowed.length : null,
-        allowed_department_ids_count_effective:
-            gate.dim.departmentScope === "restricted" ? effectiveAllowed.length : null,
-        portal_admin_bypasses_department_scope: bypass,
-        department_scope_rule: bypass
-            ? "Portal admin/ops: all active org departments (user_department_access not required for list APIs)."
-            : gate.dimRaw.departmentScope === "restricted"
-              ? "Restricted: only user_department_access rows."
-              : "Profile department_scope=all: all active org departments.",
+        allowed_department_ids_count_effective: gate.dim.departmentScope === "restricted" ? allowed.length : null,
+        department_scope_rule:
+            gate.dim.departmentScope === "restricted"
+                ? "Restricted: only user_department_access rows. No role widens this."
+                : "Profile department_scope=all: all active org departments.",
         site_scope_effective: gate.dim.siteScope,
     });
 }

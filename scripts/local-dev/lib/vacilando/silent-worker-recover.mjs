@@ -39,6 +39,18 @@ export async function recoverSilentWorkers({ nowMs = Date.now() } = {}) {
   const { listDecisions } = await import("./decisions.mjs");
   const { deriveMissionPosture } = await import("./mission-posture.mjs");
   const { resumeStalledMission } = await import("./mission-reopen.mjs");
+  const { reconcileZombieSessions } = await import("./execution-session.mjs");
+  const { getBrief } = await import("./mission-brief.mjs");
+  const { getMission } = await import("./commands/missions.mjs");
+  const { isFixtureMission } = await import("./presentation/mission-filters.mjs");
+  const { listAssignments } = await import("./worker-assignment.mjs");
+
+  // Flip stale "running" sessions to failed first — otherwise posture stays
+  // busy/executing and silent recovery never sees worker_silent.
+  let zombies = [];
+  try {
+    zombies = reconcileZombieSessions({ nowMs });
+  } catch { zombies = []; }
 
   const attempted = [];
   const recovered = [];
@@ -48,6 +60,12 @@ export async function recoverSilentWorkers({ nowMs = Date.now() } = {}) {
   for (const row of listMissionsV2({ includeArchived: false })) {
     const missionId = row.mission_id || row.missionId;
     if (!missionId) continue;
+    const title = getBrief(missionId)?.title || getMission(missionId)?.title;
+    if (isFixtureMission(title, missionId)) continue;
+    // Cheap gate — skip full posture when nothing is claimed running.
+    const claimed = (listAssignments(missionId) || []).some((a) =>
+      ["running", "verification"].includes(a.status));
+    if (!claimed) continue;
 
     const posture = deriveMissionPosture(missionId);
     if (posture.id !== "worker_silent") {
@@ -117,5 +135,5 @@ export async function recoverSilentWorkers({ nowMs = Date.now() } = {}) {
     }
   }
 
-  return { attempted, recovered, escalated, skipped };
+  return { attempted, recovered, escalated, skipped, zombies };
 }

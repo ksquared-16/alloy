@@ -1,0 +1,160 @@
+{
+  "workstream": "W-4 — Service-client principal check (I-3, addresses G6)",
+  "leg": "third — re-execution under the Mission 2 reopen",
+  "date": "2026-08-06",
+  "mission": "msn_f74ed02c126c88d7ff",
+  "assignment": "asg_91e144a61569e4",
+  "context_version": "v1",
+  "context_hash": "3c36b58117e46b2363ef602b385409e7",
+  "prior_legs": [
+    { "date": "2026-07-31", "assignment": "asg_d203f547736c16", "result": "executed, green" },
+    { "date": "2026-08-04", "assignment": "asg_91e144a61569e4", "result": "re-verified, green; ceiling ratcheted 26 → 17" }
+  ],
+
+  "base": {
+    "worktree": "wt6-director-experience-dx5-5-continuation",
+    "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+    "commit": "a3e01ddb5",
+    "note": "The reopen's Wave 1 branch. The first two legs ran on hotfix/vacilando-ui-freshness-flash; this is the first W-4 run on a base carrying both the W-4 line and the Slice C public-tour line."
+  },
+
+  "arrival_state": {
+    "check_cli": "green",
+    "lock": "RED — 15 tests, 1 failing",
+    "failing_test": "W-4 · the ratchet > does not grow the advisory transitive-only set past its baseline of 3",
+    "assertion": "expected 10 to be less than or equal to 3",
+    "why_it_was_not_caught_earlier": "The numeric ceilings lived only in the vitest lock, never in prebuild. The check enforces list membership exactly in both directions, which stops a list growing WITHOUT an edit, but does not stop the edit itself. e7e585010 (2026-08-03) grew advisory_transitive_only 3 → 9 in a commit touching exactly one file — the allow-list — with next build staying green. 9187ae81a (2026-08-04) added the tenth. The breach stayed latent until the lock was run on a base containing both lines of work."
+  },
+
+  "counts": {
+    "routes": 570,
+    "holds_service_client_direct": 541,
+    "subject_resolves_principal": 526,
+    "subject_unresolved": 15,
+    "listed_exceptions": 15,
+    "listed_baseline": 0,
+    "reaches_service_client_transitive": 567,
+    "transitive_only_unresolved": 10,
+    "listed_advisory": 10
+  },
+  "counts_history": {
+    "2026-07-31": { "routes": 539, "holds": 520, "unresolved": 26, "exceptions": 21, "baseline": 5, "advisory": 3 },
+    "2026-08-04": { "routes": 559, "holds": 537, "unresolved": 17, "exceptions": 17, "baseline": 0, "advisory": 3 },
+    "2026-08-06": { "routes": 570, "holds": 541, "unresolved": 15, "exceptions": 15, "baseline": 0, "advisory": 10 }
+  },
+
+  "delta_reconciliation": {
+    "unresolved_17_to_15": "Not a fix. Two routes stopped IMPORTING a service client when Slice C moved it into guardTourActionRoute, so they left the enforced predicate and moved from `exceptions` to `advisory_transitive_only`.",
+    "moved_exceptions_to_advisory": [
+      "app/api/public/tour-booking/[token]/resolve/route.ts",
+      "app/api/public/tour-booking/[token]/slots/route.ts"
+    ],
+    "new_advisory_routes": [
+      "app/api/public/tour-booking/[token]/decline/route.ts",
+      "app/api/public/tour-booking/[token]/confirm/route.ts",
+      "app/api/public/tour-booking/[token]/reschedule/route.ts",
+      "app/api/public/tour-booking/[token]/cancel/route.ts",
+      "app/api/public/tour-booking/[token]/cancel-intent/route.ts"
+    ],
+    "advisory_arithmetic": "3 original + 2 moved + 5 new = 10",
+    "no_route_was_reclassified_to_hide_a_finding": true
+  },
+
+  "fix": {
+    "root_cause_addressed": "Ceilings moved out of the lock and into the register (`ratchet` block in web/scripts/serviceClientPrincipal.allowlist.json), enforced by web/scripts/checkServiceClientPrincipal.mjs so a breach stops prebuild.",
+    "enforced_in_both_directions": {
+      "over_ceiling": "violation `ratchet-exceeded` — the bounded count grew",
+      "under_ceiling": "stale `ratchet-slack` — the floor dropped and nobody followed it down, which is the exact state that silently handed out 9 free exceptions between 2026-08-01 and 2026-08-04",
+      "absent": "violation `ratchet-missing` — the bound cannot be deleted to make the build pass"
+    },
+    "lock_assertion_strengthened": "ceiling === live floor, replacing floor <= ceiling. Under the old assertion the 2026-08-04 slack was green; under the new one it is red the moment it appears.",
+    "ceilings_now": { "max_subject_unresolved": 15, "max_transitive_only_unresolved": 10 },
+    "advisory_ceiling_raise_is_not_a_shrink": "3 → 10 ratifies a growth that already happened and was never bounded. Recorded with its cause in the register's ratchet.history."
+  },
+
+  "red_state_demonstrations": {
+    "at_the_cli_per_10_4": {
+      "method": "ceilings temporarily set to 24 / 3, `npm run check:service-client-principal` run as a command",
+      "observed": "1 ratchet-exceeded breach + 1 ratchet-slack entry ('ceiling is 24 but the live floor is 15 — re-tighten it to 15, or it hands out 9 free exception(s)'), non-zero exit",
+      "restored": true
+    },
+    "locked_as_tests": [
+      "FAILS when the allow-list is empty — the red state",
+      "FAILS on a stale entry, so the lists cannot accumulate residue",
+      "FAILS when a ceiling is left above a fallen floor — the slack state",
+      "FAILS when the count grows past a ceiling — the breach state",
+      "FAILS when no ceiling is recorded at all, so the count cannot be left unbounded"
+    ]
+  },
+
+  "register_review": {
+    "exceptions_rechecked": 15,
+    "all_still_exist_hold_a_client_and_resolve_no_principal": true,
+    "asserted_per_entry_by_the_lock": true,
+    "advisory_reasons_verified_against_the_tree": 10,
+    "inaccurate_entries_found": 4,
+    "drifted_line_citations": [
+      { "route": "app/api/public/tour-booking/[token]/slots/route.ts", "cited": 20, "actual": 26 },
+      { "route": "app/api/public/tour-booking/[token]/reschedule/route.ts", "cited": 21, "actual": 24 },
+      { "route": "app/api/public/tour-booking/[token]/resolve/route.ts", "cited": 16, "actual": "27-35" }
+    ],
+    "substantive_drift": {
+      "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
+      "claim_that_became_false": "requiredActions is the route constant [view_tour_slots, view_tour_details] — so a decline- or cancel-only token cannot read context",
+      "reality": "REQUIRED_ACTIONS now lists all seven action kinds, including decline_tour and cancel_tour (:27-35)",
+      "is_the_code_defective": false,
+      "why": "The widening is deliberate and argued in the route header (:18-25) — any credential on the same invitation may re-read what that invitation already disclosed to that same recipient — and authorizeTourAction still proves recipient binding, expiry and revocation. The defect is in the register, not the route.",
+      "resolution": "All four corrected in place and marked CORRECTED 2026-08-06, rather than rewritten to look as though they had always been right."
+    },
+    "also_verified_this_run": "requiredActions is a module-level constant in all seven public tour routes, never request-derived; guardTourActionRoute returns the service client only after authorizeTourAction succeeds (tourActionRouteGuard.ts:76, :89)."
+  },
+
+  "validation": {
+    "check_cli": { "command": "npm run check:service-client-principal", "result": "green, exit 0" },
+    "lock": { "command": "npx vitest run tests/access/serviceClientPrincipalCheck.test.ts", "tests": 18, "passed": 18 },
+    "wave_1_suite": {
+      "command": "npx vitest run tests/access/",
+      "files": 4,
+      "tests": 84,
+      "passed": 84,
+      "breakdown": {
+        "serviceClientPrincipalCheck.test.ts": 18,
+        "analyticsRouteGates.test.ts": 42,
+        "selfAuthorityMutation.test.ts": 14,
+        "accessProductUi.test.ts": 10
+      }
+    },
+    "typecheck": { "command": "vac run typecheck:tests", "rc": 0, "class": "ok" },
+    "evidence_snapshot_regenerated": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json"
+  },
+
+  "limits": {
+    "unchanged_and_still_governing": "The check proves a principal is RESOLVED, never that the result GATES the handler. W-14 and W-15 own that proof.",
+    "newly_evidenced_this_run": [
+      {
+        "id": "coverage-escape",
+        "statement": "W-4's enforced predicate is DIRECT IMPORT. A helper refactor is an exit from it: two routes left the enforced set with no change in their authority and landed on the weaker advisory list, bounded only by a count.",
+        "closable_inside_w4": false,
+        "why_not": "Rebuilding the predicate on reachability rather than import would change what the number means.",
+        "handed_to": "W-15, as a named property to preserve"
+      },
+      {
+        "id": "reasons-are-unbound-prose",
+        "statement": "The check enforces membership and now counts. Nothing binds a reason to the line it cites, so a reviewed exception can decay into an inaccurate one with the build green throughout — the exit criterion's 'reviewed artifact rather than a residue' eroding by a route the ratchet does not cover.",
+        "current_control": "periodic human re-reading",
+        "evidence_that_it_works": "this run found 4 of 10 advisory reasons inaccurate, one of them substantively"
+      }
+    ]
+  },
+
+  "changed_files": [
+    "web/scripts/checkServiceClientPrincipal.mjs",
+    "web/scripts/serviceClientPrincipal.allowlist.json",
+    "web/tests/access/serviceClientPrincipalCheck.test.ts",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-service-client-principal-baseline.json",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-reopen-evidence.json"
+  ],
+  "routes_changed": 0,
+  "note_on_scope": "W-4 measures and freezes; it remediates nothing. No route's authority was changed by this leg."
+}

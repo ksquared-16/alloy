@@ -1,0 +1,182 @@
+{
+  "title": "W-12 — seed_default_rbac enumerates its grants (M6), and the grant-seed inventory RL-8 stands on",
+  "why_this_file_exists": "W-12's exit criterion is 'grant seeds are a readable list; adding a catalog key grants nothing implicitly'. That is a claim about every grant seed in the tree, not about one function, so the claim needs an inventory. This file is that inventory, plus the two things the plan asked M6 to establish before it lands: which half of seed_default_rbac is being changed (§11), and what the catalog-width-vs-live preflight (§11 item 5) resolved to.",
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "assignment_id": "asg_6c9043d1ef0fd8",
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "phase": "Wave 3 — Seeds enumerate grants (W-12)"
+  },
+  "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "§7 — W-12; §11 — M6; §13 — RL-8",
+
+  "the_invariant_as_authored": {
+    "plan_phrasing": "§13 RL-8: 'No SELECT over the catalog in a grant seed'.",
+    "finding": "Taken literally, that phrasing condemns three seeds that are not the defect and would have to be waived on sight. It is restated — strictly stronger in the direction that matters — as a property of the key set.",
+    "restated": "Every statement that writes role_permission_grants must take its permission keys from literals in its own text, or from an enclosing loop's literal VALUES list, and never from the contents of a catalog relation.",
+    "why_stronger": "A blanket over a non-catalog relation passes the literal reading of §13 and fails this one.",
+    "why_weaker_where_it_should_be": "A catalog join bounded by a literal IN list (20260505164000, seventeen keys; Phase 0's workflows backfill, two keys) reads the catalog and still cannot be widened by seeding a key. So does the narrowing EXISTS guard M6 itself carries.",
+    "status": "restatement raised to the Director in §7; the register row is left as authored"
+  },
+
+  "grant_seed_inventory": {
+    "method": "static, over supabase/migrations at this commit — every region (dollar-quoted body or bare statement) containing an INSERT INTO role_permission_grants, then every such statement in it, classified by what bounds its key set",
+    "instrument": "web/tests/access/grantSeedDiscovery.ts",
+    "guard": "web/tests/access/grantSeedEnumeration.test.ts",
+    "migration_files_scanned": 315,
+    "grant_writing_statements": 14,
+    "files_carrying_them": 9,
+    "by_binding": { "literal": 9, "loop-values": 1, "blanket": 4 },
+    "blanket_statements": [
+      {
+        "file": "20260329165048_remote_schema.sql",
+        "roles": ["admin", "ops"],
+        "count": 2,
+        "location": "the baseline definition of seed_default_rbac (lines 748-760)",
+        "superseded_by": "20260729120000, then by M6",
+        "note": "The ops half selects the whole catalog and then names two keys it excludes with NOT IN. A 'does the statement mention a permission key?' test reads that as enumerated, which is why the instrument strips NOT IN / NOT EXISTS / <> ALL before looking for a bound."
+      },
+      {
+        "file": "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql",
+        "roles": ["admin", "ops"],
+        "count": 2,
+        "location": "the Phase 0 rewrite of seed_default_rbac (§6, lines 292-304)",
+        "superseded_by": "M6",
+        "note": "This is the live one. It is the statement G5 names."
+      }
+    ],
+    "bounded_statements": [
+      { "file": "20260505120100_settings_users_roles_permission.sql", "binding": "literal", "keys": 1, "reads_catalog": false },
+      { "file": "20260505164000_permission_grid_keys.sql", "binding": "literal", "keys": 17, "reads_catalog": true },
+      { "file": "20260520100000_ai_enrichment_permission_keys_seed.sql", "binding": "literal", "keys": 1, "reads_catalog": false },
+      { "file": "20260523150000_config_assist_permissions_seed.sql", "binding": "literal", "keys": 10, "reads_catalog": false },
+      { "file": "20260720000000_operational_expectations_author_permission_and_idempotency.sql", "binding": "literal", "keys": 1, "reads_catalog": false },
+      { "file": "20260721000000_operational_expectations_ratification_p1_wave_c.sql", "binding": "literal", "keys": 1, "reads_catalog": false },
+      { "file": "20260722000000_operational_expectations_authority_model_p1_wave_c.sql", "binding": "loop-values", "keys": 2, "reads_catalog": false },
+      { "file": "20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql", "binding": "literal", "keys": 2, "reads_catalog": true },
+      { "file": "20260807170000_w12_seed_default_rbac_enumerated_grants.sql", "binding": "literal", "keys": 57, "reads_catalog": true, "role": "admin" },
+      { "file": "20260807170000_w12_seed_default_rbac_enumerated_grants.sql", "binding": "literal", "keys": 55, "reads_catalog": true, "role": "ops" }
+    ],
+    "ratchet": {
+      "historical_blanket_ceiling": 4,
+      "enforced": "over and under",
+      "why_both_directions": "W-4's execution record: a ceiling that can only fail upward let a 3 -> 10 breach sit latent for three days because the build could not see it. A count that drops below the ceiling means the ceiling is stale and must be re-stated deliberately."
+    }
+  },
+
+  "m6": {
+    "path": "supabase/migrations/20260807170000_w12_seed_default_rbac_enumerated_grants.sql",
+    "authored": true,
+    "applied": false,
+    "target": "shared",
+    "which_half_it_changes": {
+      "asked_by": "§11 M6 row, amended by W-11: 'seed_default_rbac is a catalog writer, not only a grant writer. Preflight must state which half it is changing.'",
+      "changed": "the grant half — two blanket SELECTs become two literal enumerations, 57 rows for admin and 55 for ops",
+      "unchanged": "the catalog half — the 57-key permission_definitions literal is reproduced byte-for-byte from 20260729120000 §6. Narrowing it is W-11/M5's, and is gated on operator review of the deletion list, which has not happened."
+    },
+    "behaviour": {
+      "claim": "behaviour-preserving against this repository's migration tree",
+      "admin": "all 57 keys — the same set the blanket produced over the tree's catalog",
+      "ops": "the same 57 less admin.users.write and admin.roles.write — the same exclusion the blanket carried as a NOT IN",
+      "is_active": "preserved as a narrowing EXISTS guard on the enumeration rather than dropped. It can remove a key from the list and can never add one, so the key set is still decided by the list. Dropping it would have been a real widening: `resolveAdminAccessCore.fetchPermissionKeys` reads grant rows without joining the catalog at all, so `is_active` shapes nothing else at runtime and the seed is the only place it does anything.",
+      "data_effect": "none. No grant row is created or removed and no existing organization is touched; this changes what future calls do."
+    },
+    "the_preflight_executed_as_an_assertion": {
+      "asked_by": "§11 M6 preflight focus: 'Catalog width vs live — a new tenant must not silently get a thinner set.'",
+      "problem": "W-11 precondition P3 records that no live measurement has been taken, and the channel (`database.read_census`) has no worker-reachable side. Every prior wave that hit this wall recorded the preflight as unrun.",
+      "resolution": "The check runs inside the migration instead, against the database being migrated, and aborts. It reads the enumeration back out of the installed function via pg_get_functiondef between sentinel markers, so the assertion cannot disagree with the function — it reads the function. If the target holds one active catalog key the admin enumeration does not name, the migration raises and the transaction rolls the function back.",
+      "second_assertion": "the ops enumeration must not name admin.users.write or admin.roles.write — the exclusion is now an absence from a list, and an absence is what an editor restores by accident",
+      "third_assertion": "if the sentinels are missing the migration refuses to leave the function installed at all",
+      "what_this_does_not_replace": "It is not a preflight. §11 requires a read-only preflight with evidence before the operator is asked to authorize. This is a fail-closed apply. The operator is still being asked to authorize an apply whose live catalog width is unmeasured — the difference is that a wrong answer aborts instead of landing."
+    },
+    "not_parsed_by_any_postgresql": {
+      "statement": "No PostgreSQL has parsed this migration. The shared local stack (alloy-cert) was started for exactly this purpose and the psql invocation was declined by the session permission layer; the lease was released rather than routed around.",
+      "consequence": "A syntax error would surface only after the operator authorizes. This is the same exposure W-6's migration carries and it is stated rather than left implied.",
+      "what_is_verified": "the static structure — the enumerated sets, the sentinels, the guard's binding to them, and the classification of every grant statement in the tree — by the RL-8 suite"
+    }
+  },
+
+  "rl8": {
+    "lock": "web/tests/access/grantSeedEnumeration.test.ts",
+    "status": "live",
+    "tests": "15 passed / 0 failed",
+    "asserts": [
+      "the end state of seed_default_rbac — the definition that survives a replay of the whole tree in filename order — contains no blanket grant",
+      "every blanket left in the tree is history: a superseded definition in an applied migration, count ratcheted in both directions at 4",
+      "the admin enumeration equals the function's own catalog literal (57), and equals the catalog W-11's independent instrument discovers from the whole tree",
+      "the ops enumeration equals that set less exactly the two keys the blanket withheld",
+      "M6's guard slices the function on sentinels the function actually carries",
+      "the three bounded seeding syntaxes in the tree are classified as bounded, and a NOT IN exclusion is not read as a bound"
+    ],
+    "proven_red_by_negative_fixture": [
+      { "fixture": "a new migration carrying a blanket grant decorated with NOT IN, in a file the instrument had never been told about", "result": "1 red — the ratchet", "removed": true },
+      { "fixture": "the blanket restored inside the enumerated function", "result": "2 red — end state and ratchet", "removed": true },
+      { "fixture": "admin.users.write added to the ops enumeration", "result": "1 red — the ops exclusion", "removed": true },
+      { "fixture": "the admin BEGIN sentinel renamed", "result": "5 red — sentinel presence, both enumeration comparisons, cross-instrument agreement, guard binding", "removed": true },
+      { "fixture": "the narrowing is_active guard dropped from the ops enumeration", "result": "1 red — narrow-not-source", "removed": true }
+    ],
+    "fixture_discipline": "Each fixture is finished because it was removed and the suite is green again, not because it went red. That is the standard W-5 and W-10 evidence repairs established.",
+    "registered": "RL-8 is an existing numbered row in §13 (status `proposed` since the plan was authored), so this workstream fills a lock it was assigned rather than minting one — the DR-12 question W-11 had to raise does not arise here."
+  },
+
+  "findings_raised_not_fixed": [
+    {
+      "id": "W12-F1",
+      "severity": "material",
+      "title": "seed_default_rbac has no caller in this repository, and every authenticated principal can call it",
+      "detail": "A full-tree census finds no trigger, no application call and no script that invokes seed_default_rbac. Its only reachable caller is PostgREST RPC. The 2026-08-04 anon revocation deliberately touched only `anon` ('It does not touch authenticated — not one grant, not one policy'), so `authenticated` retains EXECUTE on this SECURITY DEFINER function, as does service_role. Any signed-in user can therefore call it for an arbitrary org id.",
+      "consequences": [
+        "W-11 precondition P2 states the durability problem as 'creating one organization after M5 re-creates every key M5 deleted'. It is broader than that: no organization need be created. Any authenticated RPC call re-creates them.",
+        "It restores grants an operator has revoked through the grid. The function is idempotent by ON CONFLICT DO NOTHING, so it cannot remove a revocation row — but every grant it names comes back.",
+        "It re-creates the org's system role definitions via seed_default_role_definitions.",
+        "M6 shrinks the blast radius of such a call — after enumeration it can only restore the enumerated set, not whatever the catalog has since grown to — but does not close it."
+      ],
+      "why_not_fixed_here": "Revoking EXECUTE is a privilege change, not grant enumeration. It needs its own migration register row, and §33.1/DR-12 settles that minting register entries is the Director's, not a worker's. Authoring it inside M6 would also mean a shared apply whose scope is wider than the row the operator authorized.",
+      "relation_to_rl11": "RL-11 — 'a principal cannot modify its own authority' — has a TypeScript-route subject. This path is a database function and is invisible to it, in the same way user_department_access was invisible to W-2's enumeration. Recorded against RL-11's subject completeness rather than as a new lock."
+    },
+    {
+      "id": "W12-F2",
+      "severity": "informational",
+      "title": "is_active is a seeding filter, not an enforcement filter",
+      "detail": "resolveAdminAccessCore.fetchPermissionKeys selects role_permission_grants by org and role with allowed = true and never joins the catalog. Deactivating a catalog key therefore revokes nothing from anyone who already holds the grant; the API that writes grants (app/api/admin/rbac/grants/route.ts:60-68) does refuse inactive keys, and the seed did filter on it. So is_active has exactly two effects, both at write time.",
+      "why_it_matters_here": "It is why M6 keeps the predicate as a narrowing guard instead of dropping it, and it bears directly on W-11/M5's third option (deactivate rather than delete): under that option the deactivated keys stay effective for every principal that already holds them."
+    },
+    {
+      "id": "W12-F3",
+      "severity": "informational",
+      "title": "An apostrophe inside a SQL comment desynchronises every naive literal parser in this workstream",
+      "detail": "The first draft of M6 carried the word 'organization's' in a comment inside the admin enumeration. The RL-8 instrument then read that 57-key enumeration as zero keys — the lone quote shifted every subsequent quote pairing by one. It was caught because the assertion was a comparison against a number a second method produced, not a 'greater than zero' guard.",
+      "generalises_to": "permissionCatalogDiscovery.ts and every other tuple/literal parser here strip comments before pairing quotes, so they are safe; anything that slices raw text first is not. The fourth distinct way an enumerated subject has been quietly truncated in this workstream, after two file lists and one syntax pin."
+    }
+  ],
+
+  "operator_decision_required": {
+    "gate": "M6 targets `shared`. Per MIGRATION-APPLY-GATE.md it needs authorization, and per §11 'accept is not authorize-apply'.",
+    "the_ask": "Authorize the M6 apply, or keep it deferred — and separately, decide whether the EXECUTE surface in W12-F1 gets a register row.",
+    "options": [
+      { "id": "authorize_m6", "description": "Apply M6. The migration is idempotent, writes no data, and aborts if the live catalog holds an active key the enumeration does not name. It has not been parsed by any PostgreSQL." },
+      { "id": "defer_m6_until_m5", "description": "Hold M6 until W-11/M5's deletion list is reviewed and land them together. W-11 precondition P2 argues for this: M5's deletions are not durable unless the seed's catalog literal moves with them, and after M6 the RL-8 lock forces both lists to move together anyway." },
+      { "id": "number_the_execute_revocation", "description": "Mint a register row for revoking EXECUTE on seed_default_rbac from PUBLIC and authenticated (service_role retains it). W12-F1 is the finding; the migration is not authored." }
+    ],
+    "recommendation": "defer_m6_until_m5 for the apply, and number the EXECUTE revocation now. M6 is correct standing alone, but applying it before M5 means the enumeration is authored against a 57-key catalog that the operator has already been asked to cut to 22 — two shared applies where one would do. The EXECUTE surface is independent of both and is the only item here that is reachable by an unprivileged principal today."
+  },
+
+  "exit_criteria": {
+    "grant_seeds_are_a_readable_list": "met in the tree, unapplied — the live definition of seed_default_rbac enumerates 57 admin and 55 ops grants as literals; the other nine grant-writing statements in the tree were already bounded, and that is now asserted rather than assumed",
+    "adding_a_catalog_key_grants_nothing_implicitly": "met in the tree, unapplied — no grant-writing statement in the end state derives its key set from a catalog relation; RL-8 is live and proven red five ways",
+    "tier_a_no_select_over_the_catalog_in_a_grant_seed": "met as restated (no catalog-*sourced* key set). Not met as literally worded, deliberately and with the restatement raised — three pre-existing bounded seeds and M6's own narrowing guard read the catalog",
+    "tier_c_a_freshly_seeded_org_has_exactly_the_enumerated_grants": "NOT RUN. It needs an applied migration and a service-role round trip; the migration is unapplied and SUPABASE_SERVICE_ROLE_KEY is absent from every worktree env file by two-tier-env design — the same boundary RL-4's tier C and RL-5's hit"
+  },
+
+  "status": {
+    "exit": "partially met",
+    "migration_authored": true,
+    "migration_applied": false,
+    "migration_parsed_by_postgresql": false,
+    "lock_live": "RL-8",
+    "tier_c": "not run",
+    "tier_d": "not applicable — no user-visible surface changes",
+    "pushed": false
+  }
+}

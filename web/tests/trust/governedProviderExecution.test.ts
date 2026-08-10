@@ -313,8 +313,8 @@ describe("P24-3 — failures normalize to a closed vocabulary", () => {
 
     it("every failure code is covered by the closed vocabulary", () => {
         expect([...PROVIDER_EXECUTION_FAILURES].sort()).toEqual([
-            "adapter_contract_violation", "malformed_response", "provider_refused",
-            "provider_unavailable", "timeout", "transport_failure",
+            "adapter_contract_violation", "invalid_execution_budget", "malformed_response",
+            "provider_refused", "provider_unavailable", "timeout", "transport_failure",
         ]);
     });
 });
@@ -594,13 +594,20 @@ describe("P24-6 — the seam introduces no transport and no credential", () => {
         expect(registry).not.toContain("governedProviderExecution");
     });
 
-    it("the module is pure apart from an injectable clock", () => {
+    it("the module owns only execution-control side effects", () => {
+        // Phase 2.6 note: this control previously asserted NO `setTimeout`,
+        // which encoded D-19 being open. A timer is now the deadline mechanism
+        // — an execution-control primitive, not reasoning input — so the
+        // assertion is what still matters: no randomness, no identity
+        // generation, no I/O, and a clock only as the injectable default.
         const src = readFileSync(join(WEB_ROOT, SRC), "utf8");
         expect(src).not.toMatch(/Math\.random/);
         expect(src).not.toMatch(/randomUUID/);
-        expect(src).not.toMatch(/setTimeout/);
-        // Date.now appears only as the injectable default.
+        expect(src).not.toMatch(/readFileSync|writeFile/);
         expect(src.split("Date.now").length - 1).toBe(1);
+        // The timer must always be cleared — a leaked timer is a resource leak
+        // on every fast success.
+        expect(src).toContain("clearTimeout(timer)");
     });
 
     it("the test proof needs no API key and no network", () => {

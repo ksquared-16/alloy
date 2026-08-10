@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { effectiveDepartmentScopeDimensions, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { buildLifecycleCatalog, catalogEntryForProcess } from "@/lib/lifecycle/lifecycleCatalog";
 import { repairLifecycleWorkspaceVisibility } from "@/lib/lifecycle/repairLifecycleWorkspaceVisibility";
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     let body: { department_id?: string; process_id?: string } = {};
     try {
@@ -38,8 +38,7 @@ export async function POST(request: NextRequest) {
         departmentId,
         processId,
         dim,
-        access.userId,
-        access.roleKeys
+        access.userId
     );
     if (!result.ok) {
         return NextResponse.json({ error: result.error, actions: result.actions ?? [] }, { status: 400 });

@@ -483,22 +483,30 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
     completedAt: new Date(nowMs ?? Date.now()).toISOString(),
   }, { nowMs });
 
-  if (validated.validation?.passed) {
-    try {
-      const { createDeliverableReview } = await import("./deliverable-review.mjs");
-      createDeliverableReview(missionId, assignmentId, { actor, nowMs });
-    } catch { /* review layer best-effort */ }
-    // Do not auto-chain dependents here — operator must approve the Deliverable Review first.
-    return {
-      ok: true,
-      assignmentId,
-      provider: "claude",
-      workerId: wid,
-      sessionId: finished.sessionId,
-      lifecycle: "completed",
-      awaitingDeliverableReview: true,
-    };
-  }
+      if (validated.validation?.passed) {
+        try {
+          const { createDeliverableReview } = await import("./deliverable-review.mjs");
+          createDeliverableReview(missionId, assignmentId, { actor, nowMs });
+        } catch { /* review layer best-effort */ }
+        try {
+          const { scheduleImplementationChainContinue } = await import("./mission-advance.mjs");
+          scheduleImplementationChainContinue(missionId, {
+            fromAssignmentId: assignmentId,
+            actor: "director",
+            nowMs,
+          });
+        } catch { /* auto-continue best-effort */ }
+        return {
+          ok: true,
+          assignmentId,
+          provider: "claude",
+          workerId: wid,
+          sessionId: finished.sessionId,
+          lifecycle: "completed",
+          awaitingDeliverableReview: false,
+          autoContinueScheduled: true,
+        };
+      }
 
   return { ok: false, error: "validation_failed", sessionId: finished.sessionId };
 }
@@ -790,13 +798,21 @@ async function dispatchAssignmentInner(missionId, assignmentId, { slot, actor, n
           const { createDeliverableReview } = await import("./deliverable-review.mjs");
           createDeliverableReview(missionId, assignmentId, { actor, nowMs });
         } catch { /* review layer best-effort */ }
-        // Dependents unlock + chain only after operator accepts the Deliverable Review.
+        try {
+          const { scheduleImplementationChainContinue } = await import("./mission-advance.mjs");
+          scheduleImplementationChainContinue(missionId, {
+            fromAssignmentId: assignmentId,
+            actor: "director",
+            nowMs,
+          });
+        } catch { /* auto-continue best-effort */ }
         return {
           ok: true,
           assignmentId,
           provider: providerId,
           workerId: wid,
           lifecycle: "completed",
+          autoContinueScheduled: true,
         };
       }
 
@@ -940,6 +956,14 @@ export async function resumeAfterDecisionAnswer({
           const { createDeliverableReview } = await import("./deliverable-review.mjs");
           createDeliverableReview(missionId, assignmentId, { actor, nowMs });
         } catch { /* review layer best-effort */ }
+        try {
+          const { scheduleImplementationChainContinue } = await import("./mission-advance.mjs");
+          scheduleImplementationChainContinue(missionId, {
+            fromAssignmentId: assignmentId,
+            actor: "director",
+            nowMs,
+          });
+        } catch { /* auto-continue best-effort */ }
       }
       results.push({ ok: Boolean(validated.validation?.passed), sessionId: finished.sessionId, resumed: true });
     } finally {

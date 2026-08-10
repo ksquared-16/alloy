@@ -169,8 +169,7 @@ export async function validateLifecycleActivationRuntime(
     departmentId: string,
     activation: LifecycleActivationV1,
     dim?: AdminAccessScopeDimensions,
-    currentUserId?: string | null,
-    roleKeys?: readonly string[]
+    currentUserId?: string | null
 ): Promise<ValidateLifecycleActivationRuntimeResult> {
     const scopeDim = dim ?? {
         departmentScope: "all" as const,
@@ -226,18 +225,15 @@ export async function validateLifecycleActivationRuntime(
             supabase,
             orgId,
             currentUserId.trim(),
-            selectedDepartmentId,
-            { roleKeys }
+            selectedDepartmentId
         );
         workspaceAccessPass = accessState.membership_provisioned && accessState.visible_in_departments_api;
         workspaceAccessDetail =
-            roleKeys?.length && accessState.department_scope === "all"
-                ? `Portal admin/ops or department_scope=all — workspace list APIs include all active departments when the department row is active.`
-                : accessState.department_scope === "all"
-                  ? `department_scope=all — no user_department_access row required; department is visible on /workspace API when active.`
-                  : workspaceAccessPass
-                    ? `user_department_access row exists for ${selectedDepartmentId} (required when department_scope=restricted).`
-                    : `Missing user_department_access for ${selectedDepartmentId}. Run Repair workspace visibility to provision membership.`;
+            accessState.department_scope === "all"
+                ? `department_scope=all — no user_department_access row required; department is visible on /workspace API when active.`
+                : workspaceAccessPass
+                  ? `user_department_access row exists for ${selectedDepartmentId} (required when department_scope=restricted).`
+                  : `Missing user_department_access for ${selectedDepartmentId}. Ask another administrator to add this department to your department scope — W-8 removed self-provisioning.`;
     }
 
     const checks: LifecycleActivationCheckResult[] = [];

@@ -42,28 +42,18 @@ export function departmentIdAllowed(dim: AdminAccessScopeDimensions, departmentI
     return allowed.includes(String(departmentId));
 }
 
-const PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES = new Set(["admin", "ops"]);
-
 /**
- * Portal admin/ops users see all active org departments on workspace and GET /api/admin/departments,
- * regardless of user_access_profiles.department_scope=restricted.
+ * W-8 (I-20, closes C8) — no role widens a scope dimension.
+ *
+ * `portalAdminBypassesDepartmentScope` and `effectiveDepartmentScopeDimensions` used to force
+ * `departmentScope = "all"` for `admin`/`ops`, which made the department dimension configurable,
+ * displayed, and inert: since only `admin`/`ops` reach the portal, *every* principal who could use
+ * the product bypassed department scope. Both are deleted rather than neutered — a role must not be
+ * an input to the scope branch at all, so there is no parameter left to pass one through.
+ *
+ * Routes now enforce the stored dimensions via `scopeDimensionsFromAccess(access)` directly. Role
+ * governs *admission* to a route; it never widens the scope the route enforces once admitted.
  */
-export function portalAdminBypassesDepartmentScope(roleKeys: readonly string[]): boolean {
-    return roleKeys.some((k) => PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES.has(String(k).trim()));
-}
-
-/** Effective department allow-list for workspace + department list APIs. */
-export function effectiveDepartmentScopeDimensions(
-    dim: AdminAccessScopeDimensions,
-    roleKeys: readonly string[]
-): AdminAccessScopeDimensions {
-    if (!portalAdminBypassesDepartmentScope(roleKeys)) return dim;
-    return {
-        ...dim,
-        departmentScope: "all",
-        allowedDepartmentIds: [],
-    };
-}
 
 /** True when either dimension uses an explicit allow-list (restricted mode). */
 export function accessScopeRestrictsData(dim?: AdminAccessScopeDimensions | null): boolean {
