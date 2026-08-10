@@ -299,6 +299,16 @@ export default function CurrentWorkCard({
                 return;
             case "open_inline_panel":
                 setHandoffNotice(null);
+                // Mark click before shell commit so Move to Waitlist click→shell timings are measurable.
+                if (plan.surface === "subject_selector" && typeof performance !== "undefined") {
+                    try {
+                        const key =
+                            (plan.action.handlerKey ?? plan.action.key).trim() || "waitlist_child";
+                        performance.mark(`alloy-cw:${key}:click`);
+                    } catch {
+                        /* ignore */
+                    }
+                }
                 if (!isWorkspace) {
                     openWorkspace({ kind: "action", actionKey: plan.action.key });
                     return;

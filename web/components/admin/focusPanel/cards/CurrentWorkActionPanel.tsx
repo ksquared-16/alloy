@@ -4,13 +4,12 @@ import { useCallback } from "react";
 import dynamic from "next/dynamic";
 
 import CurrentWorkStageTransitionPanel from "@/components/admin/focusPanel/cards/CurrentWorkStageTransitionPanel";
+// Subject selector is small and must paint inside the shell on the same click frame — static import
+// avoids next/dynamic chunk lag after the centered shell chrome commits.
+import CurrentWorkSubjectSelectorPanel from "@/components/admin/focusPanel/cards/CurrentWorkSubjectSelectorPanel";
 
-// These three surfaces render ONLY inside a specific Current Work action branch (form_delivery /
-// communications_composer / inline_form) — never at first paint. Load them dynamically so their subtrees
-// (the ~1.4k-line Communications runtime + FamilyCommunicationWorkspaceView, Form Delivery, the tour
-// scheduler) leave the Work Unit initial-path graph; each loads when the operator opens that action.
-// (Phase 4 ownership — this also re-removes the Communications module a prior split dropped, which this
-// panel had been re-dragging onto first paint.)
+// Heavy surfaces render ONLY inside a specific Current Work action branch — never at first paint.
+// Load them dynamically so their subtrees leave the Work Unit initial-path graph.
 const CommunicationsDrawerSection = dynamic(
     () => import("@/components/admin/communications/CommunicationsDrawerSection"),
     { ssr: false },
@@ -24,10 +23,6 @@ const OpportunityTourScheduleActionModal = dynamic(
         import("@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal").then(
             (m) => m.OpportunityTourScheduleActionModal,
         ),
-    { ssr: false },
-);
-const CurrentWorkSubjectSelectorPanel = dynamic(
-    () => import("@/components/admin/focusPanel/cards/CurrentWorkSubjectSelectorPanel"),
     { ssr: false },
 );
 const CurrentWorkTourInvitationPanel = dynamic(

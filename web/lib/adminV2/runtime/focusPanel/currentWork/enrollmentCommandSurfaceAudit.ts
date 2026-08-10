@@ -62,12 +62,12 @@ export const ENROLLMENT_COMMAND_SURFACE_AUDIT: EnrollmentCommandAuditRow[] = [
     },
     {
         command: "Move to Waitlist",
-        existingRuntime: "subject_selector → waitlist_child execute per OCM",
-        existingPresentation: "Centered select → preview → confirm",
+        existingRuntime: "subject_selector → parallel waitlist_child per OCM + one refresh",
+        existingPresentation: "Centered select → preview → confirm → success auto-close",
         immediateOpen: true,
         confirmPattern: "Confirm Move to Waitlist",
         needsConvergence: false,
-        notes: "Multi-select + household→OCM ensure this sprint",
+        notes: "Warm eligible children on intent; static shell body; waitlist_child membership refresh",
     },
     {
         command: "Make Primary Contact",

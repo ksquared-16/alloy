@@ -5,6 +5,9 @@
  * enrollment child before execute. Always: select → preview → confirm → execute.
  * Supports single and multi-select (select all eligible). Zero eligible shows a
  * block — never auto-executes, never invents subjects.
+ *
+ * Shell chrome mounts immediately in CurrentWorkActionPanel; this body hydrates
+ * inside the visible shell (warm peek when available, otherwise compact loading).
  */
 
 "use client";
@@ -13,6 +16,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
+import {
+    invalidateEligibleEnrollmentChildren,
+    peekEligibleEnrollmentChildren,
+    prefetchEligibleEnrollmentChildren,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/eligibleEnrollmentChildrenWarmCache";
+import {
+    commandTimingMark,
+    commandTimingMeasure,
+    commandTimingStamp,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/commandSurfaceTiming";
 
 type EligibleChildOption = { id: string; label: string };
 
@@ -31,67 +44,160 @@ type LoadState =
 
 type Stage = "select" | "preview" | "success";
 
+function formatChildNames(labels: string[]): string {
+    const names = labels.map((label) => label.split(" · ")[0]?.trim() || label).filter(Boolean);
+    if (names.length === 0) return "Children";
+    if (names.length === 1) return names[0]!;
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+function loadStateFromWarm(
+    opportunityId: string,
+): { load: LoadState; selectedIds: string[] } | null {
+    const warm = peekEligibleEnrollmentChildren(opportunityId);
+    if (!warm) return null;
+    if (warm.status === "none" || warm.subjects.length === 0) {
+        return {
+            load: {
+                phase: "none",
+                message:
+                    warm.message?.trim()
+                    || "No eligible child is available for Waitlist on this family.",
+            },
+            selectedIds: [],
+        };
+    }
+    return {
+        load: { phase: "ready", subjects: warm.subjects },
+        selectedIds: warm.subjects.map((s) => s.id),
+    };
+}
+
 export default function CurrentWorkSubjectSelectorPanel({
     action,
     opportunityId,
     onClose,
     onComplete,
 }: Props) {
-    const [load, setLoad] = useState<LoadState>({ phase: "loading" });
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const warmSeed = useMemo(() => loadStateFromWarm(opportunityId), [opportunityId]);
+    const [load, setLoad] = useState<LoadState>(() => warmSeed?.load ?? { phase: "loading" });
+    const [selectedIds, setSelectedIds] = useState<string[]>(() => warmSeed?.selectedIds ?? []);
     const [stage, setStage] = useState<Stage>("select");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successCount, setSuccessCount] = useState(0);
+    const [successNames, setSuccessNames] = useState<string>("");
     const submitLock = useRef(false);
+    const closeTimerRef = useRef<number | null>(null);
+    const subjectsRenderedMark = useRef(false);
     const commandKey = (action.handlerKey ?? action.key).trim() || "waitlist_child";
-    const commandLabel = action.label?.trim() || "Move to Waitlist";
+
+    useEffect(() => {
+        commandTimingMark(commandKey, "shell_visible");
+        commandTimingMeasure(commandKey, "click_to_shell", "click", "shell_visible");
+        return () => {
+            if (closeTimerRef.current != null) {
+                window.clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+        };
+    }, [commandKey]);
 
     const executeForChildren = useCallback(
-        async (ocmIds: string[]) => {
+        async (ocmIds: string[], labels: string[]) => {
             if (submitLock.current || ocmIds.length === 0) return;
             submitLock.current = true;
             setBusy(true);
             setError(null);
+            commandTimingMark(commandKey, "confirm");
             try {
-                for (const ocmId of ocmIds) {
-                    const res = await fetch("/api/admin/actions/execute", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            action_key: commandKey,
-                            entity_type: "opportunity_customer_member",
-                            entity_id: ocmId,
-                            context: {
-                                surface: "focus_panel",
-                                origin: "operator",
-                            },
-                            confirmation: { confirmed: true },
-                        }),
+                // Independent child OCM commits — parallelize; one consolidated refresh afterward.
+                const settled = await Promise.allSettled(
+                    ocmIds.map(async (ocmId, index) => {
+                        const res = await fetch("/api/admin/actions/execute", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                action_key: commandKey,
+                                entity_type: "opportunity_customer_member",
+                                entity_id: ocmId,
+                                context: {
+                                    surface: "focus_panel",
+                                    origin: "operator",
+                                },
+                                confirmation: { confirmed: true },
+                            }),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as {
+                            ok?: boolean;
+                            error?: { message?: string; code?: string };
+                            message?: string;
+                        };
+                        if (!res.ok || json.ok === false) {
+                            throw new Error(
+                                json.error?.message
+                                    ?? json.message
+                                    ?? `Could not move ${labels[index]?.split(" · ")[0] ?? "child"}.`,
+                            );
+                        }
+                        return { ocmId, label: labels[index] ?? ocmId };
+                    }),
+                );
+                commandTimingMark(commandKey, "mutation_done");
+                commandTimingMeasure(commandKey, "confirm_to_mutation", "confirm", "mutation_done");
+
+                const succeeded = settled
+                    .filter((row): row is PromiseFulfilledResult<{ ocmId: string; label: string }> =>
+                        row.status === "fulfilled",
+                    )
+                    .map((row) => row.value);
+                const failed = settled
+                    .filter((row): row is PromiseRejectedResult => row.status === "rejected")
+                    .map((row) =>
+                        row.reason instanceof Error ? row.reason.message : "Could not complete this action.",
+                    );
+
+                if (succeeded.length > 0) {
+                    invalidateEligibleEnrollmentChildren(opportunityId);
+                    commandTimingMark(commandKey, "refresh_dispatch");
+                    // One canonical operational refresh — queue membership + Focus Panel scopes.
+                    // Membership classification for waitlist_child drives Waitlist/Lead pill + row refetch
+                    // even when child-grain queue rows do not share the family opportunity id.
+                    dispatchOpportunityDrawerScopedUpdate(opportunityId, commandKey, [
+                        "activity",
+                        "header_actions",
+                    ]);
+                    commandTimingMeasure(commandKey, "mutation_to_refresh", "mutation_done", "refresh_dispatch");
+                    commandTimingStamp(commandKey, "refresh_dispatched", {
+                        childCount: succeeded.length,
+                        opportunityId,
+                        failedCount: failed.length,
                     });
-                    const json = (await res.json().catch(() => ({}))) as {
-                        ok?: boolean;
-                        error?: { message?: string; code?: string };
-                        message?: string;
-                    };
-                    if (!res.ok || json.ok === false) {
-                        throw new Error(
-                            json.error?.message
-                                ?? json.message
-                                ?? "Could not complete this action.",
-                        );
-                    }
                 }
-                dispatchOpportunityDrawerScopedUpdate(opportunityId, commandKey, [
-                    "activity",
-                    "header_actions",
-                ]);
-                setSuccessCount(ocmIds.length);
+
+                if (failed.length > 0) {
+                    setBusy(false);
+                    submitLock.current = false;
+                    setError(
+                        succeeded.length > 0
+                            ? `Moved ${succeeded.length}, but ${failed[0]}`
+                            : failed[0]!,
+                    );
+                    return;
+                }
+
+                setSuccessCount(succeeded.length);
+                setSuccessNames(formatChildNames(succeeded.map((row) => row.label)));
                 setStage("success");
                 setBusy(false);
                 submitLock.current = false;
-                // Brief success acknowledgement, then close through the same surface.
-                window.setTimeout(() => onComplete(), 700);
+                // Concise success acknowledgement, then auto-close to normal Focus Panel.
+                closeTimerRef.current = window.setTimeout(() => {
+                    commandTimingMark(commandKey, "closed");
+                    commandTimingMeasure(commandKey, "refresh_to_close", "refresh_dispatch", "closed");
+                    onComplete();
+                }, 900);
             } catch (e) {
                 setBusy(false);
                 submitLock.current = false;
@@ -103,10 +209,74 @@ export default function CurrentWorkSubjectSelectorPanel({
 
     useEffect(() => {
         let cancelled = false;
+        const applyPayload = (json: {
+            ok?: boolean;
+            data?: {
+                status?: string;
+                message?: string | null;
+                subjects?: EligibleChildOption[];
+            };
+            error?: { message?: string };
+        }, resOk: boolean) => {
+            if (cancelled) return;
+            if (!resOk || json.ok === false) {
+                setLoad({
+                    phase: "error",
+                    message: json.error?.message ?? "Could not load children for this family.",
+                });
+                return;
+            }
+            const subjects = json.data?.subjects ?? [];
+            const status = json.data?.status;
+            if (status === "none" || subjects.length === 0) {
+                setLoad({
+                    phase: "none",
+                    message:
+                        json.data?.message?.trim()
+                        || "No eligible child is available for Waitlist on this family.",
+                });
+                return;
+            }
+            setLoad({ phase: "ready", subjects });
+            setSelectedIds((prev) => (prev.length > 0 ? prev : subjects.map((s) => s.id)));
+            if (!subjectsRenderedMark.current) {
+                subjectsRenderedMark.current = true;
+                commandTimingMark(commandKey, "subjects_ready");
+                commandTimingMeasure(commandKey, "shell_to_subjects", "shell_visible", "subjects_ready");
+            }
+        };
+
+        // Warm path: already painted from peek — re-verify in background (single fetch, de-duped).
+        if (warmSeed?.load.phase === "ready") {
+            if (!subjectsRenderedMark.current) {
+                subjectsRenderedMark.current = true;
+                commandTimingMark(commandKey, "subjects_ready");
+                commandTimingMeasure(commandKey, "shell_to_subjects", "shell_visible", "subjects_ready");
+            }
+            void prefetchEligibleEnrollmentChildren(opportunityId)?.then((value) => {
+                if (cancelled || !value) return;
+                applyPayload(
+                    {
+                        ok: true,
+                        data: {
+                            status: value.status,
+                            message: value.message,
+                            subjects: value.subjects,
+                        },
+                    },
+                    true,
+                );
+            });
+            return () => {
+                cancelled = true;
+            };
+        }
+
         (async () => {
             try {
                 const res = await fetch(
                     `/api/admin/opportunities/${encodeURIComponent(opportunityId)}/eligible-enrollment-children`,
+                    { credentials: "include" },
                 );
                 const json = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
@@ -117,28 +287,7 @@ export default function CurrentWorkSubjectSelectorPanel({
                     };
                     error?: { message?: string };
                 };
-                if (cancelled) return;
-                if (!res.ok || json.ok === false) {
-                    setLoad({
-                        phase: "error",
-                        message: json.error?.message ?? "Could not load children for this family.",
-                    });
-                    return;
-                }
-                const subjects = json.data?.subjects ?? [];
-                const status = json.data?.status;
-                if (status === "none" || subjects.length === 0) {
-                    setLoad({
-                        phase: "none",
-                        message:
-                            json.data?.message?.trim()
-                            || "No eligible child is available for Waitlist on this family.",
-                    });
-                    return;
-                }
-                setLoad({ phase: "ready", subjects });
-                // Default: all eligible selected when multiple; single selected when one.
-                setSelectedIds(subjects.map((s) => s.id));
+                applyPayload(json, res.ok);
             } catch {
                 if (!cancelled) {
                     setLoad({
@@ -151,7 +300,7 @@ export default function CurrentWorkSubjectSelectorPanel({
         return () => {
             cancelled = true;
         };
-    }, [opportunityId]);
+    }, [commandKey, opportunityId, warmSeed]);
 
     const subjects = load.phase === "ready" ? load.subjects : [];
     const selectedSubjects = useMemo(
@@ -176,6 +325,7 @@ export default function CurrentWorkSubjectSelectorPanel({
                 className="alloy-os-currentwork__action-panel-body"
                 data-work-action-panel-state="resolving-subject"
                 data-command-surface-section="subject_selector"
+                data-command-surface-hydrating="true"
             >
                 <p className="text-sm font-medium text-alloy-midnight">Who should move to Waitlist?</p>
                 <p className="alloy-os-household__row-detail mt-1">Loading eligible children…</p>
@@ -210,13 +360,14 @@ export default function CurrentWorkSubjectSelectorPanel({
                 className="alloy-os-currentwork__action-panel-body space-y-2"
                 data-work-action-panel-state="subject-success"
                 data-command-surface-section="success"
+                data-testid="current-work-subject-success"
             >
-                <p className="text-sm font-medium text-alloy-midnight">
+                <p className="text-sm font-semibold text-alloy-midnight">Moved to Waitlist</p>
+                <p className="text-sm text-alloy-midnight/80">
                     {successCount === 1
-                        ? "Moved to Waitlist."
-                        : `Moved ${successCount} children to Waitlist.`}
+                        ? `${successNames || "Child"} was moved successfully.`
+                        : `${successNames || `${successCount} children`} were moved successfully.`}
                 </p>
-                <p className="text-xs text-alloy-midnight/60">Updating this record…</p>
             </div>
         );
     }
@@ -263,7 +414,12 @@ export default function CurrentWorkSubjectSelectorPanel({
                         disabled={busy || selectedSubjects.length === 0}
                         data-testid="current-work-subject-selector-confirm"
                         data-command-surface-primary
-                        onClick={() => void executeForChildren(selectedSubjects.map((s) => s.id))}
+                        onClick={() =>
+                            void executeForChildren(
+                                selectedSubjects.map((s) => s.id),
+                                selectedSubjects.map((s) => s.label),
+                            )
+                        }
                     >
                         {busy ? "Working…" : "Move to Waitlist"}
                     </button>
@@ -348,6 +504,8 @@ export default function CurrentWorkSubjectSelectorPanel({
                     data-command-surface-primary
                     onClick={() => {
                         setError(null);
+                        commandTimingMark(commandKey, "continue");
+                        commandTimingMeasure(commandKey, "continue_to_preview", "continue", "continue");
                         setStage("preview");
                     }}
                 >
