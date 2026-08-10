@@ -21,7 +21,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
+import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 import { createOpenAiCompatibleStructuredProvider } from "@/lib/ai/openAiCompatibleStructuredProvider";
 import { createDisabledAiProvider } from "@/lib/ai/disabledStructuredProvider";
 import type { AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
@@ -34,12 +34,17 @@ import { createProviderBackedAttentionEnrichmentStrategy } from "@/lib/trust/cap
 
 const AGENT_KEY = "needs_attention_suggestion_enrichment";
 const PRIVACY: PrivacyPolicyV1 = { key: "operator_safe_v1", pii_mode: "standard", prohibited_classes: [] };
+// Built from the REAL producer and then narrowed, rather than cast into shape.
+// A cast here hid fixture defects until CI typechecked the file; the default
+// supplies `schema_version`, `logging_mode` and `retention_mode` I would
+// otherwise have had to guess.
 const AI_POLICY: ResolvedAiOrgPolicyV1 = {
+    ...parseAiPolicyFromMetadata({}),
     enabled: true,
     provider: "openai",
     pii_mode: "standard",
     allowed_features: ["draft_enrichment"],
-} as ResolvedAiOrgPolicyV1;
+};
 
 function suggestion(overrides?: {
     last_activity_summary?: string;
@@ -60,7 +65,7 @@ function suggestion(overrides?: {
             reason_codes: [overrides?.primary_reason_code ?? "tour_no_followup"],
             activity_signal_key: overrides?.activity_signal_key === undefined ? "no_touch_14d" : overrides.activity_signal_key,
         },
-        next_action: { key: "send_followup", label: "Send follow-up", action_family: "communication", confidence: "deterministic" },
+        next_action: { key: "send_followup", label: "Send follow-up", action_family: "follow_up", confidence: "deterministic" },
         reasoning: {
             summary: `Operational attention: Tour with no follow-up. Last activity: ${prose}.`,
             factors: [{ code: "tour_no_followup", label: "Tour", severity: "high", sla_tier: "t2" }],
@@ -76,7 +81,7 @@ function suggestion(overrides?: {
 }
 
 function eligible(s: AttentionSuggestionV1): EligibleReasoningInputV1 {
-    const pkg = buildInformationPackage({ spec: attentionEnrichmentInformationSpec, source: s, source_refs: { org_id: "org-1" } });
+    const pkg = buildInformationPackage({ spec: attentionEnrichmentInformationSpec, source: s, sourceRefs: { org_id: "org-1" } });
     if (!pkg.ok) throw new Error(`package refused: ${pkg.refusal_code}`);
     const e = buildEligibleReasoningInput({ package: pkg.package, policy: PRIVACY });
     if (!e.ok) throw new Error(`privacy refused: ${e.refusal_code}`);

@@ -38,7 +38,7 @@ const SUGGESTION: AttentionSuggestionV1 = {
         reason_codes: ["tour_no_followup"],
         activity_signal_key: "no_touch_14d",
     },
-    next_action: { key: "send_followup", label: "Send follow-up", action_family: "communication", confidence: "deterministic" },
+    next_action: { key: "send_followup", label: "Send follow-up", action_family: "follow_up", confidence: "deterministic" },
     reasoning: {
         summary: `Operational attention: Tour with no follow-up. Last activity: ${ARBITRARY_PROSE}.`,
         factors: [{ code: "tour_no_followup", label: "Tour with no follow-up", severity: "high", sla_tier: "t2" }],
@@ -58,7 +58,7 @@ function eligibleInput(): EligibleReasoningInputV1 {
     const pkg = buildInformationPackage({
         spec: attentionEnrichmentInformationSpec,
         source: SUGGESTION,
-        source_refs: { org_id: "org-1" },
+        sourceRefs: { org_id: "org-1" },
     });
     if (!pkg.ok) throw new Error(`fixture package refused: ${pkg.refusal_code}`);
     const eligible = buildEligibleReasoningInput({ package: pkg.package, policy: POLICY });

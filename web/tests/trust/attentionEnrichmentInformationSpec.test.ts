@@ -42,7 +42,7 @@ const SUGGESTION: AttentionSuggestionV1 = {
         reason_codes: ["tour_no_followup", "decision_pending"],
         activity_signal_key: "no_touch_14d",
     },
-    next_action: { key: "send_followup", label: "Send follow-up", action_family: "communication", confidence: "deterministic" },
+    next_action: { key: "send_followup", label: "Send follow-up", action_family: "follow_up", confidence: "deterministic" },
     reasoning: {
         // The rendered summary, including the unbounded fallback clause. Present
         // on the source precisely so the tests can prove it does NOT get read.
@@ -62,7 +62,7 @@ const SUGGESTION: AttentionSuggestionV1 = {
 };
 
 function build(source: AttentionSuggestionV1 = SUGGESTION) {
-    return buildInformationPackage({ spec: attentionEnrichmentInformationSpec, source, source_refs: { org_id: "org-1" } });
+    return buildInformationPackage({ spec: attentionEnrichmentInformationSpec, source, sourceRefs: { org_id: "org-1" } });
 }
 
 describe("P28A-1 — the package now builds (Gate A prerequisite 1)", () => {
@@ -217,6 +217,9 @@ describe("P28A-4 — the declared surface, and nothing beyond it", () => {
         const built = build();
         expect(built.ok).toBe(true);
         if (!built.ok) return;
+        // Asserted explicitly: passing `source_refs` instead of `sourceRefs`
+        // was silently ignored and this control did not notice. It does now.
+        expect(built.package.provenance.source_refs).toEqual({ org_id: "org-1" });
         const prov = JSON.stringify(built.package.provenance);
         expect(prov).toContain("suggested_content.template_key");
         expect(prov).not.toContain(CONTACT_NAME);
