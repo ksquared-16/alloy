@@ -53,10 +53,24 @@
  */
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import { ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_BACKED_CLASS_KEY } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/keys";
 import type { InformationPackageSpecV1 } from "@/lib/trust/information/informationPackage";
 
-/** Decision class this spec feeds. Matches the registered enrichment decision class. */
-export const ATTENTION_ENRICHMENT_DECISION_CLASS_KEY = "attention_suggestion_enrichment" as const;
+/**
+ * The class this spec feeds — the PROVIDER-BACKED one.
+ *
+ * An Information Package exists to answer "what may leave the platform", and
+ * only the provider-backed class can send anything anywhere. The deterministic
+ * class keeps the Phase 1 compatibility path (`resolvedInformation` +
+ * `semanticMap`) and needs no package, so binding this spec to it would declare
+ * an egress surface for a path that has no egress.
+ *
+ * The binding is load-bearing, not cosmetic: the runtime refuses a governed
+ * input whose `decision_class_key` differs from the contract's, so this constant
+ * is what makes a package built here usable by that contract at all.
+ */
+export const ATTENTION_ENRICHMENT_PROVIDER_BACKED_CLASS_KEY =
+    ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_BACKED_CLASS_KEY;
 
 export const ATTENTION_ENRICHMENT_SPEC_KEY = "attention_suggestion_enrichment_input" as const;
 /** v2: rendered prose replaced by the facts it was rendered from. */
@@ -78,7 +92,7 @@ function scalarsOrNull(values: readonly (string | undefined | null)[]): readonly
 export const attentionEnrichmentInformationSpec: InformationPackageSpecV1<AttentionSuggestionV1> = {
     key: ATTENTION_ENRICHMENT_SPEC_KEY,
     version: ATTENTION_ENRICHMENT_SPEC_VERSION,
-    decision_class_key: ATTENTION_ENRICHMENT_DECISION_CLASS_KEY,
+    decision_class_key: ATTENTION_ENRICHMENT_PROVIDER_BACKED_CLASS_KEY,
     source_kind: "needs_attention_suggestion",
     elements: [
         {

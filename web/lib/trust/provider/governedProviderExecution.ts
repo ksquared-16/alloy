@@ -189,6 +189,39 @@ export type ProviderAdapterV1 = {
     ): Promise<ProviderAdapterResponseV1>;
 };
 
+/**
+ * A CONFIGURED port — an adapter together with the identity it was configured
+ * to reach (Phase 2.8 Gate C).
+ *
+ * The two travel together because they are one configuration act. Trust must
+ * put a `requested_provider_key` on every governed request, and it must not be
+ * the one deciding what that key says: the vendor's name is not a fact Trust
+ * knows, may name, or could keep correct — the boundary control forbids the
+ * literal, and a hardcoded copy would silently disagree the moment the
+ * deployment pointed somewhere else.
+ *
+ * So the owner outside Trust that resolves the transport also states what it
+ * resolved, and hands both across in one object. Note the asymmetry that keeps
+ * D-44 intact: this is what was REQUESTED. What actually answered comes back as
+ * `ProviderIdentityV1` from the adapter, and that is the only identity Trust
+ * records.
+ */
+export type GovernedReasoningProviderPortV1 = {
+    readonly adapter: ProviderAdapterV1;
+    /** Identity of the provider this port was configured to reach. Requested, not observed. */
+    readonly requested_provider_key: string;
+    /** Optional: a deployment may leave model choice to the provider. */
+    readonly requested_model_key?: string;
+};
+
+/**
+ * Resolves the configured port, or reports that none is configured.
+ *
+ * A function, not a value, and `null` is a first-class answer: a provider that
+ * is not configured is not a provider. Implemented outside `lib/trust`.
+ */
+export type GovernedReasoningProviderPortResolverV1 = () => GovernedReasoningProviderPortV1 | null;
+
 export type GovernedProviderExecutionResultV1 =
     | {
           readonly ok: true;

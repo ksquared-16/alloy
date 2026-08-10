@@ -67,6 +67,24 @@ export type TrustRuntimeExecution = {
     readonly package: DecisionPackageV1;
     /** Steps actually executed, in order. Certification scenario S6 reads this. */
     readonly step_trace: readonly TrustRuntimeStep[];
+    /**
+     * Provider facts, when a provider participated (Phase 2.8 Gate C).
+     *
+     * NOT on the Decision Package, deliberately — ADR-2 keeps provider and model
+     * identity off the package, and this does not smuggle it back on. It is an
+     * execution-local report of the same values already persisted to
+     * `trust_reasoning_usage`, surfaced so a consumer can attribute its own
+     * telemetry truthfully rather than re-deriving a provider name from org
+     * policy.
+     *
+     * That re-derivation is precisely what D-44 forbids: org policy records what
+     * was ASKED for, and only the adapter knows what answered. Absent means no
+     * provider participated — a fact a consumer may report as such.
+     *
+     * Present on refusals too, for the reason it sits on both branches of
+     * `ReasoningOutcome`: a call that failed still identifies who failed.
+     */
+    readonly provider_execution?: ReasoningCostReport["provider_execution"];
 };
 
 export type TrustRuntimeInput = {
@@ -604,7 +622,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
         strategyKind: selection.strategy.kind,
         level: selection.escalation_level,
     });
-    return { package: pkg, step_trace: trace };
+    return { package: pkg, step_trace: trace, ...(providerExecution ? { provider_execution: providerExecution } : {}) };
 
     // ---- refusal / completion helpers --------------------------------------
 
@@ -720,7 +738,11 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             strategyKind: econ?.strategyKind ?? null,
             level: econ?.level ?? 0,
         });
-        return { package: refusal, step_trace: trace };
+        return {
+            package: refusal,
+            step_trace: trace,
+            ...(providerExecution ? { provider_execution: providerExecution } : {}),
+        };
     }
 }
 

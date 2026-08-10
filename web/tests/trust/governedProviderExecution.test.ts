@@ -578,9 +578,21 @@ describe("P24-6 — the seam introduces no transport and no credential", () => {
         }
     });
 
-    it("the existing ungoverned OpenAI branch is untouched (D-5)", () => {
+    /**
+     * Phase 2.4 asserted the route STILL reached the ungoverned envelope, as
+     * proof that building the seam had not silently rerouted live traffic
+     * (D-5). Phase 2.8 Gate C is the slice that deliberately reroutes it, so
+     * this assertion inverts. That inversion is the phase gate, not a
+     * regression — and inverting it is why the control was written as a
+     * positive in the first place.
+     *
+     * What the control actually protects is unchanged and still asserted: this
+     * module stays transport-free and capability-free. It never knew about the
+     * route, and the route no longer knows about the bypass.
+     */
+    it("the ungoverned branch is no longer reachable from the route (Gate C), and this module still knows nothing of it", () => {
         const route = readFileSync(join(WEB_ROOT, "app/api/admin/ai/enrich-attention-suggestion/route.ts"), "utf8");
-        expect(route).toContain("enrichAttentionSuggestionStubEnvelope");
+        expect(route).not.toContain("enrichAttentionSuggestionStubEnvelope");
         const src = readFileSync(join(WEB_ROOT, SRC), "utf8");
         expect(src).not.toContain("enrichAttentionSuggestion");
         expect(src).not.toContain("lib/ai/");

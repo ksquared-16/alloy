@@ -106,18 +106,20 @@ describe("P28C0-1 — deterministic strategies are unaffected", () => {
 describe("P28C0-2 — the provider strategy is registry-safe", () => {
     it("constructs from STABLE dependencies only — no request state in the factory", () => {
         const s: ReasoningStrategyV1 = createProviderBackedAttentionEnrichmentStrategy({
-            adapter: createOpenAiCompatibleProviderAdapter({
-                provider_key: "openai",
-                base_url: "https://api.openai.com",
-                model: "gpt-4o-mini",
-                api_key: "sk-test-c0",
+            resolvePort: () => ({
+                adapter: createOpenAiCompatibleProviderAdapter({
+                    provider_key: "openai",
+                    base_url: "https://api.openai.com",
+                    model: "gpt-4o-mini",
+                    api_key: "sk-test-c0",
+                }),
+                requested_provider_key: "openai",
+                requested_model_key: "gpt-4o-mini",
             }),
-            requested_provider_key: "openai",
-            requested_model_key: "gpt-4o-mini",
             deadline_ms: 20_000,
         });
         expect(s.kind).toBe("small_reasoning");
-        expect(s.decision_class_key).toBe("attention_suggestion_enrichment");
+        expect(s.decision_class_key).toBe("attention_suggestion_enrichment_provider_backed");
     });
 
     it("a SINGLE constructed instance serves two executions with different governed inputs", async () => {
@@ -140,13 +142,15 @@ describe("P28C0-2 — the provider strategy is registry-safe", () => {
 
         // Constructed ONCE, as the composition root would.
         const s = createProviderBackedAttentionEnrichmentStrategy({
-            adapter: createOpenAiCompatibleProviderAdapter({
-                provider_key: "openai",
-                base_url: "https://api.openai.com",
-                model: "gpt-4o-mini",
-                api_key: "sk-test-c0",
+            resolvePort: () => ({
+                adapter: createOpenAiCompatibleProviderAdapter({
+                    provider_key: "openai",
+                    base_url: "https://api.openai.com",
+                    model: "gpt-4o-mini",
+                    api_key: "sk-test-c0",
+                }),
+                requested_provider_key: "openai",
             }),
-            requested_provider_key: "openai",
             deadline_ms: 20_000,
         });
 
@@ -176,13 +180,15 @@ describe("P28C0-2 — the provider strategy is registry-safe", () => {
 
         const input = eligibleInput();
         const s = createProviderBackedAttentionEnrichmentStrategy({
-            adapter: createOpenAiCompatibleProviderAdapter({
-                provider_key: "openai",
-                base_url: "https://api.openai.com",
-                model: "gpt-4o-mini",
-                api_key: "sk-test-c0",
+            resolvePort: () => ({
+                adapter: createOpenAiCompatibleProviderAdapter({
+                    provider_key: "openai",
+                    base_url: "https://api.openai.com",
+                    model: "gpt-4o-mini",
+                    api_key: "sk-test-c0",
+                }),
+                requested_provider_key: "openai",
             }),
-            requested_provider_key: "openai",
             deadline_ms: 20_000,
         });
         await s.reason({ context: {} as never, nowIso: "t", eligibleReasoningInput: input, correlation_id: "c1" });
@@ -195,13 +201,15 @@ describe("P28C0-2 — the provider strategy is registry-safe", () => {
 
     it("refuses rather than transmitting when no governed input is supplied", async () => {
         const s = createProviderBackedAttentionEnrichmentStrategy({
-            adapter: createOpenAiCompatibleProviderAdapter({
-                provider_key: "openai",
-                base_url: "https://api.openai.com",
-                model: "gpt-4o-mini",
-                api_key: "sk-test-c0",
+            resolvePort: () => ({
+                adapter: createOpenAiCompatibleProviderAdapter({
+                    provider_key: "openai",
+                    base_url: "https://api.openai.com",
+                    model: "gpt-4o-mini",
+                    api_key: "sk-test-c0",
+                }),
+                requested_provider_key: "openai",
             }),
-            requested_provider_key: "openai",
             deadline_ms: 20_000,
         });
         const fetchMock = vi.fn();

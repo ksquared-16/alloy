@@ -20,7 +20,25 @@ import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informati
 import type { PrivacyPolicyV1 } from "@/lib/trust/privacy/privacyEngine";
 import { attentionEnrichmentInformationSpec } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/informationSpec";
 import { createProviderBackedAttentionEnrichmentStrategy } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/providerBackedStrategy";
-import { validateAttentionEnrichmentResult } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/validationPolicy";
+import type { GovernedReasoningProviderPortResolverV1 } from "@/lib/trust/provider/governedProviderExecution";
+import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
+import { orchestrateValidation } from "@/lib/trust/validation/validationOrchestrator";
+
+/**
+ * Gate C moved content validation off the strategy and onto the registered
+ * policy. These tests followed it: where they used to call a capability-local
+ * validator, they now run the policy the registry actually resolves — which is
+ * the thing the runtime runs.
+ */
+const REGISTERED_VALIDATION_POLICY_KEY = "attention_suggestion_enrichment_v1";
+
+async function validateThroughRegisteredPolicy(recommendation: unknown): Promise<boolean> {
+    const result = await orchestrateValidation({
+        policy_key: REGISTERED_VALIDATION_POLICY_KEY,
+        recommendation: recommendation as Record<string, unknown>,
+    });
+    return result.ok && result.report.passed;
+}
 
 const API_KEY = "sk-test-GATE-A-DO-NOT-LEAK";
 const CONTACT_NAME = "Dana Okonkwo";
@@ -75,11 +93,15 @@ function adapter() {
     });
 }
 
-function strategy(overrides?: { deadline_ms?: number }) {
+function strategy(overrides?: { deadline_ms?: number; resolvePort?: GovernedReasoningProviderPortResolverV1 }) {
     return createProviderBackedAttentionEnrichmentStrategy({
-        adapter: adapter(),
-        requested_provider_key: "openai",
-        requested_model_key: "gpt-4o-mini",
+        resolvePort:
+            overrides?.resolvePort ??
+            (() => ({
+                adapter: adapter(),
+                requested_provider_key: "openai",
+                requested_model_key: "gpt-4o-mini",
+            })),
         deadline_ms: overrides?.deadline_ms ?? 20_000,
     });
 }
@@ -130,7 +152,10 @@ describe("P28GA-1 — the governed chain is the one that runs", () => {
     it("the strategy declares model reasoning, not deterministic", () => {
         const s = strategy();
         expect(s.kind).toBe("small_reasoning");
-        expect(s.decision_class_key).toBe("attention_suggestion_enrichment");
+        // Gate C: it satisfies the provider-backed class, never the
+        // deterministic one. That binding is what keeps the certified
+        // deterministic path unreachable by a provider.
+        expect(s.decision_class_key).toBe("attention_suggestion_enrichment_provider_backed");
     });
 
     it("the real governed seam is invoked — the adapter receives the Eligible Reasoning Input", async () => {
@@ -182,37 +207,70 @@ describe("P28GA-2 — valid output becomes a capability result", () => {
     });
 });
 
-describe("P28GA-3 — Trust owns business validation, not transport", () => {
-    it("the registered policy is the thing that decides validity", () => {
-        expect(validateAttentionEnrichmentResult(VALID_ENRICHMENT).ok).toBe(true);
-        expect(validateAttentionEnrichmentResult({ nonsense: true }).ok).toBe(false);
+/**
+ * Gate C rewrote this block, and the rewrite is the point.
+ *
+ * Under Gate A the strategy validated the answer itself, so an invalid output
+ * came back as `ok: false` from `reason()`. That was a SECOND copy of the
+ * registered policy — the exact duplicated authority Phase 2.8 exists to
+ * remove — and it has been deleted. The strategy now forwards; the registered
+ * policy judges; the runtime enforces.
+ *
+ * So the assertions moved rather than weakened: what used to be "the strategy
+ * refused" is now "the strategy forwarded AND the registered policy refuses",
+ * and the end-to-end consequence (`failed_validation`, null overlay) is proven
+ * through the real runtime in the Gate C suite.
+ */
+describe("P28GA-3 — Trust owns business validation, and the strategy is not Trust", () => {
+    it("the REGISTERED policy is the thing that decides validity", async () => {
+        expect(await validateThroughRegisteredPolicy(VALID_ENRICHMENT)).toBe(true);
+        expect(await validateThroughRegisteredPolicy({ nonsense: true })).toBe(false);
     });
 
-    it("an invalid enum is rejected", async () => {
-        const { exec } = run({ ...VALID_ENRICHMENT, provider_report: { provider_key: "impostor", execution_mode: "live" } });
+    it("the registry resolves exactly one enrichment validation policy, shared by both classes", () => {
+        expect(TRUST_REGISTRY.getValidationPolicy(REGISTERED_VALIDATION_POLICY_KEY)).not.toBeNull();
+        expect(TRUST_REGISTRY.requireDecisionClass("attention_suggestion_enrichment").validation_policy_key).toBe(
+            REGISTERED_VALIDATION_POLICY_KEY,
+        );
+        expect(
+            TRUST_REGISTRY.requireDecisionClass("attention_suggestion_enrichment_provider_backed")
+                .validation_policy_key,
+        ).toBe(REGISTERED_VALIDATION_POLICY_KEY);
+    });
+
+    it("an invalid enum is forwarded by the strategy and refused by the policy", async () => {
+        const invalid = { ...VALID_ENRICHMENT, provider_report: { provider_key: "impostor", execution_mode: "live" } };
+        const { exec } = run(invalid);
         const outcome = await exec();
-        expect(outcome.ok).toBe(false);
-        expect(!outcome.ok && outcome.refusal_code).toBe("REASONING_UNABLE");
+
+        // Forwarded, not judged.
+        expect(outcome.ok).toBe(true);
+        expect(outcome.ok && outcome.proposal.recommendation).toMatchObject({
+            provider_report: { provider_key: "impostor" },
+        });
+        // And refused by the authority that owns the question.
+        expect(await validateThroughRegisteredPolicy(invalid)).toBe(false);
     });
 
-    it("a missing required field is rejected", async () => {
+    it("a missing required field is refused by the policy", async () => {
         const { generated_at_iso: _omitted, ...missing } = VALID_ENRICHMENT;
-        const { exec } = run(missing);
-        expect((await exec()).ok).toBe(false);
+        expect(await validateThroughRegisteredPolicy(missing)).toBe(false);
     });
 
-    it("a smuggled extra field is rejected — the contract is strict", async () => {
-        const { exec } = run({ ...VALID_ENRICHMENT, trust_score: 99, lifecycle_state: "accepted" });
-        expect((await exec()).ok).toBe(false);
+    it("a smuggled extra field is refused — the contract is strict", async () => {
+        expect(
+            await validateThroughRegisteredPolicy({ ...VALID_ENRICHMENT, trust_score: 99, lifecycle_state: "accepted" }),
+        ).toBe(false);
     });
 
-    it("the adapter does NOT decide validity — it normalized the envelope and passed nonsense through", async () => {
+    it("neither the adapter nor the strategy decides validity — both pass nonsense through", async () => {
         const fetchMock = vi.fn().mockResolvedValue(completion({ utter: "nonsense" }));
         vi.stubGlobal("fetch", fetchMock);
+
         // Transport succeeded...
         const raw = await adapter().execute({
             schema_version: 1,
-            decision_class_key: "attention_suggestion_enrichment",
+            decision_class_key: "attention_suggestion_enrichment_provider_backed",
             correlation_id: "c",
             input: eligibleInput(),
             requested_strategy_kind: "small_reasoning",
@@ -220,8 +278,19 @@ describe("P28GA-3 — Trust owns business validation, not transport", () => {
             deadline_ms: 20_000,
         });
         expect(raw.ok).toBe(true);
-        // ...and Trust is what refused it.
-        expect(validateAttentionEnrichmentResult({ utter: "nonsense" }).ok).toBe(false);
+
+        // ...the strategy forwarded it verbatim...
+        const outcome = await strategy().reason({
+            context: {} as never,
+            nowIso: "2026-08-10T00:00:00.000Z",
+            eligibleReasoningInput: eligibleInput(),
+            correlation_id: "corr-1",
+        });
+        expect(outcome.ok).toBe(true);
+        expect(outcome.ok && outcome.proposal.recommendation).toEqual({ utter: "nonsense" });
+
+        // ...and Trust is what refuses it.
+        expect(await validateThroughRegisteredPolicy({ utter: "nonsense" })).toBe(false);
     });
 });
 
@@ -305,13 +374,20 @@ describe("P28GA-6 — hostile provider output cannot reach durable evidence", ()
         expect(JSON.stringify(await exec())).not.toContain(API_KEY);
     });
 
-    it("the validation refusal names the contract, never the rejected content", () => {
-        const res = validateAttentionEnrichmentResult({ secret_note: "Dana Okonkwo lives at 12 Elm St" });
-        expect(res.ok).toBe(false);
-        if (res.ok) return;
-        expect(res.detail).not.toContain("Dana Okonkwo");
-        expect(res.detail).not.toContain("Elm St");
-        expect(res.detail).toContain("attention_suggestion_enrichment_result_v1");
+    it("the registered policy's refusal names the contract, never the rejected content", async () => {
+        const hostile = { secret_note: "Dana Okonkwo lives at 12 Elm St" };
+        const result = await orchestrateValidation({
+            policy_key: REGISTERED_VALIDATION_POLICY_KEY,
+            recommendation: hostile as unknown as Record<string, unknown>,
+        });
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.report.passed).toBe(false);
+
+        const blob = JSON.stringify(result.report);
+        expect(blob).not.toContain("Dana Okonkwo");
+        expect(blob).not.toContain("Elm St");
+        expect(blob).toContain("AttentionSuggestionAiEnrichmentV1");
     });
 });
 
@@ -327,13 +403,22 @@ describe("P28GA-7 — boundaries hold", () => {
         expect(src).not.toContain("createOpenAiCompatibleProviderAdapter");
     });
 
-    it("validation is delegated, not duplicated inside the strategy", async () => {
+    it("validation is ABSENT from the strategy, not merely delegated by it", async () => {
         const src = await import("node:fs").then((fs) =>
             fs.readFileSync("lib/trust/capabilities/attentionSuggestionEnrichment/providerBackedStrategy.ts", "utf8"),
         );
-        expect(src).toContain("validateAttentionEnrichmentResult");
-        // No second copy of the business contract.
+        // Gate A called a capability-local validator here. Gate C removed the
+        // call and the module. A strategy that never invokes a validator cannot
+        // hold an opinion that disagrees with the registered one.
+        expect(src).not.toContain("validateAttentionEnrichmentResult");
+        expect(src).not.toContain("validationPolicy");
+        // No second copy of the business contract, by any route.
         expect(src).not.toContain("agent_key:");
         expect(src).not.toContain("safeParse");
+    });
+
+    it("the deleted duplicate is gone from the tree, not just unimported", async () => {
+        const fs = await import("node:fs");
+        expect(fs.existsSync("lib/trust/capabilities/attentionSuggestionEnrichment/validationPolicy.ts")).toBe(false);
     });
 });

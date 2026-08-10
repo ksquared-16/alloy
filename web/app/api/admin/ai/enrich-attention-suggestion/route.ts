@@ -5,7 +5,6 @@ import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
 import { completeTrustAuthorization, resolveTrustAccessAuthorization } from "@/lib/ai/resolveTrustAuthorization";
 import { trustAuthorizationRefusalResponse } from "@/lib/ai/trustAuthorizationHttp";
-import { enrichAttentionSuggestionStubEnvelope } from "@/lib/ai/enrichAttentionSuggestionStub";
 import { enrichAttentionSuggestionViaTrustRuntime } from "@/lib/trust/consumers/attentionSuggestionEnrichmentEnvelope";
 import { parseEnrichAttentionSuggestionRequest } from "@/lib/ai/enrichAttentionSuggestionRouteValidation";
 import { permitsReasoningMode } from "@/lib/trust/authorization/trustAuthorizationDecision";
@@ -61,13 +60,26 @@ export async function POST(request: NextRequest) {
     const authorization = completeTrustAuthorization({ accessDecision: gate.decision, orgMetadata: org_metadata });
     if (!authorization.permitted) return trustAuthorizationRefusalResponse(authorization)!;
 
-    // Trust Runtime V1, Slice 1. The deterministic path is governed: it becomes a
-    // Decision Contract and returns a Decision Package, with the same envelope
-    // the surface has always rendered. No provider participates.
+    // Both reasoning modes are governed as of Phase 2.8 Gate C. Either becomes a
+    // Decision Contract and returns a Decision Package, and the envelope the
+    // surface renders is the same shape it always was.
     //
-    // The live-provider branch is deliberately untouched — Slice 1 sends nothing
-    // anywhere, and rerouting a provider call is Slice 2's decision to make.
-    if (permitsReasoningMode(authorization, "deterministic_local")) {
+    // The route names no strategy, no provider and no decision class. It
+    // establishes that ONE of the two modes is affirmatively permitted and hands
+    // the authorization decision across the seam; the capability reads
+    // `permitsReasoningMode` from that same decision to choose which governed
+    // question to ask. Nothing here can reach a provider without an affirmative
+    // `provider_backed` permission, because nothing here selects anything.
+    //
+    // Written as an explicit positive over both modes rather than
+    // `if deterministic … else provider`: an `else` would make provider-backed
+    // reasoning the destination for any authorization state that is not
+    // recognisably deterministic, which is the fail-open shape D-42 exists to
+    // prevent.
+    if (
+        permitsReasoningMode(authorization, "deterministic_local") ||
+        permitsReasoningMode(authorization, "provider_backed")
+    ) {
         let governed;
         try {
             governed = await enrichAttentionSuggestionViaTrustRuntime({
@@ -125,25 +137,17 @@ export async function POST(request: NextRequest) {
         });
     }
 
-    // Provider-backed path. Permission and availability were both settled by the
-    // seam; this reports the already-resolved verdict rather than re-deriving it.
-    const result = await enrichAttentionSuggestionStubEnvelope({
-        org_id: ctx.orgId,
-        org_metadata,
-        deterministic: det,
-        correlation_id: correlationId,
-        request_id: requestIdFromBody,
-        openai_live_invocation_permitted: authorization.evidence.provider_use_permitted,
-    });
-
-    return NextResponse.json({
-        ok: true,
-        envelope: result.envelope,
-        telemetry_emitted: result.telemetry_emitted,
-        enrichment_telemetry: {
-            provider_key: result.telemetry_payload.provider_key,
-            outcome: result.telemetry_payload.outcome,
-        },
-        provider_error_code: result.provider_last_error_code ?? null,
-    });
+    // Fail closed.
+    //
+    // Reaching here means authorization returned `permitted: true` while naming
+    // no reasoning mode this consumer can execute. That is not an operational
+    // condition — `completeTrustAuthorization` sets `permitted_reasoning_modes`
+    // on every permit — so it is a state the seam should not be able to produce.
+    // It answers as a refusal rather than falling through to any provider path,
+    // because an authorization state we cannot classify is exactly the one that
+    // must not reach a model.
+    return NextResponse.json(
+        { ok: false, error: "AI_POLICY_PROVIDER", message: "No reasoning mode is permitted for this request." },
+        { status: 403 },
+    );
 }

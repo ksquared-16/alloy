@@ -31,6 +31,7 @@ import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informati
 import type { PrivacyPolicyV1 } from "@/lib/trust/privacy/privacyEngine";
 import { attentionEnrichmentInformationSpec } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/informationSpec";
 import { createProviderBackedAttentionEnrichmentStrategy } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/providerBackedStrategy";
+import { orchestrateValidation } from "@/lib/trust/validation/validationOrchestrator";
 
 const AGENT_KEY = "needs_attention_suggestion_enrichment";
 const PRIVACY: PrivacyPolicyV1 = { key: "operator_safe_v1", pii_mode: "standard", prohibited_classes: [] };
@@ -128,17 +129,28 @@ async function legacy(): Promise<{ outcome: string; enriched: boolean }> {
     return { outcome: res.outcome, enriched: res.outcome === "ok" && res.data != null };
 }
 
-/** Governed observable outcome: did enrichment survive, and did reasoning succeed. */
+/**
+ * Governed observable outcome: did enrichment survive, and did reasoning succeed.
+ *
+ * Gate C moved content validation off the strategy and onto the registered
+ * policy, so the governed PIPELINE is now strategy + registered validation —
+ * exactly the two steps `executeDecisionContract` runs back to back. This helper
+ * runs both. Comparing only the strategy would compare half a pipeline against
+ * a whole one and report parity where none exists: a schema-violating answer
+ * leaves the strategy as a success and is refused one step later.
+ */
 async function governed(s: AttentionSuggestionV1 = suggestion()): Promise<{ ok: boolean; enriched: boolean; detail?: string }> {
     const outcome = await createProviderBackedAttentionEnrichmentStrategy({
-        adapter: createOpenAiCompatibleProviderAdapter({
-            provider_key: "openai",
-            base_url: "https://api.openai.com",
-            model: "gpt-4o-mini",
-            api_key: "sk-test-parity",
+        resolvePort: () => ({
+            adapter: createOpenAiCompatibleProviderAdapter({
+                provider_key: "openai",
+                base_url: "https://api.openai.com",
+                model: "gpt-4o-mini",
+                api_key: "sk-test-parity",
+            }),
+            requested_provider_key: "openai",
+            requested_model_key: "gpt-4o-mini",
         }),
-        requested_provider_key: "openai",
-        requested_model_key: "gpt-4o-mini",
         deadline_ms: 20_000,
     }).reason({
         context: {} as never,
@@ -147,10 +159,18 @@ async function governed(s: AttentionSuggestionV1 = suggestion()): Promise<{ ok: 
         correlation_id: "c1",
     });
 
+    if (!outcome.ok) return { ok: false, enriched: false, detail: outcome.detail };
+
+    const validation = await orchestrateValidation({
+        policy_key: "attention_suggestion_enrichment_v1",
+        recommendation: outcome.proposal.recommendation,
+    });
+    const passed = validation.ok && validation.report.passed;
+
     return {
-        ok: outcome.ok,
-        enriched: outcome.ok && outcome.proposal.recommendation != null,
-        ...(outcome.ok ? {} : { detail: outcome.detail }),
+        ok: passed,
+        enriched: passed && outcome.proposal.recommendation != null,
+        ...(passed ? {} : { detail: "Registered validation refused the proposal." }),
     };
 }
 

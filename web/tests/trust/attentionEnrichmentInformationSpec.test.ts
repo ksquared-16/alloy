@@ -234,7 +234,7 @@ describe("P28A-5 — identity and determinism", () => {
         if (!built.ok) return;
         expect(built.package.spec_key).toBe(ATTENTION_ENRICHMENT_SPEC_KEY);
         expect(built.package.spec_version).toBe("2.0.0");
-        expect(built.package.decision_class_key).toBe("attention_suggestion_enrichment");
+        expect(built.package.decision_class_key).toBe("attention_suggestion_enrichment_provider_backed");
     });
 
     it("content is deterministic over the same facts", () => {
