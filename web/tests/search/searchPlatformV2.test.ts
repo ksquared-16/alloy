@@ -380,6 +380,40 @@ describe("Case 1 — child search", () => {
         expect(joe.destinations.some((d) => d.key === "household")).toBe(true);
     });
 
+    it("a child with NO person row opens its participation record, not the household", async () => {
+        // Found by browser certification against the live tenant: real children can
+        // have `person_id = null`. Falling straight through to the household opens
+        // the FAMILY when the operator asked for the CHILD.
+        const fixtures = baseFixtures();
+        const joe = (fixtures.customer_members as Array<Record<string, unknown>>).find(
+            (m) => m.id === JOE_MEMBER
+        )!;
+        joe.person_id = null;
+
+        const { results } = await run("Joe Smith", openDim, fixtures);
+        const subject = results.find((r) => r.subject.id === JOE_MEMBER)!;
+        const primary = subject.destinations.find((d) => d.primary)!;
+
+        expect(primary.entity_type).toBe("opportunities");
+        expect(primary.entity_id).toBe(JOE_OPPORTUNITY);
+        expect(primary.entity_type).not.toBe("customers");
+    });
+
+    it("falls back to the household only when there is no participation record", async () => {
+        const fixtures = baseFixtures();
+        const joe = (fixtures.customer_members as Array<Record<string, unknown>>).find(
+            (m) => m.id === JOE_MEMBER
+        )!;
+        joe.person_id = null;
+        fixtures.process_instances = [];
+
+        const { results } = await run("Joe Smith", openDim, fixtures);
+        const subject = results.find((r) => r.subject.id === JOE_MEMBER)!;
+        const primary = subject.destinations.find((d) => d.primary)!;
+        expect(primary.entity_type).toBe("customers");
+        expect(primary.entity_id).toBe(SMITH_HOUSEHOLD);
+    });
+
     it("never targets a legacy drawer type", async () => {
         const { results } = await run("Joe Smith");
         for (const r of results) {

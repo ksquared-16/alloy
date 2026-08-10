@@ -226,7 +226,9 @@ export async function enrichSearchCandidates(args: {
         const recognition: SearchRecognition = {
             type_label: resolveTypeLabel(c, cpByPerson.get(c.id) ?? []),
             household_name: c.kind === "household" ? null : householdName,
-            location_label: locationLabel,
+            // A campus's own name IS the location — repeating it as recognition
+            // ("North Campus · Campus · North Campus") is noise, not disambiguation.
+            location_label: c.kind === "location" ? null : locationLabel,
             age_label:
                 c.kind === "child" && c.person_id
                     ? globalSearchAgeLabelFromDob(dobByPersonId.get(c.person_id) ?? null)
@@ -235,7 +237,12 @@ export async function enrichSearchCandidates(args: {
 
         if (c.kind === "person") {
             const cps = cpByPerson.get(c.id) ?? [];
-            if (cps.some((r) => r.is_primary)) recognition.role_note = "Primary contact";
+            // Only note primary-contact status when the configured role label does
+            // not already say it — otherwise the row reads
+            // "Primary Contact · Household / Primary contact · 2 children".
+            if (cps.some((r) => r.is_primary) && !/primary/i.test(recognition.type_label)) {
+                recognition.role_note = "Primary contact";
+            }
 
             // Related children — ACCESS-FILTERED. Only households the operator can
             // already reach contribute names, so recognition metadata cannot leak

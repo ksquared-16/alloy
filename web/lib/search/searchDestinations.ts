@@ -47,7 +47,10 @@ const PROCESS_CONTEXT_ENTITY_TYPES: Record<string, string> = {
  * `persons` is canonical human identity; the child profile is the operational
  * grain, not the identity. Falls back to the household shell.
  */
-export function resolveSubjectDestination(subject: SearchSubject): SearchDestination | null {
+export function resolveSubjectDestination(
+    subject: SearchSubject,
+    contexts: readonly SearchContext[] = []
+): SearchDestination | null {
     const label = `Open ${firstName(subject.display_name)}`;
 
     if (subject.kind === "location") {
@@ -81,6 +84,26 @@ export function resolveSubjectDestination(subject: SearchSubject): SearchDestina
             entity_id: personId,
             primary: true,
         };
+    }
+
+    // A child without a person row still has an authoritative surface: the record
+    // its participation runs in. Falling straight to the household would open the
+    // FAMILY when the operator asked for the CHILD — V1 resolved
+    // person → opportunity → customer for exactly this reason.
+    for (const context of contexts) {
+        if (context.kind !== "process") continue;
+        const type = PROCESS_CONTEXT_ENTITY_TYPES[String(context.destination_entity_type ?? "").trim()];
+        const id = String(context.destination_entity_id ?? "").trim();
+        if (type === "opportunities" && id) {
+            return {
+                key: "subject",
+                label,
+                target: "open_drawer",
+                entity_type: type,
+                entity_id: id,
+                primary: true,
+            };
+        }
     }
 
     const householdId = (subject.household_id ?? "").trim();
@@ -155,7 +178,7 @@ export function resolveSearchDestinations(args: {
 }): SearchDestination[] {
     const { subject, contexts, promotedKeys } = args;
 
-    const primary = resolveSubjectDestination(subject);
+    const primary = resolveSubjectDestination(subject, contexts);
     const secondary: SearchDestination[] = [];
 
     for (const context of contexts) {
