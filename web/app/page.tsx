@@ -139,7 +139,7 @@ export default function HomePage() {
       <SectionShell
         variant="muted"
         density="compact"
-        className="border-t border-alloy-midnight-forge/[0.06] !pt-5 !pb-3 md:!pt-6 md:!pb-4"
+        className="border-t border-alloy-midnight-forge/[0.06] !pt-4 !pb-2.5 md:!pt-4.5 md:!pb-3"
       >
         <div className="mx-auto flex w-full max-w-full flex-col items-center">
           <h2 className="marketing-section-headline text-center text-alloy-midnight-forge">
@@ -159,7 +159,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-3.5 w-full max-w-3xl md:mt-4">
+          <div className="mt-2.5 w-full max-w-3xl md:mt-3">
             <FragmentedWorkMap />
           </div>
         </div>

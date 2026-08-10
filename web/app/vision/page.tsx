@@ -1,104 +1,96 @@
 import CTAButton from "@/components/marketing/CTAButton";
-import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
+import RoadmapBuildingNow from "@/components/marketing/RoadmapBuildingNow";
+import RoadmapEvolutionBands from "@/components/marketing/RoadmapEvolutionBands";
+import RoadmapExpansionFootprint from "@/components/marketing/RoadmapExpansionFootprint";
+import RoadmapMaturityLanes from "@/components/marketing/RoadmapMaturityLanes";
 import SectionShell from "@/components/marketing/SectionShell";
-import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
-
-const SHIPPED = [
-  "Platform Foundation",
-  "Business Processes",
-  "Processing",
-  "Operational Intelligence / BOS",
-  "Communications",
-  "Documents & Forms",
-  "Automation",
-] as const;
-
-const NEXT_DIRECTION = [
-  "Billing",
-  "Payments",
-  "Attendance",
-  "Scheduling",
-  "Staffing",
-  "Family Experience",
-  "Reporting & Analytics",
-] as const;
+import { getBuildingNowItems, ROADMAP_LAST_UPDATED } from "@/lib/marketing/roadmap";
 
 export default function VisionPage() {
+  const building = getBuildingNowItems();
+
   return (
     <>
       <SectionShell density="compact" className="!pt-10 md:!pt-14" innerClassName="max-w-2xl">
         <p className="marketing-eyebrow">Vision & Roadmap</p>
-        <h1 className="marketing-page-headline mt-3">
-          From today&apos;s operations to the operating system for work
-        </h1>
+        <h1 className="marketing-page-headline mt-3">Building the operating system for work</h1>
         <p className="marketing-body-lg mt-4">
-          Alloy starts where operational pressure is highest and expands toward one operating system
-          that moves work forward. This roadmap reflects direction — not release dates.
+          Alloy is being built in layers — one shared foundation, then more of the operation on top
+          of it.
+        </p>
+        <p className="marketing-body mt-4">
+          This roadmap shows how Alloy has evolved, where the platform stands today, what we&apos;re
+          building now, and where we&apos;re headed next.
+        </p>
+        <p className="mt-5 text-[0.75rem] tracking-[0.02em] text-alloy-midnight-forge/45">
+          {`Last updated ${ROADMAP_LAST_UPDATED.label}`}
+        </p>
+      </SectionShell>
+
+      <SectionShell variant="muted" density="compact" id="evolution">
+        <div className="max-w-2xl">
+          <h2 className="marketing-section-headline">How Alloy has evolved</h2>
+          <p className="marketing-body mt-3">
+            Major milestones that materially changed what Alloy can do.
+          </p>
+        </div>
+        <div className="mt-6 md:mt-7">
+          <RoadmapEvolutionBands />
+        </div>
+      </SectionShell>
+
+      <SectionShell density="compact" id="today" className="!pt-6 md:!pt-8">
+        <div className="max-w-2xl">
+          <h2 className="marketing-section-headline">Where Alloy stands today</h2>
+          <p className="marketing-body mt-2.5">
+            The foundation is established. The platform keeps expanding.
+          </p>
+        </div>
+        <div className="mt-5 md:mt-6">
+          <RoadmapMaturityLanes />
+        </div>
+      </SectionShell>
+
+      <SectionShell variant="muted" density="compact" id="building">
+        <div className="max-w-2xl">
+          <h2 className="marketing-section-headline">Building now</h2>
+          <p className="marketing-body mt-3">
+            Major work Alloy is actively pushing forward right now — not the full backlog.
+          </p>
+        </div>
+        <div className="mt-5 md:mt-6">
+          <RoadmapBuildingNow items={building} />
+        </div>
+      </SectionShell>
+
+      <SectionShell density="compact" id="expanding">
+        <div className="max-w-2xl">
+          <h2 className="marketing-section-headline">Expanding across the operation</h2>
+          <p className="marketing-body mt-3">
+            Where Alloy is headed next — by operational area, not as a promised build order.
+          </p>
+        </div>
+        <div className="mt-6 md:mt-7">
+          <RoadmapExpansionFootprint />
+        </div>
+        <p className="mx-auto mt-7 max-w-2xl text-center text-sm leading-relaxed text-alloy-midnight-forge/45 md:mt-8">
+          Sequencing may change as we learn from operators. We share direction early so you can see
+          where Alloy is headed — not to lock timelines.
         </p>
       </SectionShell>
 
       <SectionShell variant="muted" density="compact">
-        <div className="grid items-start gap-8 lg:grid-cols-2 lg:gap-12">
-          <div>
-            <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-alloy-bend-pine">
-              Shipped / Current
-            </h2>
-            <ul className="mt-4 space-y-1.5">
-              {SHIPPED.map((item) => (
-                <li
-                  key={item}
-                  className="flex items-center gap-3 rounded-xl border border-alloy-bend-pine/12 bg-white/70 px-3.5 py-2.5"
-                >
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-bend-pine" aria-hidden />
-                  <span className="text-sm font-medium text-alloy-midnight-forge">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-alloy-midnight-forge/40">
-              Next — Direction, not commitments
-            </h2>
-            <ul className="mt-4 space-y-1.5">
-              {NEXT_DIRECTION.map((item) => (
-                <li
-                  key={item}
-                  className="flex items-center gap-3 rounded-xl border border-alloy-midnight-forge/[0.07] bg-white px-3.5 py-2.5"
-                >
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full border border-alloy-midnight-forge/30"
-                    aria-hidden
-                  />
-                  <span className="text-sm text-alloy-midnight-forge/65">{item}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-5 text-sm leading-relaxed text-alloy-midnight-forge/45">
-              Sequencing may change as we learn from operators. We share direction early so you can
-              see where Alloy is headed — not to lock timelines.
-            </p>
-          </div>
-        </div>
-      </SectionShell>
-
-      <SectionShell density="compact">
-        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
-          <MarketingAssetPlaceholder
-            assetKey={MARKETING_ASSETS.platformExpansion.key}
-            alt={MARKETING_ASSETS.platformExpansion.alt}
-            aspectClassName="aspect-[16/11]"
-          />
-          <div className="marketing-copy-measure">
-            <h2 className="marketing-section-headline">
-              One operating system. One source of truth. Work that moves forward.
-            </h2>
-            <p className="marketing-body-lg mt-3.5">
-              The goal is not more software — it is fewer systems. Every Business Process Alloy adds
-              shares the same foundation.
-            </p>
-            <div className="mt-7">
-              <CTAButton href="/contact">Request a Demo</CTAButton>
-            </div>
+        <div className="mx-auto max-w-xl text-center">
+          <h2 className="marketing-statement-headline">One foundation. More of your operation.</h2>
+          <p className="marketing-body mt-3.5">
+            Every capability Alloy adds shares the same records, identity, permissions, Business
+            Processes, communications, Processing, and intelligence.
+          </p>
+          <p className="mt-4 text-sm font-semibold tracking-[-0.01em] text-alloy-midnight-forge">
+            Start with the work that matters most. Expand without starting over.
+          </p>
+          <div className="mt-7">
+            <CTAButton href="/contact">Request a Demo</CTAButton>
           </div>
         </div>
       </SectionShell>

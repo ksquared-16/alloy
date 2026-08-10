@@ -1,7 +1,6 @@
 import CTAButton from "@/components/marketing/CTAButton";
-import MarketingAssetPlaceholder from "@/components/marketing/MarketingAssetPlaceholder";
+import PlatformFoundationVisual from "@/components/marketing/PlatformFoundationVisual";
 import SectionShell from "@/components/marketing/SectionShell";
-import { MARKETING_ASSETS } from "@/lib/marketing/artifactPaths";
 
 const FOUNDATION_CAPABILITIES = [
   {
@@ -47,23 +46,22 @@ export default function PlatformPage() {
         </p>
       </SectionShell>
 
-      <SectionShell
-        variant="muted"
-        density="compact"
-        innerClassName="grid items-center gap-8 lg:grid-cols-2 lg:gap-12"
-      >
-        <MarketingAssetPlaceholder
-          assetKey={MARKETING_ASSETS.businessProcesses.key}
-          alt={MARKETING_ASSETS.businessProcesses.alt}
-          aspectClassName="aspect-[16/11]"
-        />
-        <div className="marketing-copy-measure">
+      <SectionShell variant="muted" density="compact" id="foundation">
+        <div className="mx-auto max-w-2xl text-center md:max-w-3xl">
           <h2 className="marketing-section-headline">What the foundation includes</h2>
           <p className="marketing-body mt-3.5">
             Every operational area on Alloy runs on the same core — configured for your organization,
             not rebuilt from scratch.
           </p>
         </div>
+
+        <div className="mt-6 md:mt-7 lg:mt-9">
+          <PlatformFoundationVisual />
+        </div>
+
+        <p className="mx-auto mt-5 max-w-xl text-center text-sm font-semibold tracking-[-0.01em] text-alloy-midnight-forge md:mt-6">
+          One foundation. Different kinds of work. Everything stays connected.
+        </p>
       </SectionShell>
 
       <SectionShell density="compact">
