@@ -101,18 +101,25 @@ function SidebarNav({
     // (Workspace / lifecycle) defer to it so the rail shows a single active anchor.
     const activeModal = useActiveAdminV2WorkspaceModal();
     const modalOpen = activeModal != null;
+    // Site scope: prefer the shell site-filter context (what WS/WU counts use) so the numbers
+    // agree; fall back to the sticky nav site id when the sidebar renders outside the provider
+    // (non-workspace shell branch), matching the scope hrefs already carry.
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter
+        ? siteFilter.selectedSiteId
+        : readStickyWorkspaceSiteIdForNavigation();
 
     const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(
-        () => peekOperatorLifecycleLandingCards() ?? [],
+        () => peekOperatorLifecycleLandingCards(selectedSiteId) ?? [],
     );
     const [lifecycleLoading, setLifecycleLoading] = useState(
-        () => peekOperatorLifecycleLandingCards() == null,
+        () => peekOperatorLifecycleLandingCards(selectedSiteId) == null,
     );
     const [expandedLifecycleIds, setExpandedLifecycleIds] = useState<Set<string>>(() => new Set());
 
     useEffect(() => {
         let cancelled = false;
-        void loadOperatorLifecycleLandingCards()
+        void loadOperatorLifecycleLandingCards({ selectedSiteId })
             .then((cards) => {
                 if (cancelled) return;
                 setLifecycleCards(cards);
@@ -128,7 +135,7 @@ function SidebarNav({
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [selectedSiteId]);
 
     const toggleLifecycleExpanded = useCallback((id: string) => {
         setExpandedLifecycleIds((prev) => {
@@ -144,14 +151,6 @@ function SidebarNav({
     // canonical location — host work unit + base lane). Left-nav count == tile count == pill
     // count for the same view by construction. Fetches DEDUPE via `dedupeAdminFetch`, so calling
     // the hook here does not double-fetch what the WS/WU surfaces already request.
-    //
-    // Site scope: prefer the shell site-filter context (what WS/WU counts use) so the numbers
-    // agree; fall back to the sticky nav site id when the sidebar renders outside the provider
-    // (non-workspace shell branch), matching the scope hrefs already carry.
-    const siteFilter = useWorkspaceSiteFilter();
-    const selectedSiteId = siteFilter
-        ? siteFilter.selectedSiteId
-        : readStickyWorkspaceSiteIdForNavigation();
 
     const workViewTotalTargets = useMemo<WorkViewTotalTarget[]>(() => {
         const seen = new Set<string>();

@@ -75,8 +75,10 @@ import {
 /** Warmest available first paint: session peek, else the server-composed Route VM seed. */
 function seedLifecycleCards(
     routeVmCards: readonly OperatorLifecycleLandingCard[],
+    selectedSiteId: string | null,
 ): OperatorLifecycleLandingCard[] {
-    const peeked = typeof window === "undefined" ? null : peekOperatorLifecycleLandingCards();
+    const peeked =
+        typeof window === "undefined" ? null : peekOperatorLifecycleLandingCards(selectedSiteId);
     if (peeked?.length) return peeked;
     return routeVmCards.length ? [...routeVmCards] : [];
 }
@@ -109,7 +111,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     );
 
     const [cards, setCards] = useState<OperatorLifecycleLandingCard[]>(() =>
-        seedLifecycleCards(routeVm.firstPaint.lifecycleCards),
+        seedLifecycleCards(routeVm.firstPaint.lifecycleCards, selectedSiteId),
     );
     const [cardsSettled, setCardsSettled] = useState(false);
 
@@ -132,10 +134,33 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
     }, []);
 
-    // Authoritative load (rollups included) refines the seeded tiles in place; re-runs on refresh.
+    // Authoritative load (rollups included) refines the seeded tiles in place; re-runs on refresh
+    // AND when the Workspace Site Filter changes so process-card grain counts stay site-scoped.
     useEffect(() => {
         let cancelled = false;
-        void loadOperatorLifecycleLandingCards()
+        const peeked = peekOperatorLifecycleLandingCards(selectedSiteId);
+        if (peeked?.length) {
+            setCards(peeked);
+        } else {
+            // Do not flash another site's (or org-wide) primaryGrainCount while the scoped load runs —
+            // clear grain signals so WorkViewList falls through to site-scoped useWorkViewTotals.
+            setCardsSettled(false);
+            setCards((prev) =>
+                prev.map((card) => ({
+                    ...card,
+                    activeRecordCount: null,
+                    needsAttentionCount: null,
+                    workQueues: card.workQueues.map((entry) => ({
+                        ...entry,
+                        primary_grain_count: null,
+                        supporting_grain_count: null,
+                        attention_count: null,
+                        overdue_count: null,
+                    })),
+                })),
+            );
+        }
+        void loadOperatorLifecycleLandingCards({ selectedSiteId })
             .then((next) => {
                 if (!cancelled && next.length) setCards(next);
             })
@@ -145,7 +170,7 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         return () => {
             cancelled = true;
         };
-    }, [refreshNonce]);
+    }, [refreshNonce, selectedSiteId]);
 
     // ── Right Rail actions: the configured Workspace actions for the persistent command rail ─
     // Org-scoped (surface=workspace + shared right_rail); registered into the same shell command
