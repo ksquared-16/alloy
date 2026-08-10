@@ -148,14 +148,48 @@ describe("child-grain read cutover — process_instances", () => {
         expect(rows).toEqual([]);
     });
 
-    it("excludes instances whose context opportunity is not in the work unit", async () => {
+    it("excludes instances whose context opportunity cannot be resolved", async () => {
         const supabase = mockSupabase({
             process_instances: [pi("pi-1", "child-A", "waitlist", "waitlisted")],
-            opportunities: [], // opportunity not returned for this work unit
+            opportunities: [], // opportunity missing / deleted
             customer_members: [cm("child-A", "Mia Rivera")],
         });
         const rows = await queryEnrollmentProcessInstanceTrackRows({ supabase, orgId: ORG, workUnitId: WU, stageKey: "waitlist" });
         expect(rows).toEqual([]);
+    });
+
+    it("Kurzman-style: waitlisted children remain Waitlist rows when family opportunity is still parked on Lead WU", async () => {
+        const LEAD_WU = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const WAITLIST_WU = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const familyOpp = { ...opp(LEAD), work_unit_id: LEAD_WU, stage_key: "lead", name: "Kurzman Family" };
+        const supabase = mockSupabase({
+            process_instances: [
+                pi("pi-lennon", "cm-lennon", "waitlist", "waitlisted"),
+                pi("pi-wrigley", "cm-wrigley", "waitlist", "waitlisted"),
+            ],
+            opportunities: [familyOpp],
+            customer_members: [cm("cm-lennon", "Lennon Kurzman"), cm("cm-wrigley", "Wrigley Kurzman")],
+        });
+        // Query as the Waitlist stage work unit — opportunity.work_unit_id is still Lead.
+        const rows = await queryEnrollmentProcessInstanceTrackRows({
+            supabase,
+            orgId: ORG,
+            workUnitId: WAITLIST_WU,
+            stageKey: "waitlist",
+        });
+        expect(rows).toHaveLength(2);
+        expect(rows.map((r) => r.customer_member_id).sort()).toEqual(["cm-lennon", "cm-wrigley"]);
+        expect(rows.every((r) => (r as { _effective_stage_key?: string })._effective_stage_key === "waitlist")).toBe(
+            true,
+        );
+        // Lead lane must not claim them (effective stage is waitlist, not inherited lead).
+        const leadRows = await queryEnrollmentProcessInstanceTrackRows({
+            supabase,
+            orgId: ORG,
+            workUnitId: LEAD_WU,
+            stageKey: "lead",
+        });
+        expect(leadRows).toHaveLength(0);
     });
 
     it("carries the child's EFFECTIVE stage, not the family's, once the child has branched", () => {
@@ -257,14 +291,33 @@ describe("participation membership — stage-independent child rows", () => {
         expect(rows).toEqual([]);
     });
 
-    it("excludes instances whose context opportunity is not in the work unit", async () => {
+    it("excludes children whose context opportunity cannot be resolved", async () => {
         const supabase = mockSupabase({
             process_instances: [piLive("pi-1", "child-A", null, null)],
-            opportunities: [], // scoped read returns nothing for this work unit
+            opportunities: [], // opportunity missing
             customer_members: [cm("child-A", "Mia Rivera")],
         });
         const rows = await queryEnrollmentProcessInstanceParticipationRows({ supabase, orgId: ORG, workUnitId: WU });
         expect(rows).toEqual([]);
+    });
+
+    it("includes live children when family opportunity is parked on a different stage work unit", async () => {
+        const LEAD_WU = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const OTHER_WU = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const supabase = mockSupabase({
+            process_instances: [
+                piLive("pi-1", "child-A", null, null),
+                piLive("pi-2", "child-B", "waitlist", "waitlisted"),
+            ],
+            opportunities: [{ ...opp(LEAD), work_unit_id: LEAD_WU }],
+            customer_members: [cm("child-A", "Mia Rivera"), cm("child-B", "Leo Rivera")],
+        });
+        const rows = await queryEnrollmentProcessInstanceParticipationRows({
+            supabase,
+            orgId: ORG,
+            workUnitId: OTHER_WU,
+        });
+        expect(rows.map((r) => r.customer_member_id).sort()).toEqual(["child-A", "child-B"]);
     });
 
     it("does not admit a non-enrollment subject type through the enrollment lens", async () => {

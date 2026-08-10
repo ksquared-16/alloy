@@ -91,9 +91,14 @@ type ResolvedRefs = {
 };
 
 /**
- * Resolve everything a set of process instances needs to become track rows: the CONTEXT opportunities
- * (filtered to the work unit — inner-join semantics, so an instance whose context is elsewhere simply
- * has no opportunity here), the SUBJECT children, and the program categories.
+ * Resolve everything a set of process instances needs to become track rows: the CONTEXT opportunities,
+ * the SUBJECT children, and the program categories.
+ *
+ * Opportunities are resolved by org + context id only — NOT by the stage work unit's
+ * `opportunities.work_unit_id`. Child-grain membership is Effective Process Position
+ * (`PI.stage_key ?? opportunity.stage_key`). After Move to Waitlist the family opportunity often
+ * remains parked on the Lead work unit while participant PIs are `waitlist`; filtering context
+ * opportunities to the Waitlist work unit dropped those children from Waitlist rows/pills.
  *
  * Shared by both membership rules below. The rules differ in which instances they admit; what a child
  * row is made of does not, and two copies of this resolution would be two answers to that.
@@ -118,7 +123,6 @@ async function resolveTrackRowRefs(params: {
             .from("opportunities")
             .select(OPP_SELECT)
             .eq("org_id", params.orgId)
-            .eq("work_unit_id", params.workUnitId)
             .in("id", contextIds);
         if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
         for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
@@ -195,7 +199,8 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
 
     const rows: OcmEnrollmentTrackQueryRow[] = [];
     for (const pi of piRows) {
-        // Only include instances whose context opportunity is in this work unit.
+        // Context opportunity must resolve (org-scoped). Lane membership is effective stage — not
+        // whether the family opportunity is still parked on this stage work unit.
         const opp = pi.context_id ? refs.oppById.get(pi.context_id) : null;
         if (!opp) continue;
         // Effective-stage membership: keep only children whose PI.stage_key ?? opp.stage_key == lane.
@@ -240,7 +245,7 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
 
     const refs = await resolveTrackRowRefs({ ...params, piRows });
 
-    // In-scope instances only (context opportunity resolved inside this work unit), then the
+    // In-scope instances only (context opportunity resolved in-org), then the
     // Definition's own liveness gate over the canonical participant shape.
     const inScope = piRows.filter((pi) => pi.context_id && refs.oppById.has(pi.context_id));
     if (!inScope.length) return [];
