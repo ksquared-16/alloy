@@ -62,6 +62,8 @@ export type QueueRowSubjectPresentation = {
     subject_type: LifecycleSubjectType;
     subject_id: string;
     display_name: string;
+    /** Effective process stage key when known (variant matching / Focus Panel). */
+    stage_key?: string | null;
     /** ISO date-of-birth when known from inquiry / household child payload. */
     date_of_birth?: string | null;
     /** Compact age label (e.g. `2y2m`, `6m`) derived from DOB or inquiry age. */
@@ -189,6 +191,11 @@ export type QueueRowContext = {
 
     /** Operator stage label for the queue lane (e.g. "Tours", "New Leads"). */
     row_stage: string;
+    /**
+     * Effective process stage KEY for this row (e.g. `waitlist`). Distinct from `row_stage`
+     * (operator label). Required for Queue Row variant `appliesWhen.stage_key` matching.
+     */
+    row_stage_key?: string | null;
     /**
      * Configured stage key → the tenant's authored label. Additive and optional: configured stages
      * are the only runtime stage vocabulary, so a per-row stage can render in the operator's own

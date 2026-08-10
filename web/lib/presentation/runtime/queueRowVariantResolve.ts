@@ -20,9 +20,19 @@ export function queueRowVariantMatchInputFromContext(
     scope: { workViewId?: string | null; workViewKey?: string | null },
 ): QueueRowVariantMatchInput {
     const grain = context.row_subject?.subject_type ?? null;
+    const rowStageKey =
+        typeof (context as { row_stage_key?: unknown }).row_stage_key === "string"
+            ? ((context as { row_stage_key?: string }).row_stage_key ?? "").trim() || null
+            : null;
+    const subjectStageKey =
+        typeof context.row_subject?.stage_key === "string"
+            ? context.row_subject.stage_key.trim() || null
+            : null;
     const stageKey =
         context.drawer_open?.active_subject?.stage_key?.trim() ||
         context.drawer_open?.stage_focus_key?.trim() ||
+        rowStageKey ||
+        subjectStageKey ||
         null;
     return {
         stageKey,

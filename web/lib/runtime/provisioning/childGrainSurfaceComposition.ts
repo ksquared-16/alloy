@@ -233,6 +233,9 @@ export function childQueueRowContext(params: {
     const subject: LifecycleSubjectRef = {
         subject_type: "child",
         subject_id: row.subjectId,
+        lifecycle_key: params.lifecycleKey,
+        stage_key: row.stageKey ?? "",
+        status_key: row.statusKey ?? "",
         ...(row.contextId ? { case_id: row.contextId } : {}),
     } as LifecycleSubjectRef;
 
@@ -243,8 +246,12 @@ export function childQueueRowContext(params: {
             subject_type: "child",
             subject_id: row.subjectId,
             display_name: row.title ?? "Child",
+            // Effective stage key — required for Queue Row variant matching (Waitlist appliesWhen.stage_key).
+            stage_key: row.stageKey ?? null,
         },
         row_stage: params.stageLabel,
+        // Machine stage key for variant match input (labels alone cannot match authored stage_key rules).
+        row_stage_key: row.stageKey ?? null,
         stage_labels_by_key: { ...params.stageLabelsByKey },
         lifecycle_key: params.lifecycleKey,
         // `process_instances.state` is null for a child that has not been dispositioned. That is a real
@@ -269,6 +276,7 @@ export function childQueueRowContext(params: {
             entity_type: "opportunities",
             entity_id: row.contextId ?? "",
             active_subject: subject,
+            ...(row.stageKey ? { stage_focus_key: row.stageKey } : {}),
         },
     };
 }
