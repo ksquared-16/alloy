@@ -9,6 +9,8 @@ import {
     opportunityDisplayLocationFromRecord,
     opportunityDisplayLocationLabel,
 } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { effectiveStagesFromInquiryChildren } from "@/lib/process/definitions/enrollment/loadEffectiveEnrollmentStagesByOpportunity";
+import { composeLocationRollup } from "@/lib/process/engine/effectiveProcessPosition";
 
 const KNOWN_CHIP_LABELS: Record<string, string> = {
     new_inquiry: "New Lead",
@@ -181,13 +183,50 @@ export function resolveFocusPanelStatusTone(statusKey: string | null | undefined
 
 /** Location chip when a real site/location is known — skips placeholder copy.
  * Uses child-site aggregate (with lead inherit) so siblings at South + North surface as multi.
+ * Prefers Effective Process Position location rollup when participant sites diverge.
  */
 export function resolveFocusPanelLocationChip(record: Record<string, unknown>): string | null {
+    const fromRow =
+        typeof record._effective_location_rollup_label === "string"
+            ? record._effective_location_rollup_label.trim()
+            : "";
+    if (fromRow) return fromRow;
+
+    const fromChildren = effectiveStagesFromInquiryChildren(record);
+    const locRollup = composeLocationRollup(fromChildren.locationIds);
+    if (locRollup.compactLabel) return locRollup.compactLabel;
+
     const resolved = opportunityDisplayLocationFromRecord(record);
     if (resolved.kind === "none") return null;
     const label = resolved.label?.trim();
     if (!label || label === OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL) return null;
     return label;
+}
+
+/**
+ * Operator-facing Effective Process Position stage rollup for the Focus Panel header.
+ * Derived from participant stages already on the record — never writes stage.
+ */
+export function resolveFocusPanelEffectiveStageChip(record: Record<string, unknown>): string | null {
+    const attached =
+        typeof record._effective_stage_rollup_label === "string"
+            ? record._effective_stage_rollup_label.trim()
+            : "";
+    if (attached) {
+        return formatFocusPanelChipLabel(
+            attached
+                .split(" · ")
+                .map((part) => formatFocusPanelChipLabel(part) ?? part)
+                .join(" · "),
+        );
+    }
+    const derived = effectiveStagesFromInquiryChildren(record);
+    if (!derived.stageRollupLabel) return null;
+    const parts = derived.stageRollupLabel.split(" · ");
+    if (parts.length >= 3 || derived.stageRollupLabel.endsWith("active stages")) {
+        return derived.stageRollupLabel;
+    }
+    return parts.map((p) => formatFocusPanelChipLabel(p) ?? p).join(" · ");
 }
 
 /** Seed-backed header chips for cold Focus Panel open (queue row → panel). */

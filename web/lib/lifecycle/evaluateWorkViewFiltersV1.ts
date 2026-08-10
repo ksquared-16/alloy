@@ -13,6 +13,7 @@ import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPic
 import { isCanonicalWorkViewConditionFieldKey } from "@/lib/lifecycle/workViewCanonicalOperands";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { parseRelativeDateToken } from "@/lib/lifecycle/workViewFilterValueControls";
+import { contextBelongsToEffectiveStage } from "@/lib/process/engine/effectiveProcessPosition";
 
 export type WorkViewFilterEvaluationNote = {
     field_key: string;
@@ -338,8 +339,37 @@ function evaluateOneFilter(
         };
     }
 
-    const actual = fieldValue(row, fieldKey, tenantFieldDefinitions);
     const expectedParts = parseFilterValues(filter.value);
+
+    // Case/context-grain stage membership via Effective Process Position when the row carries
+    // authorized participant effective stages. Missing key → legacy lifecycle_stage_key equality.
+    if (
+        fieldKey === "opportunity_stage"
+        && (filter.operator === "equals" || filter.operator === "not_equals" || filter.operator === "is_any_of")
+        && Array.isArray(row._effective_participant_stage_keys)
+    ) {
+        const contextStage =
+            readRowString(row, "stage_key")
+            ?? readRowString(row, "lifecycle_stage_key")
+            ?? readRowString(row, "_lifecycle_stage_key");
+        const participantKeys = (row._effective_participant_stage_keys as unknown[]).map((k) =>
+            typeof k === "string" ? k : null,
+        );
+        const belongs = expectedParts.some((part) =>
+            contextBelongsToEffectiveStage({
+                contextStageKey: contextStage,
+                participantEffectiveStageKeys: participantKeys,
+                stageKey: part,
+            }),
+        );
+        const pass = filter.operator === "not_equals" ? !belongs : belongs;
+        return {
+            pass,
+            notes: [{ field_key: fieldKey, operator: filter.operator, supported: true }],
+        };
+    }
+
+    const actual = fieldValue(row, fieldKey, tenantFieldDefinitions);
 
     if (isDateFieldKey(fieldKey) && (filter.operator === "equals" || filter.operator === "not_equals" || filter.operator === "date_is")) {
         return {
