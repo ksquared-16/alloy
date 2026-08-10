@@ -17,6 +17,17 @@ export {
     countParticipants,
 } from "./processParticipant";
 export {
+    type EffectiveParticipantPosition,
+    type EffectiveProcessPosition,
+    type StageRollup,
+    type LocationRollup,
+    composeStageRollup,
+    composeLocationRollup,
+    contextBelongsToEffectiveStage,
+    deriveEffectiveProcessPosition,
+    effectiveProcessPositionBelongsToStage,
+} from "./effectiveProcessPosition";
+export {
     type ProcessParticipantProjection,
     type ProcessParticipantScope,
 } from "./processParticipantProjection";

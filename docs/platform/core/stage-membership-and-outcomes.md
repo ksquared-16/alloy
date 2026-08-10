@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-10
 supersedes: []
 ---
 
@@ -37,9 +37,10 @@ If a design decision violates this chain, stop and redesign it.
 A stage answers **"what belongs here?"** — operational membership, not queue membership and
 not status ownership.
 
-- Membership is the persisted stage position: `stage_key` on the process subject
-  (`opportunities.stage_key` for family-track stages, `opportunity_customer_members.stage_key`
-  for child-track stages).
+- Membership is the persisted stage position on the **correct subject grain**:
+  - Context/family track: `opportunities.stage_key` (shared/context stage)
+  - Participant track: `process_instances.stage_key` (Enrollment children; null = inherit context)
+- Legacy `opportunity_customer_members.stage_key` is compatibility only — not the membership owner.
 - `stage_key` is written by exactly two things: **intake** (initial stage) and **outcome
   execution** (`move_to_stage` targets). Nothing else writes it — not PATCH routes, not queue
   code, not surfaces.
@@ -47,8 +48,38 @@ not status ownership.
   count unit, and location scope. It contains **no status lists** — the old
   `included_status_keys` / `included_disposition_keys` pattern re-derived membership from
   durable state and drifted (three divergent copies existed at audit time).
-- Queue lanes and Work View scoping are *derived* from stage membership. A queue definition
-  filters on `stage_key`; it is generated output, never independently-authored status filters.
+- Queue lanes and Work View scoping are *derived* from stage membership **and** Effective
+  Process Position (below). A queue definition filters on stage; it is generated output, never
+  independently-authored status filters.
+
+## Effective Process Position (derived)
+
+**Effective Process Position** is a **read/projection** concept. It is **not** another persisted
+status, stage column, process instance, or Business Process runtime.
+
+### Invariants
+
+1. **Persisted subject stage remains authoritative.** Outcome execution writes the correct grain.
+2. **Effective participant stage** = explicit participant stage when present; otherwise the shared
+   context stage when the process participation contract declares `inheritsContextStage`.
+3. **Context/family rollup** is the composition of effective stages of **authorized, scope-filtered**
+   participants. Homogeneous → one stage label. Mixed → compact multi-stage label (e.g.
+   `Lead · Waitlist`). It is **not** durable state and must not be written back to
+   `opportunities.stage_key`.
+4. **Access filtering precedes rollup.** Unauthorized participants must not contribute stages or
+   locations to the rollup a principal sees.
+5. **Work Views use effective participation at their configured grain:**
+   - **Case/context grain:** the context belongs when at least one visible participant is
+     effectively in that stage, **or** (no participants yet) the shared context stage matches.
+     Raw `opportunities.stage_key` alone must not keep a family in Lead after every participant
+     has branched to Waitlist.
+   - **Child/candidate grain:** each effective participant in that stage is its own row/count.
+6. **Queues remain projection/selection.** Focus Panel remains the universal operator surface and
+   displays rollups for mixed stage/location without inventing a fake family location.
+
+Canonical implementation: `web/lib/process/engine/effectiveProcessPosition.ts` (generic) consumed
+by Work View evaluation, queue enrichment, and Focus Panel header chips. Do not add
+Enrollment-only branches inside the engine resolver.
 
 ## Outcomes
 
