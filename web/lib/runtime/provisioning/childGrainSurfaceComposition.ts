@@ -43,11 +43,14 @@ import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuild
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { resolveJourneySegment, type JourneySegment } from "@/lib/lifecycle/grainVocabulary";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
+import type { ChildProvisioningRowWithPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
+import { waitlistContextFromPlacementProjection } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
 import {
     QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
     type LifecycleSubjectRef,
     type QueueRowContext,
+    type SubjectPlacementContext,
 } from "@/lib/workUnits/lifecycleSubjectContracts";
 // Type-only: erased at build time, so this does NOT create an import cycle back into the answer.
 import type { CurrentBusinessState, TruthfulPrimaryAction } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
@@ -218,8 +221,31 @@ export function composeChildGrainSurface(params: {
  * and it is not a fallback: `active_subject` names the child, so the affordance reads "open the case,
  * focused on this child" rather than "this child is a case".
  */
+function placementContextFromChildPlacement(
+    row: ChildProvisioningRowWithPlacement,
+): SubjectPlacementContext | undefined {
+    const proj = row.placementWaitlistRow;
+    if (!proj) return undefined;
+    const locationId = typeof proj.site_id === "string" ? proj.site_id.trim() || null : null;
+    const programKey = typeof proj.program_key === "string" ? proj.program_key.trim() || null : null;
+    const programLabel =
+        (typeof proj.program_room_group_label === "string" && proj.program_room_group_label.trim()) ||
+        programKey ||
+        null;
+    const roomId =
+        (typeof proj.program_room_cohort_key === "string" && proj.program_room_cohort_key.trim()) || null;
+    if (!locationId && !programKey && !programLabel && !roomId) return undefined;
+    return {
+        location_id: locationId,
+        program_key: programKey,
+        program_label: programLabel,
+        room_id: roomId,
+        room_label: programLabel,
+    };
+}
+
 export function childQueueRowContext(params: {
-    row: ChildProvisioningRow;
+    row: ChildProvisioningRow | ChildProvisioningRowWithPlacement;
     /** The child's effective stage, in the operator's configured words. */
     stageLabel: string;
     stageLabelsByKey: Readonly<Record<string, string>>;
@@ -238,6 +264,10 @@ export function childQueueRowContext(params: {
         status_key: row.statusKey ?? "",
         ...(row.contextId ? { case_id: row.contextId } : {}),
     } as LifecycleSubjectRef;
+
+    const withPlacement = row as ChildProvisioningRowWithPlacement;
+    const waitlist_context = waitlistContextFromPlacementProjection(withPlacement.placementWaitlistRow);
+    const placement_context = placementContextFromChildPlacement(withPlacement);
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -278,6 +308,8 @@ export function childQueueRowContext(params: {
             active_subject: subject,
             ...(row.stageKey ? { stage_focus_key: row.stageKey } : {}),
         },
+        ...(placement_context ? { placement_context } : {}),
+        ...(waitlist_context ? { waitlist_context } : {}),
     };
 }
 

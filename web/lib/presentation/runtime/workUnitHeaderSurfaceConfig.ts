@@ -45,9 +45,9 @@ export const DEFAULT_WORK_UNIT_HEADER_KPIS: readonly WorkUnitHeaderKpiSlot[] = [
     {
         slot: 3,
         enabled: true,
-        label: "Lead count",
+        label: "Pipeline Children",
         icon: "chart",
-        sourceKey: "enrollment.lead_count",
+        sourceKey: "enrollment.active_leads",
         accent: null,
     },
     { slot: 4, enabled: false, label: null, icon: "calendar", sourceKey: "enrollment.tour_completed_count", accent: null },

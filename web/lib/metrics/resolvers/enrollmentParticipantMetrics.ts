@@ -89,15 +89,17 @@ async function resolveParticipantMetric(
         locationIds = filter.locationIds;
     }
 
-    // ONE membership source: the Enrollment projection (process_instances ⋈ context ⋈ subject),
-    // scoped to the work unit when present, else the org rollup — then narrowed by site location.
+    // ONE membership source: the Enrollment projection (process_instances ⋈ context ⋈ subject).
+    // Work-unit scope expands to the department Enrollment footprint inside `load` (so Waitlist
+    // children whose family remains parked on Lead still count). Do NOT re-narrow by
+    // opportunity.work_unit_id here — that reintroduces the park defect.
     let participants = await enrollmentProjection.load(ctx.supabase, { orgId: ctx.orgId, scopeId });
     if (locationIds?.length) {
         participants = participants.filter((p) =>
             enrollmentParticipantMatchesLocationScope(p, locationIds!, grain),
         );
     }
-    const value = counter(participants, { orgId: ctx.orgId, scopeId });
+    const value = counter(participants, { orgId: ctx.orgId, scopeId: null });
 
     return {
         key: def.key,

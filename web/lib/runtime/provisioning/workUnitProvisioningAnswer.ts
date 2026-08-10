@@ -73,8 +73,13 @@ import {
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
 import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
 import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
-import { applyQueueRowVariantSortCriteria } from "@/lib/presentation/runtime/applyQueueRowVariantSortCriteria";
-import { normalizeSortCriteria } from "@/lib/adminV2/settings/surfaces/queueRowVariantDisplayControls";
+import { applyQueueRowVariantGroupAndSortCriteria } from "@/lib/presentation/runtime/applyQueueRowVariantGroupAndSortCriteria";
+import {
+    normalizeGroupByCriteria,
+    normalizeSortCriteria,
+} from "@/lib/adminV2/settings/surfaces/queueRowVariantDisplayControls";
+import { attachChildGrainWaitlistPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
+import type { ChildProvisioningRowWithPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import {
     enrichOperationalProjectionRows,
     queueRowContextOf,
@@ -149,6 +154,9 @@ export type ProvisioningRow = {
      * Null only when enrichment is unavailable — the row still renders through honest fallbacks.
      */
     context: QueueRowContext | null;
+    /** Placement waitlist projection (child Waitlist) — used for sort/group + compact fields. */
+    _placement_waitlist_row?: unknown;
+    placementCandidateId?: string | null;
 };
 
 /** U-O1 orientation: the active lens indicated among its lens set. Identity only — NO counts. */
@@ -582,7 +590,7 @@ export async function composeWorkUnitProvisioningAnswer(
     const wuLookup = await cachedConfigRead(`wu:${req.orgId}:${workUnitKey || req.workUnitSlug}`, async () => {
         const { data, error } = await req.supabase
             .from("work_units")
-            .select("id, key, name, org_id, department_id, queue_definition")
+            .select("id, key, name, org_id, department_id, queue_definition, metadata")
             .eq("org_id", req.orgId)
             .eq("key", workUnitKey || req.workUnitSlug)
             .maybeSingle();
@@ -907,13 +915,47 @@ export async function composeWorkUnitProvisioningAnswer(
     // were serial (~680 ms + ~690 ms measured); kick BOTH off here and join below so composition is
     // the max, not the sum. The subject-snapshot's enriched `primary_contact` is built AFTER the join.
     //
-    // CHILD ROWS ARE NOT ENRICHED. `enrichOperationalProjectionRows` resolves CRM labels by
-    // OPPORTUNITY id — a child row's `id` is not one, so running it here would either return nothing
-    // or, worse, attach the family's contact to the child and call it the child's. The child page is
-    // already complete for what it claims: identity, effective stage, and the family it hangs off.
+    // CHILD ROWS: enrich the FAMILY opportunity(s) on the page so commit-critical Household /
+    // Children cards can know person + sibling roster while Attention stays on the child.
+    // Keys are opportunity ids (drawer_open / contextId), never participation ids.
     const enrichedPromise: Promise<readonly Record<string, unknown>[]> =
         childRows
-            ? Promise.resolve([])
+            ? (async () => {
+                  const familyIds = [
+                      ...new Set(
+                          childRows
+                              .slice(0, PROVISIONING_ROW_PAGE_CAP)
+                              .map((r) => (typeof r.contextId === "string" ? r.contextId.trim() : ""))
+                              .filter(Boolean),
+                      ),
+                  ];
+                  if (!familyIds.length) return [];
+                  const byId = new Map(
+                      ((baseRows ?? []) as Array<Record<string, unknown>>)
+                          .filter((o) => familyIds.includes(String(o.id)))
+                          .map((o) => [String(o.id), o] as const),
+                  );
+                  const familyPage = familyIds
+                      .map((id) => byId.get(id))
+                      .filter((r): r is Record<string, unknown> => r != null);
+                  if (!familyPage.length) return [];
+                  return enrichOperationalProjectionRows({
+                      supabase: req.supabase,
+                      orgId: req.orgId,
+                      rows: familyPage as unknown as EnrichableProjectionRow[],
+                      queue: {
+                          key: activeView.id,
+                          label: activeView.label,
+                          lifecycle_key: process.key,
+                          subject_grain: "case",
+                          stage_labels_by_key: Object.fromEntries(
+                              stages
+                                  .filter((s) => s.key.trim() && s.label.trim())
+                                  .map((s) => [s.key.trim(), s.label.trim()]),
+                          ),
+                      },
+                  }) as unknown as Promise<readonly Record<string, unknown>[]>;
+              })()
             : (enrichOperationalProjectionRows({
                   supabase: req.supabase,
                   orgId: req.orgId,
@@ -1041,6 +1083,21 @@ export async function composeWorkUnitProvisioningAnswer(
             : [],
     );
 
+    // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
+    // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
+    if (childRows?.length) {
+        childRows = await attachChildGrainWaitlistPlacement({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            workUnitId: workUnit.id,
+            workUnitMetadata: (wuRow as { metadata?: unknown }).metadata ?? null,
+            departmentMetadata: deptRow?.metadata ?? null,
+            placementQueueKeys: ["waitlisted", "waitlist", activeView.id],
+            childRows,
+            familyNamesByOpportunityId,
+        });
+    }
+
     let stage: LifecycleBuilderStageRecord;
     let currentBusinessState: CurrentBusinessState;
     let primaryAction: TruthfulPrimaryAction | null;
@@ -1157,20 +1214,29 @@ export async function composeWorkUnitProvisioningAnswer(
         stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
     );
     const rowsUnsorted: ProvisioningRow[] = childRows
-        ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => ({
-              id: String(r.participationId ?? ""),
-              stageKey: r.stageKey,
-              statusKey: r.statusKey,
-              updatedAt: r.updatedAt,
-              title: r.title,
-              context: childQueueRowContext({
-                  row: r,
-                  stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
-                  stageLabelsByKey,
-                  lifecycleKey: process.key,
-                  familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
-              }),
-          }))
+        ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => {
+              const placed = r as ChildProvisioningRowWithPlacement;
+              return {
+                  id: String(r.participationId ?? ""),
+                  stageKey: r.stageKey,
+                  statusKey: r.statusKey,
+                  updatedAt: r.updatedAt,
+                  title: r.title,
+                  context: childQueueRowContext({
+                      row: placed,
+                      stageLabel: (r.stageKey ? stageLabelsByKey[r.stageKey] : null) ?? r.stageKey ?? "",
+                      stageLabelsByKey,
+                      lifecycleKey: process.key,
+                      familyName: r.contextId ? familyNamesByOpportunityId.get(r.contextId) ?? null : null,
+                  }),
+                  ...(placed.placementWaitlistRow
+                      ? {
+                            _placement_waitlist_row: placed.placementWaitlistRow,
+                            placementCandidateId: placed.placementCandidateId ?? null,
+                        }
+                      : {}),
+              };
+          })
         : enriched.map((r) => ({
               id: String((r as Record<string, unknown>).id),
               stageKey: strOrNull((r as Record<string, unknown>).stage_key),
@@ -1184,11 +1250,10 @@ export async function composeWorkUnitProvisioningAnswer(
     const presentation = await presentationPromise;
     timings.presentation_ms = now() - tPres;
 
-    // Published Queue Row variant sortCriteria must drive child-grain order (Waitlist priority, etc.).
-    // Work View sort_v1 remains authoritative for family/case grain; child lenses consume the matched
-    // queue-row variant's authored sort when present so builder settings are not silently ignored.
+    // Published Queue Row variant groupBy + sortCriteria drive child-grain Waitlist order.
+    // Canonical config owner = the matched published variant (not a second Work View authority).
     let rows: ProvisioningRow[] = rowsUnsorted;
-    if (childRows && rowsUnsorted.length > 1 && presentation.queue.rowVariants.length > 0) {
+    if (childRows && rowsUnsorted.length > 0 && presentation.queue.rowVariants.length > 0) {
         const stageKey = rowsUnsorted[0]?.stageKey ?? null;
         const matched = resolveQueueRowVariant(presentation.queue.rowVariants, {
             stageKey,
@@ -1197,10 +1262,12 @@ export async function composeWorkUnitProvisioningAnswer(
             grain: "child",
         });
         if (matched) {
+            const groupBy = normalizeGroupByCriteria(matched);
             const criteria = normalizeSortCriteria(matched);
-            if (criteria.length) {
-                rows = applyQueueRowVariantSortCriteria(
+            if (groupBy.length || criteria.length) {
+                rows = applyQueueRowVariantGroupAndSortCriteria(
                     rowsUnsorted as unknown as Array<Record<string, unknown>>,
+                    groupBy,
                     criteria,
                 ) as unknown as ProvisioningRow[];
             }
@@ -1217,18 +1284,41 @@ export async function composeWorkUnitProvisioningAnswer(
     // Sourced from data ALREADY resolved for the subject row (enriched queue-row `primary_contact` + the
     // row's `metadata.inquiry_children`) — no extra DB read. Empty/absent bindings → the bag is null and
     // those cards reserve (the drawer VM fills them). A second surface declares its own keys the same way.
+    //
+    // CHILD ATTENTION: Settlement Truth is the family opportunity. Prefer enriched family row for
+    // Household/Children knowability while child.* bindings name the focused participant.
+    const familyEnrichedForChild =
+        childSubjectRow?.contextId != null
+            ? ((enriched.find(
+                  (r) => String((r as Record<string, unknown>).id) === childSubjectRow.contextId,
+              ) ?? null) as Record<string, unknown> | null)
+            : null;
+    const familyContextForChild = familyEnrichedForChild
+        ? queueRowContextOf(familyEnrichedForChild)
+        : null;
+
     const chosenRowContext = (rows.find((r) => r.id === chosen.entityId)?.context ?? {}) as Record<string, unknown>;
-    const chosenPrimaryContact = (chosenRowContext.primary_contact ?? {}) as Record<string, unknown>;
-    const subjectMetadata = (subjectRow as Record<string, unknown>).metadata as Record<string, unknown> | null | undefined;
-    const primaryContactName = strOrNull(chosenPrimaryContact.display_name);
-    const primaryContactPhone = strOrNull(chosenPrimaryContact.phone);
-    const primaryContactEmail = strOrNull(chosenPrimaryContact.email);
+    const identityContactSource = (familyContextForChild?.primary_contact ??
+        chosenRowContext.primary_contact ??
+        {}) as Record<string, unknown>;
+    const subjectMetadata = (
+        (familyEnrichedForChild?.metadata ?? (subjectRow as Record<string, unknown>).metadata) as
+            | Record<string, unknown>
+            | null
+            | undefined
+    );
+    const primaryContactName = strOrNull(identityContactSource.display_name);
+    const primaryContactPhone = strOrNull(identityContactSource.phone);
+    const primaryContactEmail = strOrNull(identityContactSource.email);
     // The committed Children card's roster. Prefer enriched queue-row children (Create Lead never
     // writes legacy `metadata.inquiry_children`). Primary source = `related_subjects_summary` —
     // same compact child projection as the queue children band. Fall back to `_household_children`
     // from enrichment, then the legacy intake snapshot for older records.
-    const relatedSubjectsSummary = Array.isArray(chosenRowContext.related_subjects_summary)
-        ? (chosenRowContext.related_subjects_summary as Array<Record<string, unknown>>)
+    const relatedSubjectsSummary = Array.isArray(
+        familyContextForChild?.related_subjects_summary ?? chosenRowContext.related_subjects_summary,
+    )
+        ? ((familyContextForChild?.related_subjects_summary ??
+              chosenRowContext.related_subjects_summary) as Array<Record<string, unknown>>)
         : [];
     const childrenFromContext = relatedSubjectsSummary
         .filter((s) => s.subject_type === "child")
@@ -1239,10 +1329,13 @@ export async function composeWorkUnitProvisioningAnswer(
             dob: strOrNull(s.date_of_birth),
             age: strOrNull(s.age_label),
             outcome_status_label: strOrNull(s.status_label),
+            ...(childSubjectRow?.subjectId && strOrNull(s.subject_id) === childSubjectRow.subjectId
+                ? { focused: true }
+                : {}),
         }));
-    const chosenEnrichedRow = (enriched.find(
-        (r) => String((r as Record<string, unknown>).id) === chosen.entityId
-    ) ?? {}) as Record<string, unknown>;
+    const chosenEnrichedRow = (familyEnrichedForChild ??
+        (enriched.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
+            {})) as Record<string, unknown>;
     const householdChildren = chosenEnrichedRow._household_children;
     const inquiryChildren =
         (childrenFromContext.length ? childrenFromContext : null)
@@ -1255,13 +1348,17 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
     };
-    // A SECOND SURFACE DECLARES ITS OWN KEYS — the seam working as designed. The child domain names
-    // `child.*` bindings; the platform contract and the work-mode builder forward them opaquely,
-    // knowing none of them. The family bindings above are NOT reused: they describe the household's
-    // primary contact, and a child surface presenting them as the child's identity would be the
-    // family-shaped answer wearing a child's name.
-    const subjectIdentityTruth: SubjectIdentityTruth | null = childComposition
+    // Child surface: Attention bindings (child.*) + family Truth bindings (person.* / children).
+    // Family bindings are Settlement context for the Focus Panel — not a substitution of subject.
+    const childBindings = childComposition
         ? childSubjectIdentityTruthBindings(childComposition, childSubjectRow?.title ?? null)
+        : null;
+    // Child surface: Attention bindings (child.*) + family Truth bindings (person.* / children).
+    // Family bindings are Settlement context for the Focus Panel — not a substitution of subject.
+    const subjectIdentityTruth: SubjectIdentityTruth | null = childComposition
+        ? Object.keys({ ...subjectIdentityTruthBindings, ...(childBindings ?? {}) }).length
+            ? { ...subjectIdentityTruthBindings, ...(childBindings ?? {}) }
+            : null
         : Object.keys(subjectIdentityTruthBindings).length
           ? subjectIdentityTruthBindings
           : null;

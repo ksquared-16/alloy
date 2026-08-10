@@ -137,12 +137,42 @@ async function loadEnrollmentParticipants(
     let opportunities: OppRow[];
 
     if (scopeId) {
-        // Scope at the source: this work unit's opportunities, then their enrollment instances.
+        // Work-unit scope must NOT mean "only opportunities parked on this work_unit_id".
+        // After Move to Waitlist, families often remain on the Lead WU while child PIs are
+        // waitlist — child-grain queues already resolve by effective stage. Pipeline Children /
+        // active_leads must use the same authorized Enrollment population: opportunities in the
+        // SAME DEPARTMENT as the scoped work unit (process footprint), not a single WU park.
+        const { data: wuRow, error: wuErr } = await supabase
+            .from("work_units")
+            .select("id, department_id")
+            .eq("org_id", orgId)
+            .eq("id", scopeId)
+            .maybeSingle();
+        if (wuErr) throw new Error(wuErr.message);
+        const departmentId =
+            wuRow && typeof (wuRow as { department_id?: unknown }).department_id === "string"
+                ? String((wuRow as { department_id: string }).department_id).trim()
+                : null;
+
+        let workUnitIds: string[] = [scopeId];
+        if (departmentId) {
+            const { data: deptUnits, error: deptWuErr } = await supabase
+                .from("work_units")
+                .select("id")
+                .eq("org_id", orgId)
+                .eq("department_id", departmentId);
+            if (deptWuErr) throw new Error(deptWuErr.message);
+            const ids = (deptUnits ?? [])
+                .map((r) => (typeof (r as { id?: unknown }).id === "string" ? String((r as { id: string }).id) : ""))
+                .filter(Boolean);
+            if (ids.length) workUnitIds = ids;
+        }
+
         const { data: oppData, error: oppErr } = await supabase
             .from("opportunities")
             .select("id, stage_key, status_key, work_unit_id, location_id")
             .eq("org_id", orgId)
-            .eq("work_unit_id", scopeId);
+            .in("work_unit_id", workUnitIds);
         if (oppErr) throw new Error(oppErr.message);
         opportunities = (oppData ?? []) as OppRow[];
         if (!opportunities.length) return [];

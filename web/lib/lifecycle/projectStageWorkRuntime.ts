@@ -152,9 +152,10 @@ export function taskMatchesStageWorkTemplate(
         return false;
     }
 
-    // Same platform work definition — bind when stage aligns (or stage is unknown on legacy rows).
+    // Same platform work definition — bind only when stage aligns (or stage is unknown on legacy rows).
+    // Do NOT use lifecycle_provenance to bypass stage: Lead `contact_family` tasks must not
+    // overwrite Waitlist `review_waitlist_position` labels via shared definition binding.
     if (!stage || stage === stageKey) return true;
-    if (trimOrNull(md.lifecycle_provenance) === "lifecycle_template") return true;
 
     return false;
 }
@@ -269,9 +270,17 @@ function buildWorkItemProjection(args: {
         const md = openRow.metadata ?? {};
         const dueAt = String(openRow.due_at ?? "") || null;
         const status = trimOrNull(openRow.status) ?? "open";
+        // Prefer configured template label when the matched task carries a foreign template key
+        // (shared work_definition bindings must not rename Waitlist work to Lead titles).
+        const taskTemplateKey =
+            trimOrNull(md.operating_plan_template_key) ?? trimOrNull(md.work_intent_key);
+        const label =
+            taskTemplateKey && taskTemplateKey !== template.template_key
+                ? template.label
+                : (trimOrNull(openRow.title) ?? template.label);
         return {
             template_key: template.template_key,
-            label: trimOrNull(openRow.title) ?? template.label,
+            label,
             description: trimOrNull(template.description),
             role,
             state: "open",

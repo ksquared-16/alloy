@@ -11,23 +11,28 @@ function readSortValue(row: Record<string, unknown>, key: string): unknown {
     const waitlist = (ctx?.waitlist_context ?? row.waitlist_context) as Record<string, unknown> | null | undefined;
     const placement = row._placement_waitlist_row as Record<string, unknown> | null | undefined;
 
+    if (k.includes("priority") || k.includes("score")) {
+        return (
+            waitlist?.priority ??
+            waitlist?.priority_score ??
+            placement?.placement_priority_v2?.score ??
+            placement?.priority_score ??
+            placement?.bucket_rank ??
+            row.waitlist_priority ??
+            null
+        );
+    }
     if (k.includes("waitlist") && (k.includes("position") || k.includes("rank"))) {
+        const runtimePos = placement?.runtime_position;
+        if (typeof runtimePos === "number") return runtimePos;
+        const ctxPos = waitlist?.runtime_position ?? waitlist?.position;
+        if (typeof ctxPos === "number") return ctxPos;
         return (
             waitlist?.position_label ??
             waitlist?.position ??
             placement?.runtime_position_label ??
             placement?.position ??
             row.waitlist_position ??
-            null
-        );
-    }
-    if (k.includes("priority") || k.includes("score")) {
-        return (
-            waitlist?.priority ??
-            waitlist?.priority_score ??
-            placement?.priority_score ??
-            placement?.bucket_rank ??
-            row.waitlist_priority ??
             null
         );
     }

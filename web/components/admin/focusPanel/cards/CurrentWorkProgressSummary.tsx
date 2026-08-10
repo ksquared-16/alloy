@@ -123,7 +123,7 @@ export default function CurrentWorkProgressSummary({ progress }: Props) {
                     </li>
                 ))}
             </ol>
-            {(progress.currentDetail || progress.afterDetail) ?
+            {(progress.currentDetail || progress.afterDetail) && progress.items.length > 1 ?
                 <div className="alloy-os-currentwork__progress-detail-row">
                     {progress.currentDetail ?
                         <div>

@@ -434,7 +434,10 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             : null;
 
     const placement_context = resolvePlacementContext(row, subjectType === "child" ? active.subjectId : null);
-    const waitlist_context = subjectType === "candidate" ? resolveWaitlistContext(row) : undefined;
+    // Waitlist ranking fields are Placement-owned. Candidate grain always carries the projection;
+    // child-grain Waitlist provisioning now attaches the same `_placement_waitlist_row` shape.
+    const waitlist_context =
+        subjectType === "candidate" || subjectType === "child" ? resolveWaitlistContext(row) : undefined;
 
     const activeInquiryRaw = readInquiryChildrenFromRow(row).find((entry) => {
         if (entry == null || typeof entry !== "object" || Array.isArray(entry)) return false;

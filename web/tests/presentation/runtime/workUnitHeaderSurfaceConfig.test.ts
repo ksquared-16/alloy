@@ -15,7 +15,8 @@ describe("workUnitHeaderSurfaceConfig", () => {
         expect(config.kpis.slice(0, WORKSPACE_HEADER_KPI_REQUIRED_COUNT).every((k) => k.enabled)).toBe(true);
         expect(config.kpis[0]?.sourceKey).toBe("ops.needs_attention_count");
         expect(config.kpis[1]?.accent).toBe("gold");
-        expect(config.kpis[2]?.sourceKey).toBe("enrollment.lead_count");
+        expect(config.kpis[2]?.sourceKey).toBe("enrollment.active_leads");
+        expect(config.kpis[2]?.label).toBe("Pipeline Children");
     });
 
     it("buildWorkUnitHeaderPresentationForRuntime falls back to process and work-view labels", () => {
@@ -32,6 +33,6 @@ describe("workUnitHeaderSurfaceConfig", () => {
 
     it("workUnitHeaderKpiSourceKeys collects enabled calculation keys", () => {
         const keys = workUnitHeaderKpiSourceKeys(DEFAULT_WORK_UNIT_HEADER_SURFACE_CONFIG);
-        expect(keys).toEqual(["ops.needs_attention_count", "ops.work_overdue_count", "enrollment.lead_count"]);
+        expect(keys).toEqual(["ops.needs_attention_count", "ops.work_overdue_count", "enrollment.active_leads"]);
     });
 });

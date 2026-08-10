@@ -78,6 +78,15 @@ export function resolveQueueRowFieldValueFromContext(
                 || context.placement_context?.room_label?.trim()
                 || null
             );
+        case "child.program":
+        case "inquiry_child.program":
+        case "opportunity.program":
+        case "placement.program":
+            return (
+                context.placement_context?.program_label?.trim()
+                || context.placement_context?.room_label?.trim()
+                || null
+            );
         case "person.primary_contact_name":
             return context.primary_contact?.display_name?.trim() || null;
         case "person.phone":

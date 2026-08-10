@@ -7256,7 +7256,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .alloy-os-currentwork__progress-strip {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0;
   margin: 0;
   padding: 6px 4px 2px;
@@ -7269,7 +7269,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__progress-node {
   position: relative;
   display: flex;
-  flex: 1 1 5rem;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
   gap: 2px;
@@ -7281,11 +7281,11 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__progress-connector {
   position: absolute;
   top: 10px;
-  right: calc(50% + 12px);
-  width: calc(100% - 24px);
+  left: calc(-50% + 9px);
+  right: calc(50% + 9px);
   height: 2px;
   background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
-  transform: translateX(-100%);
+  pointer-events: none;
 }
 
 .alloy-os-currentwork__progress-connector[data-complete="true"] {

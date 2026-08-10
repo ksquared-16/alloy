@@ -76,6 +76,12 @@ export type WorkViewConfigV1Stored = {
 export const WORK_VIEW_CATCH_ALL_SUMMARY = "All work in this process" as const;
 
 /**
+ * Operator-facing pill label for catch-all (include-all) Work Views.
+ * "All Leads" is misleading once families leave Lead via EPP — catch-all means all process cases.
+ */
+export const WORK_VIEW_CATCH_ALL_OPERATOR_LABEL = "All Enrollment" as const;
+
+/**
  * Process-wide catch-all Work View — empty or absent `filters_v1`.
  * Runtime: every row on the work unit all-records base passes the view predicate.
  * Builder: "All work in this process" mode; skips mixed-grain stage validation.
@@ -90,13 +96,22 @@ export function isWorkViewCatchAll(
  * Include-all Work Views (empty `filters_v1`) must resolve on the department aggregate host
  * and all-records lane — not a stage-specific `compat_queue_key`. Strip erroneous bindings at
  * load time so runtime counts/rows and pill routing agree with predicate-only semantics.
+ *
+ * Also repair the misleading seeded label "All Leads" → {@link WORK_VIEW_CATCH_ALL_OPERATOR_LABEL}.
+ * Count semantics stay include-all (Classification A); only the operator-facing label changes.
  */
 export function normalizeCatchAllWorkViewCompatBinding(
     view: WorkViewConfigV1Stored,
 ): WorkViewConfigV1Stored {
-    if (!isWorkViewCatchAll(view) || !view.compat_queue_key?.trim()) return view;
-    const { compat_queue_key: _removed, ...rest } = view;
-    return rest;
+    let next = view;
+    if (isWorkViewCatchAll(next) && next.compat_queue_key?.trim()) {
+        const { compat_queue_key: _removed, ...rest } = next;
+        next = rest;
+    }
+    if (isWorkViewCatchAll(next) && /^all\s+leads$/i.test(next.label?.trim() ?? "")) {
+        next = { ...next, label: WORK_VIEW_CATCH_ALL_OPERATOR_LABEL };
+    }
+    return next;
 }
 
 /** Repair every catch-all view in a process work_views_v1 list. Returns changed rows + whether any changed. */
