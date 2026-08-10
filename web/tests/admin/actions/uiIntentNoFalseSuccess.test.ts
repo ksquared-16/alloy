@@ -114,35 +114,67 @@ function executeResponse(body: unknown, ok = true, status = 200) {
     return { ok, status, json: async () => body };
 }
 
-describe("send_tour_invitation derives its result from the server", () => {
-    it("reads the runtime's FLATTENED execution_result, as the live route returns it", async () => {
-        // Proven against the running app: the detail fields sit directly on
-        // execution_result, not under a nested `detail`.
+// --- send_tour_invitation opens compose after prepare (never silent-sends) ------
+
+describe("send_tour_invitation opens compose instead of silent-sending", () => {
+    it("prepares a draft then launches QuickMessage compose", async () => {
+        const { launchContextualQuickMessage } = await import(
+            "@/lib/admin/actions/contextualActionInvocation"
+        );
         fetchMock.mockResolvedValue(
             executeResponse({
                 ok: true,
                 data: {
                     execution_result: {
-                        invitation_id: "inv-9",
-                        option_count: 5,
-                        sent_channels: ["email", "sms"],
-                        idempotent_replay: false,
-                        skipped: [],
+                        detail: {
+                            invitation_id: "inv-9",
+                            draft: {
+                                invitationId: "inv-9",
+                                emailSubject: "Come visit",
+                                emailBody: "Hello…",
+                            },
+                        },
                     },
                 },
-            })
+            }),
         );
 
         const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
 
         expect(out.ok).toBe(true);
-        const said = (window.alert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-        expect(said).toContain("Invitation created");
-        expect(said).toContain("Email queued");
-        expect(said).toContain("SMS queued");
+        expect(fetchMock).toHaveBeenCalled();
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe("/api/admin/actions/execute");
+        const body = JSON.parse(init.body as string);
+        expect(body.action_key).toBe("send_tour_invitation");
+        expect(body.payload.mode).toBe("prepare");
+        expect(launchContextualQuickMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                opportunity_id: "opp-1",
+                defaultChannel: "email",
+                draftBody: "Hello…",
+                tourInvitationId: "inv-9",
+            }),
+        );
+        expect(window.alert).not.toHaveBeenCalled();
+        expect(window.confirm).not.toHaveBeenCalled();
     });
 
-    it("reports per-channel truth from sent_channels and skipped", async () => {
+    it("still opens compose when prepare fails", async () => {
+        const { launchContextualQuickMessage } = await import(
+            "@/lib/admin/actions/contextualActionInvocation"
+        );
+        fetchMock.mockResolvedValue(
+            executeResponse({ ok: false, error: { message: "No times" } }, false, 422),
+        );
+
+        const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
+
+        expect(out.ok).toBe(true);
+        expect(launchContextualQuickMessage).toHaveBeenCalled();
+    });
+
+    it("does not claim invitation sent from the ui_intent open alone", async () => {
         fetchMock.mockResolvedValue(
             executeResponse({
                 ok: true,
@@ -150,111 +182,19 @@ describe("send_tour_invitation derives its result from the server", () => {
                     execution_result: {
                         detail: {
                             invitation_id: "inv-1",
-                            sent_channels: ["email"],
-                            skipped: ["sms_suppressed"],
-                            idempotent_replay: false,
+                            draft: { emailBody: "Draft" },
+                            mode: "prepare",
+                            sent_channels: [],
                         },
                     },
                 },
-            })
-        );
-
-        const out = await applyRegistryResolvedActionClient(
-            uiIntent("send_tour_invitation", { intent: "send_tour_invitation" }),
-            host()
-        );
-
-        expect(out.ok).toBe(true);
-        const said = (window.alert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-        expect(said).toContain("Email queued");
-        expect(said).toContain("not sent — sms suppressed");
-        expect(said).not.toContain("Invitation sent");
-    });
-
-    it("says an existing invitation was reused rather than claiming a new one", async () => {
-        fetchMock.mockResolvedValue(
-            executeResponse({
-                ok: true,
-                data: {
-                    execution_result: {
-                        detail: { sent_channels: ["email", "sms"], skipped: [], idempotent_replay: true },
-                    },
-                },
-            })
+            }),
         );
 
         await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
 
-        const said = (window.alert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-        expect(said).toContain("Existing invitation reused");
-        expect(said).toContain("Email queued");
-        expect(said).toContain("SMS queued");
-    });
-
-    it("confirms explicitly before issuing the request", async () => {
-        (window.confirm as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
-
-        const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
-
-        expect(fetchMock).not.toHaveBeenCalled();
-        expect(out.ok).toBe(true); // declined, not failed — nothing happened
-    });
-
-    it("posts to the canonical execute route with the registered key and subject", async () => {
-        fetchMock.mockResolvedValue(
-            executeResponse({
-                ok: true,
-                data: { execution_result: { detail: { sent_channels: ["email"], skipped: [] } } },
-            })
-        );
-
-        await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
-
-        const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toBe("/api/admin/actions/execute");
-        expect(init.method).toBe("POST");
-        expect(init.credentials).toBe("include");
-        const body = JSON.parse(init.body as string);
-        expect(body.action_key).toBe("send_tour_invitation");
-        expect(body.entity_type).toBe("opportunity");
-        expect(body.entity_id).toBe("opp-1");
-    });
-
-    it.each([
-        ["a non-2xx response", executeResponse({ ok: false, error: { message: "Blocked by policy" } }, false, 422)],
-        ["an ok:false envelope", executeResponse({ ok: false, error: "Refused" })],
-    ])("%s is a failure, not a success", async (_label, response) => {
-        fetchMock.mockResolvedValue(response);
-
-        const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
-
-        expect(out.ok).toBe(false);
-        expect(errorOf(out).length).toBeGreaterThan(0);
-    });
-
-    it("treats an unreadable body as failure", async () => {
-        fetchMock.mockResolvedValue({
-            ok: true,
-            status: 200,
-            json: async () => {
-                throw new Error("not json");
-            },
-        });
-
-        const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
-
-        expect(out.ok).toBe(false);
-        expect(errorOf(out)).toMatch(/could not be read/i);
-    });
-
-    it("treats a 2xx with no recognisable invitation detail as failure", async () => {
-        // A success envelope carrying nothing to report is not a send. Claiming
-        // "no eligible delivery channel" here would invent an outcome.
-        fetchMock.mockResolvedValue(executeResponse({ ok: true, data: { execution_result: {} } }));
-
-        const out = await applyRegistryResolvedActionClient(uiIntent("send_tour_invitation"), host());
-
-        expect(out.ok).toBe(false);
-        expect(errorOf(out)).toMatch(/not confirmed/i);
+        expect(window.alert).not.toHaveBeenCalled();
+        const said = (window.alert as unknown as ReturnType<typeof vi.fn>).mock.calls;
+        expect(said).toHaveLength(0);
     });
 });

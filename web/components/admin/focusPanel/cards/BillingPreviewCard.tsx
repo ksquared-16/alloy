@@ -94,7 +94,7 @@ export default function BillingPreviewCard({
                 onClick={() => setExpanded(true)}
                 data-billing-action="expand"
             >
-                View configuration →
+                View configuration
             </button>
         )
     ) : null;

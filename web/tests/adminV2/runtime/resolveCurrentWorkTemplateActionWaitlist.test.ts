@@ -30,7 +30,7 @@ describe("resolveCurrentWorkTemplateAction — Move to Waitlist related subjects
         expect(resolved!.blockedReason).toBeNull();
     });
 
-    it("auto-resolves single eligible child without requiring a picker flag", () => {
+    it("requires picker for a single eligible child (confirm before execute)", () => {
         const resolved = resolveCurrentWorkTemplateAction({
             actionRef: "move_to_waitlist",
             truth: {
@@ -39,7 +39,7 @@ describe("resolveCurrentWorkTemplateAction — Move to Waitlist related subjects
                 ],
             },
         });
-        expect(resolved!.requiresSubjectPicker).toBe(false);
+        expect(resolved!.requiresSubjectPicker).toBe(true);
         expect(resolved!.relatedSubjectResolution).toBe("enrollment_child");
         expect(resolved!.blockedReason).toBeNull();
     });
@@ -51,5 +51,17 @@ describe("resolveCurrentWorkTemplateAction — Move to Waitlist related subjects
         });
         expect(resolved!.relatedSubjectResolution).toBe("enrollment_child");
         expect(resolved!.blockedReason).toMatch(/child/i);
+    });
+
+    it("does not block when Focus Panel truth omits child projection (execute-time resolve)", () => {
+        const resolved = resolveCurrentWorkTemplateAction({
+            actionRef: "move_to_waitlist",
+            truth: { opportunity_id: "opp-1" },
+        });
+        expect(resolved!.relatedSubjectResolution).toBe("enrollment_child");
+        expect(resolved!.blockedReason).toBeNull();
+        // Surface still opens subject_selector via relatedSubjectResolution; picker flag
+        // stays false until truth projects subjects.
+        expect(resolved!.requiresSubjectPicker).toBe(false);
     });
 });

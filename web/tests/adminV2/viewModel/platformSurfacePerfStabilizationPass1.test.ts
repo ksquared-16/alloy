@@ -155,11 +155,18 @@ describe("platform surface perf stabilization pass 1", () => {
     });
 
     it("loadOperatorLifecycleLandingCards returns cached cards without refetching catalog", async () => {
-        const fetchMock = vi
-            .fn()
-            .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) })
-            .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) })
-            .mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) });
+        const { resetWorkspaceAdminFetchDedupeForTests } = await import(
+            "@/lib/workspace/workspaceAdminFetchDedupe"
+        );
+        resetWorkspaceAdminFetchDedupeForTests();
+        invalidateOperatorLifecycleLandingCache();
+
+        const fetchMock = vi.fn().mockImplementation(async () =>
+            new Response(JSON.stringify({ items: [] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            }),
+        );
         vi.stubGlobal("fetch", fetchMock);
 
         await loadOperatorLifecycleLandingCards({ includeRollups: false });

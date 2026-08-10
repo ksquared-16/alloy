@@ -13,12 +13,15 @@
  * Effective stage = process_instances.stage_key ?? opportunities.stage_key (engine coalesce).
  *
  * Grain: participant/child (process_instances). Work View queue totals use opportunity/case grain.
+ * Workspace Site Filter: case grain uses opportunity.location_id; child grain uses OCM location
+ * (falling back to opportunity location). Never show org-wide PI totals inside a site-scoped workspace.
  */
 
 import type { MetricResolveContext, OipMetricKey, ResolvedMetricValue } from "@/lib/metrics/types";
 import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import { getMetricDefinition } from "@/lib/metrics/registry";
 import { resolveMetricTimeWindowBounds } from "@/lib/metrics/timeWindow";
+import { resolveMetricScopeFilter } from "@/lib/metrics/scopeFilter";
 import {
     enrollmentProjection,
     countActiveLeadParticipants,
@@ -33,6 +36,25 @@ type EnrollmentCounter = (
     scope?: { orgId: string; scopeId?: string | null },
 ) => number;
 
+/** Location match for a Workspace Site Filter cohort — grain-aware. */
+export function enrollmentParticipantMatchesLocationScope(
+    participant: EnrollmentParticipant,
+    locationIds: readonly string[],
+    grain: "participant" | "case",
+): boolean {
+    const allowed = new Set(locationIds.map((id) => id.trim()).filter(Boolean));
+    if (!allowed.size) return false;
+    if (grain === "case") {
+        const loc = participant.attributes.contextLocationId?.trim() || "";
+        return Boolean(loc && allowed.has(loc));
+    }
+    const loc =
+        participant.attributes.subjectLocationId?.trim()
+        || participant.attributes.contextLocationId?.trim()
+        || "";
+    return Boolean(loc && allowed.has(loc));
+}
+
 async function resolveParticipantMetric(
     ctx: MetricResolveContext,
     key: OipMetricKey,
@@ -43,10 +65,38 @@ async function resolveParticipantMetric(
     const now = ctx.now ?? new Date();
     const { windowStart, windowEnd } = resolveMetricTimeWindowBounds(ctx.window, now);
     const scopeId = ctx.workUnitId?.trim() || null;
+    const siteId = ctx.siteLocationId?.trim() || null;
+
+    let locationIds: string[] | null = null;
+    if (siteId) {
+        const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, siteId);
+        if (filter.impossible) {
+            return {
+                key: def.key,
+                label: def.label,
+                format: def.format,
+                value: 0,
+                formattedValue: formatMetricValue(def.format, 0),
+                window: ctx.window,
+                windowStartIso: windowStart.toISOString(),
+                windowEndIso: windowEnd.toISOString(),
+                computedAtIso: now.toISOString(),
+                sources: def.sources,
+                resolveMode: ctx.mode ?? "live",
+                meta: { count: 0, grain, scope: "site", site_id: siteId },
+            };
+        }
+        locationIds = filter.locationIds;
+    }
 
     // ONE membership source: the Enrollment projection (process_instances ⋈ context ⋈ subject),
-    // scoped to the work unit when present, else the org rollup.
-    const participants = await enrollmentProjection.load(ctx.supabase, { orgId: ctx.orgId, scopeId });
+    // scoped to the work unit when present, else the org rollup — then narrowed by site location.
+    let participants = await enrollmentProjection.load(ctx.supabase, { orgId: ctx.orgId, scopeId });
+    if (locationIds?.length) {
+        participants = participants.filter((p) =>
+            enrollmentParticipantMatchesLocationScope(p, locationIds!, grain),
+        );
+    }
     const value = counter(participants, { orgId: ctx.orgId, scopeId });
 
     return {
@@ -61,7 +111,12 @@ async function resolveParticipantMetric(
         computedAtIso: now.toISOString(),
         sources: def.sources,
         resolveMode: ctx.mode ?? "live",
-        meta: { count: value, grain, scope: scopeId ? "work_unit" : "org" },
+        meta: {
+            count: value,
+            grain,
+            scope: siteId ? "site" : scopeId ? "work_unit" : "org",
+            ...(siteId ? { site_id: siteId } : {}),
+        },
     };
 }
 

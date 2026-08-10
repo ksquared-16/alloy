@@ -254,6 +254,7 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
                 stage_key: typeof opp.stage_key === "string" ? opp.stage_key : null,
                 status_key: typeof opp.status_key === "string" ? opp.status_key : null,
                 work_unit_id: typeof opp.work_unit_id === "string" ? opp.work_unit_id : null,
+                location_id: typeof opp.location_id === "string" ? opp.location_id : null,
             };
         }),
         [...refs.cmById.values()].map((cm) => ({

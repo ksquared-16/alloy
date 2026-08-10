@@ -435,10 +435,52 @@ export async function applyRegistryResolvedActionClient(
         if (actionKey === "send_tour_invitation" || intent === "send_tour_invitation") {
             if (!eid) return { ok: false, error: "entity_id required" };
 
-            // Open canonical Communications compose (same path as send_email / quick_message).
-            // Operator reviews and sends from compose — no browser confirm/alert dialogs.
-            // Invitation minting remains owned by sendTourInvitation when that mutation path is used;
-            // this Manage / registry entry opens compose so the operator can write and send.
+            // Prepare invitation draft (mint + render) WITHOUT sending, then open compose.
+            // Operator edits freely and confirms send through Communications — never auto-send.
+            let draftBody = "";
+            let draftSubject = "";
+            let invitationId = "";
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action_key: "send_tour_invitation",
+                        entity_type: "opportunity",
+                        entity_id: eid,
+                        context: host.context,
+                        payload: { mode: "prepare", idempotency_key: `send_tour_invitation:prepare:${eid}:${crypto.randomUUID()}` },
+                        confirmation: { confirmed: true },
+                    }),
+                });
+                const json = (await res.json().catch(() => ({}))) as {
+                    ok?: boolean;
+                    data?: {
+                        execution_result?: {
+                            detail?: {
+                                draft?: {
+                                    emailBody?: string | null;
+                                    emailSubject?: string | null;
+                                    smsBody?: string | null;
+                                    invitationId?: string | null;
+                                } | null;
+                                invitation_id?: string;
+                            };
+                        };
+                    };
+                };
+                const detail = json.data?.execution_result?.detail;
+                const draft = detail?.draft ?? null;
+                invitationId =
+                    String(detail?.invitation_id ?? "").trim()
+                    || String(draft?.invitationId ?? "").trim();
+                draftBody = String(draft?.emailBody ?? "").trim();
+                draftSubject = String(draft?.emailSubject ?? "").trim();
+            } catch {
+                // Compose still opens; operator can write manually if prepare fails.
+            }
+
             await launchContextualQuickMessage({
                 surface: invocation?.surface ?? "record_drawer",
                 record_id: eid,
@@ -452,6 +494,9 @@ export async function applyRegistryResolvedActionClient(
                 work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
                 bos_source_surface: invocation?.bos_source_surface,
                 defaultChannel: "email",
+                draftSubject: draftSubject || null,
+                draftBody: draftBody || null,
+                tourInvitationId: invitationId || null,
             });
             return { ok: true };
         }

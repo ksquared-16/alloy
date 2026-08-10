@@ -1,7 +1,5 @@
 "use client";
 
-import clsx from "clsx";
-
 import {
     resolveCurrentWorkRequirementOwner,
     type CurrentWorkRequirementOwner,
@@ -46,15 +44,14 @@ function groupStillNeededByOwner(items: CurrentWorkChecklistItemVM[]): Readiness
     return groups;
 }
 
-/** Synthetic navigation target so the group-level "Open {owner} →" reuses the checklist handoff. */
+/** Synthetic navigation target so the group-level owner heading reuses the checklist handoff. */
 function ownerHandoffItem(owner: CurrentWorkRequirementOwner): CurrentWorkChecklistItemVM {
     return { key: `owner:${owner.key}`, label: owner.label, status: "missing", owner };
 }
 
 /**
  * What's Next readiness — a CONCISE "Still needed" summary grouped by owning capability
- * (Slice E). Never a progress meter or requirement count; the satisfied field inventory is
- * owned by the Required Information card. Derives entirely from the View Model.
+ * (Slice E). Dense inline requirement labels under each owner. Derives entirely from the VM.
  */
 export function ReadinessSummary({
     surface,
@@ -91,7 +88,6 @@ export function ReadinessSummary({
                     className="alloy-os-currentwork__readiness-owner-group"
                     data-work-readiness-owner={group.owner.key}
                 >
-                    {/* The owner heading IS the navigation to its card (no separate "Open X →" link). */}
                     {group.owner.card ?
                         <button
                             type="button"
@@ -100,10 +96,37 @@ export function ReadinessSummary({
                             onClick={() => onNavigate(ownerHandoffItem(group.owner))}
                         >
                             {group.owner.label}
-                            <span className="alloy-os-currentwork__readiness-owner-arrow" aria-hidden>→</span>
                         </button>
                     :   <p className="alloy-os-currentwork__readiness-owner">{group.owner.label}</p>}
-                    <ChecklistStepper items={group.items} onNavigate={onNavigate} />
+                    <div className="alloy-os-currentwork__readiness-inline" data-work-checklist="true">
+                        {group.items.map((item, index) => {
+                            const navigable =
+                                item.status !== "complete"
+                                && (item.actionRef != null || item.handoffItemId != null || item.owner?.card != null);
+                            const label = (
+                                <span className="alloy-os-currentwork__readiness-inline-label">{item.label}</span>
+                            );
+                            return (
+                                <span key={item.key} className="alloy-os-currentwork__readiness-inline-item">
+                                    {index > 0 ?
+                                        <span className="alloy-os-currentwork__readiness-inline-sep" aria-hidden>
+                                            ·
+                                        </span>
+                                    :   null}
+                                    {navigable ?
+                                        <button
+                                            type="button"
+                                            className="alloy-os-currentwork__readiness-inline-button"
+                                            data-work-checklist-item={item.key}
+                                            onClick={() => onNavigate(item)}
+                                        >
+                                            {label}
+                                        </button>
+                                    :   label}
+                                </span>
+                            );
+                        })}
+                    </div>
                 </div>
             ))}
             {overflow > 0 ?
@@ -112,62 +135,5 @@ export function ReadinessSummary({
                 </p>
             :   null}
         </div>
-    );
-}
-
-function ChecklistStepper({
-    items,
-    onNavigate,
-}: {
-    items: CurrentWorkChecklistItemVM[];
-    onNavigate: (item: CurrentWorkChecklistItemVM) => void;
-}) {
-    if (items.length === 0) return null;
-    return (
-        <ol className="alloy-os-currentwork__stepper" data-work-checklist="true">
-            {items.map((item, index) => {
-                const navigable =
-                    item.status !== "complete"
-                    && (item.actionRef != null || item.handoffItemId != null || item.owner?.card != null);
-                const mark =
-                    item.status === "complete" ? "✓"
-                    : item.status === "blocked" ? "!"
-                    : "○";
-                const content = (
-                    <>
-                        <span
-                            className={clsx(
-                                "alloy-os-currentwork__stepper-mark",
-                                item.status === "complete" && "alloy-os-currentwork__stepper-mark--complete",
-                            )}
-                            aria-hidden
-                        >
-                            {mark}
-                        </span>
-                        <span className="alloy-os-currentwork__stepper-label">{item.label}</span>
-                    </>
-                );
-                return (
-                    <li key={item.key} className="alloy-os-currentwork__stepper-item">
-                        {navigable ?
-                            <button
-                                type="button"
-                                className="alloy-os-currentwork__stepper-button"
-                                data-work-checklist-item={item.key}
-                                onClick={() => onNavigate(item)}
-                            >
-                                {content}
-                            </button>
-                        :   <div className="alloy-os-currentwork__stepper-static" data-work-checklist-state={item.status}>
-                                {content}
-                            </div>
-                        }
-                        {index < items.length - 1 ?
-                            <span className="alloy-os-currentwork__stepper-connector" aria-hidden />
-                        :   null}
-                    </li>
-                );
-            })}
-        </ol>
     );
 }

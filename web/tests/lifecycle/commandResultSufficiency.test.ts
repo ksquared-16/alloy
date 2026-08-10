@@ -105,7 +105,7 @@ describe("resolveSufficientCommandResultOutcome — config decides sufficiency",
     });
 });
 
-describe("resolveEffectiveSufficientCommandResultOutcome — explicit → default → none", () => {
+describe("resolveEffectiveSufficientCommandResultOutcome — capability-scoped explicit → default → none", () => {
     it("uses platform default for canonical contact_family when sufficiency is absent", () => {
         const bare = {
             template_key: "contact_family",
@@ -127,7 +127,7 @@ describe("resolveEffectiveSufficientCommandResultOutcome — explicit → defaul
         expect(resolveEffectiveSufficientCommandResultOutcome(custom, "communications_send", "sent")).toBeNull();
     });
 
-    it("explicit reply-required overrides the platform default", () => {
+    it("explicit reply-required overrides the platform default for communications_send", () => {
         const replyRequired = {
             template_key: "contact_family",
             work_definition_key: "contact_family",
@@ -141,6 +141,31 @@ describe("resolveEffectiveSufficientCommandResultOutcome — explicit → defaul
         expect(resolveEffectiveSufficientCommandResultOutcome(replyRequired, "communications_send", "replied")).toBe(
             "reached_family",
         );
+    });
+
+    it("partial explicit list (tour only) does not wipe platform communications_send default", () => {
+        const tourOnly = {
+            template_key: "contact_family",
+            work_definition_key: "contact_family",
+            completion_policy: {
+                min_attempts: 3,
+                window_days: 7,
+                sufficient_command_results: [
+                    {
+                        capability: "schedule_tour",
+                        result: "confirmed",
+                        satisfies_outcome_key: "tour_scheduled",
+                    },
+                ],
+            },
+        };
+        expect(resolveEffectiveSufficientCommandResultOutcome(tourOnly, "communications_send", "sent")).toBe(
+            "left_message",
+        );
+        expect(resolveEffectiveSufficientCommandResultOutcome(tourOnly, "schedule_tour", "confirmed")).toBe(
+            "tour_scheduled",
+        );
+        expect(resolveEffectiveSufficientCommandResultOutcome(tourOnly, "communications_send", "failed")).toBeNull();
     });
 });
 

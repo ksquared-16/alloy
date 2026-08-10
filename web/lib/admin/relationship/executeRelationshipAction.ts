@@ -1,4 +1,4 @@
-import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     applyChildScopedContactAssignments,
@@ -210,40 +210,13 @@ async function ensureOpportunityCustomerMemberLink(
     opportunityId: string,
     customerMemberId: string,
 ): Promise<{ ocmId: string; created: boolean }> {
-    const { data: existingOcm } = await supabase
-        .from("opportunity_customer_members")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("opportunity_id", opportunityId)
-        .eq("customer_member_id", customerMemberId)
-        .maybeSingle();
-    if (existingOcm?.id) return { ocmId: String(existingOcm.id), created: false };
-
-    const { data: inserted, error } = await supabase
-        .from("opportunity_customer_members")
-        .insert({
-            org_id: orgId,
-            opportunity_id: opportunityId,
-            customer_member_id: customerMemberId,
-            outcome_status_key: NEW_LEAD_STATUS_KEY,
-            metadata: { source: "relationship_action" },
-        })
-        .select("id")
-        .single();
-    if (error?.code === "23505") {
-        const { data: retry } = await supabase
-            .from("opportunity_customer_members")
-            .select("id")
-            .eq("org_id", orgId)
-            .eq("opportunity_id", opportunityId)
-            .eq("customer_member_id", customerMemberId)
-            .maybeSingle();
-        if (retry?.id) return { ocmId: String(retry.id), created: false };
-    }
-    if (error || !inserted?.id) {
-        throw new Error(error?.message ?? "Could not link child to opportunity.");
-    }
-    return { ocmId: String(inserted.id), created: true };
+    return ensureOpportunityCustomerMemberParticipation({
+        supabase,
+        orgId,
+        opportunityId,
+        customerMemberId,
+        source: "relationship_action",
+    });
 }
 
 async function refreshScopedContactLinks(

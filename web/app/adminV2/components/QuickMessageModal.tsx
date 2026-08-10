@@ -97,6 +97,9 @@ export type QuickMessageModalSeed = {
     /** Record-scoped launch — load linked contacts for opportunity (no global search). */
     recordScoped?: boolean;
     defaultChannel?: "email" | "sms";
+    draftSubject?: string | null;
+    draftBody?: string | null;
+    tourInvitationId?: string | null;
 };
 
 export interface QuickMessageModalProps {
@@ -265,7 +268,13 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             setScopedRecipientsResolved(false);
             return;
         }
-    }, [open]);
+        // Seed editable draft when opening (e.g. prepared tour invitation).
+        if (seed?.draftBody?.trim() || seed?.draftSubject?.trim()) {
+            setSubject(String(seed.draftSubject ?? "").trim());
+            setBody(String(seed.draftBody ?? "").trim());
+            setChannel(seed.defaultChannel === "sms" ? "sms" : "email");
+        }
+    }, [open, seed?.draftBody, seed?.draftSubject, seed?.defaultChannel]);
 
     const recordScoped = Boolean(seed?.recordScoped && seed?.opportunityId?.trim());
     const opportunityId = seed?.opportunityId?.trim() ?? "";
@@ -525,6 +534,26 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             }
             if (fail.length === 0) {
                 setSendOk(ok.length === 1 ? ok[0]! : `${ok.length} sends completed.`);
+                const invitationId = seed?.tourInvitationId?.trim();
+                if (invitationId) {
+                    // Link was prepared earlier; confirmed compose send records invitation activated.
+                    void fetch("/api/admin/actions/execute", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action_key: "send_tour_invitation",
+                            entity_type: "opportunity",
+                            entity_id: seed?.opportunityId?.trim() || "",
+                            payload: {
+                                mode: "mark_sent",
+                                invitation_id: invitationId,
+                                channel,
+                            },
+                            confirmation: { confirmed: true },
+                        }),
+                    }).catch(() => null);
+                }
             } else if (ok.length === 0) {
                 setSendErr(fail.map((f) => `${f.name}: ${f.err}`).join(" · "));
             } else {

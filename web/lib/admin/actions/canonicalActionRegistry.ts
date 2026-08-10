@@ -136,6 +136,13 @@ function relationshipCanonicalEntry(entry: RelationshipActionRegistryEntry): Can
         bosProposalSupport: entry.allowedSourceSurfaces.includes("bos_rail"),
         runtimeWired: entry.runtimeWired,
         settingsConfigurable: false,
+        // Capture-first Add Child on What's Next — not the Link existing | Create new wizard.
+        ...(actionKey === "add_child"
+            ? {
+                  interactionHost: "inline_form" as const,
+                  inputSchema: "registry_form" as const,
+              }
+            : {}),
     };
 }
 
@@ -210,7 +217,7 @@ const LIFECYCLE_PLATFORM_ACTIONS: CanonicalActionDefinition[] = [
     {
         actionKey: "add_child",
         label: "Add child",
-        description: "Add or link a child on this opportunity or household.",
+        description: "Add a child to this family and enrollment case.",
         category: "relationship",
         allowedBusinessProcesses: ["enrollment"],
         allowedStages: ["lead", "new_inquiry", "waitlist"],
@@ -218,12 +225,14 @@ const LIFECYCLE_PLATFORM_ACTIONS: CanonicalActionDefinition[] = [
         allowedLayoutSurfaces: ["opportunity_drawer", "person_drawer"],
         allowedLayoutContexts: ["section_row", "contact_related_list"],
         requiredContext: { entityTypes: ["opportunity", "person"], requiresCustomer: true, requiresOpportunity: true },
-        inputSchema: "relationship_wizard",
+        inputSchema: "registry_form",
         executor: { kind: "relationship_execute", relationshipKey: "add_child" },
         confirmationPolicy: "required",
         bosProposalSupport: true,
         runtimeWired: true,
         settingsConfigurable: true,
+        // What's Next / Current Work: capture-first create form — not the Link existing | Create new wizard.
+        interactionHost: "inline_form",
     },
     {
         actionKey: "update_enrollment_status",

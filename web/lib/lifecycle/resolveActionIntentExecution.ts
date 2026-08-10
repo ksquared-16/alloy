@@ -43,8 +43,8 @@ export type ActionIntentExecutionPlan = {
 
 function selectionModeForExecutionKey(executionKey: string): ActionIntentSelectionMode {
     if (executionKey === "waitlist_child" || executionKey === "enroll_child") {
-        // Related-subject: exactly one child at a time; multi must pick.
-        return "single";
+        // Related-subject: operator may select one or more eligible children.
+        return "one_or_more";
     }
     const platform = getPlatformAction(executionKey);
     if (platform?.supportsMultiSubject) return "one_or_more";
@@ -55,11 +55,22 @@ export function evaluateRequiresSubjectPicker(
     applicableSubjects: ActionIntentApplicableSubject[],
     selectionMode: ActionIntentSelectionMode,
 ): boolean {
+    // Waitlist / enroll related-subject always opens the selector (even for one child)
+    // so the operator reviews and confirms before execute.
+    if (selectionMode === "one_or_more" || selectionMode === "all") {
+        return applicableSubjects.length >= 1;
+    }
     if (applicableSubjects.length <= 1) return false;
+    return selectionMode === "single";
+}
+
+/** True when Focus Panel / runtime truth already projected an enrollment-child list (even if empty). */
+export function truthProjectsEnrollmentChildren(truth: Record<string, unknown> | undefined): boolean {
+    if (!truth) return false;
     return (
-        selectionMode === "one_or_more"
-        || selectionMode === "all"
-        || selectionMode === "single"
+        Array.isArray(truth.eligible_enrollment_children)
+        || Array.isArray(truth.eligibleEnrollmentChildren)
+        || Array.isArray(truth.opportunity_customer_members)
     );
 }
 
@@ -181,8 +192,12 @@ export function resolveActionIntentExecution(input: {
             });
 
     const requiresSubjectPicker = evaluateRequiresSubjectPicker(applicableSubjects, selectionMode);
+    // Block only when truth already projected children and found none. Missing projection means
+    // related-subject resolution runs at execute time — do not hide Move to Waitlist on family grain.
     const blockedReason =
-        classified?.status === "none" && eligible.length === 0 && input.truth != null
+        classified?.status === "none"
+        && eligible.length === 0
+        && truthProjectsEnrollmentChildren(input.truth)
             ? classified.message
             : undefined;
 

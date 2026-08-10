@@ -116,8 +116,10 @@ export default function CurrentWorkTourGroupedActions({
                 <button
                     key={action.key}
                     type="button"
-                    className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                    className="alloy-os-currentwork__helpful-action"
                     data-work-supporting-action={action.key}
+                    disabled={action.disabled}
+                    title={action.disabledReason ?? undefined}
                     onClick={() => onAction(action)}
                     onMouseEnter={() => onWarm?.(action)}
                     onFocus={() => onWarm?.(action)}
@@ -129,7 +131,7 @@ export default function CurrentWorkTourGroupedActions({
                 <div className="relative inline-flex" ref={setRootEl} data-work-tour-grouped="true">
                     <button
                         type="button"
-                        className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
+                        className="alloy-os-currentwork__helpful-action"
                         data-work-tour-menu-trigger="true"
                         aria-expanded={open}
                         aria-controls={menuId}
@@ -149,8 +151,10 @@ export default function CurrentWorkTourGroupedActions({
                                     <button
                                         type="button"
                                         role="menuitem"
-                                        className="block w-full px-3 py-1.5 text-left text-sm text-alloy-midnight hover:bg-alloy-stone/10"
+                                        className="block w-full px-3 py-1.5 text-left text-sm text-alloy-midnight hover:bg-alloy-stone/10 disabled:opacity-40"
                                         data-work-supporting-action={action.key}
+                                        disabled={action.disabled}
+                                        title={action.disabledReason ?? undefined}
                                         onClick={() => {
                                             setOpen(false);
                                             onAction(action);

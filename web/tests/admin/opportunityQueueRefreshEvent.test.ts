@@ -32,6 +32,11 @@ describe("opportunityQueueRefreshEvent", () => {
         expect(isQueueMembershipMutationActionKey("stage_work_outcome")).toBe(true);
     });
 
+    it("treats waitlist_child as a queue-membership mutation (cross-lane Waitlist rows)", () => {
+        expect(isQueueMembershipMutationActionKey("waitlist_child")).toBe(true);
+        expect(isQueueMembershipMutationActionKey("move_to_waitlist")).toBe(true);
+    });
+
     it("refetches lane rows AND summaries for a newly created lead not yet in the visible list", () => {
         const detail = { id: "opp-new", action_key: "create_lead" };
         const visibleOpportunityIds = ["opp-1", "opp-2"]; // new lead is off-screen

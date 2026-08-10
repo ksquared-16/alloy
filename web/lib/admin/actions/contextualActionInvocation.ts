@@ -36,6 +36,11 @@ export type ContextualActionInvocation = {
     bos_source_surface?: GlobalAssistantSourceSurface;
     /** Pre-select composer channel (canonical send_email / send_sms). */
     defaultChannel?: "email" | "sms";
+    /** Optional compose draft (e.g. prepared tour invitation). */
+    draftSubject?: string | null;
+    draftBody?: string | null;
+    /** When set, a successful compose send records this invitation as sent. */
+    tourInvitationId?: string | null;
 };
 
 export type QueueRowActionPayload = {
@@ -108,6 +113,9 @@ export async function launchContextualQuickMessage(invocation: ContextualActionI
         originatingSurface: invocation.surface,
         recordScoped: true,
         defaultChannel: invocation.defaultChannel,
+        draftSubject: invocation.draftSubject ?? null,
+        draftBody: invocation.draftBody ?? null,
+        tourInvitationId: invocation.tourInvitationId ?? null,
     });
 }
 

@@ -32,6 +32,8 @@ function participant(over: {
         contextStatusKey: over.contextStatusKey ?? "open",
         subjectActive: over.subjectActive ?? true,
         waitlistRank: null,
+        contextLocationId: null,
+        subjectLocationId: null,
     };
     return buildProcessParticipant<EnrollmentAttributes>(
         {

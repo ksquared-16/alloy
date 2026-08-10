@@ -78,10 +78,11 @@ describe("resolveActionIntentExecution", () => {
             },
         });
         expect(plan.requiresSubjectPicker).toBe(true);
+        expect(plan.selectionMode).toBe("one_or_more");
         expect(plan.applicableSubjects).toHaveLength(2);
     });
 
-    it("does not require picker for exactly one eligible child", () => {
+    it("requires picker for exactly one eligible child (confirm before execute)", () => {
         const plan = resolveActionIntentExecution({
             actionRef: "move_to_waitlist",
             stageDefinition: { journey_segment: "family" },
@@ -91,8 +92,28 @@ describe("resolveActionIntentExecution", () => {
                 ],
             },
         });
-        expect(plan.requiresSubjectPicker).toBe(false);
+        expect(plan.requiresSubjectPicker).toBe(true);
+        expect(plan.selectionMode).toBe("one_or_more");
         expect(plan.applicableSubjects).toHaveLength(1);
+    });
+
+    it("does not block Move to Waitlist when truth omits enrollment-child projection", () => {
+        const plan = resolveActionIntentExecution({
+            actionRef: "move_to_waitlist",
+            stageDefinition: { journey_segment: "family" },
+            truth: { opportunity_id: "opp-1" },
+        });
+        expect(plan.blockedReason).toBeUndefined();
+        expect(plan.executionKey).toBe("waitlist_child");
+    });
+
+    it("blocks Move to Waitlist only when truth projected an empty child list", () => {
+        const plan = resolveActionIntentExecution({
+            actionRef: "move_to_waitlist",
+            stageDefinition: { journey_segment: "family" },
+            truth: { eligible_enrollment_children: [] },
+        });
+        expect(plan.blockedReason).toMatch(/child/i);
     });
 
     it("evaluates multi-subject selection requirement without enrollment conditionals", () => {
@@ -104,6 +125,9 @@ describe("resolveActionIntentExecution", () => {
                 ],
                 "one_or_more",
             ),
+        ).toBe(true);
+        expect(
+            evaluateRequiresSubjectPicker([{ id: "sub-1", label: "Subject A" }], "one_or_more"),
         ).toBe(true);
         expect(
             evaluateRequiresSubjectPicker(

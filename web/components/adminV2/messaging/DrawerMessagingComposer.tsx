@@ -41,6 +41,9 @@ type DrawerMessagingComposerProps = {
     compact?: boolean;
     /** Side-by-side drawer column — fills right pane instead of stacking under thread. */
     columnLayout?: boolean;
+    /** Optional seed when opening from a prepared command (e.g. tour invitation). */
+    initialSubject?: string | null;
+    initialBody?: string | null;
 };
 
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
@@ -76,12 +79,14 @@ export default function DrawerMessagingComposer({
     sendOkNote,
     compact = true,
     columnLayout = false,
+    initialSubject = null,
+    initialBody = null,
 }: DrawerMessagingComposerProps) {
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [bosOpen, setBosOpen] = useState(false);
     // Composer draft is owned here so typing re-renders only this subtree, not the drawer tree.
-    const [subject, setSubject] = useState("");
-    const [body, setBody] = useState("");
+    const [subject, setSubject] = useState(() => String(initialSubject ?? "").trim());
+    const [body, setBody] = useState(() => String(initialBody ?? "").trim());
 
     /** Reproduce the parent's prior sendDisabledReason: base reasons first, then the body-empty case. */
     const composedDisabledReason =

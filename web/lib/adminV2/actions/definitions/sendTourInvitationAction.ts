@@ -49,6 +49,13 @@ export const sendTourInvitationAction: RegisteredAction = {
         // An operator note is optional; the invitation stands on its own without one.
         if (src.message_text != null) value.message_text = trimmed(src.message_text);
         if (src.location_id != null) value.location_id = trimmed(src.location_id);
+        if (src.mode === "prepare" || src.mode === "send" || src.mode === "mark_sent") {
+            value.mode = src.mode;
+        }
+        if (src.invitation_id != null) value.invitation_id = trimmed(src.invitation_id);
+        if (src.channel != null) value.channel = trimmed(src.channel);
+        // Optional client-stable key for double-submit within one compose open.
+        if (src.idempotency_key != null) value.idempotency_key = trimmed(src.idempotency_key);
         // Never accept a recipient from the caller — identity is resolved server-side.
         delete value.recipient_person_id;
         delete value.to;
@@ -65,8 +72,8 @@ export const sendTourInvitationAction: RegisteredAction = {
 
     async buildPreview() {
         return {
-            summary: "Email or text this family a link to choose a tour time.",
-            changes: ["Tour invitation → sent to the parent"],
+            summary: "Review and send a tour invitation so this family can choose a time.",
+            changes: ["Tour invitation draft → operator confirm → send"],
             before: null,
             after: null,
         };
@@ -85,11 +92,57 @@ export const sendTourInvitationAction: RegisteredAction = {
         }
 
         const src = (payload ?? {}) as Record<string, unknown>;
+        // Default prepare: operator compose must confirm before enqueue. Explicit mode:"send"
+        // remains for programmatic / confirmed delivery paths. mark_sent records activation
+        // after a successful Communications compose send of a prepared invitation.
+        const mode =
+            src.mode === "send" ? "send" : src.mode === "mark_sent" ? "mark_sent" : "prepare";
 
-        // Idempotency is keyed on the record, not on the click. A double-submit, a retry
-        // after a timeout, and a second operator pressing the same button all collapse
-        // onto one invitation — while a genuinely new offer (different times) still sends.
-        const idempotencyKey = `send_tour_invitation:${ctx.orgId}:${invocation.entityId}`;
+        if (mode === "mark_sent") {
+            const invitationId = trimmed(src.invitation_id);
+            if (!invitationId) {
+                return {
+                    ok: false,
+                    correlationId,
+                    status: 422,
+                    error: "Invitation id is required to record a sent invitation.",
+                };
+            }
+            const { recordTourEvent } = await import("@/lib/tours/events/recordTourEvent");
+            await recordTourEvent(supabase, {
+                event: "tour_invitation_activated",
+                orgId: ctx.orgId,
+                invitationId,
+                recipientPersonId: null,
+                opportunityId: invocation.entityId,
+                detail: {
+                    channel: trimmed(src.channel) || "compose",
+                },
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: SEND_TOUR_INVITATION_ACTION_KEY,
+                    entityType: "opportunity",
+                    entityId: invocation.entityId,
+                    affectedId: invitationId,
+                    detail: {
+                        invitation_id: invitationId,
+                        mode: "mark_sent",
+                        sent_channels: trimmed(src.channel) ? [trimmed(src.channel)] : [],
+                    },
+                },
+            };
+        }
+
+        // Each operator invocation gets a fresh prepare key. A fixed
+        // `send_tour_invitation:org:opp` key collided when availability/fingerprint
+        // changed between clicks ("already used for a different … set of times").
+        // Double-submit within one click still shares one key via the client payload.
+        const idempotencyKey =
+            trimmed(src.idempotency_key)
+            || `send_tour_invitation:${ctx.orgId}:${invocation.entityId}:${correlationId}`;
 
         const result = await sendTourInvitation({
             supabase,
@@ -100,6 +153,7 @@ export const sendTourInvitationAction: RegisteredAction = {
             messageText: trimmed(src.message_text) || null,
             baseUrl,
             idempotencyKey,
+            mode,
         });
 
         if (!result.ok) {
@@ -125,6 +179,8 @@ export const sendTourInvitationAction: RegisteredAction = {
                     sent_channels: result.sentChannels,
                     idempotent_replay: result.idempotentReplay,
                     skipped: result.skippedReasons,
+                    mode,
+                    draft: result.draft ?? null,
                 },
             },
         };

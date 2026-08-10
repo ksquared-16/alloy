@@ -35,3 +35,27 @@ export function partitionTourGroupedActions<T extends { key: string; handlerKey?
     }
     return { tour, rest };
 }
+
+/**
+ * Presentation accounting — every input action must land in exactly one bucket.
+ * Use for projection-fidelity tests; grouping never drops configured commands.
+ */
+export function accountHelpfulActionPresentation<T extends { key: string; handlerKey?: string | null }>(
+    actions: readonly T[],
+): { tour: T[]; standalone: T[]; accounted: T[] } {
+    const { tour, rest } = partitionTourGroupedActions(actions);
+    return {
+        tour,
+        standalone: rest,
+        accounted: [...rest, ...tour],
+    };
+}
+
+/** Stable identity for accounting (prefer handlerKey when present). */
+export function helpfulActionPresentationKey(action: {
+    key: string;
+    handlerKey?: string | null;
+    actionRef?: string | null;
+}): string {
+    return (action.handlerKey ?? action.actionRef ?? action.key).trim();
+}

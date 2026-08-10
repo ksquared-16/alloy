@@ -75,15 +75,11 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
     tour_invitation: [
         "Hello {{parent_name}},",
         "",
-        "We would love to show {{child_name}} around {{location_name}}.",
+        "We’d love to show your family around {{location_name}}.",
         "{{site_line}}",
         "",
-        "Here are some times that work for us — choose whichever suits you:",
-        "",
-        "{{tour_options_block}}",
-        "",
-        "None of these work? See more times: {{invitation_action_url}}",
-        "Not the right time for your family? Let us know: {{decline_url}}",
+        "Choose a tour time:",
+        "{{invitation_action_url}}",
         "",
         "We look forward to meeting you.",
         "",
@@ -161,7 +157,7 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
 const DEFAULT_SMS_BODY: Partial<Record<TourCommsEventKey, string>> = {
     // SMS carries one link, not the option list — the page shows the times.
     tour_invitation:
-        "Hi {{parent_name}}, we'd love to show {{child_name}} around {{location_name}}. Pick a tour time here: {{invitation_action_url}}",
+        "Hi {{parent_name}}, we'd love to show your family around {{location_name}}. Pick a tour time: {{invitation_action_url}}",
     tour_confirmation:
         "Hi {{parent_name}}, your tour is set for {{tour_display_label}} at {{location_name}}. Details: {{add_to_calendar_url}}",
     tour_reminder: "Reminder: tour {{tour_display_label}} at {{location_name}}. Reply if you need to reschedule.",
@@ -235,28 +231,58 @@ function plainTextToSimpleHtml(text: string): string {
     return paras.map((p) => `<p>${p}</p>`).join("\n");
 }
 
-/** Turn plain merged lines into parent-friendly HTML CTAs (text body keeps raw URLs). */
+/** Turn plain merged lines into parent-friendly HTML CTAs (text body keeps raw URLs for SMS). */
 export function polishTourCommsEmailHtml(bodyHtml: string): string {
     let out = bodyHtml;
+    // Concise invitation CTA: lone booking URL after "Choose a tour time"
+    out = out.replace(
+        /(Choose a tour time:?\s*(?:<br\/?>)?)(?:\s*)(https?:\/\/[^\s<]+)/gi,
+        '$1<a href="$2" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Book your tour</a>',
+    );
+    // Tour invitation option lines (legacy templates that still list times):
+    // "Monday, August 10 · 9:00 AM — https://…"
+    out = out.replace(
+        /(?:^|<br\/?>|<p>)([^<]*?·[^<]*?)\s+[—–-]\s*(https?:\/\/[^\s<]+)/gi,
+        (match, label: string, url: string) => {
+            const cleanLabel = String(label).replace(/^[\s•]+/, "").trim();
+            if (!cleanLabel) return match;
+            const linked = `<a href="${url}" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">${cleanLabel}</a>`;
+            if (match.startsWith("<p>")) return `<p>${linked}`;
+            if (match.startsWith("<br")) return `<br/>${linked}`;
+            return linked;
+        },
+    );
+    out = out.replace(
+        /See more times:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">See more times</a>',
+    );
+    out = out.replace(
+        /Request another time:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Request another time</a>',
+    );
+    out = out.replace(
+        /Book your tour:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Book your tour</a>',
+    );
     out = out.replace(
         /Add to calendar:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Add to calendar</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Add to calendar</a>'
     );
     out = out.replace(
         /Need to reschedule\?\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Reschedule your tour</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Reschedule your tour</a>'
     );
     out = out.replace(
         /If this time does not work, please contact us or reschedule here:\s*(https?:\/\/[^\s<]+)/gi,
-        'If this time does not work, please <a href="$1" style="color:#2563eb;text-decoration:underline;">reschedule here</a> or reply to this email.'
+        'If this time does not work, please <a href="$1" style="color:#1f4d3a;text-decoration:underline;">reschedule here</a> or reply to this email.'
     );
     out = out.replace(
         /If you would like to book a new time:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Book a new time</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Book a new time</a>'
     );
     out = out.replace(
         /Book a new time:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#2563eb;text-decoration:underline;">Book a new time</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Book a new time</a>'
     );
     return out;
 }

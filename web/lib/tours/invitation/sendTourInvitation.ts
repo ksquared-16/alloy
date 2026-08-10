@@ -30,18 +30,32 @@ import {
 } from "@/lib/tours/comms/resolveTourCommsRecipient";
 import type { TourCommsTemplateContext } from "@/lib/tours/comms/tourCommsTemplateContext";
 import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
+import { aliasTourBookingUrl } from "@/lib/tours/invitation/tourBookingPublicAlias";
 import { mintTourInvitation, type MintedAction } from "@/lib/tours/invitation/mintTourInvitation";
 import {
     validateTourInvitationContent,
     type TourInvitationContent,
     type TourOption,
 } from "@/lib/tours/invitation/tourInvitationContent";
+import { renderTourCommsTemplate } from "@/lib/tours/comms/tourCommsTemplates";
 
 /** How many times to offer. More than this reads as a wall of text on a phone. */
 const MAX_OFFERED_OPTIONS = 5;
 
 /** How far ahead to look for offerable times. */
 const OFFER_WINDOW_DAYS = 21;
+
+export type TourInvitationComposeDraft = {
+    invitationId: string;
+    recipientPersonId: string | null;
+    recipientDisplayName: string | null;
+    recipientEmail: string | null;
+    recipientPhone: string | null;
+    emailSubject: string | null;
+    emailBody: string | null;
+    smsBody: string | null;
+    invitationActionUrl: string;
+};
 
 export type SendTourInvitationResult =
     | {
@@ -54,6 +68,8 @@ export type SendTourInvitationResult =
           sentChannels: string[];
           /** Machine-readable reasons a channel did not send. */
           skippedReasons: string[];
+          /** Present when mode is prepare — editable compose seed; nothing was sent. */
+          draft?: TourInvitationComposeDraft;
       }
     | { ok: false; code: SendTourInvitationFailureCode; message: string };
 
@@ -143,14 +159,48 @@ function findToken(actions: MintedAction[], kind: string): string | null {
 }
 
 /**
- * Render the option list into the block the templates interpolate.
- *
- * Each line carries its own single-use `select_tour_slot` link, so choosing a time is
- * one tap with no login and no typing.
+ * Collapse recipient-identical wall-clock choices (same location + label).
+ * Distinct staff/resources that present identically to the parent stay one choice;
+ * booking resolves an eligible backing resource via existing scheduling.
  */
-export function buildTourOptionsBlock(content: TourInvitationContent, baseUrl: string, selectToken: string): string {
+export function dedupeTourOptionsForRecipient(options: TourOption[]): TourOption[] {
+    const seen = new Set<string>();
+    const out: TourOption[] = [];
+    for (const option of options) {
+        const key = [
+            String(option.locationId ?? "").trim(),
+            String(option.presentationLabel ?? "").trim().toLowerCase(),
+            String(option.date ?? "").trim(),
+            String(option.startTime ?? "").trim(),
+            String(option.timezone ?? "").trim(),
+        ].join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(option);
+    }
+    return out;
+}
+
+export type TourOptionsBlockFormat = "plain" | "email_html_source";
+
+/**
+ * Render the option list into the block templates interpolate.
+ *
+ * Plain (SMS): labeled times with short or long URLs on the same line.
+ * Email source: "Label — URL" so polishTourCommsEmailHtml can turn labels into anchors
+ * without exposing raw tokens in HTML.
+ */
+export function buildTourOptionsBlock(
+    content: TourInvitationContent,
+    baseUrl: string,
+    selectToken: string,
+    urlByOptionId?: Record<string, string>,
+): string {
     return content.options
-        .map((o) => `• ${o.presentationLabel} — ${actionUrl(baseUrl, selectToken, o.optionId)}`)
+        .map((o) => {
+            const url = urlByOptionId?.[o.optionId] ?? actionUrl(baseUrl, selectToken, o.optionId);
+            return `${o.presentationLabel} — ${url}`;
+        })
         .join("\n");
 }
 
@@ -170,6 +220,11 @@ export async function sendTourInvitation(args: {
      * recipient/location/times returns the existing invitation instead of a second one.
      */
     idempotencyKey: string;
+    /**
+     * `prepare` mints the invitation and returns editable draft copy without enqueueing.
+     * `send` (default) enqueues through tour invitation communications.
+     */
+    mode?: "prepare" | "send";
 }): Promise<SendTourInvitationResult> {
     const orgId = String(args.orgId ?? "").trim();
     const opportunityId = String(args.opportunityId ?? "").trim();
@@ -254,14 +309,18 @@ export async function sendTourInvitation(args: {
     const from = new Date();
     const to = new Date(from.getTime() + OFFER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const slots = await computeAvailableTourSlots(args.supabase, { orgId, locationId, from, to });
-    const offered = slots.slice(0, MAX_OFFERED_OPTIONS);
+    const offered = dedupeTourOptionsForRecipient(
+        slots
+            .slice(0, MAX_OFFERED_OPTIONS * 3)
+            .map((s) =>
+                toOption(s, locationLabel, formatTourOptionLabel(s.startAt, s.timezone || orgTimezone)),
+            ),
+    ).slice(0, MAX_OFFERED_OPTIONS);
     if (!offered.length) {
         return { ok: false, code: "no_available_times", message: SEND_TOUR_INVITATION_OPERATOR_MESSAGE.no_available_times };
     }
 
-    const options = offered.map((s) =>
-        toOption(s, locationLabel, formatTourOptionLabel(s.startAt, s.timezone || orgTimezone))
-    );
+    const options = offered;
 
     // `fallbackActionUrl` is filled after minting — the token does not exist yet.
     const content: TourInvitationContent = {
@@ -299,6 +358,36 @@ export async function sendTourInvitation(args: {
     const viewToken = findToken(minted.actions, "view_tour_slots");
     const declineToken = findToken(minted.actions, "decline_tour");
 
+    const urlByOptionId: Record<string, string> = {};
+    if (selectToken) {
+        for (const option of content.options) {
+            const longUrl = actionUrl(args.baseUrl, selectToken, option.optionId);
+            urlByOptionId[option.optionId] = await aliasTourBookingUrl({
+                supabase: args.supabase,
+                orgId,
+                invitationId: minted.invitationId,
+                longUrl,
+            });
+        }
+    }
+
+    const invitationLong = viewToken ? actionUrl(args.baseUrl, viewToken) : content.fallbackActionUrl;
+    const declineLong = declineToken ? actionUrl(args.baseUrl, declineToken) : "";
+    const invitationActionUrl = await aliasTourBookingUrl({
+        supabase: args.supabase,
+        orgId,
+        invitationId: minted.invitationId,
+        longUrl: invitationLong,
+    });
+    const declineUrl = declineLong
+        ? await aliasTourBookingUrl({
+              supabase: args.supabase,
+              orgId,
+              invitationId: minted.invitationId,
+              longUrl: declineLong,
+          })
+        : "";
+
     const templateContext: TourCommsTemplateContext = {
         orgName,
         locationName: locationLabel || null,
@@ -307,12 +396,47 @@ export async function sendTourInvitation(args: {
         parentName: recipient.displayName,
         childName: opportunity.name,
         opportunityName: opportunity.name,
-        tourOptionsBlock: selectToken ? buildTourOptionsBlock(content, args.baseUrl, selectToken) : "",
-        invitationActionUrl: viewToken ? actionUrl(args.baseUrl, viewToken) : content.fallbackActionUrl,
-        declineUrl: declineToken ? actionUrl(args.baseUrl, declineToken) : "",
+        tourOptionsBlock: selectToken ? buildTourOptionsBlock(content, args.baseUrl, selectToken, urlByOptionId) : "",
+        invitationActionUrl,
+        declineUrl,
     };
 
     const { config } = await resolveTourCommsConfig(args.supabase, { orgId, locationId });
+
+    // Prepare-only: mint + render editable drafts. Do not enqueue or mark invitation sent.
+    if (args.mode === "prepare") {
+        const email = renderTourCommsTemplate({
+            eventKey: "tour_invitation",
+            channel: "email",
+            context: templateContext,
+            templateOverrides: config.templates,
+        });
+        const sms = renderTourCommsTemplate({
+            eventKey: "tour_invitation",
+            channel: "sms",
+            context: templateContext,
+            templateOverrides: config.templates,
+        });
+        return {
+            ok: true,
+            invitationId: minted.invitationId,
+            idempotentReplay: minted.idempotentReplay,
+            optionCount: options.length,
+            sentChannels: [],
+            skippedReasons: ["prepare_only"],
+            draft: {
+                invitationId: minted.invitationId,
+                recipientPersonId: recipient.personId,
+                recipientDisplayName: recipient.displayName,
+                recipientEmail: recipient.email,
+                recipientPhone: recipient.smsTo,
+                emailSubject: email?.channel === "email" ? email.subject : null,
+                emailBody: email?.channel === "email" ? email.bodyText : null,
+                smsBody: sms?.channel === "sms" ? sms.body : null,
+                invitationActionUrl,
+            },
+        };
+    }
 
     // Keyed on the offered times, so re-sending the same offer dedupes while a genuinely
     // new set of times is allowed to send again.

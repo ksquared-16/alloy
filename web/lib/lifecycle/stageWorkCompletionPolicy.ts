@@ -115,7 +115,8 @@ export function completionPolicyForWorkTemplate(
 /**
  * Platform-owned default command-result sufficiency for recognized canonical work templates.
  * Operators never see these runtime result keys — they are engine vocabulary only.
- * Explicit `completion_policy.sufficient_command_results` on a work template always wins.
+ * Explicit entries for a given capability override the platform default for that capability
+ * only — authoring schedule_tour sufficiency must not wipe communications_send defaults.
  */
 export const PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS: Readonly<
     Record<string, readonly StageWorkSufficientCommandResultV1[]>
@@ -182,10 +183,14 @@ export function resolveSufficientCommandResultOutcome(
 }
 
 /**
- * Effective sufficiency resolution (product decision, July 2026):
- * 1. Explicit work-item `sufficient_command_results` wins (including reply-required overrides).
- * 2. Else platform default for recognized canonical templates (e.g. contact_family).
+ * Effective sufficiency resolution (product decision, July 2026; capability-scoped merge Aug 2026):
+ * 1. When the work item authors any `sufficient_command_results` for this capability, those
+ *    entries alone decide (including reply-required overrides that intentionally exclude "sent").
+ * 2. Else platform default for that capability on recognized canonical templates (e.g. contact_family).
  * 3. Else no inference — unknown/custom work never auto-completes from a send.
+ *
+ * Capability scoping prevents a partial authored list (e.g. only schedule_tour) from wiping
+ * platform communications_send sufficiency on contact_family.
  */
 export function resolveEffectiveSufficientCommandResultOutcome(
     template:
@@ -196,17 +201,29 @@ export function resolveEffectiveSufficientCommandResultOutcome(
     capability: string,
     result: string,
 ): string | null {
-    if (hasExplicitSufficientCommandResults(template)) {
-        return resolveSufficientCommandResultOutcome(template, capability, result);
+    const cap = capability.trim();
+    if (!cap) return null;
+
+    const explicit = completionPolicyForWorkTemplate(template)?.sufficient_command_results ?? [];
+    const explicitForCapability = explicit.filter((entry) => entry.capability === cap);
+    if (explicitForCapability.length > 0) {
+        return resolveSufficientCommandResultOutcome(
+            { completion_policy: { sufficient_command_results: explicitForCapability } },
+            cap,
+            result,
+        );
     }
 
     const canonicalKey = canonicalWorkTemplateKey(template);
     const defaults = canonicalKey ? PLATFORM_DEFAULT_SUFFICIENT_COMMAND_RESULTS[canonicalKey] : undefined;
     if (!defaults?.length) return null;
 
+    const defaultsForCapability = defaults.filter((entry) => entry.capability === cap);
+    if (!defaultsForCapability.length) return null;
+
     return resolveSufficientCommandResultOutcome(
-        { completion_policy: { sufficient_command_results: [...defaults] } },
-        capability,
+        { completion_policy: { sufficient_command_results: [...defaultsForCapability] } },
+        cap,
         result,
     );
 }

@@ -150,6 +150,9 @@ export default function TopNavBar() {
         phone: detail.phone,
         recordScoped: detail.recordScoped ?? Boolean(opportunityId),
         defaultChannel: detail.defaultChannel,
+        draftSubject: detail.draftSubject ?? null,
+        draftBody: detail.draftBody ?? null,
+        tourInvitationId: detail.tourInvitationId ?? null,
       });
       openWorkspaceModal("quick_message");
     };

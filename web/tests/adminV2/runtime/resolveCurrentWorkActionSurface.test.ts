@@ -72,7 +72,7 @@ describe("resolveCurrentWorkActionSurface", () => {
                     resolved: resolvedAction("add_child"),
                 }),
             ),
-        ).toBe("header_delegate");
+        ).toBe("inline_form");
     });
 
     it("returns unsupported for BOS recommendations and unknown keys without resolved action", () => {
