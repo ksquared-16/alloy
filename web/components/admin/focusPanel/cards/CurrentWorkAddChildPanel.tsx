@@ -182,7 +182,6 @@ export default function CurrentWorkAddChildPanel({
             dispatchOpportunityDrawerScopedUpdate(opportunityId, "add_child", [
                 "activity",
                 "header_actions",
-                "children",
             ]);
             setStage("success");
             setBusy(false);

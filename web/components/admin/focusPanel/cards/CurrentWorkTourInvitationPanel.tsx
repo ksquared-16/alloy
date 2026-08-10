@@ -116,7 +116,7 @@ export default function CurrentWorkTourInvitationPanel({
                     String(detail?.invitation_id ?? d?.invitationId ?? "").trim() || null;
 
                 let recipient: Recipient | null = null;
-                if (d?.recipientEmail || d?.recipientPhone || (d as { recipientPersonId?: string })?.recipientPersonId) {
+                if (d && (d.recipientEmail || d.recipientPhone || (d as { recipientPersonId?: string }).recipientPersonId)) {
                     recipient = {
                         person_id: String((d as { recipientPersonId?: string }).recipientPersonId ?? "").trim(),
                         display_name: String(d.recipientDisplayName ?? "Primary contact").trim(),

@@ -21,7 +21,9 @@ describe("classifyEligibleEnrollmentChildren", () => {
         const out = classifyEligibleEnrollmentChildren([]);
         expect(out.status).toBe("none");
         expect(out.subjects).toEqual([]);
-        expect(out.message).toMatch(/child/i);
+        if (out.status === "none") {
+            expect(out.message).toMatch(/child/i);
+        }
     });
 
     it("classifies a single child", () => {
@@ -37,7 +39,9 @@ describe("classifyEligibleEnrollmentChildren", () => {
         ]);
         expect(out.status).toBe("multiple");
         expect(out.subjects).toHaveLength(2);
-        expect(out.message).toMatch(/Who should move/i);
+        if (out.status === "multiple") {
+            expect(out.message).toMatch(/Who should move/i);
+        }
     });
 });
 
