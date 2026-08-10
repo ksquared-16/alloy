@@ -88,8 +88,11 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
         capability: SETTINGS_USERS_ROLES_PERMISSION,
         backingRoutes: [
             "app/api/admin/settings/users-roles/members/route.ts",
+            "app/api/admin/users/route.ts",
             "app/api/admin/users/[userId]/role/route.ts",
             "app/api/admin/users/[userId]/access-scope/route.ts",
+            "app/api/admin/users/[userId]/remove/route.ts",
+            "app/api/admin/rbac/roles/route.ts",
         ],
         divergentRoutes: [
             {
@@ -115,6 +118,9 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
         capability: SETTINGS_USERS_ROLES_PERMISSION,
         backingRoutes: [
             "app/api/admin/rbac/roles/route.ts",
+            "app/api/admin/rbac/roles/[role_key]/route.ts",
+            "app/api/admin/rbac/permissions/route.ts",
+            "app/api/admin/rbac/grants/route.ts",
             "app/api/admin/settings/users-roles/members/route.ts",
         ],
     },
