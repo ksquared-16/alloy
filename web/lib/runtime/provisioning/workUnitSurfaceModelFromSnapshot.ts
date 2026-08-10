@@ -58,6 +58,7 @@ function resolveRowVariantSlots(
     variants: readonly QueueRowVariant[],
     fixedControls: QueueRecordFixedControls | null,
     workViewId: string | null,
+    workViewKey: string | null,
     processKey: string | null,
     defaultSlots: CompactRowSlots,
 ): CompactRowSlots | undefined {
@@ -65,7 +66,7 @@ function resolveRowVariantSlots(
     const rowContext = (context ?? {}) as QueueRowContext;
     const input = queueRowVariantMatchInputFromContext(rowContext, {
         workViewId,
-        workViewKey: null,
+        workViewKey,
     });
     if (!input.processKey && processKey) {
         input.processKey = processKey;
@@ -222,6 +223,7 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                               queueRowVariants,
                               p.queue.rowVariantFixedControls,
                               snapshot.activeWorkView.id,
+                              snapshot.activeWorkView.label.trim().toLowerCase().replace(/\s+/g, "_") || null,
                               snapshot.businessProcess.key,
                               p.queue.rowSlots,
                           );

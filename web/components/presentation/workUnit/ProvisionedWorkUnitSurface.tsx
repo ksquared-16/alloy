@@ -48,6 +48,10 @@ export function ProvisionedWorkUnitSurface() {
         committed && committed.snapshot.terminal !== "error"
             ? committed.snapshot.activeWorkView.id
             : null;
+    const workViewKey =
+        committed && committed.snapshot.terminal !== "error"
+            ? committed.snapshot.activeWorkView.label.trim().toLowerCase().replace(/\s+/g, "_") || null
+            : null;
 
     const publishedOverlay = usePublishedQueueRowSlotsOverlay({
         surfaceId: model?.queue.provenance?.surfaceId ?? null,
@@ -73,7 +77,7 @@ export function ProvisionedWorkUnitSurface() {
                     if (!row.context) return row;
                     const input = queueRowVariantMatchInputFromContext(row.context, {
                         workViewId,
-                        workViewKey: null,
+                        workViewKey,
                     });
                     if (!input.processKey && processKey) {
                         input.processKey = processKey;
@@ -85,7 +89,7 @@ export function ProvisionedWorkUnitSurface() {
                 }),
             },
         };
-    }, [model, publishedOverlay, processKey, workViewId]);
+    }, [model, publishedOverlay, processKey, workViewId, workViewKey]);
 
     useEffect(() => {
         if (typeof window === "undefined" || !effectiveModel) return;
