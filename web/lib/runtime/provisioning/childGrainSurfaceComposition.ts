@@ -276,7 +276,7 @@ export function childQueueRowContext(params: {
             entity_type: "opportunities",
             entity_id: row.contextId ?? "",
             active_subject: subject,
-            stage_focus_key: row.stageKey ?? null,
+            ...(row.stageKey ? { stage_focus_key: row.stageKey } : {}),
         },
     };
 }
