@@ -52,12 +52,19 @@ export async function runSearch(args: RunSearchArgs): Promise<Omit<SearchRespons
     const { supabase, orgId, dimensions, rawQ } = args;
     const limit = clampLimit(args.limit);
 
-    // 1. Access first. Nothing is read on the operator's behalf before this.
-    const envelope = await resolveSearchAccessEnvelope(supabase, orgId, dimensions);
+    // 1 + 2. Access and tenant configuration are independent reads, so they share
+    //        one round trip rather than two. Search is an interactive control and
+    //        its latency is dominated by sequential DB hops, not by CPU.
+    //
+    //        Access still gates everything below: no candidate is read until the
+    //        envelope exists, which is the security order the doctrine requires.
+    const [envelope, processConfig] = await Promise.all([
+        resolveSearchAccessEnvelope(supabase, orgId, dimensions),
+        loadSearchProcessConfiguration(supabase, orgId, dimensions),
+    ]);
 
-    // 2. Tenant configuration supplies the process vocabulary for intent parsing,
-    //    so `enrollment` and `admissions` are recognised through the same path.
-    const processConfig = await loadSearchProcessConfiguration(supabase, orgId, dimensions);
+    // Tenant configuration supplies the process vocabulary for intent parsing, so
+    // `enrollment` and `admissions` are recognised through the same path.
     const intent = parseSearchIntent(rawQ, { processVocabulary: processConfig.vocabulary });
 
     const empty = {

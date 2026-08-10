@@ -23,7 +23,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { departmentIdAllowed, type AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import {
+    buildAccessScopeCacheFingerprint,
+    departmentIdAllowed,
+    type AdminAccessScopeDimensions,
+} from "@/lib/admin/accessScope";
 import {
     activeStagesForProcess,
     lifecycleBuilderFromDepartmentMetadata,
@@ -49,6 +53,31 @@ export type SearchProcessConfiguration = {
 };
 
 /**
+ * Short-lived process-configuration cache.
+ *
+ * Measured on a remote Supabase instance, every round trip costs ~400-500ms and
+ * this read sits on the critical path of EVERY keystroke — while the data it
+ * returns changes only when an operator publishes a Business Process. Caching it
+ * removes roughly a third of search latency.
+ *
+ * Keyed by org AND access fingerprint, because the vocabulary is access-filtered:
+ * two operators with different department scope must never share an entry.
+ *
+ * The TTL is deliberately short. A freshly published process appears in search
+ * within `CONFIG_CACHE_TTL_MS`; nothing here is authoritative, so a briefly stale
+ * LABEL is acceptable in a way stale truth never would be.
+ */
+const CONFIG_CACHE_TTL_MS = 30_000;
+
+type ConfigCacheEntry = { expiresAt: number; value: SearchProcessConfiguration };
+const configCache = new Map<string, ConfigCacheEntry>();
+
+/** Test seam — configuration is process-global, so tests must be able to clear it. */
+export function resetSearchProcessConfigurationCache(): void {
+    configCache.clear();
+}
+
+/**
  * Read the tenant's published process configuration.
  *
  * Deliberately ONE query. Departments carry the `lifecycle_builder_v1` payload;
@@ -56,6 +85,22 @@ export type SearchProcessConfiguration = {
  * its own opinion about the configuration format.
  */
 export async function loadSearchProcessConfiguration(
+    supabase: SupabaseClient,
+    orgId: string,
+    dimensions: AdminAccessScopeDimensions,
+    options?: { now?: number }
+): Promise<SearchProcessConfiguration> {
+    const now = options?.now ?? Date.now();
+    const cacheKey = `${orgId}::${buildAccessScopeCacheFingerprint(dimensions)}`;
+    const cached = configCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.value;
+
+    const value = await readSearchProcessConfiguration(supabase, orgId, dimensions);
+    configCache.set(cacheKey, { expiresAt: now + CONFIG_CACHE_TTL_MS, value });
+    return value;
+}
+
+async function readSearchProcessConfiguration(
     supabase: SupabaseClient,
     orgId: string,
     dimensions: AdminAccessScopeDimensions

@@ -85,7 +85,12 @@ export async function enrichSearchCandidates(args: {
     // Wave 1 — a PERSON candidate carries no household on the row; its household
     // membership is the `customer_persons` edge. Household names, siblings, and the
     // household destination all depend on it, so it must resolve before the rest.
-    const customerPersonRows = await fetchCustomerPersons(supabase, orgId, personIds);
+    //
+    // Skipped entirely when nothing matched a person, which removes a sequential
+    // round trip from the common child-only query.
+    const customerPersonRows = personIds.length
+        ? await fetchCustomerPersons(supabase, orgId, personIds)
+        : [];
 
     const householdIds = uniq([
         ...candidates.map((c) => c.household_id),
@@ -97,21 +102,39 @@ export async function enrichSearchCandidates(args: {
     const processSubjectIds = uniq([...childIds, ...personIds, ...childPersonIds]);
 
     // Wave 2 — everything else, in parallel.
-    const [processRows, scheduleRows, householdRows, siblingRows, dobRows] = await Promise.all([
-        fetchProcessInstances(supabase, orgId, processSubjectIds),
-        fetchScheduleAssignments(supabase, orgId, childIds),
-        fetchHouseholds(supabase, orgId, householdIds),
-        fetchSiblings(supabase, orgId, householdIds),
-        fetchPersonDobs(supabase, orgId, childPersonIds),
-    ]);
+    //
+    // Location labels join this wave rather than waiting for it. Their id set is
+    // only known after the rows above land, but an org's location table is small,
+    // so reading it wholesale removes an entire sequential round trip from the
+    // critical path. `fetchOrgLocationLabels` reports whether it hit its cap.
+    const [processRows, scheduleRows, householdRows, siblingRows, dobRows, orgLocations] =
+        await Promise.all([
+            fetchProcessInstances(supabase, orgId, processSubjectIds),
+            fetchScheduleAssignments(supabase, orgId, childIds),
+            fetchHouseholds(supabase, orgId, householdIds),
+            fetchSiblings(supabase, orgId, householdIds),
+            fetchPersonDobs(supabase, orgId, childPersonIds),
+            fetchOrgLocationLabels(supabase, orgId),
+        ]);
 
-    // Location labels are resolved last because their id set comes from the rows above.
     const locationIds = uniq([
         ...processRows.map((r) => r.location_id),
         ...scheduleRows.map((r) => r.site_location_id),
         ...candidates.map((c) => c.location_id),
     ]);
-    const locationLabels = await fetchLocationLabels(supabase, orgId, locationIds);
+
+    // Correctness fallback: only if the wholesale read was capped AND a needed id
+    // is genuinely missing do we pay for a targeted follow-up. Zero extra hops in
+    // the normal case; never a silently missing label.
+    const locationLabels = orgLocations.labels;
+    if (orgLocations.capped) {
+        const missing = locationIds.filter((id) => !locationLabels.has(id));
+        if (missing.length) {
+            for (const [id, label] of await fetchLocationLabels(supabase, orgId, missing)) {
+                locationLabels.set(id, label);
+            }
+        }
+    }
 
     // --- index the batched rows -------------------------------------------------
     const processBySubject = new Map<string, typeof processRows>();
@@ -459,6 +482,36 @@ async function fetchPersonDobs(
         id: String(r.id),
         date_of_birth: r.date_of_birth ?? null,
     }));
+}
+
+/** Cap for the wholesale org location read. Orgs are far below this in practice. */
+const ORG_LOCATION_LABEL_CAP = 1000;
+
+/**
+ * Read the org's location labels wholesale so label resolution can join wave 2
+ * instead of forming its own sequential hop.
+ *
+ * Reports `capped` so the caller can fall back to a targeted read rather than
+ * silently dropping a label it could not resolve.
+ */
+async function fetchOrgLocationLabels(
+    supabase: SupabaseClient,
+    orgId: string
+): Promise<{ labels: Map<string, string>; capped: boolean }> {
+    const labels = new Map<string, string>();
+    const { data, error } = await supabase
+        .from("locations")
+        .select(LOCATION_DISPLAY_LABEL_SELECT)
+        .eq("org_id", orgId)
+        .limit(ORG_LOCATION_LABEL_CAP);
+    if (error) throw new Error(error.message);
+
+    const rows = (data ?? []) as Array<{ id: string } & LocationDisplayLabelRow>;
+    for (const row of rows) {
+        const label = locationDisplayLabelFromRow(row);
+        if (label) labels.set(String(row.id), label);
+    }
+    return { labels, capped: rows.length >= ORG_LOCATION_LABEL_CAP };
 }
 
 async function fetchLocationLabels(

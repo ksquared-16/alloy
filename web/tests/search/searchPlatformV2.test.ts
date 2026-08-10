@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { runSearch } from "@/lib/search/runSearch";
 import { SEARCH_RESULT_DOCTRINE } from "@/lib/search/searchContracts";
+import { resetSearchProcessConfigurationCache } from "@/lib/search/searchProcessConfiguration";
+
+// Process configuration is cached process-globally for latency. Tests vary that
+// configuration deliberately, so each one must start from a cold cache.
+beforeEach(() => resetSearchProcessConfigurationCache());
 
 /**
  * Alloy Search Platform V2 — the five required pressure-test scenarios, plus the
