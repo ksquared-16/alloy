@@ -53,14 +53,25 @@ function displayStatus(status: string): string {
     return status.charAt(0).toUpperCase() + status.slice(1).replaceAll("_", " ");
 }
 
+/**
+ * **W49-F2.** `visibleDomainKeys` is required and has no default. A default of "every domain"
+ * would restore the fail-open by omission: a caller that forgot to pass it would render the full
+ * grid and nothing would report it. The list is decided at the route boundary by
+ * `isOrganizationDomainVisible`, from the surface declaration — this component filters, it does
+ * not judge, and the summary counts what it actually drew rather than what the org has.
+ */
 export default function OrganizationConfigurationPage({
     organization,
     locations,
+    visibleDomainKeys,
 }: {
     organization: { id: string; name: string; status: string };
     locations: OrganizationConfigurationLocation[];
+    visibleDomainKeys: readonly string[];
 }) {
-    const domains = organizationConfigurationDomains();
+    const domains = organizationConfigurationDomains().filter((domain) =>
+        visibleDomainKeys.includes(domain.key),
+    );
     const activeLocations = locations.filter((location) => location.isActive);
     const publishRequiredCount = domains.filter(
         (domain) => domain.publication.status === "publish_required",

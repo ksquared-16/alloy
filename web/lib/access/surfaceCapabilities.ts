@@ -169,3 +169,39 @@ export function visibleAccessChapters(
         heldCapabilities.has(ACCESS_SURFACE_DECLARATIONS[chapter].capability)
     );
 }
+
+/**
+ * **W49-F2 — the workspace above the workspace.**
+ *
+ * Gating `/organization/access` closed the URL, but `/organization` still drew an Access domain
+ * card, with a link, to a principal the page now redirects. That is the same defect one level out:
+ * navigation offering what admission refuses. `05…§7.7` is explicit that navigation must filter
+ * *from the same declaration*, so this reads {@link ACCESS_SURFACE_DECLARATIONS}' capability rather
+ * than naming `settings.users_roles` a third time.
+ *
+ * **Only `access` is declared, and that is the honest state, not an oversight.** The other ten
+ * organization domains are the residue of `05…§1`'s *"1 of 132 admin pages"* — no capability is
+ * enforced behind them, so there is nothing to filter on, and inventing one here would be the
+ * fabricated gate `W-50` exists to catch. They stay visible until `W-15`'s sweep gives them a
+ * capability to be visible *for*. An undeclared domain is unfiltered **and says so** — the tier A
+ * check asserts this map covers exactly the declared set, so a domain that acquires a capability
+ * without acquiring a filter is a failure rather than a silent pass.
+ */
+export const ORGANIZATION_DOMAIN_CAPABILITIES: Readonly<Record<string, string>> = {
+    access: SETTINGS_USERS_ROLES_PERMISSION,
+};
+
+/**
+ * Does this principal see the `/organization` card for `domainKey`?
+ *
+ * @param heldCapabilities - from {@link heldAccessCapabilities}, so the card and the page it links
+ *   to are decided by one evaluation of one predicate.
+ */
+export function isOrganizationDomainVisible(
+    domainKey: string,
+    heldCapabilities: ReadonlySet<string>
+): boolean {
+    const capability = ORGANIZATION_DOMAIN_CAPABILITIES[domainKey];
+    if (!capability) return true;
+    return heldCapabilities.has(capability);
+}

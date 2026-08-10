@@ -26,9 +26,12 @@ import path from "node:path";
 import {
     ACCESS_SURFACE_DECLARATIONS,
     ACCESS_SURFACE_LIST,
+    ORGANIZATION_DOMAIN_CAPABILITIES,
+    isOrganizationDomainVisible,
     visibleAccessChapters,
     heldAccessCapabilities,
 } from "@/lib/access/surfaceCapabilities";
+import { organizationConfigurationDomains } from "@/lib/configRuntime/organizationRuntime";
 import { ACCESS_WORKSPACE_CHAPTERS } from "@/lib/access/accessChapterRoutes";
 import { buildAccessLandingModel } from "@/lib/configRuntime/accessLandingModel";
 import { SETTINGS_USERS_ROLES_PERMISSION } from "@/lib/admin/canManageUsersAndRoles";
@@ -298,6 +301,46 @@ describe("W-49 · AE-4 — the surface is not reachable by URL without the capab
         expect(admissionViolations(unchecked)).toEqual([
             "accepts a ?section= the filter excluded — hidden, but reachable by URL",
         ]);
+    });
+
+    /**
+     * W49-F2. Closing the URL is half the property; the other half is that nothing offers the door.
+     * `/organization` drew an Access card, with a link, to principals `/organization/access` now
+     * redirects — navigation promising what admission refuses, one level out from the chapter tabs.
+     */
+    it("filters the /organization Access card from the same declaration", () => {
+        const admin = heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [] });
+        const opsOnly = heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [] });
+        expect(isOrganizationDomainVisible("access", admin)).toBe(true);
+        expect(isOrganizationDomainVisible("access", opsOnly)).toBe(false);
+
+        // The declared capability is read from the surface declaration, not restated. If the two
+        // ever diverge, the Access card and the Access page would gate on different keys.
+        expect(ORGANIZATION_DOMAIN_CAPABILITIES.access).toBe(ACCESS_SURFACE_DECLARATIONS.users.capability);
+
+        // Every key in the map must be a real domain — a typo would silently gate nothing.
+        const domainKeys = organizationConfigurationDomains().map((d) => d.key);
+        for (const key of Object.keys(ORGANIZATION_DOMAIN_CAPABILITIES)) {
+            expect(domainKeys, `${key} is not an organization domain`).toContain(key);
+        }
+
+        // Undeclared domains are unfiltered *and only those*. This is the `05…§1` residue: they are
+        // enforced by nothing, so there is nothing to filter on. When W-15 gives one a capability,
+        // adding it here is what this assertion forces — it cannot acquire a gate and skip the nav.
+        const undeclared = domainKeys.filter((key) => !(key in ORGANIZATION_DOMAIN_CAPABILITIES));
+        expect(undeclared).not.toContain("access");
+        for (const key of undeclared) {
+            expect(isOrganizationDomainVisible(key, new Set()), `${key} claims a gate it has not got`).toBe(true);
+        }
+
+        // The page decides and the component filters — neither may be dropped. A default of "all"
+        // in the component would make the whole filter a no-op for a caller that forgot the prop.
+        const page = readWebCode("app/adminV2/settings/organization/page.tsx");
+        expect(page).toContain("isOrganizationDomainVisible");
+        expect(page).toContain("visibleDomainKeys={visibleDomainKeys}");
+        const grid = readWebCode("components/adminV2/settings/organization/OrganizationConfigurationPage.tsx");
+        expect(grid).toContain("visibleDomainKeys.includes(domain.key)");
+        expect(grid).not.toMatch(/visibleDomainKeys\s*=\s*\[/);
     });
 
     it("leaves the client no way to re-derive the chapter list, or to hold an authorization prop", () => {
