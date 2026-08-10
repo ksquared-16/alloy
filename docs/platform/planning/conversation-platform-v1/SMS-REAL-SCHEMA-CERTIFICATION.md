@@ -50,6 +50,37 @@ tenant role** — a false failure that would equally have been a false PASS had 
 expectation been inverted. Role-based RLS checks must be wrapped in
 `BEGIN; SET LOCAL ROLE …; … COMMIT;` or they prove nothing.
 
+## Second checkpoint — unread authority + duplicate exclusion (2026-08-10)
+
+Pending set was computed from the ledger, not assumed. It was **five**, not two:
+three migrations from other sprints that had reached staging but never the cert DB
+(`20260807140000`, `20260807170000`, `20260807210000`) plus this sprint's two. All
+five forward-applied; **zero pending** afterwards (320 applied / 320 branch
+versions).
+
+| Property | Result |
+|---|---|
+| `communication_unread_count` installed, SECURITY DEFINER, `search_path` pinned | PASS |
+| EXECUTE granted to `authenticated` + `service_role` only | PASS |
+| Supporting partial index present on the real table | PASS |
+| Replay is a safe no-op | PASS |
+| 350 genuine + 40 superseded + 25 outbound → **350** | PASS (past the old 300 cap) |
+| 100 marked read → **250** | PASS |
+| Second operator still sees **350** (per-user read model) | PASS |
+| Another org sees **0** | PASS |
+| 390 inbound rows still stored (history retained) | PASS |
+
+Fixtures were scoped to one thread and removed.
+
+### Ledger hazard found
+
+Two branch files share version `20260807090000`
+(`business_process_publish_idempotency` and `membership_profile_atomic_create`).
+`supabase_migrations.schema_migrations` is keyed by version, so it can only ever
+record one of them — the other is invisible to any "is it applied?" check,
+including this one. Not caused by this sprint and not fixed here; recorded because
+a pending-set computation that dedupes by version will silently under-report.
+
 ## Not covered here
 
 - **Task 4 provenance against real data.** Implementation and focused tests pass,
