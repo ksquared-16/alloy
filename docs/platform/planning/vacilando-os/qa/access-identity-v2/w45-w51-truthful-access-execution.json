@@ -11,10 +11,11 @@
     "worktree": "/Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation",
     "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
     "head_at_session_start": "f44f6a38a",
-    "head_at_report": "45e6488ed",
+    "head_at_report": "16302dff3",
     "promoted": false,
     "pushed": false,
-    "generated": "2026-08-10"
+    "generated": "2026-08-10",
+    "record_covers_multiple_sessions": "This file is EXTENDED per session rather than forked, for the reason given in `supersedes`. Session 1 ended at 45e6488ed. Session 2 (W-51/IA-8, W49-F1) ended at 65520202c. Session 3 (W14-F1, backing-route completeness) ends at 16302dff3."
   },
 
   "what_this_milestone_is": "The mission's product milestone: /organization/access derives and displays authoritative state, and the authorization paths underlying those claims are enforced. Presentation reflects authorization; presentation does not create authorization.",
@@ -56,13 +57,38 @@
       "fixtures": ["org-wide administrator", "location-restricted staff", "department-restricted staff", "multi-location staff", "user with multiple roles", "invited/not-yet-admitted", "inactive/deactivated membership", "user with no access profile", "capability permits but scope excludes the target", "user without Access administration capability", "parent/external principal"],
       "layer_separation_proved": "F9 is admitted by capability and still bounded to one location; F1 holds the same capability bounded by nothing. The distinction is therefore real and not an artifact of every fixture being restricted.",
       "negatives_asserted_directly": "For every unset-profile fixture: scopeSummary must NOT return 'All locations', certainty is 'unset', the divergence reason is present, and allow-list rows are withheld. IA-3 as a test rather than a claim."
+    },
+    {
+      "commit": "4612d4d2d",
+      "session": 3,
+      "workstream": "W14-F1 — the disclosure half, which was never the half that needed a decision",
+      "why_this_was_actionable": "W-14 recorded the finding and declined to answer it because asserting that a roster read needs no capability is W-15's product call. That reasoning is correct and unchanged — and it was applied to the wrong half. The finding has two: WHO REACHES the route is a product question; WHAT IT DISCLOSES to whoever reaches it is not. Only the first needed an operator.",
+      "defect": "GET /api/admin/users is admitted by portal eligibility alone and returned every org member's email address to everyone it admitted. The live consumer that made this matter is components/admin/opportunity/OperationalWorkAssigneeSelect.tsx, which needs to NAME a colleague in an assignee dropdown and derived that name from the local-part client-side — `label: row.email?.trim() || row.label` — so the full address crossed the wire in order to be rendered whole. Any staffer who could assign work could read the organisation's entire email list out of a <select>.",
+      "remedy": "The label is computed at the route for every caller; the address is projected against canManageUsersAndRoles. No consumer loses a function — the picker shows the same names, the Access surface reads from the gated members route as before, and the legacy tables already handled email === null, which has always been in AdminUserRow's contract for an unreadable auth record.",
+      "admission_deliberately_unchanged": "The declaration stays 'pending' rather than being quietly resolved, and its note is AMENDED rather than cleared. The gate is read from the bundle getAdminContextCached already resolved, so it costs no second auth pass — and it must NOT be re-derived from getAdminAccessContextCached, which does not require portalEligible and would widen who reaches the route while appearing to tighten it. Two tests assert that exact accident, one of them a caller who is portal-refused while holding the managing grant.",
+      "certification_shape": "The agreement tests run the real handler and feed its real JSON to the real consumer's fetcher, then assert what the dropdown would put on screen. Three passing per-layer suites can still describe a route that withholds an address and a component that renders one from somewhere else.",
+      "non_vacuity": "Proved by defeating the gate: the two disclosure assertions fail and the other thirteen do not.",
+      "still_open": "The admission question. W14-F1 is NOT closed — its disclosure half is."
+    },
+    {
+      "commit": "16302dff3",
+      "session": 3,
+      "workstream": "The backing-route record is discovered, not enumerated",
+      "defect_class": "A sound check over an unsound subject. surfaceCapabilityDeclaration asserts that every route a chapter NAMES declares that chapter's capability, but backingRoutes is hand-authored — so a chapter calling a route nobody wrote down does not fail the join, it never enters it. This initiative has already been bitten by this shape (W-5, 'does the lock DISCOVER or ENUMERATE?').",
+      "measurement": "The Users chapter issues six requests and declared three; the Roles chapter issues four and declared two. Six omissions.",
+      "why_nothing_was_broken": "Every omitted route is correctly gated — users POST, users/[userId]/remove, rbac/roles, rbac/roles/[role_key], rbac/permissions and rbac/grants all declare settings.users_roles in W-14's table. Which is precisely why nothing said anything. A record that can only be audited by the person who wrote it is not a control.",
+      "remedy": "The declaration is completed, and the new lock's subject is DISCOVERED from each chapter's own source, with dynamic segments normalised on both sides so `[userId]` and `${encodeURIComponent(id)}` compare as one path.",
+      "grain_decides_the_classification": "capabilitiesDeclaredBy unions over a file's methods, and the divergence ratchet asserts a divergent route does NOT declare the capability. rbac/roles, rbac/grants and rbac/permissions read through requirePortalOrUsersRolesManageAuth, which admits portal-eligible principals lacking the grant — wider than the chapter's gate. They are still BACKING routes, because their files DO declare settings.users_roles; the wider read leg is recorded in W-14's table as W-13's portal.access question. Listing them as divergent would have failed the ratchet and stated something false.",
+      "non_vacuity": "Removing rbac/permissions from the roles declaration makes the lock name that exact route and fail."
     }
   ],
 
   "tests": {
     "command": "cd web && npx vitest run tests/access/",
-    "result": "16 files passed, 1 skipped — 300 passed, 6 skipped, 0 failed",
+    "result": "18 files passed, 1 skipped — 341 passed, 6 skipped, 0 failed (at 16302dff3)",
+    "result_session_1": "16 files passed, 1 skipped — 300 passed, 6 skipped, 0 failed",
     "at_session_start": "213 passed",
+    "pre_existing_failures_outside_this_lane": "tests/admin/operationalWork/opportunityOperationalCompactStrip.contract.test.ts fails 3 of 6 ('My Tasks supports assignee filters and display', 'drawer strip uses operational work gate not Task Assist gate', 'My Tasks and nav badge use operational work gate'). It reads OpportunityOperationalCompactStrip.tsx, AdminEntityDrawer.tsx, MyTasksPanel.tsx and OperationalTasksNavBadge.tsx — four files no Access commit touches — and fails identically at HEAD. Recorded as a LIST, not a count, per the standing rule that a count cannot distinguish a fixed failure from a new one.",
     "environment_gotcha": "A run from the REPOSITORY ROOT reports 12 failing files with 'Cannot find package @/…' for modules that plainly exist. That is the root vitest config resolving without the web/ path alias, not a defect in the tree. Vitest for this package must be invoked from web/. Recorded because the failure text points convincingly at the wrong thing — it names the module under test."
   },
 
@@ -77,7 +103,9 @@
     "restrictions_and_inheritance": "PARTIAL — the render leg of GAP-3 is done; GAP-12 closes only when W-24 (cache) and W-43 (resolver) land, and neither is started",
     "chapter_surface_availability": "TRUE — W-49 + W49-F2, from actual capabilities, one declaration",
     "inert_capability_presentation": "TRUE — W-50 presentation clause",
-    "route_enforcement": "PARTIAL — 25 declared / 1 reasoned-none / 725 pending. W-15 is the burndown and is not started."
+    "route_enforcement": "PARTIAL — 25 declared / 1 reasoned-none / 725 pending platform-wide. W-15 is the burndown and is not started. SCOPED TO THIS MILESTONE, however, the picture is stronger and is now certified: every route the Access surface calls is named in its declaration and declares settings.users_roles. The mission's clause — a hidden surface must not remain reachable by URL/API — holds for the Access surface itself.",
+    "member_directory_disclosure": "TRUE — W14-F1 disclosure half. The org's address list is no longer readable by everyone the portal admits.",
+    "backing_route_record": "TRUE and self-auditing — the join's subject is discovered from chapter source, so an omission fails rather than passing silently."
   },
 
   "certification_state": {
@@ -98,6 +126,7 @@
         "Slot 6's stored auth reports `missing`, so even the registered tree has no QA identity session.",
         "web/.env.local.agent carries only public/anon values, by design — no service-role key. Every Access admin route calls createAdminClient(), so an unbrokered server would fail on exactly the routes under certification."
       ],
+      "re_verified_session_3": "Still true, checked rather than inherited. `alloy-dev-start wt6-director-experience-dx5-5-continuation` returns 'unknown worktree metadata'; the metadata directory holds seven entries and this worktree is not among them; slot 6 resolves to wt6-search-platform-certification (a different path, on branch agent/claude/6-search-platform-certification, auth 'missing'). Nothing about the blocker has changed and nothing was worked around.",
       "what_would_unblock_it": "Register this worktree with the dev toolkit (or re-point slot 6 at it) and run alloy-agent-login, after which alloy-agent-verify can produce route evidence for /organization/access.",
       "not_worked_around": "No dev server was started by another path. The governance forbids bare `next dev`, and privileged values are deliberately absent from the worktree; manufacturing a server here would have produced evidence from an environment the product does not run in."
     }
@@ -114,7 +143,7 @@
 
   "findings_left_open": {
     "W49-F1": "app/api/admin/send-password-reset/route.ts — the chapter renders 'Send password reset' to every holder of settings.users_roles; the route enforces ctx.role !== 'admin'. A grant-holder who is not org admin is shown the control and gets 403. Declaring it settings.users_roles would be a one-line WIDENING of who may trigger a password-reset email — W-15's sweep with a product decision behind it. Pinned in RL-36.",
-    "W14-F1": "Unchanged. app/api/admin/users GET returns every org member's email behind portal admission alone while its POST requires settings.users_roles. Asserting that roster read needs no capability is W-15's product call."
+    "W14-F1": "HALF CLOSED (4612d4d2d). The disclosure half is done: GET no longer returns any member's address to a caller without settings.users_roles. The ADMISSION half stands open and unchanged — whether a roster read should require a capability at all is still W-15's product call, and the route's declaration remains 'pending' to say so. Do not read the amended note as a resolved finding."
   },
 
   "operator_decisions_still_blocking": {
