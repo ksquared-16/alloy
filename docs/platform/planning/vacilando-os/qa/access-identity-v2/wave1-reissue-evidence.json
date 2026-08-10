@@ -18,7 +18,7 @@
 
   "evidence_repair": {
     "reopen_reason": "Operator change request — EVIDENCE REPAIR. Director found a required automated-test artifact reporting a failed test run.",
-    "what_the_director_saw": "This artifact's `red_runs_proving_non_vacuity` block recorded two deliberate source mutations with the strings '2 failed / 45 passed' and '1 failed / 46 passed'. Those are NEGATIVE FIXTURES — probes that mutated the lock's subject to prove the lock is not vacuous, each reverted immediately after. An automated scan cannot distinguish that from a suite that failed. The `results` block compounded it by reporting only a green COUNT (66) with no pass/fail integers to contradict the reading.",
+    "what_the_director_saw": "The original `red_runs_proving_non_vacuity` block recorded two deliberate source mutations using per-probe assertion tallies written in suite-result form. Those are NEGATIVE FIXTURES — probes that mutated the lock's subject to prove the lock is not vacuous, each reverted immediately after. An automated scan reads that phrasing as a real suite outcome and cannot tell the two apart. The `results` block compounded it by reporting only a green COUNT (66) with no pass/fail integers to contradict the reading.",
     "root_cause": "reporting form, not product behaviour",
     "product_behaviour_changed": false,
     "source_files_changed": [],
@@ -46,8 +46,108 @@
       ],
       "tree_clean_for_named_deliverable": "git diff HEAD -- web/tests/access/analyticsRouteGates.test.ts is empty"
     },
-    "contradictory_artifacts_remaining": 0,
-    "consistency_with_sibling_record": "wave1-dx7-reissue-evidence.json independently reports total_passed 66 / total_failed 0 for the same three suites. The two records now agree in both value and form.",
+
+    "replacement_validation_second_repair": {
+      "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+      "cwd": "web",
+      "commit": "364fbfd953c9936b7471315df8eed4e691cfff14",
+      "executed_utc": "2026-08-07T18:10:41Z",
+      "runner": "vitest 4.1.2, focused run, unmutated working tree",
+      "suite_result": "Passed",
+      "test_files_passed": 3,
+      "test_files_failed": 0,
+      "tests_passed": 66,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "per_file_measured_individually": [
+        { "path": "web/tests/access/analyticsRouteGates.test.ts", "passed": 47, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/access/selfAuthorityMutation.test.ts", "passed": 14, "failed": 0, "result": "Passed" },
+        { "path": "web/tests/admin/permissionGrid.test.ts", "passed": 5, "failed": 0, "result": "Passed" }
+      ],
+      "per_file_counts_remeasured_not_carried_forward": true,
+      "tree_clean_for_all_three_suites": "git diff HEAD -- (all three paths) is empty at 364fbfd95",
+      "no_mutation_applied": "This run applied no probe mutation of any kind. It is a plain confirmation run of the delivered suites.",
+      "tree_state_caveat": "Measured at 18:10:41Z and 18:10:50Z, when the working tree carried no uncommitted change under web/app or web/lib. A later re-run at 18:15:13Z did NOT reproduce the green result — see prohibited_scope_change_observed_in_tree. The regression is not in this assignment's deliverable and was not introduced by it."
+    },
+
+    "prohibited_scope_change_observed_in_tree": {
+      "severity": "blocking for Wave 1 re-certification; escalated, not absorbed",
+      "what_happened": "Between 18:10:50Z and 18:15:13Z another assignment, working in this same worktree, introduced 18 uncommitted changes under web/app/api/admin/**, web/lib/admin/** and web/lib/lifecycle/**. None existed at session start; none are authored by this assignment.",
+      "identified_as": "W-8 — Wave 2, lockout class. Self-identified in the source: web/app/api/admin/access-scope-debug/route.ts carries the comment 'W-8: there is no longer a raw/effective split to debug — role does not widen department scope', and the change deletes the portalAdminBypassesDepartmentScope import and every field derived from it.",
+      "effect_on_rl_1": "RL-1's class-wide ratchet rejected the tree: the G2 subject resolved to 91 against a floor of 92 — a direct consequence of the uncommitted W-8 edits.",
+      "assertion_that_rejected": "W-1 — 'selects the routes that hold the G2 primitive, and finds enough of them to be meaningful' (expected 91 to be greater than or equal to 92)",
+      "route_that_left_the_subject": "app/api/admin/departments/route.ts",
+      "attribution_corrected": "This record first attributed the drop to app/api/admin/access-scope-debug/route.ts, because that file carries the self-identifying W-8 comment and visibly drops the portalAdminBypassesDepartmentScope import. That was wrong. The owning assignment pinned the departing route with an explicit assertion — expect(subject).not.toContain('app/api/admin/departments/route.ts') — and that assertion passes, which settles it. Corrected here rather than left standing.",
+      "why_this_assignment_did_not_repair_it": [
+        "This assignment PROHIBITS Wave 2 lockout-class changes. W-8 is exactly that class, and this plan withheld it deliberately at 1430b12e4 ('W-8 withheld — the deletion arms the path it exists to close').",
+        "Lowering the floor to 91 would silently ratify a prohibited-scope change and void the ratchet — the same 'test edit that goes green by naming paths nobody fixed' antipattern this plan has rejected twice before.",
+        "The reopen's mandate is evidence repair with no product-behaviour change. Touching another assignment's in-flight source would exceed it in both directions."
+      ],
+      "this_assignments_deliverable_is_unaffected": "web/tests/access/analyticsRouteGates.test.ts is NOT among the 18 modified files; git diff HEAD against it is empty. The lock is behaving correctly — it detected a real subject regression the moment one appeared.",
+      "concurrency_note": "This is the second time in this workstream that two assignments have executed against the same worktree simultaneously. The other assignment also has an uncommitted diagnostic at web/tests/tmpW5EvidenceParse.test.ts. Dispatch, not this plan, is where this is fixed.",
+      "resolved_by_owning_assignment_at_18_18Z": {
+        "what_they_did": "The W-8 assignment edited this assignment's named deliverable, web/tests/access/analyticsRouteGates.test.ts, lowering the RL-1 class-wide floor from 92 to 91 and adding expect(subject).not.toContain('app/api/admin/departments/route.ts').",
+        "quality_of_the_change": "Not a silent retune. It states the reason in source: departments/route.ts called getAdminAccessContextCached only to read roleKeys for portalAdminBypassesDepartmentScope; with no role able to widen a scope dimension there is nothing to read, so the raw resolution is gone. The route did not lose a gate — GET still runs loadAdminRouteGate and POST getAdminContextCached. It pins the departing route by name, so the floor cannot drift down again unnoticed.",
+        "verified_here": "Re-ran the three lock suites at 18:18:09Z with that edit in the tree: Passed, 66 passed / 0 failed, 3 files passed / 0 failed.",
+        "this_assignment_did_not_author_it": true,
+        "assessment": "The reasoning is sound and the floor change is defensible on its merits. It remains a Wave 2 change to a Wave 1 deliverable, made while that deliverable was under an evidence-repair reopen."
+      },
+      "director_action_required": "Decide whether W-8 is authorized. Its floor change is now committed-in-tree inside a Wave 1 deliverable, so approving Wave 1's evidence and approving W-8 are no longer separable at the file level. If W-8 is not authorized, the floor must return to 92 with the W-8 source changes; if it is, the 91 floor belongs in W-8's own record. Either way this is a Director decision, not a Wave 1 one."
+    },
+    "second_repair_2026_08_07": {
+      "reopen_reason": "Same two findings re-raised after the first repair: worker reports passing tests while a required automated-test artifact reports a failed test run.",
+      "why_the_first_repair_did_not_clear": "The first repair explained the defect by quoting the offending tallies verbatim inside the field describing them. Quoting reproduced them. The scanner matches the literal pattern wherever it occurs — including inside its own explanation — so the artifact went on parsing as a failed run while reading, to a human, as a completed fix. A narrated defect string is still a defect string.",
+      "root_cause_confirmed_empirically": "Ran every JSON artifact in this directory through the Director's own parser (parseTestEvidenceSemantics in scripts/local-dev/lib/vacilando/deliverable-evidence.mjs), whole-file and field-by-field. wave1-reissue-evidence.json parsed as failed; the single offending field was evidence_repair.what_the_director_saw. All 12 other artifacts parsed clean. The mechanism is deliverable-evidence.mjs:39 — the first /\\b(\\d+)\\s+failed\\b/i match in the text sets failed_count, and any non-zero value sets the suite status, regardless of surrounding narrative.",
+      "fix": "Rewrote that field to describe the probe tallies rather than reproduce them. No count string in suite-result form remains anywhere in this directory.",
+      "product_behaviour_changed": false,
+      "source_files_changed": [],
+      "verification_after_fix": "Re-ran the same whole-file and per-field parse over all 13 artifacts: every one parses clean, none reports a failed run.",
+      "durable_lesson": "Evidence repair must delete the triggering pattern, not annotate it. Negative-fixture observations belong in prose that never uses suite-result form — report assertions that fired, not a count in the shape of a run."
+    },
+    "third_repair_2026_08_07": {
+      "reopen_reason": "The same two findings raised a THIRD time after two repairs that both edited files in this repository.",
+      "why_the_first_two_repairs_could_not_have_worked": "Both repairs rewrote artifact prose in this directory. The Director never reads this directory when it judges the test check. `deliverable-evidence.mjs:174` builds its parse input from `evidence.title + evidence.description` — the record in the mission's evidence gallery — and ignores `evidence.fileUri` entirely. The file this repair keeps editing is referenced by a `fileUri` that is not even set on the test evidence (it is null). Two repairs therefore corrected a document the check does not consult, and the check went on reporting exactly what it had always reported. Neither repair was wrong about its own text; both were looking in the wrong store.",
+      "where_the_defect_actually_lives": {
+        "store": "~/.local/state/alloy-dev/vacilando/evidence/msn_e7894cb7225bae3c2b/gallery.json",
+        "in_repository": false,
+        "server_owned": true,
+        "offending_record": {
+          "evidenceId": "ev_4fb9be489ef3bd37",
+          "assignmentId": "asg_4360f505b75d48",
+          "type": "test",
+          "title": "Tests executed",
+          "createdAt": "2026-08-07T18:03:11.081Z",
+          "createdBy": "claude-6",
+          "issuance": "fifth (the original submission, before any repair)",
+          "what_is_wrong_with_it": "Its description reports the two non-vacuity probes using per-probe assertion tallies written in suite-result form — a non-zero integer directly ahead of the word the parser keys on. Deliberately not quoted here: quoting it is what defeated the first repair. The probes themselves behaved correctly and were reverted before commit; only the phrasing is at fault.",
+          "how_it_parses": "test_run_status = failed"
+        },
+        "clean_record_also_present": {
+          "evidenceId": "ev_8036d46eea82b49c",
+          "createdAt": "2026-08-07T18:20:11.939Z",
+          "how_it_parses": "test_run_status = passed",
+          "effect_on_the_check": "none"
+        }
+      },
+      "why_attaching_more_evidence_cannot_clear_it": "`evaluateAssignmentTests` (deliverable-evidence.mjs:239-240) computes `suiteFailed = semantics.some(s => s.test_run_status === 'failed')` over EVERY test-type evidence record for the assignment, then sets `suitePassed = semantics.some(passed) && !suiteFailed`. One record that parses as a failed run vetoes the whole assignment, and newer records do not outrank older ones. `listEvidence(missionId, {assignmentId})` (evidence.mjs:122) applies no recency, attempt, or supersede filter — note that `listDeliverableReviews` DOES take `includeSuperseded`, so the evidence store is the one place in this pipeline with no way to retract a record. `attachEvidence` is the only mutator; there is no update and no delete.",
+      "consequence": "This assignment cannot clear the finding by any action available to it. Re-running the validation produces a green record that is ignored. Rewriting artifacts edits a file the check does not read. The one action that would clear it — retracting or superseding ev_4fb9be489ef3bd37 — means writing to the Director's own append-only audit log, outside the worktree, which is not a worker's to do and is not something a worker should do to make a check go green.",
+      "product_behaviour_changed": false,
+      "source_files_changed": [],
+      "method": "Read the gallery directly and traced the two consuming functions in the Director's source. Not inferred from the artifact text.",
+      "independently_corroborated": {
+        "by_assignment": "asg_dd4c9b956363f7 (W-5), second evidence-repair reopen, recorded in 03-implementation-qa-sequence.md §W-5 at lines 1738-1762",
+        "reached_the_same_conclusion": true,
+        "their_offending_record": "ev_adda2689ef22024a (18:09:40Z) — same shape, a nonzero digits-before-token from the w5probe negative fixture; their clean replacement ev_48656e8babb8e255 (18:19:09Z) is likewise ignored",
+        "they_cite": "deliverable-review.mjs:290 collects with listEvidence(missionId, {assignmentId}) — no recency filter, no supersession; evidence.mjs exports attachEvidence and listEvidence and no amend, supersede or withdraw operation exists",
+        "significance": "Two assignments in this mission, working independently on different workstreams and different suites, hit the identical wall and both concluded the same thing: an evidence-repair reopen CANNOT CONVERGE FROM THE WORKER SIDE. That makes this a Director-side defect in the DX7 review path rather than a Wave 1 or W-5 reporting failure, and it is the reason this assignment is escalating rather than submitting a third identical repair.",
+        "both_refused_the_same_workaround": "Hand-editing Director state under ~/.local/state/alloy-dev. W-5's record names it 'the same move as editing a test to go green'. Concur."
+      },
+      "durable_lesson": "An evidence-repair reopen is only actionable if the worker can reach the thing being parsed. Here the parsed text is the evidence RECORD, the repairable text was the evidence FILE, and the two are not connected. Until the store can retract a record, a badly-worded evidence description is permanent and un-repairable by the worker who wrote it."
+    },
+    "contradictory_artifacts_remaining_in_repository": 0,
+    "contradictory_artifacts_remaining_in_evidence_gallery": 1,
+    "prior_claim_corrected": "Earlier passes of this file recorded `contradictory_artifacts_remaining: 0`. That was true of this directory and false of the mission as a whole, because the surviving record is ev_4fb9be489ef3bd37 in the evidence gallery. Split into two counts rather than left as one misleading zero.",
+    "consistency_with_sibling_record": "wave1-dx7-reissue-evidence.json independently reports total_passed 66 / total_failed 0 for the same three suites. The two records agree in both value and form.",
     "tree_state_not_this_assignment": {
       "path": "web/tests/access/membershipAtomicWiring.test.ts",
       "what": "uncommitted W-5 lock widening (subject moved from a fixed writer list to a walk of app/ and lib/), authored by another concurrent assignment",
@@ -121,6 +221,31 @@
     "note": "The smallest interval any Wave 1 run has crossed, and the first in which no route file was added. Both RL-1 ratchets were therefore expected to hold at their exact floors, and did. The material change is W-5, which altered the membership-writer topology that W-2's open finding is about."
   },
 
+  "replacement_validation_third_repair": {
+    "command": "npx vitest run tests/access/analyticsRouteGates.test.ts tests/access/selfAuthorityMutation.test.ts tests/admin/permissionGrid.test.ts",
+    "cwd": "web",
+    "runner": "vitest 4.1.2, focused run",
+    "commit": "3f80468243716ecb0e8790c380c6dd1c04682cdd",
+    "executed_utc": "2026-08-07T18:22:10Z",
+    "suite_result": "Passed",
+    "test_files_total": 3,
+    "test_files_passed": 3,
+    "test_files_failed": 0,
+    "tests_total": 66,
+    "tests_passed": 66,
+    "tests_failed": 0,
+    "tests_skipped": 0,
+    "duration_ms": 814,
+    "per_file": [
+      { "path": "web/tests/access/analyticsRouteGates.test.ts", "tests": 47, "passed": 47, "failed": 0, "result": "Passed" },
+      { "path": "web/tests/access/selfAuthorityMutation.test.ts", "tests": 14, "passed": 14, "failed": 0, "result": "Passed" },
+      { "path": "web/tests/admin/permissionGrid.test.ts", "tests": 5, "passed": 5, "failed": 0, "result": "Passed" }
+    ],
+    "no_mutation_applied": "A plain confirmation run of the delivered suites. No probe mutation of any kind was applied, so this run has no per-probe tallies to report and cannot reintroduce the phrasing that caused the reopen.",
+    "tree_state_at_run": "The W-8 source edits described in prohibited_scope_change_observed_in_tree are still uncommitted in this worktree (13 files under web/app and web/lib). The suites are green with them present, at the floor of 91 that W-8's own assignment set.",
+    "repository_artifacts_rescanned": "Every .json and .md file in this directory was re-checked against all four suite-failure predicates the parser applies at deliverable-evidence.mjs:38-83. Zero matches on all four. The predicates are referred to by line number and deliberately NOT reproduced as literals: a first draft of this very field spelled two of them out, which would have re-armed the detector inside the field describing it — the second repair's lesson, caught here by re-scanning after writing rather than before. The repository side of this repair is clean, and was already clean before this run."
+  },
+
   "results": {
     "suite_result": "Passed",
     "total_tests": 66,
@@ -130,10 +255,10 @@
     "test_files_total": 3,
     "test_files_passed": 3,
     "test_files_failed": 0,
-    "runner": "vitest, focused run (three files, unmutated working tree)",
-    "commit_at_validation": "45cb6cfe3579c158862cc74940e4444935042aee",
-    "executed_utc": "2026-08-07T18:04:53Z",
-    "reconciliation_note": "Re-run under the evidence-repair reopen. This block is the authoritative pass/fail record for this artifact. The earlier issuance reported only a green COUNT (66) with no pass/fail integers, and recorded its mutation probes with 'N failed' strings that an automated evidence scan read as a failed test run. No product behaviour was changed to produce this result; the tree was already clean at HEAD and every probe mutation had been reverted before the fifth issuance was committed.",
+    "runner": "vitest 4.1.2, focused run (three files, no probe mutation applied)",
+    "commit_at_validation": "3f80468243716ecb0e8790c380c6dd1c04682cdd",
+    "executed_utc": "2026-08-07T18:22:10Z",
+    "reconciliation_note": "Re-measured under the THIRD evidence-repair reopen, at HEAD 3f8046824. This block is the authoritative pass/fail record for this artifact and agrees with replacement_validation_third_repair, which carries the per-file breakdown. All three prior runs (18:04:53Z, 18:10:41Z, 18:22:10Z) agree at 66 passed / 0 failed across 3 files. No product behaviour was changed to produce any of them: the suites were already clean at HEAD each time, and every edit in these repairs is to artifact prose. The finding that reopened this assignment does not live in this file — see evidence_repair.third_repair_2026_08_07.",
     "suites_green_on_arrival": 61,
     "suites_green_after_this_assignment": 66,
     "matches_prior_record": true,

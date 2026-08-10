@@ -37,8 +37,7 @@ export async function repairLifecycleWorkspaceVisibility(
     departmentId: string,
     processId: string,
     dim: AdminAccessScopeDimensions,
-    currentUserId?: string | null,
-    roleKeys?: readonly string[]
+    currentUserId?: string | null
 ): Promise<RepairWorkspaceVisibilityResult> {
     const actions: string[] = [];
 
@@ -67,12 +66,10 @@ export async function repairLifecycleWorkspaceVisibility(
             orgId,
             departmentId,
             currentUserId: currentUserId.trim(),
-            roleKeys,
         });
         if (!ensureAccess.ok) {
             return { ok: false, error: ensureAccess.error, actions };
         }
-        if (ensureAccess.inserted) actions.push("provisioned_user_department_access");
         if (ensureAccess.department_scope === "restricted") {
             workingDim = await refreshDepartmentScopeDimensions(
                 supabase,
@@ -240,12 +237,10 @@ export async function repairLifecycleWorkspaceVisibility(
             orgId,
             departmentId: targetDeptId,
             currentUserId: currentUserId.trim(),
-            roleKeys,
         });
         if (!ensureTarget.ok) {
             return { ok: false, error: ensureTarget.error, actions };
         }
-        if (ensureTarget.inserted) actions.push("provisioned_user_department_access_target");
         workingDim = await refreshDepartmentScopeDimensions(
             supabase,
             orgId,

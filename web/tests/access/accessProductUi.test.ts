@@ -11,7 +11,7 @@ import {
     accessWorkspaceChapterHref,
     normalizeAccessWorkspaceChapter,
 } from "@/lib/access/accessChapterRoutes";
-import { PERMISSION_GRID_ROWS } from "@/lib/admin/permissionGrid";
+import { buildPermissionGridRows } from "@/lib/admin/permissionGrid";
 
 const root = resolve(__dirname, "../..");
 
@@ -60,7 +60,18 @@ describe("Access chapter routing", () => {
 
 describe("Permission grid operator labels", () => {
     it("never uses a raw dotted permission_key as the operator-facing row label", () => {
-        for (const row of PERMISSION_GRID_ROWS) {
+        // W-10: rows are projected from the catalog, so this is a property of the projection over an
+        // arbitrary catalog rather than of a hand-authored list. The projection over the *seeded*
+        // catalog is asserted in `tests/admin/permissionGrid.test.ts` (RL-3).
+        const rows = buildPermissionGridRows([
+            { key: "crm.customers.read", group_key: "crm", label: "View customers / families" },
+            { key: "crm.customers.write", group_key: "crm", label: "Manage customers / families" },
+            { key: "reports.read", group_key: "reports", label: "View reports / analytics" },
+            { key: "ai.enrichment.use", group_key: "ai", label: "Use AI enrichment" },
+            { key: "sections.manage", group_key: "sections", label: "" },
+        ]);
+        expect(rows.length).toBeGreaterThan(0);
+        for (const row of rows) {
             expect(row.label).not.toMatch(/\./);
             for (const key of [...row.readKeys, ...row.writeKeys]) {
                 expect(row.label).not.toBe(key);
@@ -101,15 +112,11 @@ describe("Access product UI wiring", () => {
 
     it("Roles page shows operator labels in the permissions grid, not raw permission_keys, in visible text", () => {
         const src = read("components/adminV2/settings/access/AccessRolesConfigurationPage.tsx");
-        expect(src).toContain("PERMISSION_GRID_ROWS");
+        // W-10: the grid is projected from the catalog the permissions endpoint returns. The
+        // component names no permission key at all — locked as RL-3 in `tests/admin/permissionGrid.test.ts`.
+        expect(src).toContain("buildPermissionGridRows");
+        expect(src).not.toContain("PERMISSION_GRID_ROWS");
         expect(src).toContain("row.label");
-        // The component never hardcodes a raw dotted permission_key literal — every grid row's
-        // read/write keys are sourced from imported PERMISSION_GRID_ROWS / API data, not literals.
-        for (const row of PERMISSION_GRID_ROWS) {
-            for (const key of [...row.readKeys, ...row.writeKeys]) {
-                expect(src).not.toContain(`"${key}"`);
-            }
-        }
     });
 
     it("Planned surfaces render calm static copy and are marked with data-capability, not live fetches", () => {

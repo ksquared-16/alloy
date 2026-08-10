@@ -490,9 +490,21 @@ describe("W-1 — no route in web/app/api gates on a raw access resolution alone
     );
 
     it("selects the routes that hold the G2 primitive, and finds enough of them to be meaningful", () => {
-        // 92 of 570 route files on 2026-08-06. A floor, ratcheted to the live count: if the
-        // selector silently stopped matching, this fails rather than passing on an empty subject.
-        expect(subject.length).toBeGreaterThanOrEqual(92);
+        // 92 of 570 route files on 2026-08-06; 91 on 2026-08-07 after W-8.
+        //
+        // A floor, ratcheted to the live count: if the selector silently stopped matching, this
+        // fails rather than passing on an empty subject. Lowering it is therefore a decision, not
+        // a retune — recorded here because a floor that drifts down quietly locks nothing.
+        //
+        // W-8 removed the one route that left: `app/api/admin/departments/route.ts` called
+        // `getAdminAccessContextCached` *only* to read `roleKeys` for
+        // `portalAdminBypassesDepartmentScope`. With no role able to widen a scope dimension there
+        // is nothing to read, so the raw resolution is gone. The route did not lose a gate — GET
+        // still runs `loadAdminRouteGate` and POST `getAdminContextCached`, both of which require
+        // portal eligibility. It resolves less because it needs less, which is the direction G2
+        // wants; the count fell for the reason the lock exists to produce.
+        expect(subject.length).toBeGreaterThanOrEqual(91);
+        expect(subject).not.toContain("app/api/admin/departments/route.ts");
         expect(subject).toContain("app/api/admin/configuration/programs/route.ts");
         expect(subject).toContain("app/api/admin/lifecycle-catalog/repair/route.ts");
         // `metrics/resolve` is deliberately *not* in the subject: W-1 moved its raw resolution

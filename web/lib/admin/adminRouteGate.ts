@@ -11,7 +11,6 @@ import {
 } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 import {
-    effectiveDepartmentScopeDimensions,
     scopeDimensionsFromAccess,
     type AdminAccessScopeDimensions,
 } from "@/lib/admin/accessScope";
@@ -26,7 +25,10 @@ export type AdminRouteGateSuccess = {
     /** Department scope after portal admin/ops bypass (used by workspace + departments APIs). */
     dim: AdminAccessScopeDimensions;
     /** Profile-derived scope before bypass (debug / audit). */
-    dimRaw: AdminAccessScopeDimensions;
+    /**
+     * W-8 removed the raw/effective split: no role widens a scope dimension, so the stored
+     * dimensions *are* the enforced ones and there is no second answer to report.
+     */
 };
 
 export type AdminRouteGateFailure = AdminContextFailure | AdminAccessContextFailure;
@@ -61,8 +63,7 @@ export async function loadAdminRouteGate(): Promise<AdminRouteGateResult> {
         role: compatibilityPortalRole(access.roleKeys),
         roleKeys: access.roleKeys,
         access,
-        dim: effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys),
-        dimRaw: scopeDimensionsFromAccess(access),
+        dim: scopeDimensionsFromAccess(access),
     };
 }
 

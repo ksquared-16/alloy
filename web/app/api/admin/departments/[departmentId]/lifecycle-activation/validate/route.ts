@@ -4,7 +4,6 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import {
     departmentIdAllowed,
-    effectiveDepartmentScopeDimensions,
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
@@ -17,7 +16,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
@@ -51,8 +50,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             departmentId,
             activation,
             dim,
-            access.userId,
-            access.roleKeys
+            access.userId
         );
         const allPass = checks.every((c) => c.pass);
         return NextResponse.json({ checks, all_pass: allPass, activation, id_audit });
