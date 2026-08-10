@@ -6321,6 +6321,32 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork__composer-host > .alloy-os-activity-cockpit__comms {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: min(70vh, 640px);
+}
+
+/* What's Next → Contact Family: execution-focused compact variant.
+ * Composer stays visible; history is a bounded internal scroll (latest messages).
+ * Activity → Communications keeps the richer tall workspace. */
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] {
+  max-height: min(70vh, 640px);
+}
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="conversation"] > [data-cc-ws-section="timeline"],
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="timeline"] {
+  flex: 0 1 auto;
+  max-height: 9.5rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] {
+  flex: 0 0 auto;
+}
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="threadlist"],
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-topic-rail] {
+  flex: 0 0 10rem;
+  width: 10rem;
+  min-width: 9rem;
+  max-width: 11rem;
+  max-height: min(70vh, 640px);
 }
 
 /* Mode panel hosts Linked overlays relative to the Focus Panel column. */
@@ -6379,6 +6405,22 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     0 0 0 5px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, transparent);
   pointer-events: auto;
 }
+
+/* Focus Panel command surfaces — primary CTA is ALWAYS Bend Pine (#00A283).
+ * Never use legacy `bg-alloy-pine` (that token is Midnight Forge). */
+.alloy-os-focus-panel-linked-host__card [data-command-surface-primary],
+.alloy-os-currentwork [data-command-surface-primary],
+[data-command-surface] [data-command-surface-primary] {
+  background-color: var(--alloy-os-bend-pine, #00a283) !important;
+  color: #fff !important;
+  border-color: transparent;
+}
+.alloy-os-focus-panel-linked-host__card [data-command-surface-primary]:disabled,
+.alloy-os-currentwork [data-command-surface-primary]:disabled,
+[data-command-surface] [data-command-surface-primary]:disabled {
+  opacity: 0.5;
+}
+
 /* Inner Universal Card — fill host; shell chrome lives on the host above. */
 .alloy-os-focus-panel-linked-host__card .alloy-os-ucard {
   width: 100%;

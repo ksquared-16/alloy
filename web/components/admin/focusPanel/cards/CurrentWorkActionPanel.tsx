@@ -34,6 +34,10 @@ const CurrentWorkTourInvitationPanel = dynamic(
     () => import("@/components/admin/focusPanel/cards/CurrentWorkTourInvitationPanel"),
     { ssr: false },
 );
+const CurrentWorkAddChildPanel = dynamic(
+    () => import("@/components/admin/focusPanel/cards/CurrentWorkAddChildPanel"),
+    { ssr: false },
+);
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -226,32 +230,42 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                     surface={surface}
                 />
             : surface === "inline_form" ?
-                // `inline_form` is the scheduling capability's declared interaction host (metadata,
-                // not the action name). It is the only inline_form capability today; when more exist,
-                // resolve the component from a host registry rather than assuming the scheduler.
-                <OpportunityTourScheduleActionModal
-                    open
-                    variant="embedded"
-                    title={action.label}
-                    submitLabel={action.label}
-                    opportunityId={opportunityId}
-                    locationId={tourFields.locationId}
-                    initialTourDate={tourFields.initialTourDate}
-                    initialTourTime={tourFields.initialTourTime}
-                    onClose={onClose}
-                    onSlotBooked={async () => {
-                        await handleTourComplete();
-                    }}
-                    onLegacySubmit={async (payload) => {
-                        await submitTourScheduleLegacyFromPanel({
-                            opportunityId,
-                            locationId: tourFields.locationId,
-                            actionKey: actionKey || "schedule_tour",
-                            payload,
-                        });
-                        await handleTourComplete();
-                    }}
-                />
+                actionKey === "add_child" || actionKey === "add_sibling" ?
+                    <CurrentWorkAddChildPanel
+                        action={action}
+                        opportunityId={opportunityId}
+                        defaultLocationId={
+                            typeof context.truth?.location_id === "string"
+                                ? context.truth.location_id
+                                : tourFields.locationId
+                        }
+                        onClose={onClose}
+                        onComplete={onComplete}
+                    />
+                :   // Scheduling capability's declared interaction host (metadata-driven).
+                    <OpportunityTourScheduleActionModal
+                        open
+                        variant="embedded"
+                        title={action.label}
+                        submitLabel={action.label}
+                        opportunityId={opportunityId}
+                        locationId={tourFields.locationId}
+                        initialTourDate={tourFields.initialTourDate}
+                        initialTourTime={tourFields.initialTourTime}
+                        onClose={onClose}
+                        onSlotBooked={async () => {
+                            await handleTourComplete();
+                        }}
+                        onLegacySubmit={async (payload) => {
+                            await submitTourScheduleLegacyFromPanel({
+                                opportunityId,
+                                locationId: tourFields.locationId,
+                                actionKey: actionKey || "schedule_tour",
+                                payload,
+                            });
+                            await handleTourComplete();
+                        }}
+                    />
             :   <UnsupportedPanelBody action={action} surface={surface} />}
         </aside>
     );

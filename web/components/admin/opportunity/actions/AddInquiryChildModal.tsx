@@ -211,7 +211,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                     </button>
                     <button
                         type="button"
-                        className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        className="rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                         disabled={!canSubmit}
                         data-add-inquiry-child-submit="true"
                         onClick={async () => {

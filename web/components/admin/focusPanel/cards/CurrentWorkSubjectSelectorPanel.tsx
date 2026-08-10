@@ -259,13 +259,13 @@ export default function CurrentWorkSubjectSelectorPanel({
                     </button>
                     <button
                         type="button"
-                        className="rounded-md bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                        className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                         disabled={busy || selectedSubjects.length === 0}
                         data-testid="current-work-subject-selector-confirm"
                         data-command-surface-primary
                         onClick={() => void executeForChildren(selectedSubjects.map((s) => s.id))}
                     >
-                        {busy ? "Working…" : `Confirm ${commandLabel}`}
+                        {busy ? "Working…" : "Move to Waitlist"}
                     </button>
                 </div>
             </div>
@@ -290,17 +290,21 @@ export default function CurrentWorkSubjectSelectorPanel({
                     return (
                         <label
                             key={child.id}
-                            className="flex cursor-pointer items-start gap-2 rounded-lg border border-alloy-stone/20 px-3 py-2 text-sm text-alloy-midnight hover:border-alloy-pine/40"
+                            className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm text-alloy-midnight transition-colors ${
+                                selectedIds.includes(child.id)
+                                    ? "border-alloy-bend-pine/50 bg-alloy-bend-pine/[0.06]"
+                                    : "border-alloy-stone/20 hover:border-alloy-bend-pine/40"
+                            }`}
                             data-testid={`current-work-subject-option-${child.id}`}
                         >
                             <input
                                 type="checkbox"
-                                className="mt-0.5"
+                                className="mt-0.5 h-4 w-4 accent-alloy-bend-pine"
                                 checked={selectedIds.includes(child.id)}
                                 onChange={() => toggleChild(child.id)}
                             />
                             <span>
-                                <span className="font-medium">{name}</span>
+                                <span className="font-medium text-alloy-midnight">{name}</span>
                                 {context ?
                                     <span className="mt-0.5 block text-xs text-alloy-midnight/60">
                                         {context}
@@ -314,7 +318,7 @@ export default function CurrentWorkSubjectSelectorPanel({
             {subjects.length > 1 ?
                 <button
                     type="button"
-                    className="text-sm font-semibold text-alloy-pine"
+                    className="text-sm font-semibold text-alloy-bend-pine"
                     onClick={selectAllEligible}
                     disabled={busy || allSelected}
                     data-testid="current-work-subject-select-all"
@@ -338,7 +342,7 @@ export default function CurrentWorkSubjectSelectorPanel({
                 </button>
                 <button
                     type="button"
-                    className="rounded-md bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                    className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                     disabled={busy || selectedIds.length === 0}
                     data-testid="current-work-subject-selector-continue"
                     data-command-surface-primary
