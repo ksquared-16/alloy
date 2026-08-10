@@ -17,6 +17,153 @@ import {
   getOpenDeliverableReview,
   deliverableReviewVm,
 } from "../deliverable-review.mjs";
+import {
+  listExecutionSessions,
+  getActiveSessionForAssignment,
+  sessionLiveVm,
+  isSessionActuallyLive,
+} from "../execution-session.mjs";
+import { silentRecoveryState } from "../silent-worker-recover.mjs";
+import { readTimeline } from "../timeline.mjs";
+import { missionContinuationVm } from "./mission-continuation.mjs";
+import { canAdvanceToImplementation, peekNextImplementationPhase, shouldAutoContinueImplementation, scheduleImplementationChainContinue } from "../mission-advance.mjs";
+import { isFixtureMission } from "./mission-filters.mjs";
+
+const _autoChainOnce = new Set();
+function scheduleChainOnce(missionId, fromAssignmentId) {
+  const key = `${missionId}:${fromAssignmentId || ""}`;
+  if (_autoChainOnce.has(key)) return false;
+  _autoChainOnce.add(key);
+  scheduleImplementationChainContinue(missionId, {
+    fromAssignmentId: fromAssignmentId || null,
+    actor: "director",
+  });
+  return true;
+}
+
+function clipOperatorText(value, max = 420) {
+  const t = String(value || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const breakAt = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("; "), cut.lastIndexOf(", "));
+  return `${(breakAt > 140 ? cut.slice(0, breakAt + 1) : cut).trim()}…`;
+}
+
+function basenamePath(p) {
+  const s = String(p || "").replace(/\\/g, "/");
+  const parts = s.split("/");
+  return parts[parts.length - 1] || s;
+}
+
+function isScreenshotEvidence(e) {
+  const type = String(e?.type || "").toLowerCase();
+  const path = String(e?.fileUri || e?.externalUri || e?.title || "");
+  if (type === "screenshot" || type === "video" || type === "image") return true;
+  return /\.(png|jpe?g|gif|webp|webm|mp4)(\?|$)/i.test(path);
+}
+
+function evidencePresentation(e) {
+  if (isScreenshotEvidence(e)) return "media";
+  const type = String(e?.type || "").toLowerCase();
+  if (type === "test" || type === "browser") return "result";
+  return "document";
+}
+
+function evidenceItemsFor(missionId, { assignmentId = null, limit = 8 } = {}) {
+  let rows = listEvidence(missionId) || [];
+  if (assignmentId) {
+    const scoped = rows.filter((e) =>
+      (e.assignmentId || e.assignment_id) === assignmentId
+      || String(e.title || "").includes(String(assignmentId)));
+    if (scoped.length) rows = scoped;
+  }
+  return rows.slice(-limit).reverse().map((e) => {
+    const id = e.evidence_id || e.evidenceId || e.id;
+    let title = e.title || e.label || e.type || "Evidence";
+    title = String(title)
+      .replace(/^Present\s+/i, "")
+      .replace(/^Modified\s+/i, "")
+      .replace(/^(document|notes|log|diff|test)\s+[—\-]\s+/i, "")
+      .trim();
+    const presentation = evidencePresentation(e);
+    return {
+      evidenceId: id,
+      title: title.slice(0, 120),
+      type: e.type || e.kind || "artifact",
+      typeLabel: String(e.type || "file").replace(/_/g, " "),
+      presentation,
+      previewHref: id
+        ? `/api/v2/evidence/file?missionId=${encodeURIComponent(missionId)}&evidenceId=${encodeURIComponent(id)}`
+        : null,
+    };
+  });
+}
+
+/** Structure a completion report into a Claude/Cursor-style operator brief. */
+function directorBriefFromCompletion(report, lastDone, { readyNext = null, posture = null } = {}) {
+  const workerRec = String(report?.recommendation || "").trim();
+  const accepts = /\baccept\b/i.test(workerRec);
+  const needsWork = /\b(rework|reject|more discovery|incomplete)\b/i.test(workerRec);
+  const summary = String(report?.summary || "").replace(/\s+/g, " ").trim();
+  const sentences = summary.split(/(?<=[.!?])\s+/).filter(Boolean);
+
+  let problem = null;
+  let fix = null;
+  for (const s of sentences) {
+    if (!problem && /\b(red|fail|breach|broken|wrong|gap|latent|capped|missing)\b/i.test(s)) {
+      problem = clipOperatorText(s, 220);
+    } else if (!fix && /\b(fix|fixed|moved|enforced|resolved|green|passed)\b/i.test(s)) {
+      fix = clipOperatorText(s, 220);
+    }
+  }
+  if (!problem && sentences[0]) problem = clipOperatorText(sentences[0], 220);
+  if (!fix && sentences[1]) fix = clipOperatorText(sentences[1], 220);
+
+  const changes = (report?.changesMade || []).map((c) => basenamePath(c)).filter(Boolean);
+  const testsLine = (report?.tests || [])
+    .map((t) => t.results || t.summary || t.command)
+    .filter(Boolean)[0] || null;
+  const commitMatch = String(testsLine || summary).match(/\b([0-9a-f]{7,40})\b/i);
+  const commit = commitMatch ? commitMatch[1].slice(0, 8) : null;
+
+  const ac = Array.isArray(report?.acceptanceCriteriaResults) ? report.acceptanceCriteriaResults : [];
+  const acMet = ac.filter((r) => /met|pass|ok|done/i.test(String(r.status || ""))).length;
+
+  let verdictId = "decision_needed";
+  let verdictLabel = "Waiting on your decision";
+  if (accepts && !needsWork) {
+    verdictId = "accept_recommended";
+    verdictLabel = "Complete — worker recommends Accept";
+  } else if (needsWork) {
+    verdictId = "needs_work";
+    verdictLabel = "Worker asks for more work";
+  } else if (ac.length && acMet === ac.length) {
+    verdictId = "complete_pending_you";
+    verdictLabel = "Criteria met — choose next step";
+  }
+
+  const proofLines = [];
+  if (ac.length) proofLines.push(`Acceptance: ${acMet}/${ac.length} criteria met`);
+  if (testsLine) proofLines.push(clipOperatorText(testsLine, 200));
+  if (commit) proofLines.push(`Commit ${commit} (local; not pushed)`);
+  if (report?.confidence) proofLines.push(`Worker confidence: ${report.confidence}`);
+
+  return {
+    verdictId,
+    verdictLabel,
+    problem,
+    fix,
+    doneBullets: changes.slice(0, 6),
+    proofLines,
+    workerRecommendation: workerRec || null,
+    accepts,
+    needsWork,
+    summary: clipOperatorText(summary || lastDone?.objective || "", 360),
+    postureLabel: posture?.label || "Waiting on you",
+    readyNextTitle: readyNext?.title || null,
+  };
+}
 
 /** Friendly titles for known long-lived missions (display only). */
 const MISSION_DISPLAY_TITLES = Object.freeze({
@@ -25,6 +172,9 @@ const MISSION_DISPLAY_TITLES = Object.freeze({
 
 let _listCache = { at: 0, filter: null, payload: null };
 const LIST_CACHE_MS = 8000;
+
+/** Re-export for callers that imported from this module. */
+export { isFixtureMission };
 
 export function displayMissionTitle(missionId, fallback = null) {
   if (MISSION_DISPLAY_TITLES[missionId]) return MISSION_DISPLAY_TITLES[missionId];
@@ -62,6 +212,8 @@ export function missionConversationListVm({ filter = "active", limit = 24 } = {}
     const mission = getMission(missionId);
     if (!includeArchived && mission?.archived) return;
     if (includeArchived && !mission?.archived && missionId !== identityId) return;
+    const title = displayMissionTitle(missionId, fallbackTitle || mission?.title);
+    if (isFixtureMission(title, missionId) || isFixtureMission(mission?.title, missionId)) return;
     const slot = Number(mission?.worker_slot ?? mission?.slot) || null;
     const identity = slot ? resolveSlotIdentity(slot) : null;
     let needsCount = 0;
@@ -73,7 +225,7 @@ export function missionConversationListVm({ filter = "active", limit = 24 } = {}
       kind: "mission_nav_item",
       missionId,
       workspaceId: missionId,
-      title: displayMissionTitle(missionId, fallbackTitle || mission?.title),
+      title,
       needsYou: needsCount > 0,
       needsCount,
       phase: null,
@@ -114,7 +266,12 @@ export function missionConversationListVm({ filter = "active", limit = 24 } = {}
 /**
  * Aggressively compressed Current State for the right rail.
  */
-export function compressCurrentState(cs, { provider = null, slot = null, serverStatus = null } = {}) {
+export function compressCurrentState(cs, {
+  provider = null,
+  slot = null,
+  serverStatus = null,
+  liveProgress = null,
+} = {}) {
   if (!cs) return null;
   const lines = [];
   if (cs.currentPhase) lines.push(String(cs.currentPhase).slice(0, 40));
@@ -128,22 +285,241 @@ export function compressCurrentState(cs, { provider = null, slot = null, serverS
   if (waiting && !lines.some((l) => /waiting on you/i.test(l))) {
     lines.push("Waiting on You");
   }
+  if (liveProgress?.active) {
+    const pct = liveProgress.percent != null ? `${liveProgress.percent}%` : null;
+    const fresh = liveProgress.freshnessLabel || null;
+    lines.push([pct, fresh].filter(Boolean).join(" · ").slice(0, 48) || "In progress");
+  }
   const workerBits = [provider, slot != null ? `Slot ${slot}` : null].filter(Boolean).join(" · ");
   if (workerBits) lines.push(workerBits);
   if (serverStatus) lines.push(`Server ${serverStatus}`);
+  const goal = liveProgress?.workingOn || cs.workingOn || cs.currentGoal || "—";
+  const next = liveProgress?.active
+    ? (liveProgress.activity || liveProgress.eta || cs.nextExpectedCheckpoint || cs.recommendation || "—")
+    : (cs.nextExpectedCheckpoint || cs.recommendation || "—");
   return {
     kind: "current_state_compact",
     derived: true,
     editable: false,
     phase: cs.currentPhase || "—",
-    goal: String(cs.workingOn || cs.currentGoal || "—").slice(0, 48),
-    next: String(cs.nextExpectedCheckpoint || cs.recommendation || "—").slice(0, 48),
+    goal: String(goal).slice(0, 64),
+    next: String(next).slice(0, 64),
     blockedBy: cs.blockedBy && cs.blockedBy !== "Nothing" ? String(cs.blockedBy).slice(0, 48) : null,
     recommendation: cs.recommendation || null,
     postureId: cs.postureId || null,
     summaryLines: lines.slice(0, 4),
     primaryAction: cs.primaryAction || null,
     secondaryAction: cs.secondaryAction || null,
+    liveProgress: liveProgress?.active ? liveProgress : null,
+  };
+}
+
+/**
+ * One operator-facing progress card — replaces a flood of "Claude is …" heartbeats.
+ * Uses execution-session percent + assignment completion; never invents certainty.
+ */
+export function liveWorkProgressVm(missionId) {
+  if (!missionId) return null;
+  const assignments = listAssignments(missionId) || [];
+  const terminal = new Set(["complete", "accepted", "cancelled"]);
+  const activeStatuses = new Set(["active", "running", "in_progress", "dispatched", "acked"]);
+  const done = assignments.filter((a) => terminal.has(String(a.status || "").toLowerCase()));
+  const runningClaim = assignments.find((a) => activeStatuses.has(String(a.status || "").toLowerCase())) || null;
+  // Ready/waiting/verification are not live work — do not keep a stale "Executing" card up.
+  const active = runningClaim;
+
+  let session = null;
+  try {
+    if (active) {
+      session = getActiveSessionForAssignment(missionId, active.assignmentId || active.id);
+    }
+    if (!session) {
+      const sessions = listExecutionSessions({ missionId, limit: 40 }) || [];
+      session = sessions.find((s) => isSessionActuallyLive(s)) || null;
+    }
+  } catch { session = null; }
+
+  const live = sessionLiveVm(session);
+  const awaitingYou = Boolean(session && ["awaiting_decision", "awaiting_operator"].includes(session.status));
+  const liveRunning = Boolean(live && ["starting", "running", "recovering", "retrying", "producing_evidence", "queued"].includes(live.status));
+  if (!liveRunning && !awaitingYou && !active) return null;
+
+  const openDecisions = (() => {
+    try { return listDecisions(missionId, { status: "open" }) || []; } catch { return []; }
+  })();
+  const openReview = (() => {
+    try { return getOpenDeliverableReview(missionId); } catch { return null; }
+  })();
+  const needsYourApproval = awaitingYou || openDecisions.length > 0 || Boolean(openReview);
+
+  const total = assignments.length;
+  const assignmentPct = total > 0 ? Math.round((done.length / total) * 100) : null;
+  const sessionPct = live?.percent != null ? Number(live.percent) : null;
+  let percent = (liveRunning || awaitingYou) && sessionPct != null
+    ? sessionPct
+    : (assignmentPct != null ? assignmentPct : (sessionPct ?? null));
+  if (percent != null) percent = Math.max(0, Math.min(99, Math.round(percent)));
+
+  const hb = live?.heartbeatSecondsAgo;
+  let freshness = "idle";
+  if (needsYourApproval) {
+    freshness = "needs_you";
+  } else if (liveRunning) {
+    if (hb == null) freshness = "starting";
+    else if (hb <= 60) freshness = "live";
+    else if (hb <= 180) freshness = "quiet";
+    else freshness = "stale";
+  } else if (active) {
+    freshness = "claimed";
+  }
+
+  const doneSummary = done
+    .slice(-4)
+    .map((a) => String(a.title || a.deliverable || a.assignmentId || "").slice(0, 80))
+    .filter(Boolean);
+
+  // Distinct recent activities from timeline (audit), not each as a chat bubble
+  let recentActivities = [];
+  try {
+    const events = readTimeline(missionId, { limit: 80 }) || [];
+    const seen = new Set();
+    for (let i = events.length - 1; i >= 0 && recentActivities.length < 4; i--) {
+      const e = events[i];
+      if (e.type !== "progress") continue;
+      const label = String(e.summary || e.headline || "")
+        .replace(/^Claude is\s+/i, "")
+        .replace(/\.$/, "")
+        .trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recentActivities.push(label);
+    }
+    recentActivities.reverse();
+  } catch { recentActivities = []; }
+
+  const workingOn = String(
+    active?.title || active?.objective || live?.activity || "Ongoing work",
+  ).slice(0, 120);
+
+  // "Waiting for approval" is only honest when a real gate exists.
+  // Classifier heartbeats often fire that label from tool chatter — don't show it alone.
+  let activity = live?.activity && live.activity !== "—" ? live.activity : null;
+  if (/waiting for approval/i.test(String(activity || "")) && !needsYourApproval) {
+    activity = recentActivities.filter((a) => !/waiting for approval/i.test(a)).slice(-1)[0]
+      || "Working";
+  }
+  if (needsYourApproval) {
+    activity = openReview
+      ? "Deliverable ready for your review"
+      : (openDecisions[0]?.title
+        ? `Decision: ${String(openDecisions[0].title).slice(0, 80)}`
+        : "Waiting for your approval");
+  }
+
+  const buttons = [];
+  if (openReview) {
+    buttons.push({
+      kind: "inline_review_expand",
+      label: "Review Outcome",
+      missionId,
+      reviewId: openReview.review_id || openReview.reviewId || null,
+    });
+  }
+  if (openDecisions[0]) {
+    const d = openDecisions[0];
+    const rec = d.recommendation || d.recommendation_id || d.options?.[0]?.optionId || d.options?.[0]?.id;
+    if (rec) {
+      buttons.push({
+        kind: "answer_decision",
+        label: "Approve recommendation",
+        missionId,
+        decisionId: d.decisionId || d.id,
+        optionId: rec,
+      });
+    }
+    buttons.push({
+      kind: "provide_feedback",
+      label: "Give Feedback",
+      missionId,
+    });
+  } else if (awaitingYou && session?.decisionRequest) {
+    const opts = session.decisionRequest.options || [];
+    for (const o of opts.slice(0, 3)) {
+      buttons.push({
+        kind: "session_decision_option",
+        label: o.label || o.optionId || "Choose",
+        missionId,
+        sessionId: session.sessionId,
+        optionId: o.optionId || o.id,
+      });
+    }
+  }
+
+  // Orphaned claim / failed provider session — operator next step is relaunch, not wait.
+  const latestFailed = (() => {
+    try {
+      return (listExecutionSessions({ missionId, limit: 8 }) || [])
+        .find((s) => s.status === "failed" || s.status === "interrupted");
+    } catch { return null; }
+  })();
+  if (!needsYourApproval && !liveRunning && (freshness === "claimed" || latestFailed)) {
+    const recovering = silentRecoveryState(missionId)?.recovering;
+    freshness = recovering ? "recovering" : (latestFailed ? "failed" : freshness);
+    activity = recovering
+      ? "Director is relaunching the silent worker"
+      : (latestFailed?.recovery?.lastError
+        ? `Worker failed (${latestFailed.recovery.lastError})`
+        : (activity || "Worker is not live"));
+    if (!buttons.some((b) => b.kind === "resume_stalled")) {
+      buttons.push({
+        kind: "resume_stalled",
+        label: recovering ? "Director relaunching…" : "Relaunch worker",
+        missionId,
+        disabled: recovering,
+      });
+    }
+  }
+
+  return {
+    kind: "live_work_progress",
+    active: true,
+    missionId,
+    workerLabel: live?.workerLabel || "Worker",
+    workingOn,
+    activity,
+    percent,
+    percentLabel: percent != null ? `${percent}%` : "—",
+    doneCount: done.length,
+    totalCount: total || null,
+    doneSummary,
+    recentActivities,
+    freshness,
+    freshnessLabel: ({
+      starting: "Starting…",
+      live: "Actively working",
+      quiet: "Still working",
+      stale: "No update recently — may be stuck",
+      claimed: "Claimed in progress",
+      recovering: "Director relaunching",
+      failed: "Worker failed — relaunch needed",
+      needs_you: "Waiting on you",
+      idle: "Idle",
+    })[freshness] || freshness,
+    heartbeatLabel: live?.heartbeatLabel || null,
+    eta: live?.estimatedCheckpoint || null,
+    filesInspected: live?.filesInspected ?? null,
+    sessionStatus: live?.status || session?.status || null,
+    needsYourApproval,
+    howToApprove: needsYourApproval
+      ? (buttons.length
+        ? "Use the buttons on this card — you do not need to type Approve in chat."
+        : "A decision is open — reply in this thread with your choice, or open Review Outcome when it appears.")
+      : (buttons.some((b) => b.kind === "resume_stalled")
+        ? "Claude’s session failed. Click Relaunch worker — Server Stopped is unrelated."
+        : null),
+    buttons,
   };
 }
 
@@ -238,22 +614,29 @@ export function operationalRailVm(missionId) {
 
 /**
  * Inline Review Outcome card — expands in thread, no navigation.
- * Prefers open deliverable review; otherwise a soft card from posture + evidence
- * so "Review Outcome" never navigates away from the conversation.
+ * Prefers open deliverable review; otherwise a soft card grounded in the
+ * latest completion report + continuation choices (not posture boilerplate).
  */
 export function inlineReviewCardVm(missionId) {
   const open = getOpenDeliverableReview(missionId);
   if (open) {
     const vm = deliverableReviewVm(missionId, open);
     if (vm) {
-      const evidence = (vm.evidence || []).slice(0, 8).map((e) => ({
-        evidenceId: e.evidence_id || e.evidenceId || e.id,
-        title: e.title || e.label || e.type || "Evidence",
-        type: e.type || e.kind || "artifact",
-        previewHref: (e.evidence_id || e.evidenceId || e.id)
-          ? `/api/v2/evidence/file?missionId=${encodeURIComponent(missionId)}&evidenceId=${encodeURIComponent(e.evidence_id || e.evidenceId || e.id)}`
-          : null,
-      }));
+      const evidence = (vm.evidence || []).slice(0, 8).map((e) => {
+        const id = e.evidence_id || e.evidenceId || e.id;
+        const presentation = evidencePresentation(e);
+        return {
+          evidenceId: id,
+          title: e.title || e.label || e.type || "Evidence",
+          type: e.type || e.kind || "artifact",
+          typeLabel: String(e.type || "file").replace(/_/g, " "),
+          presentation,
+          previewHref: id
+            ? `/api/v2/evidence/file?missionId=${encodeURIComponent(missionId)}&evidenceId=${encodeURIComponent(id)}`
+            : null,
+        };
+      });
+      const mediaEvidence = evidence.filter((e) => e.presentation === "media" && e.previewHref);
 
       const buttons = [];
       if (vm.actions?.approve) {
@@ -290,21 +673,68 @@ export function inlineReviewCardVm(missionId) {
           reviewId: vm.reviewId,
         });
       }
-      if (evidence.some((e) => e.previewHref)) {
+      if (mediaEvidence.length) {
         buttons.push({ kind: "toggle_screenshots", label: "View Screenshots", missionId });
       }
+
+      const statusFacts = [];
+      if (vm.waveLabel) statusFacts.push(vm.waveLabel);
+      if (vm.operatorMayApprove) statusFacts.push("Director verified — you may approve");
+      else statusFacts.push("Director has not cleared this for approval yet");
+      if (vm.confidencePct != null) statusFacts.push(`Confidence ${vm.confidencePct}%`);
+
+      const asgId = open.assignment_id || open.assignmentId;
+      const asg = asgId
+        ? (listAssignments(missionId) || []).find((a) => (a.assignmentId || a.id) === asgId)
+        : null;
+      const brief = directorBriefFromCompletion(asg?.completionReport || null, asg, { posture: null });
+      const hardBrief = {
+        verdictId: vm.operatorMayApprove ? "ready_to_approve" : brief.verdictId,
+        verdictLabel: vm.operatorMayApprove
+          ? "Ready to approve"
+          : (brief.accepts
+            ? "Worker recommends Accept — Director verification incomplete"
+            : (vm.headline || brief.verdictLabel)),
+        problem: brief.problem,
+        fix: brief.fix,
+        doneBullets: brief.doneBullets,
+        proofLines: [
+          ...brief.proofLines,
+          ...statusFacts.filter((f) => !brief.proofLines.includes(f)),
+        ].slice(0, 6),
+        workerRecommendation: brief.workerRecommendation,
+      };
 
       return {
         kind: "inline_review",
         reviewId: vm.reviewId,
         missionId,
-        headline: vm.headline,
-        waveLabel: vm.waveLabel,
-        summary: vm.executiveSummary?.text
+        soft: false,
+        headline: asg?.title || vm.headline || "Review Outcome",
+        waveLabel: hardBrief.verdictLabel,
+        whatFinished: asg?.title || vm.waveLabel || vm.headline || null,
+        statusFacts: hardBrief.proofLines,
+        brief: hardBrief,
+        summary: brief.summary
+          || vm.executiveSummary?.text
           || (vm.executiveSummary?.sentences || []).join(" ")
           || vm.directorRecommendation?.summary
           || "",
-        recommendation: vm.directorRecommendation?.headline || vm.recommendation?.headline || null,
+        findings: (vm.findings || vm.risks || []).slice(0, 4).map((f) =>
+          typeof f === "string" ? f : (f.text || f.label || f.title)).filter(Boolean),
+        recommendation: vm.operatorMayApprove
+          ? (vm.directorRecommendation?.headline || "Approve this deliverable")
+          : (brief.accepts
+            ? "Hold or request rework — Approve is locked until Director verification clears"
+            : (vm.directorRecommendation?.headline || vm.recommendation?.headline || "Director cannot certify yet")),
+        recommendationDetail: vm.operatorMayApprove
+          ? (vm.directorRecommendation?.summary || vm.recommendation?.summary || null)
+          : (brief.accepts
+            ? `Worker said: ${brief.workerRecommendation}. Director still needs evidence/verification before Approve unlocks.`
+            : (vm.directorRecommendation?.summary || vm.recommendation?.summary || null)),
+        nextStep: vm.operatorMayApprove
+          ? "Approve to accept this deliverable, or request rework if it is wrong."
+          : "Recheck after attaching evidence, Request Rework if wrong, or Continue Discovery for gaps.",
         confidencePct: vm.directorRecommendation?.confidencePct ?? vm.recommendation?.confidencePct ?? null,
         evidence,
         buttons,
@@ -318,48 +748,218 @@ export function inlineReviewCardVm(missionId) {
     return null;
   }
 
-  const evidence = (listEvidence(missionId) || []).slice(-8).reverse().map((e) => {
-    const id = e.evidence_id || e.id;
-    return {
-      evidenceId: id,
-      title: e.title || e.label || e.type || "Evidence",
-      type: e.type || e.kind || "artifact",
-      previewHref: id
-        ? `/api/v2/evidence/file?missionId=${encodeURIComponent(missionId)}&evidenceId=${encodeURIComponent(id)}`
-        : null,
-    };
-  });
+  const assignments = listAssignments(missionId) || [];
+  const completed = assignments.filter((a) =>
+    ["complete", "accepted"].includes(String(a.status || "").toLowerCase()));
+  const lastDone = [...completed].reverse().find((a) => a.completionReport?.summary)
+    || completed[completed.length - 1]
+    || null;
+  const readyNext = assignments.find((a) => String(a.status || "").toLowerCase() === "ready") || null;
+  const report = lastDone?.completionReport || null;
 
-  const buttons = [
-    { kind: "provide_feedback", label: "Give Feedback", missionId },
-    { kind: "reopen_work", label: "Continue Discovery", missionId },
-  ];
-  if (posture.primaryAction?.kind === "certify_completion") {
-    buttons.unshift({
-      kind: "certify_completion",
-      label: posture.primaryAction.label || "Approve",
-      missionId,
+  let cont = null;
+  try {
+    const advance = canAdvanceToImplementation(missionId);
+    cont = missionContinuationVm(missionId, {
+      choices: posture.choices || [],
+      posture,
+      advance,
     });
-  } else if (posture.primaryAction?.kind === "advance_implementation") {
-    buttons.unshift({
-      kind: "advance_implementation",
-      label: posture.primaryAction.label || "Continue",
+  } catch { cont = null; }
+  const recommended = cont?.recommended || null;
+
+  const brief = directorBriefFromCompletion(report, lastDone, { readyNext, posture });
+
+  const findings = [];
+  for (const risk of (report?.residualRisks || []).slice(0, 3)) {
+    const text = typeof risk === "string" ? risk : (risk.text || risk.label || risk.title);
+    if (text) findings.push(String(text).slice(0, 180));
+  }
+  for (const item of (report?.followUpItems || []).slice(0, 3)) {
+    const text = typeof item === "string" ? item : (item.text || item.label || item.title);
+    if (text) findings.push(`Follow-up: ${String(text).slice(0, 160)}`);
+  }
+
+  const evidence = evidenceItemsFor(missionId, {
+    assignmentId: lastDone?.assignmentId || lastDone?.id || null,
+    limit: 8,
+  });
+  const mediaEvidence = evidence.filter((e) => e.presentation === "media" && e.previewHref);
+
+  // Align primary CTA with worker Accept when criteria are met — do not lead with
+  // "Request More Discovery" just because continuation defaults to reopen.
+  let recommendation;
+  let recommendationDetail;
+  let nextStep;
+  let primaryAction = null;
+
+  if (readyNext) {
+    recommendation = `Start next: ${readyNext.title}`;
+    recommendationDetail = "A ready assignment is queued. Start it when you are satisfied with this outcome.";
+    nextStep = `Dispatches “${readyNext.title}” to a worker.`;
+    primaryAction = {
+      kind: "dispatch_ready",
+      label: `Start next: ${String(readyNext.title).slice(0, 42)}`,
+      missionId,
+    };
+  } else if (brief.accepts && !brief.needsWork) {
+    let plannedNext = null;
+    try { plannedNext = peekNextImplementationPhase(missionId); } catch { plannedNext = null; }
+    const autoGate = shouldAutoContinueImplementation(missionId);
+    const lastPhase = String(lastDone?.phaseId || "");
+    const wave2Done = lastPhase === "impl_w2d" || /W-8|Department scope bypass/i.test(String(lastDone?.title || ""));
+    if (plannedNext?.title && autoGate.ok) {
+      scheduleChainOnce(missionId, lastDone?.assignmentId || lastDone?.id || null);
+      recommendation = wave2Done && /^impl_w3/.test(plannedNext.phaseId)
+        ? `Wave 2 complete — starting ${plannedNext.title}`
+        : `Continuing — ${plannedNext.title}`;
+      recommendationDetail = "Director keeps the approved implementation chain moving. It only stops for an open decision, rework, or when the plan is finished.";
+      nextStep = `Starts ${plannedNext.title} automatically.`;
+      primaryAction = {
+        kind: "open_next_wave",
+        label: wave2Done && /^impl_w3/.test(plannedNext.phaseId)
+          ? "Start Wave 3"
+          : `Start ${String(plannedNext.title).replace(/^Wave\s+\d+\s+[—\-]\s+/i, "").slice(0, 36)}`,
+        missionId,
+        phaseId: plannedNext.phaseId,
+      };
+    } else if (plannedNext?.title) {
+      recommendation = wave2Done && /^impl_w3/.test(plannedNext.phaseId)
+        ? `Wave 2 complete — next is ${plannedNext.title}`
+        : `Accept and continue — ${plannedNext.title}`;
+      recommendationDetail = wave2Done
+        ? "W-0 through W-8 are done. Wave 3 starts at W-9 (one catalog). Click Start Wave 3 to continue."
+        : (brief.workerRecommendation
+          ? `Worker said: ${brief.workerRecommendation}. Next on the plan is ${plannedNext.title}.`
+          : `Criteria met. Next on the plan is ${plannedNext.title}.`);
+      nextStep = `Opens and starts ${plannedNext.title}.`;
+      primaryAction = {
+        kind: "open_next_wave",
+        label: wave2Done && /^impl_w3/.test(plannedNext.phaseId) ? "Start Wave 3" : "Accept & start next",
+        missionId,
+        phaseId: plannedNext.phaseId,
+      };
+    } else {
+      recommendation = wave2Done ? "Wave 2 is complete" : "Milestone reached";
+      recommendationDetail = wave2Done
+        ? "W-0 through W-8 are done. No further phase is in the Director register yet — say “open Wave 3” when you want catalog work (W-9…), or park/close."
+        : "Criteria met. Nothing else is queued in the implementation register.";
+      nextStep = "Park keeps the mission open idle. Close ends it. Or ask Director to open the next wave.";
+      primaryAction = {
+        kind: "park_outcome",
+        label: "Done for now",
+        missionId,
+      };
+    }
+  } else if (recommended?.action) {
+    recommendation = recommended.buttonLabel || recommended.title || "Choose a next step";
+    recommendationDetail = [
+      recommended?.whyChoose || recommended?.why,
+      recommended?.expectedOutcome,
+    ].filter(Boolean).map((s) => String(s).slice(0, 220)).join(" ");
+    nextStep = recommended?.whatHappensNext
+      || "Reviewing alone does not change mission state — pick an action below.";
+    primaryAction = {
+      ...recommended.action,
+      label: recommended.buttonLabel || recommended.action.label,
+      missionId,
+    };
+  } else {
+    recommendation = brief.workerRecommendation
+      ? clipOperatorText(brief.workerRecommendation, 120)
+      : "Choose a next step";
+    recommendationDetail = null;
+    nextStep = "Reviewing alone does not change mission state — pick an action below.";
+  }
+
+  const buttons = [];
+  const seenKinds = new Set();
+  function pushBtn(action) {
+    if (!action?.kind || !action.missionId) return;
+    const key = `${action.kind}:${action.label || ""}`;
+    if (seenKinds.has(key)) return;
+    seenKinds.add(key);
+    buttons.push(action);
+  }
+
+  if (primaryAction) pushBtn(primaryAction);
+  if (readyNext && primaryAction?.kind !== "dispatch_ready") {
+    pushBtn({
+      kind: "dispatch_ready",
+      label: `Start next: ${String(readyNext.title).slice(0, 42)}`,
       missionId,
     });
   }
-  if (evidence.some((e) => e.previewHref)) {
-    buttons.push({ kind: "toggle_screenshots", label: "View Screenshots", missionId });
+  if (brief.accepts && primaryAction?.kind === "open_next_wave") {
+    pushBtn({ kind: "park_outcome", label: "Stop here for now", missionId });
+    pushBtn({ kind: "reopen_work", label: "Request More Discovery", missionId });
   }
+  if (brief.accepts && primaryAction?.kind === "park_outcome") {
+    pushBtn({ kind: "reopen_work", label: "Request More Discovery", missionId });
+  }
+  if (recommended?.action && recommended.action.kind !== primaryAction?.kind) {
+    pushBtn({
+      ...recommended.action,
+      label: recommended.buttonLabel || recommended.action.label,
+      missionId,
+    });
+  }
+  for (const alt of (cont?.alternatives || []).slice(0, 4)) {
+    if (alt.presentationOnly) continue;
+    if (!alt.action?.kind) continue;
+    if (["review_findings", "provide_feedback"].includes(alt.action.kind)) continue;
+    if (brief.accepts && alt.action.kind === "reopen_work" && primaryAction?.kind === "park_outcome") {
+      continue; // already pushed as secondary
+    }
+    if (primaryAction?.kind === "park_outcome" && alt.action.kind === "park_outcome") {
+      continue; // already leading with Accept & hold
+    }
+    pushBtn({
+      ...alt.action,
+      label: alt.buttonLabel || alt.action.label,
+      missionId,
+    });
+  }
+  pushBtn({ kind: "provide_feedback", label: "Give Feedback", missionId });
+  if (mediaEvidence.length) {
+    pushBtn({ kind: "toggle_screenshots", label: "View Screenshots", missionId });
+  }
+  if (!buttons.length) {
+    pushBtn({ kind: "reopen_work", label: "Continue Discovery", missionId });
+  }
+
+  const statusFacts = brief.proofLines.length
+    ? brief.proofLines
+    : [
+      lastDone?.title ? `Just finished: ${lastDone.title}` : null,
+      posture.label || "Waiting on you",
+    ].filter(Boolean);
 
   return {
     kind: "inline_review",
     reviewId: null,
     missionId,
     soft: true,
-    headline: posture.primaryAction?.label || "Review Outcome",
-    waveLabel: posture.label || null,
-    summary: posture.explanation || posture.detail || "",
-    recommendation: posture.recommendation || posture.primaryAction?.label || null,
+    headline: lastDone?.title
+      ? `${lastDone.title}`
+      : "Review Outcome",
+    waveLabel: brief.verdictLabel,
+    whatFinished: lastDone?.title || null,
+    statusFacts,
+    brief: {
+      verdictId: brief.verdictId,
+      verdictLabel: brief.verdictLabel,
+      problem: brief.problem,
+      fix: brief.fix,
+      doneBullets: brief.doneBullets,
+      proofLines: brief.proofLines,
+      workerRecommendation: brief.workerRecommendation,
+    },
+    summary: brief.summary,
+    findings,
+    recommendation,
+    recommendationDetail: recommendationDetail || null,
+    nextStep,
     confidencePct: null,
     evidence,
     buttons,

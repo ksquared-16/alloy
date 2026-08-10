@@ -513,10 +513,18 @@ We'll capture the context automatically.</p>
       </div>`;
   }
 
+  /** Open inline Review Outcome and scroll it into the conversation viewport. */
+  function openInlineReview() {
+    V2.state._wsInlineReviewOpen = true;
+    V2.state._wsStickBottom = true;
+    bump();
+    schedulePaint();
+  }
+
   function actionBtn(action) {
     if (!action) return "";
     if (action.kind === "inline_review_expand") {
-      return `<button class="btn" type="button" data-ws-inline-review="${esc(action.missionId || "")}" data-review="${esc(action.reviewId || "")}">${esc(action.label || "Review Outcome")}</button>`;
+      return `<button class="btn" type="button" data-ws-inline-review="${esc(action.missionId || "")}" data-ws-review-id="${esc(action.reviewId || "")}">${esc(action.label || "Review Outcome")}</button>`;
     }
     if (action.kind === "drev_approve" && action.reviewId) {
       return `<button class="btn" type="button" data-drev-approve="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Approve")}</button>`;
@@ -555,7 +563,8 @@ We'll capture the context automatically.</p>
       return `<button class="btn" data-mc-reopen-work="${esc(action.missionId)}">${esc(action.label || "Request More Discovery")}</button>`;
     }
     if ((action.kind === "review_outcome" || action.kind === "review_deliverable") && action.missionId) {
-      return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review deliverable")}</button>`;
+      // Conversation surface: expand inline — never navigate away or hit legacy review.resolve
+      return `<button class="btn" type="button" data-ws-inline-review="${esc(action.missionId)}" data-ws-review-id="${esc(action.reviewId || "")}">${esc(action.label || "Review Outcome")}</button>`;
     }
     if (action.kind === "recheck_deliverable" && action.missionId && action.reviewId) {
       return `<button class="btn" type="button" data-drev-recheck="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Have Director re-check")}</button>`;
@@ -567,13 +576,20 @@ We'll capture the context automatically.</p>
       return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Begin Implementation")}</button>`;
     }
     if (action.kind === "park_outcome" && action.missionId) {
-      return `<button class="btn ghost" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park Mission")}</button>`;
+      const cls = /accept/i.test(action.label || "") ? "btn" : "btn ghost";
+      return `<button class="${cls}" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park Mission")}</button>`;
+    }
+    if (action.kind === "open_next_wave" && action.missionId) {
+      return `<button class="btn" data-mc-open-next-wave="${esc(action.missionId)}">${esc(action.label || "Accept & start next")}</button>`;
     }
     if (action.kind === "review_findings") {
       return `<button class="btn ghost" type="button" data-mc-review-findings="${esc(action.missionId || "")}">${esc(action.label || "Review Findings")}</button>`;
     }
     if (action.kind === "provide_feedback") {
       return `<button class="btn ghost" type="button" data-mc-provide-feedback="${esc(action.missionId || "")}">${esc(action.label || "Provide Feedback")}</button>`;
+    }
+    if (action.kind === "answer_decision" && action.decisionId && action.optionId) {
+      return `<button class="btn" type="button" data-mc-answer="${esc(action.decisionId)}" data-option="${esc(action.optionId)}" data-mission="${esc(action.missionId || "")}">${esc(action.label || "Approve recommendation")}</button>`;
     }
     if (action.kind === "dispatch_ready" && action.missionId) {
       return `<button class="btn" data-mc-dispatch="${esc(action.missionId)}">${esc(action.label || "Start work")}</button>`;
@@ -737,13 +753,15 @@ We'll capture the context automatically.</p>
           context: V2.state.workspaceShell.context,
           operational: V2.state.workspaceShell.operational,
           inlineReview: V2.state.workspaceShell.inlineReview,
+          liveProgress: V2.state.workspaceShell.liveProgress || null,
           sinceLastVisit: V2.state.workspaceShell.sinceLastVisit,
           composer: V2.state.workspaceShell.composer,
           messages: V2.state.workspaceMessages || [],
           page: V2.state.workspacePage || null,
           messagesStatus: V2.state.workspaceMessagesStatus || "loading",
         };
-        if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
+    if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
+        V2.state.workspaceLiveProgress = j.shell?.liveProgress || null;
         markFetched(`workspace-shell:${id}`);
         if (typeof window.renderMissionRail === "function") {
           window.renderMissionRail(V2.state.workspaceList);
@@ -801,11 +819,13 @@ We'll capture the context automatically.</p>
       V2.state.workspacePage = j.page || null;
       V2.state.workspaceMessagesStatus = j.messagesStatus || (incoming.length ? "ready" : "empty_known");
       V2.state.workspaceMessagesInlineReview = j.inlineReview || null;
+      V2.state.workspaceLiveProgress = j.liveProgress || V2.state.workspaceLiveProgress || null;
       if (V2.state.workspaceRuntime) {
         V2.state.workspaceRuntime.messages = V2.state.workspaceMessages;
         V2.state.workspaceRuntime.page = V2.state.workspacePage;
         V2.state.workspaceRuntime.messagesStatus = V2.state.workspaceMessagesStatus;
         V2.state.workspaceRuntime.inlineReview = j.inlineReview || null;
+        V2.state.workspaceRuntime.liveProgress = V2.state.workspaceLiveProgress;
         V2.state.workspaceRuntime.empty = j.empty;
       }
       markFetched(`workspace-messages:${id}`);
@@ -840,6 +860,14 @@ We'll capture the context automatically.</p>
         thread.scrollTop = thread.scrollHeight - V2.state._wsScrollHeight;
         V2.state._wsPreserveScroll = false;
         V2.state._wsScrollHeight = null;
+      } else if (V2.state._wsInlineReviewOpen) {
+        const review = document.getElementById("ws-inline-review");
+        if (review) {
+          // Review card sits at end of thread — keep it in view (not stuck off-screen at top).
+          thread.scrollTop = Math.max(0, review.offsetTop - 12);
+        } else {
+          thread.scrollTop = thread.scrollHeight;
+        }
       } else if (V2.state._wsStickBottom !== false) {
         thread.scrollTop = thread.scrollHeight;
       }
@@ -909,6 +937,7 @@ We'll capture the context automatically.</p>
     const inlineReview = V2.state._wsInlineReviewOpen
       ? (V2.state.workspaceMessagesInlineReview || rt.inlineReview)
       : null;
+    const liveProgress = V2.state.workspaceLiveProgress || rt.liveProgress || null;
     const showShots = Boolean(V2.state._wsShowShots);
     const activeId = ws.workspaceId || ws.missionId || id;
 
@@ -919,26 +948,116 @@ We'll capture the context automatically.</p>
       </ul>
     </section>` : "";
 
-    const reviewHtml = inlineReview ? `<section class="ws-inline-review" id="ws-inline-review">
+    const attention = rt.attention || { items: [] };
+    const attentionHtml = (attention.items || []).length ? `<section class="ws-attention" aria-label="Needs you">
+      <h2 class="ws-attention-title">Needs you · ${esc(String(attention.items.length))}</h2>
+      <ul class="ws-attention-list">
+        ${attention.items.map((n) => {
+          const act = n.primaryAction || n.action;
+          const btn = act ? actionBtn({
+            ...act,
+            label: act.label || "Open",
+            kind: act.kind || (act.href?.startsWith("decisions/") ? "open_decision" : "open_mission"),
+            missionId: n.missionId,
+            decisionId: n.decisionId || act.decisionId,
+          }) : "";
+          return `<li class="ws-attention-item">
+            <div class="ws-attention-k">${esc(n.urgency || n.type || "Attention")}</div>
+            <div class="ws-attention-h">${esc(n.title || "Needs you")}</div>
+            ${n.body ? `<p class="ws-attention-b">${esc(String(n.body).slice(0, 220))}</p>` : ""}
+            ${btn ? `<div class="ws-msg-actions mc-actions">${btn}</div>` : ""}
+          </li>`;
+        }).join("")}
+      </ul>
+    </section>` : "";
+
+    const progressHtml = liveProgress?.active ? (() => {
+      const pct = liveProgress.percent != null ? Math.max(0, Math.min(100, Number(liveProgress.percent))) : null;
+      const doneBits = (liveProgress.doneSummary || []).slice(0, 4);
+      const tone = liveProgress.needsYourApproval || liveProgress.freshness === "needs_you" ? "needs"
+        : liveProgress.freshness === "failed" || liveProgress.freshness === "stale" ? "stale"
+          : liveProgress.freshness === "live" ? "live"
+            : liveProgress.freshness === "quiet" ? "quiet" : "neutral";
+      const btns = (liveProgress.buttons || []).map((b) => actionBtn(b)).filter(Boolean).join("");
+      return `<section class="ws-progress ws-progress-${tone}" id="ws-live-progress" aria-label="Work progress">
+        <header class="ws-progress-h">
+          <div>
+            <div class="ws-progress-k">Work progress${pct != null ? ` · ${esc(String(pct))}%` : ""}</div>
+            <div class="ws-progress-title">${esc(liveProgress.workingOn || "In progress")}</div>
+          </div>
+          <div class="ws-progress-fresh">${esc(liveProgress.freshnessLabel || "")}${liveProgress.heartbeatLabel ? ` · ${esc(liveProgress.heartbeatLabel)}` : ""}</div>
+        </header>
+        ${pct != null ? `<div class="ws-progress-bar" role="progressbar" aria-valuenow="${esc(String(pct))}" aria-valuemin="0" aria-valuemax="100"><span style="width:${esc(String(pct))}%"></span></div>` : ""}
+        <dl class="ws-progress-meta">
+          ${liveProgress.activity ? `<div><dt>Now</dt><dd>${esc(liveProgress.activity)}</dd></div>` : ""}
+          ${liveProgress.doneCount != null && liveProgress.totalCount != null
+            ? `<div><dt>Assignments</dt><dd>${esc(String(liveProgress.doneCount))} of ${esc(String(liveProgress.totalCount))} closed</dd></div>`
+            : ""}
+          ${liveProgress.eta ? `<div><dt>Checkpoint</dt><dd>${esc(liveProgress.eta)}</dd></div>` : ""}
+          ${liveProgress.filesInspected ? `<div><dt>Inspected</dt><dd>${esc(String(liveProgress.filesInspected))} files</dd></div>` : ""}
+        </dl>
+        ${doneBits.length ? `<div class="ws-progress-done"><div class="ws-progress-k">Done so far</div><ul>${doneBits.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div>` : ""}
+        ${liveProgress.freshness === "stale"
+          ? `<p class="ws-progress-warn">No fresh heartbeat — this may be stuck on a long tool call, or the worker may have stalled.</p>`
+          : ""}
+        ${liveProgress.howToApprove ? `<p class="ws-progress-hint">${esc(liveProgress.howToApprove)}</p>` : ""}
+        ${btns ? `<div class="ws-msg-actions mc-actions" style="margin-top:10px">${btns}</div>` : ""}
+      </section>`;
+    })() : "";
+
+    const reviewHtml = (() => {
+      if (!inlineReview) return "";
+      const brief = inlineReview.brief || null;
+      const docs = (inlineReview.evidence || []).filter((e) => e.presentation !== "media");
+      const shots = (inlineReview.evidence || []).filter((e) => e.presentation === "media" && e.previewHref);
+      const briefBlocks = brief ? `
+        ${brief.verdictLabel ? `<p class="ws-inline-verdict">${esc(brief.verdictLabel)}</p>` : ""}
+        ${brief.problem ? `<div class="ws-inline-block"><div class="ws-inline-k">Problem</div><p>${esc(brief.problem)}</p></div>` : ""}
+        ${brief.fix ? `<div class="ws-inline-block"><div class="ws-inline-k">Fix</div><p>${esc(brief.fix)}</p></div>` : ""}
+        ${(brief.doneBullets || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Changed</div>
+          <ul class="ws-inline-findings">${brief.doneBullets.map((d) => `<li><code>${esc(d)}</code></li>`).join("")}</ul>
+        </div>` : ""}
+        ${(brief.proofLines || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Proof</div>
+          <ul class="ws-inline-facts">${brief.proofLines.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        </div>` : ""}
+        ${inlineReview.summary && !brief.problem
+          ? `<div class="ws-inline-block"><div class="ws-inline-k">Summary</div><p>${esc(inlineReview.summary)}</p></div>`
+          : ""}
+      ` : `
+        ${inlineReview.waveLabel ? `<p class="ws-inline-wave">${esc(inlineReview.waveLabel)}</p>` : ""}
+        ${(inlineReview.statusFacts || []).length ? `<ul class="ws-inline-facts">${inlineReview.statusFacts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+        ${inlineReview.summary ? `<div class="ws-inline-block"><div class="ws-inline-k">What happened</div><p>${esc(inlineReview.summary)}</p></div>` : ""}
+      `;
+      return `<section class="ws-inline-review" id="ws-inline-review">
       <header class="ws-inline-review-h">
         <h2>${esc(inlineReview.headline || "Review Outcome")}</h2>
         <button type="button" class="btn ghost sm" data-ws-inline-review-close>Close</button>
       </header>
-      ${inlineReview.waveLabel ? `<p class="ws-inline-wave">${esc(inlineReview.waveLabel)}</p>` : ""}
-      ${inlineReview.summary ? `<div class="ws-inline-block"><div class="ws-inline-k">Summary</div><p>${esc(inlineReview.summary)}</p></div>` : ""}
-      ${inlineReview.recommendation ? `<div class="ws-inline-block"><div class="ws-inline-k">Recommendation</div><p>${esc(inlineReview.recommendation)}${inlineReview.confidencePct != null ? ` · ${esc(inlineReview.confidencePct)}%` : ""}</p></div>` : ""}
-      ${(inlineReview.evidence || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Evidence</div>
-        <ul class="ws-artifact-list">${inlineReview.evidence.map((e) =>
-          `<li>${e.previewHref
+      ${briefBlocks}
+      ${(inlineReview.findings || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Still open / risks</div>
+        <ul class="ws-inline-findings">${inlineReview.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+      </div>` : ""}
+      ${inlineReview.recommendation ? `<div class="ws-inline-block"><div class="ws-inline-k">Your move</div>
+        <p class="ws-inline-rec">${esc(inlineReview.recommendation)}${inlineReview.confidencePct != null ? ` · ${esc(inlineReview.confidencePct)}%` : ""}</p>
+        ${inlineReview.recommendationDetail ? `<p class="ws-inline-rec-detail">${esc(inlineReview.recommendationDetail)}</p>` : ""}
+        ${inlineReview.nextStep ? `<p class="ws-inline-rec-detail"><b>If you take that step:</b> ${esc(inlineReview.nextStep)}</p>` : ""}
+      </div>` : ""}
+      ${docs.length ? `<div class="ws-inline-block"><div class="ws-inline-k">Evidence</div>
+        <ul class="ws-artifact-list">${docs.map((e) =>
+          `<li class="ws-ev-doc"><span class="ws-ev-type">${esc(e.typeLabel || e.type || "file")}</span>
+            ${e.previewHref
             ? `<button type="button" class="btn link sm" data-ws-artifact="${esc(e.previewHref)}" data-title="${esc(e.title || "")}">${esc(e.title || e.type || "Artifact")}</button>`
             : esc(e.title || e.type || "Artifact")}</li>`).join("")}</ul>
       </div>` : ""}
-      ${showShots && (inlineReview.evidence || []).some((e) => e.previewHref)
-        ? `<div class="ws-shot-grid">${inlineReview.evidence.filter((e) => e.previewHref).map((e) =>
-          `<figure class="ws-shot"><img src="${esc(e.previewHref)}" alt="${esc(e.title || "")}" loading="lazy"/><figcaption>${esc(e.title || "")}</figcaption></figure>`).join("")}</div>`
+      ${showShots && shots.length
+        ? `<div class="ws-inline-block"><div class="ws-inline-k">Screenshots</div>
+          <div class="ws-shot-grid">${shots.map((e) =>
+          `<figure class="ws-shot"><img src="${esc(e.previewHref)}" alt="${esc(e.title || "")}" loading="lazy"/><figcaption>${esc(e.title || "")}</figcaption></figure>`).join("")}</div>
+        </div>`
         : ""}
       <div class="ws-msg-actions mc-actions">${(inlineReview.buttons || []).map((b) => actionBtn(b)).join("")}</div>
-    </section>` : "";
+    </section>`;
+    })();
 
     let threadBody = "";
     if (msgStatus === "loading" && !msgs.length) {
@@ -1028,7 +1147,7 @@ We'll capture the context automatically.</p>
         <header class="ws-main-h">
           <h1>${esc(ws.title || "Mission")}</h1>
         </header>
-        <div class="ws-thread" id="ws-thread">${sinceHtml}${reviewHtml}${threadBody}</div>
+        <div class="ws-thread" id="ws-thread">${attentionHtml}${sinceHtml}${threadBody}${progressHtml}${reviewHtml}</div>
         <footer class="ws-composer-wrap">
           <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="${esc(rt.composer?.placeholder || "Message Director…")}"${composerEnabled ? "" : " disabled"}>${esc(draft)}</textarea>
           <button type="button" class="btn ws-send" data-ws-send="${esc(activeId)}"${busy}>Send</button>
@@ -3189,6 +3308,31 @@ We'll capture the context automatically.</p>
     }
   }
 
+  async function openNextWave(missionId) {
+    toast("Opening next wave and starting worker…", "ok");
+    try {
+      const out = await post("/api/v2/missions/open-next-wave", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator accepted prior deliverable and continued to next wave",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Could not open next wave"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      V2.state._wsInlineReviewOpen = false;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      const title = out?.readyAssignment?.title || out?.phase?.title || "next wave";
+      toast(`Started: ${title}`, "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
   async function reopenWork(missionId) {
     const ok = window.confirm(
       "Need more work?\n\nThis reopens the assignment so you can Start work again.\nIt does not launch a worker by itself.\n\nContinue?"
@@ -3211,7 +3355,11 @@ We'll capture the context automatically.</p>
       await refreshNeedsBadge();
       bump(); schedulePaint();
       toast("Reopened. Click Start work when you want a worker to run.", "ok");
-      location.hash = "#/missions/" + encodeURIComponent(missionId);
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+      } else {
+        location.hash = "#/missions/" + encodeURIComponent(missionId);
+      }
     } catch (e) {
       toast(e?.message || String(e), "err");
     }
@@ -3289,12 +3437,8 @@ We'll capture the context automatically.</p>
     const inlineOpen = ev.target.closest("[data-ws-inline-review]");
     if (inlineOpen) {
       ev.preventDefault();
-      V2.state._wsInlineReviewOpen = true;
-      V2.state._wsStickBottom = true;
-      bump(); schedulePaint();
-      requestAnimationFrame(() => {
-        document.getElementById("ws-inline-review")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      ev.stopPropagation();
+      openInlineReview();
       return;
     }
     if (ev.target.closest("[data-ws-inline-review-close]")) {
@@ -3306,8 +3450,7 @@ We'll capture the context automatically.</p>
     if (ev.target.closest("[data-ws-toggle-shots]")) {
       ev.preventDefault();
       V2.state._wsShowShots = !V2.state._wsShowShots;
-      V2.state._wsInlineReviewOpen = true;
-      bump(); schedulePaint();
+      openInlineReview();
       return;
     }
     const art = ev.target.closest("[data-ws-artifact]");
@@ -3551,7 +3694,7 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-open-next-wave],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
     if (!t) return;
 
     if (t.hasAttribute("data-mc-review-findings")) {
@@ -3685,6 +3828,10 @@ We'll capture the context automatically.</p>
       parkOutcome(t.dataset.mcParkOutcome);
       return;
     }
+    if (t.dataset.mcOpenNextWave) {
+      openNextWave(t.dataset.mcOpenNextWave);
+      return;
+    }
     if (t.dataset.mcAdvance) {
       advanceImplementation(t.dataset.mcAdvance);
       return;
@@ -3692,11 +3839,7 @@ We'll capture the context automatically.</p>
     if (t.dataset.mcReviewOutcome) {
       const mid = t.dataset.mcReviewOutcome;
       if (onMissionConversation()) {
-        V2.state._wsInlineReviewOpen = true;
-        bump(); schedulePaint();
-        requestAnimationFrame(() => {
-          document.getElementById("ws-inline-review")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+        openInlineReview();
         return;
       }
       V2.state.showOutcome = true;

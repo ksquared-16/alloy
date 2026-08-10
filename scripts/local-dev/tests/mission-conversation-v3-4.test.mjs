@@ -51,6 +51,18 @@ const list = missionConversationListVm({ filter: "active" });
 assert.ok(list.missions.length >= 1);
 assert.ok(list.missions.some((m) => /Identity/i.test(m.title)));
 
+const fx = ingestMissionBrief(brief("DX7 Fixture — Ready Implementation"), { slot: 6, actor: "operator" });
+approveMissionExecution(fx.brief.missionId, fx.brief.version, { slot: 6, actor: "operator" });
+// Bust list cache (filter key change)
+const listWithFx = missionConversationListVm({ filter: "archived" });
+const listActive = missionConversationListVm({ filter: "active" });
+assert.ok(
+  !listActive.missions.some((m) => /DX7\s+Fixture/i.test(m.title)),
+  "DX7 Fixture missions must not appear in the operator rail",
+);
+assert.ok(listActive.missions.some((m) => /Identity/i.test(m.title)));
+void listWithFx;
+
 const shell = workspaceShellVm(missionId);
 assert.ok(shell);
 assert.equal(shell.sinceLastVisit, null, "Opening path defers sinceLastVisit");

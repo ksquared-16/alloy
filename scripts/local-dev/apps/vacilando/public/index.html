@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vacilando Runtime — Control Plane</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=v34l">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -34,14 +34,9 @@
       <div id="mission-rail" class="mission-rail">
         <a class="mission-rail-item" data-route="workspaces/msn_f74ed02c126c88d7ff"><span class="mission-rail-title">Identity Platform</span></a>
       </div>
-      <details class="nav-more">
-        <summary>More</summary>
-        <a data-route="missions">Portfolio</a>
-        <a data-route="needs-you">Needs You<span class="badge" id="nb-needs">0</span></a>
-        <a data-route="workers">Workers</a>
-        <a data-route="improvements">Improvements</a>
-      </details>
     </nav>
+    <!-- Portfolio / Needs You / Workers / Improvements stay reachable via hash routes; not primary rail chrome. -->
+    <span id="nb-needs" class="badge" hidden aria-hidden="true">0</span>
     <div class="railcap" id="railcap"></div>
     <div class="nav-sep"></div>
     <div class="desert">
@@ -73,7 +68,7 @@
   </main>
 </div>
 
-<script src="mission-control.js"></script>
-<script src="app.js"></script>
+<script src="mission-control.js?v=v34l"></script>
+<script src="app.js?v=v34l"></script>
 </body>
 </html>

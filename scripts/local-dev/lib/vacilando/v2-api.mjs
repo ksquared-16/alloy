@@ -273,6 +273,25 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     });
     return { status: out.ok ? 200 : 409, body: out };
   }
+  if (path === "/api/v2/missions/open-next-wave" || path === "/api/v2/missions/next-wave") {
+    const { ensureNextImplementationWave } = await import("./mission-advance.mjs");
+    const mid = v.mission_id || v.missionId;
+    const opened = ensureNextImplementationWave(mid, {
+      actor: v.actor || "operator",
+      waveHint: { wave: "next", workstream: v.workstream ?? null },
+      response: v.response || v.note || "Accept and continue to next implementation phase",
+    });
+    if (!opened?.ok) {
+      return { status: 409, body: opened };
+    }
+    try {
+      const { scheduleDispatchAfterKickoff } = await import("./assignment-dispatch.mjs");
+      const dispatched = scheduleDispatchAfterKickoff(mid, { actor: v.actor || "director" });
+      return { status: 200, body: { ...opened, dispatch: dispatched } };
+    } catch (e) {
+      return { status: 200, body: { ...opened, dispatch: { ok: false, error: String(e?.message || e) } } };
+    }
+  }
   if (path === "/api/v2/missions/dispatch") {
     try {
       if (v.provider) process.env.VACILANDO_EXECUTION_PROVIDER = String(v.provider);

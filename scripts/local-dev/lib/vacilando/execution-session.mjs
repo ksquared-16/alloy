@@ -129,9 +129,70 @@ export function listExecutionSessions({ missionId = null, assignmentId = null, s
 
 export function getActiveSessionForAssignment(missionId, assignmentId) {
   return listExecutionSessions({ missionId, assignmentId }).find((s) =>
-    ["queued", "starting", "running", "recovering", "recovered", "retrying",
-      "awaiting_decision", "awaiting_operator", "producing_evidence", "paused", "interrupted"].includes(s.status))
+    isSessionActuallyLive(s))
     || null;
+}
+
+/** Heartbeat / completion honesty — a "running" row can be a zombie after restart. */
+export const SESSION_STALE_HEARTBEAT_MS = 3 * 60 * 1000;
+
+export function isSessionActuallyLive(session, { nowMs = Date.now() } = {}) {
+  if (!session) return false;
+  const status = String(session.status || "");
+  const activeish = [
+    "queued", "starting", "running", "recovering", "recovered", "retrying",
+    "awaiting_decision", "awaiting_operator", "producing_evidence", "paused", "interrupted",
+  ];
+  if (!activeish.includes(status)) return false;
+  // Terminal facts written while status was never flipped.
+  if (session.completed_at && ["running", "starting", "queued", "retrying", "recovering", "producing_evidence"].includes(status)) {
+    return false;
+  }
+  if (["awaiting_decision", "awaiting_operator", "paused"].includes(status)) return true;
+  const hb = session.progress?.lastHeartbeatAt || session.updated_at || session.started_at;
+  if (!hb) {
+    // Brand-new sessions may not have heartbeated yet — allow a short grace.
+    const created = Date.parse(session.created_at || session.started_at || 0);
+    if (Number.isFinite(created) && nowMs - created < 90_000) return true;
+    return false;
+  }
+  const age = nowMs - Date.parse(hb);
+  if (!Number.isFinite(age)) return false;
+  if (age > SESSION_STALE_HEARTBEAT_MS) return false;
+  return true;
+}
+
+/**
+ * Flip zombie "running" sessions to failed so posture/recovery can relaunch.
+ * Returns sessions that were reconciled.
+ */
+export function reconcileZombieSessions({ missionId = null, nowMs = Date.now() } = {}) {
+  const rows = listExecutionSessions({ missionId, limit: 200 }) || [];
+  const fixed = [];
+  for (const s of rows) {
+    const status = String(s.status || "");
+    if (!["running", "starting", "queued", "retrying", "recovering", "producing_evidence", "interrupted"].includes(status)) {
+      continue;
+    }
+    if (isSessionActuallyLive(s, { nowMs })) continue;
+    const reason = s.completed_at
+      ? "zombie_completed_without_status_flip"
+      : "zombie_stale_heartbeat";
+    updateExecutionSession(s.sessionId, {
+      status: "failed",
+      completed_at: s.completed_at || iso(nowMs),
+      recovery: {
+        ...(s.recovery || {}),
+        lastError: s.recovery?.lastError || "stale session — no fresh heartbeat",
+        zombieReconciledAt: iso(nowMs),
+        zombieReason: reason,
+        resumable: true,
+      },
+      logLine: `reconciled zombie session (${reason})`,
+    }, { nowMs });
+    fixed.push({ sessionId: s.sessionId, missionId: s.missionId, assignmentId: s.assignmentId, reason });
+  }
+  return fixed;
 }
 
 /** Persist a decision-pause checkpoint (Claude session id + question package). */
@@ -288,7 +349,7 @@ export function parseExecutionOutcome(text = "") {
 }
 
 export function sessionLiveVm(session) {
-  if (!session) return null;
+  if (!session || !isSessionActuallyLive(session)) return null;
   const hb = session.progress?.lastHeartbeatAt
     ? Math.max(0, Math.round((Date.now() - Date.parse(session.progress.lastHeartbeatAt)) / 1000))
     : null;

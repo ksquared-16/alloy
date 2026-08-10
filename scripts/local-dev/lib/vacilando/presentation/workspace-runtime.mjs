@@ -29,6 +29,7 @@ import {
   enrichConversationMessages,
   resolveMissionConversationId,
   displayMissionTitle,
+  liveWorkProgressVm,
 } from "./mission-conversation.mjs";
 import { executeMissionDirectorTurn } from "../mission-conversation-director.mjs";
 
@@ -115,7 +116,10 @@ function messageKindForEvent(type, participant) {
 function isMeaningfulEvent(e) {
   const t = e.type;
   if (e.visibility === "debug") return false;
-  if (["resource_claim", "resource_release", "context_invalidated", "worker_health"].includes(t)) return false;
+  // Heartbeat chatter — shown as one live progress card, not a message flood
+  if (["resource_claim", "resource_release", "context_invalidated", "worker_health", "progress"].includes(t)) {
+    return false;
+  }
   return true;
 }
 
@@ -324,6 +328,7 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
       context: null,
       operational: null,
       inlineReview: null,
+      liveProgress: null,
       sinceLastVisit: null,
       missions,
       messagesStatus: "unavailable",
@@ -334,6 +339,7 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
   const currentState = deriveCurrentState(missionId);
   currentState.workspaceTitle = displayMissionTitle(missionId);
   const operational = operationalRailVm(missionId);
+  const liveProgress = liveWorkProgressVm(missionId);
   // Reuse ops for context rail — avoid second operationalRailVm / port probe
   const context = {
     kind: "context_rail",
@@ -357,10 +363,47 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     provider: operational.worker?.provider,
     slot: operational.worker?.slot,
     serverStatus: operational.server?.statusLabel || operational.server?.status,
+    liveProgress,
   });
   const inlineReview = inlineReviewCardVm(missionId);
   // Defer expensive since-last-visit off the critical shell path (V3-4 Opening fix)
   const sinceLastVisit = null;
+  // Mission-local Needs You only (never full portfolio scan — that freezes the shell).
+  let attention = { items: [], count: 0 };
+  try {
+    const items = [];
+    for (const d of listDecisions(missionId, { status: "open" }) || []) {
+      items.push({
+        kind: "needs_you_item",
+        type: "decision",
+        decisionId: d.decisionId || d.id,
+        missionId,
+        title: d.title || "Decision needed",
+        body: d.situation || d.summary || "",
+        urgency: "Decision",
+        primaryAction: {
+          kind: "open_decision",
+          label: "Review and decide",
+          href: `decisions/${d.decisionId || d.id}`,
+          decisionId: d.decisionId || d.id,
+          missionId,
+        },
+      });
+    }
+    const posture = deriveMissionPosture(missionId);
+    if (posture?.needsYou && posture.id !== "decision_required") {
+      items.push({
+        kind: "needs_you_item",
+        type: posture.id,
+        missionId,
+        title: posture.label || "Needs you",
+        body: posture.detail || "",
+        urgency: "Needs you",
+        primaryAction: posture.primaryAction || null,
+      });
+    }
+    attention = { items, count: items.length };
+  } catch { /* best-effort */ }
 
   return {
     kind: "workspace_shell",
@@ -368,10 +411,12 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     missionId,
     currentState,
     currentStateCompact,
+    liveProgress,
     context,
     operational,
     inlineReview,
     sinceLastVisit,
+    attention,
     missions,
     messagesStatus: "loading",
     composer: {
@@ -410,6 +455,7 @@ export function workspaceMessagesVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
   const projected = projectTimelineToMessages(missionId, { limit, beforeEventId });
   const cs = currentState || deriveCurrentState(missionId);
   const inlineReview = beforeEventId ? null : inlineReviewCardVm(missionId);
+  const liveProgress = beforeEventId ? null : liveWorkProgressVm(missionId);
   let messages = projected.messages;
   if (!beforeEventId && cs.primaryAction && messages.length) {
     const last = messages[messages.length - 1];
@@ -428,6 +474,7 @@ export function workspaceMessagesVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     missionId,
     messages,
     inlineReview,
+    liveProgress,
     page: projected.page,
     messagesStatus: messages.length ? "ready" : (projected.page.hasEarlier ? "ready" : "empty_known"),
     empty: messages.length === 0 && !beforeEventId && !projected.page.hasEarlier,
@@ -469,6 +516,7 @@ export function workspaceRuntimeVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     context: shell.context,
     operational: shell.operational,
     inlineReview: page.inlineReview || shell.inlineReview,
+    liveProgress: page.liveProgress || shell.liveProgress,
     sinceLastVisit: shell.sinceLastVisit,
     missions: shell.missions,
     messages: page.messages,

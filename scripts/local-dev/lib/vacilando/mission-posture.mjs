@@ -16,7 +16,7 @@ import { canCertifyMission } from "./evidence.mjs";
 import { getMission } from "./commands/missions.mjs";
 import { listWorkerTelemetry } from "./worker-health.mjs";
 import { getActiveSessionForAssignment, listExecutionSessions } from "./execution-session.mjs";
-import { canAdvanceToImplementation } from "./mission-advance.mjs";
+import { canAdvanceToImplementation, peekNextImplementationPhase, shouldAutoContinueImplementation, scheduleImplementationChainContinue } from "./mission-advance.mjs";
 import { silentRecoveryState } from "./silent-worker-recover.mjs";
 import {
   ensureDeliverableReviewsForMission,
@@ -215,6 +215,7 @@ export function deriveMissionPosture(missionId) {
   }
 
   // Director-owned Deliverable Review — before generic cert copy.
+  // Implementation chain: do not park the operator between waves when auto-continue is allowed.
   const openReview = getOpenDeliverableReview(missionId);
   if (openReview && ["ready_for_review", "cannot_verify", "evidence_discrepancy", "evidence_repair", "director_verifying"].includes(openReview.certification_state)) {
     const state = openReview.certification_state;
@@ -225,6 +226,26 @@ export function deriveMissionPosture(missionId) {
     const wave = openReview.wave_label
       || (String(openReview.deliverable_title || "").match(/\b(W-\d+)\b/i)?.[1])
       || "this deliverable";
+    const autoGate = shouldAutoContinueImplementation(missionId);
+    const nextPhase = peekNextImplementationPhase(missionId);
+    const canChain = autoGate.ok && nextPhase && !repair && !verifying;
+    if (canChain) {
+      scheduleImplementationChainContinue(missionId, {
+        fromAssignmentId: openReview.assignment_id,
+        actor: "director",
+      });
+      return {
+        ...base,
+        id: "executing",
+        status: "auto_continuing",
+        label: "Continuing",
+        detail: `Director accepted ${wave} and is opening ${nextPhase.title}.`,
+        next: `Running ${nextPhase.title}`,
+        needsYou: false,
+        primaryAction: action("open_mission", "Open mission", { href: `missions/${missionId}`, missionId }),
+        deliverableReviewId: openReview.review_id,
+      };
+    }
     return {
       ...base,
       id: "deliverable_review",

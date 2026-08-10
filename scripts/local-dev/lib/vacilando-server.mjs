@@ -636,6 +636,9 @@ function conductorTick() {
           if (out?.recovered?.length) {
             console.log(`[director] auto-resumed ${out.recovered.length} silent worker mission(s)`);
           }
+          if (out?.zombies?.length) {
+            console.log(`[director] reconciled ${out.zombies.length} zombie session(s)`);
+          }
           if (out?.escalated?.length) {
             console.log(`[director] silent recovery exhausted for ${out.escalated.length} mission(s) — Needs You`);
           }
@@ -648,9 +651,18 @@ function conductorTick() {
         .then(async ({ listMissionsV2 }) => {
           const { deriveMissionPosture } = await import("./vacilando/mission-posture.mjs");
           const { scheduleDispatchAfterKickoff } = await import("./vacilando/assignment-dispatch.mjs");
+          const { listAssignments } = await import("./vacilando/worker-assignment.mjs");
+          const { getBrief } = await import("./vacilando/mission-brief.mjs");
+          const { getMission } = await import("./vacilando/commands/missions.mjs");
+          const { isFixtureMission } = await import("./vacilando/presentation/mission-filters.mjs");
           for (const row of listMissionsV2({ includeArchived: false })) {
             const mid = row.mission_id || row.missionId;
             if (!mid) continue;
+            const title = getBrief(mid)?.title || getMission(mid)?.title;
+            if (isFixtureMission(title, mid)) continue;
+            // Cheap gate — skip full posture when nothing is queued ready.
+            const ready = (listAssignments(mid) || []).some((a) => a.status === "ready");
+            if (!ready) continue;
             const posture = deriveMissionPosture(mid);
             if (posture.id === "ready_to_start") {
               scheduleDispatchAfterKickoff(mid, { actor: "director" });
@@ -1414,7 +1426,8 @@ export function createVacilandoServer() {
   // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
   const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
   diskTimer.unref?.();
-  // Engineering Health: observe/evaluate only (never executes cleanup). Refresh every 30 min.
+  // Engineering Health: observe/evaluate only (never executes cleanup).
+  // Heavy sync `du`/`ps` collectors — do NOT run on cold open (starves HTTP).
   const engHealthTick = () => {
     import("./engineering-health/index.mjs").then(({ runEngineeringHealth }) =>
       runEngineeringHealth({ deep: false, refresh: false }).then((report) => {
@@ -1432,10 +1445,21 @@ export function createVacilandoServer() {
   };
   const engHealthTimer = setInterval(engHealthTick, 30 * 60 * 1000);
   engHealthTimer.unref?.();
-  setTimeout(engHealthTick, 45_000).unref?.();
+  // First run after 10 minutes — never at 45s (blocks the event loop with sync collectors).
+  setTimeout(engHealthTick, 10 * 60 * 1000).unref?.();
   // Autonomous conductor: advance handed-off objectives without the operator.
-  const condTimer = setInterval(() => { try { conductorTick(); } catch {} }, 15000);
+  // Delay first tick so cold open / static UI stays responsive after listen.
+  let conductorInFlight = false;
+  const runConductor = () => {
+    if (conductorInFlight) return;
+    conductorInFlight = true;
+    try { conductorTick(); } catch { /* */ }
+    // Release on next tick so a long sync loop can't stack with the next interval.
+    setTimeout(() => { conductorInFlight = false; }, 0);
+  };
+  const condTimer = setInterval(runConductor, 30000);
   condTimer.unref?.();
+  setTimeout(runConductor, 60_000).unref?.();
 
   /**
    * Background warm AFTER listen. Previously recover + diskSignal (sync GC dry-run
@@ -1444,6 +1468,8 @@ export function createVacilandoServer() {
    * hung FS never blocks accepting traffic.
    */
   function beginBackgroundWarm({ startedAtMs = Date.now() } = {}) {
+    // Yield once so the first HTTP responses after listen are not starved by boot recovery.
+    setImmediate(() => {
     const tWarm = Date.now();
     try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
     try {
@@ -1490,27 +1516,12 @@ export function createVacilandoServer() {
     } catch { /* best-effort */ }
     startupTimings.recover_ms = Date.now() - tWarm;
 
-    // Defer expensive compose / provider / GC until after the process is accepting.
+    // Defer expensive compose / provider until after the process is accepting.
+    // Skip getSnapshot / warmExpensive on cold open — alloy-ro fan-out can starve HTTP for minutes.
     setImmediate(() => {
-      getSnapshot().then((s) => {
-        startupTimings.first_compose_ms = Date.now() - startedAtMs;
-        if (s && !s.pending) {
-          recordControlPlaneEvent({
-            status: "hydrated",
-            detail: "Board projection ready",
-            timings: { ...startupTimings },
-          });
-        }
-      }).catch(() => {});
-      // Memory reclaim OFF until hydrated — avoid stopping idle servers while compose runs.
       refreshMemory({ act: false }).catch(() => {});
-      refreshDisk({ act: false }).catch(() => {});
-      // Stagger provider warm so it does not compete with first compose.
-      setTimeout(() => warmExpensive(), 1500);
     });
-    const warmTimer = setInterval(warmExpensive, 30000);
-    warmTimer.unref?.();
-    backgroundTimers.push(warmTimer);
+    }); // end setImmediate yield
   }
 
   const backgroundTimers = [];

@@ -243,7 +243,7 @@ function setActiveNav(name) {
     const mid = route.split("/")[1] || "";
     a.classList.toggle("active", Boolean(missionId && mid === missionId));
   });
-  document.querySelectorAll(".nav-more a, .ruser[data-route]").forEach((a) => {
+  document.querySelectorAll(".ruser[data-route]").forEach((a) => {
     a.classList.toggle("active", a.dataset.route === name);
   });
   $("#crumb").textContent = CRUMBS[name] || "Missions";
@@ -329,11 +329,14 @@ function renderMcView(r, V2) {
   try {
     // Mission Control badge is V2 Needs You only — never fall back to legacy board counts.
     const items = window.VacilandoV2?.state?.needsYou?.items;
-    if (Array.isArray(items)) $("#nb-needs").textContent = String(items.length);
-    else if (typeof window.VacilandoV2?.fetchNeedsYou === "function") {
+    if (Array.isArray(items)) {
+      const nb = $("#nb-needs");
+      if (nb) nb.textContent = String(items.length);
+    } else if (typeof window.VacilandoV2?.fetchNeedsYou === "function") {
       window.VacilandoV2.fetchNeedsYou();
     } else {
-      $("#nb-needs").textContent = "0";
+      const nb = $("#nb-needs");
+      if (nb) nb.textContent = "0";
     }
   } catch { /* */ }
 }
@@ -386,7 +389,8 @@ function render(force) {
     const n = document.getElementById(savedFocus.id);
     if (n) { try { n.focus({ preventScroll: true }); if (savedFocus.s != null) n.setSelectionRange(savedFocus.s, savedFocus.e); n.scrollTop = savedFocus.top; } catch { /* field gone */ } }
   }
-  $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
+  const nb = $("#nb-needs");
+  if (nb) nb.textContent = state.snap ? needsYou().length : 0;
 }
 window.render = render;
 
@@ -1937,7 +1941,11 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-retry]"))) { const rid = n.dataset.retry; const slot = state.sel; const orig = (state.requests[slot] || []).find((r) => r.request_id === rid); if (orig) sendDirector(slot, orig.request_type || "worker-instruction", orig.instruction, rid); return; }
   if ((n = t("[data-discardcmd]"))) { showDiscard(Number(n.dataset.discardcmd)); return; }
   if ((n = t("[data-nav-tab]"))) { state.tab = n.dataset.navTab; render(true); return; }
-  if ((n = t("[data-review]"))) { showReview(n.dataset.review); return; }
+  if ((n = t("[data-review]"))) {
+    const key = n.dataset.review;
+    // Ignore empty data-review (V3 inline Review Outcome must not hit legacy review.resolve)
+    if (key) { showReview(key); return; }
+  }
   if ((n = t("[data-prcmd]"))) { e.stopPropagation(); showOpenPr(Number(n.dataset.slot)); return; }
   if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
   if ((n = t("[data-prov-verify]"))) { e.stopPropagation(); verifyProviderUI(n.dataset.provVerify); return; }
@@ -1968,6 +1976,10 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
 });
 function showReview(initiative_key) {
+  if (!initiative_key) {
+    console.warn("showReview: missing initiative_key");
+    return;
+  }
   const rv = (state.snap.approvals?.reviews || []).find((x) => x.initiative_key === initiative_key);
   const ov = el("div", "ov");
   ov.innerHTML = `<div class="dlg"><h3>Review · ${esc(initiative_key)}</h3><span class="risk consequential">consequential</span>
