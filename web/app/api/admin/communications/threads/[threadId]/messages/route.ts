@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { withoutSupersededDuplicates } from "@/lib/communications/supersededDuplicateMessages";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -49,7 +50,10 @@ export async function GET(
 
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
 
-    let list = (msgs ?? []) as Record<string, unknown>[];
+    // Duplicate provider deliveries recorded before inbound uniqueness existed are
+    // kept as history but must not read as the parent having said the same thing
+    // twice. Excluded from presentation, never deleted.
+    let list = withoutSupersededDuplicates((msgs ?? []) as Record<string, unknown>[]);
     if (includeViewerRead && ctx.userId && list.length > 0) {
         const ids = list.map((m) => String(m.id ?? "")).filter((id) => UUID_RE.test(id));
         const { data: reads, error: rErr } = await supabase
