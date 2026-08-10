@@ -181,6 +181,96 @@ def _row_exists_or_create_thread(
     return None
 
 
+def find_thread_by_outbound_provenance(
+    base_url: str,
+    headers: Dict[str, str],
+    *,
+    org_id: str,
+    sender: str,
+    destination: str,
+) -> Tuple[Optional[str], Dict[str, Any]]:
+    """
+    Which conversation was this a reply TO?
+
+    Twilio inbound SMS carries only From, To, Body and MessageSid — there is no
+    email-style In-Reply-To, and pretending otherwise would be inventing evidence.
+    The strongest truthful provenance available is therefore the endpoint pair:
+    the most recent outbound message Alloy sent to THIS sender FROM THIS
+    destination is the message being replied to, and its thread is the
+    conversation.
+
+    This replaces "first thread with a matching phone number" as authority, which
+    was wrong in two ways it could not detect. A parent with an Enrollment thread
+    and a Billing thread got whichever thread was found first regardless of what
+    Alloy had actually just said to them. And a parent texting two different Alloy
+    numbers collapsed into one conversation, because the sender matched and the
+    destination was never considered.
+
+    Returns (thread_id, provenance_metadata). A None thread_id with an
+    `ambiguous` reason means two outbound messages are equally recent on different
+    threads — genuinely undecidable, so it stays undecided.
+    """
+    sender_key = recipient_key_normalize_sms(sender)
+    dest_key = recipient_key_normalize_sms(destination)
+    if not sender_key or not dest_key:
+        return None, {"thread_provenance": "unavailable", "reason": "missing_endpoint"}
+
+    url = f"{base_url}/communication_messages"
+    params = {
+        "org_id": f"eq.{org_id}",
+        "channel": "eq.sms",
+        "direction": "eq.outbound",
+        "select": "id,thread_id,to_address,from_address,created_at",
+        "order": "created_at.desc",
+        "limit": "50",
+    }
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if not r.ok:
+            return None, {"thread_provenance": "unavailable", "reason": "lookup_failed"}
+        rows = r.json()
+        if not isinstance(rows, list) or not rows:
+            return None, {"thread_provenance": "none", "reason": "no_prior_outbound"}
+    except Exception:
+        return None, {"thread_provenance": "unavailable", "reason": "lookup_failed"}
+
+    # Addresses are stored as authored, so compare on the normalized key rather
+    # than the raw string — "+15551234567" and "5551234567" are one number.
+    matches = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("thread_id")
+        and recipient_key_normalize_sms(str(row.get("to_address") or "")) == sender_key
+        and recipient_key_normalize_sms(str(row.get("from_address") or "")) == dest_key
+    ]
+    if not matches:
+        return None, {"thread_provenance": "none", "reason": "no_outbound_on_this_endpoint_pair"}
+
+    newest_at = matches[0].get("created_at")
+    tied = [m for m in matches if m.get("created_at") == newest_at]
+    tied_threads = {str(m.get("thread_id")) for m in tied}
+    if len(tied_threads) > 1:
+        # Two conversations spoke to this number from this number at the same
+        # instant. Recency cannot separate them and nothing else may.
+        return None, {
+            "thread_provenance": "ambiguous",
+            "reason": "tied_recent_outbound_threads",
+            "candidate_thread_ids": sorted(tied_threads)[:20],
+        }
+
+    thread_id = str(matches[0]["thread_id"])
+    distinct = {str(m.get("thread_id")) for m in matches}
+    return thread_id, {
+        "thread_provenance": "outbound_endpoint_pair",
+        "provenance_outbound_message_id": str(matches[0].get("id")),
+        "provenance_outbound_at": newest_at,
+        # Recorded so a reply landing on the newest of several conversations is
+        # explainable after the fact rather than merely asserted.
+        "provenance_candidate_thread_count": len(distinct),
+    }
+
+
 def _find_canonical_sms_thread(
     base_url: str,
     headers: Dict[str, str],
@@ -450,9 +540,35 @@ def persist_inbound_communication_sms(
         msg_meta.update(destination_routing)
 
     rkey = recipient_key_normalize_sms(from_num)
-    # G4 — reuse the canonical conversation for this contact when one exists (any anchor); the
-    # originating business object stays attached as context. Only create when there is no thread yet.
-    thread_id = _find_canonical_sms_thread(base_url, headers, org_id=org_id, recipient_key=rkey)
+
+    # PROVENANCE FIRST. What Alloy last said to this number FROM this number is
+    # real evidence of which conversation is being replied to; a phone-number
+    # match is only a coincidence of contact details. Provenance therefore wins
+    # whenever it exists, and a tie is left undecided rather than broken
+    # arbitrarily.
+    thread_id, provenance_meta = find_thread_by_outbound_provenance(
+        base_url, headers, org_id=org_id, sender=from_num, destination=to_num
+    )
+    thread_meta = dict(thread_meta)
+    msg_meta = dict(msg_meta)
+    thread_meta.update(provenance_meta)
+    msg_meta.update(provenance_meta)
+
+    if provenance_meta.get("thread_provenance") == "ambiguous":
+        # Equally plausible conversations. Attaching to either would silently put
+        # a parent's reply in the wrong one, so the ambiguity is carried instead.
+        thread_meta["destination_routing_state"] = "ambiguous"
+        msg_meta["destination_routing_state"] = "ambiguous"
+        if destination_routing is None:
+            destination_routing = {}
+        destination_routing = dict(destination_routing)
+        destination_routing["destination_routing_state"] = "ambiguous"
+
+    # G4 — only when provenance cannot answer: reuse the canonical conversation for this
+    # contact when one exists (any anchor); the originating business object stays attached
+    # as context. Only create when there is no thread yet.
+    if not thread_id:
+        thread_id = _find_canonical_sms_thread(base_url, headers, org_id=org_id, recipient_key=rkey)
     if not thread_id:
         thread_id = _row_exists_or_create_thread(
             base_url,
