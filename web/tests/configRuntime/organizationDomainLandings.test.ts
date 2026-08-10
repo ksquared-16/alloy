@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildAccessLandingModel } from "@/lib/configRuntime/accessLandingModel";
+import { ACCESS_WORKSPACE_CHAPTERS } from "@/lib/access/accessChapterRoutes";
 import { buildBusinessProcessesLandingModel } from "@/lib/configRuntime/businessProcessesLandingModel";
 import { buildDataModelLandingModel } from "@/lib/configRuntime/dataModelLandingModel";
 import { buildSurfacesLandingModel } from "@/lib/configRuntime/surfacesLandingModel";
@@ -34,7 +35,7 @@ describe("organization domain landings", () => {
     });
 
     it("builds Access tiles without inheritance vocabulary", () => {
-        const model = buildAccessLandingModel();
+        const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
         expect(model.summaryCards).toEqual([]);
         expect(model.ownershipNote.toLowerCase()).toContain("not configuration inheritance");

@@ -21,13 +21,24 @@ function read(rel: string): string {
 
 describe("Access landing model", () => {
     it("exposes exactly the four Access chapters as tiles with no conceptual summary cards", () => {
-        const model = buildAccessLandingModel();
+        const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
         expect(model.summaryCards).toEqual([]);
     });
 
+    // W-49: the tiles are navigation, so they filter from the chapter list the page admitted on.
+    // Without this the landing offers a chapter the route refuses — `07/AE-4`'s failure in the one
+    // place an operator is most likely to click.
+    it("offers only the chapters it is given, and nothing when given none", () => {
+        expect(buildAccessLandingModel(["users", "security"]).tiles.map((t) => t.id)).toEqual([
+            "users",
+            "security",
+        ]);
+        expect(buildAccessLandingModel([]).tiles).toEqual([]);
+    });
+
     it("routes every tile at /organization/access with the matching ?section=", () => {
-        const model = buildAccessLandingModel();
+        const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         for (const tile of model.tiles) {
             expect(tile.href).toContain("/organization/access?section=");
             expect(tile.href).toContain(`section=${tile.id}`);
@@ -89,13 +100,16 @@ describe("Access product UI wiring", () => {
         expect(page).toContain("normalizeAccessWorkspaceChapter");
     });
 
-    it("Access workspace surface renders all four chapter pages behind a canManage gate", () => {
+    // W-49 changed this assertion's subject. The surface used to render an in-shell denial notice
+    // (`access-permission-denied`) for a principal it had already admitted; the gate moved to the
+    // route boundary, so that notice is gone and its absence is the property worth locking.
+    it("Access workspace surface renders all four chapter pages and no in-shell denial notice", () => {
         const surface = read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx");
         expect(surface).toContain("AccessUsersConfigurationPage");
         expect(surface).toContain("AccessRolesConfigurationPage");
         expect(surface).toContain("AccessScopesPage");
         expect(surface).toContain("AccessSecurityPage");
-        expect(surface).toContain("access-permission-denied");
+        expect(surface).not.toContain("access-permission-denied");
         expect(surface).toContain("data-testid=\"access-workspace-surface\"");
     });
 

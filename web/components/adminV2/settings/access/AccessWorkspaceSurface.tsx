@@ -19,17 +19,24 @@ import AccessRolesConfigurationPage from "@/components/adminV2/settings/access/A
 import AccessScopesPage from "@/components/adminV2/settings/access/AccessScopesPage";
 import AccessSecurityPage from "@/components/adminV2/settings/access/AccessSecurityPage";
 import {
-    ACCESS_WORKSPACE_CHAPTERS,
     ACCESS_WORKSPACE_CHAPTER_META,
     accessWorkspaceChapterHref,
     type AccessWorkspaceChapter,
 } from "@/lib/access/accessChapterRoutes";
 
+/**
+ * Tabs render the chapters the *server* said this principal may see — never the full chapter
+ * constant. Drawing every chapter and letting the route refuse the click is how navigation and
+ * admission drift apart; `05…§7.7` requires them to filter from one declaration. The tier A check
+ * `tests/access/surfaceCapabilityDeclaration.test.ts` asserts this file cannot reach that constant.
+ */
 function ChapterTabs({
     active,
+    chapters,
     onSelect,
 }: {
     active: AccessWorkspaceChapter;
+    chapters: readonly AccessWorkspaceChapter[];
     onSelect: (chapter: AccessWorkspaceChapter) => void;
 }) {
     return (
@@ -39,7 +46,7 @@ function ChapterTabs({
             role="tablist"
             aria-label="Access sections"
         >
-            {ACCESS_WORKSPACE_CHAPTERS.map((chapter) => {
+            {chapters.map((chapter) => {
                 const selected = chapter === active;
                 return (
                     <button
@@ -63,12 +70,30 @@ function ChapterTabs({
     );
 }
 
+/**
+ * **W-49: this component no longer carries a `canManage` prop.**
+ *
+ * It used to render a *notice* — "You need org admin or the `settings.users_roles` permission" —
+ * inside the fully-rendered workspace shell, chapter tabs and all. That is a surface reached, and
+ * `07/AE-4` rejects it. The gate is now at the route boundary, where a refusal is a refusal:
+ * both pages that render this surface redirect before they reach it.
+ *
+ * A prop that can only ever be `true` reads like a second gate and is none — it is the display
+ * prop `05…§3.3` describes as *"a display prop, not an access decision"*, and leaving it would
+ * invite the next author to trust it. What keeps the property true instead is a tier A check
+ * (`web/tests/access/surfaceCapabilityDeclaration.test.ts`): every page rendering this surface
+ * must call the declared capability's gate, and it discovers those pages from disk.
+ *
+ * `chapters` is not that prop returning under a new name. It carries no *decision* — the decision
+ * was made and enforced at the boundary; this is the enforced result, so navigation cannot offer
+ * a chapter admission would refuse.
+ */
 export default function AccessWorkspaceSurface({
     section,
-    canManage,
+    chapters,
 }: {
     section: AccessWorkspaceChapter;
-    canManage: boolean;
+    chapters: readonly AccessWorkspaceChapter[];
 }) {
     const router = useRouter();
     const meta = ACCESS_WORKSPACE_CHAPTER_META[section];
@@ -86,21 +111,12 @@ export default function AccessWorkspaceSurface({
                 testId="access-configuration-context"
             >
                 <div className="mt-1.5">
-                    <ChapterTabs active={section} onSelect={selectChapter} />
+                    <ChapterTabs active={section} chapters={chapters} onSelect={selectChapter} />
                 </div>
             </ConfigurationContext>
 
             <ConfigurationShell testId={`access-chapter-shell-${section}`}>
-                {!canManage ?
-                    <div
-                        className="rounded-lg border border-alloy-forge/12 bg-white/60 px-4 py-3 text-sm text-alloy-midnight/75"
-                        data-testid="access-permission-denied"
-                    >
-                        You need org <span className="font-medium text-alloy-midnight">admin</span> or the{" "}
-                        <code className="rounded bg-alloy-forge/10 px-1">settings.users_roles</code> permission to view
-                        or change users, roles, access scopes, or security.
-                    </div>
-                : section === "users" ?
+                {section === "users" ?
                     <div data-testid="access-chapter-users">
                         <AccessUsersConfigurationPage />
                     </div>
