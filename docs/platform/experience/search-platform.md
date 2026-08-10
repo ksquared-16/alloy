@@ -233,11 +233,39 @@ be explicitly derived, rebuildable, and search-only — never authoritative.
    property today, and inventing a parallel config path would violate the
    configuration boundary above. Sequenced as follow-up.
 
-4. **V1 removal.** `globalRecordSearchService.ts` and its exclusive dependencies
-   are no longer reachable from the route. `globalRecordSearchTypes` still has 13
-   non-test importers across other surfaces, so V1 was left in place rather than
-   deleted in the same change as V2's introduction. Removal is a separate,
-   provable cleanup.
+4. **V1 removal — reclassified.** An earlier note here said
+   `globalRecordSearchTypes` had "13 non-test importers", implying a wide
+   migration. That figure counted the V1 cluster's own internal references.
+
+   | Module | Classification |
+   |---|---|
+   | `globalRecordSearchService` | **Safely removable now** — zero non-test importers |
+   | `globalRecordSearchDrawerTarget`, `globalRecordSearchOpen`, `globalRecordSearchWarmPrefetch`, `…AgeLabel` | **Still required** — V2 uses these |
+   | `globalRecordSearchTypes` | **Compatibility dependency** — 10 of 13 importers are inside the V1 cluster; only 3 are external, and all 3 import types only |
+   | `…Clustering`, `…ClusterLimits`, `…HitAssembly`, `…LocationContext`, `…HouseholdChildren`, `…PersonPresentation`, `…ResultPresentation`, `…StatusLabel` | **Removal requires separate migration** — reachable only via the service, but its 1100-line test exercises them |
+
+   Retirement is a small, provable change, deliberately kept out of this sprint's
+   diff.
+
+---
+
+## The endpoint has THREE consumers
+
+`GET /api/admin/global-search` is consumed by:
+
+1. the global search control (`GlobalSearchBox`) — renders subjects
+2. the POS packet record picker (`RecordLaunchPicker`) — wants a flat record reference
+3. the Experience Builder preview selector (`LayoutBuilderPreviewRecordSelector`) — wants an opportunity id
+
+(2) and (3) do **not** want subjects. When V2 changed `results` to subjects and
+only (1) was updated, both silently filtered to zero results — no error, no
+failing test, shipped to staging. Anything that changes this response shape must
+account for all three.
+
+They are served by `searchSelectionFromResult`, the one place that flattens a
+subject back to a record reference (its PRIMARY destination). It exists so the
+endpoint keeps a single response model instead of growing a compatibility
+payload — which would be the second search data model this doctrine forbids.
 
 ---
 
