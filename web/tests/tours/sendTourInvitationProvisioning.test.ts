@@ -17,7 +17,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 
-import { getRegisteredAction, hasRegisteredHandler } from "@/lib/adminV2/actions/actionRegistry";
+import { getRegisteredAction, hasRegisteredHandler, listRegisteredActionKeys } from "@/lib/adminV2/actions/actionRegistry";
+import { resolveClientCommandDispatch } from "@/lib/admin/actions/clientCommandDispatch";
 import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/sendTourInvitationAction";
 
 const MIGRATIONS_DIR = join(process.cwd(), "..", "supabase", "migrations");
@@ -210,47 +211,36 @@ describe("registry and database provisioning stay in parity", () => {
 // --- the dispatch branch: provisioned must also mean executable ------------
 
 /**
- * `ui_intent` dispatch is a hardcoded chain keyed on action key. A command that
- * is provisioned but has no branch renders in the Manage menu and does NOTHING
- * when clicked — which reads to an operator as "I sent it" while no invitation,
- * no message and no event were created. Certification hit exactly that.
+ * `ui_intent` dispatch used to be a hardcoded chain keyed on action key. A command
+ * that was provisioned but had no branch rendered in the Manage menu and did NOTHING
+ * when clicked — which reads to an operator as "I sent it" while no invitation, no
+ * message and no event were created. Certification hit exactly that.
+ *
+ * That chain no longer decides reachability: the client resolves a command's host
+ * from its capability declaration. So these assertions moved off this one key's
+ * branch and onto the rule itself — every registered action must resolve to a host,
+ * or it is unreachable no matter how green its handler tests.
  */
-describe("the provisioned command is wired to the canonical runtime", () => {
-    const client = readFileSync(
-        join(process.cwd(), "lib", "admin", "actions", "applyRegistryResolvedActionClient.ts"),
-        "utf8"
-    );
-
-    /**
-     * Just this command's branch, with comment lines stripped — the chain
-     * continues with other action keys, and a comment quoting a forbidden
-     * phrase must not read as the code emitting it.
-     */
-    function branchSource(): string {
-        const start = client.indexOf('actionKey === "send_tour_invitation"');
-        const next = client.indexOf('if (actionKey === "send_email"', start);
-        return client
-            .slice(start, next > start ? next : undefined)
-            .split("\n")
-            .filter((line) => !line.trim().startsWith("//"))
-            .join("\n");
-    }
-
-    it("has a ui_intent dispatch branch", () => {
-        expect(client).toContain('actionKey === "send_tour_invitation"');
+describe("the provisioned command is reachable from the client", () => {
+    it("resolves send_tour_invitation to Communications compose", () => {
+        expect(resolveClientCommandDispatch("send_tour_invitation")).toEqual({
+            kind: "communications_composer",
+            actionKey: "send_tour_invitation",
+            defaultChannel: "email",
+        });
     });
 
-    it("opens canonical QuickMessage compose instead of confirm/execute/alert", () => {
-        const branch = branchSource();
-        expect(branch).toContain("launchContextualQuickMessage");
-        expect(branch).toContain('defaultChannel: "email"');
-        expect(branch).not.toContain("window.confirm");
-        expect(branch).not.toContain("window.alert");
-        expect(branch).not.toContain("/api/admin/actions/execute");
+    it("leaves NO registered action without a client host", () => {
+        // The generalisation the original test reached for: this fails for the next
+        // capability that ships a handler no operator can reach.
+        const unreachable = listRegisteredActionKeys().filter(
+            (key) => resolveClientCommandDispatch(key).kind === "undeclared"
+        );
+        expect(unreachable).toEqual([]);
     });
 
-    it("does not claim a generic Invitation sent success", () => {
-        const branch = branchSource();
-        expect(branch).not.toContain("Invitation sent");
+    it("does not fire the runtime from the menu click for this command", () => {
+        // Compose owns the send; a Manage click must not execute the invitation.
+        expect(resolveClientCommandDispatch("send_tour_invitation").kind).not.toBe("actions_runtime");
     });
 });

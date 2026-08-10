@@ -28,6 +28,7 @@ import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPreflightDrawerEvents";
+import { resolveClientCommandDispatch } from "@/lib/admin/actions/clientCommandDispatch";
 import { isBosCreateLeadSessionEnabled } from "@/lib/bos/commandSession/bosCreateLeadSessionFlag";
 import { dispatchStartBosCommandSession } from "@/contexts/BosCommandSessionContext";
 import {
@@ -148,6 +149,121 @@ function applyScheduleTourWithoutSelectedRecord(
         return { ok: true };
     }
     return null;
+}
+
+/**
+ * The one path that calls the canonical Actions Runtime.
+ *
+ * Every caller — the mutating tail below and declaration-driven `ui_intent` dispatch —
+ * derives success from this envelope and nothing else. Duplicating the POST is how a
+ * command ends up reporting an outcome the server never confirmed.
+ */
+async function executeThroughActionsRuntime(
+    actionKey: string,
+    entityId: string,
+    host: ApplyRegistryResolvedActionHost
+): Promise<ApplyRegistryResolvedActionResult> {
+    const res = await fetch("/api/admin/actions/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            action_key: actionKey,
+            entity_type: "opportunity",
+            entity_id: entityId,
+            context: host.context,
+        }),
+    });
+    let unreadableBody = false;
+    const json = (await res.json().catch(() => {
+        unreadableBody = true;
+        return {};
+    })) as {
+        ok?: boolean;
+        /**
+         * `runRegisteredAction` returns a bare string here; the admin action path returns
+         * a structured object. Both reach this envelope, so both must be read — narrowing
+         * to the object shape alone would turn a registered action's real reason into a
+         * generic "Execute failed".
+         */
+        error?:
+            | string
+            | {
+                  message?: string;
+                  details?: {
+                      completion_requirements?: RequirementValidationResult;
+                      action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
+                  };
+              };
+        data?: {
+            execution_result?: Record<string, unknown> & {
+                kind?: string;
+                href?: string;
+                drawer?: { defaultSurface?: string | null };
+                workflow_run_id?: string;
+            };
+        };
+    };
+    if (unreadableBody) {
+        // The execute route always answers with an `{ ok, … }` envelope. A 2xx whose
+        // body cannot be parsed therefore did not come from the route — a proxy, an
+        // auth redirect, an error page. The command's real outcome is unknown, and
+        // unknown is not success.
+        console.warn("[applyRegistryResolvedActionClient] execute response could not be read", {
+            action_key: actionKey,
+            status: res.status,
+        });
+        return {
+            ok: false,
+            error: "The server response could not be read, so this command was not confirmed.",
+        };
+    }
+    if (!res.ok || json.ok !== true) {
+        const structuredError = typeof json.error === "string" ? null : json.error;
+        const completion = structuredError?.details?.completion_requirements;
+        const preflight = structuredError?.details?.action_preflight;
+        const summary =
+            preflight?.summary ||
+            (completion ? formatRequirementValidationSummary(completion) : "") ||
+            (typeof json.error === "string" ? json.error : structuredError?.message) ||
+            "Execute failed";
+        console.warn("[applyRegistryResolvedActionClient] execute failed", summary);
+        dispatchActionPreflightBlocked({
+            action_key: actionKey,
+            opportunity_id: entityId,
+            error: summary,
+            completion_requirements: completion,
+            action_preflight: preflight,
+        });
+        return {
+            ok: false,
+            error: summary,
+            completion_requirements: completion,
+            action_preflight: preflight,
+        };
+    }
+    const er = json.data?.execution_result;
+    if (er?.kind === "open_drawer") {
+        if (er.drawer?.defaultSurface === "quote_intake") {
+            host.openDrawer({ type: "opportunities", id: entityId, defaultOpportunitySurface: "quote_intake" });
+        } else {
+            host.openDrawer({ type: "opportunities", id: entityId });
+        }
+        if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: actionKey });
+        else host.router.refresh();
+        return { ok: true, execution_result: er };
+    }
+    if (er?.kind === "navigate" && er.href) {
+        host.router.push(String(er.href));
+        return { ok: true, execution_result: er };
+    }
+    if (er?.kind === "external_link" && er.href) {
+        window.open(String(er.href), "_blank", "noopener,noreferrer");
+        return { ok: true, execution_result: er };
+    }
+    if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: actionKey });
+    else host.router.refresh();
+    return { ok: true, execution_result: er };
 }
 
 export async function applyRegistryResolvedActionClient(
@@ -404,57 +520,6 @@ export async function applyRegistryResolvedActionClient(
         const invocation = invocationFromApplyRegistryHost(host);
         const eid = invocation?.opportunity_id?.trim() || host.entityId?.trim() || "";
 
-        if (actionKey === "confirm_tour" || intent === "confirm_tour") {
-            if (!eid) return { ok: false, error: "entity_id required" };
-            // confirm_tour is a registered action; this POST routes through the canonical
-            // Actions Runtime (runRegisteredAction) which returns a string `error` envelope.
-            const res = await fetch("/api/admin/actions/execute", {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action_key: "confirm_tour",
-                    entity_type: "opportunity",
-                    entity_id: eid,
-                    context: host.context,
-                }),
-            });
-            const json = (await res.json().catch(() => ({}))) as {
-                ok?: boolean;
-                error?: string | { message?: string };
-            };
-            if (!res.ok || json.ok === false) {
-                const message =
-                    typeof json.error === "string" ? json.error : json.error?.message ?? "Confirm tour failed";
-                return { ok: false, error: message };
-            }
-            if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: eid, action_key: "confirm_tour" });
-            else host.router.refresh();
-            return { ok: true };
-        }
-        if (actionKey === "send_tour_invitation" || intent === "send_tour_invitation") {
-            if (!eid) return { ok: false, error: "entity_id required" };
-
-            // Open canonical Communications compose (same path as send_email / quick_message).
-            // Operator reviews and sends from compose — no browser confirm/alert dialogs.
-            // Invitation minting remains owned by sendTourInvitation when that mutation path is used;
-            // this Manage / registry entry opens compose so the operator can write and send.
-            await launchContextualQuickMessage({
-                surface: invocation?.surface ?? "record_drawer",
-                record_id: eid,
-                entity_type: "opportunity",
-                opportunity_id: eid,
-                person_id: invocation?.person_id ?? null,
-                display_name: invocation?.display_name ?? null,
-                email: invocation?.email ?? null,
-                phone: invocation?.phone ?? null,
-                department_id: invocation?.department_id ?? host.departmentId ?? null,
-                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
-                bos_source_surface: invocation?.bos_source_surface,
-                defaultChannel: "email",
-            });
-            return { ok: true };
-        }
         if (actionKey === "send_email" || intent === "send_email") {
             if (!eid) return { ok: false, error: "entity_id required" };
             await launchContextualQuickMessage({
@@ -666,21 +731,55 @@ export async function applyRegistryResolvedActionClient(
             dispatchFocusInquiryChildren(eid, field as InquiryChildrenFocusField);
             return { ok: true };
         }
+        // Declaration-driven dispatch — the convergence point.
+        //
+        // A registered action is provisioned as `ui_intent` with the key carried in
+        // `payload.intent`, so every one of them used to need its own branch above
+        // before an operator could invoke it. `send_tour_invitation` was registered,
+        // provisioned, and unreachable for the life of the feature because nobody
+        // wrote that branch. What a command does on the client is a property of the
+        // command; resolve it from the capability rather than from its name.
+        const dispatch = resolveClientCommandDispatch(actionKey || intent);
+        if (dispatch.kind === "actions_runtime") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            return executeThroughActionsRuntime(dispatch.actionKey, eid, host);
+        }
+        if (dispatch.kind === "communications_composer") {
+            if (!eid) return { ok: false, error: "entity_id required" };
+            // The operator writes and sends from compose; the runtime is not fired
+            // by the menu click. No browser confirm/alert dialogs on this path.
+            await launchContextualQuickMessage({
+                surface: invocation?.surface ?? "record_drawer",
+                record_id: eid,
+                entity_type: "opportunity",
+                opportunity_id: eid,
+                person_id: invocation?.person_id ?? null,
+                display_name: invocation?.display_name ?? null,
+                email: invocation?.email ?? null,
+                phone: invocation?.phone ?? null,
+                department_id: invocation?.department_id ?? host.departmentId ?? null,
+                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                bos_source_surface: invocation?.bos_source_surface,
+                defaultChannel: dispatch.defaultChannel,
+            });
+            return { ok: true };
+        }
+
         if (message) {
             window.alert(message);
             return { ok: true };
         }
         // NO generic success fall-through.
         //
-        // Reaching here means a provisioned `ui_intent` has no branch above, so
-        // NOTHING was executed — no request was issued, no server result was
-        // validated. Returning `{ ok: true }` here told operators their command
-        // ran when it had not: `send_tour_invitation` reported "completed" while
-        // creating no invitation, no message and no event. A command that cannot
-        // run must say so.
+        // Reaching here means a provisioned `ui_intent` has no branch above and no
+        // capability declaring how the client hosts it, so NOTHING was executed —
+        // no request was issued, no server result was validated. Returning
+        // `{ ok: true }` here told operators their command ran when it had not:
+        // `send_tour_invitation` reported "completed" while creating no invitation,
+        // no message and no event. A command that cannot run must say so.
         //
-        // This is deliberately not special-cased to one action. Any future
-        // provisioned intent without a branch fails loudly on its first click
+        // This is deliberately not special-cased to one action. Any provisioned
+        // intent the platform cannot resolve fails loudly on its first click
         // instead of silently lying for however long it takes someone to notice.
         console.warn("[applyRegistryResolvedActionClient] unhandled ui_intent — nothing executed", {
             key: actionKey,
@@ -698,78 +797,5 @@ export async function applyRegistryResolvedActionClient(
         return { ok: false, error: "entity_id required" };
     }
 
-    const res = await fetch("/api/admin/actions/execute", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            action_key: a.key,
-            entity_type: "opportunity",
-            entity_id: entityId,
-            context: host.context,
-        }),
-    });
-    const json = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: {
-            message?: string;
-            details?: {
-                completion_requirements?: RequirementValidationResult;
-                action_preflight?: import("@/lib/admin/actions/actionPreflightPresentation").ActionPreflightUiPayload;
-            };
-        };
-        data?: {
-            execution_result?: Record<string, unknown> & {
-                kind?: string;
-                href?: string;
-                drawer?: { defaultSurface?: string | null };
-                workflow_run_id?: string;
-            };
-        };
-    };
-    if (!res.ok || json.ok === false) {
-        const completion = json.error?.details?.completion_requirements;
-        const preflight = json.error?.details?.action_preflight;
-        const summary =
-            preflight?.summary ||
-            (completion ? formatRequirementValidationSummary(completion) : "") ||
-            json.error?.message ||
-            "Execute failed";
-        console.warn("[applyRegistryResolvedActionClient] execute failed", summary);
-        dispatchActionPreflightBlocked({
-            action_key: a.key,
-            opportunity_id: entityId,
-            error: summary,
-            completion_requirements: completion,
-            action_preflight: preflight,
-        });
-        return {
-            ok: false,
-            error: summary,
-            completion_requirements: completion,
-            action_preflight: preflight,
-        };
-    }
-    const er = json.data?.execution_result;
-    if (er?.kind === "open_drawer") {
-        if (er.drawer?.defaultSurface === "quote_intake") {
-            host.openDrawer({ type: "opportunities", id: entityId, defaultOpportunitySurface: "quote_intake" });
-        } else {
-            host.openDrawer({ type: "opportunities", id: entityId });
-        }
-        if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: a.key });
-        else host.router.refresh();
-        return { ok: true, execution_result: er };
-    }
-    if (er?.kind === "navigate" && er.href) {
-        host.router.push(String(er.href));
-        return { ok: true, execution_result: er };
-    }
-    if (er?.kind === "external_link" && er.href) {
-        window.open(String(er.href), "_blank", "noopener,noreferrer");
-        return { ok: true, execution_result: er };
-    }
-    if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: a.key });
-    else host.router.refresh();
-    return { ok: true, execution_result: er };
+    return executeThroughActionsRuntime(a.key, entityId, host);
 }

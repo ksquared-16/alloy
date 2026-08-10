@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "lib/admin/actions/clientCommandDispatch.ts",
+    "lib/admin/actions/applyRegistryResolvedActionClient.ts",
+    "lib/admin/actions/actionDefinitionRegistry.ts",
+    "lib/admin/actions/canonicalActionRegistry.ts",
+    "lib/platform/commands/capabilityTypes.ts",
+    "lib/platform/commands/capabilityRegistry.ts",
+    "tests/admin/actions/clientCommandDispatch.test.ts",
+    "tests/admin/actions/uiIntentNoFalseSuccess.test.ts",
+    "tests/tours/sendTourInvitationProvisioning.test.ts",
+    "tests/adminV2/runtime/whatsNextTourComposeFidelity.test.ts"
+  ]
+}

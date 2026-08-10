@@ -7,6 +7,7 @@ import {
     partitionTourGroupedActions,
 } from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
 import { withTourInvitationCompanionRefs } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkTemplateConfig";
+import { getPlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 
@@ -101,14 +102,28 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
         expect(defaults).toContain('action_ref: "send_tour_invitation"');
     });
 
-    it("Send Tour Invitation opens QuickMessage compose", () => {
+    it("Send Tour Invitation declares Communications compose as its host", () => {
+        // This used to pin `actionKey === "send_tour_invitation"` in the client — a
+        // control that required the very hardcoded branch the platform is converging
+        // away from. The behaviour it protected is unchanged; where it is declared moved.
+        const capability = getPlatformCapability("send_tour_invitation");
+        expect(capability?.interactionHost).toBe("communications_composer");
+        expect(capability?.composerDefaultChannel).toBe("email");
+
         const client = read("lib/admin/actions/applyRegistryResolvedActionClient.ts");
-        const start = client.indexOf('actionKey === "send_tour_invitation"');
+        const start = client.indexOf('dispatch.kind === "communications_composer"');
         expect(start).toBeGreaterThan(-1);
-        const branch = client.slice(start, start + 2200);
+        const branch = client.slice(start, client.indexOf("if (message)", start));
         expect(branch).toContain("launchContextualQuickMessage");
-        expect(branch).toContain('defaultChannel: "email"');
+        expect(branch).toContain("defaultChannel: dispatch.defaultChannel");
         expect(branch).not.toMatch(/\bwindow\.confirm\b/);
         expect(branch).not.toMatch(/\bwindow\.alert\b/);
+    });
+
+    it("no longer needs a per-key branch for registered tour commands", () => {
+        const client = read("lib/admin/actions/applyRegistryResolvedActionClient.ts");
+        expect(client).toContain("resolveClientCommandDispatch");
+        expect(client).not.toContain('actionKey === "send_tour_invitation"');
+        expect(client).not.toContain('actionKey === "confirm_tour"');
     });
 });

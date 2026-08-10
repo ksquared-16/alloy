@@ -64,6 +64,20 @@ export type CapabilityDestructiveKind =
 
 export type CapabilityImplementationStatus = "production" | "partial" | "legacy" | "missing";
 
+/**
+ * Generic interaction hosts a capability may declare — where the operator interacts when
+ * this capability runs inside a work surface. Not business- or action-name specific: the
+ * client resolves the host from THIS declaration, never from the action key or label.
+ */
+export type CapabilityInteractionHost =
+    | "inline_form"
+    | "communications_composer"
+    | "header_delegate"
+    | "form_delivery";
+
+/** Channel a `communications_composer` host opens on. Meaningless for other hosts. */
+export type CapabilityComposerChannel = "email" | "sms";
+
 export type CapabilityFamily =
     | "record_creation"
     | "status"
@@ -104,5 +118,14 @@ export type PlatformCapabilityDefinition = {
     /** Alternate keys that resolve to this canonical capability. */
     compatibilityAliases?: readonly string[];
     implementationStatus: CapabilityImplementationStatus;
+    /**
+     * Where the operator interacts when a work surface invokes this capability.
+     * Omit to let the client route the capability through its execution owner —
+     * for `registered_action`, that is a direct call to the Actions Runtime.
+     * Declare a host only when the operator must go somewhere else first.
+     */
+    interactionHost?: CapabilityInteractionHost;
+    /** Only meaningful with `interactionHost: "communications_composer"`. */
+    composerDefaultChannel?: CapabilityComposerChannel;
     reason?: string;
 };

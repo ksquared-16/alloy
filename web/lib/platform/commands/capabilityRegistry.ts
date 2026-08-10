@@ -102,6 +102,10 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         confirmationPolicy: "confirm",
         registeredActionKey: "send_tour_invitation",
         implementationStatus: "production",
+        // Declared host, not a key check: the operator writes and sends from
+        // Communications compose rather than firing the runtime from a menu click.
+        interactionHost: "communications_composer",
+        composerDefaultChannel: "email",
         reason: "Slice D: the only operator entry point that mints a tour invitation and sends it through the canonical communication path.",
     }),
     def({

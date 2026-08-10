@@ -3,6 +3,7 @@
  */
 
 import { getPlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
+import type { CapabilityInteractionHost } from "@/lib/platform/commands/capabilityTypes";
 
 export type ActionDefinitionCategory =
     | "record"
@@ -30,8 +31,12 @@ export type ActionRegistryEntry = {
     icon?: string;
 };
 
-/** Generic interaction hosts a capability may declare. Not business- or action-name specific. */
-export type CapabilityInteractionHost = "inline_form" | "communications_composer" | "header_delegate" | "form_delivery";
+/**
+ * Generic interaction hosts a capability may declare. Not business- or action-name specific.
+ * Owned by the capability contract so the Platform Capability Registry and this library
+ * describe the same hosts — re-exported here for existing callers.
+ */
+export type { CapabilityInteractionHost } from "@/lib/platform/commands/capabilityTypes";
 
 export const ACTION_CATEGORY_LABELS: Record<ActionDefinitionCategory, string> = {
     record: "Record",
