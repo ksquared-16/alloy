@@ -3083,7 +3083,7 @@
     "app/api/admin/users/route.ts": {
       "GET": {
         "status": "pending",
-        "note": "W-14 FINDING — the method grain found this. POST requires settings.users_roles; GET requires only getAdminContextCached(), i.e. portal admission. GET returns the full org member roster including every member's email address (route.ts:22-65). A file-grained census counts this file as gated because POST is. Whether roster read should require settings.users_roles is a product decision for W-15, not a worker's — declaring it 'none' here would assert an answer this workstream has no authority to give."
+        "note": "W-14 FINDING — the method grain found this. POST requires settings.users_roles; GET requires only getAdminContextCached(), i.e. portal admission. A file-grained census counts this file as gated because POST is. Whether roster read should require settings.users_roles is a product decision for W-15, not a worker's — declaring it 'none' here would assert an answer this workstream has no authority to give, so this stays 'pending'. AMENDED: the finding's DISCLOSURE half is closed. GET no longer returns every member's email address to everyone the portal admits — the address is projected against canManageUsersAndRoles (the same predicate the managing routes enforce, read a second time) and a server-computed `label` carries the naming function its consumers actually needed. Admission is deliberately unchanged, so this remains a pending declaration and not a resolved one. See lib/access/memberDirectoryProjection.ts and tests/access/memberDirectoryDisclosure.test.ts."
       },
       "POST": {
         "status": "declared",

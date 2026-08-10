@@ -2,24 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+/**
+ * W14-F1 (disclosure half): this picker names colleagues; it does not disclose their addresses.
+ *
+ * It previously fetched the full roster — every member's address — and rendered the raw address as
+ * the option text, so any staffer who could assign work could read the organisation's entire email
+ * list out of a dropdown. The label is now computed by the route, which withholds the address from
+ * callers without `settings.users_roles`. `email` is deliberately absent from this option type: a
+ * field this component does not need is a field it should not carry.
+ */
 export type OperationalWorkOrgUserOption = {
     user_id: string;
-    email: string | null;
     label: string;
 };
 
 type AdminUsersResponse = {
-    users?: Array<{ user_id: string; email: string | null }>;
+    users?: Array<{ user_id: string; label?: string | null; email?: string | null }>;
 };
-
-function userLabel(email: string | null, userId: string): string {
-    const trimmed = email?.trim();
-    if (trimmed) {
-        const at = trimmed.indexOf("@");
-        return at > 0 ? trimmed.slice(0, at) : trimmed;
-    }
-    return userId.slice(0, 8);
-}
 
 export async function fetchOperationalWorkOrgUsers(): Promise<OperationalWorkOrgUserOption[]> {
     const res = await fetch("/api/admin/users", { credentials: "include" });
@@ -28,8 +27,7 @@ export async function fetchOperationalWorkOrgUsers(): Promise<OperationalWorkOrg
     return json.users
         .map((u) => ({
             user_id: u.user_id,
-            email: u.email ?? null,
-            label: userLabel(u.email ?? null, u.user_id),
+            label: u.label?.trim() || u.user_id.slice(0, 8),
         }))
         .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -80,7 +78,7 @@ export default function OperationalWorkAssigneeSelect({
             if (me && row.user_id === me) continue;
             nodes.push({
                 value: row.user_id,
-                label: row.email?.trim() || row.label,
+                label: row.label,
             });
         }
         return nodes;

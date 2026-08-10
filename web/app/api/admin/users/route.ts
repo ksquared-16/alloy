@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { canManageUsersAndRoles, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
+import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 
 export type AdminUserRow = {
     user_id: string;
+    /**
+     * The member's address, or `null` — withheld from callers without `settings.users_roles`.
+     * See `lib/access/memberDirectoryProjection.ts` (W14-F1, disclosure half).
+     */
     email: string | null;
+    /** A name safe to show to any portal-admitted caller. Always present. */
+    label: string;
     /** Sorted unique role_keys for this member in the current org */
     role_keys: string[];
     /**
@@ -18,10 +26,25 @@ export type AdminUserRow = {
     created_at: string;
 };
 
-/** GET: list org members (one row per user; roles aggregated). Admin + ops can read. */
+/**
+ * GET: list org members (one row per user; roles aggregated). Admin + ops can read.
+ *
+ * W14-F1 (disclosure half): admission is deliberately UNCHANGED — portal eligibility, as before.
+ * Whether a roster read should require a capability at all is still W-15's product call, and this
+ * handler still declares `pending`. What changed is that the member's *address* is now projected
+ * against `settings.users_roles` instead of being handed to everyone the portal admits.
+ *
+ * The gate is read from the same request-cached bundle `getAdminContextCached` already resolved,
+ * so this costs no additional auth pass. It must NOT be re-derived from
+ * `getAdminAccessContextCached`, which does not require `portalEligible` — reading admission from
+ * there would silently widen who reaches this route.
+ */
 export async function GET() {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+    const bundle = await loadAdminAccessBundleCached();
+    const mayReadEmail = bundle.ok && canManageUsersAndRoles(bundle);
 
     const supabase = createAdminClient();
 
@@ -54,7 +77,8 @@ export async function GET() {
 
         result.push({
             user_id,
-            email,
+            email: projectMemberEmail(email, mayReadEmail),
+            label: memberDirectoryLabel(email, user_id),
             role_keys,
             role,
             created_at,
