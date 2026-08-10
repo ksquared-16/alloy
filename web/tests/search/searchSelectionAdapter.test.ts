@@ -89,10 +89,20 @@ describe("search selection projection", () => {
     it("REGRESSION: the POS record picker produces options again", () => {
         // Before the fix this returned [] for every query, silently.
         const options = buildRecordPickerOptions(searchSelectionsFromResults([childResult()]));
-        expect(options).toHaveLength(1);
+
         expect(options[0].entity_type).toBe("person");
         expect(options[0].entity_id).toBe("p-1");
         expect(options[0].label).toBe("Joe Smith");
+
+        // The picker derives a selectable household from `customer_id` +
+        // `household_name`. The projection must carry both, or that affordance
+        // would be lost silently rather than loudly.
+        expect(options).toHaveLength(2);
+        expect(options[1]).toMatchObject({
+            entity_type: "customer",
+            entity_id: "cust-1",
+            label: "Smith Household",
+        });
     });
 
     it("REGRESSION: a raw SearchResult array yields no picker options without the projection", () => {
