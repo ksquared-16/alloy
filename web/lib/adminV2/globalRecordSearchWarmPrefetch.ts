@@ -16,8 +16,41 @@ export function warmGlobalSearchHitDrawerIntent(hit: GlobalRecordSearchHit): voi
     if (typeof window === "undefined") return;
     const resolution = resolveGlobalSearchOpenFromHit(hit);
     if (!resolution.supported || !resolution.detail) return;
+    warmDrawerIntent(
+        resolution.detail.open_entity_type,
+        resolution.detail.open_entity_id,
+        resolution.detail.personDrawerOpenSeed?.presentation_emphasis ?? null
+    );
+}
 
-    const { open_entity_type, open_entity_id, personDrawerOpenSeed } = resolution.detail;
+/**
+ * Search Platform V2 — warm the drawer behind an already-resolved destination.
+ *
+ * V2 destinations are resolved server-side, so there is no hit to re-resolve:
+ * the entity type and id are authoritative. A child subject opens as its person
+ * identity, so the child presentation emphasis is passed through to keep
+ * first-paint chrome identical to a click from any other surface.
+ */
+export function warmSearchDestinationDrawerIntent(destination: {
+    target: string;
+    entity_type?: string | null;
+    entity_id?: string | null;
+    subject_kind?: string | null;
+}): void {
+    if (typeof window === "undefined") return;
+    if (destination.target !== "open_drawer") return;
+    warmDrawerIntent(
+        (destination.entity_type ?? "").trim(),
+        (destination.entity_id ?? "").trim(),
+        destination.subject_kind === "child" ? PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS : null
+    );
+}
+
+function warmDrawerIntent(
+    open_entity_type: string,
+    open_entity_id: string,
+    emphasis: string | null
+): void {
     const entityId = open_entity_id.trim();
     if (!entityId) return;
 
@@ -27,7 +60,6 @@ export function warmGlobalSearchHitDrawerIntent(hit: GlobalRecordSearchHit): voi
     }
 
     if (open_entity_type === "persons") {
-        const emphasis = personDrawerOpenSeed?.presentation_emphasis ?? null;
         const isChild = emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS;
         if (
             (isChild && childDrawerHardCutoverEnabled()) ||
