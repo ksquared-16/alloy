@@ -91,6 +91,15 @@ export const PROVIDER_EXECUTION_FAILURES = [
     "malformed_response",
     "provider_refused",
     "adapter_contract_violation",
+    /**
+     * Trust's OWN request carried an unusable execution budget.
+     *
+     * Deliberately distinct from `adapter_contract_violation`: the adapter did
+     * nothing wrong and, in this case, was never invoked. Attributing a caller's
+     * malformed deadline to the adapter would misplace the fault in durable
+     * evidence, and telemetry would then blame a provider that never ran.
+     */
+    "invalid_execution_budget",
 ] as const;
 
 export type ProviderExecutionFailureCode = (typeof PROVIDER_EXECUTION_FAILURES)[number];
@@ -161,7 +170,23 @@ export type ProviderAdapterResponseV1 =
  */
 export type ProviderAdapterV1 = {
     readonly adapter_key: string;
-    execute(request: GovernedProviderExecutionRequestV1): Promise<ProviderAdapterResponseV1>;
+    /**
+     * `options.signal` is aborted when Trust's deadline expires.
+     *
+     * A standard `AbortSignal` rather than a bespoke cancellation object: it is
+     * already the repository's convention (`lib/ai`, runtime provisioning,
+     * several prefetchers) and `fetch` consumes it directly, so a real adapter
+     * needs no translation layer.
+     *
+     * OPTIONAL, and honouring it is a courtesy rather than a guarantee. Trust
+     * never relies on an adapter cooperating — the deadline is enforced on this
+     * side regardless. The signal exists so a cooperative adapter can stop
+     * wasting a socket, not so Trust can stay safe.
+     */
+    execute(
+        request: GovernedProviderExecutionRequestV1,
+        options?: { readonly signal: AbortSignal },
+    ): Promise<ProviderAdapterResponseV1>;
 };
 
 export type GovernedProviderExecutionResultV1 =
@@ -283,15 +308,97 @@ export async function executeGovernedProviderReasoning(input: {
         return fail("adapter_contract_violation", UNKNOWN_IDENTITY(requestedProvider));
     }
 
-    let response: ProviderAdapterResponseV1;
-    try {
-        response = await input.adapter.execute(input.request);
-    } catch {
-        // The thrown value is deliberately not read. It is provider- or
-        // adapter-controlled, it would end up in durable evidence, and a closed
-        // code says everything Trust is entitled to assert about it.
-        return fail("transport_failure", UNKNOWN_IDENTITY(requestedProvider));
+    // ---- execution budget --------------------------------------------------
+    // Validated BEFORE the adapter is invoked, and never coerced. A caller that
+    // asks for a nonsense budget has not asked for an unbounded execution, and
+    // silently substituting a default would invent a policy nobody set.
+    const deadlineMs = input.request.deadline_ms;
+    if (typeof deadlineMs !== "number" || !Number.isFinite(deadlineMs) || deadlineMs <= 0 || deadlineMs > MAX_EXECUTION_DEADLINE_MS) {
+        return fail("invalid_execution_budget", UNKNOWN_IDENTITY(requestedProvider));
     }
+
+    // ---- the hard wall -----------------------------------------------------
+    //
+    // Trust enforces the deadline itself. An adapter that ignores cancellation,
+    // never resolves, or resolves late cannot hold Trust open, and — the part
+    // that actually matters — cannot come back afterwards and change what
+    // happened.
+    //
+    // `settled` is the quarantine. Once the deadline wins the race the
+    // execution is TERMINAL from Trust's perspective, and every later
+    // continuation observes that and returns without effect. An adapter is
+    // transport; it must never acquire authority by resolving second.
+    const controller = new AbortController();
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutResult = new Promise<GovernedProviderExecutionResultV1>((resolve) => {
+        timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            // Tell a cooperative adapter to stop. Courtesy, not the mechanism:
+            // the race below has already been decided.
+            controller.abort();
+            resolve(fail("timeout", UNKNOWN_IDENTITY(requestedProvider)));
+        }, deadlineMs);
+    });
+
+    const adapterResult = (async (): Promise<GovernedProviderExecutionResultV1 | typeof LATE> => {
+        try {
+            const raw = await input.adapter.execute(input.request, { signal: controller.signal });
+            if (settled) return LATE;
+            settled = true;
+            return normalizeAdapterResponse(raw, requestedProvider, fail, clock() - startedAt);
+        } catch {
+            // The thrown value is deliberately not read. It is provider- or
+            // adapter-controlled, it would end up in durable evidence, and a
+            // closed code says everything Trust is entitled to assert about it.
+            //
+            // A late rejection is swallowed here rather than left to become an
+            // unhandled rejection — quarantined, not ignored by accident.
+            if (settled) return LATE;
+            settled = true;
+            return fail("transport_failure", UNKNOWN_IDENTITY(requestedProvider));
+        }
+    })();
+
+    let raced: GovernedProviderExecutionResultV1;
+    try {
+        const winner = await Promise.race([adapterResult, timeoutResult]);
+        // `LATE` can never win the race: it is only produced once `settled` is
+        // true, which means the timeout already resolved. Narrowed for the type
+        // system, and asserted by test.
+        raced = winner === LATE ? fail("timeout", UNKNOWN_IDENTITY(requestedProvider)) : winner;
+    } finally {
+        // Cleared on EVERY path, so a fast success or a fast failure leaves no
+        // timer alive.
+        if (timer !== undefined) clearTimeout(timer);
+    }
+    return raced;
+}
+
+/** Sentinel for an adapter continuation that lost the race. Never returned to a caller. */
+const LATE = Symbol("provider_execution_late_result");
+
+const MAX_EXECUTION_DEADLINE_MS = 10 * 60 * 1000;
+
+/**
+ * Validates and normalizes what the adapter returned.
+ *
+ * Extracted unchanged from the pre-deadline implementation so the hard wall
+ * added no new normalization rules — Phase 2.4's vocabulary and its refusals are
+ * exactly as they were.
+ */
+function normalizeAdapterResponse(
+    response: ProviderAdapterResponseV1,
+    requestedProvider: string,
+    fail: (
+        code: ProviderExecutionFailureCode,
+        identity: ProviderIdentityV1,
+        usage?: ProviderUsageFactsV1,
+    ) => GovernedProviderExecutionResultV1,
+    latencyMs: number,
+): GovernedProviderExecutionResultV1 {
 
     if (response == null || typeof response !== "object" || typeof response.ok !== "boolean") {
         return fail("adapter_contract_violation", UNKNOWN_IDENTITY(requestedProvider));
@@ -321,6 +428,6 @@ export async function executeGovernedProviderReasoning(input: {
         output: response.output,
         provider_identity: response.provider_identity,
         ...(usage.usage ? { usage: usage.usage } : {}),
-        latency_ms: clock() - startedAt,
+        latency_ms: latencyMs,
     };
 }
