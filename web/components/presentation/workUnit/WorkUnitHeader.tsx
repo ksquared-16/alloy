@@ -31,7 +31,8 @@ export function WorkUnitHeader({
     model: WorkUnitHeaderPresentationModel;
     builder?: WorkUnitHeaderBuilderProps;
     actionsSlot?: ReactNode;
-    /** Browse = full identity/KPI; focus = compact context bar when a record is selected. */
+    /** Browse = full identity/KPI. Focus density is retained for explicit callers/tests but
+     * WorkUnitSurfaceBodyFromModel always uses browse so grain/selection never changes shell anatomy. */
     density?: WorkUnitHeaderDensity;
 }) {
     return (
