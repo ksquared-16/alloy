@@ -35,6 +35,11 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     "delete_lead",
     // Stage-changing Current Work outcomes move membership + counts; Focus Panel stays open.
     "stage_work_outcome",
+    // Child Enrollment waitlist moves candidate-grain Waitlist membership + case-grain Lead
+    // re-evaluation. Event id is the family opportunity; Waitlist rows are child/candidate ids, so
+    // membership classification is required for off-screen / cross-lane refetch + pill counts.
+    "waitlist_child",
+    "move_to_waitlist",
 ]);
 
 /**
