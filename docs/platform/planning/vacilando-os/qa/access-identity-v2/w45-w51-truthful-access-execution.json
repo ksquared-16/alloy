@@ -1,0 +1,129 @@
+{
+  "title": "Access & Identity V2 — the Truthful Access milestone: W-45 · W-46 · W-47 · W-49 · W-50 · W-51(IA-7) + tier C certification",
+  "supersedes": "w45-w50-truthful-access-execution.json — same milestone, extended with W-50's commit, W-51's IA-7 half, and the eleven-fixture matrix. The superseded file is deleted rather than kept, because two records of one milestone is how a plan of record becomes ambiguous (OD-4 is already that problem once).",
+  "relation_to_prior_records": "Extends w14-declared-route-capability-table.json. Nothing in this session touched promotion, migrations, or the shared environment, so findings A (the W-0…W-12 tranche is on staging), B (W-8 crossed a promotion-binding announcement gate) and C (migration apply state is unverifiable from a worker session) of post-merge-certification-reconciliation.json STAND UNCHANGED.",
+
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "assignment": "asg_a5742bef764395",
+    "worktree": "/Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation",
+    "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+    "head_at_session_start": "f44f6a38a",
+    "head_at_report": "45e6488ed",
+    "promoted": false,
+    "pushed": false,
+    "generated": "2026-08-10"
+  },
+
+  "what_this_milestone_is": "The mission's product milestone: /organization/access derives and displays authoritative state, and the authorization paths underlying those claims are enforced. Presentation reflects authorization; presentation does not create authorization.",
+
+  "shipped_this_session": [
+    {
+      "commit": "0cb3805f8 + 8405526f3",
+      "workstream": "W-49 + W49-F2 — finished and committed, not restarted",
+      "state_found": "Uncommitted and passing in the worktree at session start. A worktree carrying work that already passes is indistinguishable, to the next session, from work that was abandoned. It is now two commits.",
+      "substance": "The surface gates on canManageUsersAndRoles at the route boundary before ?section= resolves; both live rendering routes gate identically, so the duplicate is not an unguarded bypass; /organization filters the Access domain card from the same declaration, so navigation cannot offer a door admission refuses."
+    },
+    {
+      "commit": "758c66d3a",
+      "workstream": "W-50 — no inert capability is presented as a control (IA-R8, T-6)",
+      "state_found": "Uncommitted, complete, and passing (11 tests). Verified before commit rather than assumed.",
+      "measurement": "36 of the catalog's 57 keys are named by no product source on an executable line.",
+      "mechanism": "unenforcedPermissionKeys.json holds the inert set; offerableLevelsForRow drops a column whose every key is inert; a row inert in both renders one statement instead of three radios. The Capability Summary keeps a granted-but-inert row and marks it 'Granted · not enforced'.",
+      "grain_is_the_column": "documents.read is enforced and documents.write is not, so a row-level verdict would be wrong in both directions.",
+      "not_a_revocation": "applyGridRowSelection runs only when a control changes, and an absent control cannot change. Asserted directly.",
+      "why_json_not_typescript": "scanEnforcement walks .ts/.tsx under web/lib. As TypeScript literals these 36 keys would each acquire an enforcement site, emptying the derived set so the both-directions lock would pass by agreeing with nothing.",
+      "not_RL_35": "RL-35's build-time form still waits on OD-3. IA-R8's presentation clause needs no decision: whether a row is a CONTROL is settled by whether anything enforces it, and that is knowable today."
+    },
+    {
+      "commit": "0d3fc9503",
+      "workstream": "W-51 — IA-7, and the M2-17 composition the plan records but does not price",
+      "defect_display": "user_roles is keyed on (user_id, org_id, role), so a membership is a SET. displayRoleForAdminPicker collapsed it and four places rendered the survivor as the whole answer: the roster row, the detail header, the Overview's Role field, and the search haystack — where a member holding {admin, regional_lead} was unfindable by 'regional lead'.",
+      "defect_counts": "The Roles chapter counted members by the collapsed value and filtered its Users tab the same way, so a role that is never anyone's primary reported ZERO holders while the resolver was unioning its grants into live requests. Both now ask one predicate, so the count and the list cannot disagree.",
+      "defect_destructive": "M2-17. The read collapses, the editor is seeded from the collapsed value, and PATCH /api/admin/users/[userId]/role replaces EVERY role row for the pair. Changing the one visible role of a principal holding {admin, regional_lead} deleted regional_lead, having never shown it. The one guard present made it worse: disabling the save while editRole === primary_role removed the harmless no-op and left only the submissions that reach the destructive path.",
+      "remedy": "replacementIsNoOp asks the union, so a multi-role membership is correctly reported as a change; the loss is itemized by name; the save requires an explicit acknowledgement that resets on any change of principal or target; and the guard sits in front of the write in saveRole, not only on the button — a disabled attribute is a presentation fact, and this platform's rule is that presentation reflects authorization rather than creating it.",
+      "scope_limit_stated": "This does NOT make the write additive. That is W-17, which needs an API that can add a role without removing the others. Until then the control says 'Replace with', because that is what it does. The card's claim that 'One role is supported per user today' described the picker, not the platform, and is gone.",
+      "why_not_deferred_to_W_17": "The plan sequences IA-7 with W-17 because W-17 makes multi-role reachable. But multi-role memberships already exist — the plan's own census names one — so the display half is a present untruth and the destructive half is present data loss. Neither needs W-17 to be worth closing, and neither preempts its design."
+    },
+    {
+      "commit": "45e6488ed",
+      "workstream": "Tier C — the eleven-fixture certification matrix",
+      "why_this_shape": "The mission's acceptance form is that the UI, the route/API, and effective authorization AGREE — not that each behaves defensibly alone. Three passing per-layer suites can still describe a surface hidden in navigation and reachable by URL. Every fixture therefore derives all three answers and asserts the agreement itself, including as a set-cardinality check so a change that moves all four consumers together in the WRONG direction still has to move them together.",
+      "the_route_answer_is_the_route_s": "requireUsersRolesManageAuth runs with its access-context dependency mocked at the module boundary. What is certified is the helper the Access routes actually call. That the mock is in effect is self-evidencing: the real resolver cannot return 200 without a database.",
+      "defect_found_in_own_work": "The URL-reachability assertion was tautological on first writing — `reachable` and `offered` were the same expression, certifying nothing. Rewritten to compose the page's two refusals in the page's order from the exported predicates; that the page applies them in that order is proved separately by RL-36 against the real page source.",
+      "fixtures": ["org-wide administrator", "location-restricted staff", "department-restricted staff", "multi-location staff", "user with multiple roles", "invited/not-yet-admitted", "inactive/deactivated membership", "user with no access profile", "capability permits but scope excludes the target", "user without Access administration capability", "parent/external principal"],
+      "layer_separation_proved": "F9 is admitted by capability and still bounded to one location; F1 holds the same capability bounded by nothing. The distinction is therefore real and not an artifact of every fixture being restricted.",
+      "negatives_asserted_directly": "For every unset-profile fixture: scopeSummary must NOT return 'All locations', certainty is 'unset', the divergence reason is present, and allow-list rows are withheld. IA-3 as a test rather than a claim."
+    }
+  ],
+
+  "tests": {
+    "command": "cd web && npx vitest run tests/access/",
+    "result": "16 files passed, 1 skipped — 300 passed, 6 skipped, 0 failed",
+    "at_session_start": "213 passed",
+    "environment_gotcha": "A run from the REPOSITORY ROOT reports 12 failing files with 'Cannot find package @/…' for modules that plainly exist. That is the root vitest config resolving without the web/ path alias, not a defect in the tree. Vitest for this package must be invoked from web/. Recorded because the failure text points convincingly at the wrong thing — it names the module under test."
+  },
+
+  "milestone_state": {
+    "membership_existence": "TRUE — W-45/W-46, projection carries what it reads",
+    "lifecycle_state": "TRUE — W-46, per-field escape hatch where no source exists",
+    "authentication_state": "TRUE where knowable — MFA presence has no source until W-36 and says so",
+    "assigned_roles": "TRUE — W-51/IA-7 this session. The union is displayed, counted, filtered and searched; the destructive replacement is named and acknowledged. The write is still replace-not-add (W-17).",
+    "effective_location_scope": "TRUE — W-47, `unset` representable and distinct from `all`",
+    "effective_department_scope": "TRUE — W-47",
+    "organization_wide_scope": "TRUE — W-47, absent scope no longer renders as All locations · All departments",
+    "restrictions_and_inheritance": "PARTIAL — the render leg of GAP-3 is done; GAP-12 closes only when W-24 (cache) and W-43 (resolver) land, and neither is started",
+    "chapter_surface_availability": "TRUE — W-49 + W49-F2, from actual capabilities, one declaration",
+    "inert_capability_presentation": "TRUE — W-50 presentation clause",
+    "route_enforcement": "PARTIAL — 25 declared / 1 reasoned-none / 725 pending. W-15 is the burndown and is not started."
+  },
+
+  "certification_state": {
+    "tier_A_static": "GREEN — RL-36, the W-50 both-directions lock, and the IA-7 chapter scan, all with subjects discovered from disk and non-vacuity proved by convicting the exact lines removed",
+    "tier_C_authorization": "GREEN — the eleven-fixture matrix, exercising the real route helper. This is the mission's 'automated authorization evidence' and it did not exist at session start.",
+    "tier_D_browser": "NOT RUN — BLOCKED, see blockers.tier_D_environment below. No browser rendered /organization/access this session.",
+    "shared_environment": "NOT EXERCISED — nothing here was promoted and no migration was applied",
+    "honest_summary": "The mission's standard is that a green unit suite alone is insufficient. Tier C now clears the 'automated authorization evidence' half of that standard against eleven fixtures, exercising the enforcing helper rather than restating it. The 'browser evidence from /organization/access' half is NOT met and is blocked on an environment registration gap, not on engineering."
+  },
+
+  "blockers": {
+    "tier_D_environment": {
+      "class": "operator-owned, environmental — not a product decision",
+      "what": "Browser certification of /organization/access cannot be run from this session.",
+      "evidence": [
+        "This worktree has no dev-server metadata: `alloy-dev-start wt6-director-experience-dx5-5-continuation` returns 'unknown worktree metadata'. Only seven worktrees are registered and this is not one of them.",
+        "Slot 6 in the registry is assigned to a DIFFERENT worktree (wt6-search-platform-certification), so every slot-numbered command — alloy-dev-start 6, alloy-agent-login 6, alloy-agent-verify 6 — would target the wrong tree. This is the 'resolve worktrees by NAME, not slot number' hazard, live.",
+        "Slot 6's stored auth reports `missing`, so even the registered tree has no QA identity session.",
+        "web/.env.local.agent carries only public/anon values, by design — no service-role key. Every Access admin route calls createAdminClient(), so an unbrokered server would fail on exactly the routes under certification."
+      ],
+      "what_would_unblock_it": "Register this worktree with the dev toolkit (or re-point slot 6 at it) and run alloy-agent-login, after which alloy-agent-verify can produce route evidence for /organization/access.",
+      "not_worked_around": "No dev server was started by another path. The governance forbids bare `next dev`, and privileged values are deliberately absent from the worktree; manufacturing a server here would have produced evidence from an environment the product does not run in."
+    }
+  },
+
+  "deliberately_not_done": {
+    "IA-8_duplicate_route_deletion": "DEFERRED, with reason. W-49 already gates both rendering routes identically, so the duplicate is NOT a live bypass and the milestone's enforcement requirement does not depend on deleting it. Deletion touches six test files owned by the Configuration Runtime initiative (organizationDomainLandings, configurationRuntimeDoctrineCleanup, settingsLegacyFieldAlignment, configurationRuntimeSettingsRollout, accessProductUi, surfaceCapabilityDeclaration), several of which pin the duplicate's existence. That is the 'source-text controls pinned the very branch being removed' shape; it is a cleanup worth doing deliberately, not as a coda to a truthfulness wave.",
+    "IA-9_overview": "Needs the rest of the wave; an overview of access is a summary of states the product is only now able to compute.",
+    "W-13": "Portal admission becomes a capability. Needs decision D2 — which roles receive portal.access. Operator-owned.",
+    "W-15": "Enforcement sweep, 725 pending handlers. Sized L. Several entries need product decisions (W14-F1, W49-F1) rather than mechanical declaration.",
+    "W-17": "The additive role write. IA-7's display half is closed without it; the write half is explicitly still replace-not-add.",
+    "W-48": "Effective access from the enforcing resolver. Sequenced after W-41/W-42, neither started."
+  },
+
+  "findings_left_open": {
+    "W49-F1": "app/api/admin/send-password-reset/route.ts — the chapter renders 'Send password reset' to every holder of settings.users_roles; the route enforces ctx.role !== 'admin'. A grant-holder who is not org admin is shown the control and gets 403. Declaring it settings.users_roles would be a one-line WIDENING of who may trigger a password-reset email — W-15's sweep with a product decision behind it. Pinned in RL-36.",
+    "W14-F1": "Unchanged. app/api/admin/users GET returns every org member's email behind portal admission alone while its POST requires settings.users_roles. Asserting that roster read needs no capability is W-15's product call."
+  },
+
+  "operator_decisions_still_blocking": {
+    "OD-2": "URGENT — W-8 shipped past an announcement gate the plan says binds promotion. Census Q6 counts exactly 1 (user, org) pair configured department_scope='restricted' AND holding admin/ops. Whether that is a narrowing or a workspace lockout turns on allowed_department_count, which has never been read. Needs Director-side database.read_census.",
+    "OD-1": "Migration apply channel. M1/M2/M6 are on origin/staging so applying them is no longer out-of-band, but no actor in the worker system holds the shared database URL. M5 is still unauthored.",
+    "OD-3": "36-of-57 catalog key deletion review. W-50's PRESENTATION clause no longer waits on this; RL-35's build-time form still does.",
+    "OD-4": "Which document is plan of record.",
+    "OD-6": "AD-22 / AD-25 — the 'reduce to four layers' directive resolves into two decisions the owning document explicitly declines to make."
+  },
+
+  "recommended_next_milestone": "Not the simplified role/access editor — it is gated on AD-22/AD-25 (OD-6) and the mission forbids beginning a decision-gated redesign. The next coherent milestone is W-15, the enforcement sweep over 725 pending handlers, because it is what converts W-14's declarations into the enforcement the truthful surface is now presenting. It carries two product decisions already isolated by name (W14-F1, W49-F1), which is the smallest possible operator ask to release a large lane."
+}
