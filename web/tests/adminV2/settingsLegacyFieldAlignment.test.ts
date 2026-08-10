@@ -64,7 +64,8 @@ describe("settings legacy field alignment", () => {
 describe("settings legacy closeout", () => {
     it("priority hybrid pages use Platform Configuration shell, not rollout placeholders", () => {
         for (const [path, component] of [
-            ["app/adminV2/settings/users-roles/page.tsx", "UsersRolesConfigurationPage"],
+            // IA-8: one renderer for the Access workspace. `/settings/users-roles` redirects here.
+            ["app/adminV2/settings/organization/access/page.tsx", "UsersRolesConfigurationPage"],
             ["app/adminV2/settings/organization/communications/page.tsx", "OrganizationCommunicationsPage"],
             ["app/adminV2/settings/entities/page.tsx", "dataModelSectionHref"],
             ["app/adminV2/settings/actions/page.tsx", "SettingsConfigurationSurfaceShell"],

@@ -92,8 +92,10 @@ describe("Permission grid operator labels", () => {
 });
 
 describe("Access product UI wiring", () => {
-    it("routes /organization/access (users-roles page) to the landing when no section is set, and to the workspace otherwise", () => {
-        const page = read("app/adminV2/settings/users-roles/page.tsx");
+    it("routes /organization/access to the landing when no section is set, and to the workspace otherwise", () => {
+        // IA-8 removed the second renderer; the parenthetical "(users-roles page)" this assertion
+        // used to carry named it. There is one page now, and it is this one.
+        const page = read("app/adminV2/settings/organization/access/page.tsx");
         expect(page).toContain("OrganizationDomainLanding");
         expect(page).toContain("buildAccessLandingModel");
         expect(page).toContain("UsersRolesConfigurationPage");

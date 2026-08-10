@@ -63,7 +63,9 @@ describe("organization domain landings", () => {
             "DataModelWorkspaceSurface",
         );
         expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
-        expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("buildAccessLandingModel");
+        // IA-8 deleted the duplicate `settings/users-roles` renderer; `/organization/access` is the
+        // one page that serves this workspace, and the legacy alias redirects into it.
+        expect(read("app/adminV2/settings/organization/access/page.tsx")).toContain("buildAccessLandingModel");
     });
 
     it("always mounts the Business Processes collection workspace (no landing-tile default)", () => {

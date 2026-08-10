@@ -254,14 +254,13 @@ function admissionViolations(source: string): string[] {
 }
 
 describe("W-49 · AE-4 — the surface is not reachable by URL without the capability", () => {
-    it("discovers the pages rendering the surface from disk", () => {
-        // IA-8: one workspace, two live rendering routes. If this number changes, a page was added
-        // or W-51 deleted the duplicate — either way the gate list below must be re-read, not
-        // assumed. The assertion names the count so the change cannot pass silently.
-        expect(renderingPages).toEqual([
-            "app/adminV2/settings/organization/access/page.tsx",
-            "app/adminV2/settings/users-roles/page.tsx",
-        ]);
+    it("discovers the pages rendering the surface from disk — and there is now exactly one", () => {
+        // IA-8, closed. There were two live rendering routes for one workspace; the duplicate at
+        // `app/adminV2/settings/users-roles/page.tsx` is deleted. Two renderers meant two places a
+        // gate had to be repeated identically, which is the shape W-49 had to fix twice in one
+        // commit. The count is asserted, not the mere presence of the canonical page, so a second
+        // renderer reappearing is a failure rather than a silent return to the old state.
+        expect(renderingPages).toEqual(["app/adminV2/settings/organization/access/page.tsx"]);
     });
 
     it("gates and filters on every discovered page", () => {
@@ -355,5 +354,117 @@ describe("W-49 · AE-4 — the surface is not reachable by URL without the capab
         expect(readWebCode("components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx")).not.toContain(
             "canManage"
         );
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/* IA-8 — the deleted route is a redirect, not a closed door           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Deleting a renderer is only safe if the URL it served still resolves. `next.config.ts` already
+ * redirected these paths to `/organization/access` — Next evaluates `redirects()` *before* the
+ * filesystem, so the deleted page had been shadowed and unreachable for some time and its deletion
+ * changes no URL's behaviour. That argument is the thing worth locking: if someone removes the
+ * redirect, the alias becomes a 404 and the deletion retroactively becomes a regression.
+ *
+ * The chain is followed rather than spot-checked. `/adminV2/settings/users-roles` reaches the
+ * canonical URL through three separate rules, and asserting only the last one would pass on a
+ * config where the first two had been dropped.
+ */
+type ConfiguredRedirect = { source: string; destination: string };
+
+const REDIRECT_RULES: ConfiguredRedirect[] = (() => {
+    const config = readWeb("next.config.ts");
+    const start = config.indexOf("async redirects()");
+    const end = config.indexOf("async rewrites()");
+    // `rewrites()` uses the same object shape; reading past the boundary would mix the two route
+    // phases and make the resolver describe a pipeline Next does not run.
+    if (start < 0 || end < 0 || end <= start) throw new Error("next.config.ts: cannot isolate redirects()");
+    return [...config.slice(start, end).matchAll(/source:\s*"([^"]+)",\s*destination:\s*"([^"]+)"/g)].map((m) => ({
+        source: m[1]!,
+        destination: m[2]!,
+    }));
+})();
+
+/** First matching rule wins, as Next does. Supports the exact and `/:path*` forms in use. */
+function applyFirstRedirect(pathname: string): string | null {
+    for (const { source, destination } of REDIRECT_RULES) {
+        if (source.endsWith("/:path*")) {
+            const prefix = source.slice(0, -"/:path*".length);
+            if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) continue;
+            const rest = pathname.slice(prefix.length);
+            return destination.replace("/:path*", rest);
+        }
+        if (source === pathname) return destination;
+    }
+    return null;
+}
+
+function resolveRedirectChain(pathname: string): { final: string; hops: string[] } {
+    const hops: string[] = [];
+    let current = pathname;
+    // A cycle in the config would otherwise hang the suite rather than report itself.
+    for (let i = 0; i < 10; i += 1) {
+        const next = applyFirstRedirect(current);
+        if (next === null || next === current) break;
+        hops.push(next);
+        current = next;
+    }
+    return { final: current, hops };
+}
+
+describe("IA-8 — one workspace, one rendering route", () => {
+    it("has no second renderer on disk", () => {
+        expect(fs.existsSync(path.join(REPO_ROOT, "web/app/adminV2/settings/users-roles"))).toBe(false);
+    });
+
+    it("still resolves every URL the deleted page used to serve", () => {
+        for (const alias of [
+            "/adminV2/settings/users-roles",
+            "/admin/settings/users-roles",
+            "/settings/users-roles",
+            "/settings/users-roles/anything",
+            // `app/adminV2/settings/user-access/page.tsx` and the two legacy-admin pages redirect
+            // into this alias in application code, so their destination has to resolve too.
+            "/settings/user-access",
+        ]) {
+            expect(resolveRedirectChain(alias).final, alias).toBe("/organization/access");
+        }
+    });
+
+    it("follows the chain rather than one lucky rule", () => {
+        // /adminV2/settings/users-roles → /admin/settings/users-roles → /settings/users-roles →
+        // /organization/access. Three rules, each of which some other workstream could remove.
+        const { hops } = resolveRedirectChain("/adminV2/settings/users-roles");
+        expect(hops).toEqual([
+            "/admin/settings/users-roles",
+            "/settings/users-roles",
+            "/organization/access",
+        ]);
+    });
+
+    it("is not vacuous — the resolver leaves unmatched paths alone and terminates at the canonical URL", () => {
+        // If `applyFirstRedirect` matched everything, every assertion above would pass for free.
+        expect(resolveRedirectChain("/settings/no-such-surface-xyz")).toEqual({
+            final: "/settings/no-such-surface-xyz",
+            hops: [],
+        });
+        // The canonical URL is a fixed point. Were it redirected onward, the assertions above would
+        // be describing a path that is not where the surface lives.
+        expect(resolveRedirectChain("/organization/access").hops).toEqual([]);
+        expect(REDIRECT_RULES.length).toBeGreaterThan(50);
+    });
+
+    it("routes the canonical URL to the surviving page, and to nothing else", () => {
+        // The rewrite phase, read directly: `/organization/access` must land on the one file the
+        // discovery above found. Deleting the duplicate and leaving the rewrite pointed at it would
+        // be a 404 that no unit assertion above would notice.
+        const config = readWeb("next.config.ts");
+        const rewrites = config.slice(config.indexOf("async rewrites()"));
+        expect(rewrites).toContain(
+            '{ source: "/organization/access", destination: "/adminV2/settings/organization/access" }'
+        );
+        expect(renderingPages[0]).toBe("app/adminV2/settings/organization/access/page.tsx");
     });
 });
