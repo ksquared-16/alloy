@@ -23,11 +23,27 @@ cleanup
 echo "--- starting disposable postgres on :$PORT ---"
 docker run -d --name "$CONTAINER" -e POSTGRES_PASSWORD=postgres -p "$PORT:5432" postgres:17-alpine >/dev/null
 
-for _ in $(seq 1 60); do
-    if docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+# Readiness must HOLD, not merely happen once: `initdb` answers the unix socket
+# from a temporary server that is then shut down, so a bare `pg_isready` can
+# succeed and the next call exit 2, killing this script under `set -e`. Probe
+# over TCP (not served during init) and require the answer to persist.
+# Full rationale in certification/trust-runtime-v1/run.sh.
+ready=0
+for _ in $(seq 1 90); do
+    if docker exec "$CONTAINER" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1 \
+        && docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
+        ready=$((ready + 1))
+        if [ "$ready" -ge 3 ]; then break; fi
+    else
+        ready=0
+    fi
     sleep 1
 done
-docker exec "$CONTAINER" pg_isready -U postgres >/dev/null
+if [ "$ready" -lt 3 ]; then
+    echo "FAIL: postgres never became durably ready on :$PORT" >&2
+    docker logs "$CONTAINER" 2>&1 | tail -20 >&2
+    exit 1
+fi
 
 run_sql() {
     docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f - < "$1"
