@@ -51,6 +51,10 @@ export default function CurrentWorkTourInvitationPanel({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const submitLock = useRef(false);
+    // One prepare key per panel mount — retries share it; a new open gets a new key.
+    const prepareKeyRef = useRef(
+        `send_tour_invitation:prepare:${opportunityId}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`,
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -66,7 +70,7 @@ export default function CurrentWorkTourInvitationPanel({
                             entity_type: "opportunity",
                             entity_id: opportunityId,
                             context: { surface: "focus_panel", origin: "operator" },
-                            payload: { mode: "prepare" },
+                            payload: { mode: "prepare", idempotency_key: prepareKeyRef.current },
                             confirmation: { confirmed: true },
                         }),
                     }),
@@ -270,7 +274,7 @@ export default function CurrentWorkTourInvitationPanel({
                     <p className="text-sm text-alloy-midnight/80">{draft.message}</p>
                     <button
                         type="button"
-                        className="mt-3 text-sm font-semibold text-alloy-pine"
+                        className="mt-3 text-sm font-semibold text-alloy-bend-pine"
                         onClick={onClose}
                     >
                         Close
@@ -300,7 +304,7 @@ export default function CurrentWorkTourInvitationPanel({
                             type="button"
                             className={`rounded-md px-3 py-1.5 text-sm font-semibold ${
                                 channel === "email"
-                                    ? "bg-alloy-pine text-white"
+                                    ? "bg-alloy-bend-pine text-white"
                                     : "bg-alloy-midnight/5 text-alloy-midnight/70"
                             }`}
                             onClick={() => onChannelChange("email")}
@@ -312,7 +316,7 @@ export default function CurrentWorkTourInvitationPanel({
                             type="button"
                             className={`rounded-md px-3 py-1.5 text-sm font-semibold ${
                                 channel === "sms"
-                                    ? "bg-alloy-pine text-white"
+                                    ? "bg-alloy-bend-pine text-white"
                                     : "bg-alloy-midnight/5 text-alloy-midnight/70"
                             }`}
                             onClick={() => onChannelChange("sms")}
@@ -358,7 +362,7 @@ export default function CurrentWorkTourInvitationPanel({
                         </button>
                         <button
                             type="button"
-                            className="rounded-md bg-alloy-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                            className="rounded-md bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                             disabled={busy || !body.trim()}
                             data-command-surface-primary
                             data-testid="tour-invitation-confirm-send"

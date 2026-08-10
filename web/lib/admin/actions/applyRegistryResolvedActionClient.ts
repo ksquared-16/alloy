@@ -450,7 +450,7 @@ export async function applyRegistryResolvedActionClient(
                         entity_type: "opportunity",
                         entity_id: eid,
                         context: host.context,
-                        payload: { mode: "prepare" },
+                        payload: { mode: "prepare", idempotency_key: `send_tour_invitation:prepare:${eid}:${crypto.randomUUID()}` },
                         confirmation: { confirmed: true },
                     }),
                 });

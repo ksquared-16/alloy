@@ -79,11 +79,7 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
         "{{site_line}}",
         "",
         "Choose a tour time:",
-        "",
-        "{{tour_options_block}}",
-        "",
-        "See more times: {{invitation_action_url}}",
-        "Can't find a time that works? Request another time: {{decline_url}}",
+        "{{invitation_action_url}}",
         "",
         "We look forward to meeting you.",
         "",
@@ -238,7 +234,13 @@ function plainTextToSimpleHtml(text: string): string {
 /** Turn plain merged lines into parent-friendly HTML CTAs (text body keeps raw URLs for SMS). */
 export function polishTourCommsEmailHtml(bodyHtml: string): string {
     let out = bodyHtml;
-    // Tour invitation option lines: "Monday, August 10 · 9:00 AM — https://…"
+    // Concise invitation CTA: lone booking URL after "Choose a tour time"
+    out = out.replace(
+        /(Choose a tour time:?\s*(?:<br\/?>)?)(?:\s*)(https?:\/\/[^\s<]+)/gi,
+        '$1<a href="$2" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Book your tour</a>',
+    );
+    // Tour invitation option lines (legacy templates that still list times):
+    // "Monday, August 10 · 9:00 AM — https://…"
     out = out.replace(
         /(?:^|<br\/?>|<p>)([^<]*?·[^<]*?)\s+[—–-]\s*(https?:\/\/[^\s<]+)/gi,
         (match, label: string, url: string) => {
@@ -259,16 +261,8 @@ export function polishTourCommsEmailHtml(bodyHtml: string): string {
         '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Request another time</a>',
     );
     out = out.replace(
-        /Can't find a time that works\?\s*/gi,
-        "Can't find a time that works? ",
-    );
-    out = out.replace(
-        /None of these work\?\s*See more times:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">See more times</a>',
-    );
-    out = out.replace(
-        /Not the right time for your family\?\s*Let us know:\s*(https?:\/\/[^\s<]+)/gi,
-        'Can\'t find a time that works? <a href="$1" style="color:#1f4d3a;text-decoration:underline;">Request another time</a>',
+        /Book your tour:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Book your tour</a>',
     );
     out = out.replace(
         /Add to calendar:\s*(https?:\/\/[^\s<]+)/gi,

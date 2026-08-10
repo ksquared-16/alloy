@@ -54,6 +54,8 @@ export const sendTourInvitationAction: RegisteredAction = {
         }
         if (src.invitation_id != null) value.invitation_id = trimmed(src.invitation_id);
         if (src.channel != null) value.channel = trimmed(src.channel);
+        // Optional client-stable key for double-submit within one compose open.
+        if (src.idempotency_key != null) value.idempotency_key = trimmed(src.idempotency_key);
         // Never accept a recipient from the caller — identity is resolved server-side.
         delete value.recipient_person_id;
         delete value.to;
@@ -134,10 +136,13 @@ export const sendTourInvitationAction: RegisteredAction = {
             };
         }
 
-        // Idempotency is keyed on the record, not on the click. A double-submit, a retry
-        // after a timeout, and a second operator pressing the same button all collapse
-        // onto one invitation — while a genuinely new offer (different times) still sends.
-        const idempotencyKey = `send_tour_invitation:${ctx.orgId}:${invocation.entityId}`;
+        // Each operator invocation gets a fresh prepare key. A fixed
+        // `send_tour_invitation:org:opp` key collided when availability/fingerprint
+        // changed between clicks ("already used for a different … set of times").
+        // Double-submit within one click still shares one key via the client payload.
+        const idempotencyKey =
+            trimmed(src.idempotency_key)
+            || `send_tour_invitation:${ctx.orgId}:${invocation.entityId}:${correlationId}`;
 
         const result = await sendTourInvitation({
             supabase,
