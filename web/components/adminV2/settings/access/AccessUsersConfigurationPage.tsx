@@ -26,16 +26,32 @@ import { LocationMultiSelect } from "@/components/adminV2/settings/configuration
 
 type AccessUserTab = "overview" | "roles" | "access" | "security" | "history";
 
+import {
+    authenticationMethodLabel,
+    scopeSummary,
+    MEMBER_LIFECYCLE_LABEL,
+    type MemberAuthenticationProjection,
+    type MemberLifecycleProjection,
+    type ConfiguredScope,
+} from "@/lib/access/memberIdentityProjection";
+import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+
 type MemberRow = {
     user_id: string;
     email: string | null;
     display_name: string | null;
     role_keys: string[];
     primary_role: string;
-    department_scope: "all" | "restricted";
-    site_scope: "all" | "restricted";
+    department_scope: ConfiguredScope;
+    site_scope: ConfiguredScope;
+    has_access_profile: boolean;
+    effective_department_scope: "all" | "restricted";
+    effective_site_scope: "all" | "restricted";
+    effective_divergence_reason: string | null;
     department_ids: string[];
     site_location_ids: string[];
+    lifecycle: MemberLifecycleProjection;
+    authentication: MemberAuthenticationProjection;
 };
 
 type DeptOpt = { id: string; name: string | null; key: string | null };
@@ -49,26 +65,44 @@ function displayName(m: MemberRow): string {
     return (m.email ?? "").trim() || "Unnamed user";
 }
 
-function locationSummary(m: MemberRow, siteLocations: SiteLocOpt[]): string {
-    if (m.site_scope === "all") return "All locations";
-    const n = m.site_location_ids.length;
-    if (n === 0) return "No locations selected";
-    if (n === 1) {
-        const label = siteLocations.find((s) => s.id === m.site_location_ids[0])?.label;
-        return label ?? "1 location";
-    }
-    return `${n} locations`;
+/**
+ * W-45 / W-47 — these summaries used to open with `if (scope === "all") return "All locations"`,
+ * and an absent access profile reached that branch because the projection defaulted it to `all`.
+ * The rule now lives in `scopeSummary`, which returns the certainty alongside the label so an
+ * unconfigured scope renders as its own state rather than as a reassurance (`IA-R3`).
+ */
+function locationSummary(m: MemberRow, siteLocations: SiteLocOpt[]) {
+    return scopeSummary({
+        configured: m.site_scope,
+        ids: m.site_location_ids,
+        labelFor: (id) => siteLocations.find((s) => s.id === id)?.label ?? null,
+        allLabel: "All locations",
+        noneLabel: "No locations selected",
+        unitSingular: "location",
+        unitPlural: "locations",
+    });
 }
 
-function departmentSummary(m: MemberRow, departments: DeptOpt[]): string {
-    if (m.department_scope === "all") return "All departments";
-    const n = m.department_ids.length;
-    if (n === 0) return "No departments selected";
-    if (n === 1) {
-        const dept = departments.find((d) => d.id === m.department_ids[0]);
-        return (dept?.name ?? dept?.key) || "1 department";
-    }
-    return `${n} departments`;
+function departmentSummary(m: MemberRow, departments: DeptOpt[]) {
+    return scopeSummary({
+        configured: m.department_scope,
+        ids: m.department_ids,
+        labelFor: (id) => {
+            const dept = departments.find((d) => d.id === id);
+            return (dept?.name ?? dept?.key) || null;
+        },
+        allLabel: "All departments",
+        noneLabel: "No departments selected",
+        unitSingular: "department",
+        unitPlural: "departments",
+    });
+}
+
+/** Status pill class — a state the platform did not read must not borrow the "active" styling. */
+function lifecyclePillClass(state: MemberLifecycleProjection["state"]): string {
+    return state === "active" ?
+            "locations-collection-row__status locations-collection-row__status--active"
+        :   "locations-collection-row__status";
 }
 
 export default function AccessUsersConfigurationPage() {
@@ -96,8 +130,14 @@ export default function AccessUsersConfigurationPage() {
     const [editRole, setEditRole] = useState("");
     const [roleSaving, setRoleSaving] = useState(false);
 
-    const [deptScope, setDeptScope] = useState<"all" | "restricted">("all");
-    const [siteScope, setSiteScope] = useState<"all" | "restricted">("all");
+    /**
+     * W-47: the editor's scope state carries `unset` too. Prefilling `all` for a membership that
+     * has no access profile would let the operator save a grant the product invented — §1.7's
+     * *"a simplification MUST NOT promote a value it has not corrected"*, in the one place where
+     * the promotion would be written back to the database.
+     */
+    const [deptScope, setDeptScope] = useState<ConfiguredScope>("all");
+    const [siteScope, setSiteScope] = useState<ConfiguredScope>("all");
     const [selDeptIds, setSelDeptIds] = useState<string[]>([]);
     const [selSiteIds, setSelSiteIds] = useState<string[]>([]);
     const [accessSaving, setAccessSaving] = useState(false);
@@ -181,6 +221,21 @@ export default function AccessUsersConfigurationPage() {
         setActionsOpen(false);
     }, [selected]);
 
+    /**
+     * The scope editor is hidden for a membership with no access profile until the operator asks
+     * for it. `LocationMultiSelect` has two modes, so simply rendering it for an `unset` scope
+     * would show one radio already chosen — a choice nobody made, one click from being written.
+     */
+    const scopeEditorVisible = (selected?.has_access_profile ?? false) || deptScope !== "unset" || siteScope !== "unset";
+
+    /** Starts from the closed direction: restricted with nothing selected, never org-wide. */
+    const beginScopeConfiguration = () => {
+        setDeptScope("restricted");
+        setSiteScope("restricted");
+        setSelDeptIds([]);
+        setSelSiteIds([]);
+    };
+
     const selectMember = (userId: string) => {
         setSelectedUserId(userId);
         setTab("overview");
@@ -248,6 +303,11 @@ export default function AccessUsersConfigurationPage() {
         setMessage(null);
         setError(null);
         try {
+            // Refused rather than coerced: an `unset` dimension has no value to write, and
+            // choosing one here is exactly the fabrication W-47 removes from the read path.
+            if (deptScope === "unset" || siteScope === "unset") {
+                throw new Error("Choose a location and department scope before saving.");
+            }
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/access-scope`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -397,12 +457,20 @@ export default function AccessUsersConfigurationPage() {
                                                 <span className="locations-collection-row__name">{displayName(m)}</span>
                                                 <span className="locations-collection-row__place">{m.email ?? "No email on file"}</span>
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
-                                                    {roleLabelFor(m.primary_role)} · {locationSummary(m, siteLocations)} ·{" "}
-                                                    {departmentSummary(m, departments)}
+                                                    {roleLabelFor(m.primary_role)} ·{" "}
+                                                    {locationSummary(m, siteLocations).label} ·{" "}
+                                                    {departmentSummary(m, departments).label}
                                                 </span>
                                             </span>
-                                            <span className="locations-collection-row__status locations-collection-row__status--active">
-                                                Active
+                                            <span
+                                                className={lifecyclePillClass(m.lifecycle.state)}
+                                                data-testid={`access-user-status-${m.user_id}`}
+                                                data-lifecycle-state={m.lifecycle.state}
+                                                {...(m.lifecycle.state === "unknown" ?
+                                                    { "data-capability": "unknown", title: m.lifecycle.unknown_reason ?? undefined }
+                                                :   {})}
+                                            >
+                                                {MEMBER_LIFECYCLE_LABEL[m.lifecycle.state]}
                                             </span>
                                         </button>
                                     );
@@ -435,13 +503,24 @@ export default function AccessUsersConfigurationPage() {
                                                     <h2 className="config-typo-workspace-title text-xl text-alloy-midnight">
                                                         {displayName(selected)}
                                                     </h2>
-                                                    <span className="locations-collection-row__status locations-collection-row__status--active">
-                                                        Active
+                                                    <span
+                                                        className={lifecyclePillClass(selected.lifecycle.state)}
+                                                        data-testid="access-user-selected-status"
+                                                        data-lifecycle-state={selected.lifecycle.state}
+                                                        {...(selected.lifecycle.state === "unknown" ?
+                                                            {
+                                                                "data-capability": "unknown",
+                                                                title: selected.lifecycle.unknown_reason ?? undefined,
+                                                            }
+                                                        :   {})}
+                                                    >
+                                                        {MEMBER_LIFECYCLE_LABEL[selected.lifecycle.state]}
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-sm text-alloy-midnight/55">
-                                                    {roleLabelFor(selected.primary_role)} · {locationSummary(selected, siteLocations)} ·{" "}
-                                                    Password sign-in
+                                                    {roleLabelFor(selected.primary_role)} ·{" "}
+                                                    {locationSummary(selected, siteLocations).label} ·{" "}
+                                                    {authenticationMethodLabel(selected.authentication)}
                                                 </p>
                                             </div>
                                             <div className="relative flex flex-wrap gap-2">
@@ -523,7 +602,44 @@ export default function AccessUsersConfigurationPage() {
                                                     </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Status</dt>
-                                                        <dd className="mt-0.5">Active</dd>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-status">
+                                                            {selected.lifecycle.state === "unknown" ?
+                                                                <UnknownValue
+                                                                    reason={
+                                                                        selected.lifecycle.unknown_reason ??
+                                                                        "This state was not read."
+                                                                    }
+                                                                />
+                                                            :   MEMBER_LIFECYCLE_LABEL[selected.lifecycle.state]}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Invited
+                                                        </dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-invited">
+                                                            {selected.lifecycle.invited_at ?
+                                                                new Date(selected.lifecycle.invited_at).toLocaleString()
+                                                            :   <UnknownValue
+                                                                    label="No invitation recorded"
+                                                                    reason="The authentication record carries no invitation timestamp for this membership."
+                                                                />
+                                                            }
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Last sign-in
+                                                        </dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-last-sign-in">
+                                                            {selected.lifecycle.last_sign_in_at ?
+                                                                new Date(selected.lifecycle.last_sign_in_at).toLocaleString()
+                                                            :   <UnknownValue
+                                                                    label="Never signed in"
+                                                                    reason="The authentication record carries no sign-in timestamp for this membership."
+                                                                />
+                                                            }
+                                                        </dd>
                                                     </div>
                                                 </dl>
                                             </ConfigWorkspaceCard>
@@ -532,13 +648,63 @@ export default function AccessUsersConfigurationPage() {
                                                 testId="access-user-overview-effective-access"
                                                 className="opacity-90"
                                             >
-                                                <p
-                                                    className="text-sm leading-6 text-alloy-midnight/55"
-                                                    data-capability="planned"
-                                                    data-testid="access-user-effective-access-planned"
+                                                {/*
+                                                  * W-47: the scope half of effective access is readable today, so it is
+                                                  * shown. `effective_*` comes from the enforcing resolver
+                                                  * (`resolveScopeAnswerFromProfile` under `ABSENT_PROFILE_ENFORCEMENT`),
+                                                  * not from a second rule — `IA-R4`'s "MUST NOT have a second
+                                                  * implementation" applied where it already costs nothing.
+                                                  *
+                                                  * The capability half is still Planned: W-48 binds it to the resolver
+                                                  * after W-41/W-42, and computing it here would be the second
+                                                  * implementation that workstream exists to prevent.
+                                                  */}
+                                                <dl
+                                                    className="grid gap-3 text-sm"
+                                                    data-testid="access-user-effective-scope"
                                                 >
-                                                    Computed effective access will appear here when available.
-                                                </p>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Locations
+                                                        </dt>
+                                                        <dd
+                                                            className="mt-0.5"
+                                                            data-scope-configured={selected.site_scope}
+                                                            data-scope-effective={selected.effective_site_scope}
+                                                        >
+                                                            {locationSummary(selected, siteLocations).label}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Departments
+                                                        </dt>
+                                                        <dd
+                                                            className="mt-0.5"
+                                                            data-scope-configured={selected.department_scope}
+                                                            data-scope-effective={selected.effective_department_scope}
+                                                        >
+                                                            {departmentSummary(selected, departments).label}
+                                                        </dd>
+                                                    </div>
+                                                    {selected.effective_divergence_reason ?
+                                                        <div
+                                                            className="rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-[12px] leading-5 text-amber-900"
+                                                            data-testid="access-user-effective-scope-divergence"
+                                                            role="note"
+                                                        >
+                                                            {selected.effective_divergence_reason}
+                                                        </div>
+                                                    :   null}
+                                                    <p
+                                                        className="text-[12px] leading-5 text-alloy-midnight/55"
+                                                        data-capability="planned"
+                                                        data-testid="access-user-effective-access-planned"
+                                                    >
+                                                        Capability-level effective access — what this person may do, not
+                                                        only where — is planned and is not computed yet.
+                                                    </p>
+                                                </dl>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard
                                                 title="Security Summary"
@@ -546,7 +712,17 @@ export default function AccessUsersConfigurationPage() {
                                                 className="md:col-span-2"
                                             >
                                                 <p className="text-sm text-alloy-midnight/70">
-                                                    Password · Reset available via the Security tab.
+                                                    {selected.authentication.state === "unknown" ?
+                                                        <UnknownValue
+                                                            label="Sign-in method unknown"
+                                                            reason={
+                                                                selected.authentication.unknown_reason ??
+                                                                "The authentication record was not read."
+                                                            }
+                                                            testId="access-user-overview-auth-unknown"
+                                                        />
+                                                    :   `${authenticationMethodLabel(selected.authentication)} · Reset available via the Security tab.`
+                                                    }
                                                 </p>
                                             </ConfigWorkspaceCard>
                                         </div>
@@ -582,6 +758,31 @@ export default function AccessUsersConfigurationPage() {
                                         </ConfigWorkspaceCard>
                                     : tab === "access" ?
                                         <div className="space-y-4" data-testid="access-user-access">
+                                            {!selected.has_access_profile ?
+                                                <div
+                                                    className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
+                                                    data-testid="access-user-access-no-profile"
+                                                    role="note"
+                                                >
+                                                    <p className="font-medium">No access profile exists for this user.</p>
+                                                    <p className="mt-1">
+                                                        {selected.effective_divergence_reason}
+                                                    </p>
+                                                    <p className="mt-1">
+                                                        Nothing is pre-selected, because nothing has been configured.
+                                                        Start configuring to choose a scope and create the profile.
+                                                    </p>
+                                                    <ConfigurationSecondaryButton
+                                                        className="mt-2"
+                                                        onClick={beginScopeConfiguration}
+                                                        data-testid="access-user-access-configure"
+                                                    >
+                                                        Configure access scope
+                                                    </ConfigurationSecondaryButton>
+                                                </div>
+                                            :   null}
+                                            {scopeEditorVisible ?
+                                            <>
                                             <ConfigWorkspaceCard testId="access-user-access-locations" title="Locations">
                                                 <LocationMultiSelect
                                                     testId="access-user-access-locations-select"
@@ -613,12 +814,14 @@ export default function AccessUsersConfigurationPage() {
                                                 />
                                             </ConfigWorkspaceCard>
                                             <ConfigurationPrimaryButton
-                                                disabled={accessSaving}
+                                                disabled={accessSaving || deptScope === "unset" || siteScope === "unset"}
                                                 onClick={() => void saveAccess()}
                                                 data-testid="access-user-access-save"
                                             >
                                                 {accessSaving ? "Saving…" : "Save access"}
                                             </ConfigurationPrimaryButton>
+                                            </>
+                                            :   null}
                                         </div>
                                     : tab === "security" ?
                                         <div className="space-y-4" data-testid="access-user-security">
@@ -626,11 +829,37 @@ export default function AccessUsersConfigurationPage() {
                                                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Account</dt>
-                                                        <dd className="mt-0.5">Active</dd>
+                                                        <dd className="mt-0.5" data-testid="access-user-security-status">
+                                                            {selected.lifecycle.state === "unknown" ?
+                                                                <UnknownValue
+                                                                    reason={
+                                                                        selected.lifecycle.unknown_reason ??
+                                                                        "This state was not read."
+                                                                    }
+                                                                />
+                                                            :   MEMBER_LIFECYCLE_LABEL[selected.lifecycle.state]}
+                                                            {selected.lifecycle.deactivated_until ?
+                                                                <span className="ml-1 text-[11px] text-alloy-midnight/50">
+                                                                    until{" "}
+                                                                    {new Date(
+                                                                        selected.lifecycle.deactivated_until,
+                                                                    ).toLocaleString()}
+                                                                </span>
+                                                            :   null}
+                                                        </dd>
                                                     </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Authentication</dt>
-                                                        <dd className="mt-0.5">Password</dd>
+                                                        <dd className="mt-0.5" data-testid="access-user-security-auth">
+                                                            {selected.authentication.state === "unknown" ?
+                                                                <UnknownValue
+                                                                    reason={
+                                                                        selected.authentication.unknown_reason ??
+                                                                        "The authentication record was not read."
+                                                                    }
+                                                                />
+                                                            :   authenticationMethodLabel(selected.authentication)}
+                                                        </dd>
                                                     </div>
                                                 </dl>
                                                 <ConfigurationSecondaryButton
@@ -643,8 +872,29 @@ export default function AccessUsersConfigurationPage() {
                                                 </ConfigurationSecondaryButton>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard testId="access-user-security-mfa" title="Multi-factor authentication">
-                                                <p className="text-sm text-alloy-midnight/55" data-capability="planned">
-                                                    Multi-factor authentication is planned and not yet available.
+                                                {/*
+                                                  * W-46: factor *presence* is readable from the auth record, so it is
+                                                  * reported. MFA *policy* — who must enrol — has no source until W-36,
+                                                  * and that half stays marked Planned rather than implied by the first.
+                                                  */}
+                                                <p className="text-sm" data-testid="access-user-security-mfa-state">
+                                                    {selected.authentication.mfa === "unknown" ?
+                                                        <UnknownValue
+                                                            reason={
+                                                                selected.authentication.mfa_unknown_reason ??
+                                                                "Factor enrolment was not read."
+                                                            }
+                                                        />
+                                                    : selected.authentication.mfa === "enrolled" ?
+                                                        "A verified second factor is enrolled on this account."
+                                                    :   "No second factor is enrolled on this account."}
+                                                </p>
+                                                <p
+                                                    className="mt-1.5 text-[12px] text-alloy-midnight/55"
+                                                    data-capability="planned"
+                                                >
+                                                    Requiring multi-factor authentication by role is planned and not yet
+                                                    available.
                                                 </p>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard testId="access-user-security-sessions" title="Sessions">
