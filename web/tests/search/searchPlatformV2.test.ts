@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+
 import { runSearch } from "@/lib/search/runSearch";
 import { SEARCH_RESULT_DOCTRINE } from "@/lib/search/searchContracts";
 import { resetSearchProcessConfigurationCache } from "@/lib/search/searchProcessConfiguration";
@@ -42,18 +44,18 @@ const DEPT_ENROLLMENT = "90909090-9090-4090-8090-909090909090";
 
 const KELLY_PERSON = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
 
-const openDim = {
-    departmentScope: "all" as const,
+const openDim: AdminAccessScopeDimensions = {
+    departmentScope: "all",
     allowedDepartmentIds: null,
-    siteScope: "all" as const,
+    siteScope: "all",
     allowedSiteLocationIds: null,
 };
 
 /** Restricted operator: Bend only. */
-const bendOnlyDim = {
-    departmentScope: "all" as const,
+const bendOnlyDim: AdminAccessScopeDimensions = {
+    departmentScope: "all",
     allowedDepartmentIds: null,
-    siteScope: "restricted" as const,
+    siteScope: "restricted",
     allowedSiteLocationIds: [BEND_CAMPUS],
 };
 
@@ -335,7 +337,11 @@ function createMockSupabase(tables: Record<string, Array<Record<string, unknown>
     return { from: (table: string) => chain(table) } as unknown as SupabaseClient;
 }
 
-function run(rawQ: string, dimensions = openDim, fixtures = baseFixtures()) {
+function run(
+    rawQ: string,
+    dimensions: AdminAccessScopeDimensions = openDim,
+    fixtures = baseFixtures()
+) {
     return runSearch({
         supabase: createMockSupabase(fixtures),
         orgId: ORG,

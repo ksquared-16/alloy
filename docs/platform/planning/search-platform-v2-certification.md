@@ -1,3 +1,10 @@
+---
+owner: platform
+status: active
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # Search Platform V2 — certification report
 
 **Branch:** `agent/claude/6-search-platform` · **Base:** `origin/staging` @ `e26cb49db`

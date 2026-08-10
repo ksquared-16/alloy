@@ -1,10 +1,17 @@
+---
+owner: platform
+status: active
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # Search V1 investigation — evidence
 
 Base: `origin/staging` @ `0108c0005`. Read-only inspection checkout.
 
 ## 1. Current query API
 
-`GET /api/admin/global-search?q=&limit=` — [route.ts](web/app/api/admin/global-search/route.ts)
+`GET /api/admin/global-search?q=&limit=` — `web/app/api/admin/global-search/route.ts`
 
 - `requireAdminOrOps()` gate, then `getAdminContextCached()` (org), then
   `getAdminAccessContextCached()` → `scopeDimensionsFromAccess(access)`.

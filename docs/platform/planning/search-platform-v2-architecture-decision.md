@@ -1,3 +1,10 @@
+---
+owner: platform
+status: active
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # Search Platform V2 — architecture decision
 
 **Base:** `origin/staging` @ `e26cb49db`

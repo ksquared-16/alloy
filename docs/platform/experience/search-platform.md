@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # Search Platform
 
 **Status:** V2 — canonical owning doctrine for Alloy Search.
