@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../redactedTest";
 
 /**
  * Search Platform V2 — tenant discovery.
