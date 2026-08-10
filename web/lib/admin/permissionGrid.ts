@@ -24,7 +24,55 @@
  *     full grant response and PUTs the union; H2 is what keeps that non-destructive.
  */
 
+import unenforcedPermissionKeys from "@/lib/admin/unenforcedPermissionKeys.json";
+
 export type PermissionGridLevel = "none" | "read" | "write";
+
+/**
+ * **W-50 (`IA-R8`, `T-6`).** Catalog keys that no product source names on an executable line.
+ *
+ * `05…§2.1` counts *"11 of 18 grantable keys consulted by nothing; 4 of 9 grid rows inert in both
+ * columns"*, and `01…§14`'s `T-6` names the result *"revocation theatre"* — an operator sets a
+ * capability to *None* and nothing changes. W-10 made that worse before it made it better: the grid
+ * became a projection of the whole catalog, so keys an operator had never been offered arrived on
+ * screen as controls.
+ *
+ * The list is data, not code, and `unenforcedPermissionKeys.json` explains why: the enforcement scan
+ * walks `.ts`/`.tsx` under `web/lib`, so writing these keys as TypeScript literals here would give
+ * every one of them a site and make the artifact evidence for its own falsity. It would also violate
+ * `RL-3`'s tier A clause, which forbids a permission-key literal in this file for the same family of
+ * reason — a list in source is a list that can be authored.
+ *
+ * **This is not `RL-35`.** The plan's `RL-35` is *"every catalog key resolves to ≥1 enforcement
+ * site"*, and it cannot be green until W-11's 36 deletions apply — which is `OD-3`, an operator
+ * decision. `IA-R8`'s presentation clause needs no such decision: whether the row is a *control* is
+ * settled by whether anything enforces it, and that is knowable today.
+ */
+export const UNENFORCED_PERMISSION_KEYS: ReadonlySet<string> = new Set(
+    (unenforcedPermissionKeys as { keys: string[] }).keys
+);
+
+export type RowEnforcement = {
+    /** At least one read key has an enforcement site. */
+    readEnforced: boolean;
+    /** At least one write key has an enforcement site. */
+    writeEnforced: boolean;
+    /** Neither column can grant anything the platform consults. */
+    inert: boolean;
+};
+
+/**
+ * Whether each column of a row grants something the platform actually consults.
+ *
+ * Per column, not per row: `documents.read` is enforced and `documents.write` is not, so a row-level
+ * verdict would either hide a real capability or keep offering an inert one. The grain has to match
+ * the control's grain, and the control is a column.
+ */
+export function rowEnforcement(row: PermissionGridRow): RowEnforcement {
+    const readEnforced = row.readKeys.some((key) => !UNENFORCED_PERMISSION_KEYS.has(key));
+    const writeEnforced = row.writeKeys.some((key) => !UNENFORCED_PERMISSION_KEYS.has(key));
+    return { readEnforced, writeEnforced, inert: !readEnforced && !writeEnforced };
+}
 
 /** One `permission_definitions` row, as served by `GET /api/admin/rbac/permissions`. */
 export type PermissionCatalogEntry = {
@@ -210,6 +258,31 @@ export function levelsForRow(row: PermissionGridRow): PermissionGridLevel[] {
     if (row.readKeys.length > 0) levels.push("read");
     if (row.writeKeys.length > 0) levels.push("write");
     return levels;
+}
+
+/**
+ * The levels a row may be **offered as controls** — {@link levelsForRow} minus the columns nothing
+ * enforces. This is `IA-R8`'s clause: *"a grid row whose keys have no enforcement site MUST NOT
+ * render as a setting."*
+ *
+ * `levelsForRow` stays exactly as it was, and the split is deliberate. That function answers what
+ * the *catalog* can express and is the shape `RL-3` locks; this one answers what the *platform* will
+ * act on. Folding enforcement into the projection would make W-10's "the grid is the catalog"
+ * property depend on a second input, and a catalog fixture would then render differently depending
+ * on repository state — which is not a property a projection can have.
+ *
+ * A row whose every column is inert returns `["none"]`, so it renders no radio at all. The existing
+ * grant is untouched by that: `applyGridRowSelection` runs only when a control changes, and an
+ * absent control cannot change. Removing the theatre must not revoke anything.
+ */
+export function offerableLevelsForRow(row: PermissionGridRow): PermissionGridLevel[] {
+    const enforcement = rowEnforcement(row);
+    return levelsForRow(row).filter(
+        (level) =>
+            level === "none" ||
+            (level === "read" && enforcement.readEnforced) ||
+            (level === "write" && enforcement.writeEnforced)
+    );
 }
 
 /**

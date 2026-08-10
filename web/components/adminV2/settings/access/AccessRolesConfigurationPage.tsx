@@ -30,7 +30,8 @@ import {
     applyGridRowSelection,
     buildPermissionGridRows,
     levelFromGrantedKeys,
-    levelsForRow,
+    offerableLevelsForRow,
+    rowEnforcement,
     type PermissionGridLevel,
 } from "@/lib/admin/permissionGrid";
 import { accessWorkspaceChapterHref } from "@/lib/access/accessChapterRoutes";
@@ -163,6 +164,13 @@ export default function AccessRolesConfigurationPage() {
      */
     const gridRows = useMemo(() => buildPermissionGridRows(permissions), [permissions]);
 
+    /**
+     * W-50. A grant on a key nothing consults is still a grant — the row exists in the database and
+     * hiding it would misstate the record — but it is not a capability the role *has*. `IA-R6`
+     * forbids simulating unbuilt capability, so the summary keeps the row and marks it rather than
+     * listing it beside the ones that work. A role that was granted the whole catalog would
+     * otherwise read as though it could do 57 things, 36 of which nothing performs.
+     */
     const capabilitySummary = useMemo(() => {
         return gridRows
             .filter((row) => levelFromGrantedKeys(row, grantKeys) !== "none")
@@ -170,6 +178,7 @@ export default function AccessRolesConfigurationPage() {
                 id: row.id,
                 label: row.label,
                 level: levelFromGrantedKeys(row, grantKeys),
+                enforced: !rowEnforcement(row).inert,
             }));
     }, [gridRows, grantKeys]);
 
@@ -435,10 +444,32 @@ export default function AccessRolesConfigurationPage() {
                                                     </p>
                                                 :   <ul className="space-y-1.5 text-sm">
                                                         {capabilitySummary.map((c) => (
-                                                            <li key={c.id} className="flex items-center justify-between gap-2">
-                                                                <span className="text-alloy-midnight/80">{c.label}</span>
-                                                                <span className="text-[11px] font-medium uppercase tracking-wide text-alloy-bend-pine/80">
-                                                                    {c.level === "write" ? "Write" : "Read"}
+                                                            <li
+                                                                key={c.id}
+                                                                className="flex items-center justify-between gap-2"
+                                                                data-capability={c.enforced ? undefined : "planned"}
+                                                                data-testid={`access-role-capability-${c.id}`}
+                                                            >
+                                                                <span
+                                                                    className={
+                                                                        c.enforced ? "text-alloy-midnight/80" : (
+                                                                            "text-alloy-midnight/45"
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {c.label}
+                                                                </span>
+                                                                <span
+                                                                    className={
+                                                                        c.enforced ?
+                                                                            "text-[11px] font-medium uppercase tracking-wide text-alloy-bend-pine/80"
+                                                                        :   "text-[11px] font-medium uppercase tracking-wide text-alloy-midnight/40"
+                                                                    }
+                                                                >
+                                                                    {c.enforced ?
+                                                                        c.level === "write" ? "Write"
+                                                                        :   "Read"
+                                                                    :   "Granted · not enforced"}
                                                                 </span>
                                                             </li>
                                                         ))}
@@ -487,7 +518,13 @@ export default function AccessRolesConfigurationPage() {
                                                         :   null}
                                                         {gridRows.map((row, index) => {
                                                             const level = levelFromGrantedKeys(row, grantKeys);
-                                                            const offered = levelsForRow(row);
+                                                            // W-50 / IA-R8. `offerable` is the
+                                                            // enforced subset: a column nothing
+                                                            // consults renders no radio, because a
+                                                            // control that changes nothing is T-6's
+                                                            // revocation theatre.
+                                                            const offered = offerableLevelsForRow(row);
+                                                            const enforcement = rowEnforcement(row);
                                                             const readHint = row.readKeys
                                                                 .map((k) => permissionLabelByKey.get(k) ?? "")
                                                                 .filter(Boolean)
@@ -514,9 +551,21 @@ export default function AccessRolesConfigurationPage() {
                                                                             </th>
                                                                         </tr>
                                                                     :   null}
-                                                                    <tr className="border-t border-alloy-stone/15" data-permission-row={row.id}>
+                                                                    <tr
+                                                                        className="border-t border-alloy-stone/15"
+                                                                        data-permission-row={row.id}
+                                                                        data-capability={enforcement.inert ? "planned" : undefined}
+                                                                    >
                                                                         <td className="px-3 py-2">
-                                                                            <div className="font-medium text-alloy-midnight">{row.label}</div>
+                                                                            <div
+                                                                                className={
+                                                                                    enforcement.inert ?
+                                                                                        "font-medium text-alloy-midnight/45"
+                                                                                    :   "font-medium text-alloy-midnight"
+                                                                                }
+                                                                            >
+                                                                                {row.label}
+                                                                            </div>
                                                                             {readHint || writeHint ?
                                                                                 <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
                                                                                     {readHint ? `Read: ${readHint}` : null}
@@ -525,29 +574,48 @@ export default function AccessRolesConfigurationPage() {
                                                                                 </div>
                                                                             :   null}
                                                                         </td>
-                                                                        {(["none", "read", "write"] as const).map((opt) => (
-                                                                            <td key={opt} className="px-3 py-2 align-top">
-                                                                                {offered.includes(opt) ?
-                                                                                    <label className="inline-flex items-center gap-2">
-                                                                                        <input
-                                                                                            type="radio"
-                                                                                            name={`access-perm-${row.id}`}
-                                                                                            checked={level === opt}
-                                                                                            onChange={() => setGridLevel(row.id, opt)}
-                                                                                            data-testid={`access-role-permission-${row.id}-${opt}`}
-                                                                                        />
-                                                                                        <span className="sr-only">{opt}</span>
-                                                                                    </label>
-                                                                                :   <span
-                                                                                        className="text-alloy-midnight/30"
-                                                                                        aria-label="Not available for this capability"
-                                                                                        data-testid={`access-role-permission-${row.id}-${opt}-unavailable`}
-                                                                                    >
-                                                                                        —
-                                                                                    </span>
-                                                                                }
+                                                                        {/*
+                                                                          * IA-R8 — a row no code consults is not a setting, so it
+                                                                          * states its condition once instead of drawing three
+                                                                          * radios that would change nothing. Any grant already
+                                                                          * held on these keys is left exactly as it is: without a
+                                                                          * control there is nothing to fire `setGridLevel`, and H2
+                                                                          * keeps an untouched save non-destructive.
+                                                                          */}
+                                                                        {enforcement.inert ?
+                                                                            <td
+                                                                                colSpan={3}
+                                                                                className="px-3 py-2 align-top text-[11px] text-alloy-midnight/45"
+                                                                                data-testid={`access-role-permission-${row.id}-unenforced`}
+                                                                            >
+                                                                                Not enforced — nothing in the platform reads this
+                                                                                capability yet, so granting it would change
+                                                                                nothing.
                                                                             </td>
-                                                                        ))}
+                                                                        :   (["none", "read", "write"] as const).map((opt) => (
+                                                                                <td key={opt} className="px-3 py-2 align-top">
+                                                                                    {offered.includes(opt) ?
+                                                                                        <label className="inline-flex items-center gap-2">
+                                                                                            <input
+                                                                                                type="radio"
+                                                                                                name={`access-perm-${row.id}`}
+                                                                                                checked={level === opt}
+                                                                                                onChange={() => setGridLevel(row.id, opt)}
+                                                                                                data-testid={`access-role-permission-${row.id}-${opt}`}
+                                                                                            />
+                                                                                            <span className="sr-only">{opt}</span>
+                                                                                        </label>
+                                                                                    :   <span
+                                                                                            className="text-alloy-midnight/30"
+                                                                                            aria-label="Not available for this capability"
+                                                                                            data-testid={`access-role-permission-${row.id}-${opt}-unavailable`}
+                                                                                        >
+                                                                                            —
+                                                                                        </span>
+                                                                                    }
+                                                                                </td>
+                                                                            ))
+                                                                        }
                                                                     </tr>
                                                                 </Fragment>
                                                             );
