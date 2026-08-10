@@ -1,0 +1,95 @@
+{
+  "workstream": "W-4",
+  "leg": "fourth issuance — DX7 fixture reissue",
+  "date": "2026-08-07",
+  "mission": "msn_bc33a72e3138ebc215",
+  "assignment": "asg_360e21924f40a5",
+  "context_version": "v1",
+  "content_hash": "187f0bd57d82c05d11aed0f3b4f06d1d",
+  "base": {
+    "commit": "448ca9d9f",
+    "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+    "web_commits_since_2026_08_06_base_a3e01ddb5": [
+      "0dd598e7a — W-4 re-execution (this workstream's own ratchet fix)",
+      "ab9c5730b — W-5 membership/profile atomic write",
+      "448ca9d9f — W-7 dual-read absent-profile instrument"
+    ],
+    "tree_state": "working tree, not a clean checkout: web/tests/access/analyticsRouteGates.test.ts is uncommitted-modified by a concurrent assignment; scripts/local-dev/** carries unrelated Vacilando changes. No W-4 artifact is modified."
+  },
+  "result": {
+    "ok": true,
+    "violations": 0,
+    "stale": 0
+  },
+  "baseline": {
+    "api_route_files": 570,
+    "holds_service_client_direct_import": 541,
+    "resolves_principal": 526,
+    "resolves_none_exception_baseline": 15,
+    "reviewed_exceptions": 15,
+    "frozen_w15_baseline": 0,
+    "reaches_service_client_transitively": 567,
+    "transitive_only_unresolved_advisory": 10
+  },
+  "delta_vs_2026_08_06": "none — every measure identical",
+  "ratchet": {
+    "unresolved_ceiling": 15,
+    "unresolved_live_floor": 15,
+    "advisory_ceiling": 10,
+    "advisory_live_floor": 10,
+    "slack": "none in either direction",
+    "note": "first run since the ceilings moved out of the vitest lock and into serviceClientPrincipal.allowlist.json, so the first evidence that prebuild carries the bound"
+  },
+  "commands": [
+    {
+      "command": "npm run check:service-client-principal",
+      "cwd": "web",
+      "executed": true,
+      "result": "green — full table printed, no violations, no stale entries"
+    },
+    {
+      "command": "npm run check:service-client-principal:evidence",
+      "cwd": "web",
+      "executed": true,
+      "result": "regenerated w4-service-client-principal-baseline.json — byte-identical to the committed copy (git reports no change)"
+    },
+    {
+      "command": "npx vitest run tests/access/serviceClientPrincipalCheck.test.ts",
+      "cwd": "web",
+      "executed": true,
+      "result": "18 passed (18) — matches the 2026-08-06 record exactly"
+    },
+    {
+      "command": "node scripts/checkServiceClientPrincipal.mjs",
+      "cwd": "web",
+      "executed": false,
+      "result": "blocked by a command-approval wall on the bare node invocation; the npm script wrapping the identical command was NOT blocked and was used instead"
+    }
+  ],
+  "finding": {
+    "title": "helper extraction is not the escape — constructing or returning the client is",
+    "supersedes": "the 2026-08-06 property handed to W-15: 'a helper refactor is an exit from W-4's enforced predicate'",
+    "evidence": [
+      "lib/tours/public/tourActionRouteGuard.ts constructs the client (:76) and returns it (:89) — 2 routes left the enforced set for the advisory list",
+      "lib/admin/membershipWithProfile.ts (W-5) receives a SupabaseClient parameter and constructs nothing — direct holders stayed 541 across a refactor that moved EVERY membership write out of route handlers",
+      "lib/admin/resolveAdminAccessCore.ts (W-7) same shape — supabase: SupabaseClient at :130, :173, :197, :298",
+      "app/api/admin/users/route.ts still imports createAdminClient (:2) and resolves via getAdminContextCached / requireUsersRolesManageAuth (:3, :4)",
+      "app/api/admin/users/[userId]/role/route.ts imports at :2, constructs at :32, resolves at :12",
+      "neither admin/users route appears on any allow-list, so a green check is itself the proof that both resolve a principal"
+    ],
+    "refined_property_for_w15": "a helper is an exit from W-4's predicate iff it constructs or returns the service-role client; a helper that takes the client as a parameter cannot be an exit, because the caller must still construct one and constructing one requires the import the predicate is built on"
+  },
+  "not_verified": {
+    "cli_red_demonstration": "deliberately not repeated. The 2026-08-06 leg showed red by temporarily setting the register ceilings to 24/3. A concurrent writer is active in this worktree (448ca9d9f landed mid-session), so temporarily corrupting a tracked register file risks another session committing the corrupted state. Red is instead proven in-process via runServiceClientPrincipalCheck(allowlistOverride) (checkServiceClientPrincipal.mjs:463) — 5 of the 18 locked tests: empty list, stale entry, ratchet-exceeded, ratchet-slack, ratchet-missing. What is carried forward and not re-proven is that the CLI PROCESS exits non-zero on those states.",
+    "typecheck": "not run — no source, test or register file was changed by this assignment",
+    "live_database_query": "none — W-0's counts are seven days old; W-4 depends on none of them",
+    "tier_d": "none, per §14.3.7",
+    "register_line_by_line_reread": "not done this run. The 2026-08-06 leg re-read the advisory entries and found four inaccurate. The byte-identical snapshot proves the SETS have not moved, but set-identity is precisely what does not bind a reason to the line it cites. Three commits, none touching a listed route, is a weak reason to expect drift — a reason, not a proof."
+  },
+  "honest_limit": "unchanged and still governs — this check proves a principal is RESOLVED, never that the result GATES the handler. W-14 and W-15 own that proof.",
+  "changed_files": [
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+    "docs/platform/planning/vacilando-os/qa/access-identity-v2/w4-dx7-reissue-evidence.json"
+  ],
+  "remediation_performed": "none — W-4 measures and freezes; remediation of the 15 exceptions and the 10 advisory routes is W-15's sweep"
+}

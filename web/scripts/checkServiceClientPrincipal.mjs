@@ -452,7 +452,7 @@ function loadAllowlist(override) {
     const baseline = new Map();
     for (const e of raw.baseline) baseline.set(e.route, e);
     const advisory = new Set(raw.advisory_transitive_only.map((e) => e.route));
-    return { raw, exceptions, baseline, advisory };
+    return { raw, exceptions, baseline, advisory, ratchet: raw.ratchet ?? null };
 }
 
 /**
@@ -461,7 +461,7 @@ function loadAllowlist(override) {
  *   an empty allow-list actually fails it.
  */
 export function runServiceClientPrincipalCheck(allowlistOverride) {
-    const { raw, exceptions, baseline, advisory } = loadAllowlist(allowlistOverride);
+    const { raw, exceptions, baseline, advisory, ratchet } = loadAllowlist(allowlistOverride);
     const routes = walkRoutes(API_ROOT).sort();
 
     const rows = routes.map((file) => {
@@ -548,6 +548,42 @@ export function runServiceClientPrincipalCheck(allowlistOverride) {
         }
     }
 
+    // The numeric ceilings. Set membership above stops a list growing without an edit; it does
+    // NOT stop the edit. Only a ceiling does that, and until 2026-08-06 the ceilings lived solely
+    // in the vitest lock — so `e7e585010` grew the advisory set 3 → 9 in an allow-list-only commit,
+    // `prebuild` stayed green, and the breach sat latent until someone ran the lock on a base that
+    // contained both lines. Enforcing here puts it in front of `next build`, where it belongs.
+    //
+    // Over the ceiling is a VIOLATION: the count grew, which is the thing being prevented.
+    // Under the ceiling is STALE: the floor dropped and nobody followed it down, which silently
+    // hands out that many free exceptions. A ratchet is only a ratchet if it follows the floor.
+    for (const [key, live] of [
+        ["max_subject_unresolved", unresolved.length],
+        ["max_transitive_only_unresolved", transitiveOnly.length],
+    ]) {
+        const ceiling = ratchet?.[key];
+        if (typeof ceiling !== "number") {
+            violations.push({
+                route: `ratchet.${key}`,
+                kind: "ratchet-missing",
+                detail: `no numeric ceiling recorded under "ratchet" in the allow-list — the count is unbounded`,
+            });
+        } else if (live > ceiling) {
+            violations.push({
+                route: `ratchet.${key}`,
+                kind: "ratchet-exceeded",
+                detail: `${live} exceeds the recorded ceiling of ${ceiling} — gate the route, or raise the ceiling deliberately and say why`,
+            });
+        } else if (live < ceiling) {
+            stale.push({
+                route: `ratchet.${key}`,
+                kind: "ratchet-slack",
+                list: "ratchet",
+                detail: `ceiling is ${ceiling} but the live floor is ${live} — re-tighten it to ${live}, or it hands out ${ceiling - live} free exception(s)`,
+            });
+        }
+    }
+
     return {
         generated_by: "web/scripts/checkServiceClientPrincipal.mjs",
         counts: {
@@ -561,6 +597,10 @@ export function runServiceClientPrincipalCheck(allowlistOverride) {
             listed_baseline: baseline.size,
             transitive_only_unresolved: transitiveOnly.length,
             listed_advisory: advisory.size,
+        },
+        ratchet: {
+            max_subject_unresolved: ratchet?.max_subject_unresolved ?? null,
+            max_transitive_only_unresolved: ratchet?.max_transitive_only_unresolved ?? null,
         },
         ok: violations.length === 0 && stale.length === 0,
         violations,
@@ -610,15 +650,29 @@ if (invokedDirectly) {
         console.log(`      W-15 baseline (frozen)                    ${String(c.listed_baseline).padStart(4)}`);
         console.log(`  reaches a service client transitively         ${String(c.reaches_service_client_transitive).padStart(4)}`);
         console.log(`    transitive-only and unresolved (advisory)   ${String(c.transitive_only_unresolved).padStart(4)}`);
+        console.log(
+            `\n  ratchet ceilings                    ` +
+                `unresolved ≤ ${report.ratchet.max_subject_unresolved} · advisory ≤ ${report.ratchet.max_transitive_only_unresolved}`
+        );
 
         if (report.violations.length) {
-            console.log(`\n✗ ${report.violations.length} unlisted violation(s):`);
-            for (const v of report.violations) console.log(`    ${v.route}`);
-            console.log(
-                `\n  A route holding a service-role client bypasses RLS, so it must resolve a principal itself.\n` +
-                    `  Gate it, or add it to "exceptions" in scripts/serviceClientPrincipal.allowlist.json with a reason.\n` +
-                    `  The "baseline" list is frozen and may not be added to.`
-            );
+            // Ratchet breaches are not routes and must not be given the route remediation, which
+            // would send the reader looking for a file that does not exist.
+            const routeViolations = report.violations.filter((v) => !v.kind.startsWith("ratchet-"));
+            const ratchetViolations = report.violations.filter((v) => v.kind.startsWith("ratchet-"));
+            if (routeViolations.length) {
+                console.log(`\n✗ ${routeViolations.length} unlisted violation(s):`);
+                for (const v of routeViolations) console.log(`    ${v.route}`);
+                console.log(
+                    `\n  A route holding a service-role client bypasses RLS, so it must resolve a principal itself.\n` +
+                        `  Gate it, or add it to "exceptions" in scripts/serviceClientPrincipal.allowlist.json with a reason.\n` +
+                        `  The "baseline" list is frozen and may not be added to.`
+                );
+            }
+            if (ratchetViolations.length) {
+                console.log(`\n✗ ${ratchetViolations.length} ratchet breach(es) — a bounded count grew:`);
+                for (const v of ratchetViolations) console.log(`    ${v.route} — ${v.detail}`);
+            }
         }
         if (report.stale.length) {
             console.log(`\n✗ ${report.stale.length} stale list entr(ies) — the lists may only shrink:`);

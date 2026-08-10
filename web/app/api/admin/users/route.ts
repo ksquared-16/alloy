@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
+import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 
 export type AdminUserRow = {
     user_id: string;
@@ -99,16 +100,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invite did not return a user" }, { status: 500 });
     }
 
-    const { error: insertError } = await supabase.from("user_roles").insert({
-        org_id: access.orgId,
-        user_id: user.id,
+    // W-5/G4: membership + access profile are one transaction. Never insert into
+    // `user_roles` directly here — that is the fail-open path this closes.
+    const membership = await createMembershipWithAccessProfile(supabase, {
+        userId: user.id,
+        orgId: access.orgId,
         role,
     });
-    if (insertError) {
-        if (insertError.code === "23505") {
+    if (!membership.ok) {
+        if (membership.kind === "duplicate") {
             return NextResponse.json({ error: "This user already has this role in this org" }, { status: 409 });
         }
-        return NextResponse.json({ error: insertError.message }, { status: 500 });
+        return NextResponse.json({ error: membership.error }, { status: 500 });
     }
 
     return NextResponse.json({

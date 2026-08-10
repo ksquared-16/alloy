@@ -1,23 +1,39 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 02 — Canonical access & identity model (Person ↔ user ↔ role ↔ scope)
 
 > **This file carries three Mission 2 phases.**
 >
 > **Part I — §1–§13 · *Person ↔ user ↔ role ↔ scope*** (assignment `asg_7a47782c7dc1c9`). States the four
 > nouns and three edges normatively, re-anchors the accepted invariant register to today's code (§7), and
-> records divergences `M2-1 … M2-9` (§8).
+> records divergences `M2-1 … M2-9` (§8). **Reopened 2026-08-06** on operator guidance: §1.3 restates the
+> authority chain as **four layers, two branches** (`M2-16`), and §4.6 bounds what a role-administration
+> surface owes the model (`I-32`, `RA-1–RA-5`). Part III is not modified by that reopen.
 >
-> **Part III — §24–§32 · *Decisions requiring approval*** (assignment `asg_90a921a3b7f414`). Consolidates
-> every open decision in the corpus — from all six documents that raise one — into a single register that can
-> be cited by number, groups them into the sittings that must decide them together, and orders them by what
-> they block. It **adds no new decision** and re-derives no recommendation; it makes the existing ones
-> approvable. **Parts I and II are not modified by Part III.**
+> **Part III — §24–§34, reopened §35–§40 · *Decisions requiring approval*** (assignment `asg_90a921a3b7f414`).
+> Consolidates every open decision in the corpus — from all six documents that raise one — into a single
+> register that can be cited by number, groups them into the sittings that must decide them together, and
+> orders them by what they block. It **adds no new decision** and re-derives no recommendation; it makes the
+> existing ones approvable. **Reopened 2026-08-06**: the register is amended from **21 to 25** open decisions
+> (§25, §36) after `AD-22`/`AD-23`, `D-15` and `D-RM1` were minted by three other documents; §37 supplies the
+> extension and prefix clauses §26.2 lacked (`X-12`); §38–§39 place the four and amend the approval order,
+> adding **Sitting 0** for `AD-25` — *"the decision that governs both operator directives"*. **The reopen
+> still answers nothing, and Parts I and II are not modified by Part III.**
 >
 > **Part II — §14–§22 · *Effective-access resolution model*** (assignment `asg_5a0d3ccf5dea42`). Specifies the
 > **function** that turns a request into an access decision — the stages, their order, how the two branches
 > compose, and what must happen when an input changes or a read fails. Part I said *what the nouns are*; Part II
 > says *how a decision is computed from them*. It adds `M2-10 … M2-15`, invariants `I-28 … I-31`, and decisions
-> `D11`/`D12`. **Part I is not modified by Part II** except for §7, where the invariant register gains four rows
-> and `I-25` moves from *carried, unverified* to *verified and violated*.
+> `D11`/`D12`. **Reopened 2026-08-06** on the same two operator directives Part I answered: §15.6 states the
+> stages against the four-layer chain, §17.7–§17.8 state what the **resolver** owes a simplified role editor,
+> and `M2-17 … M2-19`, `I-33`, `I-34` follow. **Part I is not modified by Part II** except for §7, where the
+> invariant register gains four rows and `I-25` moves from *carried, unverified* to *verified and violated* —
+> and for the mechanical re-lettering of §4.6's `R1–R5` to `RA-1–RA-5` (`M2-19`), which changes no wording.
 
 > **Mission 2 refresh.** The accepted model is reused as input, not re-derived. This pass states the
 > **Person ↔ user ↔ role ↔ scope** model normatively (§1–§6), then re-anchors the accepted invariants
@@ -35,10 +51,19 @@
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Person ↔ user ↔ role ↔ scope model* · assignment `asg_7a47782c7dc1c9`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
 **Worktree** `wt6-vacilando-os-product-def` @ `bdcf55908`
-**Date** 2026-08-03
+**Date** 2026-08-03 · **reopened and extended 2026-08-06** (§0, §1.3, §4.6) in
+`wt6-director-experience-dx5-5-continuation` @ `a72caaff4`
 **Status** Proposed — specification only. No code, schema, or migration is changed by this phase.
 **Method** static, file-grounded. Every claim marked **[verified]** was read at the cited `path:line` in this
 pass. Claims carried from the accepted model without re-derivation are marked **[carried]**.
+
+> **Reopen (2026-08-06), on operator guidance.** Two directives: *the role hierarchy is still too deep — reduce
+> to four layers*, and *simplify the role editor without changing the access architecture*. The first is
+> answered in **§1.3** — the chain is restated as four layers and two branches, which is what M2-1 already
+> implied. The second is **bounded, not executed**, in **§4.6**: `02` specifies what any role-editing surface
+> must preserve; the redesign itself belongs to `06-product-ia-and-flows.md` and is outside this assignment's
+> scope. The four-chapter Access workspace the guidance refers to (`users`, `roles`, `scopes`, `security`) was
+> read but **not modified**. Claims verified in the reopen pass are cited at `a72caaff4`.
 
 Keywords **MUST**, **MUST NOT**, **SHOULD**, **MAY** are used in the RFC 2119 sense.
 
@@ -91,9 +116,17 @@ Three consequences, and they carry most of §7's weight:
 | C10 — `owner`/`manager` are an RLS-only defect | **the vocabulary has leaked into application code** | §8, M2-6 |
 | §6.2 — "three break-glasses" | **at least 13 authority-deciding role literals** | §8, M2-7 |
 | §6.1 — `role_definitions` is the sole role vocabulary | **there are four vocabularies, one of them a CHECK constraint** | §4.2 |
+| §2 — "one chain, five links", drawn in sequence | **four layers, two branches** — the fifth link was width read as depth | §1.3, M2-16 |
 
 Nine divergences are newly recorded by this pass as **M2-1 … M2-9** (§8). Two new invariants (**I-26**,
 **I-27**) and two new decisions (**D9**, **D10**) follow from them.
+
+**The reopen pass (2026-08-06) adds two things and changes nothing else.** §1.3 restates the chain as **four
+layers, two branches** rather than five links — the arithmetic of M2-1, which Part I made but never carried
+through to the depth (**M2-16**). §4.6 states what a role-administration surface owes the model, so that
+simplifying the Access workspace can be checked against the architecture instead of judged by eye (**I-32**,
+constraints **RA-1–RA-5**). Both are projections of rules already in this document; **no invariant, edge, table, or
+decision is renumbered, reworded, or reinterpreted.**
 
 ---
 
@@ -119,11 +152,49 @@ All four are verified at the cited lines in this pass **[verified]**.
 | **E3a** | membership → capability | `role_definitions` → `role_permission_grants` → resolved key set | present; **does not honour `is_active`** (§4.4) |
 | **E3b** | membership → scope | `user_access_profiles(user_id, org_id)` → junctions | present; **fail-open on absence, bypassed by role** (§5) |
 
-### 1.3 The one authority chain, restated
+### 1.3 The authority chain is four layers deep, not five
 
-The accepted model's five-link chain **[carried]** (`02…:60-89` in the frozen copy) is unchanged and remains
-normative. This document adds only that its fourth and fifth links are **parallel branches off the third**,
-not a sequence — and that every gate therefore owes both (§7, I-23).
+The accepted model states *"One chain. Five links"* and draws them in sequence — credential → membership →
+role set → capability set → scope — with the consequence that *"a capability cannot escape its role; scope
+cannot escape its capability"* (frozen `02…:60-89`) **[carried]**. §0 shows the last two links are not in
+sequence: `user_access_profiles` is keyed on `(user_id, org_id)` and carries no `role` column
+(`20260504103000…:18-30`, unique at `:50`) **[verified]**, so scope hangs off the **membership**, not off the
+capability set.
+
+Once scope is a sibling of capability rather than its child, the fifth link is not depth. It is width:
+
+| Layer | Question | Capability branch (E3a) | Scope branch (E3b) |
+|---|---|---|---|
+| **L1 — Principal** | *who* | `auth.users.id` | *(shared)* |
+| **L2 — Membership** | *where* | `user_roles(user_id, org_id, role)` | *(shared)* |
+| **L3 — Assignment** | *as what* / *under what limit* | `role_definitions(org_id, role_key)` | `user_access_profiles(user_id, org_id)` |
+| **L4 — Resolved set** | *may do what* / *to which rows* | permission keys via `role_permission_grants` | department + site dimensions via the two junctions |
+
+**Four layers, two branches, both branches exactly four deep.** L1 and L2 are shared; the branches separate at
+L3 and are composed — never merged — at the gate.
+
+> **The chain is four layers deep. It MUST NOT be specified, drawn, or implemented as five.** A fifth layer can
+> only be produced by making one branch an input to the other, which is exactly what I-27 forbids.
+
+This is a restatement, not a change. No table, column, constraint, edge, or gate obligation moves; every
+invariant keeps its number and its wording. What changes is that the model stops describing a depth the schema
+does not have. Recorded as **M2-16** (§8).
+
+**This section also corrects Part I's own first statement of the finding.** The prior wording of §1.3 said the
+fourth and fifth links are *"parallel branches off the third"* — off the **role set**. §0 says otherwise, and
+§0 is right: `user_access_profiles` is keyed on the membership pair and never on a role, so the scope branch
+leaves at L2, one layer earlier. Branching at the role set would have left the chain five deep and would have
+made scope a property of a role. The corrected statement is that **E3a and E3b both leave the membership**.
+
+**One carried consequence follows from the correction.** The accepted §2's second consequence is right about
+the first pair and wrong-shaped about the second: scope does not derive from capability, so it cannot escape
+it. The correct form is what I-27 already requires —
+
+> **Narrowing is within a branch; composition is across branches.** A layer **MUST NOT** widen what the layer
+> above it in the *same* branch permitted. Between branches there is no narrowing relation at all: a gate
+> takes the intersection (I-27), and neither branch may read the other's output.
+
+Every gate still owes both branches (§7, I-23), unchanged.
 
 ---
 
@@ -327,6 +398,72 @@ load-bearing; it removes the one-principal path and leaves the two-principal pat
 
 This is decision **D9** (§10).
 
+### 4.6 What a role-administration surface owes the model
+
+The model has been silent on the operator surface, and that silence has become load-bearing: the Access
+workspace is under active simplification, and from the UI alone *simplify the editor* and *change the access
+architecture* are not distinguishable. This section supplies the boundary. It specifies **what any role-editing
+surface must preserve** — not what it should look like. The shape of the surface remains
+`06-product-ia-and-flows.md`'s to design.
+
+The surface today is one workspace at `/organization/access?section=…` with four chapters — `users`, `roles`,
+`scopes`, `security` (`web/lib/access/accessChapterRoutes.ts:10`) **[verified]** — rendered by
+`AccessWorkspaceSurface` (`:93-118`) **[verified]**, with `/settings/users-roles` retained as a thin named
+entrypoint (`UsersRolesConfigurationPage.tsx:7-18`) **[verified]**.
+
+**Roles and Access Scopes are already separate chapters, and that separation is not cosmetic** — it is L3's two
+branches made visible to the operator (§1.3). Folding them into a single role editor would put scope inside the
+role object and encode the precise category error I-27 forbids. It is the one simplification this document
+rules out by name.
+
+Five constraints. Each is a projection of a rule already stated above; none is new policy.
+
+| # | A role-administration surface… | Because | Rule |
+|---|---|---|---|
+| **RA-1** | **MUST** offer only `role_key`s present and `is_active` in `role_definitions` for the request's org | one role vocabulary | I-8, I-26 |
+| **RA-2** | **MUST NOT** present scope as an attribute of a role, or a role as an input to a scope control | the branches are independent in both directions | I-27, §0 |
+| **RA-3** | **MUST** be able to add and remove one `(principal, org, role)` row without disturbing the others | membership is the unit; capability is the union of roles | I-10, §4.1 |
+| **RA-4** | **MUST NOT** offer a role-level control that is not a capability grant | a role carries no behaviour of its own | §2 |
+| **RA-5** | **MUST** state, at the control itself, what deactivating a role does to principals already holding it | today it does nothing | M2-3, D10 |
+
+> **These five were labelled `R1`–`R5` when this section was written on 2026-08-06, which collided with the
+> resolution stages `R1`–`R6` that Part II defined in §15.1 three days earlier.** Part II's reopen pass
+> re-lettered them to `RA-n` under §26.2's rule — the prior reading keeps the number, the displaced reading is
+> reassigned. Nothing else in this section changed. Recorded as **M2-19** (§18).
+
+> **I-32 (new).** Simplification is a surface operation. A role-administration surface **MUST NOT** be where
+> the access model acquires or loses structure: every fact it writes **MUST** be expressible as rows in
+> `user_roles`, `role_definitions` and `role_permission_grants` under the constraints above, and every fact it
+> chooses not to show **MUST** remain settable by some sanctioned path.
+
+**RA-3 is the constraint violated today, and by the API rather than by the UI.** `PATCH /users/[userId]/role`
+deletes every role row for the pair and inserts one (`role/route.ts:44-47`) **[verified]**, §4.1. A surface
+built on that endpoint **cannot** satisfy RA-3 however it is drawn. So *"simplify the editor"* and *"do not
+change the access architecture"* are jointly satisfiable only if the additive assignment path that I-10 already
+requires is built first — otherwise a simplified single-select role control does not merely reflect C7, it
+hardens it into the product as an intended design.
+
+> **This is a sequencing constraint on the simplification, and it is the only claim in this section that is not
+> purely descriptive:** the additive `(principal, org, role)` assignment API — `03…`'s **`W-17` — Multi-role
+> write path** *(M · I-10 · closes C7 · informed by D2)* (`03…:1103`) **[verified]** — **SHOULD** land before,
+> or with, any redesign of the Roles chapter.
+
+**The plan of record already says this, and §4.6 only gives it a rule to be checked against.** `03…§14.1`
+records the same two facts as non-goals: the four-chapter Access surface *"already exists"* at
+`/organization/access` (`03…:1572-1575`, citing `web/tests/access/accessProductUi.test.ts:22-35`), and
+`W-10`/`W-17` *"change what those screens are backed by, **not what they are**"* (`03…:1576-1577`)
+**[verified]**. RA-1–RA-5 and I-32 are the conformance form of that sentence: *what those screens are* is the part
+a simplification may move, and *what they are backed by* is the part it may not.
+
+**Escalated, not answered.** The operator guidance that prompted this section — *simplify the role editor
+without changing the access architecture* — is a directive to a **surface**, and this document does not own one
+(§12.7). What `02` can do is bound it: that is RA-1–RA-5, I-32, and the sequencing constraint above — and, from
+the resolver's side, §17.7–§17.8. The redesign
+itself belongs to `06-product-ia-and-flows.md`, which exists only under
+`docs/platform/planning/vacilando-os/qa/access-identity-v2/` and is outside this assignment's declared scope —
+the same split `README.md` records as `X-2`. **No UI code, route, component, or QA-folder document was changed
+by this pass.**
+
 ---
 
 ## 5. Edge E3b — membership ↔ scope
@@ -479,13 +616,23 @@ The accepted model's I-1 … I-25 are unchanged in wording and keep their number
 | **I-29** | **Revocation is effective on the next request** | **open (new, Part II)** | `role/route.ts:44-47` and `remove/route.ts:26-30` invalidate nothing (M2-10) |
 | **I-30** | **Every resolver read error denies** | **open (new, Part II)** | `resolveAdminAccessCore.ts:145-161` discards the profile error and widens to `all` (M2-12) |
 | **I-31** | **Authority writes are atomic** | **open (new, Part II)** | `role/route.ts:44-47` delete-then-insert, no transaction (M2-14) |
+| **I-32** | **A role-administration surface adds and removes no model structure** | **open (new, reopen pass)** | RA-3 unsatisfiable on `role/route.ts:44-47`; §4.6 |
+| **I-33** | **Operator-facing authority is produced by the enforcing resolver** | **open (new, Part II reopen)** | the roster resolves independently (§17.7, M2-18); model form of `IA-R4` / `W-48` |
+| **I-34** | **Authority edits are round-trip lossless** | **open (new, Part II reopen)** | collapse → seed → replace destroys unshown roles (§17.7, M2-17) |
 
-**Score (31 invariants):** 3 met (I-5, I-6, I-12) · 2 partial (I-3, I-11) · 18 open · 6 worse · 2 carried
+**Score (34 invariants):** 3 met (I-5, I-6, I-12) · 2 partial (I-3, I-11) · 21 open · 6 worse · 2 carried
 unverified (I-4, I-21).
 
 > *Tally note.* Part I's line read "17 open · 5 worse · 4 carried", which summed to 31 against 27 rows. The
 > figures above are recounted directly from the table as it now stands; no Part I **status cell** was changed
 > except `I-25`, which Part II re-verified.
+>
+> *Reopen pass (2026-08-06).* `I-32` is appended and the score is recounted from 31 rows to 32 — 18 open
+> becomes 19. **No other row's status cell was changed**, and no invariant was renumbered or reworded.
+>
+> *Part II reopen (2026-08-06).* `I-33` and `I-34` are appended — 32 rows to 34, 19 open to 21. Again **no
+> existing status cell was changed.** `I-32`'s evidence cell now reads `RA-3` rather than `R3`, which is the
+> re-lettering of `M2-19` and not a change of content.
 
 The one genuinely new *positive* is I-12 — and it is the only invariant closed by a migration rather than by
 reclassification.
@@ -507,6 +654,7 @@ Numbered `M2-n` so the accepted `C`/`G` register stays stable.
 | **M2-7** | Role literals decide authority in **at least 13** places, not the three the accepted model named | I-9 | break-glass is not one door | table below |
 | **M2-8** | `app_users.role` CHECK is a **fourth**, database-enforced role vocabulary including `vendor_owner`/`vendor_worker` | I-8 | vocabulary on the fallback authority path | `remote_schema.sql:1018` |
 | **M2-9** | Closing I-12 enlarged I-15 — the blanket grant now sweeps the unioned catalog | I-15 | coupled remediation | `phase0:90-98,292-296` |
+| **M2-16** | The chain is specified as **five links** and the schema is **four layers**; §1.3's first statement of the fix also branched at the wrong layer (role set, not membership) | — | **specification clarification**, not a defect — plus an internal inconsistency in Part I, now corrected | `20260504103000…:18-30,50`; frozen `02…:60-89`; §1.3 |
 
 ### M2-6, in detail
 
@@ -569,6 +717,10 @@ mechanical.
 | I-13 (M2-4) | For each pair of seeded roles, the symmetric difference of their granted keys **MUST** contain at least one key that some gate reads | static |
 | I-22 (M2-5) | Assert exactly one module defines `PORTAL_ROLES` or an equivalent admission set | static |
 | I-9 (M2-6, M2-7) | Role literals in application code appear only in the declared break-glass module; no literal names a key absent from `role_definitions` seeds | static |
+| **I-32 (RA-2)** | Assert no role-administration component reads a scope field, and no scope component reads `roleKeys` — the chapter split of §4.6 holds in code, not only in navigation | static |
+| **I-32 (RA-3)** | Give a fixture principal two roles through the sanctioned path, remove one through the surface's endpoint, assert the other **survives** | integration |
+| **I-32 (RA-1)** | Assert the role options a surface offers equal the `is_active` `role_definitions` rows for the request's org — neither a superset nor a hard-coded list | integration |
+| **M2-16** | Assert the model's own diagrams and prose state four layers; no artifact in the corpus draws capability → scope as a sequence | doc-lint |
 
 The I-13 check is the one that would have caught M2-4 before it shipped: it asks not *"is this key in the
 catalog"* but *"does granting or withholding this key change any outcome."*
@@ -641,6 +793,25 @@ rg -n 'from public.permission_definitions pd' supabase/migrations/20260729120000
 rg -n 'PORTAL_ROLES' web/lib
 rg -n 'DOCUMENT_READ_ROLES|"owner"' web/lib/documents/assertDocumentAccess.ts web/lib/agent/configLayoutAssist/configurationProposalAccess.ts
 rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
+
+# --- reopen pass (2026-08-06) ---
+
+# §1.3 (M2-16) — scope is keyed on the membership pair, never on a role
+rg -n 'user_access_profiles|role' supabase/migrations/20260504103000_user_access_scope_tables_v1.sql | head -20
+#   → the profile table has user_id, org_id and two *_scope mode columns; no role column.
+#   The accepted five-link wording it restates:
+sed -n '60,89p' docs/platform/planning/vacilando-os/qa/access-identity-v2/02-canonical-access-identity-model.md
+
+# §4.6 — the four Access chapters, and the thin users-roles entrypoint
+rg -n 'ACCESS_WORKSPACE_CHAPTERS' web/lib/access/accessChapterRoutes.ts
+rg -n 'access-chapter-(users|roles|scopes|security)' web/components/adminV2/settings/access/AccessWorkspaceSurface.tsx
+cat web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx   # 19 lines
+
+# §4.6 (R3) — why the current endpoint cannot satisfy "remove one role, keep the rest"
+rg -n 'delete|insert' 'web/app/api/admin/users/[userId]/role/route.ts'
+
+# §4.6 — the workstream the sequencing constraint names
+rg -n 'W-17' docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md
 ```
 
 ---
@@ -664,6 +835,17 @@ rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
    `05-command-enforcement-census.md` supplies the surface and command halves this document cites but does not
    re-derive.
 8. **Read-only.** No source, schema, migration, or UI was modified. The frozen QA copy is untouched.
+9. **§4.6 constrains a surface it did not review.** The reopen pass read the Access workspace's chapter
+   definition, its render dispatch, and the `users-roles` entrypoint — **not** the Roles chapter's own
+   component tree, and no browser was opened. RA-1–RA-5 are therefore stated as **obligations on any surface**,
+   and only RA-3 is asserted as violated today, on API evidence (`role/route.ts:44-47`) rather than UI evidence.
+   Whether the current Roles chapter satisfies RA-1, RA-2, RA-4 or RA-5 **was not determined** and must not be
+   inferred from this section. *(Part II's reopen later read the Users chapter's handlers and the Roles
+   chapter's endpoint calls — §17.7 — which is why `M2-17` can be stated on component evidence where this
+   limit could not.)*
+10. **The reopen answered one directive and bounded the other.** "Reduce to four layers" is discharged in §1.3.
+   "Simplify the role editor" is **not** discharged — no editor was simplified, because this document does not
+   own one (§12.7). See §4.6's closing note.
 
 ---
 
@@ -686,6 +868,12 @@ rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
 - **Repository-wide searches:** `admin.users.*` / `admin.roles.*` (no matches), `settings.users_roles`
   (consumers), role literals in `web/lib`.
 - **Verified at** `bdcf55908` in `wt6-vacilando-os-product-def`.
+- **Reopen pass (2026-08-06), read at `a72caaff4` in `wt6-director-experience-dx5-5-continuation`:**
+  `web/lib/access/accessChapterRoutes.ts` (in full — the four chapters and their metadata),
+  `web/components/adminV2/settings/access/AccessWorkspaceSurface.tsx` (chapter dispatch, `:81-122`),
+  `web/components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx` (in full — a 19-line wrapper),
+  `03-implementation-qa-sequence.md` (`W-17` and the `I-10` coverage rows), and the frozen copy's §2 chain
+  (`02…:60-89`) for the five-link wording that §1.3 restates. **No file outside this document was modified.**
 
 ---
 ---
@@ -695,10 +883,28 @@ rg -n '"admin"|"ops"' web/lib --glob '*.ts' | rg -v '\.test\.'
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Effective-access resolution model* · assignment `asg_5a0d3ccf5dea42`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
 **Worktree** `wt6-vacilando-os-product-def` @ `7df17b9b3`
-**Date** 2026-08-03
+**Date** 2026-08-03 · **reopened and extended 2026-08-06** (§15.6, §17.7–§17.8, §18 `M2-17…M2-19`, §19–§23) in
+`wt6-director-experience-dx5-5-continuation` @ `288a51b7b`
 **Status** Proposed — specification only. No code, schema, or migration is changed by this phase.
 **Method** static, file-grounded. Every claim marked **[verified]** was read at the cited `path:line` in this
-pass; claims inherited from Part I or the accepted corpus are marked **[carried]**.
+pass; claims inherited from Part I or the accepted corpus are marked **[carried]**. Claims added by the reopen
+were verified at `288a51b7b`.
+
+> **Reopen (2026-08-06), on operator guidance.** The same two directives Part I answered — *reduce the role
+> hierarchy to four layers*, and *simplify the role editor without changing the access architecture* — reach
+> Part II in a different form, because Part II owns the **function**, not the nouns and not the surface.
+>
+> - **Four layers.** §15.6 maps the stages onto §1.3's `L1`–`L4` and states what a resolver may not do once
+>   the chain is four deep. The as-built resolver is **structurally conformant here** — `R4a` and `R4b` are
+>   already siblings — so the correction costs no resolver work. The five-deep shape survives at the *gate*
+>   and on the *surface*, which is where §17.7 finds it.
+> - **The role editor.** §4.6 bounds what the surface owes the model. §17.7–§17.8 bound the other half: what
+>   the **resolver** owes the surface, so that "the editor shows the truth" is a testable claim rather than a
+>   design opinion. This is where the reopen's new findings are, and they are not cosmetic — the roster the
+>   operator edits from is an **eighth resolution site** that no census in this corpus counted.
+>
+> **No decision is added by the reopen** (§20). No UI, route, resolver, schema or QA-folder document was
+> changed; the only file written is this one.
 
 **Inputs reused, not re-derived:** Part I §§1–13 (nouns, edges, invariant register), Part I's `M2-1 … M2-9`,
 [`01-existing-state-inventory.md`](./01-existing-state-inventory.md) (Mission 2 pass), and
@@ -759,6 +965,14 @@ Three claims follow, and they carry §§17–18:
 3. **R6 is a correctness stage, not a performance stage, and it is implemented as though it were the latter.**
    A 120-second in-process cache serves every consumer — including mutation gates — and nothing in production
    ever invalidates it (§18, M2-10). Part I could only carry I-25 as unverified; it is now verified, and open.
+
+**A fourth claim was added by the reopen, and it is about the opposite direction of travel.** The diagram
+above follows a *request* to a decision. It says nothing about the **read-back** — what the product tells an
+operator a principal's authority is, on the screen where they change it. That traversal resolves too, in a
+place no census in this corpus counted, by different code, with a different normal form, and it collapses a
+set to a scalar on the way (§17.7). **Everything the model says about resolution applies to it, and none of it
+holds.** That is where `M2-17` and `M2-18` are, and it is the half of the role-editor directive that belongs
+to Part II rather than to §4.6.
 
 ---
 
@@ -851,6 +1065,61 @@ disagree about the same membership row, and the disagreement is entirely a norma
 > **I-31 (new).** Authority writes are atomic. A change to a principal's authority **MUST** leave that
 > principal in either its prior complete state or its intended complete state. No path may produce an
 > intermediate state with fewer memberships, grants, or scope rows than both.
+
+### 15.6 The stages are the four layers — added by the reopen
+
+§1.3 restates the authority chain as **four layers, two branches** (`M2-16`). The resolution stages are not a
+second structure alongside it; **`R1`–`R4b` are those four layers, executed.** Stating the correspondence is
+what keeps the two halves of the model from drifting apart, and it is what makes "the chain is four deep" a
+claim about a *function* rather than about a diagram:
+
+| Layer (§1.3) | Question | Stage | What the stage produces |
+|---|---|---|---|
+| **L1 — Principal** | *who* | **R1 — Authenticate** | `auth.users.id`, or `401` |
+| **L2 — Membership** | *where* | **R3 — Select org** | `(principal, org)`, or `403` |
+| **L3 — Assignment** | *as what* / *under what limit* | **R4a** reads `role_definitions`; **R4b** reads `user_access_profiles` | the two assignment sets |
+| **L4 — Resolved set** | *may do what* / *to which rows* | **R4a** grants; **R4b** dimensions | capability keys · scope dimensions |
+
+**`R2`, `R5` and `R6` are not layers, and that is the point.**
+
+- **`R2` — Normalize** is not a layer but a *precondition of comparison*: it applies to whatever value is
+  entering, at every layer, in one form (I-28). A layer that normalizes differently from its neighbour makes
+  the chain shallower or deeper by accident — which is exactly M2-11.
+- **`R5` — Compose** sits *after* L4 on both branches, taking their intersection. It is the gate, not a fifth
+  layer. **A stage that reads one branch's L4 output as an input to the other branch's L3 or L4 would create a
+  fifth layer, and I-27 forbids it.** That is the resolution-model form of §1.3's prohibition.
+- **`R6` — Cache** is orthogonal to depth: it memoizes L4 outputs. It changes *when* a layer is read, never
+  how many layers there are.
+
+Three normative consequences follow, all restatements:
+
+> **A resolver MUST return the two branch outputs separately.** It **MUST NOT** emit a single merged
+> "effective role", "access level", or any other value in which capability and scope have already been
+> combined — because the combination is the gate's, made per operation and per resource, and a merged value
+> discards which conjunct denied (I-27, §15.3).
+>
+> **A resolver MUST NOT accept a role as an input to the scope branch, or a scope dimension as an input to the
+> capability branch** — in either direction (I-27).
+>
+> **A resolver's output is not a decision.** It is L4 for both branches. Any consumer that treats the bundle
+> as an answer has skipped `R5`, which is the shape of 131 of 132 admin page routes (`05…§1`) **[carried]**.
+
+**Where the four-layer statement costs work, and where it does not.** The core resolver already satisfies all
+three: `resolveAdminAccessCore` reads grants and scope as independent queries off the same `(user, org)` pair
+(`:107-203`) **[verified]**, and `AdminAccessContextSuccess` carries them as separate fields
+(`getAdminAccessContext.ts:18-28`) **[verified]**. The five-deep shape survives in two places, both already
+recorded and neither of them the resolver:
+
+1. **At the gate** — `portalAdminBypassesDepartmentScope` makes a role an input to the scope branch
+   (`accessScope.ts:45,51-53,60-64`, wired at `adminRouteGate.ts:64`) **[verified]**. This is the *only*
+   place in the platform where a fifth layer actually exists, and I-27 already names it.
+2. **On the surface** — the operator's roster collapses L2's membership set into one displayed role
+   (§17.7), which presents L3 as though it were a single-valued property of L2.
+
+Neither is fixed by re-drawing the chain; both are fixed by workstreams the plan of record already carries —
+`W-8` — *scope takes no role input* is `I-27`'s coverage row (`03…:2619`) **[verified]**, and `W-17` is the
+membership one (§4.6). What §15.6 adds is that a future resolver change can be **checked** against the depth,
+instead of being argued about.
 
 ---
 
@@ -971,6 +1240,117 @@ breaks P4 and P5.
 | `adminShellContextCache` (`adminShellContextCache.ts`) | **cross-request, per process** | **120 s** (`:12`) | **Unsound** — §18, M2-10 |
 | Entity-label / status-definition caches (`entityLabelsServer.ts:28`, `statusDefinitionsResolve.ts`) | cross-request | 90 s | Out of scope — org-config data, not authority. |
 
+### 17.7 The read-back path — added by the reopen
+
+§§17.1–17.6 follow a *request* through resolution. There is a second traversal the model had not specified:
+the **read-back** — what the product tells an operator a principal's authority *is*, on the screen where they
+change it. Under §15.6 that is a resolution question, because a displayed authority is an assertion about L4;
+§16's census answered "which gates resolve", never "which screens resolve".
+
+**It resolves in a place the census did not count.** The Access workspace's Users chapter loads
+`GET /api/admin/settings/users-roles/members` (`AccessUsersConfigurationPage.tsx:113`) **[verified]**, and that
+endpoint is a **resolution site in its own right** — an eighth, after §16's five entry points,
+`getAdminOrgIdForUser`, and the preview resolver. It reads `user_roles`, `user_access_profiles`,
+`user_department_access` and `user_site_access` directly with an admin client (`members/route.ts:31-97`)
+**[verified]**, reaching the same tables as `R4a`/`R4b` through none of the same code.
+
+| | Enforcing (`resolveAdminAccessCore`) | Preview (`…DimensionsForOrgMember`) | **Roster (`members/route.ts`)** |
+|---|---|---|---|
+| role keys | `.map(r => r.role)` — **raw** (`:35`) | trimmed (`:230`) | **trimmed**, de-duplicated, sorted (`userRolesMembership.ts:9,14`) |
+| `role_definitions` join | none — `is_active` ignored (M2-3) | none | **none** |
+| grants read | yes (`:93`) | yes (`:234`) | **never** |
+| missing access profile | ⇒ `all` (`:152-161`) | ⇒ `all` | **⇒ `all`** (`members/route.ts:63-65,124-125`) |
+| multi-role membership | union, preserved | union, preserved | **collapsed to one `primary_role`** (`userRolesMembership.ts:21-27`, applied `members/route.ts:104`) |
+
+All **[verified]**. Four things follow, and only the last of them is fully covered by the corpus already.
+
+**1. The roster is a fourth normalization discipline on the operator's most consequential screen.** M2-11
+recorded the enforcing/preview divergence; the roster sits on the preview's side of it. For a membership row
+holding `"admin "`, the operator sees a working portal administrator (trimmed) that every gate denies (raw).
+The divergence is therefore not confined to a diagnostic panel — it is in the list the operator selects a
+member *from*. Recorded as **M2-18** (§18).
+
+**2. The roster's missing-profile default is the fail-open of M2-12, rendered as a reassurance.** A member with
+no `user_access_profiles` row is displayed as *all departments, all sites*. This leg is already recorded and
+already has a workstream — `IA-R3` / `W-47`, *"no projection may default a missing access profile to `all`"*
+(`03…:2310-2318`) **[verified]**. What §17.7 adds is only that the same default is a **resolution** defect and
+not merely a rendering one: the projection computes it, so no rendering can recover it (`03…:2314-2315`).
+
+**3. The roster is correct today only because the resolver is wrong.** It never joins `role_definitions`, so a
+role deactivated through the Roles chapter still appears as held. That matches runtime — because runtime
+ignores `is_active` too (M2-3). **The agreement is accidental, and closing M2-3 breaks it:** the moment
+`D10`/`AD-10` is decided as *revoke* and `I-26` lands, the roster becomes the only place still asserting the
+old authority. Any workstream that closes M2-3 must carry the projection with it, or it creates a divergence
+that did not exist before. This is the sharpest sequencing consequence in the reopen.
+
+**4. The round trip is lossy on the way in and destructive on the way out.** The read collapses the union of
+memberships to one value (`displayRoleForAdminPicker`), the editor is seeded from that one value
+(`AccessUsersConfigurationPage.tsx:175`), the save `PATCH`es it (`:227-230`), and the write deletes **every**
+role row for the pair before inserting one (`role/route.ts:44-47`) **[verified]**. So an operator who changes
+the one visible role of a principal holding `{admin, regional_lead}` **silently destroys `regional_lead`** —
+having never been shown it. The write then closes the loop by asserting the collapse back: its success response
+is `role_keys: [role]` (`role/route.ts:55`) **[verified]** — a single-role claim the schema does not make.
+
+**The one guard present makes it worse, not better.** The save control is disabled while
+`editRole === selected.primary_role` (`:576`) **[verified]**, so a harmless no-op cannot be submitted — which
+means **every submission that reaches the destructive path is one where the operator changed the value they
+were shown.** The guard removes the benign case and leaves only the damaging one.
+
+> **Both halves of this are recorded; their composition is not.** `IA-7` is the display half — *"the UI
+> collapses a multi-role membership to one literal"* (`03…:2385`) **[verified]**. `C7` / `I-10` / `W-17` are
+> the write half. Neither says that the two together make an ordinary edit **destructive**, and that is the
+> claim an operator would care about. Recorded as **M2-17** (§18), together with the same shape at
+> `PUT /api/admin/rbac/grants`.
+
+**And the acknowledgement precedes the effect.** After a successful save the surface reloads the roster —
+which reads the database fresh — and calls `router.refresh()` (`AccessUsersConfigurationPage.tsx:235-237`)
+**[verified]**. The roster therefore shows the new authority immediately, while every gate built on
+`loadAdminAccessBundleCached` continues serving the old bundle for up to 120 seconds (M2-10). **The screen that
+performs the change is the one screen guaranteed not to show the window it opened.** The corpus records this
+for removal — `IA-6` / `IA-R5`, *"no transition reports success before it is effective"* (`03…:2547,2571`)
+**[verified]** — and §17.7 extends the same finding to **role change and grant rewrite**, which are served by
+the same cache and the same acknowledgement pattern.
+
+### 17.8 What the resolver owes a simplified role editor
+
+§4.6 states what the surface owes the model (`RA-1`–`RA-5`, `I-32`). This is the other half, and it is the
+half that decides whether *"simplify the editor"* and *"do not change the access architecture"* are jointly
+satisfiable: a simplified surface shows **less**, so each remaining control carries more of the operator's
+belief about what is true. Every fact removed from the screen is a fact the resolver must still be answerable
+for.
+
+Three obligations. **Deliberately no new letter series** — each is an invariant, for the reason M2-19 records.
+
+| Obligation | Invariant | Violated today by |
+|---|---|---|
+| **The screen resolves through the resolver.** Any operator-facing statement of what a principal may do or see is a projection of `R4a`/`R4b` output, in `R2`'s normalized form | **I-33 (new)** | the roster (M2-18), the preview (M2-11) |
+| **Read-modify-write is lossless.** A surface **MUST NOT** write a narrower set of authority facts than it read, except the one the operator changed | **I-34 (new)** | the collapse + replace round trip (M2-17) |
+| **Acknowledgement follows effect.** A write is not reported successful before the next request would observe it | **I-29** (corollary), `IA-R5` | the 120 s window (M2-10), now shown to cover role change too (§17.7) |
+
+> **I-33 (new).** Effective access is produced by the enforcing resolver. Any surface that displays a
+> principal's roles, capabilities, or scope **MUST** derive them from the same function that gates a request,
+> in the same normalized form (I-28), or **MUST** label the value as unresolved. A projection that recomputes
+> authority from the tables is a second resolver and inherits every divergence a second resolver has.
+>
+> This is the model form of a requirement the corpus already carries: `06…`'s **`IA-R4`** — effective access
+> *"MUST be produced by the enforcing resolver, in the same normalized form (`I-28`), and MUST NOT have a
+> second implementation"* — and its workstream `W-48` (`03…:2330-2334`) **[verified]**. The number is new; the
+> rule is not. What is new is its **reach**: `IA-R4` was written for the effective-access *panel*, and §17.7
+> shows the member roster is under the same rule and was not counted.
+
+> **I-34 (new).** Authority edits are round-trip lossless. Where a surface reads a set of authority facts,
+> presents a projection of it, and writes back, the write **MUST** preserve every fact the projection did not
+> show. A surface that cannot express a fact **MUST NOT** be able to delete it. Deleting an unshown fact is a
+> silent revocation, and I-29 gives revocation a stronger obligation than "it happened".
+
+**The sequencing constraint of §4.6, restated from the resolver's side.** `RA-3` cannot be satisfied while the
+write path replaces; I-34 says something narrower and cheaper: **until `W-17` lands, the editor must not be
+able to reach the destructive path with a partial view.** That is satisfiable before `W-17` — by showing the
+full `role_keys` set the roster already returns rather than `primary_role`, and by having the write reject a
+submission that would remove a role the operator was not shown. Neither needs a migration, a decision, or the
+multi-role write path. **This is the one place where the simplification directive can be honoured immediately
+and safely, and it is a read change, not an architecture change.**
+
 ---
 
 ## 18. New divergences recorded by this pass
@@ -985,6 +1365,9 @@ Continuing Part I's `M2-n` series so the accepted `C`/`G` register stays stable.
 | **M2-13** | `requireAdminOrOps` resolves through the **light** resolver, which reads no grants and no scope and does not use the cache — so two gates in one request can disagree about the same principal | I-22, P2 | two answers, one request | `adminAuth.ts:113-118`; `getAdminOrgContextLight.ts:45`; `resolveAdminPortalOrgCore.ts:61-99` |
 | **M2-14** | Role reassignment is `delete` then `insert` with no transaction; a failed insert leaves the principal with **zero** memberships | I-31 | non-atomic authority write | `role/route.ts:44-50` |
 | **M2-15** | `README_ADMIN_AUTH.md` — the repository's canonical description of this model — asserts a single resolver and misdescribes `requireAdminOrOps`; it cites an **archived** doc as canonical product semantics | — | documentation divergence | `README_ADMIN_AUTH.md:3,21,61` vs `adminAuth.ts:113-118` |
+| **M2-17** *(reopen)* | **Authority edits are destructive read-modify-writes.** The roster shows one role of a possibly-many membership, the editor is seeded from it, and the save deletes every role row before inserting one — so changing the visible role silently deletes the invisible ones. `PUT /rbac/grants` has the same shape with an org-wide blast radius | I-10, I-31, **I-34** | silent revocation | `userRolesMembership.ts:21-27`; `AccessUsersConfigurationPage.tsx:175,227-230`; `role/route.ts:44-47,55`; `grants/route.ts:70-89` |
+| **M2-18** *(reopen)* | **The operator roster is an eighth resolution site**, with a fourth normalization discipline, no `role_definitions` join, no grant read, and a missing-profile default of `all` — and it is the screen the operator edits authority from | I-22, I-28, **I-33**, P2 | preview ≠ runtime, on the editing surface | `members/route.ts:31-97,64-65,104,124-125`; `userRolesMembership.ts:9` |
+| **M2-19** *(reopen)* | §4.6's role-surface constraints were labelled `R1`–`R5`, colliding with §15.1's resolution stages `R1`–`R6` **inside this document**; re-lettered to `RA-1`–`RA-5` under §26.2's rule | — | documentation divergence | §4.6 vs §15.1 |
 
 ### M2-10, in detail — the 120-second revocation window
 
@@ -1078,6 +1461,48 @@ gates on admission — it only silently strips capability-gated features. Part I
 is never sufficient) is what makes that safe; until I-17 holds, the grant table is not on the critical path for
 almost any decision.
 
+### M2-17, in detail — the grant rewrite, and why it is worse than M2-14
+
+M2-14 recorded `delete`-then-`insert` on **one principal's** memberships. The Roles chapter's grant save has the
+same shape one level up:
+
+```ts
+await supabase.from("role_permission_grants").delete()
+  .eq("org_id", orgId).eq("role_key", role_key);          // grants/route.ts:70-75
+if (permission_keys.length > 0) { …insert(inserts)… }     // :80-89
+```
+
+**[verified]**, reached from `AccessRolesConfigurationPage.tsx:228` **[verified]**. Three differences from
+M2-14, all of them enlargements:
+
+1. **The blast radius is the role, not the principal.** Every principal holding `role_key` in that org loses
+   every capability of that role for the duration of the window, and permanently if the insert fails. The
+   route returns `500` and leaves the role with **zero** grants — a state no operator asked for and the UI
+   cannot distinguish from "this role grants nothing".
+2. **It is reachable with an empty submission.** `permission_keys` may legitimately be empty (`:80`), so
+   "delete all and insert nothing" is a *valid outcome* of the same path — which means the failure state and a
+   successful state are indistinguishable in the data afterwards.
+3. **The window is not bounded by the request.** Under M2-10, a principal whose capabilities were just erased
+   may continue to pass capability gates from a warm cache — so the erasure is invisible for up to 120 s and
+   then arrives without a corresponding operator action. Revocation and outage look identical.
+
+**Bounded honestly.** The *replace* shape is already recorded — `03…:566` notes the validation runs *"before
+the delete-all-then-insert at `:70-89`"* **[verified]**, and the certification-folder proposal calls the
+endpoint a *"destructive full-replace on save"* (`vacilando-os/qa/vertical-slice-v1/cap_access_roles-v2-proposal.md:31`)
+**[verified]**. What no document states is the **failure mode**: that a failed insert is an org-wide capability
+revocation with a `500` and no compensation. `01…`'s `GAP-10` covers atomicity for *role reassignment* only
+(`01…:1023`) **[verified]**. M2-17 records both endpoints under I-31, and the read-side collapse under I-34.
+
+### M2-19 — why a label collision is recorded as a divergence
+
+Two sections of this file used `R1`–`R5` for different things: §15.1's resolution stages (2026-08-03) and
+§4.6's role-surface constraints (2026-08-06). Both are cited by number in prose, and *"R3 is the constraint
+violated today"* (§4.6) is not distinguishable by a reader from *"R3 — Select org"* (§15.1). Part III's §26.2
+already supplies the rule for exactly this — the prior reading keeps the number, the displaced reading is
+reassigned — so the reopen applied it rather than inventing a convention: §4.6's five are now `RA-1`–`RA-5`.
+**No wording, rule, citation or evidence line in §4.6 changed.** It is recorded rather than silently fixed
+because §26 is a register of collisions and this one was minted after it was written.
+
 ---
 
 ## 19. Conformance checks
@@ -1094,6 +1519,13 @@ Mechanical, and each fails today. These extend Part I §9; the accepted §12 tab
 | **P4** | Property: for any removal of a membership / grant / scope row, no `(P,O,X,R)` decision flips deny → allow | property |
 | **§15.3** | Static: assert no capability composer contains a role literal on either side of a disjunction (`canManageUsersAndRoles.ts:16` fails this today) | static |
 | **M2-15** | `README_ADMIN_AUTH.md` asserts a resolver and entry-point set; assert it matches the exports actually present | static |
+| **I-33** *(reopen)* | Static: no route or component under the Access workspace reads `user_roles`, `role_permission_grants`, `user_access_profiles` or the two junctions except through the resolver. Property: `GET /settings/users-roles/members`, the preview, and the enforcing resolver return the same `roleKeys` and the same scope dimensions for every fixture member — the same matrix `W-48` asserts, extended to the roster | static + property |
+| **I-34** *(reopen)* | Property: for a fixture principal holding two roles, drive the Users chapter's save with a change to the displayed role and assert the other membership row **survives**. Contract: `PATCH /users/[userId]/role` rejects a submission that would remove a role not present in the request | property + contract |
+| **M2-17** *(reopen)* | Fault injection: fail the `insert` in `PUT /rbac/grants`; assert the role's grants are unchanged. Static: no authority-write route issues a `delete` and an `insert` to the same table outside one transaction — `role/route.ts` and `grants/route.ts` both fail this today | integration + static |
+| **§15.6** *(reopen)* | Static: the resolver's return type exposes capability and scope as separate fields and no merged authority value; no function on the resolution path takes a role key as an argument to a scope computation (`accessScope.ts:45` fails this today) | static |
+
+**The I-34 check is the one that would have caught M2-17**, and it is cheap: it needs one fixture principal
+with two memberships, which `W-17`'s own tests must create anyway.
 
 The I-29 check is the one that would have caught M2-10: it asks not *"is the cache correct"* but *"does
 revocation take effect"* — and it must run in two processes, or it passes for the wrong reason.
@@ -1129,6 +1561,20 @@ only in what they **project** from it — never in what they **compute**. Concre
 the same core and skip the grant/scope *reads*, rather than re-implementing the selection and fallback logic.
 This subsumes I-22 and Part I's M2-5 into a single structural rule and removes the P2 violation as a
 side-effect.
+
+**The reopen adds no decision, deliberately.** Every question it raises already has one, and minting a third
+number for an answered question is the failure Part III §26 exists to stop:
+
+| Reopen finding | Already decided by | Note |
+|---|---|---|
+| M2-17 — destructive round trip | `W-17` (*informed by* `AD-2`, `03…:1103`); `AD-10` for the deactivation half | I-34's pre-`W-17` mitigation (§17.8) needs **no** decision — it is a read change |
+| M2-18 — roster resolves independently | none needed — `IA-R4` / `W-48` is a requirement, not a question. What the roster *displays* is `AD-18`'s | the reopen widens `IA-R4`'s scope, not its status |
+| M2-19 — label collision | not a decision; §26.2's rule applied directly, inside the file that states it | recorded, applied, closed in this pass |
+| Acknowledgement precedes effect for role change | **`AD-11`** — revocation latency (§20, `D11`) | §17.7 shows `AD-11` prices more surfaces than removal alone |
+
+`AD-11`'s sitting is the one that moves most: **Sitting 1 — Revocation** (§27) is argued today from removal,
+inactive roles and the cache. §17.7 adds that a *demotion* and a *grant rewrite* sit in the same window, so the
+sitting's cost estimate is over more paths than it currently names — the decision itself is unchanged.
 
 ---
 
@@ -1166,6 +1612,32 @@ rg -n 'Single resolver|getAdminAuth. fails' web/README_ADMIN_AUTH.md
 
 # §18 M2-14 — delete then insert, no transaction
 rg -n 'delete\(\)|insert\(' web/app/api/admin/users/\[userId\]/role/route.ts
+
+# --- reopen pass (2026-08-06) ---
+
+# §17.7 (M2-18) — the roster is an eighth resolution site: it reads the authority tables directly
+rg -n 'from\("user_roles"\)|user_access_profiles|user_department_access|user_site_access' \
+  web/app/api/admin/settings/users-roles/members/route.ts
+#   → reads all four, through no resolver; never joins role_definitions; never reads grants.
+
+# §17.7 (M2-18) — the fourth normalization discipline, and the missing-profile default
+rg -n 'trim\(\)|\?\? "all"' web/lib/admin/userRolesMembership.ts \
+                            web/app/api/admin/settings/users-roles/members/route.ts
+
+# §17.7 (M2-17) — the lossy round trip: collapse → seed → replace → assert the collapse
+rg -n 'displayRoleForAdminPicker' web/lib/admin/userRolesMembership.ts \
+                                   web/app/api/admin/settings/users-roles/members/route.ts
+rg -n 'setEditRole|editRole|router.refresh' web/components/adminV2/settings/access/AccessUsersConfigurationPage.tsx
+rg -n 'delete\(\)|insert\(|role_keys' web/app/api/admin/users/\[userId\]/role/route.ts
+
+# §18 M2-17 — the grant rewrite, org-wide and untransacted
+rg -n 'delete\(\)|permission_keys.length|insert\(inserts\)' web/app/api/admin/rbac/grants/route.ts
+
+# §15.6 — the resolver returns the two branches separately (structurally conformant)
+rg -n 'roleKeys|permissionKeys|departmentScope|siteScope' web/lib/admin/getAdminAccessContext.ts | head -20
+
+# §18 M2-19 — the label collision this pass resolved
+rg -n '\*\*R[1-6]\*\*|\*\*RA-[1-5]\*\*' docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md
 ```
 
 ---
@@ -1194,6 +1666,28 @@ rg -n 'delete\(\)|insert\(' web/app/api/admin/users/\[userId\]/role/route.ts
    this document specifies.
 8. **Read-only.** No source, schema, migration, or UI was modified. The frozen QA copies are untouched.
 
+**Limits added by the reopen (2026-08-06):**
+
+9. **No browser was used, and the roster's rendering was not observed.** §17.7's claims are read from the
+   endpoint, the two helpers and the component's handlers. That an operator *sees* one role for a two-role
+   member follows from `primary_role` being the only role value the component binds (`:175`, `:400`, `:443`,
+   `:522`) **[verified]** — the full `role_keys` array is returned by the endpoint and is present in the
+   component's type (`:33`), and no rendering of it was found; **that is a negative search result, not a
+   verified absence.**
+10. **M2-17's destructiveness is derived, not reproduced.** No principal with two memberships was created and
+    no save was performed. The three facts composing it are each verified independently; the composition is
+    reasoned. Whether any live org holds a multi-role membership was **not queried** — and under `C7` the
+    product's own write path cannot create one, so the population is whatever seeds, imports and direct SQL
+    have produced (Part I M2-2).
+11. **The eighth resolution site is the eighth *found*.** §16's census covered `web/app/api/**/route.ts` for
+    five entry-point identifiers; §17.7 found `members/route.ts` by following the Access workspace's fetches,
+    not by a sweep. **Other surfaces may read the authority tables directly and were not enumerated** — the
+    Roles chapter's three endpoints were read, `AccessScopesPage` and `AccessSecurityPage` were not. Treat
+    "eight" as a floor, exactly as Part I treats its grep counts.
+12. **§15.6 is a restatement and adds no requirement.** It maps existing stages onto §1.3's existing layers.
+    If a reader finds a stage it cannot place in a layer, that is a defect in §15.6, not a discovered fifth
+    layer.
+
 ---
 
 ## 23. Provenance — Part II
@@ -1214,6 +1708,26 @@ rg -n 'delete\(\)|insert\(' web/app/api/admin/users/\[userId\]/role/route.ts
   resolver functions.
 - **Verified at** `7df17b9b3` in `wt6-vacilando-os-product-def`.
 
+**Reopen pass (2026-08-06), added inputs and evidence:**
+
+- **Read in full this pass:** `web/app/api/admin/settings/users-roles/members/route.ts`,
+  `web/lib/admin/userRolesMembership.ts`, `web/app/api/admin/rbac/grants/route.ts`,
+  `web/app/api/admin/rbac/roles/route.ts`, `web/app/api/admin/rbac/roles/[role_key]/route.ts`.
+- **Read in part:** `web/components/adminV2/settings/access/AccessUsersConfigurationPage.tsx` (loaders,
+  `saveRole`, `saveAccess`, and every binding of `primary_role` / `role_keys`),
+  `web/components/adminV2/settings/access/AccessRolesConfigurationPage.tsx` (its five endpoint calls),
+  `web/app/api/admin/users/[userId]/role/route.ts` (re-read for `:55`).
+- **Corpus reused, not re-derived:** Part I §1.3 and §4.6 (the four-layer chain and the surface constraints);
+  `03…§20-§21` for `W-46`, `W-47`, `W-48`, `W-17` and the `I-27` → `W-8` coverage row; `03…§22` for the
+  `IA-n` / `IA-Rn` reconciliation tables; `01…§26` for `GAP-10`; Part III §25–§27 for `AD-2`, `AD-10`,
+  `AD-11`, `AD-18` and §26.2's renumbering rule. `06-product-ia-and-flows.md` was **not** read directly — its
+  `IA-R2` / `IA-R3` / `IA-R4` wording is quoted through `03…`'s verbatim citations, and is marked
+  **[carried]** accordingly.
+- **Verified at** `288a51b7b` in `wt6-director-experience-dx5-5-continuation`.
+- **Not changed by the reopen:** any file other than this one. No UI, route, resolver, migration, test or
+  QA-folder document was modified; Part III is untouched; Part I is untouched except for §4.6's mechanical
+  re-lettering (`M2-19`), which changes no wording, rule, citation or evidence line.
+
 ---
 ---
 
@@ -1233,6 +1747,13 @@ explicit. Claims marked **[verified]** were read at the cited `path:line` in thi
 ---
 
 ## 24. Headline — the corpus has twenty-one open decisions and no way to name them
+
+> **Amended by the reopen (2026-08-06).** The count in this heading was true when it was written and is not
+> true now: the corpus holds **25**. Four decisions were minted after this section, the `AD-n` register was
+> **bound by use before it was ratified**, and the prefix it chose collides with `07…`'s audit criteria. §35
+> states the new position; §36 carries the four decisions; §37 supplies the extension rule whose absence
+> allowed three documents to mint three different ways on one day. **This section's argument is unchanged and
+> its numbers are superseded** — read it as the register's founding case, not as its current state.
 
 Nine required outputs have raised **21 open decisions across six documents**. None is worker-resolvable; all
 are recorded rather than assumed, per the mission's document-authority rule. Two further decisions have been
@@ -1281,23 +1802,40 @@ question today, and remains valid. **Blocks** uses the gap numbering of `01…§
 | **AD-2** | `D2` | What are `regional_lead` / `school_director` for? | frozen `02…:652` | GAP-4 (`W-13` value) | Grant them `portal.access`; admission is configuration |
 | **AD-3** | `D3` | What is the delegation ceiling? | frozen `02…:657` | GAP-8 (`W-18`) | Subset rule + self-elevation ban |
 | **AD-4** | `D4` | Is RLS an authority layer? | frozen `02…:662` | GAP-6 (`W-19` sizing) | **(b)** not an authority layer, with (a) as a stated goal |
-| **AD-5** | `D5` | Does account state live per-org or per-account? | `04…:735`, re-anchored `:446` | GAP-1, GAP-2 | Per-`(user, org)`; `locked` per-credential, short-circuits every org |
-| **AD-6** | `D6` | Does deactivating an **account** revoke the credential? | `04…:741`, re-anchored `:447` | **GAP-1** | **Yes**, and explicitly — never as a side effect of deleting a role row |
-| **AD-7** | `D7` | MFA scope for the first wave | `04…:746` | GAP-2 | Operators first, policy-by-role; do not couple to parent/guardian |
-| **AD-8** | `D8` | Is SSO/SAML in V2 at all? | `04…:750` | GAP-2 | Specify the policy shape; do not build it |
+| **AD-5** | `D5` | Does account state live per-org or per-account? | `04…:1057`, re-anchored `:694` | GAP-1, GAP-2 | Per-`(user, org)`; `locked` per-credential, short-circuits every org |
+| **AD-6** | `D6` | Does deactivating an **account** revoke the credential? | `04…:1063`, re-anchored `:694` | **GAP-1** | **Yes**, and explicitly — never as a side effect of deleting a role row |
+| **AD-7** | `D7` | MFA scope for the first wave | `04…:1068` | GAP-2 | Operators first, policy-by-role; do not couple to parent/guardian |
+| **AD-8** | `D8` | Is SSO/SAML in V2 at all? | `04…:1072` | GAP-2 | Specify the policy shape; do not build it |
 | **AD-9** | `D9`ᴬ | Is `ops` a user-and-role administrator? | §10 of this file | **GAP-8** | **Not intended** — gate on `admin.users.write` / `admin.roles.write` |
 | **AD-10** | `D10`ᴬ | Does deactivating a **role** revoke it? | §10 of this file | **GAP-1** | **Revoke** — the toggle is a security decision, not a documentation one |
 | **AD-11** | `D11`ᴬ | Maximum acceptable revocation latency — and does an authority cache survive the answer? | §20 of this file | **GAP-1** | **Zero**; drop the cross-request cache from the authority path |
 | **AD-12** | `D12`ᴬ | Is the light resolver an optimization or a second source of truth? | §20 of this file | GAP-7 | **Optimization** — entry points may differ in what they *project*, never in what they *compute* |
-| **AD-13** | `D13`ᴬ | Is the unauthenticated public surface inside the tenancy model, or beside it? | `01…:759` | GAP-11 | **Inside** — derive org from the request; delete the env coupling |
-| **AD-14** | `D14` | Is abuse control a security control in this platform? | `01…:769` | GAP-2 | **Yes** for credential and unauthenticated surfaces; out of scope elsewhere, in writing |
-| **AD-15** | `D11`ᴮ | Is the admin password-reset trigger bounded to the caller's org? | `04…:459` | GAP-11 | **Bound it** — resolve to a membership in `access.orgId`, 404 otherwise |
-| **AD-16** | `D12`ᴮ | What step-up does a password change require? | `04…:466` | **GAP-1** | Recovery-type session for reset; current password in-session; **split the two** |
-| **AD-17** | `D13`ᴮ | Which identity-verification mode is the platform's asserted contract? | `04…:472` | GAP-2 | **Local JWKS verification**, asserted by a test that fails if the posture changes |
-| **AD-18** | `D-IA1` | Does the Users chapter show account status or membership status? | `06…:571` | GAP-12 | Membership status primary; credential state a distinct secondary marker |
-| **AD-19** | `D-IA2` | Does the directory show a person, or an account? | `06…:579` | GAP-13 | Account primary; linked person an explicit **nullable** attribute — never matched by email |
-| **AD-20** | `D-IA3` | Is a reusable access policy in V2, and what is it? | `06…:588` | GAP-12 | Specify now, build after the resolver |
-| **AD-21** | `D-IA4` | Is time-boxed access in the first wave? | `06…:595` | GAP-12 | Specify now, build after the resolver — it is a scope attribute, not a new concept |
+| **AD-13** | `D13`ᴬ | Is the unauthenticated public surface inside the tenancy model, or beside it? | `01…:765` | GAP-11 | **Inside** — derive org from the request; delete the env coupling |
+| **AD-14** | `D14` | Is abuse control a security control in this platform? | `01…:775` | GAP-2 | **Yes** for credential and unauthenticated surfaces; out of scope elsewhere, in writing |
+| **AD-15** | `D11`ᴮ | Is the admin password-reset trigger bounded to the caller's org? | `04…:712` | GAP-11 | **Bound it** — resolve to a membership in `access.orgId`, 404 otherwise |
+| **AD-16** | `D12`ᴮ | What step-up does a password change require? | `04…:719` | **GAP-1** | Recovery-type session for reset; current password in-session; **split the two** |
+| **AD-17** | `D13`ᴮ | Which identity-verification mode is the platform's asserted contract? | `04…:725` | GAP-2 | **Local JWKS verification**, asserted by a test that fails if the posture changes |
+| **AD-18** | `D-IA1` | Does the Users chapter show account status or membership status? | `06…:579` | GAP-12 | Membership status primary; credential state a distinct secondary marker |
+| **AD-19** | `D-IA2` | Does the directory show a person, or an account? | `06…:587` | GAP-13 | Account primary; linked person an explicit **nullable** attribute — never matched by email |
+| **AD-20** | `D-IA3` | Is a reusable access policy in V2, and what is it? | `06…:596` | GAP-12 | Specify now, build after the resolver |
+| **AD-21** | `D-IA4` | Is time-boxed access in the first wave? | `06…:603` | GAP-12 | Specify now, build after the resolver — it is a scope attribute, not a new concept |
+| — | — | *— added by the reopen (§36); the four decisions minted after this table was written —* | — | — | — |
+| **AD-22** | `AD-22` | Does admission collapse into `L4`, and does any role literal remain sufficient for a capability gate? | `04…:750` | GAP-4 (`W-13` **scope**) | **Yes, and no** — `W-13` must introduce `portal.access` **and** delete the two `portalEligible` short-circuits |
+| **AD-23** | `AD-23` | Does the Security chapter's method catalog become derived before more methods are listed? | `04…:761` | GAP-2 | **Freeze the literal list** at its current four methods until `auth_policy` and the code-owned catalog land, then derive |
+| **AD-24** | `D-15` | Are the two legacy identity tables in the authority model, or out of it? | `01…:2074` | **GAP-1** | **Out** — establish whether any principal resolves solely through them; if none, delete the three reads (`S-8`) |
+| **AD-25** | `D-RM1` | Does *"reduce to four layers"* govern the resolution chain, and does it override the *"no access-architecture change"* constraint? | `01…:1635` | **GAP-15, GAP-16** | **None offered — the owning document declines to choose.** The security half is answered: `RM-7` *separate the two directives*, with `RM-10`'s ordering as a hard constraint (`01…:2067-2072`) |
+
+> **Thirteen owner citations were re-anchored by the reopen, and two of them had come to point at a
+> *different decision*.** `X-13`, §40.1. The Question, Blocks and Recommendation columns are unchanged; only
+> the `path:line` in the Owner column moved. Every value above was read at its cited site in this pass
+> **[verified]**.
+
+**Twenty-five open decisions, in one table — which is the point.** Rows `AD-22`–`AD-25` are added by the
+reopen pass and are argued in §36. `01…§64` measured the corpus at **25 open decisions** and recorded that
+*"No single document lists them"* (`01…:2450`) **[verified]**. That sentence is an unfilled obligation
+pointed at this section — §25 is the register — and appending the four rows above is what discharges it.
+`AD-24` and `AD-25` are **proposed** identifiers for `D-15` and `D-RM1` under §37's extension clause; both
+remain citable by their minted IDs until a Director ratifies, exactly as §26.2's twenty-one do.
 
 **Reconciliation with `01…§30`.** That table carries **17 rows for these same 21 questions** — it merges
 `D6 ≡ D10` into one row (`01…:1184`) and collapses `D-IA1…D-IA4` into one (`:1195`) **[verified]**. Both
@@ -1338,6 +1876,10 @@ The proposed numbering is not an arbitrary reassignment. It is generated by thre
 3. **Displaced readings are reassigned above the existing range**, in source order: `D11`ᴮ → `AD-15`,
    `D12`ᴮ → `AD-16`, `D13`ᴮ → `AD-17`, then `D-IA1…D-IA4` → `AD-18…AD-21`.
 
+> **Clauses 4 and 5 are added by the reopen and are stated in §37.** Three clauses close a *collision*; they
+> do not govern a *growth*, and the register grew by four before it was ratified. Clause 4 says who may mint
+> and into what; clause 5 says the prefix is exclusive. Both are proposed on the same terms as clauses 1–3.
+
 **Net churn: three questions change number** (`D11`ᴮ, `D12`ᴮ, `D13`ᴮ — all owned by `04`, all in the
 authentication wave that has no workstream yet), plus the `D-IA` block folds into the main series. Eighteen of
 twenty-one keep the number they are cited by today, and — per §24 — **no existing citation in `03` or `07`
@@ -1361,7 +1903,19 @@ point, a mechanism, or a migration**, so deciding them apart produces either a s
 or a second migration. `04…§7` makes this argument for sitting 1 and it generalizes (`04…:451-455`)
 **[verified]**.
 
-### Sitting 1 — Revocation *(AD-6, AD-10, AD-11, AD-16)*
+> **Amended by the reopen.** Six sittings become **seven**: `AD-24` joins sitting 1, `AD-23` joins sitting 3,
+> `AD-22` joins sitting 5, and `AD-25` takes a **Sitting 0** of its own because it is not a peer of the six —
+> it decides what the other work *is*. The placements are argued in §38 and the four sitting headers below
+> carry them.
+
+### Sitting 0 — What the operator's two directives mean *(AD-25)* — added by the reopen
+
+**The one decision that governs both operator directives, and it is gated by nothing** (`01…:2452`)
+**[verified]**. It is placed before sitting 1 rather than inside it because it is not a question about the
+access model — it is a question about *which programme the reopen is*, and the six sittings below are all
+downstream of the answer. §38 argues the placement; §39 argues the order.
+
+### Sitting 1 — Revocation *(AD-6, AD-10, AD-11, AD-16, **AD-24**)*
 
 **One question at four layers: what does it mean to take authority away?** Today the answer is *nothing, three
 times over* — an inactive account whose credential still works (`04…§2.3`), an inactive role that still
@@ -1399,7 +1953,7 @@ evidence answers both. But `01…§30` is explicit that AD-9's *fix* is **indepe
 wait** (`01…:1187`) **[verified]**, and §10 makes the same point: it is "a small change that makes an existing
 seed decision effective." AD-3 is the sharper *design* question; AD-9 is the one with a live consequence.
 
-### Sitting 3 — Authentication *(AD-5, AD-7, AD-8, AD-14, AD-17, AD-18)*
+### Sitting 3 — Authentication *(AD-5, AD-7, AD-8, AD-14, AD-17, AD-18, **AD-23**)*
 
 This sitting unblocks **GAP-2, the gap with no workstream at all** — *"the whole of `04…§6`, which has no
 workstream because `03` was sequenced before `04` existed"* (`01…:1162-1163`) **[verified]**.
@@ -1429,7 +1983,7 @@ covers only `I-7` **[verified]**. AD-15 is also the tenancy half of AD-14's mail
 membership bound, where AD-14 supplies the volume bound. **Neither alone closes the asymmetry `01…§19`
 describes.**
 
-### Sitting 5 — Vocabulary and resolver shape *(AD-2, AD-4, AD-12)*
+### Sitting 5 — Vocabulary and resolver shape *(AD-2, AD-4, AD-12, **AD-22**)*
 
 | `AD` | Options | Cost of deferral |
 |---|---|---|
@@ -1466,6 +2020,13 @@ if both are answered in one sitting.
 
 Ordered by *live consequence*, then by *cost compounding*. This is a recommendation about sequence only; it
 answers nothing.
+
+> **Amended by the reopen — §39.** The two criteria are unchanged and the six rows below keep their order
+> relative to one another. What changes is that **sitting 0 is prepended** and **sitting 5 has acquired live
+> consequence it did not have**: it now holds `AD-22`, the decision the *"four layers"* directive turns on
+> (`04…:757`), while `AD-2` in the same sitting informs `W-17`, which §4.6 makes the prerequisite for the
+> Roles-chapter redesign already in flight. A sitting ordered fifth for *cost compounding* is now upstream of
+> work in progress. §39 carries the amended table.
 
 | # | Sitting | Releases | Why here |
 |---|---|---|---|
@@ -1517,6 +2078,21 @@ to the same uncommitted file.
 **Worker-resolvable: none.** Every owning document says so in its own words, and this part repeats it rather
 than quietly narrowing any of the 21 to an assumption.
 
+**Added by the reopen — three things that look like decisions and are not.**
+
+- **The security half of `AD-25` is answered, and answering it decided nothing.** `01…§51`/`§55` establish
+  that the layer reduction closes `T-19` (S1), `T-20` and `T-4`/`T-6`'s mechanism and *"weakens no control
+  this pass could find"* — and state plainly that this *"supplies evidence, not a decision"*
+  (`01…:2067-2072`) **[verified]**. It narrows `AD-25`'s cost, not its answer.
+- **`GAP-15` and `GAP-16` are gaps, not questions.** The depth reduction having no agreed baseline, and the
+  role editor being *"the corpus's most-specified unbuilt change"* with five specifying documents and no
+  workstream (`01…:2410-2411`) **[verified]**, are both consequences of `AD-25` being open. Closing them is
+  work; only `AD-25` is a decision.
+- **`X-9`…`X-12` remain Director housekeeping**, on the same terms as `X-1`…`X-8` above. `X-9`'s resolution
+  (§37, clause 5) is a rename, not a product judgment — but it is the one piece of housekeeping that a
+  decision now depends on, because `AD-1`…`AD-5` cannot be approved unambiguously while the prefix denotes
+  two registers.
+
 ---
 
 ## 30. New findings recorded by this pass
@@ -1558,6 +2134,29 @@ and so belong with `01…§18`'s escalation rather than with a wave.
 **CR-2 is the one that would have prevented GAP-14's decision half**, and it is the one that must run *before*
 the first rubric row is written against `AD-15`…`AD-17` — because after that, it stops being a check and starts
 being a migration.
+
+### 31.1 Amended by the reopen — two of these now fail, and three are added
+
+**`CR-1` and `CR-2` have moved from "fails today" to "fails today for a new reason."** `01…§64` records it
+directly: `CR-2` *"would now fail"*, and `CR-1` *"would fail on `AD-1`…`AD-5` against `07…`"*
+(`01…:2453-2454`) **[verified]**. **`X-13` (§40.1b) supplies the in-file proof for `CR-2`**: two of §25's own
+owner citations resolved to a defining site belonging to a *different* decision. A check that fails against
+the table it was written to protect is the strongest argument available for running it mechanically. The failure is no longer the legacy `D-n` collisions this part was written
+to close — it is the register's own prefix. **A conformance check that fails against the document defining
+it is working**; what it exposes is that §31 checked identifiers for uniqueness and never checked
+*namespaces* for ownership.
+
+| Check | Asserts | Kind |
+|---|---|---|
+| **CR-6** | **Every ID prefix in the corpus has exactly one owning register.** Collect prefixes by regex over defining sites; assert no prefix is defined by two documents, and no prefix is a substring of another. Fails today three ways: `AD-` (`X-9`), `R n` inside `IA-R n` (`X-10`), and `RA-`/`R ` (`M2-19`, already resolved in-file) | static |
+| **CR-7** | **Every decision defined anywhere in the corpus appears in §25.** Collect defining sites across both folders; assert set equality with the register. This is the check that would have caught 25 ≠ 21 on the day it happened, and it is the mechanical form of `01…§64`'s *"no single document lists them"* | static |
+| **CR-8** | **No document states an open-decision count that disagrees with §25's cardinality.** A count in prose is a claim about the register and ages the moment the register grows — `02…§24`, `02…§25` and `03…§24` all said *twenty-one* while the corpus held twenty-five | static |
+
+**`CR-7` is the one this pass would have most wanted.** `CR-1`–`CR-5` all check that the register is
+*internally* well-formed; none checks that it is *complete*. Four decisions were minted correctly, argued
+carefully, and recorded in three documents, and the register did not learn of any of them — which is
+`01…§32`'s *"each phase was individually careful; nothing reconciled them"* arriving in the one place built
+to be the reconciliation.
 
 ---
 
@@ -1610,6 +2209,14 @@ sed -n '1301,1315p' $P/01-existing-state-inventory.md    # U-1…U-8
    document was edited by this phase. Until a Director ratifies §26.2, `AD-n` exists only in this section and
    the legacy IDs remain canonical. Citing `AD-n` elsewhere before ratification would create the seventh
    register this part exists to prevent.
+   > **Superseded by events, and the warning was half right.** `AD-n` is now cited across **133 lines of
+   > `03…`** (`01…:2305`, `:2569`) **[verified]**, plus `01…` and `07…`. The register was **bound by use
+   > before it was ratified**, so "exists only in this section" is false and the ratification in §26.2 is now
+   > a formality over an installed base rather than a proposal over a blank one. What the clause got right is
+   > the mechanism and not the direction: a seventh register did appear — `07…`'s audit block, four days
+   > *earlier* (`X-9`) — and it appeared because §26.2 governed renumbering and not naming. §35 states the
+   > position; §37 supplies the missing clauses. **This limit is retained unedited above as the record of
+   > what was believed.**
 4. **Completeness is bounded by two searches**, not by a reading of all eight documents end to end: a heading
    sweep for decision sections and a regex over defining sites (§32). A decision stated in prose without a
    bolded `**Dn —**` opener or a "Decisions" heading would not have been found. `00`, `05` and the
@@ -1623,6 +2230,12 @@ sed -n '1301,1315p' $P/01-existing-state-inventory.md    # U-1…U-8
 6. **`03`'s decision gates are cited from the QA copy**, which `X-3` establishes is the fresher one by 455
    lines (`01…:1268-1274`). The stale copy in this folder carries the same §12 gates but not the wave
    execution records that make "needed by wave 4" meaningful.
+   > **Inverted since, and `X-3` is closed.** `03…§26.2` records that the product-source copy — the one in
+   > *this* folder — was rewritten with all four execution records and waves 6–12, so *"the canonical copy is
+   > now the complete one, and `X-3` closes"* **[carried]**. The QA copy is now the frozen historical
+   > artifact at 1,254 lines. **Every `03…` citation added by the reopen (§35–§40) is therefore to the
+   > product-source path**, which is the opposite of this limit's instruction and is the correct reading
+   > today. Pre-reopen `03…` line citations above still resolve against the QA copy.
 7. **Line citations are as of `852f93ff8` plus the uncommitted working tree.** Part II of this file is
    uncommitted (`X-5`) and Part III is appended to it, so both are one `git checkout` from deletion, and every
    `§10`/`§20` cross-reference here resolves only in the working tree.
@@ -1646,3 +2259,407 @@ sed -n '1301,1315p' $P/01-existing-state-inventory.md    # U-1…U-8
 - **Originated by this part:** the `AD-1…AD-21` register (§25), the renumbering rule (§26.2), the six sittings
   (§27), the approval order (§28), findings `X-6`–`X-8` (§30), and checks `CR-1`–`CR-5` (§31). Nothing else.
 - **Verified at** `852f93ff8` in `wt6-vacilando-os-product-def`.
+
+---
+---
+
+# Part III — reopen pass (2026-08-06)
+
+**Worktree** `wt6-director-experience-dx5-5-continuation` @ `03efba377`
+**Status** Proposed — specification only. **No decision is answered by this pass either.**
+**Method** static, corpus-grounded. Reuses the corpus as input; re-derives nothing. Claims marked
+**[verified]** were read at the cited `path:line` in this pass; **[carried]** claims are quoted in substance
+from the owning document.
+
+---
+
+## 35. Reopen headline — both operator directives are governed by decisions this register did not carry
+
+Part III was written to make the decision register citable, and it did that. The reopen's finding is narrower
+and more uncomfortable: **the phase named *Decisions requiring approval* did not, until this pass, contain the
+decisions the operator's own guidance turns on.**
+
+| Open operator guidance | The decision that governs it | In §25 before this pass? |
+|---|---|---|
+| *"Role hierarchy is still too deep — reduce to four layers"* | **`AD-25`** (`D-RM1`) — does the instruction govern the resolution chain, and does it override the no-architecture constraint? (`01…:1635`) **[verified]**; and **`AD-22`** — *"the decision the operator's 'four layers' directive actually turns on"* (`04…:757`) **[verified]** | **no** · **no** |
+| *"Simplify the role editor without changing the access architecture"* | **`AD-25`** — *"the decision that governs both operator directives, and it is gated by nothing"* (`01…:2452`) **[verified]** | **no** |
+
+Three facts produced that state, and each is individually defensible:
+
+1. **The register grew by four and did not learn of it.** `01…§64` measures the corpus at **25 open
+   decisions** — `AD-1`…`AD-21`, plus `AD-22`/`AD-23` (`04…§7.1`), `D-15` (`01…§55`) and `D-RM1` (`01…§43`) —
+   and records that **"No single document lists them"** (`01…:2450`) **[verified]**. §25 now does; that is
+   the first thing this pass did.
+2. **The register was bound by use before it was ratified.** `AD-n` is cited across **133 lines of `03…`**
+   (`01…:2305`, `:2569`) **[verified]**, and §24's *"a window, and it is open today"* closed — not by a
+   Director ratifying §26.2, but by the plan of record adopting it. **This is the good outcome**: `03…` bound
+   to the *proposed canonical* numbers rather than to the colliding legacy ones, so the renumbering rule
+   worked exactly as designed. What failed is a rule §26.2 never contained.
+3. **The prefix was already taken.** `07…` defines `AD-1`…`AD-5` as its **Audit** acceptance criteria
+   (`07…:776-780`) **[verified]**, written four days before Part III chose the same prefix — `X-9`
+   (`03…§26.1`). `AD-1` today denotes *"Does a person ever become a principal?"* and *"Audit events exist for
+   consequential access changes."*
+
+> **The one-sentence position.** Part III solved the collision it was built for and left the register with no
+> rule for **growth** and no rule for **names** — so within three days three documents minted into three
+> different spaces, and the two decisions the operator is actively pushing on were among them.
+
+**What this pass does and does not do.** It absorbs the four decisions into §25, proposes the two missing
+clauses (§37), places the four in sittings (§38), amends the approval order (§39), and records `X-12`
+(§40.1). It **answers nothing**, renumbers no source document, and edits no file but this one.
+
+---
+
+## 36. The four decisions minted after §25
+
+Each was raised, argued and given a recommendation by its owning document. **This section carries them; it
+originates nothing.** Full rows are in §25.
+
+**`AD-22` — Does admission collapse into `L4`, and does any role literal remain sufficient for a capability
+gate?** Two questions that must be answered together, *"because answering only the first leaves the fifth
+layer intact under a new name"* (`04…:752`) **[carried]**. *Recommendation:* **yes, and no** — `W-13` must
+both introduce `portal.access` **and** delete the `portalEligible` short-circuits at `canReadAnalytics.ts:32`
+and `canManageUsersAndRoles.ts:58`. Renaming the predicate while leaving it *sufficient* at those two gates
+*"would satisfy the letter of `I-32`ᴮ and none of `I-35`ᴮ, and the chain would still be five layers deep at
+runtime while every document in the corpus said four"* (`04…:755-758`) **[carried]**.
+
+> **This is the decision §15.6 was waiting for and could not name.** §15.6 identified the gate bypass as *"the
+> only place in the platform where a fifth layer actually exists"* and routed it to `W-8`/`W-13`. `AD-22` is
+> the scope question those workstreams must answer to actually remove it — `W-13` is *"today written as an
+> admission change only"* (`04…:758`) **[carried]**. **Restating the chain as four layers does not make it
+> four layers**; `AD-22` is where that happens or does not.
+
+**`AD-23` — Does the Security chapter's method catalog become derived before more methods are listed?**
+Access → Security hand-maintains `Available`/`Planned` badges with no per-org record behind them.
+*Recommendation:* **freeze the literal list** at its current four methods until `auth_policy` and the
+code-owned catalog land, then derive. *"Adding a method to the markup is a five-minute change that makes the
+product assert an organization-level capability the platform does not have"* (`04…:763-766`) **[carried]**.
+Explicitly *"independent of `AD-22` and of `D5`–`D8`"* (`04…:766-767`) **[carried]** — which matters for §38.
+
+**`AD-24` (`D-15`) — Are the two legacy identity tables in the authority model, or out of it?**
+`user_profiles.role` and `app_users.role` are *"read by the resolver, written by nothing, displayed by
+nothing, and can only produce `admin` or `ops`"* (`01…:2074-2076`) **[carried]**. *Recommendation:* **out** —
+establish whether any live principal resolves solely through them; if none, delete the three reads (`S-8`),
+which closes the S1 outright; if some do, migrate those rows into `user_roles` first. *"This is the cheapest
+S1 closure in the corpus and it needs one database question answered, not a design"* (`01…:2078-2079`)
+**[carried]**.
+
+**`AD-25` (`D-RM1`) — Does *"reduce to four layers"* govern the resolution chain, and does it override the
+*"no access-architecture change"* constraint attached to the role-editor work?** The two readings *"lead to
+two different phases in two different waves"* (`01…:1647`) **[carried]**:
+
+- **If the depth instruction governs** — the target is the four operator-authorable layers, delivered by
+  removing the legacy reads, the hand-maintained projection and the gate bypass (`RM-4`). *"This is
+  architecture work, needs `W-10`/`W-13` sequencing, and is not a role-editor task"* (`01…:1638-1640`).
+- **If the constraint governs** — the role-editor work is presentation only, *"the chain stays eight layers
+  deep"*, and **the operator should know that the depth they are reacting to would remain**
+  (`01…:1641-1643`).
+
+> **`AD-25` carries no recommendation, and this part does not supply one.** Its owning document declines
+> explicitly — *"This part does not choose… the mission's prohibition reserves [it] to the Director"*
+> (`01…:1645-1647`) **[carried]** — because *"there is no role hierarchy"* (`01…§37`), so the guidance cannot
+> be executed literally. The **security half is answered and is not the decision**: the layer reduction closes
+> `T-19` (S1), `T-20` and `T-4`/`T-6`'s mechanism and weakens no control found, so *"a 'no
+> access-architecture change' constraint applied to the whole instruction would preserve the three most
+> severe revocation defects in the corpus"* (`01…:2067-2072`) **[carried]**. The evidence-implied
+> recommendation is `RM-7` — **separate the two directives** — with `RM-10`'s ordering as a hard constraint.
+> **That is evidence, not an answer, and §25's Recommendation cell says so.**
+
+**A secondary question rides with `AD-25` and is cheaper to settle:** *which of the five surfaces is "the
+role editor"* (`01…:1649`) **[carried]**. `GAP-16` records that five documents now specify it — `01…§40-42`
+/`§52`, `02…§4.6` (`RA-1`–`RA-5`), `04…§3.7`/`§6.4` (`R6`–`R9`), `05…§5A`, `06…§15` — **and no workstream
+builds it** (`01…:2411`) **[verified]**.
+
+---
+
+## 37. §26.2, extended — the register had a renumbering rule and no naming or growth rule
+
+**The diagnosis.** All three clauses of §26.2 condition on a **collision within a closed set**: which reading
+keeps a number, and where displaced readings go. None of them says who may mint a *new* decision, into what
+space, or how the register learns of it — and none of them says that `AD-` belongs to decisions. Both
+omissions were load-bearing within three days, and the evidence is that **each minting document reasoned
+carefully from a different premise and none was wrong on its own terms**:
+
+| Document | Reasoned from | Minted into | Verdict under the clauses proposed below |
+|---|---|---|---|
+| `04…§7.1` | *"`AD-n` runs to `AD-21` in the corpus, so these are free under both schemes"* (`04…:746-748`) **[verified]** | `AD-22`, `AD-23` | **correct** — this is clause 4, applied before it existed |
+| `01…§55` | *"the highest-numbered decision in the corpus is `D-14`"* (`01…:2081-2083`) **[verified]** | `D-15`, in the space §26.2 proposed to retire | defensible, **superseded** — §26.2 retires `D-n`, and §55 flags its own risk |
+| `01…§43` | the bare `D-n` register *"has already collided three times"*, so a qualifier is safer (`01…:1632-1633`) **[verified]** | `D-RM1`, a third convention | defensible, **superseded** — it avoids a collision by creating a namespace |
+
+> **Clause 4 — extension.** A new decision **MUST** be minted at the next free integer in `AD-n` by the
+> document that raises it, and **MUST NOT** be minted into the retired `D-n` space or into a
+> per-document convention. The raising document owns the question, the recommendation and the argument;
+> **§25 owns the list**, and the next pass to touch this file registers it. `CR-7` (§31.1) is the mechanical
+> form, and is the part that must not be left to diligence — this pass is the proof, since four decisions
+> were minted correctly, recorded in three documents, and the register still did not know.
+>
+> **Clause 5 — prefix exclusivity.** `AD-` denotes decisions corpus-wide and nothing else, and **no ID prefix
+> may be a substring of another** (`X-10`: `R n` inside `IA-R n`). `CR-6` is the mechanical form.
+
+**Clause 4 has a cost and it is the right trade.** It makes `AD-n` unbounded and makes §25 a table that must
+be maintained at every pass — against three private spaces that need no maintenance and cannot be counted.
+`01…§64`'s *"No single document lists them"* is what the second option buys.
+
+### 37.1 Clause 5 costs more than any published estimate, including the one written to correct the estimate
+
+`X-9`'s fix has been costed three times and **every estimate is stale in the same direction**:
+
+| Estimate | Option (a) — rename `07…`'s audit block | Option (b) — renumber the decision register |
+|---|---|---|
+| `03…§26.1` (as recorded) | *"Five IDs in one document"*; `07…` cited by nothing by criterion ID | *"21 IDs, but proposed and unratified, so nothing has bound to them"* |
+| `07…§8` (corrected) | **Five IDs + 48 citing lines in `03…`**, including `W-53`'s title and its five-row exit table (`07…:472-475`) **[verified]** | *"Unchanged — still 21, still unratified"* (`07…:482`) **[verified]** |
+| **This pass (corrected again)** | as `07…§8` | **Wrong in both halves: 25, not 21 — and bound, not unbound.** `AD-n` is cited on 133 lines of `03…` (`01…:2305`) **[verified]** |
+
+**So option (b) is now the more expensive of the two, and it was the cheaper one when both were written.**
+`07…§8`'s conclusion — that the corpus *"has adopted (c) by writing it, not by deciding it"* (`07…:485-487`)
+**[carried]** — is right, and this correction strengthens rather than disturbs it: **(a) is the recommended
+option and the gap between (a) and (b) is widening at every pass.** `01…§64` reaches the same recommendation
+independently — rename to `AX-1`…`AX-5`, then fold `D-15` and `D-RM1` into `AD-24`/`AD-25` — and adds the
+sentence this section exists to repeat: ***"This is now the cheapest it will ever be"*** (`01…:2459`)
+**[verified]**.
+
+**Escalated, not performed.** Renumbering across documents is not a worker act (`01…§18`). This pass proposes
+`AD-24`/`AD-25`, applies them **only inside this file**, and leaves `D-15`, `D-RM1`, and `07…`'s audit block
+untouched at their defining sites.
+
+---
+
+## 38. Where the four sit
+
+§27's rule is unchanged: a sitting groups decisions that **share an enforcement point, a mechanism, or a
+migration**. Three of the four join existing sittings under that rule; one cannot, and that is the finding.
+
+| Decision | Sitting | Why it belongs there |
+|---|---|---|
+| **`AD-24`** | **1 — Revocation** | It fails sitting 1's exit test from a new direction. A principal resolving through `user_profiles.role` is **not revoked by removing a `user_roles` row at all**, so *"revoke, then assert denial on the next request in a second process"* covers it and nothing else in the sitting does. `01…§62` adds `D-15` to `GAP-1` for the same reason (`01…:2391`) **[verified]** |
+| **`AD-23`** | **3 — Authentication** | Subject and gap (`GAP-2`) match. But it is *"independent of `AD-22` and of `D5`–`D8`"* (`04…:766`), which makes it the **only decision in sitting 3 that can be lifted out and taken alone** — worth knowing about a seven-decision sitting |
+| **`AD-22`** | **5 — Vocabulary & resolver** | It is a scope question for `W-13`, which is `AD-2`'s workstream (`04…:758`), and it is the vocabulary question in its runtime form: *is a role literal still sufficient at a gate?* Same mechanism, same migration |
+| **`AD-25`** | **0 — its own** | **It shares no enforcement point with any sitting because it is not about the access model.** It decides whether the reopen is architecture work or presentation work — i.e. what the other sittings are *for*. Placing it inside one would make it look like a peer of `AD-2` or `AD-11`, and it gates both |
+
+**Sitting 0 is not a courtesy.** Three properties justify it, and the third is the one that compounds:
+
+1. **It is gated by nothing** (`01…:2452`) **[verified]** — no prerequisite, no census, no `U-n` input.
+   Every other sitting has at least a preferred input.
+2. **Its two readings land in different waves** (`01…:1647`), so no workstream downstream of it can be sized.
+   `GAP-15` — *"the depth reduction has no agreed baseline"* — and `GAP-16` are both **blocked on `AD-25` and
+   have no workstream** (`01…:2410-2411`) **[verified]**.
+3. **Every reopen adds specification against an unchosen reading.** Five documents now specify the role
+   editor and none builds it (`GAP-16`). That is the cost of leaving `AD-25` open, it is paid per reopen, and
+   this pass is one more instalment of it — §4.6, §17.8 and this section are all specification against an
+   unchosen reading.
+
+> **The one coupling this pass asserts.** `AD-22` and `AD-25` are the two halves of *"reduce to four layers"*
+> — `AD-25` decides whether the instruction reaches the architecture, `AD-22` decides whether the fifth layer
+> actually goes. **Deciding them apart is the precise failure §27's grouping rule exists to prevent**, and
+> `AD-22`'s own stated failure mode is the proof: answer the admission half alone and *"the fifth layer
+> [survives] under a new name"* (`04…:752`). They sit in different sittings because they share no
+> mechanism — so §39 recommends the sittings be **taken together**, which is the tool §28 has for exactly
+> this.
+
+---
+
+## 39. Approval order, amended
+
+§28's two criteria — *live consequence*, then *cost compounding* — are unchanged, and so is the relative
+order of the six original sittings. Three rows change, and one row's **rationale** is closed by the plan even
+though its position holds.
+
+| # | Sitting | Releases | Change |
+|---|---|---|---|
+| **0** | **Directive scope** (`AD-25`) | `GAP-15`, `GAP-16` | **new** — ungated, governs both operator directives, and its cost is paid in specification at every reopen |
+| **1** | Revocation (`AD-6`, `AD-10`, `AD-11`, `AD-16`, **`AD-24`**) | `GAP-1` | **+`AD-24`** — the cheapest S1 closure in the corpus, and one the sitting's exit test already covers |
+| **2** | Delegation (`AD-3`, `AD-9`) | `GAP-8` | unchanged |
+| **3** | Authentication (+**`AD-23`**) | `GAP-2` | **+`AD-23`; rationale amended** — see below |
+| **4** | Tenancy (`AD-13`, `AD-15`) | `GAP-11` | unchanged |
+| **5** | Vocabulary & resolver (+**`AD-22`**) | `GAP-4`, `GAP-6`, `GAP-7` | **+`AD-22`; now has live consequence** — see below |
+| **6** | Person, policy, scope shape | `GAP-12`, `GAP-13` | unchanged |
+
+**Sitting 3's rationale is closed; its position is not.** §28 placed it third because `GAP-2` was *"the gap
+with no workstream at all."* That is **no longer true** — `03…§18` wave 8 is the authentication build, and
+`01…§62` marks `GAP-2` *"Closed as a plan gap"* with `AD-22`/`AD-23` as new inputs (`01…:2318`, `:2392`)
+**[verified]**. It stays third for the number of decisions it unblocks and the size of the wave they size,
+which is a weaker argument than the one it replaces. **Recorded because an ordering that survives the death
+of its own reason should be re-checked, not inherited.**
+
+**Sitting 5 is where the amendment bites.** It was ordered fifth on *cost compounding* alone — `AD-2`
+compounding per org seeded. It now holds two things §28 could not have weighed:
+
+1. **`AD-22`, the decision the *"four layers"* directive turns on** (`04…:757`).
+2. **`AD-2`, which informs `W-17`** — `03…:1103` defines `W-17 — Multi-role write path (M · I-10 · closes C7
+   · informed by D2)` **[verified]** — and §4.6 makes `W-17` the constraint on the Roles-chapter redesign:
+   it *"SHOULD land before, or with, any redesign of the Roles chapter"*, because otherwise a simplified
+   single-select control *"does not merely reflect `C7`, it hardens it into the product as an intended
+   design."*
+
+> **A sitting ordered fifth for cost compounding is now upstream of work already in flight.** That is live
+> consequence, which is §28's *first* criterion.
+
+**The recommendation, and it is about sequence only.** Take **sitting 5 with, or immediately after, sitting
+0** — not because sitting 5 outranks revocation, but because `AD-22` and `AD-25` are one question split
+across two sittings (§38) and the role-editor simplification is proceeding against both. **Sitting 1 keeps
+its first position**: `AD-11` still describes a defect that is live in the product now, and §28's caution
+about that applies unchanged.
+
+**What is *not* recommended.** Nothing here says the simplification should stop. §4.6 and §17.8 already give
+it a path that needs no decision — show the full `role_keys` set rather than `primary_role`, and reject a
+write that would remove an unshown role (`I-34`). **That remains the one part of the operator's directive
+that can be honoured immediately, and it is a read change, not an architecture change.**
+
+---
+
+## 40. Reproduce, limits and provenance — Part III reopen
+
+### 40.1 `X-12` — the register had no extension rule, and that is why three documents minted three ways
+
+Continuing the `X-n` series; `X-11` is taken (`01…§66`). **Corpus-integrity, not a product defect.**
+
+> **`X-12` — §26.2 is a renumbering rule for a closed set and was applied as if it were a register
+> constitution.** Its three clauses all condition on a *collision*; none governs *minting*. Within three days
+> of publication, `04…§7.1` extended `AD-n` correctly from first principles, `01…§55` minted `D-15` into the
+> space §26.2 proposed to retire, and `01…§43` minted `D-RM1` into a third convention — **each reasoning
+> carefully, from a different premise, with no rule to reason from** (§37's table) **[verified]**.
+
+`01…§64` records the *event* and concludes that *"every act is individually defensible and each document says
+why it chose as it did."* Both halves are right. **`X-12` names the cause the event report leaves implicit**:
+when three careful documents reach three different answers on the same day, the missing artifact is a rule,
+not diligence. That is `01…§32`'s *"each phase was individually careful; nothing reconciled them"* — arriving
+in the document built to be the reconciliation, which is why it is worth a number.
+
+### 40.1b `X-13` — the register's owner column decayed, and two entries came to name the wrong decision
+
+> **`X-13` — a `path:line` citation to a growing document is a decaying reference, and §25's Owner column is
+> built entirely from them.** Thirteen of twenty-one owner citations were stale at `03efba377`, and **two
+> resolved to a different decision than they named** **[verified this pass]**.
+
+| Row | Cited | Now at | What the stale cite resolves to today |
+|---|---|---|---|
+| `AD-5`…`AD-8` | `04…:735`, `:741`, `:746`, `:750` | `:1057`, `:1063`, `:1068`, `:1072` | **`AD-8`'s `:750` is `AD-22`'s definition** — a decision minted three days later |
+| `AD-15`…`AD-17` | `04…:459`, `:466`, `:472` | `:712`, `:719`, `:725` | §3.x prose about the `ops` literal |
+| `AD-13`, `AD-14` | `01…:759`, `:769` | `:765`, `:775` | neighbouring prose |
+| `AD-18`…`AD-21` | `06…:571`, `:579`, `:588`, `:595` | `:579`, `:587`, `:596`, `:603` | **`AD-19`'s `:579` is `D-IA1`'s definition — i.e. `AD-18`'s** |
+| `AD-5`/`AD-6` re-anchor | `04…:446`, `:447` | `:694` (§7 opener), `:704` (the `D6 ≡ D10` coupling) | §3.x prose |
+
+**This is `CR-2` failing inside the register that defines `CR-2`.** The check asserts *"every cited decision
+resolves to exactly one defining site"*; two of §25's own citations resolved to a defining site belonging to
+another decision — which is worse than dangling, because it reads as correct. `07…§8` found the same decay
+independently from the other end (`07…`'s audit block moved from `:136-140` to `:776-780`, and `03…§26.1`
+still cites the old range).
+
+**The general form, and it is not fixable by care.** Every document in this corpus is being extended by
+reopens; every `path:line` in every document therefore decays at a rate set by how much text is inserted
+*above* it. §25 is the most exposed artifact in the corpus because its entire value is the mapping from ID to
+defining site. **The durable fix is to cite decisions by their bolded defining opener rather than by line** —
+`^\*\*D5 —` is stable under insertion in a way `:1057` is not — which is also what makes `CR-1`, `CR-2` and
+`CR-7` mechanizable. *Recommendation, escalated not performed:* adopt opener-anchored citation for the
+Owner column at ratification, and let `CR-7` re-derive the line numbers rather than store them.
+
+### 40.2 Reproduce
+
+```bash
+cd /Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation   # @ 03efba377
+P=docs/platform/planning/access-identity-v2
+Q=docs/platform/planning/vacilando-os/qa/access-identity-v2
+
+# §35 — the register is bound by use: 133 citing lines in the plan of record
+rg -c '\bAD-[0-9]+\b' $P/03-implementation-qa-sequence.md    # 133
+rg -c '\bAD-[0-9]+\b' $Q/03-implementation-qa-sequence.md    # 0  — the frozen QA copy predates it
+rg -c '\bAD-[0-9]+\b' $P/01-existing-state-inventory.md      # 15
+rg -c '\bAD-[0-9]+\b' $Q/07-director-acceptance-rubric.md    # 9
+
+# §35 / §36 — the four decisions minted after §25, at their defining sites
+sed -n '750,767p' $Q/04-authentication-model.md              # AD-22, AD-23
+sed -n '2074,2083p' $P/01-existing-state-inventory.md        # D-15  → AD-24
+sed -n '1635,1649p' $P/01-existing-state-inventory.md        # D-RM1 → AD-25
+sed -n '2448,2461p' $P/01-existing-state-inventory.md        # "Open decisions: 25 … No single document lists them"
+
+# §35 X-9 — the prefix was taken four days earlier; the audit block has moved line
+rg -n '^\| AD-[1-5] \|' $Q/07-director-acceptance-rubric.md  # :776-780, not :136-140 as 03…§26.1 cites
+
+# §37.1 — every costing of X-9 is stale in the same direction
+sed -n '465,487p' $Q/07-director-acceptance-rubric.md        # 07…§8's correction, and its own stale (b)
+
+# §37 X-12 — three premises, three spaces, no rule
+sed -n '746,748p' $Q/04-authentication-model.md              # "free under both schemes"
+sed -n '2081,2083p' $P/01-existing-state-inventory.md        # "the highest-numbered decision is D-14"
+sed -n '1632,1633p' $P/01-existing-state-inventory.md        # "has already collided three times"
+
+# §38 / §39 — what AD-25 blocks, and why sitting 5 acquired live consequence
+rg -n 'GAP-15|GAP-16' $P/01-existing-state-inventory.md      # both: workstream none, blocked on D-RM1
+rg -n '^### W-17 — Multi-role write path' $P/03-implementation-qa-sequence.md   # :1103, "informed by D2"
+
+# §39 — sitting 3's rationale is closed: GAP-2 now has wave 8
+rg -n 'GAP-2' $P/01-existing-state-inventory.md | tail -3
+
+# §40.1b X-13 — the register's owner column, re-anchored against the defining openers
+rg -n '^\*\*D[5-8] —'        $Q/04-authentication-model.md      # 1057, 1063, 1068, 1072  (was 735-750)
+rg -n '^\*\*D1[123] —'       $Q/04-authentication-model.md      # 712, 719, 725           (was 459-472)
+rg -n '^\*\*D-IA[1-4] —'     $Q/06-product-ia-and-flows.md      # 579, 587, 596, 603      (was 571-595)
+rg -n '^\*\*D1[34] —'        $P/01-existing-state-inventory.md  # 765, 775                (was 759, 769)
+sed -n '750p'  $Q/04-authentication-model.md   # AD-8's old cite → AD-22's definition
+sed -n '579p'  $Q/06-product-ia-and-flows.md   # AD-19's old cite → D-IA1 (= AD-18)
+```
+
+### 40.3 Limits
+
+1. **Static and corpus-grounded.** No request issued, no browser used, no database queried, no test suite,
+   typecheck or build run. **The only file written by this pass is this one** — `01…`, `03…`, `04…`, `07…`
+   and every QA-folder document are unmodified.
+2. **No decision is answered and no recommendation is originated.** `AD-22`, `AD-23` and `AD-24` carry their
+   owning documents' recommendations verbatim in substance. **`AD-25` carries none, because its owning
+   document declines to give one**, and this part does not supply the gap — §36 records the security-half
+   evidence and labels it evidence.
+3. **`AD-24`/`AD-25` are proposed, and applied only inside this file.** `D-15` and `D-RM1` remain canonical
+   at their defining sites. Given §33.3's fate — a "proposed, not applied" numbering that was bound 133 times
+   before ratification — this limit is stated with less confidence than its predecessor: **the likely outcome
+   is adoption by use again**, and §37's clause 4 is written to make that outcome correct rather than
+   accidental.
+4. **Citations into `01…` are against the uncommitted working tree**, not `03efba377`. `01…§66` records this
+   as `X-11` about `05…`; the same exposure now applies to every `01…§43`/`§51`/`§55`/`§61`–`§66` citation in
+   §35–§40, which is most of this pass's evidence. **It is one `git checkout` from unresolvable.**
+5. **Only §25's Owner column was re-anchored (`X-13`). Every other citation in Part III was left as
+   written**, and §§27–§30's prose cites into `01…`, `04…` and `06…` are presumed to carry the same decay —
+   `01…` in particular has roughly doubled since Part III, so cites like `01…:1160-1161` and `:1309` are
+   very unlikely to still resolve. **They were not checked.** The Owner column was fixed because a register
+   whose ID→site mapping is wrong has failed at its only job; the prose was not, because re-anchoring ~40
+   citations without re-reading each target is how a wrong cite becomes a confident one. This is scoped
+   follow-up work, and `CR-7` is what should do it.
+6. **The four new decisions were read at their defining sites; the corpus was not re-read end to end.**
+   Completeness rests on `01…§64`'s census plus the prefix searches in §40.2. A decision minted since
+   `03efba377`, or minted without an `AD-`/`D-` opener, would not have been found — which is `CR-7`'s job and
+   is why `CR-7` is proposed rather than relied on.
+7. **`GAP-15` proposes a remedy inside this document, and this pass did not build it.** Its remedy column
+   reads *"none — proposed: one reconciliation table in `02…`"* for the four conflicting counts of the chain
+   (`01…:2410`) **[verified]**. That is a **depth** artifact and belongs to §1.3 in Part I, not to the
+   decision register; this phase's declared scope is the decisions. **Recorded as an open pointer at this
+   file, not as work done.** `AD-25` is the decision `GAP-15` is blocked on either way (§38).
+8. **Sitting placements are arguments, not derivations.** §38 applies §27's stated rule to four decisions; a
+   reader who groups by *wave* rather than by *enforcement point* would put `AD-23` with `AD-22` (both are
+   `W-13`-adjacent surface honesty) and would be reasoning from a different rule, not a wrong one.
+9. **`X-12` is a finding about a rule, and rules are contestable.** A reader could hold that §26.2 was never
+   meant to govern minting and that no rule was missing — only a reconciliation pass. §37's table is the
+   evidence either reading has to explain.
+10. **Read-only.** No source, schema, migration, UI or workstream was created, modified, renumbered or
+    re-sequenced. **One delivered table was edited**: §25's Owner column (`X-13`), which changes no decision,
+    no recommendation and no ID.
+
+### 40.4 Provenance
+
+- **Inputs (reused, not re-derived):** `01-existing-state-inventory.md` §43 (`D-RM1`), §51/§55 (`D-15`, the
+  security half), §61 (plan coverage), **§64** (the 25-decision census and the ratification recommendation),
+  §65 (`X-10`), §66 (`X-11`); `04-authentication-model.md` §7.1 (`AD-22`, `AD-23`) and §12 (the operator
+  directives' disposition); `03-implementation-qa-sequence.md` §24 (decision→workstream binding), §26.1
+  (`X-9`), §26.2 (`X-3` closed; which `03` is canonical), `W-17` at `:1103`;
+  `07-director-acceptance-rubric.md` §8 (`X-9` re-costed) and its audit block at `:776-780`; Parts I and II
+  of this file — §1.3 (four layers), §4.6 (`RA-1`–`RA-5`, `I-32`), §15.6, §17.7–§17.8 (`I-33`, `I-34`), §20.
+- **Read this pass, in full:** `01…§43`, `§55`, `§61`, `§64`, `§65`; `04…§7.1`; `07…§8`; `03…§26.1`.
+- **Corpus-wide searches:** `AD-n` citation counts per document; `AD-1`…`AD-5` defining sites in `07…`;
+  `X-n` and `CR-n` high-water marks (to place `X-12` and `CR-6`–`CR-8` without colliding — §37 clause 5
+  applied to this pass's own IDs); `GAP-15`/`GAP-16` rows; `W-17`'s definition.
+- **Re-anchored this pass:** §25's Owner column — thirteen citations across `01…`, `04…`, `06…`, each read
+  at its defining opener (`X-13`, §40.1b).
+- **Originated by this pass:** §25's four appended rows and the 25-decision statement; §26.2's clauses 4 and
+  5 (§37); the re-costing of `X-9`'s option (b) (§37.1); the four sitting placements and **Sitting 0**
+  (§38); the amended approval order and the sitting-3 rationale closure (§39); checks `CR-6`–`CR-8` (§31.1);
+  findings `X-12` and `X-13` (§40.1, §40.1b). Nothing else.
+- **Verified at** `03efba377` in `wt6-director-experience-dx5-5-continuation`, **plus the uncommitted
+  working-tree state of `01-existing-state-inventory.md`** (limit 4).

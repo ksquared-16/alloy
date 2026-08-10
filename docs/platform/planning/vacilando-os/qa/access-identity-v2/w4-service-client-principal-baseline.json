@@ -1,16 +1,20 @@
 {
   "generated_by": "web/scripts/checkServiceClientPrincipal.mjs",
   "counts": {
-    "routes": 559,
-    "holds_service_client_direct": 537,
-    "reaches_service_client_transitive": 556,
-    "resolves_principal": 536,
-    "subject_resolves_principal": 520,
-    "subject_unresolved": 17,
-    "listed_exceptions": 17,
+    "routes": 570,
+    "holds_service_client_direct": 541,
+    "reaches_service_client_transitive": 567,
+    "resolves_principal": 542,
+    "subject_resolves_principal": 526,
+    "subject_unresolved": 15,
+    "listed_exceptions": 15,
     "listed_baseline": 0,
-    "transitive_only_unresolved": 3,
-    "listed_advisory": 3
+    "transitive_only_unresolved": 10,
+    "listed_advisory": 10
+  },
+  "ratchet": {
+    "max_subject_unresolved": 15,
+    "max_transitive_only_unresolved": 10
   },
   "ok": true,
   "violations": [],
@@ -65,14 +69,6 @@
       "list": "exceptions"
     },
     {
-      "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
-      "list": "exceptions"
-    },
-    {
-      "route": "app/api/public/tour-booking/[token]/slots/route.ts",
-      "list": "exceptions"
-    },
-    {
       "route": "app/api/vendor-application/route.ts",
       "list": "exceptions"
     },
@@ -87,8 +83,15 @@
   ],
   "transitive_only_unresolved": [
     "app/api/leads/gutters/route.ts",
+    "app/api/public/tour-booking/[token]/cancel-intent/route.ts",
+    "app/api/public/tour-booking/[token]/cancel/route.ts",
+    "app/api/public/tour-booking/[token]/confirm/route.ts",
+    "app/api/public/tour-booking/[token]/decline/route.ts",
+    "app/api/public/tour-booking/[token]/reschedule/route.ts",
+    "app/api/public/tour-booking/[token]/resolve/route.ts",
+    "app/api/public/tour-booking/[token]/slots/route.ts",
     "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts",
     "app/api/webhooks/twilio/sms-status/route.ts"
   ],
-  "allowlist_reviewed": "2026-08-03"
+  "allowlist_reviewed": "2026-08-06"
 }

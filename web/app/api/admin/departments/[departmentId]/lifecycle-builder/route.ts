@@ -4,7 +4,6 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import {
     departmentIdAllowed,
-    effectiveDepartmentScopeDimensions,
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 import {
@@ -113,7 +112,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
@@ -175,7 +174,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });

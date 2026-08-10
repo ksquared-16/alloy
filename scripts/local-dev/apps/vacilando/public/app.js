@@ -211,7 +211,7 @@ document.addEventListener("input", (e) => {
 });
 
 // -------- routing (Mission Control primary; legacy board is compatibility-only) --------
-const MC_ROUTES = new Set(["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"]);
+const MC_ROUTES = new Set(["workspaces", "workspace", "missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"]);
 const LEGACY_ROUTES = new Set(["command", "director", "history", "policies", "trust"]);
 
 function legacyMode() {
@@ -228,47 +228,77 @@ function parseRoute() {
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
 const CRUMBS = {
-  missions: "Missions", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
+  workspaces: "Missions", workspace: "Missions",
+  missions: "Mission Control", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
   decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", improvements: "Improvements",
   settings: "Settings",
   director: "Legacy Director", command: "Legacy Board", history: "Work History",
   policies: "Policies", trust: "Runtime Trust",
 };
 function setActiveNav(name) {
-  const active = (name === "kickoff" || name === "timeline" || name === "decisions" || name === "evidence")
-    ? (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name)
-    : name;
-  const navActive = ["missions", "needs-you", "workers", "improvements", "settings"].includes(name)
-    ? name
-    : (name === "kickoff" ? "missions" : name === "decisions" ? "needs-you" : name === "timeline" || name === "evidence" ? "missions" : name);
-  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.route === navActive));
+  const r = parseRoute();
+  const missionId = (r.name === "workspaces" || r.name === "workspace") ? (r.sub || null) : null;
+  document.querySelectorAll("#mission-rail .mission-rail-item").forEach((a) => {
+    const route = a.dataset.route || "";
+    const mid = route.split("/")[1] || "";
+    a.classList.toggle("active", Boolean(missionId && mid === missionId));
+  });
+  document.querySelectorAll(".ruser[data-route]").forEach((a) => {
+    a.classList.toggle("active", a.dataset.route === name);
+  });
   $("#crumb").textContent = CRUMBS[name] || "Missions";
 }
 
+function escRail(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+window.renderMissionRail = function renderMissionRail(missions) {
+  const el = document.getElementById("mission-rail");
+  if (!el || !Array.isArray(missions)) return;
+  el.innerHTML = missions.map((m) => {
+    const id = m.missionId || m.workspaceId;
+    const badge = m.needsYou || m.needsCount
+      ? `<span class="badge">${escRail(String(m.needsCount || "!"))}</span>`
+      : "";
+    const meta = [m.provider, m.slot != null ? `slot ${m.slot}` : null].filter(Boolean).join(" · ");
+    return `<a class="mission-rail-item" data-route="workspaces/${escRail(id)}" title="${escRail(m.title || id)}">
+      <span class="mission-rail-title">${escRail(m.title || id)}${meta ? `<span class="mission-rail-meta">${escRail(meta)}</span>` : ""}</span>${badge}
+    </a>`;
+  }).join("");
+  setActiveNav(parseRoute().name);
+};
+
+async function fetchMissionRail() {
+  try {
+    const r = await fetch("/api/v2/views/mission-rail", { cache: "no-store" });
+    const j = await r.json();
+    if (j?.missions) window.renderMissionRail(j.missions);
+  } catch { /* keep stub */ }
+}
+
 /**
- * Cutover: empty hash and legacy home routes land in Mission Control Missions
- * unless the operator explicitly requested ?legacy=1.
- * Desktop historically opened #/director — that must not remain the landing page.
+ * Cutover: empty hash lands on Identity conversation (V3-4).
  */
 const LEGACY_HOME_ROUTES = new Set(["director", "command", "history", "policies", "trust"]);
+const V3_HOME = "#/workspaces/msn_f74ed02c126c88d7ff";
 function enforceMissionControlHome() {
   const hash = location.hash || "";
   const empty = !hash || hash === "#" || hash === "#/";
   if (empty) {
-    location.hash = "#/missions";
+    location.hash = V3_HOME;
     return;
   }
   if (legacyMode()) return;
   const r = parseRoute();
-  // Top-level legacy shells only (keep #/command/worker/N reachable via Settings → Legacy).
   if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) {
-    location.hash = "#/missions";
+    location.hash = V3_HOME;
   }
 }
 window.addEventListener("hashchange", () => {
   if (legacyMode()) return;
   const r = parseRoute();
-  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = "#/missions";
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = V3_HOME;
 });
 
 let lastKey = null;
@@ -278,6 +308,11 @@ function renderMcView(r, V2) {
   let html = "";
   const missionQ = r.query?.get("mission") || null;
   if (r.name === "settings") html = V2.viewSettings ? V2.viewSettings() : `<div class="mc-wrap"><h2>Settings</h2></div>`;
+  else if (r.name === "workspaces" || r.name === "workspace") {
+    html = V2.viewWorkspace
+      ? V2.viewWorkspace(r.sub || r.query?.get("id") || "ws_identity")
+      : `<div class="mc-wrap empty">Workspace Runtime unavailable</div>`;
+  }
   else if (r.name === "needs-you") html = V2.viewNeedsYou();
   else if (r.name === "missions" && r.sub) html = V2.viewMissionDetail(r.sub);
   else if (r.name === "missions") html = V2.viewMissions();
@@ -288,14 +323,20 @@ function renderMcView(r, V2) {
   else if (r.name === "kickoff") html = V2.viewKickoff(r.sub);
   else if (r.name === "improvements") html = r.sub ? V2.viewImprovementDetail(r.sub) : V2.viewImprovements();
   V.innerHTML = html || `<div class="mc-wrap empty">Unknown Mission Control route</div>`;
+  if ((r.name === "workspaces" || r.name === "workspace") && typeof V2.afterWorkspacePaint === "function") {
+    requestAnimationFrame(() => V2.afterWorkspacePaint());
+  }
   try {
     // Mission Control badge is V2 Needs You only — never fall back to legacy board counts.
     const items = window.VacilandoV2?.state?.needsYou?.items;
-    if (Array.isArray(items)) $("#nb-needs").textContent = String(items.length);
-    else if (typeof window.VacilandoV2?.fetchNeedsYou === "function") {
+    if (Array.isArray(items)) {
+      const nb = $("#nb-needs");
+      if (nb) nb.textContent = String(items.length);
+    } else if (typeof window.VacilandoV2?.fetchNeedsYou === "function") {
       window.VacilandoV2.fetchNeedsYou();
     } else {
-      $("#nb-needs").textContent = "0";
+      const nb = $("#nb-needs");
+      if (nb) nb.textContent = "0";
     }
   } catch { /* */ }
 }
@@ -348,7 +389,8 @@ function render(force) {
     const n = document.getElementById(savedFocus.id);
     if (n) { try { n.focus({ preventScroll: true }); if (savedFocus.s != null) n.setSelectionRange(savedFocus.s, savedFocus.e); n.scrollTop = savedFocus.top; } catch { /* field gone */ } }
   }
-  $("#nb-needs").textContent = state.snap ? needsYou().length : 0;
+  const nb = $("#nb-needs");
+  if (nb) nb.textContent = state.snap ? needsYou().length : 0;
 }
 window.render = render;
 
@@ -1899,7 +1941,11 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-retry]"))) { const rid = n.dataset.retry; const slot = state.sel; const orig = (state.requests[slot] || []).find((r) => r.request_id === rid); if (orig) sendDirector(slot, orig.request_type || "worker-instruction", orig.instruction, rid); return; }
   if ((n = t("[data-discardcmd]"))) { showDiscard(Number(n.dataset.discardcmd)); return; }
   if ((n = t("[data-nav-tab]"))) { state.tab = n.dataset.navTab; render(true); return; }
-  if ((n = t("[data-review]"))) { showReview(n.dataset.review); return; }
+  if ((n = t("[data-review]"))) {
+    const key = n.dataset.review;
+    // Ignore empty data-review (V3 inline Review Outcome must not hit legacy review.resolve)
+    if (key) { showReview(key); return; }
+  }
   if ((n = t("[data-prcmd]"))) { e.stopPropagation(); showOpenPr(Number(n.dataset.slot)); return; }
   if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
   if ((n = t("[data-prov-verify]"))) { e.stopPropagation(); verifyProviderUI(n.dataset.provVerify); return; }
@@ -1930,6 +1976,10 @@ document.addEventListener("click", (e) => {
   if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
 });
 function showReview(initiative_key) {
+  if (!initiative_key) {
+    console.warn("showReview: missing initiative_key");
+    return;
+  }
   const rv = (state.snap.approvals?.reviews || []).find((x) => x.initiative_key === initiative_key);
   const ov = el("div", "ov");
   ov.innerHTML = `<div class="dlg"><h3>Review · ${esc(initiative_key)}</h3><span class="risk consequential">consequential</span>
@@ -2034,15 +2084,30 @@ function onSnap(s) {
 }
 async function poll() { try { const r = await fetch("/api/state", { cache: "no-store" }); onSnap(await r.json()); setLive(sseOk ? "live" : "polling"); } catch { setLive("offline"); } }
 function connect() { try { const es = new EventSource("/api/events"); es.addEventListener("snapshot", (ev) => { try { onSnap(JSON.parse(ev.data)); } catch {} sseOk = true; setLive("live"); }); es.addEventListener("hello", () => { sseOk = true; setLive("live"); }); es.onerror = () => { sseOk = false; }; } catch { sseOk = false; } }
+function isWorkspaceRoute() {
+  try {
+    const raw = location.hash.replace(/^#\/?/, "");
+    const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "";
+    return name === "workspaces" || name === "workspace";
+  } catch {
+    return false;
+  }
+}
 enforceMissionControlHome();
-if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = "#/missions";
-connect();
-// Board poll is background telemetry — Mission Control does not wait on it.
-poll(); fetchResources();
+if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = V3_HOME;
+fetchMissionRail();
+// First Mission Control / Workspace paint immediately (shell interactive before board hydrate).
+render(true);
+// Board telemetry contends on the single-threaded control plane — defer on Workspace Runtime.
+if (isWorkspaceRoute()) {
+  setTimeout(() => { connect(); poll(); fetchResources(); }, 5000);
+} else {
+  connect();
+  poll();
+  fetchResources();
+}
 setInterval(poll, 4000);
 setInterval(fetchResources, 9000);
-// First Mission Control paint immediately (shell interactive before board hydrate).
-render(true);
 
 // ---- Operator notifications: Needs You + legacy Director conversations.
 // Fires a native desktop notification when something newly needs the operator
@@ -2138,7 +2203,12 @@ async function notifyPoll() {
   } catch { /* keep last */ }
 }
 ensureNotifyPermission();
-notifyPoll(); setInterval(notifyPoll, 15000);
+if (isWorkspaceRoute()) {
+  setTimeout(() => notifyPoll(), 6000);
+} else {
+  notifyPoll();
+}
+setInterval(notifyPoll, 15000);
 // Also re-check permission when the window gains focus (macOS often prompts then).
 window.addEventListener("focus", () => { ensureNotifyPermission(); });
 // Poll the selected worker's Director requests while any is still running, so

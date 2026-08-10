@@ -11,10 +11,26 @@
     "  advisory_transitive_only \u2014 reaches a service client through a helper rather than importing one,",
     "               so it is outside the enforced predicate. Listed so the set cannot grow silently.",
     "",
-    "All three lists may only shrink. A stale entry fails the check."
+    "All three lists may only shrink. A stale entry fails the check.",
+    "",
+    "The `ratchet` ceilings below are ENFORCED BY THE CHECK, not only by the lock. Over the",
+    "ceiling is a violation; under it is stale, because a ceiling left above a fallen floor hands",
+    "out that many free exceptions. Both must be re-tightened whenever the floor moves."
   ],
-  "reviewed": "2026-08-04",
-  "reviewed_by": "assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 re-verification); originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
+  "reviewed": "2026-08-06",
+  "reviewed_by": "assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
+  "ratchet": {
+    "max_subject_unresolved": 15,
+    "max_transitive_only_unresolved": 10,
+    "history": [
+      "2026-07-31: unresolved 26 (initial baseline), advisory 3.",
+      "2026-08-04: unresolved re-tightened 26 → 17 after the book-v2 retirement; advisory left at 3.",
+      "2026-08-06: unresolved re-tightened 17 → 15; advisory raised 3 → 10 and moved under enforcement.",
+      "The 3 → 10 raise is not a shrink. It ratifies a growth that already happened in e7e585010 and",
+      "9187ae81a and was never bounded: 5 genuinely new public tour routes, plus `resolve` and `slots`",
+      "which moved OFF `exceptions` when the service client migrated into `guardTourActionRoute`."
+    ]
+  },
   "exceptions": [
     {
       "route": "app/api/action/[token]/route.ts",
@@ -108,11 +124,11 @@
     },
     {
       "route": "app/api/public/tour-booking/[token]/resolve/route.ts",
-      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (:20) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link\u2194invitation recipient binding, and the action kind. `requiredActions` is the route constant `[view_tour_slots, view_tour_details]` (:16) \u2014 never request-supplied \u2014 so a decline- or cancel-only token cannot read context. Read-only; discloses labels and status, never a person, opportunity, process or household id."
+      "reason": "Recipient-scoped capability token, not a session principal. The route no longer constructs a service client: `guardTourActionRoute` (:39) holds it and returns it only after `authorizeTourAction` verifies the token hash, the link\u2194invitation recipient binding, and the action kind. `requiredActions` is the route constant `REQUIRED_ACTIONS` (:27-35) \u2014 never request-supplied. CORRECTED 2026-08-06: that constant now lists all seven action kinds, so the previous reason's claim that `[view_tour_slots, view_tour_details]` keeps a decline- or cancel-only token from reading context is NO LONGER TRUE. The widening is deliberate and argued in the route header (:18-25) \u2014 any credential on the same invitation may re-read what the invitation already disclosed to that same recipient \u2014 and the authorizer still proves recipient binding, expiry and revocation. Read-only; discloses labels and status, never a person, opportunity, process or household id."
     },
     {
       "route": "app/api/public/tour-booking/[token]/slots/route.ts",
-      "reason": "Same guard-held client and same capability model. Route constant `[view_tour_slots, reschedule_tour]` (:20); the authorized link scopes the availability read, and the guard rate-limits per token under the `slots` budget."
+      "reason": "Same guard-held client and same capability model. Route constant `[view_tour_slots, reschedule_tour, select_tour_slot]` (:26) — CORRECTED 2026-08-06: `select_tour_slot` was added to the constant and the previous reason still named only the first two. The authorized link scopes the availability read, and the guard rate-limits per token under the `slots` budget."
     },
     {
       "route": "app/api/public/tour-booking/[token]/decline/route.ts",
@@ -124,7 +140,7 @@
     },
     {
       "route": "app/api/public/tour-booking/[token]/reschedule/route.ts",
-      "reason": "Same guard-held client and same capability model. Route constant `[reschedule_tour]` (:21). Booking id is credential-bound via `loadBoundBooking`; the requested slot is revalidated against `computeAvailableTourSlots` before `rescheduleTourBooking` runs."
+      "reason": "Same guard-held client and same capability model. Route constant `[reschedule_tour]` (:24). Booking id is credential-bound via `loadBoundBooking`; the requested slot is revalidated against `computeAvailableTourSlots` before `rescheduleTourBooking` runs."
     },
     {
       "route": "app/api/public/tour-booking/[token]/cancel/route.ts",
@@ -132,8 +148,8 @@
     },
     {
       "route": "app/api/public/tour-booking/[token]/cancel-intent/route.ts",
-      "reason": "Recipient-scoped capability token, not a session principal. Same guard-held client and model as the other public tour routes: `guardTourActionRoute` holds the service client and returns it only after `authorizeTourAction` verifies the token hash, the link\u2194invitation recipient binding, and the action kind. Route constant `[view_tour_details]` \u2014 a read-only Manage credential, so the caller cannot mutate. It mints a single-use `cancel_tour` credential bound to the booking loaded from the credential via `loadBoundBooking`, never from the request; it performs no cancellation itself."
+      "reason": "Recipient-scoped capability token, not a session principal. Same guard-held client and model as the other public tour routes: `guardTourActionRoute` holds the service client and returns it only after `authorizeTourAction` verifies the token hash, the link\u2194invitation recipient binding, and the action kind. Route constant `[view_tour_details]` (:26) \u2014 a read-only Manage credential, so the caller cannot mutate. It mints a single-use `cancel_tour` credential bound to the booking loaded from the credential via `loadBoundBooking`, never from the request; it performs no cancellation itself."
     }
   ],
-  "reviewed_note": "2026-08-03: dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink). 2026-08-04 re-review: all 17 remaining entries re-checked against the tree — every one still exists, still holds a service client, and still resolves no principal (asserted by the lock). Citations spot-verified line-by-line for the two subject-binding entries (:58/:144, :114) and the tour-booking token resolve (:30). The ratchet ceiling was tightened 26 → 17 to match the post-retirement floor."
+  "reviewed_note": "2026-08-03: dropped stale book-v2 entries after routes were removed from the tree (lists may only shrink). 2026-08-04 re-review: all 17 remaining entries re-checked against the tree — every one still exists, still holds a service client, and still resolves no principal (asserted by the lock). Citations spot-verified line-by-line for the two subject-binding entries (:58/:144, :114) and the tour-booking token resolve (:30). The ratchet ceiling was tightened 26 → 17 to match the post-retirement floor. 2026-08-06 reopen re-execution: the lock was RED on this base — the advisory ratchet capped the set at 3 while 10 routes qualified. Root cause: the ceilings lived only in the lock, so an allow-list-only commit could grow a list with `prebuild` still green. The ceilings now sit in this file and the check enforces them, over AND under. All 15 exceptions re-checked; unresolved re-tightened 17 → 15. Every advisory `requiredActions` citation was re-verified against the tree and four were wrong: three drifted line numbers (`slots` :20→:26, `reschedule` :21→:24, `resolve` :16→:27-35) and one substantive — `resolve`'s reason claimed a two-action constant that now lists all seven kinds, so the property it asserted was false. Corrected in place rather than silently rewritten."
 }

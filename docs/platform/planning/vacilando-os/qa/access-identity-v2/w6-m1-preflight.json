@@ -1,0 +1,204 @@
+{
+  "artifact": "w6-m1-preflight",
+  "title": "W-6 / M1 — shared-apply preflight evidence",
+  "plan_of_record": "docs/platform/planning/vacilando-os/qa/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "§6 W-6 (QA) and §11 (migration register and the apply gate)",
+  "gate": "docs/platform/planning/vacilando-os/MIGRATION-APPLY-GATE.md",
+  "migration": "supabase/migrations/20260807140000_backfill_membership_access_profiles.sql",
+  "target": "shared",
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "assignment_id": "asg_5b1ea3f9a620c6",
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "phase": "Wave 2 — Backfill membership profiles (W-6)"
+  },
+  "prepared_at": "2026-08-07",
+  "prepared_by": "claude (Vacilando managed slot 6)",
+  "why_this_file_exists": "Plan §6 W-6 QA names it ('Evidence file per §11 — w6-m1-preflight.json') and MIGRATION-APPLY-GATE.md requires migrations[].preflight.evidence_path to point at JSON evidence under the mission QA directory. It is a THIRD file beyond the two this assignment's Scope names, created because the gate cannot be satisfied without it — the two prior W-6 dispatches could not create it because the preflight had never executed and there was no evidence to hold.",
+  "durability_rationale": "NOT a transcription for convenience — this file is the DURABLE home of run 3's Q4 numbers, and the census artifact is not. wave0-authority-census.json's `results` block is OVERWRITTEN in place by the Director on every census run (trusted-host-actions.mjs:385-406 rewrites {...prior, status, query_hash, execution, results}), a behaviour that artifact predicts of itself at next_run_prepared.what_the_directors_merge_back_will_do. A run 4 would therefore silently replace the exact numbers this preflight rests on, leaving a preflight.ok:true pointing at counts that no longer exist. Snapshotting them here fixes that.",
+
+  "preflight": {
+    "ok": true,
+    "scope_of_this_ok": "The PRE-APPLY rules only — RULE 1 (sizing), RULE 2 (grain), RULE 5 (immediacy) and both abort conditions, which are exactly what MIGRATION-APPLY-GATE.md requires a worker to establish BEFORE the operator is asked to authorize. RULES 3 and 4 are POST-apply and are structurally unreachable until the operator authorizes the apply; they are recorded below as pending, not as passed. `ok: true` here means 'safe to ASK', never 'applied' and never 'verified after'.",
+    "summary": "pairs_without_profile=2; membership_rows=8; distinct_user_org_pairs=6; orphan_profiles=0; M1 sized at exactly 2 inserted rows against the pairs_without_profile grain; no unattributed growth across three runs; migration functionally proven not-yet-applied on target",
+    "evidence_path": "docs/platform/planning/vacilando-os/qa/access-identity-v2/w6-m1-preflight.json",
+    "status_of_migration": "awaiting_authorization"
+  },
+
+  "census_source": {
+    "run": 3,
+    "artifact": "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json",
+    "census_run_at": "2026-08-07T17:24:15.663653+00:00",
+    "executed_at": "2026-08-07T17:24:16.951Z",
+    "executed_by": "trusted_host_action",
+    "trusted_host_action_id": "tha_67f9c69f628d1a",
+    "authorization_id": "tha_auth_eec51323ab20",
+    "query_hash": "a3982ca510616677db143f7eb548abc20c093add6e2e8a3511c2d1f163361a42",
+    "database_target": "alloy_deployed_primary",
+    "database_target_fingerprint": "b15dad2c6d030ed4",
+    "one_authorization_discharged_two_obligations": "As w6_m1_preflight.execution_source specified in advance, W-6 did NOT request its own census. Run 3's combined_query already computes all four Q4 figures, so the single operator authorization that unblocked W-0's run 3 also produced this preflight. A separate W-6 census would have been a second authorization for a strict subset of the same query.",
+    "independently_evaluated_twice": "The same live read was evaluated against the pass rules TWICE, by two assignments running concurrently in this worktree and unaware of each other's verdicts: asg_86eb0e4a95142e (W-0), recorded at wave0-authority-census.json -> w6_m1_preflight.preflight_run_3_outcome, and asg_5b1ea3f9a620c6 (W-6), recorded here. Both reached identical verdicts on every rule and both abort conditions. W-0 deliberately stopped short of setting preflight.ok, holding that W-0 produces the numbers and W-6 owns the gate — a correct division this file honours. The one substantive refinement W-6 adds is R1 below: W-0 held that an aged preflight 'is not a preflight', which is right about the attribution obligation but overstates the risk, because the migration self-sizes in-transaction and therefore cannot be mis-sized by a stale number."
+  },
+
+  "measured": {
+    "q4_pairs_without_profile": 2,
+    "q4_membership_rows": 8,
+    "q4_distinct_user_org_pairs": 6,
+    "q4_profiles_without_membership": 0
+  },
+
+  "target_identity_at_preflight": {
+    "org_ids": [
+      "7803388d-cdee-4afb-89cf-23a137f39423",
+      "93667019-bd28-49b5-a688-acc9bb1e0a19"
+    ],
+    "org_slugs": ["alloy-bend", "demo-childcare-co-c144769f"],
+    "org_fingerprint": "ab7e5dde2e229d5c46e251456e4d9534",
+    "server_version": "17.6",
+    "cluster_name": "main",
+    "server_addr": "2600:1f13:838:6e21:288f:4aa6:65bf:f446/128",
+    "why_recorded_here": "This is the first census run in the programme that self-identifies its target, and it converts a previously UNCHECKABLE precondition into a checkable one. A preflight is only valid for the database the migration is actually applied to. Until run 3 there was no durable identifier to compare — the target was asserted by the execution channel. The apply must now be confirmed against org_fingerprint ab7e5dde2e229d5c46e251456e4d9534 (equivalently, the two org UUIDs above); if the apply target does not carry those orgs, THIS PREFLIGHT DOES NOT APPLY TO IT and must be re-run.",
+    "what_it_does_not_establish": "It does NOT confirm the expected Supabase project ref ikaxilmwmrmbagoidedu — org UUIDs and slugs are not a project ref. It also cannot retroactively prove runs 1 and 2 hit this same database, because neither captured org identity; their only corroboration remains org_count=2 and the shared channel fingerprint b15dad2c6d030ed4. target.confirmed_against_live therefore stays false. What run 3 buys is forward comparability, not backward proof."
+  },
+
+  "rule_verdicts": [
+    {
+      "rule": "RULE 1 (sizing)",
+      "requirement": "M1's created-row count MUST equal q4_pairs_without_profile as returned by the preflight run, never the 2 recorded on 2026-08-04.",
+      "verdict": "PASS",
+      "value": 2,
+      "note": "The preflight-derived number is 2. It coincides with the 2026-08-04 figure, and that coincidence is precisely why the rule insists on re-derivation: the number was re-derived from run 3's live read, not carried forward. Had it been cited, this preflight would be worthless while looking identical."
+    },
+    {
+      "rule": "RULE 2 (grain)",
+      "requirement": "The comparison is against q4_pairs_without_profile — not q4_membership_rows, not q4_distinct_user_org_pairs.",
+      "verdict": "PASS",
+      "note": "All three values are distinct on this run (2 vs 8 vs 6), so the guard is load-bearing rather than theoretical: comparing against the wrong one would let the preflight pass on a wrong migration. The migration's own post-condition (1) uses the same anti-join grain (20260807140000:54-58, 120-124), so the in-transaction backstop and this preflight measure the same thing."
+    },
+    {
+      "rule": "RULE 3 (coverage)",
+      "requirement": "Post-apply, the Q4 anti-join MUST return 0. This is W-6's exit criterion and W-7's precondition.",
+      "verdict": "PENDING APPLY — not assessable by any worker-side means",
+      "note": "Structurally unreachable before the operator authorizes. Enforced twice regardless: in-transaction post-condition (2) (20260807140000:128-132) aborts the migration if any pair is left uncovered, and the Tier A anti-join at :174-179 is the post-apply confirmation to capture."
+    },
+    {
+      "rule": "RULE 4 (no modification)",
+      "requirement": "q4_profiles_without_membership unchanged post-apply, and zero pre-existing profile rows may differ.",
+      "verdict": "PRE-APPLY HALF ESTABLISHED (orphans = 0); post-apply half PENDING APPLY",
+      "value_before": 0,
+      "note": "0 orphan profile rows at preflight, matching runs 1 and 2 — so 'no existing profile row modified' still has nothing to collide with. Post-apply this is evidenced rather than argued: post-condition (3) EXCEPT-compares a temp-table snapshot of EVERY pre-existing row (20260807140000:72-75, 107-115, 135-139), and post-condition (4) additionally pins the orphan count and the table total."
+    },
+    {
+      "rule": "RULE 5 (immediacy)",
+      "requirement": "The census must be re-run IMMEDIATELY BEFORE apply; a count above the last census is explainable only via the known cert fixture, and otherwise means a sixth membership writer exists.",
+      "verdict": "PASS at preflight time, with a named residual on the authorization gap",
+      "note": "Q4 held at exactly 2 across all three runs (2026-07-31, 2026-08-04, 2026-08-07) and q4_membership_rows held at 8, so there is NO growth to attribute and the sixth-writer alarm does not fire. The 'immediately' requirement is satisfiable only up to the operator authorization gap that MIGRATION-APPLY-GATE.md itself mandates (preflight -> authorize -> apply); see residual_risks[0] for why that gap is safe here rather than merely tolerated."
+    }
+  ],
+
+  "abort_conditions": [
+    {
+      "condition": "q4_pairs_without_profile cannot be attributed to a known writer (cert fixture) — stop; a sixth membership writer exists and W-5's audit was incomplete.",
+      "status": "CLEAR",
+      "reasoning": "The count did not grow at all (2 -> 2 -> 2 across runs 1-3), and q4_membership_rows held at 8, so no membership was created in the interval by any writer. There is nothing requiring attribution. Note this is an absence of activity, not proof that the closure holds under load — W-5 closed the three product writers on 2026-08-07, but the deployed target has simply been idle."
+    },
+    {
+      "condition": "q4_profiles_without_membership > 0 — must be recorded and explained before apply.",
+      "status": "CLEAR",
+      "value": 0,
+      "reasoning": "Zero orphan profiles, identical to runs 1 and 2. No profile has outlived its membership."
+    }
+  ],
+
+  "gate_checklist": {
+    "1_not_already_applied": {
+      "status": "ESTABLISHED FUNCTIONALLY, NOT VIA schema_migrations",
+      "evidence": "The worker has no channel to query schema_migrations on the target (the trusted host action executes a fixed census query). But the migration's entire effect is to drive q4_pairs_without_profile to 0, and the live read returns 2. It therefore CANNOT have been applied to this target. For this specific migration the functional proof is stronger than a schema_migrations row, which would show only that a version string was recorded."
+    },
+    "2_simulate_data_effects": {
+      "status": "DONE",
+      "rows_to_create": 2,
+      "orphans_counted": 0,
+      "effect": "Two rows inserted at department_scope='all', site_scope='all' — identical to what resolveAdminAccessCore.ts:144-162 already infers for exactly these two pairs, so no principal's effective access changes. Additive only; ON CONFLICT DO NOTHING, never DO UPDATE."
+    },
+    "3_fk_repoints": {
+      "status": "N/A — this migration repoints no foreign key",
+      "note": "Referential safety was nonetheless checked statically and is recorded at wave0-authority-census.json -> w6_m1_preflight.referential_safety: user_roles carries the same two ON DELETE CASCADE FKs to auth.users(id) and public.orgs(id) that user_access_profiles does, so no selected row can be rejected."
+    },
+    "4_drop_or_rename": { "status": "N/A — nothing dropped or renamed" },
+    "5_seed_or_rewrite_function_width": { "status": "N/A — no function is created or rewritten" },
+    "6_json_evidence": { "status": "DONE — this file" }
+  },
+
+  "apply_authorization": {
+    "granted": true,
+    "granted_at": "2026-08-07",
+    "granted_by": "operator (Kelly), answered from Mission Control",
+    "decision": "Authorize the M1 shared apply, or parse-check it first?",
+    "chosen_option": "(a) Authorize the apply now, confirming the target carries org fingerprint ab7e5dde2e229d5c46e251456e4d9534",
+    "not_chosen": "(b) parse-check on a disposable PostgreSQL first — so residual risk R2 is ACCEPTED, not discharged. A syntax error in the DO block will surface at apply time. It is safe (the migration transaction rolls back, leaving the database exactly as it was) but costs a repeat round trip.",
+    "status_after_authorization": "AUTHORIZED, NOT YET APPLIED. This is a real intermediate state and the register should not collapse it to either neighbour: `awaiting_authorization` is now wrong (the operator has answered), and `applied` is not yet true (no migration has run).",
+    "why_the_worker_did_not_apply_it": "NO EXECUTION CHANNEL EXISTS — this is structural, not a permission the worker failed to request. The only Vacilando trusted host action is `database.read_census` (trusted-host-action-registry.mjs:11, 130 — it is the sole entry in the registry), and the registry calls validateReadOnlySql() unconditionally on every action (:111). An INSERT trips FORBIDDEN_KEYWORDS, so the census channel is incapable of applying a migration BY CONSTRUCTION rather than by policy. There is no `database.apply_migration` action to authorize. Separately, DATABASE_URL is on the toolkit's denylist twice (verify.sh:202, :210), so no worker holds a credential for the deployed target. The authorization is therefore genuine and actionable — but it is actionable by the OPERATOR on the trusted host, not by this worker."
+  },
+
+  "how_to_apply": {
+    "step_1_confirm_target": "Confirm the target carries org fingerprint ab7e5dde2e229d5c46e251456e4d9534 — equivalently the two org UUIDs 7803388d-cdee-4afb-89cf-23a137f39423 and 93667019-bd28-49b5-a688-acc9bb1e0a19, slugs alloy-bend and demo-childcare-co-c144769f. This is the operator's explicit condition on the authorization. If the target does not carry those orgs, THIS PREFLIGHT IS VOID FOR IT and must be re-run.",
+    "step_2_apply_THIS_FILE_ONLY": "psql \"$DATABASE_URL\" -f supabase/migrations/20260807140000_backfill_membership_access_profiles.sql",
+    "step_2_warning_DO_NOT_USE_DB_PUSH": "DO NOT run `supabase db push`. It applies EVERY pending migration, and this repository carries a 28-migration Processing/Identity backlog recorded as unapplied against the deployed target (see method.schema_drift_check_post_execution.limit and method.schema_reverification_2026_08_04.not_checked in wave0-authority-census.json). `db push` would therefore apply 28 unrelated, un-preflighted migrations alongside M1 — a mass shared-target change the operator authorized nothing of, and precisely the class of silent widening MIGRATION-APPLY-GATE.md exists to prevent. The authorization covers ONE file. Apply that one file.",
+    "step_3_capture": "psql prints RAISE NOTICE output to stderr and shows it at the default client_min_messages=notice. Capture the full block verbatim into post_apply_evidence.captured below — no summarising, no rounding.",
+    "step_4_tier_a": "Run the anti-join at 20260807140000_backfill_membership_access_profiles.sql:174-179 as a SEPARATE statement after the migration commits, and record the result. It must return 0. This is W-6's exit criterion and W-7's precondition — the in-transaction post-condition is a backstop, not a substitute, because it runs before commit.",
+    "step_5_update_register": "Set migrations[].status to `applied` in §11, and set this file's post_apply_evidence.status accordingly. Only then does the acceptance gate become eligible for `pass`."
+  },
+
+  "post_apply_evidence": {
+    "status": "NOT CAPTURED — authorized 2026-08-07 but not yet executed; see apply_authorization.why_the_worker_did_not_apply_it",
+    "tier_a": "The anti-join at 20260807140000_backfill_membership_access_profiles.sql:174-179 returning 0.",
+    "captured_notice_block": null,
+    "captured_tier_a_anti_join": null,
+    "captured_at": null,
+    "capture_slots_are_null_deliberately": "These three keys are pre-shaped and null rather than absent, so that filling them is transcription rather than authoring, and so that a reader can tell at a glance that the evidence is MISSING rather than that the file forgot to ask for it. Do not delete them; replace the nulls.",
+    "to_capture_verbatim_on_apply": [
+      "membership_rows",
+      "distinct_user_org_pairs",
+      "pairs_without_profile_before",
+      "profile_rows_created",
+      "pairs_without_profile_after",
+      "profile_rows_before -> after",
+      "orphan_profiles_before/after",
+      "pre_existing_rows_mutated"
+    ],
+    "expected_on_a_correct_apply": {
+      "profile_rows_created": 2,
+      "pairs_without_profile_after": 0,
+      "pre_existing_rows_mutated": 0,
+      "orphan_profiles_after": 0,
+      "caveat": "Recorded as an EXPECTATION for triage, not as a gate. The migration self-sizes from its own in-transaction anti-join, so if the population legitimately grew between this preflight and the apply, profile_rows_created will exceed 2 and that is CORRECT behaviour, not a failure — see residual_risks[0]."
+    }
+  },
+
+  "residual_risks": [
+    {
+      "id": "R1",
+      "risk": "The authorization gap between this preflight and the apply.",
+      "assessment": "SAFE BY CONSTRUCTION, and this is the one place where reading the migration carefully changes the answer. Post-condition (1) compares rows created against the anti-join measured microseconds earlier IN THE SAME TRANSACTION (20260807140000:54-58, 85, 120-124) — it does NOT compare against this preflight's 2. So growth in the gap does not abort the migration and does not produce a wrong-sized apply: the INSERT selects DISTINCT from user_roles at apply time, covering whatever exists then, and all four post-conditions still hold. The preflight's job is therefore to prove the number is EXPLAINABLE before the operator is asked, not to hard-bind the apply's size. A stale preflight cannot cause a wrong apply; it can only cause an unexplained one."
+    },
+    {
+      "id": "R2",
+      "risk": "The migration has still never been parsed by any PostgreSQL.",
+      "assessment": "UNCHANGED AND UNDISCHARGED by this preflight. No local stack was running (docker ps empty) on any of the three W-6 dispatches, and the shared local stack is not the shared target §11 means. A syntax error in the DO block would surface only after the operator authorizes the apply. The four in-transaction post-conditions keep that failure SAFE — the migration transaction rolls back and the database is left exactly as it was — but it would cost the authorization round trip. This is the largest remaining avoidable cost in W-6."
+    },
+    {
+      "id": "R3",
+      "risk": "The preflight measured `alloy_deployed_primary`; the apply must hit that same database.",
+      "assessment": "NEWLY CHECKABLE, and it must actually be checked. Before run 3 there was no durable identifier and this risk was silent. Confirm at authorization that the apply target carries org_fingerprint ab7e5dde2e229d5c46e251456e4d9534 / the two org UUIDs above. If it does not, this preflight is void for that target."
+    },
+    {
+      "id": "R4",
+      "risk": "Q4's stability across three runs reflects an idle tenant, not a proven-closed write path.",
+      "assessment": "Carried forward from the census artifact's own drift analysis. W-5 closed the three product membership writers on 2026-08-07, but no membership was created in the observation window, so the closure is untested under real use. tests/processing/cert/processingIdentityCertFixtures.ts:115 still upserts user_roles with no profile row and can grow Q4 in a CERTIFICATION tenant — which is why RULE 5's attribution clause exists and must be re-read, not skipped, if a future preflight sees growth."
+    }
+  ],
+
+  "what_this_does_not_authorize": "Nothing beyond asking. Per MIGRATION-APPLY-GATE.md, preflight ok:true does not auto-apply — it unlocks the honest question 'authorize apply on shared, or keep deferred'. This preflight does not flip absent-scope deny (W-7), does not remove the department-scope bypass (W-8), and does not advance the objective spine. Accept must not run while the acceptance gate is needs_operator."
+}

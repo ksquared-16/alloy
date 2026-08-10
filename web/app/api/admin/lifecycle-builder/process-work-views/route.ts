@@ -4,7 +4,6 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import {
     departmentIdAllowed,
-    effectiveDepartmentScopeDimensions,
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
 import {
@@ -44,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     const departmentId = request.nextUrl.searchParams.get("department_id")?.trim() ?? "";
     const processId = request.nextUrl.searchParams.get("process_id")?.trim() ?? "";
@@ -105,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     const access = await getAdminAccessContextCached();
     if (!access.ok) return adminContextFailureResponse(access);
-    const dim = effectiveDepartmentScopeDimensions(scopeDimensionsFromAccess(access), access.roleKeys);
+    const dim = scopeDimensionsFromAccess(access);
 
     let body: Record<string, unknown> = {};
     try {

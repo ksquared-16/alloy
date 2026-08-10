@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
+import { replaceMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 
 /**
  * PATCH: replace **all** role rows for this user in this org with a single role_key.
@@ -35,23 +36,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
     }
 
-    const { data: existing, error: exErr } = await supabase.from("user_roles").select("user_id").eq("user_id", userId).eq("org_id", access.orgId).limit(1);
-    if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
-    if (!existing?.length) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // W-5/G4: the replacement and the access profile are one transaction. This was
+    // delete-then-insert as two statements, so a failed insert left the user with
+    // no membership at all; the RPC either lands the replacement or moves nothing.
+    const membership = await replaceMembershipWithAccessProfile(supabase, {
+        userId,
+        orgId: access.orgId,
+        role,
+    });
+    if (!membership.ok) {
+        if (membership.kind === "not_found") {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        return NextResponse.json({ error: membership.error }, { status: 500 });
     }
 
-    const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("org_id", access.orgId);
-    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
-
-    const { data: inserted, error: insErr } = await supabase.from("user_roles").insert({ user_id: userId, org_id: access.orgId, role }).select().single();
-
-    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
-    if (!inserted) return NextResponse.json({ error: "Failed to assign role" }, { status: 500 });
-
-    const row = inserted as { user_id: string; org_id: string; role: string; created_at?: string };
     return NextResponse.json({
-        ...row,
+        ...membership.row,
         role_keys: [role],
     });
 }

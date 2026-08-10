@@ -1,0 +1,66 @@
+{
+  "sprint": "V3-1",
+  "base": "http://127.0.0.1:3026",
+  "workspaceId": "ws_identity",
+  "missionId": "msn_f74ed02c126c88d7ff",
+  "messageCount": 100,
+  "currentState": {
+    "kind": "current_state",
+    "derived": true,
+    "editable": false,
+    "workspaceTitle": "Identity Platform",
+    "workingOn": "Mission 2 Identity & Access Platform Objective Transform the completed Access & Roles engineering foundation into a comp",
+    "currentPhase": "Waiting on you",
+    "currentGoal": "Mission 2 Identity & Access Platform Objective Transform the completed Access & Roles engineering foundation into a complete, operator-facing Identity & Access product that is configuration-driven, co",
+    "lastCompleted": "Wave 1 — Service-client principal check (W-4)",
+    "blockedBy": "Nothing",
+    "nextExpectedCheckpoint": "Discovery reopens. Implementation does not start.",
+    "recommendation": "Request More Discovery",
+    "postureId": "operator_review",
+    "primaryAction": {
+      "kind": "review_outcome",
+      "label": "Review outcome",
+      "missionId": "msn_f74ed02c126c88d7ff"
+    },
+    "secondaryAction": null
+  },
+  "context": {
+    "worker": {
+      "slot": 6,
+      "provider": "cursor",
+      "worktree": "wt6-director-experience-dx5-5-continuation",
+      "branch": "agent/cursor/6-vacilando-v3-1-workspace-runtime",
+      "health": "conflict"
+    },
+    "branch": "agent/cursor/6-vacilando-v3-1-workspace-runtime",
+    "evidence": {
+      "count": 89,
+      "jumpLabel": "89 artifacts"
+    }
+  },
+  "checks": {
+    "apiOk": true,
+    "hasMessages": true,
+    "currentStateDerived": true,
+    "hasContextRail": true,
+    "singleWorkspace": true,
+    "scrolling": true,
+    "replyVisible": true,
+    "replyProjected": true,
+    "eventProjection": true,
+    "provenanceKept": true
+  },
+  "shots": {
+    "opening": "v3-1-opening-workspace.png",
+    "conversation": "v3-1-conversation.png",
+    "composer": "v3-1-composer.png",
+    "context": "v3-1-current-state-context.png",
+    "nav": "v3-1-workspace-nav.png",
+    "scroll": [
+      "v3-1-scroll-top.png",
+      "v3-1-scroll-bottom.png"
+    ],
+    "reply": "v3-1-reply.png"
+  },
+  "capturedAt": "2026-08-05T22:13:45.420Z"
+}

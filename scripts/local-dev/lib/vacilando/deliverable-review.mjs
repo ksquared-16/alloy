@@ -1038,6 +1038,7 @@ export function acceptDeliverableReview(missionId, reviewId, {
   actor = "operator",
   response = null,
   nowMs,
+  dispatch = true,
 } = {}) {
   const store = readStore(missionId);
   const review = store.reviews.find((r) => r.review_id === reviewId);
@@ -1060,13 +1061,76 @@ export function acceptDeliverableReview(missionId, reviewId, {
     return { ok: false, error: "director_could_not_certify", detail: review.recommendation_detail };
   }
 
+  return finalizeDeliverableAcceptance(missionId, review, store, {
+    actor,
+    response,
+    nowMs,
+    dispatch,
+  });
+}
+
+/**
+ * Auto-accept a completed implementation wave so the chain can continue without
+ * stopping the operator after every workstream. Only when the worker recommended
+ * Accept and there is no blocking evidence repair.
+ */
+export function autoAcceptDeliverableForChain(missionId, assignmentId, {
+  actor = "director",
+  nowMs,
+  response = null,
+} = {}) {
+  const store = readStore(missionId);
+  const open = (store.reviews || [])
+    .filter((r) => r.assignment_id === assignmentId && OPEN_REVIEW_STATES.includes(r.certification_state))
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+  const review = open[0] || null;
+  if (!review) return { ok: true, skipped: true, reason: "no_open_review" };
+
+  if (["evidence_discrepancy", "evidence_repair"].includes(review.certification_state)) {
+    return {
+      ok: false,
+      error: "evidence_not_reconciled",
+      detail: review.recommendation_detail || "Evidence repair required before continuing.",
+      review,
+    };
+  }
+
+  const assignment = getAssignment(missionId, assignmentId);
+  const rec = String(assignment?.completionReport?.recommendation || review.recommendation || "");
+  if (/\b(rework|reject|more discovery|incomplete)\b/i.test(rec) && !/\baccept\b/i.test(rec)) {
+    return { ok: false, error: "worker_requests_attention", detail: rec, review };
+  }
+
+  return finalizeDeliverableAcceptance(missionId, review, store, {
+    actor,
+    response: response
+      || "Auto-accepted to continue the approved implementation chain (pause only for decisions or plan end).",
+    nowMs,
+    dispatch: false,
+    chainAuto: true,
+  });
+}
+
+function finalizeDeliverableAcceptance(missionId, review, store, {
+  actor,
+  response,
+  nowMs,
+  dispatch = true,
+  chainAuto = false,
+} = {}) {
+  const reviewId = review.review_id;
   review.certification_state = "accepted";
   review.accepted_at = iso(nowMs);
   review.accepted_by = actor;
   review.acceptance_note = response || null;
+  review.chain_auto_accepted = Boolean(chainAuto);
   review.history = review.history || [];
-  review.history.push({ at: iso(nowMs), actor, action: "accepted", note: response || null });
-  // Close sibling duplicates so the UI cannot immediately re-open an older "ready" briefing.
+  review.history.push({
+    at: iso(nowMs),
+    actor,
+    action: chainAuto ? "accepted_auto_chain" : "accepted",
+    note: response || null,
+  });
   for (const r of store.reviews) {
     if (r.assignment_id !== review.assignment_id) continue;
     if (r.review_id === reviewId) continue;
@@ -1087,10 +1151,12 @@ export function acceptDeliverableReview(missionId, reviewId, {
   const note = String(response || "").trim() || null;
   appendTimelineEvent(missionId, {
     type: "deliverable_accepted",
-    headline: `You certified ${short}`,
+    headline: chainAuto ? `Director auto-continued past ${short}` : `You certified ${short}`,
     summary: [
-      unlocked.length ? `Director unlocked ${unlocked[0]}.` : "Director continues execution.",
-      note ? `Your note: ${note.slice(0, 160)}` : null,
+      chainAuto
+        ? "Implementation chain continues — no operator gate between waves unless a decision is required."
+        : (unlocked.length ? `Director unlocked ${unlocked[0]}.` : "Director continues execution."),
+      note && !chainAuto ? `Your note: ${note.slice(0, 160)}` : null,
     ].filter(Boolean).join(" "),
     visibility: "summary",
     assignmentId: review.assignment_id,
@@ -1100,11 +1166,12 @@ export function acceptDeliverableReview(missionId, reviewId, {
       approval_meaning: review.approval_meaning,
       unlocked,
       operator_note: note,
+      chain_auto: Boolean(chainAuto),
     },
     nowMs,
   });
 
-  if (note) {
+  if (note && !chainAuto) {
     try {
       createCollaborationEntry({
         missionId,
@@ -1139,11 +1206,27 @@ export function acceptDeliverableReview(missionId, reviewId, {
     } catch { /* best-effort — certification already recorded */ }
   }
 
-  import("./assignment-dispatch.mjs")
-    .then(({ scheduleDispatchAfterKickoff }) => scheduleDispatchAfterKickoff(missionId, { actor: "director" }))
-    .catch(() => {});
+  if (dispatch) {
+    // Prefer opening the next plan phase (W-7…) over only dispatching already-ready deps.
+    import("./mission-advance.mjs")
+      .then(({ scheduleImplementationChainContinue }) =>
+        scheduleImplementationChainContinue(missionId, {
+          fromAssignmentId: review.assignment_id,
+          actor: "director",
+          nowMs,
+        }))
+      .catch(() => {
+        import("./assignment-dispatch.mjs")
+          .then(({ scheduleDispatchAfterKickoff }) => scheduleDispatchAfterKickoff(missionId, { actor: "director" }))
+          .catch(() => {});
+      });
+  }
 
-  return { ok: true, review, certifyNoteSemantics: CERTIFY_NOTE_SEMANTICS };
+  return {
+    ok: true,
+    review: getDeliverableReview(missionId, reviewId) || review,
+    certifyNoteSemantics: chainAuto ? null : CERTIFY_NOTE_SEMANTICS,
+  };
 }
 
 /**

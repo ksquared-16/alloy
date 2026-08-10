@@ -1,0 +1,76 @@
+{
+  "sprint": "V3-2",
+  "base": "http://127.0.0.1:3026",
+  "workspaceId": "ws_identity",
+  "timings": {
+    "before": {
+      "note": "V3-1 browser open blocked on full workspace-runtime; first messages ~14–19s under concurrent Missions/Needs You load",
+      "shellVisibleMs": 198,
+      "firstMessagesVisibleMs": 14378,
+      "fullInitialReadyMs": 18625,
+      "rootCause": "duplicate workspace-runtime fetches + stale-seq discard + single-threaded server contention"
+    },
+    "after": {
+      "shellApiMs": 2803,
+      "messagesApiMs": 212,
+      "firstOpen": {
+        "domContentLoaded": 235,
+        "shellVisible": 302,
+        "currentStateVisible": 3175,
+        "compressionOrThread": 3203,
+        "firstMessagesVisible": 3210,
+        "msgCount": 40,
+        "label": "open"
+      },
+      "returnVisit": {
+        "domContentLoaded": 10,
+        "shellVisible": 28,
+        "currentStateVisible": 43,
+        "compressionOrThread": 63,
+        "firstMessagesVisible": 73,
+        "msgCount": 40,
+        "label": "return"
+      }
+    }
+  },
+  "checks": {
+    "shellApiOk": true,
+    "messagesApiOk": true,
+    "hasSince": true,
+    "firstPageBounded": true,
+    "hasEarlier": true,
+    "shellUsableFast": true,
+    "currentStateFast": true,
+    "understandUnder15s": true,
+    "loadEarlier": true,
+    "replyAfterProgressive": true,
+    "returnHasCompression": true,
+    "materialOrNoChange": true,
+    "noMaterialChange": true,
+    "rapidReopen": true,
+    "provenanceIntact": true
+  },
+  "shots": {
+    "opening": "v3-2-opening-shell.png",
+    "since": "v3-2-since-last-visit.png",
+    "currentState": "v3-2-current-state.png",
+    "loadEarlier": "v3-2-load-earlier.png",
+    "reply": "v3-2-reply.png",
+    "returnVisit": "v3-2-return-visit.png",
+    "noChange": "v3-2-no-change.png"
+  },
+  "liveVsFixture": {
+    "live": [
+      "open",
+      "return",
+      "reply",
+      "load-earlier",
+      "rapid-reopen",
+      "provenance"
+    ],
+    "fixture": [
+      "unit: last-seen, compression no-change, pagination, stale cursor"
+    ]
+  },
+  "capturedAt": "2026-08-05T22:29:43.147Z"
+}

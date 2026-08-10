@@ -61,6 +61,7 @@ import {
   evidenceExperienceGalleryVm,
   evidenceExperienceCardVm,
 } from "./evidence-experience.mjs";
+import { isFixtureMission } from "./mission-filters.mjs";
 import { directorPortfolioVm } from "./director-portfolio.mjs";
 
 
@@ -725,11 +726,13 @@ export function workerDetailVm(workerId) {
 }
 
 /** Needs You item */
-export function needsYouItemVm({ type, missionId, title, body, urgency, action, recommendation, secondaryAction = null }) {
+export function needsYouItemVm({ type, missionId, title, body, urgency, action, recommendation, secondaryAction = null, decisionId = null, id = null }) {
   const brief = getBrief(missionId);
   return {
     kind: "needs_you_item",
     type,
+    id: id || decisionId || null,
+    decisionId: decisionId || null,
     missionId,
     missionTitle: brief?.title || missionId,
     title,
@@ -768,17 +771,44 @@ export function recoveryNeedsOperator(tel) {
   return false;
 }
 
-export function listNeedsYou() {
+let _needsYouCache = { at: 0, items: null };
+const NEEDS_YOU_CACHE_MS = 8_000;
+
+export function listNeedsYou({ bypassCache = false } = {}) {
+  const now = Date.now();
+  if (!bypassCache && _needsYouCache.items && now - _needsYouCache.at < NEEDS_YOU_CACHE_MS) {
+    return _needsYouCache.items;
+  }
   const items = [];
+  const seen = new Set();
   const isArchivedMission = (missionId) =>
     Boolean(missionId && getMission(missionId)?.archived === true);
+  const isNoiseMission = (missionId) => {
+    if (!missionId) return true;
+    const brief = getBrief(missionId);
+    const mission = getMission(missionId);
+    return isFixtureMission(brief?.title || mission?.title, missionId);
+  };
+  const pushUnique = (item) => {
+    if (!item || isArchivedMission(item.missionId) || isNoiseMission(item.missionId)) return;
+    const key = [
+      item.type,
+      item.missionId || "",
+      item.decisionId || item.id || "",
+      String(item.title || "").slice(0, 80),
+    ].join(":");
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push(item);
+  };
   // 1) Open product / architecture decisions
   for (const d of listDecisions(null, { status: "open" })) {
-    if (isArchivedMission(d.missionId)) continue;
+    if (isArchivedMission(d.missionId) || isNoiseMission(d.missionId)) continue;
     const vm = decisionCardVm(d);
-    items.push(needsYouItemVm({
+    pushUnique(needsYouItemVm({
       type: "decision",
       missionId: d.missionId,
+      decisionId: d.decisionId || d.id || null,
       title: vm.title,
       body: vm.situation,
       urgency: vm.urgency,
@@ -789,11 +819,12 @@ export function listNeedsYou() {
   // 2) Failed recovery requiring operator action only
   for (const w of listWorkerTelemetry()) {
     if (!recoveryNeedsOperator(w)) continue;
-    if (isArchivedMission(w.missionId)) continue;
+    if (isArchivedMission(w.missionId) || isNoiseMission(w.missionId)) continue;
     const card = workerCardVm(w);
-    items.push(needsYouItemVm({
+    pushUnique(needsYouItemVm({
       type: "recovery_approval",
       missionId: w.missionId,
+      id: w.workerId,
       title: `${card.deliverable} — recovery needs your approval`,
       body: "Director refused an unsafe recovery and needs you to authorize next steps.",
       urgency: "Recovery approval",
@@ -804,14 +835,14 @@ export function listNeedsYou() {
   // 3) Mission postures that require the operator (kickoff / start / review / certify)
   for (const row of listMissionsV2({ includeArchived: false })) {
     const missionId = row.mission_id || row.missionId;
-    if (isArchivedMission(missionId)) continue;
+    if (isArchivedMission(missionId) || isNoiseMission(missionId)) continue;
     const posture = deriveMissionPosture(missionId);
     if (!posture.needsYou) continue;
     // Decisions already covered above
     if (posture.id === "decision_required") continue;
 
     if (posture.id === "deliverable_review") {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "deliverable_review",
         missionId,
         title: posture.label,
@@ -823,7 +854,7 @@ export function listNeedsYou() {
       continue;
     }
     if (posture.id === "awaiting_kickoff") {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "kickoff",
         missionId,
         title: "Kickoff approval needed",
@@ -835,7 +866,7 @@ export function listNeedsYou() {
       continue;
     }
     if (posture.id === "ready_to_start" && posture.needsYou) {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "start_work",
         missionId,
         title: "Start work",
@@ -848,7 +879,7 @@ export function listNeedsYou() {
     }
     if (posture.id === "ready_to_start") continue;
     if (posture.id === "awaiting_completion") {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "completion",
         missionId,
         title: "Completion approval needed",
@@ -861,7 +892,7 @@ export function listNeedsYou() {
       continue;
     }
     if (posture.id === "operator_review" || posture.id === "paused" || posture.id === "idle_after_kickoff" || posture.id === "blocked" || posture.id === "interrupted_idle") {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "operator_review",
         missionId,
         title: posture.label,
@@ -874,7 +905,7 @@ export function listNeedsYou() {
     }
     // worker_silent only escalates after Director auto-resume is exhausted
     if (posture.id === "worker_silent" && posture.needsYou) {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "worker_silent",
         missionId,
         title: posture.label,
@@ -886,7 +917,7 @@ export function listNeedsYou() {
       }));
     }
     if (posture.id === "worker_thrashing" && posture.needsYou) {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "worker_thrashing",
         missionId,
         title: posture.label,
@@ -900,29 +931,32 @@ export function listNeedsYou() {
   }
   // Merge / deployment flags (rare)
   for (const row of listMissionsV2({ includeArchived: false })) {
+    const missionId = row.mission_id || row.missionId;
+    if (isNoiseMission(missionId)) continue;
     if (row.merge_approval_required) {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "merge",
-        missionId: row.mission_id,
+        missionId,
         title: "Merge approval needed",
         body: "Director is ready to merge and needs your authorization.",
         urgency: "Merge approval",
         recommendation: "Review the completion package, then approve merge",
-        action: { label: "Open mission", href: `missions/${row.mission_id}` },
+        action: { label: "Open mission", href: `missions/${missionId}` },
       }));
     }
     if (row.deployment_approval_required) {
-      items.push(needsYouItemVm({
+      pushUnique(needsYouItemVm({
         type: "deployment",
-        missionId: row.mission_id,
+        missionId,
         title: "Deployment approval needed",
         body: "Director is ready to deploy and needs your authorization.",
         urgency: "Deployment approval",
         recommendation: "Review evidence, then approve deployment",
-        action: { label: "Open mission", href: `missions/${row.mission_id}` },
+        action: { label: "Open mission", href: `missions/${missionId}` },
       }));
     }
   }
+  _needsYouCache = { at: Date.now(), items };
   return items;
 }
 

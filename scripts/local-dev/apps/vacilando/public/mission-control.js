@@ -195,6 +195,12 @@
     V2.state.trustedHostDiagnostics = null;
     V2.state.improvementsHome = null;
     V2.state.improvementDetail = null;
+    V2.state.workspaceRuntime = null;
+    V2.state.workspaceId = null;
+    V2.state.workspaceShell = null;
+    V2.state.workspaceMessages = null;
+    V2.state.workspaceMessagesStatus = null;
+    V2.state.workspacePage = null;
     V2.state._fetchedAt = {};
     V2.state._inflight = {};
     V2.state._paintFp = {};
@@ -214,6 +220,7 @@
       missionQ = new URLSearchParams(queryPart || "").get("mission");
     } catch { /* */ }
     if (name === "needs-you") V2.fetchNeedsYou();
+    else if (name === "workspaces" || name === "workspace") V2.fetchWorkspace(sub || "ws_identity");
     else if (name === "missions" && sub) V2.fetchDashboard(sub);
     else if (name === "missions") V2.fetchMissions(V2.state.missionsFilter || "active");
     else if (name === "timeline") V2.fetchTimeline(sub || missionQ || V2.state.selectedMissionId);
@@ -335,7 +342,20 @@
   };
 
   V2.isPrimaryRoute = function (name) {
-    return ["missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"].includes(name);
+    return ["workspaces", "workspace", "missions", "needs-you", "timeline", "workers", "decisions", "evidence", "kickoff", "improvements", "settings"].includes(name);
+  };
+
+  /** Skip revision-driven hard reloads while Workspace Runtime is opening. */
+  const _origSync = V2.syncPresentationRevision;
+  V2.syncPresentationRevision = async function (opts) {
+    try {
+      const raw = location.hash.replace(/^#\/?/, "");
+      const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "";
+      if ((name === "workspaces" || name === "workspace") && !V2.state.workspaceMessages?.length) {
+        return;
+      }
+    } catch { /* */ }
+    return _origSync.call(V2, opts);
   };
 
   function currentOperatorContext() {
@@ -356,6 +376,8 @@
       || (r.name === "evidence" && r.sub ? r.sub : null)
       || null;
     const screenMap = {
+      workspaces: "Missions",
+      workspace: "Missions",
       missions: r.sub ? "Mission Dashboard" : "Missions",
       "needs-you": "Needs You",
       workers: "Workers",
@@ -381,6 +403,23 @@
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => { try { el.remove(); } catch { /* */ } }, 2800);
+  }
+
+  /** True when Mission Conversation Runtime is the active surface. */
+  function onMissionConversation() {
+    const h = location.hash || "";
+    return h.startsWith("#/workspaces") || h.startsWith("#/workspace");
+  }
+
+  /** Stay on conversation — refresh shell + messages instead of Mission Dashboard. */
+  async function refreshMissionConversation(missionId) {
+    const id = missionId || V2.state.workspaceId || V2.state.selectedMissionId;
+    if (!id) return;
+    V2.state.workspaceShell = null;
+    V2.state._wsInlineReviewOpen = false;
+    V2.state._wsShowShots = false;
+    await V2.fetchWorkspaceShell(id);
+    await V2.fetchWorkspaceMessages(id);
   }
 
   function openImproveDialog() {
@@ -474,8 +513,46 @@ We'll capture the context automatically.</p>
       </div>`;
   }
 
+  /** Open inline Review Outcome and scroll it into the conversation viewport. */
+  function openInlineReview() {
+    V2.state._wsInlineReviewOpen = true;
+    V2.state._wsStickBottom = true;
+    bump();
+    schedulePaint();
+  }
+
   function actionBtn(action) {
     if (!action) return "";
+    if (action.kind === "inline_review_expand") {
+      return `<button class="btn" type="button" data-ws-inline-review="${esc(action.missionId || "")}" data-ws-review-id="${esc(action.reviewId || "")}">${esc(action.label || "Review Outcome")}</button>`;
+    }
+    if (action.kind === "drev_approve" && action.reviewId) {
+      return `<button class="btn" type="button" data-drev-approve="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Approve")}</button>`;
+    }
+    if (action.kind === "drev_changes" && action.reviewId) {
+      return `<button class="btn ghost" type="button" data-drev-changes="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Request Rework")}</button>`;
+    }
+    if (action.kind === "drev_recheck" && action.reviewId) {
+      return `<button class="btn ghost" type="button" data-drev-recheck="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Recheck")}</button>`;
+    }
+    if (action.kind === "toggle_screenshots") {
+      return `<button class="btn ghost" type="button" data-ws-toggle-shots="${esc(action.missionId || "")}">${esc(action.label || "View Screenshots")}</button>`;
+    }
+    if (action.kind === "server_start" && action.missionId) {
+      return `<button class="btn" type="button" data-mc-server-start="${esc(action.missionId)}" data-worktree="${esc(action.worktree || "")}">${esc(action.label || "Start Server")}</button>`;
+    }
+    if (action.kind === "server_stop" && action.missionId) {
+      return `<button class="btn ghost" type="button" data-mc-server-stop="${esc(action.missionId)}" data-worktree="${esc(action.worktree || "")}">${esc(action.label || "Stop")}</button>`;
+    }
+    if (action.kind === "server_restart" && action.missionId) {
+      return `<button class="btn ghost" type="button" data-ws-server-restart="${esc(action.missionId)}" data-worktree="${esc(action.worktree || "")}">${esc(action.label || "Restart")}</button>`;
+    }
+    if (action.kind === "open_url" && action.href) {
+      return `<a class="btn" href="${esc(action.href)}" target="_blank" rel="noopener">${esc(action.label || "Open")}</a>`;
+    }
+    if (action.kind === "worker_pause" || action.kind === "worker_resume" || action.kind === "worker_doctor" || action.kind === "sprint_finish" || action.kind === "open_pr") {
+      return `<button class="btn ghost sm" type="button" data-ws-cmd="${esc(action.command || "")}" data-slot="${esc(action.slot)}" data-worktree="${esc(action.worktree || "")}" data-branch="${esc(action.branch || "")}">${esc(action.label)}</button>`;
+    }
     if (action.kind === "certify_completion" && action.missionId) {
       return `<button class="btn" data-mc-certify="${esc(action.missionId)}">${esc(action.label || "Certify completion")}</button>`;
     }
@@ -486,7 +563,8 @@ We'll capture the context automatically.</p>
       return `<button class="btn" data-mc-reopen-work="${esc(action.missionId)}">${esc(action.label || "Request More Discovery")}</button>`;
     }
     if ((action.kind === "review_outcome" || action.kind === "review_deliverable") && action.missionId) {
-      return `<button class="btn" data-mc-review-outcome="${esc(action.missionId)}">${esc(action.label || "Review deliverable")}</button>`;
+      // Conversation surface: expand inline — never navigate away or hit legacy review.resolve
+      return `<button class="btn" type="button" data-ws-inline-review="${esc(action.missionId)}" data-ws-review-id="${esc(action.reviewId || "")}">${esc(action.label || "Review Outcome")}</button>`;
     }
     if (action.kind === "recheck_deliverable" && action.missionId && action.reviewId) {
       return `<button class="btn" type="button" data-drev-recheck="${esc(action.reviewId)}" data-mission="${esc(action.missionId)}">${esc(action.label || "Have Director re-check")}</button>`;
@@ -498,13 +576,20 @@ We'll capture the context automatically.</p>
       return `<button class="btn" data-mc-advance="${esc(action.missionId)}">${esc(action.label || "Begin Implementation")}</button>`;
     }
     if (action.kind === "park_outcome" && action.missionId) {
-      return `<button class="btn ghost" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park Mission")}</button>`;
+      const cls = /accept/i.test(action.label || "") ? "btn" : "btn ghost";
+      return `<button class="${cls}" data-mc-park-outcome="${esc(action.missionId)}">${esc(action.label || "Park Mission")}</button>`;
+    }
+    if (action.kind === "open_next_wave" && action.missionId) {
+      return `<button class="btn" data-mc-open-next-wave="${esc(action.missionId)}">${esc(action.label || "Accept & start next")}</button>`;
     }
     if (action.kind === "review_findings") {
       return `<button class="btn ghost" type="button" data-mc-review-findings="${esc(action.missionId || "")}">${esc(action.label || "Review Findings")}</button>`;
     }
     if (action.kind === "provide_feedback") {
       return `<button class="btn ghost" type="button" data-mc-provide-feedback="${esc(action.missionId || "")}">${esc(action.label || "Provide Feedback")}</button>`;
+    }
+    if (action.kind === "answer_decision" && action.decisionId && action.optionId) {
+      return `<button class="btn" type="button" data-mc-answer="${esc(action.decisionId)}" data-option="${esc(action.optionId)}" data-mission="${esc(action.missionId || "")}">${esc(action.label || "Approve recommendation")}</button>`;
     }
     if (action.kind === "dispatch_ready" && action.missionId) {
       return `<button class="btn" data-mc-dispatch="${esc(action.missionId)}">${esc(action.label || "Start work")}</button>`;
@@ -631,6 +716,451 @@ We'll capture the context automatically.</p>
       V2.state.kickoffError = e;
       bump(); schedulePaint();
     }
+  };
+
+  /** V3-4 Workspace Runtime — coalesced shell fetch (no Opening thrash). */
+  V2.fetchWorkspaceShell = async function (workspaceId) {
+    const id = workspaceId || V2.state.workspaceId || "ws_identity";
+    const prevId = V2.state.workspaceId;
+    if (prevId && prevId !== id) {
+      V2.state.workspaceMessages = null;
+      V2.state.workspaceMessagesStatus = "loading";
+      V2.state.workspacePage = null;
+      V2.state.workspaceShell = null;
+      V2.state.workspaceError = null;
+      V2.state._wsStickBottom = true;
+    }
+    V2.state.workspaceId = id;
+    V2.state._inflight = V2.state._inflight || {};
+    const inflightKey = `workspace-shell:${id}`;
+    if (V2.state._inflight[inflightKey]) return V2.state._inflight[inflightKey];
+
+    const seq = (V2.state._wsShellSeq = (V2.state._wsShellSeq || 0) + 1);
+    const work = (async () => {
+      try {
+        const j = await get("/api/v2/views/workspace-shell?id=" + encodeURIComponent(id));
+        if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
+        V2.state.workspaceShell = j.shell || j;
+        V2.state.workspaceList = j.shell?.missions || j.workspaces || V2.state.workspaceList || [];
+        V2.state.workspaceError = null;
+        V2.state.workspaceRuntime = {
+          ...(V2.state.workspaceRuntime || {}),
+          kind: "workspace_runtime",
+          workspace: V2.state.workspaceShell.workspace,
+          missionId: V2.state.workspaceShell.missionId,
+          currentState: V2.state.workspaceShell.currentState,
+          currentStateCompact: V2.state.workspaceShell.currentStateCompact,
+          context: V2.state.workspaceShell.context,
+          operational: V2.state.workspaceShell.operational,
+          inlineReview: V2.state.workspaceShell.inlineReview,
+          liveProgress: V2.state.workspaceShell.liveProgress || null,
+          sinceLastVisit: V2.state.workspaceShell.sinceLastVisit,
+          composer: V2.state.workspaceShell.composer,
+          messages: V2.state.workspaceMessages || [],
+          page: V2.state.workspacePage || null,
+          messagesStatus: V2.state.workspaceMessagesStatus || "loading",
+        };
+    if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
+        V2.state.workspaceLiveProgress = j.shell?.liveProgress || null;
+        markFetched(`workspace-shell:${id}`);
+        if (typeof window.renderMissionRail === "function") {
+          window.renderMissionRail(V2.state.workspaceList);
+        }
+        const wt = j.shell?.operational?.worker?.worktree;
+        const br = j.shell?.operational?.worker?.branch;
+        if (wt) {
+          fetch(`/api/pr?worktree=${encodeURIComponent(wt)}&branch=${encodeURIComponent(br || "")}`, { cache: "no-store" })
+            .then((r) => r.json())
+            .then((pr) => {
+              if (V2.state.workspaceId !== id) return;
+              V2.state._wsPr = pr;
+              bump(); schedulePaint();
+            })
+            .catch(() => {});
+        }
+      } catch (e) {
+        if (seq !== V2.state._wsShellSeq || V2.state.workspaceId !== id) return;
+        V2.state.workspaceError = String(e.message || e);
+      }
+      bump(); schedulePaint();
+      if (V2.state.workspaceId === id && !V2.state._wsSending && V2.state.workspaceShell) {
+        V2.fetchWorkspaceMessages(id);
+      }
+    })();
+
+    V2.state._inflight[inflightKey] = work;
+    try { await work; }
+    finally {
+      if (V2.state._inflight?.[inflightKey] === work) V2.state._inflight[inflightKey] = false;
+    }
+  };
+
+  V2.fetchWorkspaceMessages = async function (workspaceId, { beforeEventId = null, prepend = false } = {}) {
+    const id = workspaceId || V2.state.workspaceId || "ws_identity";
+    if (V2.state.workspaceId && V2.state.workspaceId !== id) return;
+    const seq = (V2.state._wsMsgSeq = (V2.state._wsMsgSeq || 0) + 1);
+    if (!prepend) V2.state.workspaceMessagesStatus = V2.state.workspaceMessages?.length ? "ready" : "loading";
+    try {
+      let url = "/api/v2/views/workspace-messages?id=" + encodeURIComponent(id) + "&limit=40";
+      if (beforeEventId) url += "&before=" + encodeURIComponent(beforeEventId);
+      const j = await get(url);
+      if (seq !== V2.state._wsMsgSeq || V2.state.workspaceId !== id) return;
+      const incoming = j.messages || [];
+      if (prepend && V2.state.workspaceMessages?.length) {
+        const have = new Set(V2.state.workspaceMessages.map((m) => m.messageId));
+        const older = incoming.filter((m) => !have.has(m.messageId));
+        V2.state.workspaceMessages = older.concat(V2.state.workspaceMessages);
+        V2.state._wsStickBottom = false;
+        V2.state._wsPreserveScroll = true;
+      } else if (!prepend) {
+        V2.state.workspaceMessages = incoming;
+        V2.state._wsStickBottom = true;
+      }
+      V2.state.workspacePage = j.page || null;
+      V2.state.workspaceMessagesStatus = j.messagesStatus || (incoming.length ? "ready" : "empty_known");
+      V2.state.workspaceMessagesInlineReview = j.inlineReview || null;
+      V2.state.workspaceLiveProgress = j.liveProgress || V2.state.workspaceLiveProgress || null;
+      if (V2.state.workspaceRuntime) {
+        V2.state.workspaceRuntime.messages = V2.state.workspaceMessages;
+        V2.state.workspaceRuntime.page = V2.state.workspacePage;
+        V2.state.workspaceRuntime.messagesStatus = V2.state.workspaceMessagesStatus;
+        V2.state.workspaceRuntime.inlineReview = j.inlineReview || null;
+        V2.state.workspaceRuntime.liveProgress = V2.state.workspaceLiveProgress;
+        V2.state.workspaceRuntime.empty = j.empty;
+      }
+      markFetched(`workspace-messages:${id}`);
+      // Fire-and-forget last-seen — do not block reading
+      const newest = V2.state.workspaceMessages?.[V2.state.workspaceMessages.length - 1];
+      if (newest?.messageId && !prepend) {
+        post("/api/v2/workspace/last-seen", {
+          workspace_id: id,
+          event_id: newest.messageId,
+          at: newest.createdAt || null,
+        }).catch(() => {});
+      }
+    } catch (e) {
+      if (seq !== V2.state._wsMsgSeq || V2.state.workspaceId !== id) return;
+      if (!V2.state.workspaceMessages?.length) {
+        V2.state.workspaceMessagesStatus = "error";
+        V2.state.workspaceMessagesError = String(e.message || e);
+      }
+    }
+    bump(); schedulePaint();
+  };
+
+  /** @deprecated use fetchWorkspaceShell — kept for reloadActiveView */
+  V2.fetchWorkspace = function (workspaceId) {
+    return V2.fetchWorkspaceShell(workspaceId);
+  };
+
+  V2.afterWorkspacePaint = function () {
+    const thread = document.getElementById("ws-thread");
+    if (thread) {
+      if (V2.state._wsPreserveScroll && V2.state._wsScrollHeight != null) {
+        thread.scrollTop = thread.scrollHeight - V2.state._wsScrollHeight;
+        V2.state._wsPreserveScroll = false;
+        V2.state._wsScrollHeight = null;
+      } else if (V2.state._wsInlineReviewOpen) {
+        const review = document.getElementById("ws-inline-review");
+        if (review) {
+          // Review card sits at end of thread — keep it in view (not stuck off-screen at top).
+          thread.scrollTop = Math.max(0, review.offsetTop - 12);
+        } else {
+          thread.scrollTop = thread.scrollHeight;
+        }
+      } else if (V2.state._wsStickBottom !== false) {
+        thread.scrollTop = thread.scrollHeight;
+      }
+    }
+    const ta = document.getElementById("ws-composer");
+    if (ta && V2.state._wsComposer != null) {
+      ta.value = V2.state._wsComposer;
+      try { ta.focus({ preventScroll: true }); } catch { /* */ }
+    }
+  };
+
+  V2.viewWorkspace = function (workspaceId) {
+    const id = workspaceId || V2.state.workspaceId || "ws_identity";
+    const shellReady = V2.state.workspaceShell && V2.state.workspaceId === id;
+
+    // V3-4: single coalesced kick — never dual revalidate+fetch while booting
+    if (!shellReady) {
+      if (V2.state.workspaceError) {
+        return `<div class="ws-shell ws-shell-boot" data-workspace="${esc(id)}">
+          <section class="ws-main" aria-label="Conversation">
+            <header class="ws-main-h"><h1>Mission</h1></header>
+            <div class="ws-thread" id="ws-thread">
+              <div class="ws-empty">Could not open conversation: ${esc(V2.state.workspaceError)}
+                <button type="button" class="btn sm" data-ws-retry="${esc(id)}">Retry</button>
+              </div>
+            </div>
+          </section>
+          <aside class="ws-context" aria-label="Runtime"><div class="ws-ctx-label">Status</div><p class="ws-ctx-derived">Unavailable</p></aside>
+        </div>`;
+      }
+      if (!V2.state._wsSending) V2.fetchWorkspaceShell(id);
+      return `<div class="ws-shell ws-shell-boot" data-workspace="${esc(id)}">
+        <section class="ws-main" aria-label="Conversation">
+          <header class="ws-main-h"><h1>Mission</h1><p class="ws-main-sub">Opening conversation…</p></header>
+          <div class="ws-thread" id="ws-thread"><div class="ws-loading" data-ws-msgs-loading="1"><span class="spin"></span> Loading…</div></div>
+          <footer class="ws-composer-wrap">
+            <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="Message Director…" disabled></textarea>
+            <button type="button" class="btn ws-send" disabled>Send</button>
+          </footer>
+        </section>
+        <aside class="ws-context" aria-label="Runtime">
+          <div class="ws-ctx-label">Status</div>
+          <p class="ws-ctx-derived">Loading…</p>
+        </aside>
+      </div>`;
+    }
+    if (!V2.state._wsSending) {
+      V2.revalidate(`workspace-shell:${id}`, () => V2.fetchWorkspaceShell(id), { maxAgeMs: 20000 });
+    }
+    const rt = V2.state.workspaceShell;
+    if (rt.missing) {
+      return `<div class="ws-shell"><div class="rempty">Mission not found on this host.</div></div>`;
+    }
+    const ws = rt.workspace || {};
+    if (rt.missions?.length) V2.state.workspaceList = rt.missions;
+    if (typeof window.renderMissionRail === "function") {
+      window.renderMissionRail(V2.state.workspaceList || rt.missions || []);
+    }
+    const compact = rt.currentStateCompact || {};
+    const ops = rt.operational || rt.context?.operational || {};
+    const worker = ops.worker || rt.context?.worker || {};
+    const server = ops.server || rt.context?.server || {};
+    const msgs = V2.state.workspaceMessages || [];
+    const msgStatus = V2.state.workspaceMessagesStatus || rt.messagesStatus || "loading";
+    const page = V2.state.workspacePage || {};
+    const since = rt.sinceLastVisit;
+    const inlineReview = V2.state._wsInlineReviewOpen
+      ? (V2.state.workspaceMessagesInlineReview || rt.inlineReview)
+      : null;
+    const liveProgress = V2.state.workspaceLiveProgress || rt.liveProgress || null;
+    const showShots = Boolean(V2.state._wsShowShots);
+    const activeId = ws.workspaceId || ws.missionId || id;
+
+    const sinceHtml = since ? `<section class="ws-since" aria-label="Since your last visit">
+      <h2 class="ws-since-title">${esc(since.title || "Since your last visit")}</h2>
+      <ul class="ws-since-list">
+        ${(since.lines || []).map((l) => `<li title="${esc(l.provenance?.type || l.provenance?.source || "")}">${esc(l.text)}</li>`).join("")}
+      </ul>
+    </section>` : "";
+
+    const attention = rt.attention || { items: [] };
+    const attentionHtml = (attention.items || []).length ? `<section class="ws-attention" aria-label="Needs you">
+      <h2 class="ws-attention-title">Needs you · ${esc(String(attention.items.length))}</h2>
+      <ul class="ws-attention-list">
+        ${attention.items.map((n) => {
+          const act = n.primaryAction || n.action;
+          const btn = act ? actionBtn({
+            ...act,
+            label: act.label || "Open",
+            kind: act.kind || (act.href?.startsWith("decisions/") ? "open_decision" : "open_mission"),
+            missionId: n.missionId,
+            decisionId: n.decisionId || act.decisionId,
+          }) : "";
+          return `<li class="ws-attention-item">
+            <div class="ws-attention-k">${esc(n.urgency || n.type || "Attention")}</div>
+            <div class="ws-attention-h">${esc(n.title || "Needs you")}</div>
+            ${n.body ? `<p class="ws-attention-b">${esc(String(n.body).slice(0, 220))}</p>` : ""}
+            ${btn ? `<div class="ws-msg-actions mc-actions">${btn}</div>` : ""}
+          </li>`;
+        }).join("")}
+      </ul>
+    </section>` : "";
+
+    const progressHtml = liveProgress?.active ? (() => {
+      const pct = liveProgress.percent != null ? Math.max(0, Math.min(100, Number(liveProgress.percent))) : null;
+      const doneBits = (liveProgress.doneSummary || []).slice(0, 4);
+      const tone = liveProgress.needsYourApproval || liveProgress.freshness === "needs_you" ? "needs"
+        : liveProgress.freshness === "failed" || liveProgress.freshness === "stale" ? "stale"
+          : liveProgress.freshness === "live" ? "live"
+            : liveProgress.freshness === "quiet" ? "quiet" : "neutral";
+      const btns = (liveProgress.buttons || []).map((b) => actionBtn(b)).filter(Boolean).join("");
+      return `<section class="ws-progress ws-progress-${tone}" id="ws-live-progress" aria-label="Work progress">
+        <header class="ws-progress-h">
+          <div>
+            <div class="ws-progress-k">Work progress${pct != null ? ` · ${esc(String(pct))}%` : ""}</div>
+            <div class="ws-progress-title">${esc(liveProgress.workingOn || "In progress")}</div>
+          </div>
+          <div class="ws-progress-fresh">${esc(liveProgress.freshnessLabel || "")}${liveProgress.heartbeatLabel ? ` · ${esc(liveProgress.heartbeatLabel)}` : ""}</div>
+        </header>
+        ${pct != null ? `<div class="ws-progress-bar" role="progressbar" aria-valuenow="${esc(String(pct))}" aria-valuemin="0" aria-valuemax="100"><span style="width:${esc(String(pct))}%"></span></div>` : ""}
+        <dl class="ws-progress-meta">
+          ${liveProgress.activity ? `<div><dt>Now</dt><dd>${esc(liveProgress.activity)}</dd></div>` : ""}
+          ${liveProgress.doneCount != null && liveProgress.totalCount != null
+            ? `<div><dt>Assignments</dt><dd>${esc(String(liveProgress.doneCount))} of ${esc(String(liveProgress.totalCount))} closed</dd></div>`
+            : ""}
+          ${liveProgress.eta ? `<div><dt>Checkpoint</dt><dd>${esc(liveProgress.eta)}</dd></div>` : ""}
+          ${liveProgress.filesInspected ? `<div><dt>Inspected</dt><dd>${esc(String(liveProgress.filesInspected))} files</dd></div>` : ""}
+        </dl>
+        ${doneBits.length ? `<div class="ws-progress-done"><div class="ws-progress-k">Done so far</div><ul>${doneBits.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div>` : ""}
+        ${liveProgress.freshness === "stale"
+          ? `<p class="ws-progress-warn">No fresh heartbeat — this may be stuck on a long tool call, or the worker may have stalled.</p>`
+          : ""}
+        ${liveProgress.howToApprove ? `<p class="ws-progress-hint">${esc(liveProgress.howToApprove)}</p>` : ""}
+        ${btns ? `<div class="ws-msg-actions mc-actions" style="margin-top:10px">${btns}</div>` : ""}
+      </section>`;
+    })() : "";
+
+    const reviewHtml = (() => {
+      if (!inlineReview) return "";
+      const brief = inlineReview.brief || null;
+      const docs = (inlineReview.evidence || []).filter((e) => e.presentation !== "media");
+      const shots = (inlineReview.evidence || []).filter((e) => e.presentation === "media" && e.previewHref);
+      const briefBlocks = brief ? `
+        ${brief.verdictLabel ? `<p class="ws-inline-verdict">${esc(brief.verdictLabel)}</p>` : ""}
+        ${brief.problem ? `<div class="ws-inline-block"><div class="ws-inline-k">Problem</div><p>${esc(brief.problem)}</p></div>` : ""}
+        ${brief.fix ? `<div class="ws-inline-block"><div class="ws-inline-k">Fix</div><p>${esc(brief.fix)}</p></div>` : ""}
+        ${(brief.doneBullets || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Changed</div>
+          <ul class="ws-inline-findings">${brief.doneBullets.map((d) => `<li><code>${esc(d)}</code></li>`).join("")}</ul>
+        </div>` : ""}
+        ${(brief.proofLines || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Proof</div>
+          <ul class="ws-inline-facts">${brief.proofLines.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+        </div>` : ""}
+        ${inlineReview.summary && !brief.problem
+          ? `<div class="ws-inline-block"><div class="ws-inline-k">Summary</div><p>${esc(inlineReview.summary)}</p></div>`
+          : ""}
+      ` : `
+        ${inlineReview.waveLabel ? `<p class="ws-inline-wave">${esc(inlineReview.waveLabel)}</p>` : ""}
+        ${(inlineReview.statusFacts || []).length ? `<ul class="ws-inline-facts">${inlineReview.statusFacts.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+        ${inlineReview.summary ? `<div class="ws-inline-block"><div class="ws-inline-k">What happened</div><p>${esc(inlineReview.summary)}</p></div>` : ""}
+      `;
+      return `<section class="ws-inline-review" id="ws-inline-review">
+      <header class="ws-inline-review-h">
+        <h2>${esc(inlineReview.headline || "Review Outcome")}</h2>
+        <button type="button" class="btn ghost sm" data-ws-inline-review-close>Close</button>
+      </header>
+      ${briefBlocks}
+      ${(inlineReview.findings || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Still open / risks</div>
+        <ul class="ws-inline-findings">${inlineReview.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+      </div>` : ""}
+      ${inlineReview.recommendation ? `<div class="ws-inline-block"><div class="ws-inline-k">Your move</div>
+        <p class="ws-inline-rec">${esc(inlineReview.recommendation)}${inlineReview.confidencePct != null ? ` · ${esc(inlineReview.confidencePct)}%` : ""}</p>
+        ${inlineReview.recommendationDetail ? `<p class="ws-inline-rec-detail">${esc(inlineReview.recommendationDetail)}</p>` : ""}
+        ${inlineReview.nextStep ? `<p class="ws-inline-rec-detail"><b>If you take that step:</b> ${esc(inlineReview.nextStep)}</p>` : ""}
+      </div>` : ""}
+      ${docs.length ? `<div class="ws-inline-block"><div class="ws-inline-k">Evidence</div>
+        <ul class="ws-artifact-list">${docs.map((e) =>
+          `<li class="ws-ev-doc"><span class="ws-ev-type">${esc(e.typeLabel || e.type || "file")}</span>
+            ${e.previewHref
+            ? `<button type="button" class="btn link sm" data-ws-artifact="${esc(e.previewHref)}" data-title="${esc(e.title || "")}">${esc(e.title || e.type || "Artifact")}</button>`
+            : esc(e.title || e.type || "Artifact")}</li>`).join("")}</ul>
+      </div>` : ""}
+      ${showShots && shots.length
+        ? `<div class="ws-inline-block"><div class="ws-inline-k">Screenshots</div>
+          <div class="ws-shot-grid">${shots.map((e) =>
+          `<figure class="ws-shot"><img src="${esc(e.previewHref)}" alt="${esc(e.title || "")}" loading="lazy"/><figcaption>${esc(e.title || "")}</figcaption></figure>`).join("")}</div>
+        </div>`
+        : ""}
+      <div class="ws-msg-actions mc-actions">${(inlineReview.buttons || []).map((b) => actionBtn(b)).join("")}</div>
+    </section>`;
+    })();
+
+    let threadBody = "";
+    if (msgStatus === "loading" && !msgs.length) {
+      threadBody = `<div class="ws-loading" data-ws-msgs-loading="1"><span class="spin"></span> Loading conversation…</div>`;
+    } else if (msgStatus === "error" && !msgs.length) {
+      threadBody = `<div class="ws-empty">Could not load conversation.
+        <button type="button" class="btn sm" data-ws-retry-msgs="${esc(id)}">Retry</button></div>`;
+    } else {
+      const loadEarlier = page.hasEarlier
+        ? `<div class="ws-load-earlier"><button type="button" class="btn ghost sm" data-ws-earlier="${esc(id)}" data-before="${esc(page.oldestEventId || "")}">Load earlier</button></div>`
+        : "";
+      const msgHtml = msgs.map((m) => {
+        const from = m.from || {};
+        const when = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
+        const prov = m.provenance?.type ? `<span class="ws-msg-prov" title="Projected from ${esc(m.provenance.type)}">${esc(m.provenance.type)}</span>` : "";
+        const actions = (m.actions || []).map((a) => actionBtn(a)).join("");
+        const arts = (m.artifacts || []).filter((a) => a.previewHref || a.title).map((a) =>
+          a.previewHref
+            ? `<button type="button" class="ws-art-chip" data-ws-artifact="${esc(a.previewHref)}" data-title="${esc(a.title || "")}">${esc(a.title || a.type || "Artifact")}</button>`
+            : `<span class="ws-art-chip">${esc(a.title || a.type || "")}</span>`
+        ).join("");
+        return `<article class="ws-msg role-${esc(from.role || "system")} kind-${esc(m.kind || "system")}" data-event="${esc(m.messageId || "")}">
+          <header class="ws-msg-h">
+            <span class="ws-msg-from">${esc(from.label || "System")}</span>
+            <span class="ws-msg-when">${esc(when)}</span>
+            ${prov}
+          </header>
+          <div class="ws-msg-body">${esc(m.body || "")}</div>
+          ${m.detail && m.detail !== m.body ? `<div class="ws-msg-detail">${esc(m.detail)}</div>` : ""}
+          ${arts ? `<div class="ws-msg-arts">${arts}</div>` : ""}
+          ${actions ? `<div class="ws-msg-actions mc-actions">${actions}</div>` : ""}
+        </article>`;
+      }).join("");
+      threadBody = loadEarlier + (msgHtml || `<div class="ws-empty">No projected messages yet.</div>`);
+    }
+
+    const stateCompact = `<div class="ws-state-compact">
+      ${(compact.summaryLines || []).map((l) => `<div class="ws-state-line">${esc(l)}</div>`).join("") || `<div class="ws-state-line">${esc(compact.phase || "—")}</div>`}
+      <dl class="ws-state-mini">
+        <div><dt>Goal</dt><dd>${esc(compact.goal || "—")}</dd></div>
+        <div><dt>Next</dt><dd>${esc(compact.next || "—")}</dd></div>
+        ${compact.blockedBy ? `<div><dt>Blocked</dt><dd>${esc(compact.blockedBy)}</dd></div>` : ""}
+      </dl>
+    </div>`;
+
+    const serverActions = (server.actions || []).map((a) => actionBtn(a)).join("");
+    const workerActions = (ops.workerActions || []).map((a) => actionBtn(a)).join("");
+    const prHref = V2.state._wsPr?.pr?.url || null;
+    const prLabel = V2.state._wsPr?.pr?.number ? `PR #${V2.state._wsPr.pr.number}` : (prHref ? "Open PR" : "—");
+
+    const ctxBits = `<div class="ws-ctx-block">
+      <div class="ws-ctx-k">Runtime</div>
+      <div class="ws-ctx-v">${esc(worker.provider || "—")}${worker.slot != null ? ` · slot ${esc(worker.slot)}` : ""}</div>
+      <div class="ws-ctx-v mono muted">${esc(worker.worktree || "—")}</div>
+      <div class="ws-ctx-v mono">${esc(worker.branch || "—")}</div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">Server</div>
+      <div class="ws-ctx-v">${esc(server.statusLabel || server.status || "—")}${server.port ? ` · :${esc(server.port)}` : ""}</div>
+      ${server.url ? `<div class="ws-ctx-v"><a href="${esc(server.url)}" target="_blank" rel="noopener">${esc(server.url)}</a></div>` : ""}
+      <div class="ws-ctx-actions">${serverActions}</div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">PR</div>
+      <div class="ws-ctx-v">${prHref ? `<a href="${esc(prHref)}" target="_blank" rel="noopener">${esc(prLabel)}</a>` : esc(prLabel)}</div>
+    </div>
+    <div class="ws-ctx-block">
+      <div class="ws-ctx-k">Worker</div>
+      <div class="ws-ctx-actions">${workerActions}</div>
+    </div>`;
+
+    const draft = V2.state._wsComposer || "";
+    const busy = V2.state._wsSending ? " disabled" : "";
+    const composerEnabled = rt.composer?.enabled !== false && !V2.state._wsSending;
+    const artifactModal = V2.state._wsArtifact
+      ? `<div class="ws-artifact-ov" data-ws-artifact-backdrop>
+          <div class="ws-artifact-card" role="dialog">
+            <header><b>${esc(V2.state._wsArtifact.title || "Artifact")}</b>
+              <button type="button" class="btn ghost sm" data-ws-artifact-close>Close</button></header>
+            <iframe src="${esc(V2.state._wsArtifact.href)}" title="Artifact"></iframe>
+          </div>
+        </div>`
+      : "";
+
+    return `<div class="ws-shell ws-shell-v34" data-workspace="${esc(activeId)}">
+      <section class="ws-main" aria-label="Conversation">
+        <header class="ws-main-h">
+          <h1>${esc(ws.title || "Mission")}</h1>
+        </header>
+        <div class="ws-thread" id="ws-thread">${attentionHtml}${sinceHtml}${threadBody}${progressHtml}${reviewHtml}</div>
+        <footer class="ws-composer-wrap">
+          <textarea id="ws-composer" class="ws-composer" rows="2" placeholder="${esc(rt.composer?.placeholder || "Message Director…")}"${composerEnabled ? "" : " disabled"}>${esc(draft)}</textarea>
+          <button type="button" class="btn ws-send" data-ws-send="${esc(activeId)}"${busy}>Send</button>
+        </footer>
+      </section>
+      <aside class="ws-context" aria-label="Runtime">
+        <div class="ws-ctx-label">Status</div>
+        ${stateCompact}
+        <div class="ws-ctx-label">Operations</div>
+        ${ctxBits}
+      </aside>
+      ${artifactModal}
+    </div>`;
   };
 
   // ---- views ----
@@ -2508,9 +3038,13 @@ We'll capture the context automatically.</p>
       await refreshNeedsBadge();
       toast("Certified. Director will unlock the next work.", "ok");
       bump(); schedulePaint();
-      await V2.fetchDashboard(missionId);
-      bump(); schedulePaint();
-      scrollToOutcomeThread();
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+      } else {
+        await V2.fetchDashboard(missionId);
+        bump(); schedulePaint();
+        scrollToOutcomeThread();
+      }
       return true;
     } catch (e) {
       V2.state.kickoffBusy = null;
@@ -2549,6 +3083,10 @@ We'll capture the context automatically.</p>
       await V2.fetchDashboard(missionId);
       V2.state.showOutcome = true;
       bump(); schedulePaint();
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+        return;
+      }
       requestAnimationFrame(() => {
         const el = document.getElementById("mc-outcome")
           || document.querySelector(".drev-stuck-here")
@@ -2658,7 +3196,10 @@ We'll capture the context automatically.</p>
       V2.state._paintFp = {};
       bump(); schedulePaint();
       toast(out.message || (action === "start" ? "Server starting…" : "Server stopped"), "ok");
-      if (action === "start") {
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+        if (action === "start") watchMissionServerReady(missionId, out.localServer?.port);
+      } else if (action === "start") {
         watchMissionServerReady(missionId, out.localServer?.port);
       } else if (missionId) {
         setTimeout(() => V2.fetchDashboard(missionId), 800);
@@ -2678,6 +3219,15 @@ We'll capture the context automatically.</p>
       }
       try {
         if (!missionId) { clearInterval(iv); return; }
+        if (onMissionConversation()) {
+          await V2.fetchWorkspaceShell(missionId);
+          const local = V2.state.workspaceShell?.operational?.server;
+          if (local?.running || local?.status === "running") {
+            clearInterval(iv);
+            toast(`App is up on :${local.port}`, "ok");
+          }
+          return;
+        }
         const dash = await get("/api/v2/views/mission/dashboard?id=" + encodeURIComponent(missionId));
         V2.state.overview = dash;
         if (!paintIfChanged(`overview:${missionId}`, dash)) patchLiveActivity(dash);
@@ -2758,6 +3308,31 @@ We'll capture the context automatically.</p>
     }
   }
 
+  async function openNextWave(missionId) {
+    toast("Opening next wave and starting worker…", "ok");
+    try {
+      const out = await post("/api/v2/missions/open-next-wave", {
+        mission_id: missionId,
+        actor: "operator",
+        response: "Operator accepted prior deliverable and continued to next wave",
+      });
+      if (out && out.ok === false) {
+        throw Object.assign(new Error(out.detail || out.error || "Could not open next wave"), { body: out });
+      }
+      V2.state.overview = null;
+      V2.state.missionsHome = null;
+      V2.state.needsYou = null;
+      V2.state._wsInlineReviewOpen = false;
+      await refreshNeedsBadge();
+      bump(); schedulePaint();
+      const title = out?.readyAssignment?.title || out?.phase?.title || "next wave";
+      toast(`Started: ${title}`, "ok");
+      location.hash = "#/missions/" + encodeURIComponent(missionId);
+    } catch (e) {
+      toast(e?.message || String(e), "err");
+    }
+  }
+
   async function reopenWork(missionId) {
     const ok = window.confirm(
       "Need more work?\n\nThis reopens the assignment so you can Start work again.\nIt does not launch a worker by itself.\n\nContinue?"
@@ -2780,7 +3355,11 @@ We'll capture the context automatically.</p>
       await refreshNeedsBadge();
       bump(); schedulePaint();
       toast("Reopened. Click Start work when you want a worker to run.", "ok");
-      location.hash = "#/missions/" + encodeURIComponent(missionId);
+      if (onMissionConversation()) {
+        await refreshMissionConversation(missionId);
+      } else {
+        location.hash = "#/missions/" + encodeURIComponent(missionId);
+      }
     } catch (e) {
       toast(e?.message || String(e), "err");
     }
@@ -2840,6 +3419,180 @@ We'll capture the context automatically.</p>
       openImproveDialog();
       return;
     }
+    const wsRetry = ev.target.closest("[data-ws-retry]");
+    if (wsRetry) {
+      ev.preventDefault();
+      V2.state.workspaceShell = null;
+      V2.state.workspaceMessages = null;
+      V2.state.workspaceRuntime = null;
+      V2.fetchWorkspaceShell(wsRetry.dataset.wsRetry || "ws_identity");
+      return;
+    }
+    const wsRetryMsgs = ev.target.closest("[data-ws-retry-msgs]");
+    if (wsRetryMsgs) {
+      ev.preventDefault();
+      V2.fetchWorkspaceMessages(wsRetryMsgs.dataset.wsRetryMsgs || "ws_identity");
+      return;
+    }
+    const inlineOpen = ev.target.closest("[data-ws-inline-review]");
+    if (inlineOpen) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openInlineReview();
+      return;
+    }
+    if (ev.target.closest("[data-ws-inline-review-close]")) {
+      ev.preventDefault();
+      V2.state._wsInlineReviewOpen = false;
+      bump(); schedulePaint();
+      return;
+    }
+    if (ev.target.closest("[data-ws-toggle-shots]")) {
+      ev.preventDefault();
+      V2.state._wsShowShots = !V2.state._wsShowShots;
+      openInlineReview();
+      return;
+    }
+    const art = ev.target.closest("[data-ws-artifact]");
+    if (art) {
+      ev.preventDefault();
+      V2.state._wsArtifact = { href: art.dataset.wsArtifact, title: art.dataset.title || "Artifact" };
+      bump(); schedulePaint();
+      return;
+    }
+    if (ev.target.closest("[data-ws-artifact-close]") || ev.target.closest("[data-ws-artifact-backdrop]") === ev.target) {
+      ev.preventDefault();
+      V2.state._wsArtifact = null;
+      bump(); schedulePaint();
+      return;
+    }
+    const restart = ev.target.closest("[data-ws-server-restart]");
+    if (restart) {
+      ev.preventDefault();
+      const mid = restart.dataset.wsServerRestart;
+      toast("Restarting local server…");
+      post("/api/v2/missions/local-server", { mission_id: mid, action: "stop" })
+        .then(() => post("/api/v2/missions/local-server", { mission_id: mid, action: "start" }))
+        .then(() => {
+          toast("Local server restarted.");
+          V2.state.workspaceShell = null;
+          V2.fetchWorkspaceShell(mid);
+        })
+        .catch((e) => toast(String(e.message || e), "err"));
+      return;
+    }
+    const cmdBtn = ev.target.closest("[data-ws-cmd]");
+    if (cmdBtn) {
+      ev.preventDefault();
+      const command = cmdBtn.dataset.wsCmd;
+      const slot = Number(cmdBtn.dataset.slot);
+      if (!command || !slot) return;
+      const input = { slot };
+      if (command === "promotion.open_pr") {
+        input.title = `Vacilando · slot ${slot}`;
+      }
+      toast(`Running ${command}…`);
+      fetch("/api/commands", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ command, input, confirm: true, actor: "operator" }),
+      })
+        .then(async (r) => {
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(j.error || j.detail || `http_${r.status}`);
+          toast(`${command} ok`);
+          if (command === "promotion.open_pr") {
+            const wt = cmdBtn.dataset.worktree;
+            const br = cmdBtn.dataset.branch;
+            if (wt) {
+              const pr = await fetch(`/api/pr?worktree=${encodeURIComponent(wt)}&branch=${encodeURIComponent(br || "")}`).then((x) => x.json());
+              V2.state._wsPr = pr;
+              if (pr?.pr?.url) window.open(pr.pr.url, "_blank", "noopener");
+            }
+          }
+          if (onMissionConversation()) {
+            const mid = V2.state.workspaceId || V2.state.selectedMissionId;
+            if (mid) await refreshMissionConversation(mid);
+          }
+          bump(); schedulePaint();
+        })
+        .catch((e) => toast(String(e.message || e), "err"));
+      return;
+    }
+    const wsEarlier = ev.target.closest("[data-ws-earlier]");
+    if (wsEarlier) {
+      ev.preventDefault();
+      const before = wsEarlier.dataset.before;
+      if (!before) return;
+      const thread = document.getElementById("ws-thread");
+      if (thread) V2.state._wsScrollHeight = thread.scrollHeight;
+      V2.fetchWorkspaceMessages(wsEarlier.dataset.wsEarlier || "ws_identity", {
+        beforeEventId: before,
+        prepend: true,
+      });
+      return;
+    }
+    const wsSend = ev.target.closest("[data-ws-send]");
+    if (wsSend) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (V2.state._wsSending) return;
+      const workspaceId = wsSend.dataset.wsSend || V2.state.workspaceId || "ws_identity";
+      const ta = document.getElementById("ws-composer");
+      const text = (ta?.value || V2.state._wsComposer || "").trim();
+      if (!text) {
+        toast("Type a message first.", "err");
+        return;
+      }
+      V2.state._wsSending = true;
+      bump(); schedulePaint();
+      try {
+        const out = await post("/api/v2/workspace/reply", {
+          workspace_id: workspaceId,
+          text,
+          actor: "operator",
+        });
+        V2.state._wsComposer = "";
+        V2.state._wsStickBottom = true;
+        V2.state._wsShellSeq = (V2.state._wsShellSeq || 0) + 1;
+        V2.state._wsMsgSeq = (V2.state._wsMsgSeq || 0) + 1;
+        if (out.runtime) {
+          V2.state.workspaceShell = {
+            kind: "workspace_shell",
+            workspace: out.runtime.workspace,
+            missionId: out.runtime.missionId,
+            currentState: out.runtime.currentState,
+            currentStateCompact: out.runtime.currentStateCompact,
+            context: out.runtime.context,
+            operational: out.runtime.operational,
+            inlineReview: out.runtime.inlineReview,
+            sinceLastVisit: out.runtime.sinceLastVisit,
+            composer: out.runtime.composer,
+            missions: out.runtime.missions,
+            messagesStatus: "ready",
+            lastSeen: out.runtime.lastSeen,
+          };
+          V2.state.workspaceMessages = out.runtime.messages || [];
+          V2.state.workspacePage = out.runtime.page || null;
+          V2.state.workspaceMessagesStatus = "ready";
+          V2.state.workspaceMessagesInlineReview = out.runtime.inlineReview || null;
+          V2.state.workspaceRuntime = out.runtime;
+          V2.state.workspaceId = out.runtime.workspace?.workspaceId || workspaceId;
+          markFetched(`workspace-shell:${V2.state.workspaceId}`);
+          markFetched(`workspace-messages:${V2.state.workspaceId}`);
+        } else {
+          V2.state.workspaceShell = null;
+          await V2.fetchWorkspaceShell(workspaceId);
+        }
+        toast(out.director?.ok ? "Director replied." : "Sent.");
+      } catch (e) {
+        toast(String(e.message || e), "err");
+      } finally {
+        V2.state._wsSending = false;
+        bump(); schedulePaint();
+      }
+      return;
+    }
     if (ev.target.closest("[data-notify-enable]")) {
       if (typeof Notification === "undefined") {
         toast("Notifications are unavailable in this environment.", "err");
@@ -2888,10 +3641,14 @@ We'll capture the context automatically.</p>
           V2.state.overview = null;
           await refreshNeedsBadge();
           toast("Changes requested — Director will relaunch.");
-          await V2.fetchDashboard(missionId);
-          V2.state.showOutcome = true;
-          bump(); schedulePaint();
-          scrollToOutcomeThread();
+          if (onMissionConversation()) {
+            await refreshMissionConversation(missionId);
+          } else {
+            await V2.fetchDashboard(missionId);
+            V2.state.showOutcome = true;
+            bump(); schedulePaint();
+            scrollToOutcomeThread();
+          }
         },
       });
       return;
@@ -2937,7 +3694,7 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-open-next-wave],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
     if (!t) return;
 
     if (t.hasAttribute("data-mc-review-findings")) {
@@ -2952,6 +3709,31 @@ We'll capture the context automatically.</p>
       return;
     }
     if (t.hasAttribute("data-mc-provide-feedback")) {
+      const missionId = t.getAttribute("data-mc-provide-feedback");
+      if (onMissionConversation() || !document.getElementById("mc-feedback-panel")) {
+        openDirectorTextDialog({
+          title: "Give Feedback",
+          lead: "Guidance stays on this mission timeline — no other screen required.",
+          confirmLabel: "Save Feedback",
+          placeholder: "What should Director know or change?",
+          onSubmit: async (body) => {
+            await post("/api/v2/missions/collaboration", {
+              mission_id: missionId,
+              type: "feedback",
+              body,
+              actor: "director",
+            });
+            toast("Feedback saved to the mission.");
+            if (onMissionConversation()) await refreshMissionConversation(missionId);
+            else {
+              V2.state.overview = null;
+              await V2.fetchDashboard(missionId);
+              bump(); schedulePaint();
+            }
+          },
+        });
+        return;
+      }
       const panel = document.getElementById("mc-feedback-panel");
       if (panel) {
         panel.hidden = false;
@@ -3046,13 +3828,21 @@ We'll capture the context automatically.</p>
       parkOutcome(t.dataset.mcParkOutcome);
       return;
     }
+    if (t.dataset.mcOpenNextWave) {
+      openNextWave(t.dataset.mcOpenNextWave);
+      return;
+    }
     if (t.dataset.mcAdvance) {
       advanceImplementation(t.dataset.mcAdvance);
       return;
     }
     if (t.dataset.mcReviewOutcome) {
-      V2.state.showOutcome = true;
       const mid = t.dataset.mcReviewOutcome;
+      if (onMissionConversation()) {
+        openInlineReview();
+        return;
+      }
+      V2.state.showOutcome = true;
       if (!location.hash.includes(mid)) {
         location.hash = "#/missions/" + encodeURIComponent(mid);
       }
@@ -3306,16 +4096,55 @@ We'll capture the context automatically.</p>
     }
   });
 
+  document.addEventListener("input", (ev) => {
+    const t = ev.target;
+    if (t && t.id === "ws-composer") {
+      V2.state._wsComposer = t.value;
+      V2.state._wsStickBottom = false;
+    }
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || ev.shiftKey) return;
+    const t = ev.target;
+    if (!t || t.id !== "ws-composer") return;
+    ev.preventDefault();
+    document.querySelector("[data-ws-send]")?.click();
+  });
+
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(() => {
-      if (!V2.state.missionsHome) V2.fetchMissions();
-      V2.fetchNeedsYou();
+      try {
+        const raw = location.hash.replace(/^#\/?/, "");
+        const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "missions";
+        if (name !== "workspaces" && name !== "workspace") {
+          if (!V2.state.missionsHome) V2.fetchMissions();
+          V2.fetchNeedsYou();
+        } else {
+          setTimeout(() => V2.fetchNeedsYou(), 4000);
+        }
+      } catch {
+        if (!V2.state.missionsHome) V2.fetchMissions();
+        V2.fetchNeedsYou();
+      }
       V2.startFreshnessLoop();
     }, { timeout: 2000 });
   } else {
     setTimeout(() => {
-      if (!V2.state.missionsHome) V2.fetchMissions();
-      V2.fetchNeedsYou();
+      try {
+        const raw = location.hash.replace(/^#\/?/, "");
+        const name = (raw.split("?")[0] || "").split("/").filter(Boolean)[0] || "missions";
+        if (name !== "workspaces" && name !== "workspace") {
+          if (!V2.state.missionsHome) V2.fetchMissions();
+          V2.fetchNeedsYou();
+        } else {
+          // Defer Needs You until after Identity shell/messages settle.
+          setTimeout(() => V2.fetchNeedsYou(), 4000);
+        }
+      } catch {
+        if (!V2.state.missionsHome) V2.fetchMissions();
+        V2.fetchNeedsYou();
+      }
       V2.startFreshnessLoop();
     }, 50);
   }

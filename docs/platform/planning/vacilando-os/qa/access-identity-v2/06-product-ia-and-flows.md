@@ -1,4 +1,19 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 06 — Product IA & principal flows
+
+> **Reopen, 2026-08-06 — read §13 first if you are here for the operator's guidance.** `02…§4.6` and
+> `04…§12.1` both bound the directives *"reduce to four layers"* and *"simplify the role editor without
+> changing the access architecture"* and then hand the redesign to this document. **§§13–19 accept that
+> handoff**: §14 reconciles the corpus's two four-layer statements and finds the hazard in composing them
+> (`IA-11`), §15 specifies the simplified editor, §16 adds `IA-12`–`IA-14`, §17 adds `IA-R11`–`IA-R17`,
+> and §18 closes `D-IA0` and re-anchors `D-IA1`–`D-IA4` onto the canonical `AD` register.
+> **§§0–12 are unchanged** and anchored at `7df17b9b3`; the reopen is anchored at `c6e43be5f`.
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. The accepted artifact
 > (mission `msn_2d054741a54698fa4c`, 2026-07-30) is preserved **verbatim** in §12 and remains
@@ -898,3 +913,426 @@ lands; it is a scope attribute, not a new concept.
   `cap_access_roles-v2-proposal.md` (§2.1 presets/Custom, §3.3 destructive grant save);
   `02-canonical-access-identity-model.md` (§9 scope, §10 resolution).
 - **No source, schema, migration, or UI changed by this phase.**
+
+---
+
+# Reopen — 2026-08-06
+
+> Sections §13–§19 are added by the operator reopen of `asg_606a6b2c86d967`. **Nothing above is
+> renumbered, reworded, or withdrawn.** `IA-1`–`IA-10`, `IA-R1`–`IA-R10`, and `D-IA1`–`D-IA4` keep their
+> numbers and their meanings; §18 re-anchors the `D-IA` block onto the canonical register without changing
+> any question or recommendation. Two stale counts above are corrected in §19.2.
+
+## 13. What the reopen is, and why it lands here
+
+### 13.1 Both bounding documents hand the redesign to this one
+
+The operator's guidance carries three items, two of them distinct:
+
+| Directive | Where it has been answered so far |
+|---|---|
+| *Role hierarchy is still too deep — reduce to four layers* | `02…§1.3` restates the chain as four layers (`M2-16`); `02…§15.6` maps the resolution stages onto them; `04…§3.6` finds a **fifth** layer surviving at runtime (`portalEligible`, `I-35`ᴮ, `AD-22`); `05…§5A.2`–`§5A.5` measures the depth and states a four-layer target |
+| *Simplify the role editor without changing the access architecture* (twice) | **Bounded by three documents, executed by none.** `02…§4.6` gives `RA-1`–`RA-5` and `I-32`; `02…§17.8` gives `I-33`, `I-34`; `04…§6.4` gives `R6`–`R9`; `05…§5A.6` splits the work into presentation-only and architecture-requiring |
+
+Both bounding documents then say, in terms, that the redesign is not theirs:
+
+> *"The redesign itself belongs to `06-product-ia-and-flows.md`"* — `02…§4.6:450-452` **[verified]**
+>
+> *"Neither directive was discharged as a product change, and no editor was simplified. The redesign
+> belongs to `06-product-ia-and-flows.md`"* — `04…§12.1:1130-1131` **[verified]**
+
+**This document owns the surface, so this is where the directive stops being bounded and starts being
+specified.** §14 and §15 do that. They remain specification, not visual design (§10) — what the operator
+traverses and what each level means, not what it looks like.
+
+### 13.2 Method and anchor
+
+This pass is anchored at **`c6e43be5f`** in `wt6-director-experience-dx5-5-continuation`, not at
+`7df17b9b3` (the anchor of §§0–11). Every claim marked **[verified]** below was read from source in *this*
+worktree at *that* commit; §19.3 lists the files. The corpus documents cited are read at the same commit,
+which is the first commit at which `02…` Part II's §17.7–§17.8 exist. **No browser QA was performed** and
+no dev server was started — §10's limit is unchanged and applies to everything below.
+
+---
+
+## 14. Two statements of "four layers", and the hazard in composing them
+
+### 14.1 They are not the same four
+
+The corpus now contains two four-item structures, both correct, both called layers:
+
+| | `02…§1.3` — **the chain** | `05…§5A.5` — **the operator's layers** |
+|---|---|---|
+| L/1 | **Principal** — `auth.users.id` | **Person** — *who can sign in?* |
+| L/2 | **Membership** — `user_roles(user_id, org_id, role)` | **Role** — *what is this job?* |
+| L/3 | **Assignment** — `role_definitions` ∥ `user_access_profiles` | **Capability** — *what may that job do?* |
+| L/4 | **Resolved set** — permission keys ∥ scope dimensions | **Scope** — *where does it apply?* |
+| Shape | four layers, **two branches**, both four deep | four **nouns**, presented as one list |
+
+**They coincide in count by construction, not by identity.** The chain's four are *layers of derivation*;
+the operator's four are *nouns the operator authors*. The mapping between them is not one-to-one:
+
+| Operator layer (`05…§5A.5`) | Chain layers (`02…§1.3`) | Branch |
+|---|---|---|
+| **Person** | **L1 + L2** — principal and membership collapsed into one noun | shared |
+| **Role** | **L3** | capability (E3a) |
+| **Capability** | **L4** | capability (E3a) |
+| **Scope** | **L3 + L4** — the whole scope branch collapsed into one noun | scope (E3b) |
+
+The operator's list walks the **capability branch** layer by layer and represents the **entire scope
+branch** as a single fourth noun. That is a defensible product simplification — the scope branch's two
+layers are `user_access_profiles` and its junctions, a distinction the operator has no reason to name.
+
+### 14.2 IA-11 — presented as an ordered list, the four-layer target re-encodes the five-link chain
+
+The hazard is in the presentation, not the mapping. Written in a line —
+
+```
+Person  →  Role  →  Capability  →  Scope
+```
+
+— the reader is told that scope comes **after** capability, and therefore derives from it. That is exactly
+the sequence `02…§1.3` abolished: the accepted model's *"One chain. Five links"* placed scope downstream
+of the capability set, and `§1.3` corrects it because `user_access_profiles` carries no `role` column and
+so hangs off the **membership**, one layer earlier (`20260504103000…:18-30`) **[carried]**.
+
+> **A four-item list read left to right is a five-link chain with one link hidden.** The count is right and
+> the topology is wrong, which is the harder error to see — the accepted §12 model made it, and a
+> simplification that flattens four chapters into a strip will make it again.
+
+The correct product shape is the model's shape: **one shared trunk, then two branches composed at the
+gate.**
+
+```
+Person ──┬── Role ──→ Capability        (E3a: what may they do)
+         │
+         └── Scope                      (E3b: to which rows)
+                    └─→ composed at the gate, never merged (I-27)
+```
+
+**The workspace's chapter strip is the ordered-list form today.** `ACCESS_WORKSPACE_CHAPTERS =
+["users", "roles", "scopes", "security"]` (`accessChapterRoutes.ts:10`) **[verified]** renders as a
+four-item tab bar; *Access Scopes* sits third, after *Roles*, reading as the next step in a sequence. Its
+own description — *"Locations and departments used when assigning organizational visibility"*
+(`:25`) **[verified]** — is branch-correct, but its **position** is not.
+
+This is an IA finding, not a code defect: nothing in the resolver reads the tab order. It matters because
+§15's simplification is a re-presentation, and a re-presentation is precisely where topology is decided.
+
+### 14.3 What the workspace presents against the four nouns
+
+| Operator layer | Chapter today | Verdict |
+|---|---|---|
+| **Person** | **Users** | Present — and the chapter that also carries the credential commands (`04…§3.7`) **[carried]** |
+| **Role** | **Roles** | Present |
+| **Capability** | **none** | **Absent as a home** — it is the 9-row grid at level 5 inside the Roles chapter (§15.1). See `IA-13` |
+| **Scope** | **Access Scopes** | Present as a *launch point*, not an editor (§3.1); actual scope authoring lives on the Users chapter's Access tab |
+| — | **Security** | A fifth chapter, correctly not a layer — it is `04…`'s territory |
+
+**Three of the four nouns have a chapter, one does not, and the chapter that names the fourth does not
+author it.** That is the gap `05…§5A.5` names as *"Capability has no chapter of its own"* **[carried]**,
+seen from the surface side: the operator authors capability inside Roles, and authors scope inside Users,
+while the chapter called *Access Scopes* authors neither.
+
+---
+
+## 15. The simplified role editor — the IA specification
+
+> This section discharges the second directive at the specification layer. It is bound by `RA-1`–`RA-5` and
+> `I-32` (`02…§4.6`), `I-33`–`I-34` (`02…§17.8`), and `R6`–`R9` (`04…§6.4`) — all **[carried]**, none
+> restated here. What follows is the IA those constraints leave open.
+
+### 15.1 What the operator traverses today — measured at `c6e43be5f`
+
+Re-measured in this worktree; `05…§5A.4`'s shape is confirmed with two corrections of detail:
+
+| Level | Control | Choices | Site **[verified]** |
+|---|---|---|---|
+| 1 | Access workspace | — | `AccessWorkspaceSurface.tsx` |
+| 2 | Chapter tab bar | 4 | `accessChapterRoutes.ts:10` |
+| 3 | Role collection rail | *n* roles | `AccessRolesConfigurationPage.tsx` |
+| 4 | Role sub-tab bar | 5 — Overview · Permissions · Users · Experience Access · History | `:254-260` |
+| 5 | Permission grid row | **9** | `permissionGrid.ts:12-47` |
+| 6 | Level control | 3 — None · Read · Write | `keysForLevel`, `:49-53` |
+
+**Two tab bars nested inside each other; six levels to change one capability for one role.** The file is
+**607 lines with 18 `useState` declarations** **[verified]** — `05…§5A.4`'s "19" counts the `useState`
+import line; the shape of its finding is unaffected.
+
+The grid is **9 rows** (`permissionGrid.ts:13-22`) **[verified]**, the tenth having been removed by `W-3`
+with its rationale preserved in a 24-line comment (`:23-46`) **[verified]**.
+
+### 15.2 The target — four levels, one page per role
+
+The four levels are the four operator nouns of §14.1, and no level exists that is not one of them:
+
+| Level | What it is | Replaces |
+|---|---|---|
+| **1 — Layer** | The chapter strip, re-presented per §14.2 as trunk-then-branches rather than a sequence | level 2 |
+| **2 — Role** | The role collection rail | level 3 |
+| **3 — Capability** | The role's capability set, presented as a **named section of the role's one page** — not a tab, not a table inside a tab | levels 4 + 5 |
+| **4 — Level** | None · Read · Write | level 6 |
+
+**Level 4 of the current stack disappears.** The role sub-tab bar is removed, not re-labelled, because
+only two of its five tabs author anything (`05…§5A.4`) **[carried]**:
+
+| Role sub-tab | Disposition | Why |
+|---|---|---|
+| Overview | **Becomes the head of the one page** | authoring: label + active |
+| Permissions | **Becomes the capability section of that page** | authoring: the grid |
+| Users | **Folds into the role header — but not yet** (§15.4) | read-only; already summarised there |
+| Experience Access | **Removed from navigation** | placeholder (`:534-538`) **[verified]** |
+| History | **Removed from navigation** | placeholder (`:539-543`) **[verified]** |
+
+**Removing a placeholder from navigation is not removing a capability**, and it is not a retreat from
+`IA-10`'s Planned discipline — §16's `IA-14` states the distinction precisely.
+
+### 15.3 What a simplification may not do
+
+Five prohibitions. Each is a projection of a rule the corpus already carries; **none is new policy**, and
+each is stated here because it is the specific thing a *surface* simplification would otherwise do.
+
+| # | A simplified editor **MUST NOT**… | Because | Rule |
+|---|---|---|---|
+| **1** | fold the Scopes chapter into the role editor, or present scope as an attribute of a role | the branches are independent in both directions | `RA-2`, `I-27` **[carried]** |
+| **2** | present the four nouns as an ordered sequence | it re-encodes the five-link chain | §14.2, `M2-16` |
+| **3** | seed a role control from a collapsed single value, or write back a set narrower than it read | the round trip is destructive | `I-34`, `M2-17` **[carried]** |
+| **4** | tighten *"Remove from organization"* into *"Revoke"*, *"Deactivate"*, or *"Remove access"* | no code path disables a credential; the current wording is the product telling the truth | `R6` (`04…§6.4`) **[carried]** |
+| **5** | be read as having addressed the ten-plus gate families, the 507 service-role routes, or the absent surface gate | the editor is not where those are fixed | `05…§5A.6` **[carried]** |
+
+Prohibition 1 is the one worth restating in product language: *Roles* and *Access Scopes* look like two
+chapters that could obviously be merged, and merging them is the single change in this whole area that
+**would** change the access architecture — it would put scope inside the role object and encode the
+category error `I-27` exists to forbid.
+
+### 15.4 Sequencing — what is safe now, and the one item that is not
+
+`05…§5A.6` splits the reduction into four presentation-only changes and one that requires an architecture
+change. **This pass finds that split is right about the architecture boundary and wrong about one item's
+safety.** Item 3 is presentation-only *and* unsafe today, for a reason `05` did not measure:
+
+| `05…§5A.6` item | Safe at `c6e43be5f`? | This pass |
+|---|---|---|
+| 1. Collapse the inner tab bar | **Yes** | Nothing reads the tab; §15.2 adopts it |
+| 2. Drop the two placeholder tabs | **Yes** | Adopted; `IA-14` bounds how |
+| 3. Fold *"Users with this role"* into the header | **No — blocked** | The count it would promote is **wrong for every multi-role member** (`IA-12`) |
+| 4. Name the capability layer | **Yes** | §15.2 level 3; `IA-13` states what it costs to do properly |
+| 5. Retire the legacy role sources | **No — architecture** | Unchanged; belongs to `§7.1`'s single-admission-point work **[carried]** |
+
+**Item 3 is not blocked on architecture — it is blocked on a display defect that folding would make more
+prominent.** Promoting a number into a role's header is exactly the move that converts a wrong number in a
+tab nobody opens into a wrong number every operator reads. The fix is small and is stated as `IA-R13`.
+
+And one item **not** in `05`'s list, which is the cheapest correct thing available:
+
+> **Show the full `role_keys` set on the Users chapter's role control, and reject a save that would remove
+> a role the operator was not shown.** `02…§17.8` identifies this as the one place the directive *"can be
+> honoured immediately and safely… a read change, not an architecture change"* **[carried]**. This pass
+> confirms the data is already on the wire: `GET …/members` returns `role_keys` alongside `primary_role`
+> (`members/route.ts:133-134`) **[verified]**. **It is not a fetch change either.** See `IA-12`, `IA-R14`.
+
+---
+
+## 16. Findings added by the reopen
+
+Continuing the `IA-n` register of §4. `IA-11` is stated in §14.2.
+
+### 16.1 IA-12 — the Roles chapter counts and lists members by the collapsed role
+
+The Roles chapter buckets members by `primary_role` and by nothing else:
+
+```ts
+// AccessRolesConfigurationPage.tsx:104-110  — the rail's per-role count
+map.set(m.primary_role, (map.get(m.primary_role) ?? 0) + 1);
+
+// :249-251  — the selected role's user list
+members.filter((m) => m.primary_role === selected.role_key)
+```
+
+Both **[verified]**, rendered as *"n users assigned"* in the role header (`:368-369`) **[verified]**.
+
+`primary_role` is not a role the member holds *rather than* the others — it is
+`displayRoleForAdminPicker(role_keys)`, which returns `admin` if present, then `ops`, then the first
+key lexicographically (`userRolesMembership.ts:22-27`) **[verified]**.
+
+**So a member holding `{admin, regional_lead}` is counted once, under `admin`, and is absent from
+`regional_lead`'s count and from its user list** — while the API response that the same component
+received carries both keys. The chapter discards them at the type boundary: its `MemberRow` declares
+`primary_role: string` and no `role_keys` field at all (`AccessRolesConfigurationPage.tsx:37`)
+**[verified]**, so `role_keys` is fetched, typed away, and never available to the count.
+
+This is `IA-7`'s collapse and `M2-18`'s roster divergence appearing a third time, on the role side, where
+neither recorded it:
+
+| Where the collapse shows | Recorded as | Effect |
+|---|---|---|
+| The user's role picker | `IA-7`, `M2-17` **[carried]** | an edit silently destroys the unshown role |
+| The member roster's displayed role | `M2-18` **[carried]** | the operator selects from a collapsed list |
+| **The role's member count and user list** | **`IA-12` (new)** | **a role under-reports its own membership** |
+
+**A role's "who holds this" is the one question a role editor exists to answer**, and for any org that
+uses multi-role membership — which the schema permits and the resolver honours (`C7`) **[carried]** — the
+answer is currently incomplete without saying so.
+
+The fix does not need `W-17`, a migration, or a decision: carry `role_keys` through the component's row
+type and bucket on membership rather than on the picker value.
+
+### 16.2 IA-13 — capability has no home, and the grid is a lens rather than the vocabulary
+
+§14.3 records that capability is the one operator noun with no chapter. §15.2 gives it a home — a named
+section of the role's page. **That is the presentation half, and it is the cheap half.**
+
+The other half is that the thing it would name is a projection. `PERMISSION_GRID_ROWS` is a 9-row literal
+in code (`permissionGrid.ts:12-47`) **[verified]**, and `levelFromGrantedKeys` derives a level per row from
+the granted keys (`:55-61`) **[verified]** — so a grant set that does not correspond to None/Read/Write has
+no representation, which §5.5 already recorded as the missing *Custom* state.
+
+**Naming the capability layer therefore promotes a lens to the status of a layer.** Under `02…§6.4` the
+grid is a projection of the catalog **[carried]**, and `W-10` regenerates it from the catalog (`05…§7.6`)
+**[carried]**. Presenting the projection as *the* capability layer before `W-10` lands means the operator's
+newly-legible third layer is a 9-row view of a catalog it does not enumerate.
+
+This does not block §15.2 — a section is a better home than a table inside a tab regardless — but it bounds
+what the reduction can claim. **The four-layer editor is legible before `W-10` and true after it**, which
+is the same shape of caveat `05…§5A.6` attaches to its item 5, and it is stated here so the two are not
+mistaken for a single "done".
+
+### 16.3 IA-14 — a placeholder may be marked; it may not occupy navigation
+
+§4.10 calls the Planned discipline *"this surface's best property"*, and this pass does not withdraw that.
+The 14 `data-capability="planned"` markers are re-verified at `c6e43be5f` — Users 6, Roles 2, Security 6
+**[verified]** — and the refusal to fabricate events remains exactly right.
+
+**The refinement is that marking and siting are different decisions.** A marked placeholder inside a page
+costs the operator one line of honest text. A marked placeholder that owns a **tab** costs them a
+navigation choice, on every visit, forever, to learn nothing — and it makes the surface look larger than
+the product is. Two of the role editor's five tabs are in the second category (`:534-543`) **[verified]**.
+
+| | Marked as Planned | Occupies navigation |
+|---|---|---|
+| A section inside a page | ✅ required (`IA-R6`) | — |
+| A tab or chapter | ✅ required | ❌ **prohibited** (`IA-R15`) |
+
+**So `IA-10` and this finding do not conflict: `IA-R6` governs whether a placeholder tells the truth, and
+`IA-R15` governs whether it earns a place in the information architecture.** Removing the two tabs
+satisfies both; they return as sections on the day something derives them.
+
+---
+
+## 17. Requirements added by the reopen
+
+Continuing the `IA-R n` register of §7, same numbering rationale.
+
+| # | Requirement | From | Check |
+|---|---|---|---|
+| **IA-R11** | The Access IA **MUST** present the authority chain as one shared trunk and two composed branches, and **MUST NOT** present the operator's four layers as an ordered sequence in which scope follows capability. | `IA-11`, `M2-16` | Review-time: the chapter/section ordering places scope as a sibling of capability, not its successor |
+| **IA-R12** | Reaching one capability on one role **MUST NOT** require more than four levels of navigation, and the surface **MUST NOT** nest one tab bar inside another. | §15.1, §15.2 | Static: at most one tab-bar component in the Access chapter tree; navigation depth to a grid control ≤ 4 |
+| **IA-R13** | No surface may compute a role's membership count or member list from a collapsed single-role value. Membership questions **MUST** be answered from the full `role_keys` set. | `IA-12` | Fixture: a member holding `{admin, regional_lead}` appears in **both** roles' counts and lists |
+| **IA-R14** | A role control **MUST** display every role the projection returned, and a save **MUST** reject — not silently drop — any role the operator was not shown. | `IA-12`, `I-34`, `M2-17` **[carried]** | Integration: edit a multi-role member; assert the unshown role survives, or the write is refused |
+| **IA-R15** | Unbuilt capability **MUST NOT** occupy navigation. A placeholder may be a marked section within a page; it **MUST NOT** be a tab or a chapter. | `IA-14` | Static: no element carrying `data-capability="planned"` is the sole content of a tab panel |
+| **IA-R16** | Scope **MUST NOT** be presented as an attribute of a role, and the Scopes chapter **MUST NOT** be folded into the role editor. | `RA-2`, `I-27` **[carried]** | Static: no role-editing component reads or writes `user_access_profiles`, `user_department_access`, or `user_site_access` |
+| **IA-R17** | Simplification **MUST NOT** strengthen a claim the runtime does not support. Copy describing a lifecycle command **MUST** continue to name what the command performs. | `R6` (`04…§6.4`) **[carried]**, `IA-6` | Review-time: removal copy still says *removed from this organization*, never *revoked* or *deactivated* |
+
+**`IA-R13` and `IA-R14` are the two items in this reopen that are buildable today** — no decision, no
+migration, no resolver change, and in both cases the data is already in the response the component
+receives. They are the reopen's analogue of §7's note that `IA-R1`/`IA-R3`/`IA-R6` are the cheapest and
+highest-value items in the original pass.
+
+---
+
+## 18. Decisions — re-anchored, and one new
+
+### 18.1 D-IA0 is closed
+
+§8 recorded the corpus's colliding decision numbers as a hygiene item for the Director, requiring *"one
+register, one authority, before D-numbers are cited in an acceptance rubric."* **That has been done.**
+`02…§25` establishes the canonical `AD-n` register of twenty-one open decisions, and `§26.2` gives the
+renumbering rule that generated it **[verified]**.
+
+**`D-IA0` is closed by `02…§25`–`§26`.** This document's four decisions are re-anchored, unchanged in
+question and in recommendation:
+
+| This document | Canonical | Question | Status |
+|---|---|---|---|
+| `D-IA1` | **`AD-18`** | Does the Users chapter show account status or membership status? | open |
+| `D-IA2` | **`AD-19`** | Does the directory show a person, or an account? | open |
+| `D-IA3` | **`AD-20`** | Is a reusable access policy in V2, and what is it? | open |
+| `D-IA4` | **`AD-21`** | Is time-boxed access in the first wave? | open |
+
+The legacy `D-IA n` citations above remain valid — `02…§25` records them as the **Legacy** column and
+notes the block was *"namespaced deliberately"* (`§26.1`) **[verified]**. Nothing in §8 is withdrawn; §8's
+requirement was satisfied by another document, which is the outcome it asked for.
+
+### 18.2 AD-24 (proposed) — does capability get a chapter, or a section?
+
+`AD-22` and `AD-23` are taken by `04…§7.1` **[verified]**; this is the next free number under `§26.2`'s
+appending rule. **The register is `02`'s to keep, so this is recorded as proposed, not minted.**
+
+**Question.** §14.3 finds capability is the one operator noun with no home. Does the simplified IA give it
+a **fifth chapter** beside Users · Roles · Access Scopes · Security, or a **named section inside the role's
+page** (§15.2 level 3)?
+
+**Why it is a decision and not a preference.** A chapter implies capability is independently authorable —
+that an operator can open it and change something without first choosing a role. A section implies
+capability exists only as a property of the role that holds it.
+
+**Recommendation: a section, not a chapter.** `02…§2` states that a role is a label for a grant set and
+carries no behaviour of its own **[carried]**; a capability set with no role holding it grants nothing to
+nobody and has no row to live in. Giving it a chapter would present an authoring surface for an object the
+model does not have — and `RA-4` already forbids the mirror-image error on the other side. A section keeps
+the four layers legible (the directive's goal) without inventing a fifth noun (`IA-R11`).
+
+**This is the only new decision the reopen raises.** Everything else it found is either a requirement
+(§17) or a sequencing consequence (§15.4).
+
+---
+
+## 19. Reopen — limits, corrections, provenance
+
+### 19.1 Limits
+
+§10 applies unchanged and in full. Three limits are specific to this pass:
+
+- **No browser QA, again.** Every claim about what an operator sees is read from component source at
+  `c6e43be5f`. `IA-12`'s under-count in particular is derived from `memberCountByRole` and
+  `usersWithRole`, not from a screen showing a wrong number. **It should be confirmed live before it is
+  cited as an operator-visible defect** — it is the first thing a QA pass on this area should check.
+- **No multi-role member was constructed.** `IA-12` and `IA-R13`/`IA-R14` describe what the code does when
+  a principal holds two roles. Whether any principal in any live org currently does was not established —
+  no database was read (§10). The finding is structural; its blast radius is not measured.
+- **§15 is an IA specification, not a build plan.** It states levels, homes, and prohibitions. It does not
+  estimate the work, name components, or decide visual treatment, and `§15.4`'s sequencing table is a
+  safety ordering rather than a schedule.
+
+### 19.2 Two corrections to §§0–11
+
+Both are counts, neither changes a finding:
+
+- **§6's states table says *"ten placeholders"*** for the Planned row; §4.10 says **14**, and 14 is
+  correct at both `7df17b9b3` and `c6e43be5f` (`grep -c` per file: Users 6, Roles 2, Security 6)
+  **[verified]**. §4.10 was right; §6's parenthetical was stale when written.
+- **`05…§5A.4`'s "19 `useState` hooks"** counts the import line; the file declares **18**
+  (`grep -c 'const \[.*\] = useState'`) **[verified]**. Recorded here rather than in `05` because this pass
+  re-measured it; `05`'s finding — that the file is large enough for its depth to be the problem — stands.
+
+### 19.3 Provenance
+
+- **Verified in** `wt6-director-experience-dx5-5-continuation` @ `c6e43be5f`. Files opened and read this
+  pass: `web/components/adminV2/settings/access/AccessRolesConfigurationPage.tsx`,
+  `web/components/adminV2/settings/access/AccessUsersConfigurationPage.tsx`,
+  `web/components/adminV2/settings/access/{AccessWorkspaceSurface,AccessScopesPage,AccessSecurityPage}.tsx`,
+  `web/lib/access/accessChapterRoutes.ts`, `web/lib/admin/permissionGrid.ts`,
+  `web/lib/admin/userRolesMembership.ts`,
+  `web/app/api/admin/settings/users-roles/members/route.ts`.
+- **Corpus inputs, reused not re-derived:**
+  `../../../access-identity-v2/02-canonical-access-identity-model.md` (§1.3 the four-layer chain and
+  `M2-16`; §4.6 `RA-1`–`RA-5`, `I-32`, and the handoff of the redesign; §15.6 stages-as-layers; §17.7 the
+  read-back path, `M2-17`, `M2-18`; §17.8 `I-33`, `I-34`; §25 the canonical `AD` register; §26.2 the
+  renumbering rule), `./04-authentication-model.md` (§3.6 `portalEligible` as a fifth layer and `I-35`ᴮ;
+  §3.7 the credential commands under the Access surface; §6.4 `R6`–`R9`; §7.1 `AD-22`, `AD-23`; §12.1 the
+  handoff), `./05-command-enforcement-census.md` (§5A.2 resolution depth, §5A.4 editor depth, §5A.5 the
+  four-layer target, §5A.6 the presentation/architecture split).
+- **Operator guidance addressed:** *"reduce to four layers"* → §14, `IA-11`, `IA-R11`; *"simplify the role
+  editor without changing the access architecture"* → §15, `IA-12`–`IA-14`, `IA-R12`–`IA-R17`, §18.2.
+- **No source, schema, migration, UI, or QA-folder document other than this one was changed by this
+  phase.** No editor was simplified in code; this is a specification.

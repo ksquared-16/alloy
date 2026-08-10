@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 04 — Authentication model
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. The accepted artifact
@@ -13,10 +20,30 @@
 **Mission** `msn_f74ed02c126c88d7ff` v1 · phase *Authentication model* · assignment `asg_955b735bafb437`
 **contentHash** `3c36b58117e46b2363ef602b385409e7`
 **Worktree** `wt6-vacilando-os-product-def` @ `c667da4e2`
-**Date** 2026-08-03
+**Date** 2026-08-03 · **reopened and extended 2026-08-06** (§0 reopen block, §3.6, §3.7, §6.3 note,
+§6.4, §7 `AD-22`/`AD-23`, §8 reopen block, §12) in `wt6-director-experience-dx5-5-continuation` @ `107a6217d`
 **Method** static, file-grounded. Every current-state claim was opened and read in this pass and cites
 `path:line` at `c667da4e2`. Claims reused without re-derivation are marked **[carried]**. No live
 authentication flow was executed (§9).
+
+> **Reopen (2026-08-06), on operator guidance.** Two directives, the same two that reopened
+> `02-canonical-access-identity-model.md` at `107a6217d`: *the role hierarchy is still too deep — reduce
+> to four layers*, and *simplify the role editor without changing the access architecture*.
+>
+> - **Directive 1 is answered here, on the authentication side.** `02…§1.3` restated the authority chain
+>   as **four layers, two branches** (`L1` principal → `L2` membership → `L3` assignment → `L4` resolved
+>   set). This pass locates authentication against that chain and finds that the chain is *not* four
+>   layers at runtime: `portalEligible` is a **fifth layer** — a role-literal admission predicate that
+>   sits between `L3` and `L4`, belongs to neither branch, and, at two gates, **satisfies a capability
+>   check on its own**. §3.6.
+> - **Directive 2 is bounded, not executed**, exactly as `02…§4.6` bounded it. This document does not own
+>   an operator surface either. §6.4 states what any Access surface owes the *authentication* model —
+>   `R6`–`R9`, continuing the register `02…§4.6` owns — and §3.7 records what the surface does today. The
+>   redesign belongs to [`06-product-ia-and-flows.md`](./06-product-ia-and-flows.md).
+>
+> **No section, invariant, finding, decision or table is renumbered, reworded, or reinterpreted by the
+> reopen.** §§0–11 keep their numbers and their citations; everything new is an appended subsection, a
+> marked block, or a new row. §10 is untouched. Reopen claims are cited at `107a6217d`.
 
 ---
 
@@ -62,6 +89,40 @@ credential-level revocation call, not merely a status column.
 | **A2-4** | Password change requires **no** re-authentication and **no** current-password proof — any session suffices | §3.2 |
 | **A2-5** | Request identity may resolve from a JWT-claims fast path whose verification strength depends on unversioned hosted configuration | §3.3 |
 | **A2-6** | Two seeded personas per org can hold a credential they cannot use — **admission is not authentication**, and Phase 0 now grows the population | §3.4 |
+
+*Tally note (reopen).* The sentence above reads *"five new findings"* and the table lists **six**; §3.5
+adds a seventh. The register is **A2-1 … A2-7**, which is how `01…:874` and `03…:2540` already cite it.
+The count word is wrong, not the register — no finding is renumbered. The reopen adds **A2-8** and
+**A2-9** (§3.6, §3.7), bringing it to **A2-1 … A2-9**.
+
+### 0.1 Reopen block (2026-08-06) — the negatives hold, and one thing did change
+
+Every §0 negative was re-run at `107a6217d` in `wt6-director-experience-dx5-5-continuation`
+**[re-verified]**:
+
+| Probe | At `c667da4e2` | At `107a6217d` |
+|---|---|---|
+| `supabase/config.toml` | absent | **absent** |
+| `signUp(` · `signInWithOtp` · `signInWithOAuth` · `mfa.` in `web/` | 0 | **0** |
+| `auth.admin.deleteUser` · `auth.admin.updateUserById` · `ban_duration` in `web/` | 0 | **0** |
+| `showPassword` / `revealPassword` in `web/` | 0 | **0** |
+| `type="password"` in `web/` | 3 | **3** — `login/page.tsx:206`, `reset-password/page.tsx:157`, `:175` |
+
+Only one file drifted, and only by three lines: `login/page.tsx` (`signInWithPassword` `:74`→**`:77`**,
+raw-error render `:80`→**`:83`**, redirect `:89-90`→**`:92-93`**, password input `:203`→**`:206`**). Every
+other citation in §§1–7 is unchanged at `107a6217d`. **A2-1 through A2-7 all still hold.**
+
+**What changed is the surface, not the substrate.** There is now an **Access → Security** chapter
+(`web/components/adminV2/settings/access/AccessSecurityPage.tsx`, 72 lines) **[verified]** that names the
+authentication product: Password *Available*; Google, Microsoft and SSO *Planned*; Sign-in Policies,
+Sessions and Audit Log *Planned*. So §0's headline needs one word added, and it is not a retraction:
+
+> **One way to log in, a chapter that names the authentication product, and still no authentication
+> product behind it.** The Security chapter is *honest* — every absent method is labelled `Planned`, and
+> the Audit Log card states outright that *"no events are fabricated for display"* (`:67`). But its
+> catalog is a **hard-coded literal list of `<li>` elements**, not a projection of any per-org record.
+> §6.1 asks for a code-owned catalog steered by an `auth_policy`; what exists is the catalog with no
+> policy and no steering. See §3.7 and `R8` (§6.4).
 
 ---
 
@@ -313,6 +374,148 @@ Otherwise the three §10 §2.2 defects are re-verified unchanged: no person link
 (`01…:236-245`, **G4** — still the highest-value open defect, still fail-open to unrestricted scope),
 and email-only invitation with no mobile path and no create-without-invite.
 
+### 3.6 A2-8 — `portalEligible` is the fifth layer, and it is also a capability bypass *(reopen, 2026-08-06)*
+
+**This is the authentication side of the operator's "reduce to four layers" directive**, and it is the
+one place in the corpus where authentication and the authority chain touch.
+
+`02…§1.3` restates the chain as four layers and two branches: **L1** principal → **L2** membership →
+**L3** assignment (`role_definitions` ∥ `user_access_profiles`) → **L4** resolved set (permission keys ∥
+scope dimensions). Authentication's position in that chain is simple and worth stating once, because the
+rest of this section depends on it:
+
+> **Authentication establishes `L1` and nothing else.** It answers *are you who you claim* and produces
+> an `auth.users.id`. It confers no membership, no assignment and no capability — which is E1 rule 4
+> (*the link confers no authority by itself*, §4) stated from the credential end. Everything after `L1` is
+> the authority chain's business, and authentication MUST NOT add a layer to it.
+
+**At runtime, something does.** `portalEligible` is computed as a role-literal predicate —
+
+```ts
+const PORTAL_ROLES = new Set(["admin", "ops"]);                       // resolveAdminAccessCore.ts:18
+…
+const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));     // :142, and again at :233
+```
+
+— and a second, independent definition of the same set exists at `resolveAdminPortalOrgCore.ts:7`, read
+at `:98` **[verified]**. (That duplication is already `M2-5`/`I-22`'s subject; this section does not
+re-derive it.) Seven modules consume the predicate decisively **[verified]**:
+
+| Read site | What it does with the predicate |
+|---|---|
+| `adminRouteGate.ts:43` | denies with 403 when false — **admission** |
+| `getAdminContext.ts:38` | denies when false — admission |
+| `getAdminOrgContextLight.ts:51` | denies when false — admission |
+| `entityLabelsServer.ts:21` | denies when false — admission |
+| `getAdminAccessContext.ts:72` | gates the shell-context cache write |
+| **`canReadAnalytics.ts:32`** | **`if (subject.portalEligible) return true;` — grants** |
+| **`canManageUsersAndRoles.ts:58`** | **`if (!portalEligible && !canManageUsersAndRoles(access))` → the predicate alone passes — grants** |
+
+The first four are admission: a filter on entry, which is defensible and is what `A2-6` (§3.4) already
+described. The fifth gates a cache write and decides no authority. **The last two are not admission. They
+are authority.** At those two gates the predicate is
+*sufficient* — a principal holding the `admin` or `ops` string passes without the platform reading a
+single permission key.
+
+That is what makes it a layer rather than a filter, and it is a layer the schema does not have:
+
+| | `L3` assignment | `L4` resolved set | `portalEligible` |
+|---|---|---|---|
+| Stored where? | `role_definitions` / `user_access_profiles` | `role_permission_grants` → keys | **nowhere — a literal in application code** |
+| Org-scoped? | yes | yes | **no** — the set is global |
+| In the catalog? | yes | yes | **no** — `PORTAL_ROLES` is not read from `role_definitions` |
+| Which branch? | capability ∥ scope | capability ∥ scope | **neither** |
+
+> **A2-8.** `portalEligible` is a **fifth layer**: authority that sits between `L3` and `L4`, is stored in
+> no table, is scoped to no org, belongs to neither branch, and at two gates **satisfies a capability
+> check on its own**. `02…§1.3`'s *"the chain is four layers deep; it MUST NOT be specified, drawn, or
+> implemented as five"* is currently false of the implementation — and the fifth layer's entry point is
+> the authentication path, which is why this document owns the finding.
+
+**This corrects §3.5's account of who may mint a credential.** §3.5 cites the inner predicate
+(`canManageUsersAndRoles.ts:16-17` — `admin` literal **or** `settings.users_roles`) as the invite gate.
+The inner predicate is not the gate. The route wrapper is:
+
+```ts
+const { portalEligible, ...access } = b;                                  // :57
+if (!portalEligible && !canManageUsersAndRoles(access)) { …403… }         // :58
+```
+
+`portalEligible` is true for `ops`. So **`ops` passes with or without the grant, and D9's question — does
+the default seed grant `settings.users_roles` to `ops`? — does not decide the outcome on this path.** It
+is decided one layer earlier, by a hard-coded string.
+
+`requireUsersRolesManageAuth` guards **eight routes** **[verified]**: `admin/users` (invite),
+`users/[userId]/role`, `users/[userId]/remove`, `users/[userId]/access-scope`,
+`settings/users-roles/members`, `rbac/grants`, `rbac/roles`, `rbac/roles/[role_key]`. Every one of them
+is reachable by the `ops` literal alone — including the two that write the org's **role catalog and
+permission grants**. The seed's attempt to make `ops` lesser by withholding `admin.users.write` and
+`admin.roles.write` (§3.5) is not merely defeated by those keys being unread; it is defeated *before*
+they would be read.
+
+**Direction matters.** `I-27` forbids one branch reading the other's output. This is the same category
+error pointed a third way: a **role literal short-circuiting the capability branch it is supposed to feed**.
+The four-layer restatement in `02…§1.3` is a specification fix; this is the implementation half, and the
+instrument that closes it already exists in the plan — **`W-13`**, which replaces the `portalEligible`
+leg with a `portal.access` capability. `canReadAnalytics.ts:29-30` says so in a comment **[verified]**.
+
+> **`I-32`ᴮ is the four-layer instrument on the authentication side.** Making admission a capability is
+> not a rename: it moves admission from a fifth layer into `L4`, where the chain already has a place for
+> it. Two things must both happen or the layer survives the rename — see **`AD-22`** (§7).
+
+> **`I-35`ᴮ (new).** An admission predicate MUST NOT satisfy a capability gate. Admission MAY deny entry;
+> it MUST NOT, on its own, authorize a command. Every gate MUST read a permission key.
+
+### 3.7 A2-9 — the Access surface is org-scoped; the credential commands under it are not *(reopen, 2026-08-06)*
+
+**This is the authentication side of the operator's "simplify the role editor" directive.** `02…§4.6`
+bounded that directive for role administration; the credential commands in the same workspace are this
+document's, and they are bounded here and in §6.4.
+
+The Access workspace has four chapters — `users`, `roles`, `scopes`, `security`
+(`accessChapterRoutes.ts:10`) **[verified]**. Two of them carry authentication:
+
+**Access → Users holds all three credential commands** (`AccessUsersConfigurationPage.tsx`, 770 lines)
+**[verified]**: invite (`:205`, `POST /api/admin/users`), send password reset (`:278`,
+`POST /api/admin/send-password-reset`), and remove (`:299`, `POST /api/admin/users/[userId]/remove`),
+the last behind a two-step confirm (`:465-469`).
+
+> **The org bound is a property of the selection model, not of the command.** The reset control can only
+> send the email of a user the operator selected from the org's list — but `A2-3` (§3.1) establishes that
+> the endpoint accepts **any** string (`send-password-reset/route.ts:15`), with no membership lookup
+> before `:34`. The surface is org-scoped; the command is not. **A simplification of this surface cannot
+> fix that, and a simplification that makes the surface look tighter will make it look fixed.** Two other
+> call sites already post to the same endpoint from `legacy-admin` (`AccessControlClient.tsx`,
+> `UsersClient.tsx`) **[verified]** — three callers, one unbounded command. `W-38`/`I-28`ᴮ is the fix, and
+> it belongs to the API, not the chapter.
+
+**What the surface gets right, and must keep getting right.** Removal reports itself as removal —
+*"…removed from this organization."* (`:304`) **[verified]**. It does not say *revoked*, *deactivated*, or
+*disabled*, and given §2.1 (no code path disables a credential) and §2.3 (three levers, none revokes),
+that restraint is the surface telling the truth about the model. It is also the single easiest thing for
+a simplification to break: collapsing "remove from organization" into a tidier "Remove access" or
+"Deactivate" is a **wording** change that would make the product claim a capability it does not have.
+That is `R6` (§6.4).
+
+**Access → Security is a catalog with no policy behind it.** `AccessSecurityPage.tsx` **[verified]**
+declares Password *Available*, Google / Microsoft / SSO *Planned*, and Sign-in Policies, Sessions and
+Audit Log *Planned*, under a chapter described as *"Authentication methods, account security, and access
+auditing"* (`accessChapterRoutes.ts:27-29`). Three observations, in descending order of comfort:
+
+1. **It is honest, and deliberately so.** Every absent method is labelled `Planned`; the Audit Log card
+   states *"No events are fabricated for display"* (`:67`). Measured against the rest of this document,
+   that is the correct posture and should be preserved by name.
+2. **The catalog is a hard-coded list of `<li>` elements** (`:19-44`), not a projection of a per-org
+   record. §6.1 specifies a code-owned catalog *steered by* an `auth_policy`; what exists is the catalog
+   with nothing steering it. Each `Available`/`Planned` badge is hand-maintained and will drift from the
+   code the first time a method lands — and the drift will be invisible, because nothing derives one from
+   the other. That is `R8` (§6.4) and `AD-23` (§7).
+3. **`Password — Available` is org-wide language for a setting that is not per-org.** There is no
+   `supabase/config.toml` and no `auth_policy` (§0), so the badge describes the platform, not the
+   organization, on a chapter scoped to one. Meanwhile the chapter promising *"account security"* sits
+   above three password inputs that still have **zero** reveal toggles (§0.1, §6.2) — the cheapest item in
+   the corpus, now with a surface that advertises it.
+
 ---
 
 ## 4. Identity — the account is a credential for a person
@@ -426,13 +629,70 @@ Continuing the register in `02…:425-466` (I-1 … I-27):
 
 | # | Invariant | Source |
 |---|---|---|
-| **I-28** | A credential-lifecycle command MUST be bounded by the caller's org; its target must resolve to a principal with a membership in `access.orgId`. | §3.1 |
-| **I-29** | A password change MUST require step-up — current password, a fresh recovery-type session, or a second factor. Session presence alone MUST NOT authorize re-keying. | §3.2 |
-| **I-30** | Retiring a principal MUST revoke: capabilities stop resolving, live sessions stop being honoured, and on last-org deactivation the credential is disabled by an explicit call. *(The E1-side twin of I-26.)* | §2.3, §5.2 |
-| **I-31** | The verification mode of the request-identity path MUST be an asserted, tested property, not an inherited default of unversioned hosted configuration. | §3.3 |
-| **I-32** | Admission MUST be a capability (`portal.access`) evaluated after authentication, and refusal MUST produce a distinct, actionable outcome. | §3.4 |
-| **I-33** | Authentication error text MUST NOT surface provider strings verbatim; the sign-in path MUST match the anti-enumeration discipline already applied at `send-password-reset:35-37`. | §1, §3.1 |
-| **I-34** | Password policy MUST be enforced server-side. A policy expressed only in a submit handler is advisory and MUST NOT be cited as a control. | §3.2 |
+| **I-28**ᴮ | A credential-lifecycle command MUST be bounded by the caller's org; its target must resolve to a principal with a membership in `access.orgId`. | §3.1 |
+| **I-29**ᴮ | A password change MUST require step-up — current password, a fresh recovery-type session, or a second factor. Session presence alone MUST NOT authorize re-keying. | §3.2 |
+| **I-30**ᴮ | Retiring a principal MUST revoke: capabilities stop resolving, live sessions stop being honoured, and on last-org deactivation the credential is disabled by an explicit call. *(The E1-side twin of I-26.)* | §2.3, §5.2 |
+| **I-31**ᴮ | The verification mode of the request-identity path MUST be an asserted, tested property, not an inherited default of unversioned hosted configuration. | §3.3 |
+| **I-32**ᴮ | Admission MUST be a capability (`portal.access`) evaluated after authentication, and refusal MUST produce a distinct, actionable outcome. | §3.4 |
+| **I-33**ᴮ | Authentication error text MUST NOT surface provider strings verbatim; the sign-in path MUST match the anti-enumeration discipline already applied at `send-password-reset:35-37`. | §1, §3.1 |
+| **I-34**ᴮ | Password policy MUST be enforced server-side. A policy expressed only in a submit handler is advisory and MUST NOT be cited as a control. | §3.2 |
+| **I-35**ᴮ **[reopen]** | An admission predicate MUST NOT satisfy a capability gate. Admission MAY deny entry; it MUST NOT, on its own, authorize a command. Every gate MUST read a permission key. | §3.6 |
+
+#### The ᴮ superscript, and the collision it marks *(reopen, 2026-08-06)*
+
+**Nothing above is renumbered or reworded.** The superscript is a disambiguating mark, added because this
+document is the one that *originates* the `ᴮ` side of an already-tracked corpus defect and was the only
+document still printing the numbers bare.
+
+When §6.3 was written, `02…` ended at `I-27`. `02…` Part II subsequently added its own **`I-28` … `I-31`**
+(`02…:472-475`), so seven numbers now denote two invariants each. The corpus records this as **`X-1`**
+(`03…:2821`, **open**) and resolves it in citation by superscript — `ᴬ` for `02…` Part II, `ᴮ` for this
+document — throughout `01…§18` and `03…§23.4`/`§25`. `03…:2620-2630` maps each side to a different
+workstream, and `03…:2633` notes that *"each colliding pair lands in a different wave, so a lock written
+against a bare `I-29` would be run in the wrong one."* This pass makes the mark local, so the register and
+its citations agree.
+
+> **The reopen extends the collision by one, and the extension is new.** `02…`'s own reopen at `107a6217d`
+> added **`I-32` — "a role-administration surface adds and removes no model structure"** (`02…§4.6`).
+> `X-1` is scoped in `03…:2821` to *"`I-28`…`I-31`"*; it is now **`I-28`…`I-32`**. Two live citations of a
+> bare `I-32` — `03…:997` (quoting the admission wording) and `03…:2628` (*"`I-32` admission is a
+> capability → `W-13`"*) — both mean **`I-32`ᴮ**, this document's, and both now read ambiguously.
+> **`03-implementation-qa-sequence.md` should widen `X-1` and superscript those two lines.** That file is
+> outside this assignment's scope and was not modified. `I-35`ᴮ is chosen above `02…`'s current ceiling
+> and does not collide today, but it will if `02…` continues its own sequence — which is the argument for
+> resolving `X-1` rather than living with it.
+
+### 6.4 What an access surface owes the authentication model *(reopen, 2026-08-06)*
+
+`02…§4.6` states what a role-administration surface must preserve — `R1`–`R5` and `I-32`ᴬ — and stops
+there, correctly, because `02…` does not own a surface. **Neither does this document.** What follows is
+the same construction for the credential half: obligations any Access surface must satisfy, so that
+*simplify the editor* and *do not change the access architecture* can be checked against the model rather
+than judged by eye. **No surface is designed here.** The redesign belongs to
+[`06-product-ia-and-flows.md`](./06-product-ia-and-flows.md).
+
+These continue the register `02…§4.6` owns; `02…` holds `R1`–`R5`, this document appends `R6`–`R9`. Each
+is a projection of a rule already stated above — **none is new policy.**
+
+| # | An Access surface… | Because | Rule |
+|---|---|---|---|
+| **R6** | **MUST NOT** describe removing a membership, or changing a role, as revoking, deactivating, disabling or ending access — while §2.1 holds, the surface's honest wording (`:304`) is load-bearing | no code path disables a credential; three levers, none revokes | §2.1, §2.3, `I-30`ᴮ |
+| **R7** | **MUST NOT** rely on its selection model for the org bound of a credential command; the bound MUST hold when the endpoint is called directly | the surface is org-scoped, `send-password-reset` is not | §3.1, §3.7, `I-28`ᴮ |
+| **R8** | **MUST NOT** present an authentication method, policy or state as organization-level unless a per-org record backs it; `Available`/`Planned` MUST derive from the catalog, not from hand-maintained markup | §6.1's catalog exists with nothing steering it | §3.7, §6.1, `AD-23` |
+| **R9** | **MUST NOT** expose a per-user security control whose gate is admission rather than a capability | admission is not authority | §3.6, `I-35`ᴮ, `I-32`ᴮ |
+
+> **`R9` is the constraint violated today, and — as with `02…§4.6`'s `R3` — by the API rather than by the
+> UI.** Access → Users' three credential commands sit behind `requireUsersRolesManageAuth`, which passes
+> on the `portalEligible` literal alone (§3.6). A surface built on those endpoints **cannot** satisfy `R9`
+> however it is drawn. *"Simplify the editor"* and *"do not change the access architecture"* are therefore
+> jointly satisfiable on the credential half only if **`W-13`** (admission becomes `portal.access`) and
+> **`W-38`** (the credential-mail primitive is bounded) land before, or with, any redesign of the Users or
+> Security chapters — the exact shape of the argument `02…§4.6` makes for `W-17` and the Roles chapter.
+
+**Escalated, not answered.** The operator directive that prompted this section is a directive to a
+**surface**, and no surface is owned here. What `04` can do is bound the credential half: that is `R6`–`R9`,
+`I-35`ᴮ, and the sequencing constraint above. **No UI code, route, component, or test was changed by this
+pass.**
 
 ---
 
@@ -479,6 +739,40 @@ security in the acceptance rubric.
 None of D5–D13 is worker-resolvable; all are recorded rather than assumed, per the mission's
 document-authority rule.
 
+### 7.1 Two decisions from the reopen — and why they are not `D14` and `D15` *(reopen, 2026-08-06)*
+
+**The `D`-series is closed to this document.** `D14` is already occupied by `01…§19` (*abuse control*)
+**[verified]**, and `D11`ᴮ–`D13`ᴮ — all owned by this document — are the three live collisions `02…§26.1`
+tabulates. `02…§26.2` proposes retiring the series into `AD-n` (`D11`ᴮ→`AD-15`, `D12`ᴮ→`AD-16`,
+`D13`ᴮ→`AD-17`, `D-IA1…4`→`AD-18…21`), and `03…` **already cites the `AD-n` form** in its workstream
+headers (`W-24` *needs `AD-11`*, `W-38` *needs `AD-15`*, `W-27` *needs `AD-16`*, `W-34` *needs `AD-17`*)
+**[verified]**. `02…§30`'s `X-7` records that *"no downstream artifact binds to a colliding decision
+number — a window, not yet a debt."* **Minting a fresh `D14`/`D15` from here would close that window and
+add a fourth and fifth collision.**
+
+So the two reopen decisions are minted at **`AD-22`** and **`AD-23`**. `AD-n` runs to `AD-21` in the
+corpus **[verified]**, so these are free *under both schemes*: they collide with nothing today, and they
+collide with nothing if `02…§26.2` is ratified. Neither is worker-resolvable.
+
+**`AD-22` — Does admission collapse into `L4`, and does any role literal remain sufficient for a
+capability gate?**
+Two questions that must be answered together, because answering only the first leaves the fifth layer
+intact under a new name (§3.6). *Recommendation:* **yes, and no.** `W-13` must do both — introduce
+`portal.access` **and** delete the `portalEligible` short-circuits at `canReadAnalytics.ts:32` and
+`canManageUsersAndRoles.ts:58`. Renaming the predicate while leaving it *sufficient* at those two gates
+would satisfy the letter of `I-32`ᴮ and none of `I-35`ᴮ, and the chain would still be five layers deep at
+runtime while every document in the corpus said four. **This is the decision the operator's "four layers"
+directive actually turns on.** It is a scope question for `W-13`, which today is written as an admission
+change only.
+
+**`AD-23` — Does the Security chapter's method catalog become derived before more methods are listed?**
+Access → Security hand-maintains `Available`/`Planned` badges with no per-org record behind them (§3.7).
+*Recommendation:* **freeze the literal list** at its current four methods until §6.1's `auth_policy` and
+code-owned catalog land, then derive the badges from it. Adding a method to the markup is a five-minute
+change that makes the product assert an organization-level capability the platform does not have; the
+chapter is honest today and this keeps it honest by construction rather than by diligence. Independent of
+`AD-22` and of `D5`–`D8`.
+
 ---
 
 ## 8. Reproduce
@@ -509,6 +803,41 @@ sed -n '1,40p'   web/app/api/admin/send-password-reset/route.ts
 sed -n '1,35p'   web/app/api/admin/users/\[userId\]/remove/route.ts
 sed -n '17,55p'  web/app/reset-password/page.tsx
 sed -n '12,32p'  web/lib/admin/cachedAuthSession.ts
+```
+
+### 8.1 Reopen block (2026-08-06)
+
+```bash
+cd /Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation   # @ 107a6217d
+
+# §0.1 — every negative re-run; all still zero, all still absent
+ls supabase/config.toml                                                         # No such file or directory
+git grep -c "signUp(\|signInWithOtp\|signInWithOAuth\|mfa\." -- web/             # no matching files
+git grep -n "auth\.admin\.deleteUser\|auth\.admin\.updateUserById\|ban_duration" -- web/ | wc -l   # 0
+git grep -n "showPassword\|revealPassword" -- web/ | wc -l                       # 0
+git grep -n 'type="password"' -- web/                                            # 3 — login:206, reset:157, :175
+
+# §0.1 — the only drift: login/page.tsx moved +3
+git grep -n "signInWithPassword" -- web/app/login/page.tsx                       # :77  (was :74)
+sed -n '75,95p' web/app/login/page.tsx                                           # raw error :83; redirect :92-93
+
+# §3.6 — the fifth layer: two definitions, seven read sites, two of them grants
+git grep -n "PORTAL_ROLES" -- web/lib          # resolveAdminAccessCore.ts:18,30,142,233; resolveAdminPortalOrgCore.ts:7,98
+git grep -n "portalEligible" -- web/lib         # 7 read sites across 6 modules
+sed -n '29,35p' web/lib/admin/canReadAnalytics.ts          # :32 — `if (subject.portalEligible) return true;`
+sed -n '52,62p' web/lib/admin/canManageUsersAndRoles.ts    # :57-58 — the predicate alone passes
+git grep -ln "requireUsersRolesManageAuth" -- web/app                            # 8 routes
+
+# §3.7 — the surface: credential commands, and the catalog with no policy
+git grep -n "ACCESS_WORKSPACE_CHAPTERS" web/lib/access/accessChapterRoutes.ts    # :10 — users, roles, scopes, security
+git grep -n "send-password-reset\|/remove\|/api/admin/users" -- web/components/adminV2/settings/access/AccessUsersConfigurationPage.tsx
+git grep -ln "send-password-reset" -- web/                                       # 3 callers, 2 of them legacy-admin
+cat web/components/adminV2/settings/access/AccessSecurityPage.tsx                # 72 lines; the <li> catalog at :19-44
+
+# §6.3, §7.1 — the numbering facts the reopen depends on
+git grep -n "X-1" docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md   # :2821 — scoped I-28…I-31
+git grep -n "I-32" docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md  # :997, :2628 — both bare, both mean I-32ᴮ
+git grep -o "AD-[0-9]\+" -- docs/platform/planning | sort -u -V | tail -1        # AD-21 — so AD-22/AD-23 are free
 ```
 
 ---
@@ -793,3 +1122,78 @@ one method here that materially changes tenancy and provisioning.
 - **Preserved:** §10 reproduces the accepted artifact verbatim; this QA path is runtime certification
   evidence (`PRODUCT-SOURCE.md`) and no accepted content was deleted.
 - **No source, schema, migration, or UI was changed by this phase.**
+
+---
+
+## 12. Reopen (2026-08-06) — what it answered, what it bounded, and what it did not touch
+
+### 12.1 The two directives
+
+| Directive | Disposition | Where |
+|---|---|---|
+| *Role hierarchy is still too deep — reduce to four layers* | **Answered on the authentication side.** The chain is four layers in the schema (`02…§1.3`) and **five at runtime**: `portalEligible` is a fifth layer that, at two gates, satisfies a capability check on its own. The instrument that removes it is `W-13`, and `AD-22` is the scope question `W-13` must answer to actually remove it | §3.6, `I-35`ᴮ, `AD-22` |
+| *Simplify the role editor without changing the access architecture* | **Bounded, not executed** — the same disposition `02…§4.6` reached, for the same reason: no surface is owned here. `R6`–`R9` state what an Access surface owes the authentication model; §3.7 records what it does today | §3.7, §6.4, `AD-23` |
+
+**Neither directive was discharged as a product change, and no editor was simplified.** The redesign
+belongs to [`06-product-ia-and-flows.md`](./06-product-ia-and-flows.md).
+
+### 12.2 What the reopen added
+
+`A2-8`, `A2-9` (§3.6, §3.7) · `I-35`ᴮ (§6.3) · `R6`–`R9` (§6.4) · `AD-22`, `AD-23` (§7.1) · the ᴮ
+superscript on `I-28`ᴮ–`I-34`ᴮ · re-verification of every §0 negative at `107a6217d` (§0.1) · one
+correction to §3.5's account of the invite gate (§3.6) · two tally notes (§0, §6.3).
+
+**Nothing was renumbered, reworded, or reinterpreted.** Every existing section, finding, invariant,
+decision and table keeps its number and its wording; §10 is untouched.
+
+### 12.3 Limits specific to the reopen
+
+These are **in addition to** §9, which stands unchanged.
+
+- **Still static, still no live authentication.** No flow executed, no Supabase project inspected, no
+  browser opened. `A2-8`'s gate behaviour is read from source, not exercised against a running app.
+- **§3.6's eight-route claim is a call-graph reading, not a runtime trace.** `requireUsersRolesManageAuth`
+  was verified to admit on `portalEligible` alone (`:57-58`) and its eight importers were enumerated
+  (`git grep -ln`). Whether each route has a *second*, inner gate that would independently deny an `ops`
+  caller **was not checked route-by-route** — only `admin/users`'s inner predicate was read (§3.5). The
+  claim *"reachable by the `ops` literal alone"* is therefore established **at the shared wrapper** and
+  should be confirmed per route before it is cited as an exploit rather than a gate defect.
+- **§3.7 constrains a surface it did not review.** The reopen read the chapter definition, the Security
+  chapter in full (72 lines), and the credential-command call sites in the Users chapter — **not** the
+  Users chapter's 770-line component tree, and not the Roles chapter at all. `R6`–`R9` are stated as
+  obligations on **any** surface; only `R9` is asserted as violated today, and on API evidence
+  (`canManageUsersAndRoles.ts:57-58`) rather than UI evidence. **Whether the current chapters satisfy
+  `R6`, `R7` or `R8` was not determined** and must not be inferred from §3.7.
+- **`AD-22`/`AD-23` are minted against a numbering scheme that is proposed, not ratified** (`02…§26.2`).
+  They are free under both schemes (§7.1), so the mint is safe either way — but if `02…§26.2` is rejected
+  in favour of some third scheme, they travel with it.
+- **The `I-32` collision is reported, not fixed.** `03…` needs to widen `X-1` and superscript `:997` and
+  `:2628`. That file is outside this assignment's scope and **was not modified** (§6.3).
+- **Two cited corpus files have uncommitted working-tree changes**, so citations into them are against the
+  **working tree**, not against `107a6217d`: `01-existing-state-inventory.md` (+275 lines) and
+  `05-command-enforcement-census.md` (+282 lines) **[verified via `git diff --stat`]**. Every `01…:n`
+  citation added by the reopen — `:874`, `:1201`, `:1286`, `:1355` in §6.3 and §12.4 — is a working-tree
+  line number and **will drift when that work is committed**. Citations into `02…` and `03…` are against
+  `107a6217d`, which is clean for both files.
+
+### 12.4 Provenance — reopen pass
+
+- **Read at `107a6217d` in `wt6-director-experience-dx5-5-continuation`:**
+  `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/resolveAdminPortalOrgCore.ts`,
+  `web/lib/admin/canReadAnalytics.ts`, `web/lib/admin/canManageUsersAndRoles.ts`,
+  `web/lib/admin/adminRouteGate.ts`, `web/lib/admin/getAdminAccessContext.ts`,
+  `web/lib/access/accessChapterRoutes.ts`,
+  `web/components/adminV2/settings/access/AccessSecurityPage.tsx` (in full),
+  `web/components/adminV2/settings/access/AccessUsersConfigurationPage.tsx` (credential-command call
+  sites only), `web/app/login/page.tsx`, `web/app/reset-password/page.tsx`,
+  `web/app/api/admin/send-password-reset/route.ts`, `web/app/api/admin/users/route.ts`,
+  `web/app/api/admin/users/[userId]/remove/route.ts`, `web/middleware.ts`,
+  `web/lib/admin/operatorSessionGate.ts`, `web/lib/admin/cachedAuthSession.ts`.
+- **Corpus inputs reused, not re-derived:**
+  `../../../access-identity-v2/02-canonical-access-identity-model.md` (§1.3's four-layer restatement and
+  `M2-16`; §4.6's `R1`–`R5` and `I-32`ᴬ; §26's decision-collision analysis — all read, none re-derived),
+  `../../../access-identity-v2/01-existing-state-inventory.md` (§18 and §30 — the ᴬ/ᴮ convention and the
+  `D13` collision), `../../../access-identity-v2/03-implementation-qa-sequence.md` (`W-13`, `W-17`,
+  `W-38`, the `X-1` scope line, the `AD-n` citations).
+- **No file outside this document was modified.** No source, schema, migration, UI, test or sibling
+  corpus document was changed by the reopen.
