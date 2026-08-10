@@ -493,7 +493,7 @@ describe("P28C-3 — the provider-backed path runs the whole governed chain", ()
         // All declared elements are closed vocabulary, so nothing needed
         // structural redaction — and the package says so rather than inventing
         // steps a second privacy pass would have produced.
-        expect(result.package.privacy_report.classes_present.sort()).toEqual(["communications", "operational"]);
+        expect([...result.package.privacy_report.classes_present].sort()).toEqual(["communications", "operational"]);
     });
 
     it("a provider failure becomes a refusal, never an exception or a partial overlay", async () => {
