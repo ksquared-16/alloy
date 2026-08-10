@@ -144,23 +144,67 @@ def _handle_inbound_with_optional_binding(
     eff_row = binding_row
     eff_uuid: Optional[str] = binding_id.strip() if binding_id and binding_id.strip() else None
 
+    # Destination routing state travels with the message. `resolved` is the
+    # normal case; anything else must still become canonical truth rather than
+    # vanishing into a legacy row no operator surface reads.
+    destination_routing: Dict[str, Any] = {"destination_routing_state": "resolved"}
+
     if eff_uuid:
         if not eff_row:
             logger.warning("sms_inbound: unknown binding_id=%s (legacy only)", _mask_binding_id(binding_id))
+            destination_routing = {
+                "destination_routing_state": "unresolved",
+                "destination_routing_reason": "unknown_binding_id",
+            }
     else:
         matches = find_sms_bindings_by_inbound_to(base_url, headers, to_e164=to_num)
+        org_ids = sorted({str(m.get("org_id")) for m in matches if m.get("org_id")})
         if len(matches) == 0:
+            # Nothing owns this destination number. The org is genuinely unknown,
+            # and org_id is NOT NULL on threads and messages — inventing one to
+            # satisfy the column would attribute a real parent's words to an
+            # organization that never received them.
             logger.info(
-                "sms_inbound: canonical_skip no_binding to_tail=%s (no active sms binding for normalized To)",
+                "sms_inbound: unresolved_destination no_binding to_tail=%s",
                 _tail_digits_hint(to_num),
             )
-        elif len(matches) > 1:
-            distinct_orgs = len({str(m.get("org_id")) for m in matches})
+            destination_routing = {
+                "destination_routing_state": "unresolved",
+                "destination_routing_reason": "no_active_sms_binding_for_destination",
+            }
+        elif len(matches) > 1 and len(org_ids) == 1:
+            # AMBIGUOUS BINDING, KNOWN ORG. Which binding received this is
+            # undecidable, but which organization did is not — so the message can
+            # and must become canonical truth. No binding is chosen: eff_uuid
+            # stays None and only the org is carried forward. The candidates are
+            # recorded so an operator can resolve it later.
             logger.warning(
-                "sms_inbound: canonical_skip ambiguous_destination_binding bindings=%s distinct_orgs=%s",
+                "sms_inbound: ambiguous_destination_binding bindings=%s org_known=1",
                 len(matches),
-                distinct_orgs,
             )
+            eff_row = {"org_id": org_ids[0]}
+            eff_uuid = None
+            destination_routing = {
+                "destination_routing_state": "ambiguous",
+                "destination_routing_reason": "multiple_active_bindings_for_destination",
+                "candidate_binding_ids": sorted(
+                    str(m.get("id")) for m in matches if m.get("id")
+                )[:20],
+                "candidate_binding_count": len(matches),
+            }
+        elif len(matches) > 1:
+            # Candidates span organizations. Picking one would hand a family's
+            # message to the wrong tenant, so nothing is picked.
+            logger.warning(
+                "sms_inbound: unresolved_destination cross_org bindings=%s distinct_orgs=%s",
+                len(matches),
+                len(org_ids),
+            )
+            destination_routing = {
+                "destination_routing_state": "unresolved",
+                "destination_routing_reason": "ambiguous_destination_across_organizations",
+                "candidate_binding_count": len(matches),
+            }
         else:
             eff_row = matches[0]
             rid = eff_row.get("id")
@@ -178,6 +222,7 @@ def _handle_inbound_with_optional_binding(
                     body=body,
                     external_sid=message_sid,
                     primary_entity_hint=None,
+                    destination_routing=destination_routing,
                 )
                 if row and row.get(IDEMPOTENT_REPLAY_KEY):
                     # Already recorded. Every effect of this provider message —

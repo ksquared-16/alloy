@@ -285,11 +285,27 @@ def _patch_thread_inbound_state(
     *,
     thread_id: str,
     last_message_at: Optional[str],
+    destination_routing_state: Optional[str] = None,
 ) -> None:
-    """G2 + G6 — bump last activity and enter the attention workflow on inbound (needs_response)."""
+    """
+    G2 + G6 — bump last activity and enter the attention workflow on inbound.
+
+    Reuses `communication_threads.attention_state`, the existing operational queue
+    authority (it already carries a partial index on
+    `(org_id, attention_state, last_message_at DESC)`), rather than introducing a
+    second attention mechanism. A reply Alloy could not route needs a different
+    operator response than one it could: `needs_response` means "answer this",
+    `needs_routing_resolution` means "tell us where this belongs" — and without
+    the distinction an unroutable reply would sit in the queue looking answerable.
+    """
     h = dict(headers)
     h.update(_JSON_HEADERS)
-    patch: Dict[str, Any] = {"attention_state": "needs_response"}
+    state = (
+        "needs_routing_resolution"
+        if destination_routing_state in ("unresolved", "ambiguous")
+        else "needs_response"
+    )
+    patch: Dict[str, Any] = {"attention_state": state}
     if last_message_at:
         patch["last_message_at"] = last_message_at
     try:
@@ -374,6 +390,7 @@ def persist_inbound_communication_sms(
     body: str,
     external_sid: str,
     primary_entity_hint: Optional[Tuple[str, str]] = None,
+    destination_routing: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Insert inbound communication_messages + workflow event message_received.
@@ -422,6 +439,15 @@ def persist_inbound_communication_sms(
         entity_type, entity_id, thread_meta, msg_meta = resolve_inbound_sms_anchor_with_metadata(
             base_url, headers, org_id, from_num
         )
+
+    # Destination routing outcome is part of the message's truth, not a log line.
+    # An operator resolving an ambiguous reply later needs to know WHY it was
+    # ambiguous and what the candidates were.
+    if destination_routing:
+        thread_meta = dict(thread_meta)
+        msg_meta = dict(msg_meta)
+        thread_meta.update(destination_routing)
+        msg_meta.update(destination_routing)
 
     rkey = recipient_key_normalize_sms(from_num)
     # G4 — reuse the canonical conversation for this contact when one exists (any anchor); the
@@ -532,7 +558,13 @@ def persist_inbound_communication_sms(
             inbound_created_at = row.get("created_at") if isinstance(row, dict) else None
             # G2 + G6 — bump last activity and enter the attention workflow.
             _patch_thread_inbound_state(
-                base_url, headers, thread_id=thread_id, last_message_at=inbound_created_at,
+                base_url,
+                headers,
+                thread_id=thread_id,
+                last_message_at=inbound_created_at,
+                destination_routing_state=(destination_routing or {}).get(
+                    "destination_routing_state"
+                ),
             )
             # G1 — mark the prior outbound in this thread as replied.
             _mark_latest_outbound_replied(
