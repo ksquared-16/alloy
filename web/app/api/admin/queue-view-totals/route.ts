@@ -24,6 +24,7 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { countChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
 import { loadWorkUnitProcessPopulation } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
+import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
 import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 
@@ -218,8 +219,16 @@ export async function POST(request: NextRequest) {
                     scope: recordScopeConstraints,
                     scopeImpossible: recordScopeImpossible,
                 });
+                // EPP before Work View totals — same keys as D1 provisioning rows.
+                const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
+                    supabase,
+                    orgId: gate.orgId,
+                    rows: population.rows,
+                    allowedLocationIds: recordScopeConstraints?.locationIds ?? null,
+                    logLabel: "queue-view-totals",
+                });
                 totals = aggregateWorkViewTotals({
-                    baseRows: population.rows,
+                    baseRows: baseWithEpp,
                     workViews: laneViews,
                     // An include-all view is the population itself. There is no separate "lane total" to
                     // prefer — preferring one is what substituted a worklist for the process.

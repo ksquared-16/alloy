@@ -71,6 +71,10 @@ import {
     type OperationalPresentation,
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
+import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
+import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
+import { applyQueueRowVariantSortCriteria } from "@/lib/presentation/runtime/applyQueueRowVariantSortCriteria";
+import { normalizeSortCriteria } from "@/lib/adminV2/settings/surfaces/queueRowVariantDisplayControls";
 import {
     enrichOperationalProjectionRows,
     queueRowContextOf,
@@ -863,8 +867,18 @@ export async function composeWorkUnitProvisioningAnswer(
         page = childRows.slice(0, PROVISIONING_ROW_PAGE_CAP) as unknown as OperationalProjectionRow[];
     } else {
         // ── ONE Operational Projection. The lens is evaluated exactly once. ──
+        // Effective Process Position MUST be attached BEFORE the evaluator: case-grain
+        // opportunity_stage predicates use `_effective_participant_stage_keys`, not raw
+        // `opportunities.stage_key`. Without this, families remain in Lead after every
+        // child has diverged to Waitlist.
+        const baseWithEpp = await attachEffectiveEnrollmentStagesToOpportunityRows({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            rows: (baseRows ?? []) as Array<Record<string, unknown>>,
+            logLabel: "provisioning",
+        });
         const projection = computeOperationalProjection({
-            baseRows: (baseRows ?? []) as OperationalProjectionRow[],
+            baseRows: baseWithEpp as OperationalProjectionRow[],
             workViews: [activeView], // only the active lens — no count fan-out, no second evaluation
         });
         const admitted = projection.byViewId[activeView.id]?.rows ?? [];
@@ -1142,7 +1156,7 @@ export async function composeWorkUnitProvisioningAnswer(
     const stageLabelsByKey = Object.fromEntries(
         stages.filter((s) => s.key.trim() && s.label.trim()).map((s) => [s.key.trim(), s.label.trim()]),
     );
-    const rows: ProvisioningRow[] = childRows
+    const rowsUnsorted: ProvisioningRow[] = childRows
         ? childRows.slice(0, PROVISIONING_ROW_PAGE_CAP).map((r) => ({
               id: String(r.participationId ?? ""),
               stageKey: r.stageKey,
@@ -1169,6 +1183,29 @@ export async function composeWorkUnitProvisioningAnswer(
     // `presentation_ms` now measures the residual wait — the enrichment cost is hidden underneath it.
     const presentation = await presentationPromise;
     timings.presentation_ms = now() - tPres;
+
+    // Published Queue Row variant sortCriteria must drive child-grain order (Waitlist priority, etc.).
+    // Work View sort_v1 remains authoritative for family/case grain; child lenses consume the matched
+    // queue-row variant's authored sort when present so builder settings are not silently ignored.
+    let rows: ProvisioningRow[] = rowsUnsorted;
+    if (childRows && rowsUnsorted.length > 1 && presentation.queue.rowVariants.length > 0) {
+        const stageKey = rowsUnsorted[0]?.stageKey ?? null;
+        const matched = resolveQueueRowVariant(presentation.queue.rowVariants, {
+            stageKey,
+            workViewId: activeView.id,
+            processKey: process.key,
+            grain: "child",
+        });
+        if (matched) {
+            const criteria = normalizeSortCriteria(matched);
+            if (criteria.length) {
+                rows = applyQueueRowVariantSortCriteria(
+                    rowsUnsorted as unknown as Array<Record<string, unknown>>,
+                    criteria,
+                ) as unknown as ProvisioningRow[];
+            }
+        }
+    }
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
     const actionsProjection = await actionsProjectionPromise;
     const focusPanelStageWork = await focusPanelStageWorkPromise;
