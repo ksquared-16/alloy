@@ -30,6 +30,7 @@ import {
     isOrganizationDomainVisible,
     visibleAccessChapters,
     heldAccessCapabilities,
+    availableAccessCommands,
 } from "@/lib/access/surfaceCapabilities";
 import { organizationConfigurationDomains } from "@/lib/configRuntime/organizationRuntime";
 import { ACCESS_WORKSPACE_CHAPTERS } from "@/lib/access/accessChapterRoutes";
@@ -181,13 +182,68 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
      * `admin`. Whichever way that is reconciled is a W-15 decision, and this assertion is what
      * makes the reconciliation visible when it happens.
      */
-    it("records W49-F1 — send-password-reset is reached from Users and enforces a role, not the capability", () => {
+    it("records W49-F1 — send-password-reset still enforces a role, not the capability", () => {
         const route = "app/api/admin/send-password-reset/route.ts";
         expect(ACCESS_SURFACE_DECLARATIONS.users.divergentRoutes?.map((d) => d.route)).toContain(route);
         expect(readWeb("components/adminV2/settings/access/AccessUsersConfigurationPage.tsx")).toContain(
             "/api/admin/send-password-reset"
         );
+        // The divergence itself is UNCHANGED and must stay recorded: reconciling it means deciding
+        // whether a grant-holder may trigger a reset email, which is W-15's call with an AD behind
+        // it. What W49-F1 closed is the *presentation* half.
         expect(readWeb(route)).toContain('ctx.role !== "admin"');
+    });
+
+    /**
+     * W49-F1, closed on the presentation side. The chapter used to draw `Send password reset` for
+     * every holder of `settings.users_roles` and let the route answer 403 on click.
+     */
+    it("offers the reset control only where the route's own predicate admits it", () => {
+        // Resolved from `hasPortalAdminMutateAccess`, which is what `compatibilityPortalRole` — and
+        // therefore the route's `ctx.role === "admin"` — reduces to. One predicate, read twice.
+        expect(availableAccessCommands({ roleKeys: ["admin"] })).toEqual(["password-reset"]);
+        // The population W49-F1 is about: holds the surface capability, is not org admin.
+        expect(availableAccessCommands({ roleKeys: ["ops"] })).toEqual([]);
+        expect(availableAccessCommands({ roleKeys: [] })).toEqual([]);
+        // A multi-role membership still resolves by union — IA-7's subject, asserted here so the
+        // command gate cannot regress to reading a single "primary" role.
+        expect(availableAccessCommands({ roleKeys: ["ops", "admin"] })).toEqual(["password-reset"]);
+
+        // The control is conditional on that resolved list, and the prop is required the whole way
+        // down. A default anywhere on this path restores "draw it for everyone, 403 on click".
+        const chapter = readWeb("components/adminV2/settings/access/AccessUsersConfigurationPage.tsx");
+        expect(chapter).toContain('commands.includes("password-reset")');
+        expect(chapter).toContain("{canSendPasswordReset ?");
+        for (const rel of [
+            "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
+            "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
+        ]) {
+            expect(readWeb(rel), rel).toMatch(/commands: readonly AccessCommandKey\[\]/);
+            expect(readWeb(rel), `${rel} defaults the command list`).not.toMatch(/commands\s*=\s*\[/);
+        }
+        // The page resolves it at the boundary, beside the chapter filter.
+        expect(readWeb(renderingPages[0]!)).toContain("availableAccessCommands(access)");
+    });
+
+    /**
+     * The client components are `"use client"`; the resolver's module reaches `next/server` through
+     * `canManageUsersAndRoles`. The type they share therefore lives in the client-safe module, and
+     * a value import from the server one would be a runtime failure this catches first.
+     */
+    it("keeps the command vocabulary out of the server-only module for client consumers", () => {
+        for (const rel of [
+            "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
+            "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
+            "components/adminV2/settings/usersRoles/UsersRolesConfigurationPage.tsx",
+        ]) {
+            expect(readWeb(rel), rel).not.toContain("lib/access/surfaceCapabilities");
+        }
+        expect(readWeb("lib/access/accessChapterRoutes.ts")).toContain("export type AccessCommandKey");
+        // And the resolver stays where the other gates are, importing the vocabulary rather than
+        // re-declaring it — two declarations of one union is how they drift.
+        expect(readWeb("lib/access/surfaceCapabilities.ts")).toContain("type AccessCommandKey,");
+        expect(readWeb("lib/access/surfaceCapabilities.ts")).not.toContain("export type AccessCommandKey");
     });
 });
 

@@ -21,6 +21,7 @@ import AccessSecurityPage from "@/components/adminV2/settings/access/AccessSecur
 import {
     ACCESS_WORKSPACE_CHAPTER_META,
     accessWorkspaceChapterHref,
+    type AccessCommandKey,
     type AccessWorkspaceChapter,
 } from "@/lib/access/accessChapterRoutes";
 
@@ -91,9 +92,15 @@ function ChapterTabs({
 export default function AccessWorkspaceSurface({
     section,
     chapters,
+    commands,
 }: {
     section: AccessWorkspaceChapter;
     chapters: readonly AccessWorkspaceChapter[];
+    /**
+     * W49-F1. Same standing as `chapters`, one level in: controls whose route enforces something
+     * other than the capability that admitted the chapter. An enforced result, not a decision.
+     */
+    commands: readonly AccessCommandKey[];
 }) {
     const router = useRouter();
     const meta = ACCESS_WORKSPACE_CHAPTER_META[section];
@@ -118,7 +125,7 @@ export default function AccessWorkspaceSurface({
             <ConfigurationShell testId={`access-chapter-shell-${section}`}>
                 {section === "users" ?
                     <div data-testid="access-chapter-users">
-                        <AccessUsersConfigurationPage />
+                        <AccessUsersConfigurationPage commands={commands} />
                     </div>
                 : section === "roles" ?
                     <div data-testid="access-chapter-roles">

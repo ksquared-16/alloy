@@ -35,6 +35,7 @@ import {
     type ConfiguredScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+import type { AccessCommandKey } from "@/lib/access/accessChapterRoutes";
 import {
     heldRoleKeys,
     replacementIsNoOp,
@@ -111,7 +112,17 @@ function lifecyclePillClass(state: MemberLifecycleProjection["state"]): string {
         :   "locations-collection-row__status";
 }
 
-export default function AccessUsersConfigurationPage() {
+export default function AccessUsersConfigurationPage({
+    commands,
+}: {
+    /**
+     * W49-F1. The commands this principal can actually invoke, resolved on the server from each
+     * route's own predicate. Required and defaulted nowhere: a default would restore the state this
+     * fixed, where the control was drawn for everyone and the 403 arrived on click.
+     */
+    commands: readonly AccessCommandKey[];
+}) {
+    const canSendPasswordReset = commands.includes("password-reset");
     const router = useRouter();
     const searchParams = useSearchParams();
     const initialUserId = searchParams.get("userId");
@@ -1007,14 +1018,24 @@ export default function AccessUsersConfigurationPage() {
                                                         </dd>
                                                     </div>
                                                 </dl>
-                                                <ConfigurationSecondaryButton
-                                                    className="mt-3"
-                                                    disabled={resetBusy || !selected.email}
-                                                    onClick={() => void sendPasswordReset()}
-                                                    data-testid="access-user-security-reset"
-                                                >
-                                                    {resetBusy ? "Sending…" : "Send password reset"}
-                                                </ConfigurationSecondaryButton>
+                                                {/*
+                                                  * W49-F1: the reset route enforces the portal `admin`
+                                                  * role, not the capability that admitted this chapter.
+                                                  * Offering the button to a grant-holder who is not org
+                                                  * admin produced a 403 on click. Withdrawing it grants
+                                                  * nothing — the route's gate is unchanged — it stops
+                                                  * the surface promising a command that was never live.
+                                                  */}
+                                                {canSendPasswordReset ?
+                                                    <ConfigurationSecondaryButton
+                                                        className="mt-3"
+                                                        disabled={resetBusy || !selected.email}
+                                                        onClick={() => void sendPasswordReset()}
+                                                        data-testid="access-user-security-reset"
+                                                    >
+                                                        {resetBusy ? "Sending…" : "Send password reset"}
+                                                    </ConfigurationSecondaryButton>
+                                                :   null}
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard testId="access-user-security-mfa" title="Multi-factor authentication">
                                                 {/*

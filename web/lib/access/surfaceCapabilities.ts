@@ -28,11 +28,13 @@
  */
 
 import { canManageUsersAndRoles, SETTINGS_USERS_ROLES_PERMISSION } from "@/lib/admin/canManageUsersAndRoles";
+import { hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 import {
     ACCESS_WORKSPACE_CHAPTERS,
     ACCESS_WORKSPACE_CHAPTER_META,
     accessWorkspaceChapterHref,
+    type AccessCommandKey,
     type AccessWorkspaceChapter,
 } from "@/lib/access/accessChapterRoutes";
 
@@ -91,16 +93,18 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
         ],
         divergentRoutes: [
             {
-                // W49-F1. The Users chapter renders "Send password reset" to every holder of
-                // `settings.users_roles` (AccessUsersConfigurationPage.tsx:338), but the route
-                // enforces `ctx.role !== "admin"` and is `pending` in W-14's table. A grant-holder
-                // who is not org `admin` is shown the control and gets 403 — `T-6`'s revocation
-                // theatre in its inverse form. Declaring it `settings.users_roles` here would be a
-                // one-line WIDENING of who may trigger a password-reset email; that is W-15's
-                // sweep to make with a product decision behind it, not W-49's to slip in under a
-                // presentation workstream.
+                // W49-F1. The route enforces `ctx.role !== "admin"` and is `pending` in W-14's
+                // table, while the chapter around it is admitted by `settings.users_roles`. The
+                // divergence is REAL AND UNCHANGED — this entry is not a to-do that has been done.
+                //
+                // What has changed is that the surface no longer *promises* the command to
+                // principals the route refuses: `availableAccessCommands` resolves it from the
+                // route's own predicate and the control is withdrawn when that predicate says no.
+                // Reconciling the route itself means declaring it `settings.users_roles`, which is
+                // a one-line WIDENING of who may trigger a password-reset email — W-15's sweep to
+                // make with a product decision behind it, not a presentation workstream's.
                 route: "app/api/admin/send-password-reset/route.ts",
-                reason: "W49-F1 — enforces role `admin`, declared `pending`; narrowing/widening is W-15 + AD",
+                reason: "W49-F1 — enforces role `admin`, declared `pending`; presentation now agrees, the route's own declaration is W-15 + AD",
             },
         ],
     },
@@ -168,6 +172,50 @@ export function visibleAccessChapters(
     return ACCESS_WORKSPACE_CHAPTERS.filter((chapter) =>
         heldCapabilities.has(ACCESS_SURFACE_DECLARATIONS[chapter].capability)
     );
+}
+
+/* ------------------------------------------------------------------ */
+/* W49-F1 — commands whose gate is not the surface's gate              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * **W49-F1.** A chapter is admitted as a whole, but not every control inside it is enforced by the
+ * capability that admitted the chapter. `Send password reset` was rendered to every holder of
+ * `settings.users_roles`, while `app/api/admin/send-password-reset/route.ts` enforces the portal
+ * `admin` role — so a grant-holder who is not org `admin` was shown the control and got a 403.
+ * `T-6` names the general shape *revocation theatre*; this is its inverse, a control that was never
+ * live for the person being offered it.
+ *
+ * **Why this is the fix and a route declaration is not.** Declaring the route
+ * `settings.users_roles` would reconcile the two by *widening* who may trigger a password-reset
+ * email — a product decision belonging to `W-15`, not something a presentation workstream may slip
+ * in. Withdrawing the control changes no authorization at all: the route enforces exactly what it
+ * enforced before, and a principal who could never have used this control simply stops being
+ * offered it. That is the platform rule in its intended direction — *presentation reflects
+ * authorization; presentation does not create authorization.*
+ *
+ * **This is not the `canManage` prop `W-49` deleted.** That prop was a boolean the client consulted
+ * to decide whether to draw an apology *inside* a surface it had already been admitted to — an
+ * authorization decision wearing a display prop's clothes. {@link AccessCommandKey} is the same
+ * shape as `chapters`: a list of *already-enforced results* computed on the server, carrying no
+ * decision the client could get wrong. Dropping it entirely would hide a control, never expose one.
+ *
+ * The {@link AccessCommandKey} vocabulary lives in `accessChapterRoutes` because the components that
+ * carry it are client modules and this one is not; the *resolver* is here, with the other gates.
+ */
+
+/**
+ * Evaluated by calling the predicate the route's own context is derived from.
+ *
+ * `getAdminContext` builds `ctx.role` via `compatibilityPortalRole(roleKeys)`, which returns
+ * `"admin"` exactly when {@link hasPortalAdminMutateAccess} does. So `ctx.role !== "admin"` and this
+ * function are one predicate read two ways, not two predicates that presently agree — which is what
+ * `05…§7.7`'s *"true for the same reason"* requires, and what stops the drift `L8` warns about.
+ */
+export function availableAccessCommands(
+    access: Pick<AdminAccessContextSuccess, "roleKeys">
+): AccessCommandKey[] {
+    return hasPortalAdminMutateAccess(access.roleKeys) ? ["password-reset"] : [];
 }
 
 /**

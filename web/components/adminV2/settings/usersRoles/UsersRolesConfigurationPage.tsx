@@ -1,7 +1,7 @@
 "use client";
 
 import AccessWorkspaceSurface from "@/components/adminV2/settings/access/AccessWorkspaceSurface";
-import type { AccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
+import type { AccessCommandKey, AccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
 
 /**
  * Thin wrapper — `/settings/users-roles?section=…` now renders the Access product workspace
@@ -23,9 +23,16 @@ import type { AccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
 export default function UsersRolesConfigurationPage({
     initialTab = "users",
     chapters,
+    commands,
 }: {
     initialTab?: AccessWorkspaceChapter;
     chapters: readonly AccessWorkspaceChapter[];
+    /**
+     * W49-F1. Controls inside an admitted chapter whose route enforces something *other* than the
+     * chapter's capability. Required, like `chapters`, and for the same reason: a default would let
+     * a caller that forgot it fall back to offering every control.
+     */
+    commands: readonly AccessCommandKey[];
 }) {
-    return <AccessWorkspaceSurface chapters={chapters} section={initialTab} />;
+    return <AccessWorkspaceSurface chapters={chapters} commands={commands} section={initialTab} />;
 }

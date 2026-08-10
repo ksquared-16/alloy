@@ -29,10 +29,12 @@ import {
 } from "@/lib/admin/canManageUsersAndRoles";
 import {
     ACCESS_SURFACE_DECLARATIONS,
+    availableAccessCommands,
     heldAccessCapabilities,
     isOrganizationDomainVisible,
     visibleAccessChapters,
 } from "@/lib/access/surfaceCapabilities";
+import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 import {
     projectMemberAuthentication,
     projectMemberLifecycle,
@@ -452,6 +454,27 @@ describe("Truthful Access — eleven-fixture certification matrix", () => {
                 // Stated as an equality as well, so a future change that moves all four together
                 // in the WRONG direction still has to move them together.
                 expect(new Set([navVisible, chapters.length > 0, status === 200]).size).toBe(1);
+            });
+
+            /**
+             * W49-F1. Admission to a chapter is not admission to every control inside it. The
+             * mission's acceptance form is agreement between the UI and the route, so it has to
+             * hold one level below the chapter too — otherwise a fixture can be correctly admitted
+             * and still be offered a command its own 403 is waiting for.
+             */
+            it("offers only the commands this caller's routes would accept", () => {
+                const offered = availableAccessCommands(fixture.caller);
+
+                // The oracle is the route's OWN derivation — `getAdminContext` builds `ctx.role`
+                // with `compatibilityPortalRole`, and the route refuses unless that is "admin".
+                // Deriving the expectation from `hasPortalAdminMutateAccess` instead would just be
+                // the resolver checking itself.
+                const routeWouldAccept = compatibilityPortalRole(fixture.caller.roleKeys) === "admin";
+                expect(offered.includes("password-reset")).toBe(routeWouldAccept);
+
+                // A principal refused the whole surface is offered no command at all — the two
+                // gates compose rather than each admitting on its own.
+                if (!fixture.admitted) expect(offered).toEqual([]);
             });
 
             it("a hidden chapter is not reachable by URL", () => {

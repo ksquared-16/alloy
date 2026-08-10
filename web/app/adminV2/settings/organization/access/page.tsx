@@ -5,7 +5,11 @@ import UsersRolesConfigurationPage from "@/components/adminV2/settings/usersRole
 import OrganizationDomainLanding from "@/components/adminV2/settings/organization/OrganizationDomainLanding";
 import { buildAccessLandingModel } from "@/lib/configRuntime/accessLandingModel";
 import { normalizeAccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
-import { heldAccessCapabilities, visibleAccessChapters } from "@/lib/access/surfaceCapabilities";
+import {
+    availableAccessCommands,
+    heldAccessCapabilities,
+    visibleAccessChapters,
+} from "@/lib/access/surfaceCapabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -66,5 +70,14 @@ export default async function OrganizationAccessPage({ searchParams }: PageProps
         );
     }
 
-    return <UsersRolesConfigurationPage chapters={chapters} initialTab={section} />;
+    // W49-F1. Chapter admission is not command admission: `Send password reset` is enforced by the
+    // portal `admin` role, not by the capability that admitted the chapter. Resolved here, from the
+    // route's own predicate, so the client is handed an enforced result rather than a decision.
+    return (
+        <UsersRolesConfigurationPage
+            chapters={chapters}
+            commands={availableAccessCommands(access)}
+            initialTab={section}
+        />
+    );
 }
