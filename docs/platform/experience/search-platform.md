@@ -233,19 +233,29 @@ be explicitly derived, rebuildable, and search-only — never authoritative.
    property today, and inventing a parallel config path would violate the
    configuration boundary above. Sequenced as follow-up.
 
-4. **V1 removal — reclassified.** An earlier note here said
-   `globalRecordSearchTypes` had "13 non-test importers", implying a wide
-   migration. That figure counted the V1 cluster's own internal references.
+4. **V1 removal — attempted, then DEFERRED.** `globalRecordSearchService` has
+   **zero** runtime importers, and its five dependencies (`…Clustering`,
+   `…ClusterLimits`, `…HitAssembly`, `…LocationContext`, `…HouseholdChildren`)
+   are imported only by it. The source deletion is genuinely isolated and was
+   carried out — then reverted.
+
+   The blocker is not the source, it is the tests. Removing the service strands
+   seven assertions across two files, three of which are source-text guards that
+   read `globalRecordSearchService.ts` off disk. Excising them cleanly from a
+   1100-line file proved fiddly enough to break brace balance twice, which is
+   past the "small and safe" bar this kind of cleanup has to meet.
 
    | Module | Classification |
    |---|---|
-   | `globalRecordSearchService` | **Safely removable now** — zero non-test importers |
-   | `globalRecordSearchDrawerTarget`, `globalRecordSearchOpen`, `globalRecordSearchWarmPrefetch`, `…AgeLabel` | **Still required** — V2 uses these |
-   | `globalRecordSearchTypes` | **Compatibility dependency** — 10 of 13 importers are inside the V1 cluster; only 3 are external, and all 3 import types only |
-   | `…Clustering`, `…ClusterLimits`, `…HitAssembly`, `…LocationContext`, `…HouseholdChildren`, `…PersonPresentation`, `…ResultPresentation`, `…StatusLabel` | **Removal requires separate migration** — reachable only via the service, but its 1100-line test exercises them |
+   | `globalRecordSearchService` | **Safely removable** — zero runtime importers; blocked only by test surgery |
+   | `…Clustering`, `…ClusterLimits`, `…HitAssembly`, `…LocationContext`, `…HouseholdChildren` | **Removable with it** — imported by nothing else |
+   | `globalRecordSearchTypes` | **Compatibility dependency** — 10 of 13 importers are inside the V1 cluster; the 3 external ones import types only |
+   | `…DrawerTarget`, `…Open`, `…WarmPrefetch`, `…AgeLabel`, `…ResultPresentation` | **Still required** — V2 or live components use these |
 
-   Retirement is a small, provable change, deliberately kept out of this sprint's
-   diff.
+   Sequenced as its own change: delete the six modules, drop the three
+   service-source guards in `globalRecordSearch.test.ts`, the one in
+   `customerMembersStatusDeprecation.test.ts`, and the three tests that call
+   `runGlobalRecordSearch` / `buildGlobalSearchFamilyClusters`.
 
 ---
 

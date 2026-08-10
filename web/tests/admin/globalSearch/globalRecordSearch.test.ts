@@ -3,6 +3,12 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { runGlobalRecordSearch } from "@/lib/admin/globalSearch/globalRecordSearchService";
+import { buildGlobalSearchFamilyClusters } from "@/lib/admin/globalSearch/globalRecordSearchClustering";
+import { applyGlobalSearchClusterDisplayLimits } from "@/lib/admin/globalSearch/globalRecordSearchClusterLimits";
+import {
+    expandGlobalSearchChildMemberRows,
+} from "@/lib/admin/globalSearch/globalRecordSearchHouseholdChildren";
 import {
     GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES,
     resolveGlobalSearchDrawerOpenTarget,
@@ -367,6 +373,161 @@ const chenFixtures = {
     ],
     opportunity_persons: [],
 };
+
+describe("runGlobalRecordSearch — Chen family", () => {
+    it("returns child with household, lead, and campus context", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { groups, results, clusters } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        const child = results.find((r) => r.group === "children");
+        expect(child).toMatchObject({
+            entity_type: "customer_members",
+            entity_id: CHILD_MEMBER,
+            name: "Sophia Chen",
+            type_label: "Child",
+            household_name: "Chen Household",
+            location_label: "North Campus",
+            person_id: SOPHIA_PERSON,
+            open_entity_type: "persons",
+            open_entity_id: SOPHIA_PERSON,
+        });
+        expect(child?.lead_short_label).toBe("Chen");
+        expect(clusters.length).toBeGreaterThan(0);
+        expect(groups.some((g) => g.key === "children")).toBe(true);
+    });
+
+    it("returns parent/guardian with related household and location", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        const parent = results.find((r) => r.group === "parents" && r.entity_id === PARENT_PERSON);
+        expect(parent).toMatchObject({
+            entity_type: "persons",
+            name: "Sarah Chen",
+            type_label: "Guardian",
+            household_name: "Chen Household",
+            location_label: "North Campus",
+            open_entity_type: "persons",
+            open_entity_id: PARENT_PERSON,
+        });
+    });
+
+    it("returns children, parents, and leads groups for Chen — no standalone household rows", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { groups, results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        expect(groups.map((g) => g.key)).toEqual(
+            expect.arrayContaining(["children", "parents", "leads"])
+        );
+        expect(groups.map((g) => g.key as string)).not.toContain("households");
+        expect(results.some((r) => r.type_label === "Household")).toBe(false);
+        expect(results.some((r) => r.household_name === "Chen Household")).toBe(true);
+    });
+
+    it("clusters Chen family hits with shared household context", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results, clusters } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Chen",
+        });
+
+        const familyCluster = clusters.find((c) => c.key !== "__ungrouped__");
+        expect(familyCluster).toBeDefined();
+        expect(familyCluster?.household_name).toBe("Chen Household");
+        expect(familyCluster?.location_label).toBe("North Campus");
+        expect(familyCluster?.children.some((c) => c.name === "Sophia Chen")).toBe(true);
+
+        const contextLine = formatGlobalSearchClusterContextLine(familyCluster!);
+        expect(contextLine).toContain("Chen Household");
+        expect(contextLine).toContain("Lead: Chen");
+        expect(contextLine).toContain("North Campus");
+        expect(contextLine!.split("North Campus")).toHaveLength(2);
+
+        const child = results.find((r) => r.group === "children")!;
+        const secondary = formatGlobalSearchHitSecondaryLine(child, { inCluster: true });
+        expect(secondary).toBe("Child");
+        const secondaryFull = formatGlobalSearchHitSecondaryLine(child);
+        expect(secondaryFull).toContain("Chen Household");
+        expect(secondaryFull).toContain("North Campus");
+
+        const meta = formatGlobalSearchHitMetaLine(child);
+        expect(meta).not.toContain("Family lead");
+        expect(meta).toMatch(/Active|Future Start/);
+    });
+
+    it("child search status label uses linked person status_key, not customer_members roster status", async () => {
+        const fixtures = {
+            ...chenFixtures,
+            customer_members: [
+                {
+                    ...chenFixtures.customer_members[0]!,
+                    status_key: "legacy_roster_only",
+                },
+            ],
+            persons: [
+                {
+                    ...chenFixtures.persons[0]!,
+                    status_key: "future_start",
+                },
+                chenFixtures.persons[1]!,
+            ],
+        };
+        const supabase = createMockSupabase(fixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Sophia",
+        });
+        const child = results.find((r) => r.group === "children" && r.entity_id === CHILD_MEMBER);
+        expect(child?.status_label).toBe("Future Start");
+    });
+});
+
+describe("runGlobalRecordSearch — site scope", () => {
+    it("restricted location user only receives records for allowed campuses", async () => {
+        const supabase = createMockSupabase(chenFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: northSiteDim,
+            rawQ: "Chen",
+        });
+
+        expect(results.length).toBeGreaterThan(0);
+        for (const hit of results) {
+            if (hit.group === "locations") {
+                expect(hit.entity_id).toBe(LOC_NORTH);
+            } else {
+                expect(hit.location_label).toBe("North Campus");
+            }
+        }
+        expect(results.some((r) => r.name === "Other Inquiry")).toBe(false);
+    });
+
+    it("globalSearchRecordAllowedBySiteScope rejects inaccessible locations", () => {
+        expect(globalSearchRecordAllowedBySiteScope(LOC_NORTH, northSiteDim)).toBe(true);
+        expect(globalSearchRecordAllowedBySiteScope(southLoc, northSiteDim)).toBe(false);
+        expect(globalSearchRecordAllowedBySiteScope(null, northSiteDim)).toBe(false);
+    });
+});
 
 describe("global search implementation guards", () => {
     it("service source does not expose standalone household search group", () => {
@@ -792,5 +953,164 @@ describe("presentation helpers", () => {
         expect(hits[0]?.anchors).toHaveLength(1);
         expect(hits[0]?.anchors[0]?.group).toBe("leads");
         expect(hits[0]?.household_name).toBe("Chen Household");
+    });
+});
+
+describe("runGlobalRecordSearch — Mitchell household completeness", () => {
+    it("returns all four Mitchell children when searching last name", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results, clusters } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "mitchell",
+        });
+
+        const childHits = results.filter((r) => r.group === "children");
+        expect(childHits).toHaveLength(4);
+        expect(childHits.map((h) => h.name).sort()).toEqual([
+            "Ava Mitchell",
+            "Ben Mitchell",
+            "Cara Mitchell",
+            "Drew Mitchell",
+        ]);
+
+        const ava = childHits.find((h) => h.name === "Ava Mitchell");
+        expect(ava?.age_label).toBeTruthy();
+
+        const lead = results.find((r) => r.group === "leads");
+        expect(lead?.name).toBe("Mitchell");
+        expect(lead?.name.toLowerCase()).not.toContain("family inquiry");
+
+        const mitchellCluster = clusters.find((c) => c.household_name === "Mitchell Household");
+        expect(mitchellCluster?.children).toHaveLength(4);
+        expect(mitchellCluster?.children_overflow ?? 0).toBe(0);
+    });
+
+    it("expands household siblings when only household name matches", async () => {
+        const fixtures = {
+            ...mitchellFixtures,
+            customer_members: mitchellFixtures.customer_members.map((m, i) => ({
+                ...m,
+                display_name: i === 0 ? "Ava Mitchell" : `Child ${i + 1}`,
+                first_name: i === 0 ? "Ava" : `Kid${i + 1}`,
+                last_name: i === 0 ? "Mitchell" : "Other",
+            })),
+        };
+        const supabase = createMockSupabase(fixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "mitchell",
+        });
+
+        expect(results.filter((r) => r.group === "children")).toHaveLength(4);
+    });
+
+    it("includes children without person_id", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "mitchell",
+        });
+
+        for (const child of results.filter((r) => r.group === "children")) {
+            expect(child.person_id).toBeNull();
+            expect(child.open_entity_type).toBe("opportunities");
+            expect(child.status_label).toBeNull();
+        }
+    });
+
+    it("site-restricted user keeps Mitchell records at allowed campus only", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: {
+                departmentScope: "all" as const,
+                allowedDepartmentIds: null,
+                siteScope: "restricted" as const,
+                allowedSiteLocationIds: [southLoc],
+            },
+            rawQ: "mitchell",
+        });
+
+        expect(results.filter((r) => r.group === "children")).toHaveLength(4);
+        for (const hit of results) {
+            if (hit.group !== "locations") {
+                expect(hit.location_label).toBe("South Campus");
+            }
+        }
+    });
+
+    it("site-restricted user excludes Mitchell when campus is not allowed", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: northSiteDim,
+            rawQ: "mitchell",
+        });
+
+        expect(results.filter((r) => r.group === "children")).toHaveLength(0);
+    });
+});
+
+describe("global search household expansion helpers", () => {
+    it("expandGlobalSearchChildMemberRows includes all siblings for matched household", async () => {
+        const supabase = createMockSupabase(mitchellFixtures);
+        const direct = mitchellFixtures.customer_members.slice(0, 1);
+        const expanded = await expandGlobalSearchChildMemberRows({
+            supabase,
+            orgId: ORG,
+            token: "mitchell",
+            directMatches: direct,
+        });
+        expect(expanded).toHaveLength(4);
+    });
+
+    it("clustering does not drop valid children from the same household", () => {
+        const hits = Array.from({ length: 4 }).map((_, i) => ({
+            entity_type: "customer_members" as const,
+            entity_id: MITCHELL_CHILDREN[i],
+            group: "children" as const,
+            name: `Child ${i + 1}`,
+            type_label: "Child",
+            household_name: "Mitchell Household",
+            opportunity_name: "Family Inquiry - Mitchell",
+            lead_short_label: "Mitchell",
+            status_label: "Active",
+            location_label: "South Campus",
+            customer_id: CUSTOMER_MITCHELL,
+            opportunity_id: MITCHELL_OPP,
+            cluster_key: `${CUSTOMER_MITCHELL}:${MITCHELL_OPP}`,
+        }));
+        const clusters = buildGlobalSearchFamilyClusters(hits);
+        expect(clusters).toHaveLength(1);
+        expect(clusters[0]?.children).toHaveLength(4);
+    });
+
+    it("applyGlobalSearchClusterDisplayLimits surfaces children_overflow", () => {
+        const hits = Array.from({ length: 14 }).map((_, i) => ({
+            entity_type: "customer_members" as const,
+            entity_id: `child-${i}`,
+            group: "children" as const,
+            name: `Child ${i}`,
+            type_label: "Child",
+            household_name: "Mitchell Household",
+            opportunity_name: null,
+            lead_short_label: null,
+            status_label: null,
+            location_label: "South Campus",
+            customer_id: CUSTOMER_MITCHELL,
+            opportunity_id: MITCHELL_OPP,
+            cluster_key: `${CUSTOMER_MITCHELL}:${MITCHELL_OPP}`,
+        }));
+        const [cluster] = applyGlobalSearchClusterDisplayLimits(buildGlobalSearchFamilyClusters(hits));
+        expect(cluster?.children.length).toBe(12);
+        expect(cluster?.children_overflow).toBe(2);
     });
 });
