@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 03 — Sequenced implementation & QA plan
 
 > **Delivery plan — Mission 2 revision.** The order in which Access & Identity V2 is built, and how each

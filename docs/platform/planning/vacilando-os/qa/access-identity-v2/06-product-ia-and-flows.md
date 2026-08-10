@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 06 — Product IA & principal flows
 
 > **Reopen, 2026-08-06 — read §13 first if you are here for the operator's guidance.** `02…§4.6` and

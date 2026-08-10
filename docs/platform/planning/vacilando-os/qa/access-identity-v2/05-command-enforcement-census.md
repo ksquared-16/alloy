@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 05 — Surface & capability access catalog
 
 > **Required output #2.** Catalogs the four things the brief's threat statement puts in tension:

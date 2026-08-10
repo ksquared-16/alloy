@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # V3-2 Evidence — Fast Resume + Context Compression
 
 **Sprint:** Vacilando V3-2  

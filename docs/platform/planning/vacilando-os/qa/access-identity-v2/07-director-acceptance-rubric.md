@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 07 — Director acceptance rubric
 
 > **Reopen, 2026-08-06 — read §15 first if you are here for the operator's guidance.** The reopen

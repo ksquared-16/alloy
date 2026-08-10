@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 02 — Canonical access & identity model (Person ↔ user ↔ role ↔ scope)
 
 > **This file carries three Mission 2 phases.**

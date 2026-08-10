@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # V3-4 Evidence — Conversational Director + Shell Simplification
 
 **Sprint:** Vacilando V3-4  

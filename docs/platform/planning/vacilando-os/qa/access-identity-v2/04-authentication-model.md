@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 04 — Authentication model
 
 > **Mission 2 refresh.** The accepted corpus is reused as input, not re-derived. The accepted artifact

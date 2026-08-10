@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 01 — Existing-state inventory
 
 > **This file has four parts.** **Part I (§§0–9)** is the existing-state inventory. **Part II (§§10–23)** is

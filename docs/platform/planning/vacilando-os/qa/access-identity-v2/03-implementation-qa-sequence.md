@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-10
+supersedes: []
+---
+
 # 03 — Sequenced implementation & QA plan
 
 > **Delivery plan.** The order in which Access & Identity V2 is built, and how each step is proven.
@@ -1209,8 +1216,8 @@ workstream's value is that the number stops growing silently.
 
 | Field | Value |
 |---|---|
-| Check | [`web/scripts/checkServiceClientPrincipal.mjs`](../../../../../web/scripts/checkServiceClientPrincipal.mjs) — AST walk over TypeScript's own parser |
-| Register | [`web/scripts/serviceClientPrincipal.allowlist.json`](../../../../../web/scripts/serviceClientPrincipal.allowlist.json) — three lists, each entry reasoned |
+| Check | [`web/scripts/checkServiceClientPrincipal.mjs`](../../../../../../web/scripts/checkServiceClientPrincipal.mjs) — AST walk over TypeScript's own parser |
+| Register | [`web/scripts/serviceClientPrincipal.allowlist.json`](../../../../../../web/scripts/serviceClientPrincipal.allowlist.json) — three lists, each entry reasoned |
 | Lock | `web/tests/access/serviceClientPrincipalCheck.test.ts` — **15 tests, all green** (RL-15, §13) |
 | CI | `web/package.json` → `prebuild` runs `check:service-client-principal`; the check exits 1 on any violation or stale entry, so `next build` cannot proceed past it |
 | Evidence | [`w4-service-client-principal-baseline.json`](./w4-service-client-principal-baseline.json) — full counts, per-route rows omitted; regenerate with `npm run check:service-client-principal:evidence` |
