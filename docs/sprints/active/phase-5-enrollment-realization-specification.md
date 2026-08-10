@@ -11,8 +11,9 @@ supersedes: []
 > (`new_lead`, `contacting`, `tour_scheduled`, `offered_spot`, `future_start`) and **invented terms** ("Enrollment
 > Offer", "Extend Offer", "Assign Room", "Assign Schedule", "Enroll Child", a Documents/Medical/Placement/Funding
 > checklist) that are **not** the current configured operator-facing labels. The authoritative configured vocabulary,
-> the canonical 8-stage set (New Lead · Tour · Placement / Decision · Closed · Waitlist · Enrolling · Enrolled · Closed /
-> Withdrawn), and every gap are derived in
+> the stage set Firefly had configured AT THE TIME (New Lead · Tour · Placement / Decision · Closed ·
+> Waitlist · Enrolling · Enrolled · Closed / Withdrawn — an example, never canonical: stages are configured per process
+> and per tenant, and the two Closed stages have since been removed), and every gap are derived in
 > [phase-5-enrollment-vocabulary-derivation.md](phase-5-enrollment-vocabulary-derivation.md). The corrected mockups are
 > [phase-5-enrollment-realization-mockups.html](phase-5-enrollment-realization-mockups.html). **The composition
 > conclusions below stand; the stage words and colors were wrong — use the derivation for language.**

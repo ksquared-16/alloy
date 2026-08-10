@@ -240,29 +240,17 @@ describe("the provisioned command is wired to the canonical runtime", () => {
         expect(client).toContain('actionKey === "send_tour_invitation"');
     });
 
-    it("executes through the canonical Actions Runtime, not a bespoke endpoint", () => {
+    it("opens canonical QuickMessage compose instead of confirm/execute/alert", () => {
         const branch = branchSource();
-        expect(branch).toContain("/api/admin/actions/execute");
-        expect(branch).toContain('action_key: "send_tour_invitation"');
-        expect(branch).toContain('entity_type: "opportunity"');
+        expect(branch).toContain("launchContextualQuickMessage");
+        expect(branch).toContain('defaultChannel: "email"');
+        expect(branch).not.toContain("window.confirm");
+        expect(branch).not.toContain("window.alert");
+        expect(branch).not.toContain("/api/admin/actions/execute");
     });
 
-    it("confirms explicitly before sending", () => {
+    it("does not claim a generic Invitation sent success", () => {
         const branch = branchSource();
-        expect(branch).toMatch(/Send this tour invitation to \$\{parentName\} by \$\{channelPhrase\}\?/);
-    });
-
-    it("reports per-channel truth, never a generic success", () => {
-        const branch = branchSource();
-        expect(branch).toContain("sent_channels");
-        expect(branch).toContain("skipped");
-        expect(branch).toContain("no eligible delivery channel");
-        // The exact phrasing the success contract forbids.
         expect(branch).not.toContain("Invitation sent");
-    });
-
-    it("surfaces a server refusal instead of claiming success", () => {
-        const branch = branchSource();
-        expect(branch).toContain("Send tour invitation failed");
     });
 });

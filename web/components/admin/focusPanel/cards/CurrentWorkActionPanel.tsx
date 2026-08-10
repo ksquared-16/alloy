@@ -26,6 +26,10 @@ const OpportunityTourScheduleActionModal = dynamic(
         ),
     { ssr: false },
 );
+const CurrentWorkSubjectSelectorPanel = dynamic(
+    () => import("@/components/admin/focusPanel/cards/CurrentWorkSubjectSelectorPanel"),
+    { ssr: false },
+);
 import { resolveOpportunityTourScheduleFromTruth } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveOpportunityTourScheduleFromTruth";
 import {
     resolveCurrentWorkActionSurface,
@@ -85,6 +89,43 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
         );
     }
 
+    if (surface === "subject_selector") {
+        return (
+            <aside
+                className="alloy-os-currentwork__action-panel"
+                data-work-action-panel="true"
+                data-work-action-panel-key={action.key}
+                data-work-action-surface="subject_selector"
+                aria-label={`${action.label} — choose child`}
+            >
+                <div className="alloy-os-currentwork__action-panel-header">
+                    <div>
+                        <p className="alloy-os-currentwork__action-panel-eyebrow">Helpful action</p>
+                        <h3 className="alloy-os-currentwork__action-panel-title">{action.label}</h3>
+                        {action.description ?
+                            <p className="alloy-os-currentwork__action-panel-desc">{action.description}</p>
+                        :   null}
+                    </div>
+                    <button
+                        type="button"
+                        className="alloy-os-currentwork__action-panel-close"
+                        onClick={onClose}
+                        aria-label="Close action panel"
+                        data-work-action-panel-close="true"
+                    >
+                        Close
+                    </button>
+                </div>
+                <CurrentWorkSubjectSelectorPanel
+                    action={action}
+                    opportunityId={opportunityId}
+                    onClose={onClose}
+                    onComplete={onComplete}
+                />
+            </aside>
+        );
+    }
+
     if (surface === "form_delivery") {
         return (
             <FormDeliverySurface
@@ -100,7 +141,7 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
         // surface — reusing the SAME embedded section + fill/scroll/pinned-footer layout contract the
         // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-
         // workspace__embed` → activity_embed variant). The composer fills the host height with an
-        // internal-scroll thread and its Send / Send later / BOS Assist footer stays visible.
+        // internal-scroll thread and its Send / Send later / BOS footer stays visible.
         // Close lives on the What's Next card header (capability-active) so the compose body
         // gets full vertical room — no Communication chip / Message sub-header here.
         return (
@@ -119,6 +160,7 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
                             embedded
                             embeddedHeaderMode="description_only"
                             surfaceVariant="activity_embed"
+                            entryContext="current_work"
                         />
                     </div>
                 </div>

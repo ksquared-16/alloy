@@ -11,6 +11,7 @@
  */
 
 import type { ReasoningContextV1 } from "@/lib/trust/privacy/privacyEngine";
+import type { ProviderIdentityV1, ProviderUsageFactsV1 } from "@/lib/trust/provider/governedProviderExecution";
 
 /**
  * Strategy kinds, cheapest first. V1 implements `deterministic` only; the rest
@@ -76,6 +77,23 @@ export type ReasoningProposalV1 = {
 export type ReasoningCostReport = {
     /** Finite, non-negative units. Validated by `parseProviderCostUnits`. */
     readonly cost_units?: number;
+    /**
+     * Provider execution facts, when a provider participated (Phase 2.5).
+     *
+     * Carried here rather than on the proposal because a FAILED provider call
+     * still has identity and still spent something — the same reason
+     * `cost_units` sits on both branches of {@link ReasoningOutcome}. A
+     * deterministic strategy omits it entirely, and that omission is what tells
+     * telemetry no provider ran.
+     *
+     * The strategy does not assemble these facts; it forwards what
+     * `executeGovernedProviderReasoning` normalized. Trust persists them. The
+     * adapter never writes telemetry itself.
+     */
+    readonly provider_execution?: {
+        readonly identity: ProviderIdentityV1;
+        readonly usage?: ProviderUsageFactsV1;
+    };
 };
 
 export type ReasoningOutcome =

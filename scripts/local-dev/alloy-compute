@@ -16,6 +16,7 @@
 #   alloy-compute status [resource]
 #   alloy-compute doctor
 #   alloy-compute reap [--confirm]
+#   alloy-compute recover <resource> [--holder X]
 #
 # Resources and why each is capped:
 #
@@ -99,6 +100,23 @@ resolve_anchor_pid() {
 proc_start_of() { ps -o lstart= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//'; }
 proc_cmd_of()   { ps -o command= -p "$1" 2>/dev/null | tr -s ' ' | sed 's/^ *//;s/ *$//' | cut -c1-120; }
 field()         { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1; }
+
+# Mutex for the acquire critical section. Short-lived by construction: it is held
+# only across a count + write, never across a wait.
+mutex_path() { printf '%s/%s/.acquire.lock\n' "$STATE_DIR" "$1"; }
+
+# A mutex older than this cannot be a live critical section (which takes
+# milliseconds); it is debris from an interrupted acquire.
+MUTEX_STALE_SECS="${ALLOY_COMPUTE_MUTEX_STALE_SECS:-30}"
+
+clear_stale_mutex() {
+  local m; m="$(mutex_path "$1")"
+  [[ -d "$m" ]] || return 0
+  local mt now
+  mt="$(stat -f %m "$m" 2>/dev/null || stat -c %Y "$m" 2>/dev/null || echo 0)"
+  now="$(date -u +%s)"
+  if (( now - mt > MUTEX_STALE_SECS )); then rmdir "$m" 2>/dev/null || true; fi
+}
 
 permit_age_seconds() {
   local created; created="$(field "$1" CREATED)"
@@ -246,12 +264,30 @@ cmd_acquire() {
     return 0
   fi
 
+  mkdir -p "${STATE_DIR}/${res}" 2>/dev/null || true
+  clear_stale_mutex "$res"
+
   local deadline=$(( $(date -u +%s) + wait_secs ))
   queue_join "$res" "$holder"
   while :; do
-    local n head; n="$(held_count "$res")"; head="$(queue_head "$res")"
-    if [[ "$n" -lt "$cap" && ( -z "$head" || "$head" == "$holder" ) ]]; then
-      write_permit "$res" "$holder" "$reason"
+    # ATOMIC compare-and-set. `held_count` followed by `write_permit` is a
+    # check-then-act race: two workers could both observe n < cap and both write a
+    # permit, which is how a "capacity 1" resource ended up with two owners.
+    #
+    # `mkdir` is the atomic primitive available on macOS (no flock) and is the same
+    # mechanism the validate lock already uses — not a second locking system.
+    local n head granted=0
+    if mkdir "$(mutex_path "$res")" 2>/dev/null; then
+      n="$(held_count "$res")"; head="$(queue_head "$res")"
+      if [[ "$n" -lt "$cap" && ( -z "$head" || "$head" == "$holder" ) ]]; then
+        write_permit "$res" "$holder" "$reason"
+        granted=1
+      fi
+      rmdir "$(mutex_path "$res")" 2>/dev/null || true
+    else
+      n="$(held_count "$res")"; head="$(queue_head "$res")"
+    fi
+    if [[ "$granted" -eq 1 ]]; then
       queue_leave "$res" "$holder"
       ok "permit granted: ${res} → '${holder}' ($(held_count "$res")/${cap})"
       [[ -n "$reason" ]] && dim "reason: ${reason}"
@@ -311,12 +347,79 @@ cmd_status() {
     local h
     for h in $(holders_of "$res"); do
       local f; f="$(permit_path "$res" "$h")"
+      local pid alive wt
+      pid="$(field "$f" PID)"; wt="$(field "$f" WORKTREE)"
+      if [[ -z "$pid" ]] || kill -0 "$pid" 2>/dev/null; then alive="live"; else alive="NOT RUNNING"; fi
       printf '      owner   %-24s age=%ss  %s\n' "$h" "$(permit_age_seconds "$f")" "$(field "$f" REASON)"
+      printf '              worktree=%s  pid=%s (%s)\n' "${wt:-?}" "${pid:-none}" "$alive"
+      [[ "$alive" == "NOT RUNNING" ]] && printf '              recover with: alloy-compute recover %s\n' "$res"
     done
     local w; w="$(queue_list "$res" | tr '\n' ' ')"
     [[ -n "$w" ]] && printf '      waiters %s\n' "$w"
   done
   printf '\n'
+}
+
+# Evidence-based ownership recovery. NEVER time-based alone: an owner mid browser
+# certification can be quiet for a long time and must not be reaped for it.
+cmd_recover() {
+  local res="${1:-}"
+  [[ -n "$res" ]] || die "usage: alloy-compute recover <resource> [--holder X]"
+  require_resource "$res"
+  shift || true
+  local only_holder=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --holder) only_holder="${2:-}"; shift 2 ;;
+      --holder=*) only_holder="${1#*=}"; shift ;;
+      *) shift ;;
+    esac
+  done
+
+  local found=0 recovered=0 h f
+  shopt -s nullglob
+  local files=( "${STATE_DIR}/${res}"/*.permit )
+  shopt -u nullglob
+  for f in "${files[@]}"; do
+    h="$(field "$f" HOLDER)"; [[ -n "$h" ]] || h="$(basename "$f" .permit)"
+    [[ -n "$only_holder" && "$h" != "$only_holder" ]] && continue
+    found=1
+    local pid age; pid="$(field "$f" PID)"; age="$(permit_age_seconds "$f")"
+
+    # Evidence 1: the anchor process. A live process is decisive — refuse.
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      warn "refusing to recover '${h}': its process (pid ${pid}) is still running"
+      info "if it is genuinely wedged, stop that process first, then re-run recover"
+      continue
+    fi
+
+    # Evidence 2: age. Even with no process, a very fresh permit is more likely a
+    # just-launched holder than an abandoned one.
+    if [[ "$age" -ge 0 && "$age" -lt "$MIN_RECLAIM_AGE" ]]; then
+      warn "refusing to recover '${h}': permit is only ${age}s old (< ${MIN_RECLAIM_AGE}s)"
+      continue
+    fi
+
+    printf '\n  recovering %s from %s\n' "$res" "$h"
+    printf '    reason:   anchor process %s is gone and permit age %ss exceeds %ss\n' "${pid:-none}" "$age" "$MIN_RECLAIM_AGE"
+    printf '    worktree: %s\n' "$(field "$f" WORKTREE)"
+    printf '    acquired: %s\n' "$(field "$f" CREATED)"
+
+    mkdir -p "$STATE_DIR" 2>/dev/null || true
+    printf '%s permit-recover resource=%s holder=%s pid=%s created=%s by=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$res" "$h" "${pid:-none}" "$(field "$f" CREATED)" "$(default_holder)" \
+      >> "${STATE_DIR}/recovery.log"
+
+    rm -f "$f"
+    recovered=$((recovered + 1))
+    ok "ownership released — the stack and database were NOT touched"
+  done
+
+  [[ "$found" -eq 0 ]] && { info "no permit holders for ${res}"; return 0; }
+  if [[ "$recovered" -eq 0 ]]; then
+    die "nothing recovered — every holder still shows evidence of life"
+  fi
+  info "next: alloy-compute acquire ${res} --reason \"...\""
 }
 
 cmd_doctor() {
@@ -376,6 +479,7 @@ Usage:
   alloy-compute status [resource]
   alloy-compute doctor
   alloy-compute reap [--confirm]
+  alloy-compute recover <resource> [--holder X]   evidence-based ownership recovery
 
 Resources (capacity):
 $(for r in $(known_resources); do printf '  %-28s %s\n' "$r" "$(resource_capacity "$r")"; done)
@@ -394,6 +498,7 @@ main() {
     status)  cmd_status "$@" ;;
     doctor)  cmd_doctor "$@" ;;
     reap)    cmd_reap "$@" ;;
+    recover) cmd_recover "$@" ;;
     -h|--help|help) usage ;;
     --version) printf '%s\n' "$VERSION" ;;
     *) usage >&2; exit 2 ;;

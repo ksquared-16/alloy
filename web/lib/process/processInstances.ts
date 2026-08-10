@@ -275,6 +275,47 @@ export async function listEnrollmentInstancesForLead(
     return (data ?? []) as ProcessInstanceRow[];
 }
 
+export type EnrollmentInstanceReadResult =
+    | { ok: true; rows: ProcessInstanceRow[] }
+    | { ok: false; error: string };
+
+/**
+ * Read outcome for callers that must tell "no children" apart from "could not read".
+ *
+ * `listEnrollmentInstancesForLead` answers a failed query with `[]`. That is fine for a display
+ * surface — an empty list renders as nothing. It is NOT fine for a decision: a guard that blocks
+ * closing a family while children are active would read a database failure as "this family has no
+ * children" and permit the very close it exists to prevent. Failing open is the one thing such a
+ * guard must never do.
+ *
+ * Display callers keep the lenient function. Anything that DECIDES uses this one.
+ */
+export async function readEnrollmentInstancesForLead(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityId: string },
+): Promise<EnrollmentInstanceReadResult> {
+    const opportunityId = args.opportunityId?.trim();
+    if (!opportunityId) return { ok: false, error: "opportunity id required" };
+
+    try {
+        const { data, error } = await supabase
+            .from(PROCESS_INSTANCES_TABLE)
+            .select("*")
+            .eq("org_id", args.orgId)
+            .eq("process_key", ENROLLMENT_PROCESS_KEY)
+            .eq("context_id", opportunityId);
+        if (error) return { ok: false, error: error.message };
+        // `null` data with no error is not "zero rows" — it is a response this code cannot vouch
+        // for, and the caller is about to make an irreversible decision with it.
+        if (!Array.isArray(data)) {
+            return { ok: false, error: "enrollment process instances unreadable" };
+        }
+        return { ok: true, rows: data as ProcessInstanceRow[] };
+    } catch (cause) {
+        return { ok: false, error: cause instanceof Error ? cause.message : "enrollment read failed" };
+    }
+}
+
 /** Read enrollment process instances in a stage (child-grain Work View membership). */
 export async function listEnrollmentInstancesForStage(
     supabase: SupabaseClient,

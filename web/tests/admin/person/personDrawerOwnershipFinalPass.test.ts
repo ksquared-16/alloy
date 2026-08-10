@@ -168,7 +168,7 @@ describe("person drawer ownership final pass", () => {
                 {
                     customer_id: "cust-1",
                     person_id: "kevin-1",
-                    role_type: "parent",
+                    role_type: "guardian",
                     is_primary: false,
                     name: "Kevin Mitchell",
                 },

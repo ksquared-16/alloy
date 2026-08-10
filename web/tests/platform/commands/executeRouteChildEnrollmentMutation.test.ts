@@ -40,7 +40,23 @@ vi.mock("@/lib/admin/actions/executeAdminAction", () => ({
 vi.mock("@/lib/mutations/runtime", () => ({
     executeMutation: (...args: unknown[]) => executeMutation(...args),
 }));
+vi.mock("@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime", () => ({
+    applyChildWaitlistViaOutcomeRuntime: vi.fn(async () => ({
+        ok: true as const,
+        opportunity_id: "opp-1",
+        customer_member_id: "child-1",
+    })),
+    resolveChildWaitlistSubjectFromOcm: vi.fn(async () => ({
+        opportunity_id: "opp-1",
+        customer_member_id: "child-1",
+        opportunity_customer_member_id: "ocm-1",
+    })),
+}));
+vi.mock("@/lib/lifecycle/resolveStageWorkOutcomeContext", () => ({
+    resolveEnrollmentDepartmentForOpportunity: vi.fn(async () => "dept-1"),
+}));
 
+import { applyChildWaitlistViaOutcomeRuntime } from "@/lib/lifecycle/applyChildWaitlistViaOutcomeRuntime";
 import { POST } from "@/app/api/admin/actions/execute/route";
 
 function jsonReq(body: unknown): Parameters<typeof POST>[0] {
@@ -83,11 +99,15 @@ describe("POST /api/admin/actions/execute Child Enrollment cutover (P2.S2)", () 
                 detail: { created: true },
             },
         });
+        vi.mocked(applyChildWaitlistViaOutcomeRuntime).mockResolvedValue({
+            ok: true,
+            opportunity_id: "opp-1",
+            customer_member_id: "child-1",
+        });
     });
 
     it.each([
         ["update_child_enrollment_status", { target_state: "waitlisted" }, "waitlisted"],
-        ["waitlist_child", { target_state: "enrolled" }, "waitlisted"],
         ["enroll_child", { status_key: "waitlisted" }, "enrolled"],
     ] as const)("routes %s through facade → executeMutation once", async (key, payload, expected) => {
         const res = await POST(
@@ -123,6 +143,49 @@ describe("POST /api/admin/actions/execute Child Enrollment cutover (P2.S2)", () 
                 operatorId: "user-1",
             })
         );
+    });
+
+    it("routes waitlist_child through child Enrollment facade → outcome progression (not Mutation Runtime)", async () => {
+        const res = await POST(
+            jsonReq({
+                action_key: "waitlist_child",
+                entity_type: "opportunity_customer_member",
+                entity_id: "ocm-1",
+                payload: { target_state: "enrolled" },
+                context: {
+                    actor: { orgId: "spoof" },
+                    org_id: "spoof",
+                    department_id: "dept-1",
+                },
+            })
+        );
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect(body.data.execution_result.kind).toBe("mutation");
+        expect(body.data.execution_result.mutation_result.newState).toBe("waitlisted");
+        expect(applyChildWaitlistViaOutcomeRuntime).toHaveBeenCalledTimes(1);
+        expect(executeMutation).not.toHaveBeenCalled();
+        expect(executeAdminAction).not.toHaveBeenCalled();
+        expect(runRegisteredAction).not.toHaveBeenCalled();
+    });
+
+    it("routes move_to_waitlist alias through waitlist_child outcome progression", async () => {
+        const res = await POST(
+            jsonReq({
+                action_key: "move_to_waitlist",
+                entity_type: "opportunity_customer_member",
+                entity_id: "ocm-1",
+                payload: {},
+                context: { department_id: "dept-1" },
+            })
+        );
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.ok).toBe(true);
+        expect(body.data.execution_result.mutation_result.newState).toBe("waitlisted");
+        expect(applyChildWaitlistViaOutcomeRuntime).toHaveBeenCalledTimes(1);
+        expect(executeMutation).not.toHaveBeenCalled();
     });
 
     it("keeps Lead Status close_lead on P2.S1 path", async () => {

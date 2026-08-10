@@ -28,6 +28,17 @@ function resolveContactPersonFields(
         }
     }
 
+    // Secondaries often live only on household adult links — include them so flip-back
+    // does not leave stale person.primary_contact_name from the prior primary.
+    for (const link of (record._household_adult_links as Record<string, unknown>[] | undefined) ?? []) {
+        if (trimOrNull(link.person_id) !== personId) continue;
+        return {
+            name: trimOrNull(link.display_name) ?? trimOrNull(link.name),
+            phone: trimOrNull(link.phone),
+            email: trimOrNull(link.email),
+        };
+    }
+
     return { name: null, phone: null, email: null };
 }
 

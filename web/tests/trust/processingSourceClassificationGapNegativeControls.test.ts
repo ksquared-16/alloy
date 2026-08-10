@@ -425,8 +425,10 @@ describe("GNC-7 — a governance gap leaking into identity review would be caugh
         );
         // The count that feeds `hasOpenException` must filter this type out, or a
         // Trust outage would flip the identity review lane to `exception`.
-        expect(src).toContain("TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE");
-        expect(src).toMatch(/\.neq\(\s*"exception_type"\s*,\s*TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE\s*\)/);
+        // Phase 1.5 generalized this to a SHARED list, so a new capability's
+        // gap type is isolated the moment it is registered.
+        expect(src).toContain("TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES");
+        expect(src).toMatch(/\.neq\(\s*"exception_type"\s*,\s*gapType\s*\)/);
     });
 });
 

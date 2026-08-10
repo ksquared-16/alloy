@@ -45,6 +45,7 @@ function personFromNameFact(
         dob: null,
         age_years: null,
         calculated_age: null,
+        gender: null,
         program_interest: null,
         source_fact_ids: [fact.fact_id],
         confidence: hasStructuredName ? (fact.confidence === "low" ? "medium" : fact.confidence) : "medium",
@@ -60,14 +61,17 @@ function attachChildContext(
         allowCrossLine?: boolean;
         matchChildFirstName?: boolean;
         consumedDobFactIds?: Set<string>;
+        consumedGenderFactIds?: Set<string>;
     },
 ): IntakePersonCandidate {
     const line = child.source_line;
     const firstName = child.first_name?.trim().toLowerCase() ?? "";
     let dob: string | null = child.dob;
     let age: number | null = child.age_years;
+    let gender: IntakePersonCandidate["gender"] = child.gender ?? null;
     const factIds = [...child.source_fact_ids];
     const consumed = options?.consumedDobFactIds ?? new Set<string>();
+    const consumedGender = options?.consumedGenderFactIds ?? new Set<string>();
 
     for (const fact of facts) {
         if (
@@ -78,9 +82,13 @@ function attachChildContext(
         ) {
             continue;
         }
-        if (fact.fact_type !== "dob" && fact.fact_type !== "age_years") continue;
+        if (fact.fact_type !== "dob" && fact.fact_type !== "age_years" && fact.fact_type !== "gender") continue;
         if (fact.role_hint === "parent") continue;
-        if (consumed.has(fact.fact_id)) continue;
+        if (fact.fact_type === "gender") {
+            if (consumedGender.has(fact.fact_id) || gender) continue;
+        } else if (consumed.has(fact.fact_id)) {
+            continue;
+        }
 
         if (options?.matchChildFirstName && firstName) {
             const evidence = String(fact.evidence ?? "").toLowerCase();
@@ -96,6 +104,14 @@ function attachChildContext(
             age = Number(fact.normalized_value ?? fact.raw_value);
             factIds.push(fact.fact_id);
         }
+        if (fact.fact_type === "gender" && !gender) {
+            const raw = String(fact.normalized_value ?? fact.raw_value).trim().toLowerCase();
+            if (raw === "female" || raw === "male") {
+                gender = raw;
+                factIds.push(fact.fact_id);
+                consumedGender.add(fact.fact_id);
+            }
+        }
     }
 
     const derived = dob ? deriveAgeFromDateOfBirth(dob) : null;
@@ -106,6 +122,7 @@ function attachChildContext(
         ...child,
         dob,
         age_years: age,
+        gender: gender ?? null,
         calculated_age,
         source_fact_ids: [...new Set(factIds)],
         confidence: corroborated || child.confidence === "high" ? "high" : child.confidence,
@@ -117,27 +134,22 @@ function inferChildLastNames(
     parents: IntakePersonCandidate[],
     children: IntakePersonCandidate[],
 ): IntakePersonCandidate[] {
-    const parentLastNames = parents
-        .map((p) => p.last_name?.trim())
-        .filter((name): name is string => Boolean(name));
-    const uniqueParentLastNames = [...new Set(parentLastNames)];
+    // Explicit child surname wins. Otherwise inherit the primary contact's surname (parents[0]).
+    // Never fabricate a surname when the primary has none.
+    const primaryLast = parents[0]?.last_name?.trim() || null;
+    if (!primaryLast) return children;
 
-    if (uniqueParentLastNames.length === 1) {
-        const sharedLast = uniqueParentLastNames[0]!;
-        return children.map((child) => {
-            if (child.last_name?.trim()) return child;
-            if (!child.first_name?.trim()) return child;
-            return {
-                ...child,
-                last_name: sharedLast,
-                last_name_inferred: true,
-                validation_state: child.validation_state === "ambiguous" ? "valid" : child.validation_state,
-                confidence: child.confidence === "medium" ? "high" : child.confidence,
-            };
-        });
-    }
-
-    return children;
+    return children.map((child) => {
+        if (child.last_name?.trim()) return child;
+        if (!child.first_name?.trim()) return child;
+        return {
+            ...child,
+            last_name: primaryLast,
+            last_name_inferred: true,
+            validation_state: child.validation_state === "ambiguous" ? "valid" : child.validation_state,
+            confidence: child.confidence === "medium" ? "high" : child.confidence,
+        };
+    });
 }
 
 function inferParentSharedSurnames(parents: IntakePersonCandidate[]): IntakePersonCandidate[] {
@@ -273,16 +285,19 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
     }
 
     const consumedDobFactIds = new Set<string>();
+    const consumedGenderFactIds = new Set<string>();
     if (children.length === 1) {
         children[0] = attachChildContext(children[0]!, facts, {
             allowCrossLine: true,
             consumedDobFactIds,
+            consumedGenderFactIds,
         });
     } else {
         for (let i = 0; i < children.length; i++) {
             children[i] = attachChildContext(children[i]!, facts, {
                 matchChildFirstName: true,
                 consumedDobFactIds,
+                consumedGenderFactIds,
             });
         }
     }

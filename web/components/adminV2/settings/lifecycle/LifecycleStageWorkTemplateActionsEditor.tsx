@@ -8,6 +8,7 @@ import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes
 import type { StageCompletionOutcomeV1, StageOperatingPlanV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOperatingPlanEditorDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import {
     addWorkTemplateHelpfulAction,
     markWorkTemplateHelpfulActionsEmpty,
@@ -24,6 +25,7 @@ import {
     resolveWorkTemplateActionOptions,
     type WorkTemplateActionOption,
 } from "@/lib/lifecycle/resolveWorkTemplateActionOptions";
+import { workTemplateActionAppliesToLabel } from "@/lib/lifecycle/workTemplateActionAppliesToLabel";
 import {
     helpfulActionsConfigSource,
     primaryActionConfigSource,
@@ -41,7 +43,7 @@ type Props = {
     stageOutcomes: StageCompletionOutcomeV1[];
     actionCatalog: StageActionCatalogV1 | null;
     configuredActions: LifecycleConfiguredActionRow[];
-    processStages: Array<{ key: string; label: string }>;
+    processStages: Array<{ key: string; label: string; grain?: string }>;
     stageOperatingPlan?: StageOperatingPlanV1 | null;
     processTracks?: ProcessTracksV1 | null;
     stageDefinition?: { journey_segment?: string } | null;
@@ -52,6 +54,9 @@ type Props = {
     /** Stage draft + transitions enable Outcome Definitions in this Work Template surface. */
     stageDraft?: StageOperatingPlanEditorDraft;
     transitionOptions?: StageOutcomeTransitionOption[];
+    /** Case-status catalog + grain, so a terminal outcome can resolve its closed status. */
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+    entityType?: string;
     onStageDraftChange?: (draft: StageOperatingPlanEditorDraft) => void;
 };
 
@@ -60,21 +65,26 @@ function optionByRef(options: WorkTemplateActionOption[], ref: string): WorkTemp
 }
 
 function toPickerOptions(options: WorkTemplateActionOption[]): AlloyConfigPickerOption[] {
-    return options.map((row) => ({
-        value: row.ref,
-        label: row.label,
-        description: row.description,
-        group:
-            row.category === "transition" ? "Recommended"
-            : row.category === "communication" ? "Communications"
-            : row.category === "workflow" ? "Workflow"
-            : row.category === "relationship" ? "Relationships"
-            : row.category === "lifecycle" || row.category === "status_lifecycle" ? "Lifecycle"
-            : row.category === "bos" || row.category === "bos_native" ? "BOS"
-            : "Record actions",
-        disabled: !row.supported,
-        disabledReason: row.disabledReason,
-    }));
+    return options.map((row) => {
+        const appliesTo = workTemplateActionAppliesToLabel(row.ref);
+        return {
+            value: row.ref,
+            label: row.label,
+            description: appliesTo
+                ? [appliesTo, row.description].filter(Boolean).join(" · ")
+                : row.description,
+            group:
+                row.category === "transition" ? "Recommended"
+                : row.category === "communication" ? "Communications"
+                : row.category === "workflow" ? "Workflow"
+                : row.category === "relationship" ? "Relationships"
+                : row.category === "lifecycle" || row.category === "status_lifecycle" ? "Lifecycle"
+                : row.category === "bos" || row.category === "bos_native" ? "BOS"
+                : "Record actions",
+            disabled: !row.supported,
+            disabledReason: row.disabledReason,
+        };
+    });
 }
 
 function ConfigSourceBadge({ source, fallbackHint }: { source: ReturnType<typeof helpfulActionsConfigSource>; fallbackHint?: string }) {
@@ -191,6 +201,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     stageDraft,
     transitionOptions = [],
     onStageDraftChange,
+    configuredStatuses,
+    entityType,
 }: Props) {
     const options = resolveWorkTemplateActionOptions({
         actionRegistry: configuredActions,
@@ -220,7 +232,17 @@ export default function LifecycleStageWorkTemplateActionsEditor({
     );
 
     return (
-        <div className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3" data-testid={`work-template-actions-${work.template_key}`}>
+        <div
+            className="mt-3 space-y-4 border-t border-alloy-forge/10 pt-3"
+            data-testid={`work-template-actions-${work.template_key}`}
+            data-stage-actions-results="true"
+        >
+            <div className="mb-1">
+                <h3 className="stage-section-label">Actions &amp; Results</h3>
+                <p className="stage-field__hint mt-0.5">
+                    What can happen here, which action is emphasized, who it applies to, and what result it produces.
+                </p>
+            </div>
             <section data-testid={`work-template-primary-action-${work.template_key}`}>
                 <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <h4 className="stage-section-label">How operators start this work</h4>
@@ -245,13 +267,13 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                             data-testid={`work-template-primary-select-${work.template_key}`}
                         />
                         <span className="min-w-0 flex-1">
-                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Direct Action</span>
+                            <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Direct Command</span>
                             <span className="stage-field__hint mb-1.5 block">
-                                Operators launch this action first, then may record an outcome.
+                                Operators launch this command first, then may record an outcome.
                             </span>
                             {executionMode === "direct_action" ?
                                 <AlloyConfigPicker
-                                    label="Primary Action"
+                                    label="Primary Command"
                                     value={primaryRef}
                                     options={primaryOptions}
                                     onChange={(value) => onChange(setWorkTemplatePrimaryActionRef(work, value || null))}
@@ -272,7 +294,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                         <span>
                             <span className="block text-[0.8125rem] font-medium text-alloy-midnight">Outcome Led</span>
                             <span className="stage-field__hint block">
-                                No Primary Action. Record Outcome is the main operator action.
+                                No Primary Command. Record Outcome is the main operator command.
                             </span>
                         </span>
                     </label>
@@ -280,10 +302,9 @@ export default function LifecycleStageWorkTemplateActionsEditor({
             </section>
 
             <section data-testid={`work-template-helpful-actions-${work.template_key}`}>
-                {/* "Helpful Actions support this work" restated the heading. The sentence about
-                    stage transitions now lives where they are configured — Ways out. */}
+                {/* Helpful Commands support this work. Stage transitions live under Ways out. */}
                 <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <h4 className="stage-section-label">Other actions available</h4>
+                    <h4 className="stage-section-label">Helpful Commands</h4>
                     <ConfigSourceBadge
                         source={helpfulActionsConfigSource(work)}
                         fallbackHint="Configure this section to take explicit control."
@@ -299,7 +320,7 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     </button>
                     <div className="w-44">
                         <AlloyConfigPicker
-                            label="Add helpful action"
+                            label="Add helpful command"
                             value=""
                             options={helpfulAddOptions}
                             onChange={(ref) => {
@@ -315,13 +336,21 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                     </div>
                 </div>
                 <OrderedActionRows
-                    title="Helpful Actions"
+                    title="Helpful Commands"
                     refs={helpfulRefs}
                     resolveLabel={(ref) => optionByRef(options.helpfulActionOptions, ref)?.label ?? ref.replace(/_/g, " ")}
-                    resolveDescription={(ref) => optionByRef(options.helpfulActionOptions, ref)?.description ?? null}
+                    resolveDescription={(ref) => {
+                        const appliesTo = workTemplateActionAppliesToLabel(ref);
+                        const description =
+                            optionByRef(options.helpfulActionOptions, ref)?.description ?? null;
+                        if (appliesTo && description && !description.includes(appliesTo)) {
+                            return `${appliesTo} · ${description}`;
+                        }
+                        return appliesTo ?? description;
+                    }}
                     resolveInvalid={(ref) => {
                         const row = optionByRef(options.helpfulActionOptions, ref);
-                        if (!row) return "Unknown action";
+                        if (!row) return "Unknown command";
                         if (!row.supported) return row.disabledReason ?? "Unsupported";
                         return null;
                     }}
@@ -370,6 +399,8 @@ export default function LifecycleStageWorkTemplateActionsEditor({
                         // operator to another section to satisfy its own dependency.
                         stageKey={stageKey}
                         processStages={processStages}
+                        configuredStatuses={configuredStatuses}
+                        entityType={entityType}
                         workTemplateKey={work.template_key}
                         onChange={onStageDraftChange}
                     />

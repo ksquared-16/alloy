@@ -370,6 +370,15 @@ function buildWorkPrimaryAction(args: {
             placement: "current_work_primary",
             handlerKey: resolved.handlerKey,
             actionRef: resolved.actionRef,
+            relatedSubjectResolution: resolved.relatedSubjectResolution,
+            requiresSubjectPicker: resolved.requiresSubjectPicker,
+            ...(resolved.blockedReason
+                ? {
+                      disabled: true,
+                      disabledReason: resolved.blockedReason,
+                      blockedReason: resolved.blockedReason,
+                  }
+                : { blockedReason: null }),
         };
     }
     // Outcome-led / no Primary Action: never fabricate a Primary Action from the work title.
@@ -446,7 +455,7 @@ export function alignTourScheduleActionForBookingState(
     };
 }
 
-/** Config-owned helpful actions: explicit template config first; legacy catalog/header fallback only when undefined. */
+/** Config-owned helpful actions only — never invent from record-header registry placement. */
 function resolveHelpfulActions(args: {
     explicitRefs: CurrentWorkTemplateConfigOverlay["helpful_actions"] | undefined;
     explicitConfigured: boolean;
@@ -458,7 +467,10 @@ function resolveHelpfulActions(args: {
     }
     const filteredConfig = args.fromConfig.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
     if (filteredConfig.length > 0) return filteredConfig;
-    return args.fromRegistry.filter((action) => !isGenericUmbrellaLifecycleAction(action.key));
+    // No Work Template helpful list and no config refs — stay empty rather than inventing
+    // Manage-menu / header placement actions into What's Next.
+    void args.fromRegistry;
+    return [];
 }
 
 /**
@@ -516,9 +528,10 @@ function contextAllowedActionKeys(args: {
     commandProjection?: import("@/lib/lifecycle/processRuntimeCommandProjection").ProcessRuntimeCommandProjection | null;
 }): { keys: ReadonlySet<string>; enforce: boolean } {
     const template = args.templateConfig;
+    const helpfulForAllowlist = resolvedHelpfulActionRefs(template) ?? [];
     const explicitTemplateRefs = [
         template?.primary_action?.action_ref,
-        ...(template?.helpful_actions ?? []).map((row) => row.action_ref),
+        ...helpfulForAllowlist.map((row) => row.action_ref),
         ...(template?.alternate_paths ?? []).flatMap((row) =>
             "action_ref" in row ? [row.action_ref] : [],
         ),
@@ -746,7 +759,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
                   "communications_inline",
                   intentCtx,
               )
-            : classified.communicationActions;
+            : [];
 
     const primaryProjection =
         runtime && actionableWorkItem

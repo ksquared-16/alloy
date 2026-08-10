@@ -24,6 +24,11 @@ import {
     resolveProcessingBuilderRegistryEntry,
     type ProcessingBuilderCanonicalField,
 } from "@/lib/forms/processingFormBuilderLibrary";
+import {
+    registryEntryForOffer,
+    type ProcessingLibraryFieldOffer,
+    type ProcessingLibraryGroupOffer,
+} from "@/lib/forms/processingFormFieldLibrary";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import ProcessingFormBuilderLibraryPanel from "./ProcessingFormBuilderLibraryPanel";
 import ProcessingFormBrandedHeader from "./ProcessingFormBrandedHeader";
@@ -118,6 +123,7 @@ export default function ProcessingFormBuilder({
     const [links, setLinks] = useState<ProcessingFormPublicLinkRow[]>([]);
     const [hasPublishedVersion, setHasPublishedVersion] = useState(Boolean(formMeta?.has_published_version));
     const [publishJustSucceeded, setPublishJustSucceeded] = useState(false);
+    const [fieldLibrary, setFieldLibrary] = useState<ProcessingLibraryGroupOffer[] | null>(null);
 
     const [inspectorSection, setInspectorSection] = useState<string>(hasPublishedVersion ? "distribution" : "form");
 
@@ -173,6 +179,31 @@ export default function ProcessingFormBuilder({
         void reloadLinks();
     }, [reloadLinks]);
 
+    // Stage-derived field library. Comes from the lifecycle-coverage payload so the picker offers
+    // the same vocabulary `/process → requirements` can require — including org custom fields.
+    // A failure leaves it null and the panel falls back to the curated list rather than emptying.
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/admin/forms/${encodeURIComponent(formId)}/lifecycle-coverage`,
+                    { credentials: "include" }
+                );
+                if (!res.ok || cancelled) return;
+                const json = (await res.json()) as {
+                    data?: { field_library?: ProcessingLibraryGroupOffer[] };
+                };
+                if (!cancelled) setFieldLibrary(json.data?.field_library ?? null);
+            } catch {
+                /* keep the curated fallback */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [formId, formMetaSnapshot]);
+
     const onFormMetadataUpdated = useCallback(
         (metadata: Record<string, unknown>) => setFormMetaSnapshot(metadata),
         []
@@ -182,9 +213,19 @@ export default function ProcessingFormBuilder({
             setLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, metadata } : l))),
         []
     );
-    const onCopy = useCallback((_key: string, text: string) => {
-        void navigator.clipboard?.writeText(text);
+    // The panel renders "Copied" from this key. It was never tracked, so every copy button looked
+    // inert even when the clipboard write succeeded.
+    const [copiedKey, setCopiedKey] = useState<string | null>(null);
+    const onCopy = useCallback((key: string, text: string) => {
+        void Promise.resolve(navigator.clipboard?.writeText(text))
+            .then(() => setCopiedKey(key))
+            .catch(() => setCopiedKey(null));
     }, []);
+    useEffect(() => {
+        if (!copiedKey) return;
+        const t = setTimeout(() => setCopiedKey(null), 1600);
+        return () => clearTimeout(t);
+    }, [copiedKey]);
     const onCreateLocationLink = useCallback(
         async ({ locationId, locationName }: { locationId: string; locationName: string }) => {
             const pv = await loadPublishedVersionId(formId);
@@ -271,6 +312,43 @@ export default function ProcessingFormBuilder({
         const { schema: next, fieldId } = addRegistryField(schema, entry, librarySectionId, {
             label: canonical.pickerLabel,
         });
+        setSchema(next);
+        setSelectedFieldId(fieldId);
+        setSelectedSectionId(null);
+        setDirty(true);
+        setLibraryOpen(false);
+    };
+
+    /** Add a stage-derived library field — registry-backed where one exists, bound otherwise. */
+    const addLibraryField = (offer: ProcessingLibraryFieldOffer) => {
+        if (!schema || !editable || !librarySectionId || offer.captureUnsupported) return;
+
+        const registry = registryEntryForOffer(offer);
+        if (registry) {
+            const { schema: next, fieldId } = addRegistryField(schema, registry, librarySectionId, {
+                label: offer.label,
+            });
+            setSchema(next);
+            setSelectedFieldId(fieldId);
+            setSelectedSectionId(null);
+            setDirty(true);
+            setLibraryOpen(false);
+            return;
+        }
+
+        if (offer.add.kind !== "bound") return;
+        const spec: BuilderFieldSpec = {
+            type: offer.add.builderType,
+            label: offer.label,
+            sectionId: librarySectionId,
+            // Bind to the canonical entity field so coverage matches it by entity_field_key —
+            // an unbound custom field would never satisfy the rule it was added for.
+            field_source: { entity_type: offer.add.entityType, field_key: offer.add.fieldKey },
+            ...(offer.add.builderType === "select"
+                ? { options: [{ value: "option_1", label: "Option 1" }] }
+                : {}),
+        };
+        const { schema: next, fieldId } = addField(schema, spec);
         setSchema(next);
         setSelectedFieldId(fieldId);
         setSelectedSectionId(null);
@@ -378,7 +456,7 @@ export default function ProcessingFormBuilder({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-alloy-stone" data-testid="processing-form-builder">
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-alloy-midnight/[0.06] bg-white px-4 py-2.5" data-testid="surface-publish-toolbar">
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-alloy-midnight/[0.06] bg-white py-2.5 pl-4 pr-14" data-testid="surface-publish-toolbar">
                 <button type="button" onClick={onBack} className="text-[12px] text-alloy-midnight/50 hover:text-alloy-midnight">
                     ← Forms
                 </button>
@@ -537,6 +615,7 @@ export default function ProcessingFormBuilder({
                                 schema={schema}
                                 editable={editable}
                                 mutate={mutate}
+                                fieldLibrary={fieldLibrary}
                                 onRemove={() => {
                                     mutate((s) => removeField(s, selectedField.id));
                                     setSelectedFieldId(null);
@@ -726,6 +805,7 @@ export default function ProcessingFormBuilder({
                                                 hasPublished={hasPublishedVersion}
                                                 canMutate={editable || hasPublishedVersion}
                                                 onCopy={onCopy}
+                                                copied={copiedKey}
                                                 onCreateLocationLink={onCreateLocationLink}
                                             />
                                         </div>
@@ -794,6 +874,8 @@ export default function ProcessingFormBuilder({
                     questionCategoryLabels={CATEGORY_LABELS}
                     onPickQuestionType={addQuestion}
                     onPickCanonicalField={addCanonicalField}
+                    onPickLibraryField={addLibraryField}
+                    fieldLibrary={fieldLibrary}
                     onClose={() => setLibraryOpen(false)}
                 />
             ) : null}

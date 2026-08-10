@@ -52,7 +52,10 @@ The frozen ontology has **two authored ledgers** — neither derivable from the 
 | Term | Meaning |
 |------|---------|
 | **Business Process** | Operator-facing configurable process (e.g. Enrollment Process). Settings UI label; internal tables may still say lifecycle. |
-| **Stage** | Step in a business process — queue membership + expected work. Operator primary lens on execution surface. |
+| **Stage** | Step in a business process — queue membership + expected work. Operator primary lens on execution surface. **Configured per process and per tenant.** Alloy doctrine defines stage semantics and invariants (what a stage is, its grain, transition integrity, family/child separation, terminal-state rules), *not* a mandatory list of stage keys. Template stage sets are optional examples. |
+| **Family case closure** | Durable case status — `opportunities.status_key = closed` plus a close reason. **Not inherently a terminal stage.** A tenant may configure a closed stage; the platform does not require one, and a valid family-close configuration may move no stage at all. |
+| **Child enrollment termination** | Durable child process state — `process_instances.state = not_enrolling \| withdrawn` plus a close reason. **Not inherently a terminal stage.** |
+| **Enrolled** | Completes the child's **Enrollment participation**. It is terminal for that process only — not the child's global state. Downstream Attendance, Billing, Scheduling, Communications and placement truths are owned by their respective platforms and are **not** subsequent Enrollment stages; they are established through domain records and signals after enrollment completes. |
 | **Record** | Authoritative entity detail in drawer (opportunity, person, child context). |
 | **Work Unit** | **Implementation construct** — hosts `queue_definition` and slug route. Not the operator's primary noun. |
 | **Queue** | Preview list for a stage lens — not authoritative record store. |
@@ -104,8 +107,33 @@ Canonical spine: **Workspace → Perspective → Queue → Row → Drawer → Co
 
 | Term | Meaning |
 |------|---------|
-| **Case lifecycle** | `opportunities.status_key` — household coordination. |
-| **Child enrollment lifecycle** | `opportunity_customer_members.outcome_status_key` — per-child SoT. |
+| **Case lifecycle** | `opportunities.status_key` — household coordination. Family Business Process **stage** is `opportunities.stage_key`. |
+| **Child enrollment lifecycle** | `process_instances.state` — per-child SoT for Business Process participation. Child **stage** is `process_instances.stage_key`. |
+
+### Where child participation state actually lives
+
+`opportunity_customer_members.outcome_status_key` was the per-child source of truth and is no
+longer the one outcome execution writes. The current runtime writers are explicit about it:
+
+- `setEnrollmentInstanceStateByScope` / `moveEnrollmentInstanceStageByScope`
+  (`web/lib/process/processInstances.ts`) — the only writers of child state and stage.
+- `stageOutcomeRuleTargetExecutor.ts`, `update_child_enrollment_status`: *"the OCM durable
+  enrollment-status column is NOT written — process_instances is the single source of truth for
+  child participation state."*
+- `stageOutcomeRuleTargetExecutor.ts`, `move_to_stage` (child branch): *"Authoritative + only
+  writer: the child's process instance owns stage_key."*
+
+This is a narrower statement than "OCM is removed", which is **not** true:
+
+| Record | Owns |
+|---|---|
+| `customer_members` | the durable child profile |
+| `opportunity_customer_members` | the opportunity↔child relationship, and compatibility / enrollment-proposal responsibilities where those still apply |
+| `process_instances` | that child's Business Process participation — `state`, `close_reason_key`, `stage_key` |
+| `opportunities` | the family case — `status_key`, `close_reason_key`, `stage_key` |
+
+Identity, relationship, proposal and process-execution authority are four different things; only
+the last moved.
 
 ---
 

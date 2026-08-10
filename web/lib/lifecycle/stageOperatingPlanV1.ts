@@ -5,6 +5,7 @@
  * No schema migration — departments.metadata JSON only.
  */
 
+import type { ActionRequiredInputType } from "@/lib/adminV2/actions/actionTypes";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { normalizeCompletionPolicy } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import {
@@ -58,6 +59,17 @@ export type StageWorkCompletionPolicyV1 = {
     repeat_until_outcome?: boolean;
     repeat_due_days?: number;
     /**
+     * The work is not completable until every required participant of this work has a resolved
+     * path (R3). What "resolved" means is DERIVED from this template's `participant_decisions` —
+     * a participant is resolved when its durable state matches the disposition any configured
+     * decision writes. Adding a decision therefore widens "resolved" automatically, and no second
+     * vocabulary of terminal states exists to drift from the first.
+     *
+     * Without this, a work item with per-participant decisions closes on the first `completes_work`
+     * outcome and the remaining participants lose their surface.
+     */
+    requires_all_participants_resolved?: boolean;
+    /**
      * Objective capability results configuration declares sufficient to satisfy
      * this requirement (R2). When absent on a recognized canonical work template
      * (e.g. contact_family), the platform default may apply at runtime; unknown
@@ -93,6 +105,149 @@ export function isWorkTemplateTransitionRef(
 
 export type StageWorkTemplateExecutionModeV1 = "direct_action" | "outcome_led";
 
+/**
+ * Target fields a participant decision's required input may bind to.
+ *
+ * CLOSED SET, deliberately. The alternative considered was a naming convention — an input whose
+ * `key` happens to match a target field binds to it — and it was rejected: the binding would be
+ * invisible in the configuration, unvalidatable at authoring time, and would silently start
+ * binding the day someone named an unrelated input `close_reason_key`. An explicit declaration
+ * costs one string and lets the validator refuse a binding the target kind cannot accept.
+ */
+export type StageParticipantDecisionBindableTargetField = "close_reason_key";
+
+export const STAGE_PARTICIPANT_DECISION_BINDABLE_TARGET_FIELDS: readonly StageParticipantDecisionBindableTargetField[] =
+    ["close_reason_key"];
+
+/**
+ * Target kinds that accept each bindable field. A binding declared against a decision whose
+ * targets contain no accepting kind is a configuration error, not a silent no-op.
+ */
+export const STAGE_PARTICIPANT_DECISION_BINDING_ACCEPTORS: Record<
+    StageParticipantDecisionBindableTargetField,
+    readonly StageOutcomeRuleTargetKind[]
+> = {
+    close_reason_key: ["update_child_enrollment_status", "update_family_case_status"],
+};
+
+/**
+ * Target kinds a participant decision may carry.
+ *
+ * `update_family_case_status` is ABSENT and that is the point: a decision about one child must not
+ * be able to write the family's status, and the cheapest place to make that impossible is the
+ * vocabulary itself rather than a runtime check someone can forget to call. The family record is
+ * moved by the stage's own family outcomes, on the family's own track.
+ */
+export const STAGE_PARTICIPANT_DECISION_ALLOWED_TARGET_KINDS: readonly StageOutcomeRuleTargetKind[] = [
+    "update_child_enrollment_status",
+    "move_to_stage",
+    "update_candidate_status",
+    "stamp_enrollment_date",
+    "create_next_work",
+    "mark_stage_work_complete",
+    "no_movement",
+];
+
+/**
+ * An operator input a participant decision collects before it executes.
+ *
+ * Structurally the platform's generic `ActionRequiredInput` (same keys, same `type` vocabulary,
+ * same `options` shape) so the existing `resolve_required_inputs` command-flow stage and its UI
+ * render it unchanged. The single addition is `binds_to_target_field`, which is what makes the
+ * collected value reach durable state instead of being decoration.
+ */
+export type StageParticipantDecisionInputV1 = {
+    key: string;
+    label: string;
+    type: ActionRequiredInputType;
+    required: boolean;
+    options?: { value: string; label: string }[];
+    hint?: string | null;
+    /** EXPLICIT binding onto a target field. Never inferred from `key`. */
+    binds_to_target_field?: StageParticipantDecisionBindableTargetField;
+};
+
+/**
+ * Target kinds the FAMILY half of a governed close may carry.
+ *
+ * The mirror image of the participant set: this one may move the family case and must not touch a
+ * child, because the child half of the operation has its own targets and its own guard. Keeping the
+ * two vocabularies separate is what stops a single misconfigured target list from closing a family
+ * without closing its children, or the reverse.
+ */
+export const STAGE_FAMILY_CLOSE_ALLOWED_FAMILY_TARGET_KINDS: readonly StageOutcomeRuleTargetKind[] = [
+    "update_family_case_status",
+    "move_to_stage",
+    "create_next_work",
+    "no_movement",
+];
+
+/**
+ * Governed family close, as configuration declares it.
+ *
+ * NOT a participant decision, and deliberately not expressible as one: closing a family is a single
+ * operator action whose effects land on several records at once, so it needs two target lists and a
+ * preview naming exactly who is affected. A per-child decision has neither.
+ *
+ * `child_targets` are applied to EVERY child the operation actually closes — the ones the platform's
+ * classifier puts in the closable set, never "all children". `family_targets` are applied to the
+ * family afterwards. Order is not configurable: children first, family second, so the family's own
+ * close guard sees a family whose children are already terminal and passes on the evidence rather
+ * than on an exemption. That guard stays in force; this operation never bypasses it.
+ */
+export type StageWorkFamilyCloseV1 = {
+    /** Registered capability key. Must be process-selected in `command_set_v1`. */
+    action_ref: string;
+    /** Operator label. Absent falls back to the capability's registered operator label. */
+    label?: string;
+    /**
+     * What the preview says the affected children BECOME — "Not Enrolling", "Withdrawn".
+     * Configuration owns these words because the disposition key behind them is vocabulary, not
+     * operator language, and must never reach the screen. Absent degrades to "closed".
+     */
+    child_outcome_label?: string;
+    /** Visibility. Absent means available; `false` keeps it authored but hidden. */
+    available?: boolean;
+    /** Applied to each child being closed. Child-grain vocabulary — cannot touch the family. */
+    child_targets: StageOutcomeRuleTargetV1[];
+    /** Applied to the family once every child close has succeeded. */
+    family_targets: StageOutcomeRuleTargetV1[];
+    /** Operator inputs collected before the operation runs — e.g. the one close reason. */
+    required_inputs?: StageParticipantDecisionInputV1[];
+};
+
+/**
+ * One configured decision an operator can take for ONE participant of this work.
+ *
+ * This is not a second command catalog. `action_ref` names a capability the PROCESS already
+ * selected in `command_set_v1`, resolved through the same registry every other command uses; a
+ * decision naming an unselected capability is the existing "stage orphan" configuration error.
+ * `targets` is the existing `StageOutcomeRuleTargetV1` vocabulary, executed by the existing target
+ * executor, under the existing grain guard. Ordering is array order, matching `helpful_actions`
+ * and `outcome_refs`.
+ *
+ * Grain: a participant decision is child-grain BY DEFINITION, on a work template that may live on
+ * a family-grain stage. That asymmetry is the whole point — the family stays on the family track
+ * while each child moves on its own — so the runtime demands one explicit child and the validator
+ * refuses a decision whose movement targets a family-grain stage.
+ */
+export type StageWorkParticipantDecisionV1 = {
+    /** Stable identity — audit, idempotency, and the operator-facing row key. */
+    decision_key: string;
+    /** Registered capability key. Must be process-selected in `command_set_v1`. */
+    action_ref: string;
+    /** Operator label. Absent falls back to the capability's registered operator label. */
+    label?: string;
+    /** Visibility. Absent means available; `false` keeps the row authored but hidden. */
+    available?: boolean;
+    /** Only `child` in V1. Present so the declaration is explicit rather than assumed. */
+    subject_grain: "child";
+    /** Existing target vocabulary — disposition, stage movement, close reason. */
+    targets: StageOutcomeRuleTargetV1[];
+    /** Operator inputs collected before execution. */
+    required_inputs?: StageParticipantDecisionInputV1[];
+};
+
 export type StageWorkTemplateV1 = {
     template_key: string;
     label: string;
@@ -120,6 +275,19 @@ export type StageWorkTemplateV1 = {
     alternate_paths?: StageWorkTemplateAlternatePathRefV1[];
     /** Ordered outcome refs — filters canonical stage outcomes for this template. Empty = explicitly none. */
     outcome_refs?: StageWorkTemplateOutcomeRefV1[];
+    /**
+     * Ordered per-participant decisions. Each executes a registered capability against exactly ONE
+     * explicit child. Empty array = explicitly none. These are NOT stage outcomes: the stage's own
+     * outcomes stay at the stage's grain and complete the work item, while these move individual
+     * participants without touching the family record.
+     */
+    participant_decisions?: StageWorkParticipantDecisionV1[];
+    /**
+     * Governed family close offered from this work surface. Absent = this work does not offer it,
+     * which is how configuration controls where the operation appears without any code asking
+     * "is this the Decision stage?".
+     */
+    family_close?: StageWorkFamilyCloseV1;
 };
 
 export type StageCompletionOutcomeV1 = {
@@ -329,6 +497,175 @@ function parseOutcomeRef(raw: unknown): StageWorkTemplateOutcomeRefV1 | null {
     return { outcome_ref };
 }
 
+const PARTICIPANT_DECISION_INPUT_TYPES = new Set<ActionRequiredInputType>([
+    "text",
+    "email",
+    "phone",
+    "select",
+    "status",
+    "textarea",
+    "boolean",
+    "date",
+]);
+
+function parseParticipantDecisionInput(raw: unknown): StageParticipantDecisionInputV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const key = trimNonEmpty(o.key);
+    const label = trimNonEmpty(o.label);
+    const typeRaw = trimNonEmpty(o.type);
+    if (!key || !label || !typeRaw || !PARTICIPANT_DECISION_INPUT_TYPES.has(typeRaw as ActionRequiredInputType)) {
+        return null;
+    }
+    const input: StageParticipantDecisionInputV1 = {
+        key,
+        label,
+        type: typeRaw as ActionRequiredInputType,
+        required: o.required === true,
+    };
+    if (Array.isArray(o.options)) {
+        const options: { value: string; label: string }[] = [];
+        for (const item of o.options) {
+            if (item == null || typeof item !== "object" || Array.isArray(item)) continue;
+            const row = item as Record<string, unknown>;
+            const value = trimNonEmpty(row.value);
+            const optionLabel = trimNonEmpty(row.label) ?? value;
+            if (!value || !optionLabel) continue;
+            options.push({ value, label: optionLabel });
+        }
+        input.options = options;
+    }
+    const hint = trimNonEmpty(o.hint);
+    if (hint) input.hint = hint;
+    const binds = trimNonEmpty(o.binds_to_target_field);
+    if (
+        binds
+        && (STAGE_PARTICIPANT_DECISION_BINDABLE_TARGET_FIELDS as readonly string[]).includes(binds)
+    ) {
+        input.binds_to_target_field = binds as StageParticipantDecisionBindableTargetField;
+    }
+    return input;
+}
+
+/**
+ * Parse one participant decision.
+ *
+ * Drops the row rather than repairing it when identity, capability or targets are missing — a
+ * half-parsed decision would render as an operator button that cannot execute, which is worse than
+ * a decision that is visibly absent from the surface.
+ */
+function parseParticipantDecision(raw: unknown): StageWorkParticipantDecisionV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const decision_key = trimNonEmpty(o.decision_key);
+    const action_ref = trimNonEmpty(o.action_ref);
+    if (!decision_key || !action_ref) return null;
+    // `subject_grain` is required and only `child` is meaningful in V1. A decision that declares
+    // family grain is not a participant decision at all — it is a stage outcome wearing the wrong
+    // name, and accepting it here would reintroduce exactly the family/child confusion this
+    // structure exists to remove.
+    if (trimNonEmpty(o.subject_grain) !== "child") return null;
+
+    const targets: StageOutcomeRuleTargetV1[] = [];
+    if (Array.isArray(o.targets)) {
+        for (const t of o.targets) {
+            const parsed = parseTarget(t);
+            // A family-status target on a per-child decision is dropped at the door rather than
+            // parsed and refused later — the shape is not a participant decision.
+            if (parsed && STAGE_PARTICIPANT_DECISION_ALLOWED_TARGET_KINDS.includes(parsed.kind)) {
+                targets.push(parsed);
+            }
+        }
+    }
+    if (!targets.length) return null;
+    /**
+     * EXACTLY ONE state target. A participant decision IS the child's path, so it names the state
+     * that path lands in — once. Zero would leave the regression guard with nothing to compare
+     * against and no way to tell "already resolved" from "never decided"; two would make the
+     * decision's own meaning ambiguous and its idempotence undecidable.
+     */
+    if (targets.filter((t) => t.kind === "update_child_enrollment_status").length !== 1) return null;
+
+    const decision: StageWorkParticipantDecisionV1 = {
+        decision_key,
+        action_ref,
+        subject_grain: "child",
+        targets,
+    };
+    const label = trimNonEmpty(o.label);
+    if (label) decision.label = label;
+    if (o.available === false) decision.available = false;
+
+    if (Array.isArray(o.required_inputs)) {
+        const required_inputs: StageParticipantDecisionInputV1[] = [];
+        for (const item of o.required_inputs) {
+            const parsed = parseParticipantDecisionInput(item);
+            if (parsed) required_inputs.push(parsed);
+        }
+        decision.required_inputs = required_inputs;
+    }
+    return decision;
+}
+
+/**
+ * Parse a governed family close.
+ *
+ * Both halves must be present and each must name its own state write exactly once. A close with no
+ * family status target would move a family nowhere while closing its children; one with no child
+ * disposition would strand the children under a closed family. Neither is a partially-valid
+ * configuration worth repairing, so the whole declaration is dropped and the surface shows nothing
+ * rather than a button that does half an operation.
+ */
+function parseFamilyClose(raw: unknown): StageWorkFamilyCloseV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const action_ref = trimNonEmpty(o.action_ref);
+    if (!action_ref) return null;
+
+    const readTargets = (value: unknown, allowed: readonly StageOutcomeRuleTargetKind[]) => {
+        const out: StageOutcomeRuleTargetV1[] = [];
+        if (!Array.isArray(value)) return out;
+        for (const item of value) {
+            const parsed = parseTarget(item);
+            if (parsed && allowed.includes(parsed.kind)) out.push(parsed);
+        }
+        return out;
+    };
+
+    const child_targets = readTargets(
+        o.child_targets,
+        STAGE_PARTICIPANT_DECISION_ALLOWED_TARGET_KINDS,
+    );
+    const family_targets = readTargets(
+        o.family_targets,
+        STAGE_FAMILY_CLOSE_ALLOWED_FAMILY_TARGET_KINDS,
+    );
+
+    if (child_targets.filter((t) => t.kind === "update_child_enrollment_status").length !== 1) {
+        return null;
+    }
+    if (family_targets.filter((t) => t.kind === "update_family_case_status").length !== 1) {
+        return null;
+    }
+
+    const close: StageWorkFamilyCloseV1 = { action_ref, child_targets, family_targets };
+    const label = trimNonEmpty(o.label);
+    if (label) close.label = label;
+    const childOutcomeLabel = trimNonEmpty(o.child_outcome_label);
+    if (childOutcomeLabel) close.child_outcome_label = childOutcomeLabel;
+    if (o.available === false) close.available = false;
+
+    if (Array.isArray(o.required_inputs)) {
+        const required_inputs: StageParticipantDecisionInputV1[] = [];
+        for (const item of o.required_inputs) {
+            const parsed = parseParticipantDecisionInput(item);
+            if (parsed) required_inputs.push(parsed);
+        }
+        close.required_inputs = required_inputs;
+    }
+    return close;
+}
+
 function parseDuePolicy(raw: unknown): StageWorkDuePolicy | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const o = raw as Record<string, unknown>;
@@ -403,6 +740,23 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
         }
         tpl.outcome_refs = outcome_refs;
     }
+
+    if (Array.isArray(o.participant_decisions)) {
+        const participant_decisions: StageWorkParticipantDecisionV1[] = [];
+        const seen = new Set<string>();
+        for (const item of o.participant_decisions) {
+            const parsed = parseParticipantDecision(item);
+            if (!parsed) continue;
+            // Duplicate identities would collide in audit, idempotency and the row key at once.
+            if (seen.has(parsed.decision_key)) continue;
+            seen.add(parsed.decision_key);
+            participant_decisions.push(parsed);
+        }
+        tpl.participant_decisions = participant_decisions;
+    }
+
+    const family_close = parseFamilyClose(o.family_close);
+    if (family_close) tpl.family_close = family_close;
 
     return tpl;
 }

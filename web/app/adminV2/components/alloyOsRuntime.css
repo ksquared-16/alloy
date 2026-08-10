@@ -6770,10 +6770,377 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   align-items: stretch;
   gap: 8px;
 }
-/* All action buttons in the row share ONE equal width (flex:1 with a 0 basis), centered labels on a
-   single line, same height. Primary vs secondary differ only in fill, never in dimensions. The row
-   stays on one line (nowrap) with min-width:0 so buttons shrink equally instead of a 3+1 wrap. */
-.alloy-os-currentwork__primary-row > button,
+
+/* Flat action row: primary + supporting are direct children with equal widths. */
+.alloy-os-currentwork__primary-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.alloy-os-currentwork__primary-stack > .alloy-os-currentwork__primary-action,
+.alloy-os-currentwork__primary-stack > button,
+.alloy-os-currentwork__primary-stack > [data-work-tour-grouped="true"] {
+  flex: 1 1 calc(50% - 6px);
+  max-width: calc(50% - 3px);
+  min-width: 7.5rem;
+  min-height: 2.25rem;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.alloy-os-currentwork__primary-stack > [data-work-tour-grouped="true"] {
+  display: flex;
+}
+
+.alloy-os-currentwork__primary-stack > [data-work-tour-grouped="true"] > button {
+  width: 100%;
+  min-height: 2.25rem;
+  justify-content: center;
+}
+
+/* Legacy wrappers (if present) collapse so children participate in the flat row. */
+.alloy-os-currentwork__primary-lead,
+.alloy-os-currentwork__supporting-row {
+  display: contents;
+}
+
+.alloy-os-currentwork__context {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding-bottom: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.alloy-os-currentwork__context-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__context-action-row > .alloy-os-currentwork__primary-action {
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 2.25rem;
+  white-space: nowrap;
+}
+
+.alloy-os-currentwork__context-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px 18px;
+  min-width: 0;
+  flex: 1 1 12rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.alloy-os-currentwork__context-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.alloy-os-currentwork__context-label {
+  margin: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__context-value {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+
+.alloy-os-currentwork__still-activity-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: start;
+  margin-top: 2px;
+}
+
+.alloy-os-currentwork__still-activity-row > :only-child {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .alloy-os-currentwork__still-activity-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.alloy-os-currentwork__recent-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.alloy-os-currentwork__recent-activity-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alloy-os-currentwork__recent-activity-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.alloy-os-currentwork__recent-activity-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 70%, #64748b);
+}
+
+.alloy-os-currentwork__recent-activity-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.alloy-os-currentwork__recent-activity-label {
+  font-size: 0.76rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+
+.alloy-os-currentwork__recent-activity-when {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+
+/* What's Next Card V2 — summary line + progress grammar */
+.alloy-os-currentwork__summary-line {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
+}
+
+.alloy-os-currentwork__progress-summary {
+  margin: 0 0 10px;
+  min-width: 0;
+}
+
+.alloy-os-currentwork__progress-collapsed,
+.alloy-os-currentwork__progress-headline {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__progress-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.alloy-os-currentwork__progress-column {
+  min-width: 0;
+  padding: 8px 10px;
+  border-right: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+}
+
+.alloy-os-currentwork__progress-column:last-child {
+  border-right: 0;
+}
+
+.alloy-os-currentwork__progress-column[data-progress-current="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 5%, #fff);
+}
+
+.alloy-os-currentwork__progress-col-label {
+  margin: 0 0 4px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+}
+
+.alloy-os-currentwork__progress-attempt-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alloy-os-currentwork__progress-attempt-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-currentwork__progress-check {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.alloy-os-currentwork__progress-empty {
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 45%, #64748b);
+}
+
+.alloy-os-currentwork__progress-item-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  line-height: 1.25;
+}
+
+.alloy-os-currentwork__progress-item-label--current {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__progress-item-status {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__progress-node[data-progress-role="upcoming"] .alloy-os-currentwork__progress-item-status {
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 48%, #64748b);
+  font-weight: 500;
+}
+
+.alloy-os-currentwork__progress-item-detail {
+  display: block;
+  margin: 1px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+.alloy-os-currentwork__progress-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 8px 4px 4px;
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.alloy-os-currentwork__progress-node {
+  position: relative;
+  display: flex;
+  flex: 1 1 5.5rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 8px 6px;
+  text-align: center;
+}
+
+.alloy-os-currentwork__progress-connector {
+  position: absolute;
+  top: 11px;
+  right: calc(50% + 14px);
+  width: calc(100% - 28px);
+  height: 2px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+  transform: translateX(-100%);
+}
+
+.alloy-os-currentwork__progress-connector[data-complete="true"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+
+.alloy-os-currentwork__progress-node-marker {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: 2px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 18%, transparent);
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+  background: #fff;
+}
+
+.alloy-os-currentwork__progress-node[data-progress-role="completed"] .alloy-os-currentwork__progress-node-marker,
+.alloy-os-currentwork__progress-node[data-progress-role="current"] .alloy-os-currentwork__progress-node-marker {
+  border-color: var(--alloy-os-bend-pine, #00a283);
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+
+.alloy-os-currentwork__progress-node-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.alloy-os-currentwork__progress-detail-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 420px) {
+  .alloy-os-currentwork__progress-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .alloy-os-currentwork__progress-column {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 10%, transparent);
+  }
+
+  .alloy-os-currentwork__progress-column:last-child {
+    border-bottom: 0;
+  }
+
+  .alloy-os-currentwork__progress-detail-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Legacy equal-width toolbar removed — primary-stack grid equalizes action cells. */
 .alloy-os-currentwork__focused-actions > button {
   display: inline-flex;
   align-items: center;
@@ -7236,6 +7603,20 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 
 .alloy-os-currentwork__activity-preview-list li {
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.alloy-os-currentwork__activity-preview-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 70%, #64748b);
+}
+
+.alloy-os-currentwork__activity-preview-body {
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   gap: 2px;
 }
@@ -7351,11 +7732,16 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .alloy-os-currentwork__primary-action {
-  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: stretch;
   border: 0;
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: 8px 12px;
   font: inherit;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
   color: #fff;
@@ -8114,6 +8500,42 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 [data-change-lead-location-select] select option {
   background-color: #fff;
   color: var(--alloy-os-text-primary, #17211c);
+}
+
+/* Workspace top-nav site filter — white + Bend Pine on midnight header (not inherited white text). */
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__trigger {
+  min-height: 2.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--alloy-os-bend-pine, #00a283) !important;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 40%, #fff) !important;
+  background: #fff !important;
+  box-shadow: none;
+}
+
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__value,
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__chevron {
+  color: var(--alloy-os-bend-pine, #00a283) !important;
+}
+
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__list {
+  background: #fff !important;
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 28%, #e5e7eb);
+  box-shadow: 0 10px 28px rgba(0, 162, 131, 0.12);
+}
+
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option {
+  color: var(--alloy-os-bend-pine, #00a283) !important;
+  font-size: 14px;
+  font-weight: 500;
+  background: #fff;
+}
+
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option:hover,
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option--selected {
+  background: rgba(0, 162, 131, 0.1) !important;
+  color: var(--alloy-os-bend-pine, #00a283) !important;
 }
 
 /* AlloySelect custom listbox — white menu (native <option> ignores CSS on macOS). */

@@ -119,7 +119,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(runSpy.mock.calls[0][2].context.department_id).toBe("dept-1");
     });
 
-    it("rejects unknown, placeholder, unadapted relationship, navigation, processing, mark_lost, and enrollment aliases", async () => {
+    it("rejects unknown, placeholder, unadapted relationship, navigation, processing, and uncut aliases", async () => {
         const cases = [
             "totally_unknown_xyz",
             "send_message_placeholder",
@@ -128,7 +128,6 @@ describe("executeCommandInvocation (P1.S2)", () => {
             "open_record",
             "processing.create_lead",
             "mark_lost",
-            "move_to_waitlist",
             "approve_enrollment",
         ] as const;
         for (const key of cases) {
@@ -145,6 +144,10 @@ describe("executeCommandInvocation (P1.S2)", () => {
             expect(runSpy).not.toHaveBeenCalled();
             runSpy.mockClear();
         }
+    });
+
+    it("accepts move_to_waitlist as waitlist_child facade alias", () => {
+        expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(true);
     });
 
     it("ignores client actor and uses server org/user", async () => {
@@ -271,7 +274,7 @@ describe("executeCommandInvocation (P1.S2)", () => {
         expect(isCommandRuntimeFacadeExecutionSupported("delete_lead")).toBe(true);
         expect(isCommandRuntimeFacadeExecutionSupported("add_family_member")).toBe(false);
         expect(isCommandRuntimeFacadeExecutionSupported("mark_lost")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(true);
     });
 
     it("forbids facade execute modules from importing domain mutation / raw handler execute paths", () => {

@@ -16,7 +16,8 @@ export function isLayoutRuntimeStatusRefKey(refKey: string): boolean {
 
 function looksLikeStatusKeyToken(value: string): boolean {
     const trimmed = value.trim();
-    return /^[a-z][a-z0-9_]*$/i.test(trimmed) && trimmed.includes("_");
+    // Include single-token keys (e.g. "new") — otherwise raw lowercase enums reach Recent Activity.
+    return /^[a-z][a-z0-9_]*$/i.test(trimmed);
 }
 
 type LayoutRuntimeStatusDomain = "child_enrollment" | "opportunity" | "generic";

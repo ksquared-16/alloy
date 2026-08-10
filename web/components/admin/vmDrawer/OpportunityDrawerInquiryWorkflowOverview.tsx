@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import OpportunityInquiryChildrenSection from "@/components/admin/entity/OpportunityInquiryChildrenSection";
-import OpportunityDecisionSplitPanel from "@/components/admin/opportunity/OpportunityDecisionSplitPanel";
+import DecisionCurrentWorkCard from "@/components/admin/opportunity/DecisionCurrentWorkCard";
 import { FamilyContactsPanel } from "@/components/admin/opportunity/FamilyContactsPanel";
 import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { OpportunityInquirySummaryRightColumn } from "@/components/admin/opportunity/OpportunityInquirySummaryRightColumn";
@@ -100,8 +100,21 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
         shellContract.section_slots.some((s) => s.section_key === "inquiry_children") ||
         drawerChildRows.length > 0;
 
-    const showDecisionSplit =
-        displayVm.workspace.lifecycle_rail?.current_stage_key === "decision" && drawerChildRows.length > 0;
+    /**
+     * The per-child decision surface is CONFIGURATION-GATED, not stage-gated.
+     *
+     * This used to read `current_stage_key === "decision"`, which hardcoded one tenant's stage key
+     * into the drawer: a process that named the stage anything else got no surface, and a process
+     * that had no per-child decisions on Decision got one anyway. The panel now asks the platform
+     * whether this stage's work configures participant decisions and renders nothing when it does
+     * not, so the stage key stops being product logic.
+     */
+    const participantDecisionScope = useMemo(() => {
+        const stageKey = displayVm.workspace.lifecycle_rail?.current_stage_key?.trim();
+        const departmentId = drawer.opportunityWorkspaceContext?.department_id?.trim();
+        if (!stageKey || !departmentId) return null;
+        return { opportunityId: drawerId, departmentId, stageKey, templateKey: "" };
+    }, [displayVm.workspace.lifecycle_rail?.current_stage_key, drawer.opportunityWorkspaceContext, drawerId]);
 
     const refreshVm = useCallback(() => {
         void loadOpportunityDrawerViaViewModel(drawerId, drawer.opportunityWorkspaceContext ?? null);
@@ -243,12 +256,11 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                     :   null}
                 </div>
             </div>
-            {showDecisionSplit ?
-                <OpportunityDecisionSplitPanel
-                    opportunityId={drawerId}
-                    children={drawerChildRows}
+            {participantDecisionScope ?
+                <DecisionCurrentWorkCard
+                    scope={participantDecisionScope}
                     canMutate={!!canMutate}
-                    onApplied={refreshVm}
+                    onChanged={refreshVm}
                 />
             :   null}
             {showInquiryChildren ?

@@ -3,7 +3,12 @@ import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsRe
 import { dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
 import { parseLifecycleProgressionRequirementsOverride } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { asOperatorStageKey, lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    activeLifecycleProcess,
+    activeStagesForProcess,
+    asOperatorStageKey,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     configuredStageInventoryFromMetadata,
     isStageInConfiguredInventory,
@@ -289,9 +294,33 @@ export async function buildLifecycleStageBootstrap(params: {
             ? coercePerspectivesV1ForLanes(savedPerspectives, perspectiveLaneKeys)
             : savedPerspectives;
 
+    /**
+     * Configured stages WITH their declared grain — carried, never normalised.
+     *
+     * The editor previously derived its destination list from `pipeline.queues`, which are work
+     * unit queue definitions and carry no journey grain. That left the editor's grain resolver
+     * with only the canonical vocabulary to consult, so a stage whose configured metadata
+     * DISAGREES with canon — Firefly's Decision — resolved cleanly in the editor while runtime
+     * correctly refused it. Same contract, different evidence, opposite answers.
+     *
+     * `grain` is passed through exactly as configured, including when it is absent or malformed.
+     * `resolveStageGrain` is the only thing allowed to judge it; coercing here would erase the
+     * disagreement this payload exists to reveal.
+     */
+    const configured_stages = activeStagesForProcess(
+        activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata)) ?? {
+            stages: [],
+        } as never,
+    ).map((stage) => ({
+        key: stage.key,
+        label: stage.label ?? stage.key,
+        grain: (stage as { grain?: unknown }).grain ?? null,
+    }));
+
     return {
         department_id: departmentId,
         builder_stage_key: builderStageKey,
+        configured_stages,
         stage_track_key: stageRecord?.track_key ?? null,
         operator_stage: operatorStage,
         statuses,

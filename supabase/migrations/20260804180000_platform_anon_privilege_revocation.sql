@@ -95,6 +95,39 @@ END
 $future$;
 
 -- -----------------------------------------------------------------------------
+-- 1b. BASELINE CAPTURE — what `authenticated` and `service_role` can execute
+--     RIGHT NOW, before anything is revoked.
+--
+-- Checks (8) and (9) below prove this migration did not narrow either role's
+-- EXECUTE surface. They originally asserted absolute totals (126 / 128) measured
+-- on a from-empty replay of the chain. That is environment-fragile: staging has
+-- 136 functions executable by `authenticated`, entirely legitimately, because
+-- migrations merged after that baseline added more. The assertion failed there
+-- and blocked every later migration — while proving nothing about preservation,
+-- since a total cannot distinguish "unchanged" from "lost one, gained one".
+--
+-- Bumping 126 → 136 would only move the same trap to the next function added.
+-- The real invariant is a SET comparison against this environment's own
+-- pre-migration state, which holds on a from-empty database and on a long-lived
+-- one alike, and needs no maintenance when a function is legitimately added.
+--
+-- Captured by oid, so overloads are distinct identities rather than a name.
+--
+-- A plain TEMP table (not ON COMMIT DROP): the verify block reads it before the
+-- transaction commits, and ON COMMIT DROP would remove it immediately if this
+-- file were ever run outside an explicit transaction block. It is dropped
+-- explicitly at the end, and is session-scoped regardless, so nothing persists.
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS _anon_rev_execute_baseline;
+CREATE TEMP TABLE _anon_rev_execute_baseline AS
+SELECT r.rolname::text AS grantee, p.oid AS fn
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+CROSS JOIN (VALUES ('authenticated'), ('service_role')) AS r(rolname)
+WHERE n.nspname = 'public'
+  AND has_function_privilege(r.rolname, p.oid, 'EXECUTE');
+
+-- -----------------------------------------------------------------------------
 -- 2. EXISTING OBJECTS — remove what was already granted.
 --
 -- `ALL TABLES` covers ordinary tables and views (there are 4 views and 0
@@ -240,25 +273,48 @@ BEGIN
     END IF;
 
     -- (8)/(9) EXECUTE preservation. Revoking the PUBLIC entry must not have
-    --     changed what `authenticated` or `service_role` can execute. These are
-    --     the exact pre-migration counts, measured on the same from-empty chain.
-    SELECT count(*) INTO v_auth_fn
-    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE n.nspname = 'public' AND has_function_privilege('authenticated', p.oid, 'EXECUTE');
-    IF v_auth_fn <> 126 THEN
-        RAISE EXCEPTION 'ANON PRIVILEGE FAIL 8: authenticated can execute % functions, expected the unchanged 126', v_auth_fn;
-    END IF;
+    --     changed what `authenticated` or `service_role` can execute.
+    --
+    --     Compared as a SET against this environment's own pre-migration state
+    --     (captured in section 1b), not against a hardcoded total. `REVOKE ...
+    --     FROM PUBLIC` can only remove privilege, and PUBLIC grants flow to
+    --     every role, so a loss here is the real hazard — and a loss is exactly
+    --     what a count can hide when something is gained in the same breath.
+    --     Losses are named by `regprocedure`, which carries the full overload
+    --     signature, so the failure says which function rather than how many.
+    DECLARE
+        v_lost_auth text;
+        v_lost_svc  text;
+    BEGIN
+        SELECT string_agg(b.fn::regprocedure::text, ', ' ORDER BY b.fn::regprocedure::text)
+          INTO v_lost_auth
+        FROM _anon_rev_execute_baseline b
+        WHERE b.grantee = 'authenticated'
+          AND NOT has_function_privilege('authenticated', b.fn, 'EXECUTE');
+        IF v_lost_auth IS NOT NULL THEN
+            RAISE EXCEPTION 'ANON PRIVILEGE FAIL 8: authenticated lost EXECUTE on %s — this migration must not modify authenticated', v_lost_auth;
+        END IF;
 
-    SELECT count(*) INTO v_svc_fn
-    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE n.nspname = 'public' AND has_function_privilege('service_role', p.oid, 'EXECUTE');
-    IF v_svc_fn <> 128 THEN
-        RAISE EXCEPTION 'ANON PRIVILEGE FAIL 9: service_role can execute % functions, expected the unchanged 128', v_svc_fn;
-    END IF;
+        SELECT string_agg(b.fn::regprocedure::text, ', ' ORDER BY b.fn::regprocedure::text)
+          INTO v_lost_svc
+        FROM _anon_rev_execute_baseline b
+        WHERE b.grantee = 'service_role'
+          AND NOT has_function_privilege('service_role', b.fn, 'EXECUTE');
+        IF v_lost_svc IS NOT NULL THEN
+            RAISE EXCEPTION 'ANON PRIVILEGE FAIL 9: service_role lost EXECUTE on %s — the application data path would break', v_lost_svc;
+        END IF;
+    END;
 
-    RAISE NOTICE 'EXECUTE preserved — authenticated % functions, service_role % functions (both unchanged)', v_auth_fn, v_svc_fn;
+    SELECT count(*) INTO v_auth_fn FROM _anon_rev_execute_baseline WHERE grantee = 'authenticated';
+    SELECT count(*) INTO v_svc_fn  FROM _anon_rev_execute_baseline WHERE grantee = 'service_role';
+
+    RAISE NOTICE 'EXECUTE preserved — authenticated % functions, service_role % functions (every pre-migration grant still held)', v_auth_fn, v_svc_fn;
 
     RAISE NOTICE 'anon privilege revocation verified — anon: 0 table grants, 0 sequence privileges, 1 approved RPC, schema USAGE retained';
     RAISE NOTICE 'untouched confirmed — authenticated SELECT on % tables, service_role INSERT on % tables', v_auth, v_svc;
 END
 $verify$;
+
+-- The baseline was scaffolding for the preservation proof above; it is session
+-- scoped, but dropped explicitly so nothing is left for a later statement to see.
+DROP TABLE IF EXISTS _anon_rev_execute_baseline;

@@ -34,9 +34,10 @@ import {
     getAdminV2WorkspaceModalSnapshot,
 } from "@/lib/adminV2/workspaceModalCoordinator";
 import {
-    parseWorkspaceModalIntent,
-    WORKSPACE_MODAL_INTENT_PARAM,
+  parseWorkspaceModalIntent,
+  WORKSPACE_MODAL_INTENT_PARAM,
 } from "@/lib/adminV2/workspaceModalIntent";
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 
 function normalizeAdminPath(pathname: string): string {
   return normalizeToCanonicalAdminPath(pathname);
@@ -53,7 +54,7 @@ function WorkspaceSiteFilterLocationReserve() {
       className="flex shrink-0 items-center min-w-[min(280px,34vw)] max-w-[min(280px,34vw)] h-[2.375rem]"
       aria-hidden
     >
-      <div className="h-[2.375rem] w-full rounded-md opacity-40" style={{ backgroundColor: derived.searchBgOnPrimary }} />
+      <div className="h-[2.375rem] w-full rounded-md border border-alloy-stone/30 bg-white opacity-70" />
     </div>
   );
 }
@@ -81,30 +82,25 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
   const { selectedSiteId, setSelectedSiteId } = wf;
 
   if (bootstrap.show_dropdown && bootstrap.sites.length > 1) {
+    const siteOptions = bootstrap.sites.map((s) => ({
+      value: s.id,
+      label: s.label?.trim() || s.id,
+    }));
     return (
-      <div className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(280px,34vw)]">
-        <label htmlFor="adminv2-workspace-site-filter" className="sr-only">
-          Site filter
-        </label>
-        <select
+      <div
+        className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(280px,34vw)]"
+        data-adminv2-site-filter="true"
+        title="View filter — narrows workspace data to one campus within your allowed sites. Selection persists across workspace navigation."
+      >
+        <AlloySelect
           id="adminv2-workspace-site-filter"
+          aria-label="Site filter"
           value={selectedSiteId ?? ""}
-          onChange={(e) => setSelectedSiteId(e.target.value === "" ? null : e.target.value)}
-          className="min-w-0 flex-1 truncate rounded-md border px-3 py-2 text-[15px] font-medium outline-none focus:ring-1 focus:ring-white/35"
-          style={{
-            backgroundColor: derived.searchBgOnPrimary,
-            borderColor: derived.topBarDivider,
-            color: neutral.surface,
-          }}
-          title="View filter — narrows workspace data to one campus within your allowed sites. Selection persists across workspace navigation."
-        >
-          <option value="">All locations</option>
-          {bootstrap.sites.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => setSelectedSiteId(next === "" ? null : next)}
+          options={siteOptions}
+          placeholder="All locations"
+          className="min-w-0 flex-1"
+        />
       </div>
     );
   }
@@ -112,7 +108,7 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
   if (bootstrap.single_site_label) {
     return (
       <span
-        className="shrink-0 truncate max-w-[min(240px,32vw)] text-[15px] font-medium opacity-90"
+        className="shrink-0 truncate max-w-[min(240px,32vw)] rounded-md border border-alloy-stone/30 bg-white px-3 py-2 text-[15px] font-medium text-alloy-bend-pine"
         title="Your access is scoped to this site."
       >
         {bootstrap.single_site_label}

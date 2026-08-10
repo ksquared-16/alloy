@@ -435,117 +435,24 @@ export async function applyRegistryResolvedActionClient(
         if (actionKey === "send_tour_invitation" || intent === "send_tour_invitation") {
             if (!eid) return { ok: false, error: "entity_id required" };
 
-            // Provisioning the command made it VISIBLE. This branch is what makes it
-            // RUN: `ui_intent` dispatch is a hardcoded chain keyed on action key, so a
-            // provisioned command with no branch here renders in the menu and does
-            // nothing when clicked — visible and inert, which reads to an operator as
-            // "I sent it" while nothing was created.
-            //
-            // Explicit confirmation first; the action declares confirmationPolicy
-            // "required" and this is where that is honoured on the Manage path.
-            const parentName = invocation?.display_name?.trim() || "this family";
-            const channels: string[] = [];
-            if (invocation?.email?.trim()) channels.push("email");
-            if (invocation?.phone?.trim()) channels.push("SMS");
-            const channelPhrase = channels.length ? channels.join(" and ") : "the contact details on file";
-            if (typeof window !== "undefined") {
-                const proceed = window.confirm(`Send this tour invitation to ${parentName} by ${channelPhrase}?`);
-                if (!proceed) return { ok: true };
-            }
-
-            // Registered action → canonical Actions Runtime, exactly as confirm_tour
-            // does. Recipient identity, offered times and send authority are all
-            // resolved server-side; nothing assembled here is trusted as input.
-            const res = await fetch("/api/admin/actions/execute", {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action_key: "send_tour_invitation",
-                    entity_type: "opportunity",
-                    entity_id: eid,
-                    context: host.context,
-                }),
+            // Open canonical Communications compose (same path as send_email / quick_message).
+            // Operator reviews and sends from compose — no browser confirm/alert dialogs.
+            // Invitation minting remains owned by sendTourInvitation when that mutation path is used;
+            // this Manage / registry entry opens compose so the operator can write and send.
+            await launchContextualQuickMessage({
+                surface: invocation?.surface ?? "record_drawer",
+                record_id: eid,
+                entity_type: "opportunity",
+                opportunity_id: eid,
+                person_id: invocation?.person_id ?? null,
+                display_name: invocation?.display_name ?? null,
+                email: invocation?.email ?? null,
+                phone: invocation?.phone ?? null,
+                department_id: invocation?.department_id ?? host.departmentId ?? null,
+                work_unit_id: invocation?.work_unit_id ?? host.workUnitId ?? null,
+                bos_source_surface: invocation?.bos_source_surface,
+                defaultChannel: "email",
             });
-            let json:
-                | {
-                      ok?: boolean;
-                      error?: string | { message?: string };
-                      result?: { detail?: Record<string, unknown> };
-                      data?: { execution_result?: Record<string, unknown> };
-                  }
-                | null = null;
-            try {
-                json = await res.json();
-            } catch {
-                json = null;
-            }
-
-            // A body we cannot read is not a success. Silence is the failure mode
-            // this whole correction exists to remove.
-            if (!json || typeof json !== "object") {
-                return {
-                    ok: false,
-                    error: "The invitation could not be confirmed — the server response could not be read. Nothing was sent.",
-                };
-            }
-            if (!res.ok || json.ok === false) {
-                const message =
-                    typeof json.error === "string"
-                        ? json.error
-                        : json.error?.message ?? "Send tour invitation failed";
-                return { ok: false, error: message };
-            }
-
-            // Per-channel truth, never a generic "Invitation sent". A channel the
-            // canonical enqueue refused is reported as refused — claiming otherwise is
-            // precisely the failure this capability exists to avoid.
-            // The route's documented success envelope is
-            //   { ok: true, data: { execution_result, affected_id? }, correlation_id }
-            // so the action's `detail` arrives under data.execution_result.detail.
-            // `result.detail` is accepted as a fallback only; reading the wrong
-            // path silently degraded a real send into "no eligible delivery
-            // channel", which is the same class of lie in the other direction.
-            // Verified against the live route: the runtime FLATTENS the action's
-            // detail onto `execution_result` itself —
-            //   data.execution_result = { invitation_id, option_count,
-            //                             sent_channels, idempotent_replay, skipped }
-            // A nested `detail` and the legacy `result.detail` are still accepted,
-            // so a future envelope change degrades to the failure path below
-            // rather than to a confident wrong answer.
-            const execResult = (json.data?.execution_result ?? {}) as Record<string, unknown>;
-            const detail = (Array.isArray(execResult.sent_channels)
-                ? execResult
-                : ((execResult.detail as Record<string, unknown>) ?? json.result?.detail ?? null)) as Record<
-                string,
-                unknown
-            > | null;
-
-            // Success must be DERIVED from the server result. A 2xx with no
-            // recognisable invitation detail is not something to celebrate.
-            if (!detail || !Array.isArray(detail.sent_channels)) {
-                return {
-                    ok: false,
-                    error: "The invitation result could not be read, so it is not confirmed. Check the record's Communications before retrying.",
-                };
-            }
-
-            const sent = detail.sent_channels as string[];
-            const skipped = Array.isArray(detail.skipped) ? (detail.skipped as string[]) : [];
-            const replay = detail.idempotent_replay === true;
-            const parts: string[] = [];
-            for (const ch of sent) parts.push(`${String(ch).toLowerCase() === "sms" ? "SMS" : "Email"} queued`);
-            for (const reason of skipped) parts.push(`not sent — ${String(reason).replace(/_/g, " ")}`);
-            if (!parts.length) parts.push("no eligible delivery channel");
-            if (typeof window !== "undefined") {
-                window.alert(
-                    `${replay ? "Existing invitation reused" : "Invitation created"} · ${parts.join(" · ")}`
-                );
-            }
-
-            if (host.invalidate)
-                host.invalidate({ entity_type: "opportunity", entity_id: eid, action_key: "send_tour_invitation" });
-            else host.router.refresh();
             return { ok: true };
         }
         if (actionKey === "send_email" || intent === "send_email") {
@@ -597,7 +504,12 @@ export async function applyRegistryResolvedActionClient(
             window.location.href = digits ? `tel:${digits}` : `tel:${phone}`;
             return { ok: true };
         }
-        if (actionKey === "create_task" || intent === "create_task") {
+        if (
+            actionKey === "create_task"
+            || actionKey === "create_work_item"
+            || intent === "create_task"
+            || intent === "create_work_item"
+        ) {
             if (eid) {
                 if (host.openCreateWork) {
                     host.openCreateWork({ opportunity_id: eid });

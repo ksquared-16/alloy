@@ -21,12 +21,16 @@ import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeS
 import { isConfiguredClosedStatus, resolveOutcomeStatusOptions } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
 import { nextOutgoingTransitionDraft } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import { summarizeStageOperatingPlan } from "@/lib/lifecycle/stageOperatingPlanSummary";
+import {
+    entityGrainFromJourneySegment,
+    filterGrainCompatibleStageDestinations,
+} from "@/lib/lifecycle/filterGrainCompatibleStageDestinations";
 
 type Props = {
     stageKey: string;
     stageLabel?: string;
     transitions: StageOutgoingTransitionV1[];
-    processStages: Array<{ key: string; label: string }>;
+    processStages: Array<{ key: string; label: string; grain?: string }>;
     configuredStatuses: ReadonlyArray<OutcomeStatusConfiguredRow>;
     entityType: string;
     /** Read-only, and only to name what triggers each path. Never written here. */
@@ -44,7 +48,12 @@ export default function LifecycleStageOutgoingTransitionsEditor({
     plan,
     onChange,
 }: Props) {
-    const destinations = processStages.filter((stage) => stage.key !== stageKey);
+    const entityGrain = entityGrainFromJourneySegment(plan?.journey_segment);
+    const destinations = filterGrainCompatibleStageDestinations({
+        processStages,
+        stageKey,
+        entityGrain,
+    });
     const statuses = resolveOutcomeStatusOptions({
         configuredStatuses,
         purpose: "status_effect",
@@ -84,8 +93,24 @@ export default function LifecycleStageOutgoingTransitionsEditor({
             <div className="stage-panel__body">
                 {transitions.map((transition, index) => {
                     const destinationLabel =
-                        destinations.find((stage) => stage.key === transition.target_stage_key)?.label
+                        processStages.find((stage) => stage.key === transition.target_stage_key)?.label
+                        ?? destinations.find((stage) => stage.key === transition.target_stage_key)?.label
                         ?? "no destination yet";
+                    const selectDestinations = (() => {
+                        const current = processStages.find(
+                            (stage) => stage.key === transition.target_stage_key,
+                        );
+                        if (
+                            current
+                            && current.key !== stageKey
+                            && !destinations.some((stage) => stage.key === current.key)
+                        ) {
+                            // Preserve a previously saved incompatible destination so the
+                            // operator can see and replace it — do not offer other incompatible stages.
+                            return [...destinations, current];
+                        }
+                        return destinations;
+                    })();
                     const triggers = triggersByRef.get(transition.transition_ref) ?? [];
                     const automatic = triggers.some((t) => t.includes("(automatic)"));
 
@@ -158,7 +183,7 @@ export default function LifecycleStageOutgoingTransitionsEditor({
                                             }}
                                         >
                                             <option value="">Select stage…</option>
-                                            {destinations.map((stage) => (
+                                            {selectDestinations.map((stage) => (
                                                 <option key={stage.key} value={stage.key}>
                                                     {stage.label}
                                                 </option>

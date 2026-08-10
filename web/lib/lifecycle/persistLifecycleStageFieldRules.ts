@@ -22,6 +22,7 @@ import {
 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import { parseRuleMetaV1 } from "@/lib/lifecycle/requirementTimingMeta";
 import { replacePatchedStageFieldRules } from "@/lib/lifecycle/replacePatchedStageFieldRules";
+import { mergeCategoryFDepartmentMetadata } from "@/lib/lifecycle/mergeCategoryFDepartmentMetadata";
 
 export async function persistLifecycleStageFieldRules(
     supabase: SupabaseClient,
@@ -91,6 +92,7 @@ export async function persistLifecycleStageFieldRules(
         metadataPatch,
     );
     if (builderReset) metadata = deepMergeJsonObjects(metadata, builderReset);
+    metadata = mergeCategoryFDepartmentMetadata(params.existingMetadata, metadata);
 
     const { data: updated, error } = await supabase
         .from("departments")

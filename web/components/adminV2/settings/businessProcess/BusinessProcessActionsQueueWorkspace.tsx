@@ -167,11 +167,18 @@ export function useProcessActionsMatrixDraft(departmentId: string, builderStageK
                         }),
                     },
                 );
-                const j = (await res.json().catch(() => ({}))) as { error?: string; rows?: LifecycleActionsMatrixRow[] };
+                const j = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    rows?: LifecycleActionsMatrixRow[];
+                    publication_required?: boolean;
+                };
                 if (!res.ok) throw new Error(j.error ?? "Save failed");
                 if (j.rows) setRows(j.rows.map(draftFromRow));
-                setSuccess("Process actions saved.");
-                await onSaved?.();
+                setSuccess(
+                    j.publication_required
+                        ? "Process commands saved. Publish Business Process configuration to make Helpful Commands live at runtime."
+                        : "Process commands saved.",
+                );                await onSaved?.();
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Save failed");
             } finally {
@@ -269,10 +276,11 @@ const ACTION_HELP: Partial<Record<LifecycleBaseActionKey, string>> = {
     add_child: "Adds a child profile and associates them with the family record.",
     send_form: "Sends a configured form link and tracks completion on the record.",
     schedule_tour: "Books a tour slot and writes scheduling context to the record timeline.",
-    waitlist_child: "Moves a child to a waitlist status with audit and workflow side effects.",
+    waitlist_child:
+        "Moves a child to Waitlist. Enabling here writes placements immediately and drafts Move to Waitlist into the process command set for Stages → Operator work → Commands & Results (Helpful Commands). Publish Business Process configuration for runtime. Focus Panel Manage is the overflow menu — not What's Next.",
     enroll_child: "Confirms a child's enrollment with audit and workflow side effects.",
     close_lead: "Closes or loses this lead with audit and workflow side effects.",
-    create_task: "Creates an operator task tied to the record with due date and assignee.",
+    create_task: "Creates a Work Item tied to the record with due date and assignee.",
     quick_message: "Opens a quick message composer prefilled with record context.",
 };
 

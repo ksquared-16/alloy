@@ -46,39 +46,43 @@ export default function ContactPage() {
   };
 
   const inputClass =
-    "w-full rounded-lg border border-alloy-forge/15 bg-white px-4 py-3 text-sm text-alloy-forge placeholder:text-alloy-forge/40 focus:border-alloy-juniper focus:outline-none focus:ring-2 focus:ring-alloy-juniper/20";
+    "w-full rounded-xl border border-alloy-midnight-forge/12 bg-white px-4 py-3.5 text-[0.9375rem] text-alloy-midnight-forge placeholder:text-alloy-midnight-forge/35 focus:border-alloy-bend-pine focus:outline-none focus:ring-2 focus:ring-alloy-bend-pine/15";
 
   return (
     <>
-      <SectionShell className="!pt-12 md:!pt-16" innerClassName="max-w-xl">
-        <p className="text-sm font-semibold uppercase tracking-widest text-alloy-juniper">Contact</p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight text-alloy-forge md:text-5xl">
-          Request a Demo
-        </h1>
-        <p className="mt-6 text-lg text-alloy-forge/70">
-          Tell us about your organization and we will reach out to schedule a walkthrough of Alloy.
+      <SectionShell density="compact" className="!pt-10 md:!pt-14" innerClassName="max-w-lg">
+        <p className="marketing-eyebrow">Contact</p>
+        <h1 className="marketing-page-headline mt-3">Request a Demo</h1>
+        <p className="marketing-body-lg mt-4">
+          Tell us about your organization. We will schedule a walkthrough of how Alloy moves work
+          forward.
         </p>
 
         {formState === "success" ? (
           <div
-            className="mt-10 rounded-xl border border-alloy-juniper/25 bg-alloy-juniper/5 px-6 py-8"
+            className="mt-8 rounded-2xl border border-alloy-bend-pine/20 bg-alloy-bend-pine/[0.04] px-6 py-7"
             role="status"
           >
-            <h2 className="text-lg font-semibold text-alloy-forge">Thank you — we received your request.</h2>
-            <p className="mt-2 text-sm text-alloy-forge/70">
+            <h2 className="text-lg font-semibold tracking-[-0.01em] text-alloy-midnight-forge">
+              Thank you — we received your request.
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-alloy-midnight-forge/65">
               Our team will be in touch shortly at the email you provided.
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="mt-10 space-y-5">
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {formState === "error" && errorMessage ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-800">
                 {errorMessage}
               </div>
             ) : null}
 
             <div>
-              <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+              <label
+                htmlFor="name"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+              >
                 Name
               </label>
               <input
@@ -95,7 +99,7 @@ export default function ContactPage() {
             <div>
               <label
                 htmlFor="organization"
-                className="mb-1.5 block text-sm font-medium text-alloy-forge/80"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
               >
                 Organization
               </label>
@@ -111,7 +115,10 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+              >
                 Email
               </label>
               <input
@@ -126,7 +133,10 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label htmlFor="message" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
+              <label
+                htmlFor="message"
+                className="mb-1.5 block text-[0.8125rem] font-medium text-alloy-midnight-forge/70"
+              >
                 Message
               </label>
               <textarea
@@ -134,20 +144,25 @@ export default function ContactPage() {
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className={`${inputClass} resize-y min-h-[120px]`}
-                placeholder="Tell us about your centers, current tools, or what you are looking for."
+                className={`${inputClass} min-h-[112px] resize-y`}
+                placeholder="Tell us about your operations, current tools, or what you are looking for."
               />
             </div>
 
-            <CTAButton type="submit" disabled={formState === "submitting"} className="w-full sm:w-auto">
-              {formState === "submitting" ? "Sending…" : "Request a Demo"}
-            </CTAButton>
+            <div className="pt-0.5">
+              <CTAButton type="submit" disabled={formState === "submitting"} className="w-full sm:w-auto">
+                {formState === "submitting" ? "Sending…" : "Request a Demo"}
+              </CTAButton>
+            </div>
           </form>
         )}
 
-        <p className="mt-8 text-sm text-alloy-forge/50">
+        <p className="mt-8 text-sm text-alloy-midnight-forge/45">
           Prefer email?{" "}
-          <a href="mailto:hello@workwithalloy.com" className="text-alloy-juniper hover:underline">
+          <a
+            href="mailto:hello@workwithalloy.com"
+            className="font-semibold text-alloy-bend-pine hover:underline"
+          >
             hello@workwithalloy.com
           </a>
         </p>

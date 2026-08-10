@@ -41,6 +41,8 @@ export type CreateLeadSuccess = {
     workUnitKey: string | null;
     /** Config-resolved Work View id for process-context routing, when matched. */
     workViewId: string | null;
+    /** Label-derived Work View route key (`Leads` → `leads`) for operator URLs. */
+    workViewRouteKey: string | null;
     /** Canonical Work Unit Focus Panel href — Work mode, not legacy drawer. */
     focusPanelHref: string;
     /** Case status written to the record. */
@@ -89,6 +91,7 @@ export function buildCreateLeadSuccess(input: {
     const workUnitId = trimmed(detail.work_unit_id) || null;
     const workUnitKey = trimmed(detail.work_unit_key) || null;
     const workViewId = trimmed(detail.work_view_id) || null;
+    const workViewRouteKey = trimmed(detail.work_view_route_key) || null;
     const statusKey = trimmed(detail.status_key) || null;
     const name = input.knownInputs ? createLeadDisplayName(input.knownInputs) : "";
     const title = name ? `Lead for ${name}` : null;
@@ -96,6 +99,7 @@ export function buildCreateLeadSuccess(input: {
         recordId: createdRecordId,
         workUnitKey,
         workViewId,
+        workViewRouteKey,
     });
     return {
         createdRecordId,
@@ -113,6 +117,7 @@ export function buildCreateLeadSuccess(input: {
         workUnitId,
         workUnitKey,
         workViewId,
+        workViewRouteKey,
         focusPanelHref,
         statusKey,
         successCopy: name ? `Created lead for ${name}.` : "Lead created.",

@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import { getPublicSupabaseAuthDebug } from "@/lib/supabase/publicAuthEnv";
 import CTAButton from "@/components/marketing/CTAButton";
-import { MARKETING_ARTIFACTS } from "@/lib/marketing/artifactPaths";
+import { MARKETING_BRAND } from "@/lib/marketing/artifactPaths";
 
 /** Dev-only: safe Supabase connectivity hints (hostname + booleans only). */
 function DevSupabaseAuthPanel() {
@@ -122,7 +122,7 @@ function LoginForm() {
         <div className="relative flex h-full flex-col justify-between p-12 xl:p-16">
           <Link href="/">
             <Image
-              src="/brand/alloy-wordmark-black.svg"
+              src="/marketing/brand/alloy-gradient-wordmark.svg"
               alt="Alloy"
               width={160}
               height={40}
@@ -132,7 +132,7 @@ function LoginForm() {
           <div className="flex flex-1 items-center justify-center py-12">
             <div className="relative aspect-[4/3] w-full max-w-md">
               <Image
-                src={MARKETING_ARTIFACTS.title}
+                src={MARKETING_BRAND.brandmark}
                 alt=""
                 fill
                 className="object-contain"
@@ -141,9 +141,8 @@ function LoginForm() {
               />
             </div>
           </div>
-          <p className="max-w-sm text-sm leading-relaxed text-alloy-forge/55">
-            A platform for operational workflows — connecting people, processes, and actions into one
-            operating system.
+          <p className="max-w-sm text-sm leading-relaxed text-alloy-midnight-forge/55">
+            Most software stores information. Alloy moves work forward.
           </p>
         </div>
       </div>
@@ -154,7 +153,7 @@ function LoginForm() {
           <div className="mb-8 lg:hidden">
             <Link href="/">
               <Image
-                src="/brand/alloy-wordmark-black.svg"
+                src="/marketing/brand/alloy-gradient-wordmark.svg"
                 alt="Alloy"
                 width={140}
                 height={36}

@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { upsertCustomerMemberConfigFieldValues } from "@/lib/admin/customerMemberPatch";
 
 export type PortContext = {
     supabase: SupabaseClient;
@@ -62,6 +63,7 @@ export interface IdentityCommandPorts {
             last_name: string | null;
             dob: string | null;
             relationship: string;
+            gender?: "female" | "male" | null;
         },
     ): Promise<UpsertResult>;
 
@@ -217,7 +219,8 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                         person_id: input.person_id,
                         role_type: input.role_type || PERSON_HOUSEHOLD_ROLE,
                     },
-                    { onConflict: "org_id,customer_id,person_id", ignoreDuplicates: false },
+                    // Live unique: uq_customer_persons_unique (org_id, customer_id, person_id, role_type)
+                    { onConflict: "org_id,customer_id,person_id,role_type", ignoreDuplicates: false },
                 )
                 .select("id")
                 .maybeSingle();
@@ -241,7 +244,13 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                 .select("id")
                 .single();
             if (error || !data) throw new Error(error?.message ?? "create_child_failed");
-            return { id: String((data as { id: string }).id), created: true };
+            const childId = String((data as { id: string }).id);
+            if (input.gender === "female" || input.gender === "male") {
+                await upsertCustomerMemberConfigFieldValues(ctx.supabase, ctx.orgId, childId, {
+                    gender: input.gender,
+                });
+            }
+            return { id: childId, created: true };
         },
 
         async updateChild(ctx, input) {
@@ -309,7 +318,8 @@ export function createDefaultIdentityCommandPorts(): IdentityCommandPorts {
                         role_type: input.role_type,
                         ...(input.role ? { metadata: { role: input.role } } : {}),
                     },
-                    { onConflict: "org_id,opportunity_id,person_id", ignoreDuplicates: false },
+                    // Live unique: uq_opportunity_persons_opp_person (opportunity_id, person_id)
+                    { onConflict: "opportunity_id,person_id", ignoreDuplicates: false },
                 )
                 .select("id")
                 .maybeSingle();

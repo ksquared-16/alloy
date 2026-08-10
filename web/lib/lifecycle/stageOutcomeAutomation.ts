@@ -63,12 +63,64 @@ export type OutcomeAttentionDraft = {
     due_policy: StageFollowUpWorkDuePolicyV1;
 };
 
+export type OutcomeCaseCloseDraft = {
+    /** Canonical case status this outcome writes — `closed` for a terminal outcome. */
+    status_key: string;
+    /** Why the case closed. Canonical vocabulary: lost | withdrawn | not_a_fit | aged_out | other. */
+    close_reason_key?: string;
+};
+
+/**
+ * The editable shape of one outcome's behaviour.
+ *
+ * `preserved_targets` and `preserved_rules` are not decoration — they are why editing an outcome no
+ * longer destroys it. This draft models a subset of the ten `StageOutcomeRuleTargetKind`s, and
+ * `upsertComposableOutcomeBehavior` REBUILDS the outcome's rules from it. Anything the draft could
+ * not carry was therefore deleted the moment an operator touched an unrelated control: Closed Lost
+ * lost `update_family_case_status: closed`, and Unable To Reach lost `reopen_work` together with
+ * both of its `when_attempt_count_*` branches. The generated summary kept reading correctly the
+ * whole time — it reads the rules directly — so the loss stayed invisible until after save.
+ *
+ * The rule this encodes: what the editor cannot express, it carries through untouched.
+ */
 export type ComposableOutcomeBehaviorDraft = {
     movement: "stay_in_stage" | "move_through_transition";
     transition_ref?: string;
     follow_up_work: OutcomeFollowUpWorkDraft[];
     attention_items: OutcomeAttentionDraft[];
+    /** `update_family_case_status` — durable case state, owned by the outcome. */
+    case_status?: OutcomeCaseCloseDraft;
+    /** `mark_stage_work_complete` — whether recording this outcome finishes the current work. */
+    completes_stage_work: boolean;
+    /** Target kinds this draft does not model, carried verbatim so an edit cannot drop them. */
+    preserved_targets: StageOutcomeRuleTargetV1[];
+    /** Conditional rules for this outcome (attempt count, domain signal, entry status) — untouched. */
+    preserved_rules: StageOutcomeRuleV1[];
+    /** Identity of the unconditional rule, so a round-trip keeps its `rule_key`. */
+    behavior_rule_key?: string;
+    /** Whether an unconditional behaviour rule existed at all, so read→write stays faithful. */
+    had_behavior_rule: boolean;
 };
+
+/** Kinds the draft models explicitly. Everything else rides in `preserved_targets`. */
+const MODELLED_TARGET_KINDS: ReadonlySet<string> = new Set([
+    "move_to_stage",
+    "no_movement",
+    "create_next_work",
+    "create_needs_attention",
+    "update_family_case_status",
+    "mark_stage_work_complete",
+]);
+
+/** A rule the outcome editor owns: triggered by the outcome alone, with no extra condition. */
+function isUnconditionalBehaviorRule(rule: StageOutcomeRuleV1): boolean {
+    return (
+        rule.when_attempt_count_lt == null &&
+        rule.when_attempt_count_gte == null &&
+        !rule.when_domain_signal &&
+        !rule.when_enter_status_key
+    );
+}
 
 const ENROLLMENT_STAGE_DEFAULT_STATUS: Record<string, string> = {
     lead: "new_lead",
@@ -369,8 +421,17 @@ export function readComposableOutcomeBehaviorDraft(
     outcomeKey: string,
     rules: StageOutcomeRuleV1[],
 ): ComposableOutcomeBehaviorDraft {
-    const targets = rulesForOutcome(rules, outcomeKey).flatMap((rule) => rule.targets);
+    const forOutcome = rulesForOutcome(rules, outcomeKey);
+
+    // Conditional rules belong to whoever authored the condition. The outcome editor has no way to
+    // show "…but only below 3 attempts", so it must not rewrite them — it carries them verbatim.
+    const behaviorRules = forOutcome.filter(isUnconditionalBehaviorRule);
+    const preserved_rules = forOutcome.filter((rule) => !isUnconditionalBehaviorRule(rule));
+
+    const targets = behaviorRules.flatMap((rule) => rule.targets);
     const move = targets.find((target) => target.kind === "move_to_stage");
+    const caseStatus = targets.find((target) => target.kind === "update_family_case_status");
+
     return {
         movement: move ? "move_through_transition" : "stay_in_stage",
         ...(move?.transition_ref ? { transition_ref: move.transition_ref } : {}),
@@ -386,6 +447,21 @@ export function readComposableOutcomeBehaviorDraft(
                 reason: target.attention_reason ?? "Needs attention",
                 due_policy: effectiveFollowUpDuePolicy(target.follow_up_due_policy, target.due_days),
             })),
+        ...(caseStatus?.status_key
+            ? {
+                  case_status: {
+                      status_key: caseStatus.status_key,
+                      ...(caseStatus.close_reason_key
+                          ? { close_reason_key: caseStatus.close_reason_key }
+                          : {}),
+                  },
+              }
+            : {}),
+        completes_stage_work: targets.some((target) => target.kind === "mark_stage_work_complete"),
+        preserved_targets: targets.filter((target) => !MODELLED_TARGET_KINDS.has(target.kind)),
+        preserved_rules,
+        ...(behaviorRules[0]?.rule_key ? { behavior_rule_key: behaviorRules[0].rule_key } : {}),
+        had_behavior_rule: behaviorRules.length > 0,
     };
 }
 
@@ -402,6 +478,16 @@ export function upsertComposableOutcomeBehavior(
     } else {
         targets.push({ kind: "no_movement" });
     }
+    // Durable case state before the work bookkeeping, matching how the seeds read.
+    if (draft.case_status?.status_key?.trim()) {
+        const closeReason = trimKey(draft.case_status.close_reason_key);
+        targets.push({
+            kind: "update_family_case_status",
+            status_key: draft.case_status.status_key.trim(),
+            ...(closeReason ? { close_reason_key: closeReason } : {}),
+        });
+    }
+    if (draft.completes_stage_work) targets.push({ kind: "mark_stage_work_complete" });
     for (const followUp of draft.follow_up_work) {
         const templateKey = trimKey(followUp.template_key);
         if (!templateKey) continue;
@@ -419,10 +505,30 @@ export function upsertComposableOutcomeBehavior(
             follow_up_due_policy: attention.due_policy,
         });
     }
+    // Everything the editor cannot express, exactly as it arrived.
+    targets.push(...(draft.preserved_targets ?? []));
+
+    // Conditional rules are restored untouched — including their conditions and rule keys.
+    const restored = draft.preserved_rules ?? [];
+
+    // Only emit a behaviour rule if one existed or the operator has something to say. Inventing one
+    // for an outcome whose behaviour lives entirely in conditional rules would add configuration
+    // the operator never authored.
+    const hasContent =
+        draft.movement === "move_through_transition" ||
+        Boolean(draft.case_status?.status_key?.trim()) ||
+        draft.completes_stage_work ||
+        draft.follow_up_work.some((row) => trimKey(row.template_key)) ||
+        draft.attention_items.length > 0 ||
+        (draft.preserved_targets ?? []).length > 0;
+
+    if (!draft.had_behavior_rule && !hasContent) return [...without, ...restored];
+
     return [
         ...without,
+        ...restored,
         {
-            rule_key: `${outcomeKey}_behavior`,
+            rule_key: draft.behavior_rule_key?.trim() || `${outcomeKey}_behavior`,
             when_outcome_key: outcomeKey,
             targets,
         },

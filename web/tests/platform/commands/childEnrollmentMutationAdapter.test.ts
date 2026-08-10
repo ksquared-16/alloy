@@ -221,6 +221,104 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
         );
     });
 
+    it("family opportunity + move_to_waitlist auto-resolves single OCM then waitlists child", async () => {
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "opportunity_customer_members") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                eq: vi.fn(async () => ({
+                                    data: [
+                                        {
+                                            id: "ocm-1",
+                                            customer_member_id: "child-1",
+                                            customer_members: { display_name: "Ava" },
+                                        },
+                                    ],
+                                    error: null,
+                                })),
+                            })),
+                        })),
+                    };
+                }
+                return {
+                    select: vi.fn(() => ({
+                        eq: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+                            })),
+                        })),
+                    })),
+                };
+            }),
+        } as unknown as SupabaseClient;
+
+        const result = await executeCommandInvocation({
+            request: {
+                invocation: invocation({
+                    commandKey: "move_to_waitlist",
+                    inputValues: {},
+                }),
+                mode: "execute",
+                executionSubject: { entityType: "opportunity", entityId: "opp-1" },
+                invocationId: "inv-family-waitlist",
+            },
+            server: { orgId: "org-real", userId: "user-real", supabase },
+            deps: { executeMutation: mutationSpy as never },
+        });
+
+        expect(result.ok).toBe(true);
+        expect(mutationSpy).not.toHaveBeenCalled();
+        expect(applyChildWaitlistViaOutcomeRuntime).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(applyChildWaitlistViaOutcomeRuntime).mock.calls[0]![0]).toEqual(
+            expect.objectContaining({
+                opportunityId: "opp-1",
+                customerMemberId: "child-1",
+                opportunityCustomerMemberId: "ocm-1",
+            }),
+        );
+    });
+
+    it("family opportunity + multiple children fails closed without picking first", async () => {
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "opportunity_customer_members") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                eq: vi.fn(async () => ({
+                                    data: [
+                                        { id: "ocm-1", customer_member_id: "cm-1", customer_members: { display_name: "Ava" } },
+                                        { id: "ocm-2", customer_member_id: "cm-2", customer_members: { display_name: "Ben" } },
+                                    ],
+                                    error: null,
+                                })),
+                            })),
+                        })),
+                    };
+                }
+                return { select: vi.fn() };
+            }),
+        } as unknown as SupabaseClient;
+
+        const result = await executeCommandInvocation({
+            request: {
+                invocation: invocation({ commandKey: "waitlist_child", inputValues: {} }),
+                mode: "execute",
+                executionSubject: { entityType: "opportunity", entityId: "opp-1" },
+            },
+            server: { orgId: "org-1", userId: "user-1", supabase },
+            deps: { executeMutation: mutationSpy as never },
+        });
+
+        expect(result.ok).toBe(false);
+        expect(applyChildWaitlistViaOutcomeRuntime).not.toHaveBeenCalled();
+        if (!result.ok) {
+            expect(result.error.operatorMessage).toMatch(/more than one child/i);
+        }
+    });
+
     it("preview for waitlist_child does not commit mutation or outcome progression", async () => {
         const result = await executeCommandInvocation({
             request: {
@@ -260,12 +358,12 @@ describe("Child Enrollment Mutation adapter (P2.S2)", () => {
         expect(mutationSpy).not.toHaveBeenCalled();
     });
 
-    it("rejects mark_lost and Lead Status keys on this adapter support set", () => {
+    it("routes move_to_waitlist alias through child Enrollment facade (not legacy)", () => {
         expect(isChildEnrollmentMutationFacadeSupported("mark_lost")).toBe(false);
         expect(isChildEnrollmentMutationFacadeSupported("close_lead")).toBe(false);
         expect(isLeadStatusMutationFacadeSupported("waitlist_child")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("mark_lost")).toBe(false);
-        expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(false);
+        expect(isCommandRuntimeFacadeExecutionSupported("waitlist_child")).toBe(true);
+        expect(isCommandRuntimeFacadeExecutionSupported("move_to_waitlist")).toBe(true);
     });
 
     it("prepares with mutation_runtime destination", () => {

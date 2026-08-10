@@ -14,6 +14,12 @@ import {
     upsertComposableOutcomeBehavior,
 } from "@/lib/lifecycle/stageOutcomeAutomation";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
+import type { OutcomeStatusConfiguredRow } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+import { resolveOutcomeStatusOptions } from "@/lib/lifecycle/resolveOutcomeStatusOptions";
+import {
+    entityGrainFromJourneySegment,
+    filterGrainCompatibleStageDestinations,
+} from "@/lib/lifecycle/filterGrainCompatibleStageDestinations";
 import {
     setWorkTemplateOutcomeRefs,
     workTemplateOutcomeRefs,
@@ -27,7 +33,11 @@ type Props = {
     /** Stage that owns these outcomes. With `processStages`, enables authoring an exit path here. */
     stageKey?: string;
     /** Every stage in the process — the destinations a new exit path may target. */
-    processStages?: Array<{ key: string; label: string }>;
+    processStages?: Array<{ key: string; label: string; grain?: string }>;
+    /** Case-status catalog, so a terminal outcome can resolve the canonical closed status. */
+    configuredStatuses?: ReadonlyArray<OutcomeStatusConfiguredRow>;
+    /** `opportunities` for the family track, `opportunity_customer_members` for the child track. */
+    entityType?: string;
     onChange: (draft: StageOperatingPlanEditorDraft) => void;
     /** When set, only outcomes available on this Work Template are shown/edited. */
     workTemplateKey?: string;
@@ -39,6 +49,8 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
     stageLabel,
     stageKey,
     processStages,
+    configuredStatuses,
+    entityType,
     onChange,
     workTemplateKey,
 }: Props) {
@@ -68,12 +80,31 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
         .map((ref) => draft.outcomes.find((outcome) => outcome.outcome_key === ref))
         .filter((outcome): outcome is NonNullable<typeof outcome> => Boolean(outcome));
 
+    /** This stage's own grain, from the draft that owns these outcomes. */
+    const entityGrain = entityGrainFromJourneySegment(draft.journey_segment);
+
     /**
      * Destinations an exit path from this stage may target. A stage cannot transition to itself,
      * which the operating contract already rejects (`transition_destination_self`).
+     * Grain-compatible only — UX convenience; server validators remain defense in depth.
      */
-    const transitionDestinations = (processStages ?? []).filter((stage) => stage.key !== stageKey);
+    const transitionDestinations = filterGrainCompatibleStageDestinations({
+        processStages: processStages ?? [],
+        stageKey: stageKey ?? "",
+        entityGrain,
+    });
     const canAuthorTransition = Boolean(stageKey?.trim()) && transitionDestinations.length > 0;
+
+    /**
+     * The closed case statuses a terminal outcome may write. RESOLVED from the configured catalog,
+     * never invented here — `opportunities.status_key` is owned by `status_definitions`, and an
+     * outcome that closes a case selects from that domain rather than minting a status of its own.
+     */
+    const closedStatusOptions = resolveOutcomeStatusOptions({
+        configuredStatuses: configuredStatuses ?? [],
+        purpose: "close_record",
+        entityType: entityType ?? "opportunities",
+    }).options;
 
     /**
      * Author an exit path from inside the outcome that needs one, and point that outcome at it.
@@ -335,6 +366,7 @@ export default function LifecycleStageOutcomeDefinitionsEditor({
                                 transitionDestinations={
                                     canAuthorTransition ? transitionDestinations : undefined
                                 }
+                                closedStatusOptions={closedStatusOptions}
                                 onCreateTransition={
                                     canAuthorTransition ?
                                         (targetStageKey: string) =>

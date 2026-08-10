@@ -60,7 +60,7 @@ export default function ComposerBosEnhanceModal({ open, onClose, draft }: Compos
                 >
                     <div className={MESSAGING_MODAL_HEADER_CLASS}>
                         <BosHeader
-                            title="BOS Assist"
+                            title="BOS"
                             subtitle="Review your draft and choose how BOS should refine it."
                             size="sm"
                             titleId="composer-bos-title"

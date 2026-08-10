@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 
 import { createLeadParserSpec } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
@@ -25,14 +25,55 @@ import {
     applyCreateLeadCommitSelectionToDraft,
     resolveCreateLeadCommitSelectionFromDraft,
 } from "@/lib/bos/commandSession/createLeadRepeaterDraft";
-import { resolveCreateLeadDefaultLocation } from "@/lib/admin/actions/resolveCreateLeadDefaultLocation";
+import {
+    CREATE_LEAD_WORKSPACE_LOCATION_NOTE,
+    resolveCreateLeadDefaultLocation,
+    shouldApplyImpliedCreateLeadLocation,
+} from "@/lib/admin/actions/resolveCreateLeadDefaultLocation";
 import { upsertBosDraftValue } from "@/lib/bos/commandSession/draftValues";
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import type { IntakeSelectOption } from "@/lib/intake/types";
-import type { BosCommandResolutionState } from "@/lib/bos/commandSession/types";
+import type { BosCommandDraft, BosCommandResolutionState } from "@/lib/bos/commandSession/types";
+
+function applyImpliedWorkspaceLocationToDraft(
+    draft: BosCommandDraft,
+    impliedLocationId: string | null | undefined,
+): BosCommandDraft {
+    const existing = draft.values.find((v) => v.fieldKey === "location_id");
+    const currentLocationId = existing?.value != null ? String(existing.value).trim() : "";
+    const currentIsWorkspaceImplied = Boolean(
+        existing?.evidence?.some(
+            (e) => e.kind === "system_default" && e.note === CREATE_LEAD_WORKSPACE_LOCATION_NOTE,
+        ),
+    );
+    if (
+        !shouldApplyImpliedCreateLeadLocation({
+            currentLocationId,
+            impliedLocationId,
+            currentIsWorkspaceImplied,
+        })
+    ) {
+        return draft;
+    }
+    const locationId = String(impliedLocationId).trim();
+    return upsertBosDraftValue(draft, {
+        fieldKey: "location_id",
+        value: locationId,
+        state: "confirmed",
+        evidence: [
+            {
+                kind: "system_default",
+                note: CREATE_LEAD_WORKSPACE_LOCATION_NOTE,
+                at: new Date().toISOString(),
+            },
+        ],
+        optionResolved: true,
+    });
+}
 
 function resolutionFingerprint(resolution: BosCommandResolutionState): string {
     return [
@@ -68,35 +109,21 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
 
     // Location is implied whenever the operator's own scope determines it — the selected workspace
     // site, or their single permitted site. Only an "All locations" operator with more than one
-    // permitted site has to supply it. Seeded once so clearing the field is not fought.
+    // permitted site has to supply it. Re-apply when empty (e.g. after analyze) or when tracking
+    // a prior workspace-implied value after the top-nav campus changes. Never clobber operator picks.
     const siteFilter = useWorkspaceSiteFilter();
-    const impliedLocationSeededRef = useRef(false);
     const impliedLocationId = resolveCreateLeadDefaultLocation({
         workspaceSiteId: siteFilter?.selectedSiteId ?? null,
         permittedSiteIds: (siteFilter?.bootstrap?.sites ?? []).map((s) => s.id),
     }).location_id;
 
     useEffect(() => {
-        if (!ctx || impliedLocationSeededRef.current) return;
-        if (!impliedLocationId || formLocation.trim()) return;
-        impliedLocationSeededRef.current = true;
-        ctx.dispatch({
-            type: "SET_DRAFT",
-            draft: upsertBosDraftValue(session.draft, {
-                fieldKey: "location_id",
-                value: impliedLocationId,
-                state: "confirmed",
-                evidence: [
-                    {
-                        kind: "system_default",
-                        note: "From your location",
-                        at: new Date().toISOString(),
-                    },
-                ],
-                optionResolved: true,
-            }),
-        });
-    }, [ctx, formLocation, impliedLocationId, session.draft]);
+        if (!ctx) return;
+        if (siteFilter && !siteFilter.siteSelectionReady) return;
+        const nextDraft = applyImpliedWorkspaceLocationToDraft(session.draft, impliedLocationId);
+        if (nextDraft === session.draft) return;
+        ctx.dispatch({ type: "SET_DRAFT", draft: nextDraft });
+    }, [ctx, impliedLocationId, session.draft, siteFilter?.siteSelectionReady]);
 
     const fieldOptions = useMemo(() => {
         const options: Partial<Record<string, readonly IntakeSelectOption[]>> = {};
@@ -223,11 +250,17 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             setAnalyzeError(null);
             ctx.dispatch({ type: "BUMP_REQUEST_SEQ" });
             try {
-                const nextDraft = createLeadConversationIntakeAdapter.parseOperatorTurn({
+                const parsedDraft = createLeadConversationIntakeAdapter.parseOperatorTurn({
                     text,
                     draft: session.draft,
                     effectiveSpec,
                 });
+                // Re-seed after parse so a selected (or single permitted) campus still fills
+                // location when the note did not mention it — and summary/clarification see it.
+                const nextDraft = applyImpliedWorkspaceLocationToDraft(
+                    parsedDraft,
+                    impliedLocationId,
+                );
                 ctx.dispatch({ type: "SET_DRAFT", draft: nextDraft });
                 ctx.dispatch({
                     type: "APPEND_MESSAGE",
@@ -285,7 +318,7 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
                 setAnalyzing(false);
             }
         },
-        [ctx, effectiveSpec, pasteText, session.draft, workspace]
+        [ctx, effectiveSpec, impliedLocationId, pasteText, session.draft, workspace]
     );
 
     const onFieldChange = useCallback(
@@ -421,6 +454,19 @@ export function useCreateLeadBosSessionController(session: BosCommandSession) {
             processingCaseId: result.processingCaseId ?? null,
             phase: result.processingCaseId ? "processing_review" : "completed",
         });
+        if (!result.processingCaseId && result.ok && result.success) {
+            const copy =
+                typeof result.success === "object" && result.success && "successCopy" in result.success
+                    ? String((result.success as { successCopy?: string }).successCopy ?? "Lead created")
+                    : "Lead created";
+            ctx.dispatch({
+                type: "COMPLETE",
+                successMessage: `${copy} Open Lead when you want to continue.`,
+            });
+            if (result.opportunityId) {
+                dispatchOpportunityQueueUpdated(result.opportunityId, "create_lead");
+            }
+        }
     }, [ctx, effectiveSpec, session, workspace]);
 
     return {

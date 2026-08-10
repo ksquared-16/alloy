@@ -44,6 +44,8 @@ import {
     namesAChild,
 } from "@/lib/lifecycle/childParticipationIdentity";
 import { resolveJourneySegment } from "@/lib/lifecycle/grainVocabulary";
+import { deriveParticipantDecisionProgress } from "@/lib/lifecycle/projectParticipantDecisionRows";
+import { readEnrollmentInstancesForLead } from "@/lib/process/processInstances";
 
 /**
  * Execution provenance for a discharged Current Work requirement. Distinguishes an
@@ -130,6 +132,8 @@ export async function completeStageWorkWithOutcome(
         onTrace: input.onTrace,
         validate: async () => {
             if (!resolved.ok) return { ok: false, message: resolved.message };
+            const participantGate = await preflightParticipantResolutionGate(input, resolved);
+            if (!participantGate.ok) return participantGate;
             const readiness = await preflightStageChangingOutcomeReadiness({
                 supabase: input.supabase,
                 orgId: input.orgId,
@@ -346,6 +350,71 @@ export async function completeStageWorkWithOutcome(
         transaction,
         changed: true,
         correlation_id: transaction.correlation_id,
+    };
+}
+
+/**
+ * THE FAMILY WORK DOES NOT CLOSE ON THE FIRST CHILD.
+ *
+ * A work template that carries per-participant decisions is one operational task shared by several
+ * children. Recording the family's completing outcome closes that task — and with it the only
+ * surface the remaining children's decisions are rendered on. So when configuration declares
+ * `requires_all_participants_resolved`, the completing outcome is refused until every participant
+ * has a path.
+ *
+ * Runs in `validate`, so a refusal happens before the work row is touched: the operator is told
+ * why, and nothing was written and rolled back to tell them.
+ *
+ * Reads through `readEnrollmentInstancesForLead`, the FAIL-CLOSED reader. Its lenient sibling
+ * answers a failed query with `[]`, which this gate would read as "no participants" — and
+ * `all_resolved` is false for zero participants, so the gate would block rather than let a close
+ * through. That is the safe direction, but "the database is unreachable" and "this family has no
+ * children" deserve different messages, and only the strict reader can tell them apart.
+ */
+async function preflightParticipantResolutionGate(
+    input: CompleteStageWorkWithOutcomeInput,
+    resolved: Extract<ResolvedOutcomePlan, { ok: true }>,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+    const { plan, outcome, closeDecision } = resolved;
+    if (!closeDecision.shouldClose) return { ok: true };
+
+    const templateKey = outcome.work_template_key?.trim() ?? null;
+    const template =
+        templateKey ?
+            plan.work_templates.find((t) => t.template_key === templateKey) ?? null
+        :   plan.work_templates[0] ?? null;
+    if (!template?.completion_policy?.requires_all_participants_resolved) return { ok: true };
+
+    const decisions = template.participant_decisions ?? [];
+    if (!decisions.length) return { ok: true };
+
+    const read = await readEnrollmentInstancesForLead(input.supabase, {
+        orgId: input.orgId,
+        opportunityId: input.subject.opportunity_id,
+    });
+    if (!read.ok) {
+        return {
+            ok: false,
+            message:
+                "Could not confirm every child's path before completing this step. "
+                + "Try again in a moment.",
+        };
+    }
+
+    const progress = deriveParticipantDecisionProgress({
+        participants: read.rows.map((row) => ({ state: row.state?.trim() ?? null })),
+        decisions,
+    });
+    if (progress.all_resolved) return { ok: true };
+
+    return {
+        ok: false,
+        message:
+            progress.total === 0 ?
+                `"${template.label}" cannot be completed until each child has a path, and this lead `
+                + `has no children on it yet.`
+            :   `"${template.label}" cannot be completed yet — ${progress.summary.toLowerCase()}. `
+                + `Choose a path for each child first.`,
     };
 }
 

@@ -27,11 +27,10 @@ import {
     validateMarkLostPayload,
     validateOpportunityStatusTransitionForAction,
 } from "@/lib/admin/actions/entryLifecycleActions";
-import { firstMatchingVisibleWorkView } from "@/lib/lifecycle/operationalProjection";
 import {
     fetchDepartmentMetadataForWorkUnit,
-    savedWorkViewsFromDepartmentMetadata,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import { resolveCreateLeadWorkViewForHandoff } from "@/lib/platform/commands/createLead/resolveCreateLeadWorkViewForHandoff";
 import { invalidateWorkUnitQueueItemsServerCacheForWorkUnit } from "@/lib/workspace/workUnitQueueItemsServerCache";
 import {
     executeConfirmTourAction,
@@ -337,21 +336,48 @@ export async function executeAdminAction(
             return { ok: false, correlation_id: correlationId, error: created.error, status: created.status };
         }
 
+        let workViewId: string | null = null;
+        let workViewRouteKey: string | null = null;
+        if (created.work_unit_id) {
+            try {
+                const departmentMetadata = await fetchDepartmentMetadataForWorkUnit(
+                    supabase,
+                    ctx.orgId,
+                    created.work_unit_id,
+                );
+                const handoff = resolveCreateLeadWorkViewForHandoff({
+                    departmentMetadata,
+                    statusKey: created.status_key,
+                    stageKey: created.stage_key,
+                });
+                workViewId = handoff?.workViewId ?? null;
+                workViewRouteKey = handoff?.workViewRouteKey ?? null;
+            } catch {
+                // Routing enrichment is best-effort — create already succeeded.
+            }
+        }
+
         return await withActionExecutedEmit(
             supabase,
             ctx,
             correlationId,
             actionKey,
             entityTypeRaw,
-            created.processing_case_id,
+            created.mode === "committed" ? created.opportunity_id : created.processing_case_id,
             {
                 mode: created.mode,
                 processing_case_id: created.processing_case_id,
                 readiness: created.readiness,
                 idempotency_key: created.idempotency_key,
                 work_unit_id: created.work_unit_id,
+                work_unit_key: created.work_unit_key,
+                work_view_id: workViewId,
+                work_view_route_key: workViewRouteKey,
                 status_key: created.status_key,
                 stage_key: created.stage_key,
+                ...(created.mode === "committed"
+                    ? { opportunity_id: created.opportunity_id }
+                    : {}),
             },
         );
     }

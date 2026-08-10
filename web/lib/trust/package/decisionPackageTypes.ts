@@ -65,6 +65,37 @@ export type DecisionPackagePrivacyReport = {
     readonly pii_mode: string;
     readonly classes_present: readonly InformationClass[];
     readonly redaction_steps: readonly { readonly path: string; readonly kind: string }[];
+    /**
+     * What each declared element's transformation actually did.
+     *
+     * Optional because a refusal that never reached transformation genuinely has
+     * none to report — an absent list and an empty list mean different things,
+     * and conflating them would be a smaller version of the misstatement this
+     * field exists to correct.
+     *
+     * Carries no value, no provider and no model: a key, its information class,
+     * its declared transformation, and whether that transformation was actually
+     * performed.
+     */
+    readonly transformations?: readonly {
+        readonly key: string;
+        readonly information_class: InformationClass;
+        readonly transformation: string;
+        readonly disposition: string;
+        readonly support: string;
+    }[];
+    /**
+     * What content-aware text minimization removed, per detector.
+     *
+     * Counts only, never a matched substring — recording the removed text to
+     * prove it was removed would defeat the removal. Absent when the policy
+     * required no text minimization.
+     */
+    readonly text_minimizations?: readonly {
+        readonly detector_key: string;
+        readonly redaction_kind: string;
+        readonly replaced_count: number;
+    }[];
 };
 
 export type DecisionPackageV1 = {

@@ -672,8 +672,138 @@ Everything before it is certified by test and module graph.
 
 | Slice | Status |
 |---|---|
-| **1.1** `processing_source_classification` | **Implemented.** Commits `373e0526b` (Processing-owned contract) and `e0d500de0` (Trust adoption). No migration. |
-| 1.2 – 1.7 | Not started. |
+| **1.1** `processing_source_classification` | **Merged** — `ab76c6cb6` (PR #346). Source-classification adoption, durable gaps, idempotency. No migration. |
+| **1.2** identity fact hashing | **Merged** — `9cb791ee3` (PR #347). Content-deterministic identity fact hash. No migration. |
+| **1.3** identity adapter contracts | **Merged** — `cd34be872` (PR #348). Pure and dormant. No migration. |
+| **1.4** dormant identity decision class | **Merged** — `942d078dd` (PR #349). Registered, no production caller. No migration. |
+| **1.5** live identity capture | **Merged** — `c933ea15b` (PR #351). First live identity persistence. No migration. |
+| **1.6** operator-correction lineage | **Merged** — `8d6917a18` (PR #353). Supersession by an operator correction or a replacement generation. No migration. |
+| **1.7** commit outcome binding | **Merged** — `20d7f2ae7` (PR #354). Execution outcomes become bounded Trust evidence, downstream only; includes the confirmation-versus-supersession correction. No migration. |
+| **1.8** closeout | **In progress.** Certification and closeout only — no new capability behaviour. See [PHASE-1-CLOSEOUT.md](PHASE-1-CLOSEOUT.md). |
+
+**Phase 1 status: NOT READY TO CLOSE**, one blocker — neither typecheck graph has executed on the
+merged Phase 1.7 head, because PR #354 merged during a GitHub Actions major outage whose jobs
+reported `steps = 0`, and the full graphs cannot run on this host (exit 144). Everything else
+certifies. Detail and evidence in the closeout document.
+
+### What 1.7 confirmed, refined, or corrected
+
+- **AD-P1-1 and AD-P1-2 hold, and are now structurally asserted.** No Phase 1.7 module imports the
+  executor, preflight, the plan builder, approval or the command registry, and a control proves it.
+  Trust never initiates: the binding is reachable only after `executeApprovedPlan` returns and its
+  attempt row is persisted.
+- **The assessment's central worry is closed without touching the plan.** §Central architecture
+  decision asked whether Decision Package lineage must live on the Commit Plan. It must not, and it
+  need not: `PlanOperation.resolutionRefs` has always carried `processing_resolutions.id`
+  (`recommendationBuilder.ts:465`), and synthesized participation operations inherit their child's.
+  Lineage is therefore fully reconstructable, **no field was added, and no historical plan hash can
+  move** — which is stronger than a fixture proving it did not.
+- **New finding, D-11 — the plan hash cannot be reached from outside its three inputs.**
+  `computePlanContentHash({orgId, caseId, operations})` projects each operation through an
+  eleven-key whitelist. `sourceResolutionVersions`, `builtAt`, `status` and every other plan field
+  are already outside it. A Trust value could only enter through an operation's `payload`,
+  `commandKey`, `targetId` or the other material keys — which is why the detail allow-list refuses
+  any operational field rather than filtering one out later.
+- **New finding, D-12 — `CommitAttempt.attemptId` means two different things.**
+  A freshly executed attempt carries the synthetic `${planId}:attempt:${n}`; one loaded from the
+  database carries the row uuid (`attemptsDb.attemptFromRow`). `insertCommitAttempt` returns the
+  durable id and `executeApprovedPlanForCase` **discarded it**. Only the row id proves persistence,
+  so it is now captured and used as the execution reference. The pre-existing ambiguity is untouched
+  otherwise and is worth a separate look.
+- **New finding, D-13 — Processing has no infrastructure-failure state.**
+  `AttemptOutcome` is `committed | partially_committed | failed | preflight_rejected`; none
+  distinguishes a declined command from a dead transport, and if the executor throws no attempt row
+  is persisted at all. Phase 0's `infrastructure_failure` class is therefore **unreachable from this
+  source and never emitted** — asserting it would claim knowledge Processing does not have.
+- **New finding, D-14 — a partial commit is only honest at subject grain.**
+  A package is one subject's judgment; a plan spans several. `partially_committed` yields `executed`
+  for a subject whose contributing operations all committed, and `outcome` for one where they did
+  not. A `compensated` operation is never counted as committed: a reversal reported as a commit is
+  precisely the falsehood this slice exists to prevent.
+- **D-15 — a superseded package must be excluded. RESOLVED: Phase 1.6's supersession rule was wrong.**
+  Excluding superseded packages is correct — what a plan executes after an operator overrides is the
+  operator's decision, so crediting the engine's package would be false. But Phase 1.6 superseded on
+  **any** operator decision, including a plain confirmation, which meant a fully operator-reviewed
+  case produced no execution evidence at all. Raised as an open question by 1.7 and **corrected in
+  this branch**: agreement is not supersession.
+
+### The confirmation-versus-supersession correction
+
+`classifyOperatorIdentityDecisionEffect` compares the durable ENGINE judgment with the durable
+OPERATOR result, and never reads `decided_by`:
+
+```text
+agreement, or the engine declined to decide → accepted   (package remains CURRENT, still bindable)
+the operator postponed                      → deferred   (package remains CURRENT)
+the operator replaced the judgment          → superseded
+anything unrecognised                       → nothing at all
+```
+
+- **New finding, D-16 — the engine judgment is recoverable, though it is overwritten.**
+  An operator decision UPDATEs `decision_action` and `selected_candidate_id` in place, so the
+  engine's answer is not stored. It is still exact: the engine's answer is a pure function of
+  `candidates`, and neither `recordResolutionDecision` nor `applyCommitSelectionToResolutions`
+  writes that column. The derivation moved out of `canonicalResolutionEngine` into a leaf
+  (`engineJudgment.ts`) that both the engine and the classifier import — a copy would drift, and the
+  drift would silently reclassify overrides as confirmations.
+- **New finding, D-17 — `review_required` is the engine DECLINING to decide, not a result.**
+  Its package asserts `disposition: needs_review` and asks for an operator. When one decides,
+  nothing the package claimed became untrue, so it is not superseded — it is `accepted`. This is
+  also the branch the normal reviewed path runs through, so misreading it is what made execution
+  binding unreachable in practice.
+- **No new observation kind, and no migration.** `accepted` and `deferred` are Phase 0 vocabulary
+  with existing projection semantics. The durable gap gained an OPTIONAL `observation_kind`; absent
+  reads as `superseded`, so rows written before the correction are not orphaned.
+- **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
+  and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
+  three entries. The count assertion now reads `size === length`, so adding a capability is a
+  deliberate act in the slice that adds it rather than an edit to every predecessor.
+- **Gotcha, recorded.** Phase 1.5's and 1.6's readiness controls recognise a gap store by filename
+  and both flagged the new one; Phase 1.6 additionally asserted the shared gap list has exactly
+  three entries. The count assertion now reads `size === length`, so adding a capability is a
+  deliberate act in the slice that adds it rather than an edit to every predecessor.
+
+### What 1.6 confirmed, refined, or corrected
+
+- **AD-P1-1 and AD-P1-2 hold.** No plan, approval or executor module is imported by any lineage
+  module, and a structural control asserts it. Commit Plan lineage is untouched.
+- **§16's own premise is now realised.** The assessment's governing finding was that the engine's
+  record "is destroyed at the moment an operator acts." It no longer is: the record survives as an
+  immutable package, and the operator's act is recorded as its lifecycle consequence.
+- **New finding, D-5 — Phase 0 could not represent operator supersession.**
+  `projectDecisionPackageLifecycle` hard-failed `MISSING_SUPERSEDING_PACKAGE_ID` on any `superseded`
+  observation without a successor id, because Phase 0 assumed supersession always came from a newer
+  package. A direct operator correction has no replacement package and must not invent one — minting
+  a package for a human decision would label it deterministic reasoning. The observation now declares
+  its **source**: a replacement package names the successor, an external authority names a durable
+  reference into its own record instead. Disposition **precedence is unchanged**; the relaxed rule is
+  a required-field rule, and the missing-reference case became its own error rather than a silent pass.
+- **New finding, D-6 — exactly-once needed no migration.**
+  `trust_decision_observations.id` is `uuid PRIMARY KEY DEFAULT gen_random_uuid()`. A supplied value
+  is equally legal, so a deterministic observation id derived from the supersession identity makes the
+  existing primary key the exactly-once authority — the same mechanism 1.5 used for the contract id.
+  Certified against a real database (`trust-lifecycle-observations`, assertions 13 and 14), not
+  inferred from the DDL: a future `GENERATED ALWAYS` would otherwise break idempotency silently.
+- **New finding, D-7 — there are TWO operator-decision writers, not one.**
+  `recordResolutionDecision` is the canonical service, but `applyCommitSelectionToResolutions` (the
+  Create Lead adapter) also stamps `decided_by = "operator"` by `subject_ref`. Both now call the one
+  lineage service; wiring only the first would have left Create Lead corrections ungoverned.
+- **New finding, D-8 — a fact correction alone supersedes nothing.**
+  `recordCorrection` appends a new fact version and does **not** re-run resolution, so no resolution
+  row changes and the prior engine judgment is still the authoritative result. Superseding on fact
+  correction would have declared a judgment non-current while it was still in force.
+- **New finding, D-9 — cross-generation Processing lineage does not exist.**
+  `markResolutionSuperseded` is only called for a replay **within** one generation; rows from an
+  earlier generation keep `superseded_by = null`. Replacement lineage therefore orders by `created_at`
+  per `subject_ref`, the same convention `pickLatestResolutionPerSubject` uses.
+- **New finding, D-10 — there is no production recomputation path today.**
+  Every caller of `runCanonicalIdentityResolution` is an intake adapter; nothing re-runs resolution
+  after an operator correction. Replacement-generation lineage is wired at the canonical
+  successful-capture path and is correct for any future recompute, but it is **unexercised in
+  production** as of this slice. Direct operator-correction lineage is the live path.
+- **Gotcha, recorded.** The Phase 0 `lib/trust` boundary control matches **source text**, so
+  `createHash().update()` fails it — including inside a comment that mentions it. The one-shot
+  `hash()` produces an identical digest and keeps the control's principle intact.
 
 ### What 1.1 confirmed, refined, or corrected
 

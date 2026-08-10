@@ -1,10 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useBosCommandSessionOptional } from "@/contexts/BosCommandSessionContext";
 import { useBosPresentationControllerOptional } from "@/contexts/BosPresentationControllerContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import type { BosCommandMode, BosCommandSession } from "@/lib/bos/commandSession";
 import { resolveBosCommandSessionLayoutDensity } from "@/lib/bos/commandSession/commandSessionLayout";
 import {
@@ -24,9 +26,7 @@ import { GenericBosCommandSessionBody } from "@/app/adminV2/components/aiCommand
 import { getBosCommandAdapterRegistration } from "@/lib/bos/commandSession/adapters/bosCommandAdapterRegistry";
 import { opportunityIdFromAttempt } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
-import { bosDraftToEligiblePayload } from "@/lib/bos/commandSession";
-import { createLeadDisplayName } from "@/lib/platform/commands/createLead/createLeadRequiredInputs";
-import { resolveCreatedRecordProcessContextHref } from "@/lib/platform/commands/createLead/resolveCreatedRecordProcessContextHref";
+import { resolveOpenLeadFocusPanelHref } from "@/lib/platform/commands/createLead/resolveOpenLeadFocusPanelHref";
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import {
     WS_ACTION_PRIMARY,
@@ -65,6 +65,7 @@ export function BosCommandSessionHost() {
 function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession }) {
     const ctx = useBosCommandSessionOptional();
     const bosPresentation = useBosPresentationControllerOptional();
+    const router = useRouter();
     const layoutDensity = resolveBosCommandSessionLayoutDensity(
         bosPresentation?.derivation.effective
     );
@@ -128,27 +129,51 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
     // End the command but stay in BOS — the operator is still working here and usually has a next
     // instruction. Distinct from returning to the workspace, which puts BOS away.
     const discardWithRestore = useCallback(() => {
+        const caseId =
+            session.phase === "processing_review" || session.phase === "executing"
+                ? session.processingCaseId
+                : null;
+        if (caseId) {
+            void fetch(`/api/admin/processing/cases/${caseId}/archive`, {
+                method: "POST",
+                credentials: "same-origin",
+            }).catch(() => {
+                /* best-effort */
+            });
+        }
         restoreWorkspaceWidth();
         ctx?.discardSession();
-    }, [ctx, restoreWorkspaceWidth]);
+    }, [ctx, restoreWorkspaceWidth, session.phase, session.processingCaseId]);
 
     const returnToWorkspace = useCallback(() => {
         discardWithRestore();
         bosPresentation?.closeToLauncher();
     }, [bosPresentation, discardWithRestore]);
 
+    const siteFilter = useWorkspaceSiteFilter();
     const optionLabels = useMemo(() => {
         const map = new Map<string, string>();
         const opts = controller.effectiveSpec?.fieldOptions;
-        if (!opts) return map;
-        for (const [key, options] of Object.entries(opts)) {
-            for (const opt of options ?? []) {
-                map.set(`${key}:${opt.value}`, opt.label);
-                map.set(opt.value, opt.label);
+        if (opts) {
+            for (const [key, options] of Object.entries(opts)) {
+                for (const opt of options ?? []) {
+                    map.set(`${key}:${opt.value}`, opt.label);
+                    map.set(opt.value, opt.label);
+                }
+            }
+        }
+        // Bootstrap sites as fallback so location UUIDs never render as raw ids in understanding.
+        for (const site of siteFilter?.bootstrap?.sites ?? []) {
+            if (!site.id || !site.label) continue;
+            if (!map.has(`location_id:${site.id}`)) {
+                map.set(`location_id:${site.id}`, site.label);
+            }
+            if (!map.has(site.id)) {
+                map.set(site.id, site.label);
             }
         }
         return map;
-    }, [controller.effectiveSpec?.fieldOptions]);
+    }, [controller.effectiveSpec?.fieldOptions, siteFilter?.bootstrap?.sites]);
 
     const understandingGroups = useMemo(
         () =>
@@ -264,11 +289,66 @@ function CreateLeadCommandSessionBody({ session }: { session: BosCommandSession 
                                 successMessage: `${payload.successCopy} Open Lead when you want to continue.`,
                             });
                         }}
+                        onCancel={discardWithRestore}
+                        onCloseOut={returnToWorkspace}
                     />
                 ) : session.phase === "completed" ? (
                     <SuccessBody
                         session={session}
                         compact={compact}
+                        onOpenLead={(href) => {
+                            restoreWorkspaceWidth();
+                            ctx?.discardSession();
+                            bosPresentation?.closeToLauncher();
+                            const createdId =
+                                session.execution && session.execution.ok
+                                    ? String(session.execution.opportunityId ?? "")
+                                    : "";
+                            const success =
+                                session.execution && session.execution.ok
+                                    ? session.execution.success
+                                    : null;
+                            const workViewId =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "workViewId" in success
+                                    ? String((success as { workViewId?: string }).workViewId ?? "")
+                                    : "";
+                            const workViewRouteKey =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "workViewRouteKey" in success
+                                    ? String(
+                                          (success as { workViewRouteKey?: string }).workViewRouteKey ??
+                                              "",
+                                      )
+                                    : "";
+                            const statusKey =
+                                success &&
+                                typeof success === "object" &&
+                                success !== null &&
+                                "statusKey" in success
+                                    ? String((success as { statusKey?: string }).statusKey ?? "")
+                                    : "";
+                            void (async () => {
+                                // Prefer success href; when BOS was started from workspace home
+                                // (no session workUnitId), resolve from the created opportunity /
+                                // Work View handoff — never lifecycle_wu_* stage keys.
+                                const target = await resolveOpenLeadFocusPanelHref({
+                                    preferredHref: href,
+                                    opportunityId: createdId,
+                                    sessionWorkUnitId:
+                                        session.invocation.workspace.workUnitId ?? null,
+                                    workViewId: workViewId || null,
+                                    workViewRouteKey: workViewRouteKey || null,
+                                    statusKey: statusKey || null,
+                                    stageKey: "lead",
+                                });
+                                if (target) router.push(target);
+                            })();
+                        }}
                         onCreateAnother={() => {
                             restoreWorkspaceWidth();
                             ctx?.startSession(session.invocation);
@@ -518,6 +598,7 @@ function ReviewBody(props: {
 function SuccessBody(props: {
     session: BosCommandSession;
     compact: boolean;
+    onOpenLead: (href: string) => void;
     onCreateAnother: () => void;
     onReturnToBos: () => void;
     onReturn: () => void;
@@ -528,6 +609,12 @@ function SuccessBody(props: {
         success && typeof success === "object" && success !== null && "focusPanelHref" in success
             ? String((success as { focusPanelHref?: string }).focusPanelHref ?? "")
             : "";
+    const createdRecordId =
+        success && typeof success === "object" && success !== null && "createdRecordId" in success
+            ? String((success as { createdRecordId?: string }).createdRecordId ?? "")
+            : props.session.execution && props.session.execution.ok
+              ? String(props.session.execution.opportunityId ?? "")
+              : "";
     const copy =
         props.session.messages.filter((m) => m.kind === "success").at(-1)?.body ??
         (success && typeof success === "object" && success !== null && "successCopy" in success
@@ -544,32 +631,48 @@ function SuccessBody(props: {
             className={`mx-auto w-full space-y-4 ${props.compact ? "max-w-none" : "max-w-md"}`}
         >
             <WorkspaceCard padded>
-                <p className={WS_EYEBROW}>Complete</p>
-                <p className="mt-1.5 text-[15px] font-semibold text-alloy-midnight">{copy}</p>
+                <p className={WS_EYEBROW}>Lead created</p>
+                <p className="mt-1.5 text-[15px] font-semibold text-alloy-midnight">
+                    Family and child records were created successfully.
+                </p>
                 {processingCaseId ? (
                     <p className="mt-2 text-[12px] text-alloy-midnight/55">
-                        Processing review finished — records were committed through identity.
+                        Committed through Processing identity.
                     </p>
                 ) : (
                     <p className="mt-2 text-[12px] text-alloy-midnight/55">
                         Lead is ready in the workspace queue.
                     </p>
                 )}
+                {copy && copy !== "Lead created" && copy !== "Lead created." ? (
+                    <p className="mt-1 text-[12px] text-alloy-midnight/55">{copy}</p>
+                ) : null}
             </WorkspaceCard>
             <div className={`flex flex-col gap-2 ${props.compact ? "" : "sm:flex-row sm:flex-wrap"}`}>
-                <a
-                    href={href || undefined}
+                <button
+                    type="button"
                     className={`${WS_ACTION_PRIMARY} inline-flex items-center justify-center ${
                         props.compact ? "min-h-[40px]" : ""
                     }`}
                     data-bos-command-session-open-lead
-                    onClick={(event) => {
+                    disabled={!href && !createdRecordId}
+                    onClick={() => {
                         // Explicit Open Lead only — never auto-navigate on success.
-                        if (!href) event.preventDefault();
+                        // Close BOS first (same ordering as Action Workspace handoff), then route
+                        // into the Work Unit Focus Panel for the created record.
+                        props.onOpenLead(href);
                     }}
                 >
                     Open Lead
-                </a>
+                </button>
+                <button
+                    type="button"
+                    className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
+                    data-bos-command-session-done
+                    onClick={props.onReturn}
+                >
+                    Done
+                </button>
                 <button
                     type="button"
                     className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
@@ -586,14 +689,6 @@ function SuccessBody(props: {
                 >
                     Return to BOS
                 </button>
-                <button
-                    type="button"
-                    className={`${WS_ACTION_SECONDARY} ${props.compact ? "min-h-[40px]" : ""}`}
-                    data-bos-command-session-return-workspace
-                    onClick={props.onReturn}
-                >
-                    Return to Workspace
-                </button>
             </div>
         </div>
     );
@@ -607,18 +702,21 @@ function ProcessingReviewBody(props: {
         focusPanelHref: string;
         successCopy: string;
     }) => void;
+    onCancel: () => void;
+    onCloseOut: () => void;
 }) {
     return (
         <div data-bos-command-session-processing="true" className="space-y-3">
             <div>
-                <p className={WS_EYEBROW}>Processing</p>
+                <p className={WS_EYEBROW}>Possible match</p>
                 <p className="mt-1 text-[13px] text-alloy-midnight/70">
-                    Review the household, then confirm once to create the lead and related records.
+                    Review the highlighted people, then confirm to create — or cancel and leave
+                    without creating a lead.
                 </p>
             </div>
             <IdentityReviewPanel
                 caseId={props.session.processingCaseId!}
-                onCommitted={({ operations }) => {
+                onCommitted={async ({ operations }) => {
                     const opportunityId = opportunityIdFromAttempt(
                         operations.map((o) => ({
                             commandKey: o.commandKey ?? "",
@@ -630,17 +728,35 @@ function ProcessingReviewBody(props: {
                         props.onFail("Commit completed but no lead record id was returned.");
                         return;
                     }
-                    const payload = bosDraftToEligiblePayload(props.session.draft);
-                    const name = createLeadDisplayName(payload);
-                    const successCopy = name ? `Created lead for ${name}.` : "Lead created.";
-                    const focusPanelHref = resolveCreatedRecordProcessContextHref({
-                        recordId: opportunityId,
-                        workUnitKey: null,
-                        workViewId: null,
+                    const successCopy = "Lead created";
+                    // Resolve from created opportunity when session has no Work Unit
+                    // (Create Lead from workspace home) — same canonical Focus Panel seam.
+                    const focusPanelHref = await resolveOpenLeadFocusPanelHref({
+                        opportunityId,
+                        sessionWorkUnitId:
+                            props.session.invocation.workspace.workUnitId ?? null,
                     });
                     props.onSuccess({ opportunityId, focusPanelHref, successCopy });
                 }}
             />
+            <div className="flex flex-wrap gap-2 border-t border-alloy-stone/20 pt-3">
+                <button
+                    type="button"
+                    className={WS_ACTION_SECONDARY}
+                    data-bos-command-session-cancel-create-lead
+                    onClick={props.onCancel}
+                >
+                    Cancel Create Lead
+                </button>
+                <button
+                    type="button"
+                    className={WS_ACTION_SECONDARY}
+                    data-bos-command-session-close-create-lead
+                    onClick={props.onCloseOut}
+                >
+                    Close
+                </button>
+            </div>
         </div>
     );
 }
@@ -672,7 +788,7 @@ function CommandFooter(props: {
             ) : null}
             {session.phase === "executing" ? (
                 <p className="mb-2 text-[12px] text-alloy-midnight/70">
-                    Continuing to Processing review…
+                    Checking for existing records…
                 </p>
             ) : null}
             <div className={`flex flex-wrap items-center gap-2 ${props.compact ? "gap-2.5" : ""}`}>

@@ -2,7 +2,10 @@ import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressi
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { lifecycleOperatorPlacementLabel } from "@/lib/lifecycle/enrollmentProcessStageActions";
 import type { EnrollmentProcessActionPlacement } from "@/lib/lifecycle/enrollmentProcessStageActions";
-import { lifecycleActivationBaseActions } from "@/lib/lifecycle/lifecycleStageBaseActions";
+import {
+    isLifecycleProcessActionDefinitionEntityType,
+    lifecycleActivationBaseActions,
+} from "@/lib/lifecycle/lifecycleStageBaseActions";
 import {
     isLifecycleBuilderConfiguredPlacement,
     parseLifecycleActionDisplayOrder,
@@ -59,7 +62,7 @@ export function buildLifecycleConfiguredActionRows(
     const rows: LifecycleConfiguredActionRow[] = [];
 
     for (const item of items) {
-        if (item.definition.entity_type && item.definition.entity_type !== "opportunity") continue;
+        if (!isLifecycleProcessActionDefinitionEntityType(item.definition.entity_type)) continue;
         const activePlacements = item.placements.filter((p) => p.is_active);
         if (!activePlacements.length) continue;
 

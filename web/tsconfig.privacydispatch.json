@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "tsBuildInfoFile": "./tsconfig.privacydispatch.tsbuildinfo" },
+  "include": [
+    "lib/trust/**/*.ts",
+    "lib/privacy/**/*.ts",
+    "lib/pos/processingCase/classification/**/*.ts",
+    "tests/trust/**/*.ts",
+    "next-env.d.ts"
+  ]
+}

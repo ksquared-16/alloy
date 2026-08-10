@@ -1,5 +1,14 @@
 /**
- * Enrollment Business Process template — opinionated defaults only.
+ * Enrollment Business Process template — OPTIONAL SEED CONFIGURATION, not doctrine.
+ *
+ * The stage keys below are an EXAMPLE a tenant may start from and then change: rename, reorder,
+ * re-grain, add or delete any of them. They are not a required Enrollment shape, and no runtime
+ * invariant may depend on any of them existing.
+ *
+ * In particular the platform does NOT require an Enrollment process to contain `closed` or
+ * `closed_withdrawn`. A family case ends through `opportunities.status_key`; a child's
+ * participation ends through `process_instances.state`. Representing either terminal result as a
+ * stage is a tenant's choice, not the platform's model.
  *
  * Used by: apply template action, template UI card, enrollment-specific tests.
  * Generic runtime must NOT import this module.

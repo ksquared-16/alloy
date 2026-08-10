@@ -4,12 +4,13 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
+    LIFECYCLE_ACTIVATION_METADATA_KEY,
     lifecycleActivationFromMetadata,
-    mergeLifecycleActivationIntoMetadata,
     parseLifecycleActivationV1,
     type LifecycleActivationV1,
 } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { deleteActivationLifecycleForDepartment } from "@/lib/lifecycle/lifecycleActivationOwned";
+import { mergeCategoryFDepartmentMetadata } from "@/lib/lifecycle/mergeCategoryFDepartmentMetadata";
 
 async function loadDepartment(orgId: string, departmentId: string) {
     const supabase = createAdminClient();
@@ -91,7 +92,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
             row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
                 ? (row.metadata as Record<string, unknown>)
                 : {};
-        const nextMeta = mergeLifecycleActivationIntoMetadata(metadata, activation);
+        // Category F — activation sibling only; never rewrite publication-owned builder.
+        const nextMeta = mergeCategoryFDepartmentMetadata(metadata, {
+            [LIFECYCLE_ACTIVATION_METADATA_KEY]: activation,
+        });
 
         const supabase = createAdminClient();
         const { error } = await supabase

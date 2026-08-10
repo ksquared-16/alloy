@@ -7,6 +7,7 @@ export type LifecycleBaseActionKey =
     | "add_child"
     | "send_form"
     | "schedule_tour"
+    | "send_tour_invitation"
     | "waitlist_child"
     | "enroll_child"
     | "close_lead"
@@ -21,18 +22,35 @@ export type LifecycleBaseActionDefinition = {
     definition_key: string;
 };
 
+/**
+ * Process Actions may bind Lead (opportunity) or child Enrollment participation (OCM) grains.
+ * Filtering to opportunity-only dropped Waitlist Child / Enroll Child after a successful save.
+ */
+export function isLifecycleProcessActionDefinitionEntityType(
+    entityType: string | null | undefined,
+): boolean {
+    if (entityType == null || !String(entityType).trim()) return true;
+    const t = String(entityType).trim();
+    return (
+        t === "opportunity"
+        || t === "opportunity_customer_member"
+        || t === "opportunity_customer_members"
+    );
+}
+
 export const LIFECYCLE_BASE_ACTIONS: readonly LifecycleBaseActionDefinition[] = [
     { key: "add_person", label: "Add Parent", definition_key: "add_family_member" },
     { key: "add_child", label: "Add Child", definition_key: "add_child" },
     { key: "send_form", label: "Send Form", definition_key: "send_form" },
     { key: "schedule_tour", label: "Schedule Tour", definition_key: "schedule_tour" },
+    { key: "send_tour_invitation", label: "Send Tour Invitation", definition_key: "send_tour_invitation" },
     // Domain verbs — process owns available actions; operators never pick a generic
     // "Change Status". Each routes to its own outcome/mutation path (definition keys match
     // platformActionCatalog keys). The generic status commands remain runtime-internal only.
     { key: "waitlist_child", label: "Waitlist Child", definition_key: "waitlist_child" },
     { key: "enroll_child", label: "Enroll Child", definition_key: "enroll_child" },
     { key: "close_lead", label: "Close Lead", definition_key: "close_lead" },
-    { key: "create_task", label: "Create Task", definition_key: "create_task" },
+    { key: "create_task", label: "Create Work Item", definition_key: "create_task" },
     { key: "quick_message", label: "Message", definition_key: "quick_message" },
 ] as const;
 

@@ -258,19 +258,32 @@ export function summarizeBusinessProcessEditorState(
     };
 }
 
-/** Operator-facing sentence for each state. One place, so the API and UI cannot drift. */
+/**
+ * Operator-facing sentence for each state. One place, so the API and UI cannot drift.
+ *
+ * SAVE vs APPLY, not draft vs publication. The draft/revision/projection architecture is real and
+ * stays — an operator makes several individually incomplete edits before the whole process is safe
+ * to run, and that boundary is what protects them. But a director should not have to learn the
+ * words for it. "draft", "publish", "revision", "runtime" and "projection" are the platform's
+ * internal vocabulary; what the operator needs to know is only:
+ *
+ *     Save          my edits are kept
+ *     Apply changes my edits go live
+ *
+ * Revision numbers and checksums remain available in diagnostic surfaces and data attributes, where
+ * someone debugging genuinely needs them.
+ */
 export const DRAFT_STATUS_COPY: Record<BusinessProcessDraftStatus, string> = {
-    published: "This configuration is published. Runtime is using it.",
+    published: "Everything here is live.",
     never_published:
-        "Runtime is using this configuration, but it has never been published through the " +
-        "configuration model. Publishing records an immutable revision you can roll back to.",
+        "These settings are running, but haven't been applied through this screen yet. "
+        + "Applying them keeps a version you can go back to.",
     unpublished_changes:
-        "Your changes are saved as a draft. Runtime will continue using the currently published " +
-        "configuration until you publish.",
+        "Your changes are saved. They won't affect day-to-day work until you apply them.",
     publication_blocked:
-        "Your changes are saved as a draft, but they cannot be published until the problems below " +
-        "are resolved. Runtime is still using the currently published configuration.",
+        "Your changes are saved, but something below needs fixing before they can be applied. "
+        + "Your team keeps working on the current settings until then.",
     draft_conflict:
-        "Someone else published a newer version of this configuration while you were editing. " +
-        "Reload to see their changes, then reapply yours.",
+        "Someone else changed these settings while you were editing. "
+        + "Reload to see their version, then redo your changes.",
 };

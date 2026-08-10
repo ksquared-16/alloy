@@ -501,7 +501,7 @@ export async function executeCommandInvocation(
             });
         }
 
-        if (isChildEnrollmentMutationFacadeSupported(invocation.commandKey)) {
+        if (isChildEnrollmentMutationFacadeSupported(snapshot.canonicalCapabilityKey)) {
             let adapted;
             try {
                 adapted = await executeChildEnrollmentMutationViaAdapter(sharedMutationInput);
@@ -512,7 +512,11 @@ export async function executeCommandInvocation(
                     !guard.hasDelegated() &&
                     (message.includes("target_state") ||
                         message.includes("requires") ||
-                        message.includes("Unsupported"));
+                        message.includes("Unsupported") ||
+                        message.includes("Add a child") ||
+                        message.includes("more than one child") ||
+                        message.includes("Choose which child") ||
+                        message.includes("Choose a family"));
                 return fail({
                     status: preDelegation ? "invalid" : "failed",
                     invocationId,

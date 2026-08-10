@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 
 export default function ProcessingAlloyDialog({
     open,
@@ -33,12 +34,13 @@ export default function ProcessingAlloyDialog({
 
     if (!open || typeof document === "undefined") return null;
 
-    // z-[110] nests ABOVE the Processing BOS modal shell (panel ADMINV2_WORKSPACE_BOS_PANEL_Z=97, backdrop 96 —
+    // Nests ABOVE the Processing BOS modal shell (panel ADMINV2_WORKSPACE_BOS_PANEL_Z=97, backdrop 96 —
     // components/admin/Drawer.tsx). At the old z-[80] these dialogs (import intent, rename, confirm, create-form,
     // …) opened BEHIND the shell + its backdrop and looked broken (e.g. "Import document"/"Open" did nothing).
     return createPortal(
         <div
-            className="pointer-events-auto fixed inset-0 z-[110] flex items-center justify-center bg-alloy-midnight/35 p-4 backdrop-blur-[1px]"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="pointer-events-auto fixed inset-0 flex items-center justify-center bg-alloy-midnight/35 p-4 backdrop-blur-[1px]"
             role="presentation"
             onClick={onClose}
         >

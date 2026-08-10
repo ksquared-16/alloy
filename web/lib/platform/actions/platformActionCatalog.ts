@@ -73,6 +73,15 @@ const CATALOG: readonly PlatformActionEntry[] = [
         supportsMultiSubject: false,
         confirmationPolicy: "required",
     },
+    {
+        key: "send_tour_invitation",
+        defaultLabel: "Send Tour Invitation",
+        grain: "opportunity",
+        category: "communication",
+        runtimeCommandKey: null,
+        supportsMultiSubject: false,
+        confirmationPolicy: "required",
+    },
     // ─── Child enrollment grain ───────────────────────────────────────────────
     {
         key: "update_child_enrollment_status",
@@ -113,10 +122,10 @@ const CATALOG: readonly PlatformActionEntry[] = [
     },
     {
         key: "create_task",
-        defaultLabel: "Create Task",
+        defaultLabel: "Create Work Item",
         grain: "opportunity",
         category: "workflow",
-        runtimeCommandKey: null,
+        runtimeCommandKey: "create_work_item",
         supportsMultiSubject: false,
         confirmationPolicy: "none",
     },

@@ -43,9 +43,9 @@ export default function ComposerReplyActionCluster({
             <BosButton
                 variant="secondary"
                 size="sm"
-                label="BOS Assist"
+                label="BOS"
                 onClick={onBosEnhance}
-                title="Polish this message with BOS Assist"
+                title="Polish this message with BOS"
                 data-adminv2-composer-bos-assist="true"
             />
             <button

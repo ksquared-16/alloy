@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
 import CurrentWorkActivityPreview, {
+    CurrentWorkActivityKindIcon,
     type CurrentWorkActivityPreviewItem,
 } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import CurrentWorkFocusedSurface from "@/components/admin/focusPanel/cards/CurrentWorkFocusedSurface";
@@ -23,6 +24,10 @@ import {
 import { planCurrentWorkActionExecution } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
+import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
+import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
+import CurrentWorkProgressSummary from "@/components/admin/focusPanel/cards/CurrentWorkProgressSummary";
+import { buildWhatsNextCardPresentation } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildWhatsNextCardPresentation";
 import type {
     CurrentWorkActionVM,
     CurrentWorkChecklistItemVM,
@@ -36,6 +41,11 @@ import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
+import {
+    ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE,
+    buildContactFamilySendFollowOnNotice,
+    type ContactFamilySendCompleteDetail,
+} from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
 import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWorkInitDiagnostics";
@@ -118,6 +128,7 @@ export default function CurrentWorkCard({
             currentWorkId: vm.primaryWorkItem?.work_id ?? undefined,
             workTemplateKey: vm.primaryWorkItem?.template_key ?? undefined,
             timeZone: viewerTimeZone,
+            limit: 3,
         }),
         [context, vm.primaryWorkItem?.template_key, vm.primaryWorkItem?.work_id, viewerTimeZone],
     );
@@ -189,6 +200,25 @@ export default function CurrentWorkCard({
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK, onFocusCurrentWork as EventListener);
     }, [openWorkspace, opportunityId]);
+
+    useEffect(() => {
+        const onContactFamilySend = (event: Event) => {
+            const detail = (event as CustomEvent<ContactFamilySendCompleteDetail>).detail;
+            if (!detail || detail.opportunity_id !== opportunityId) return;
+            const sentLine = detail.recipient_label
+                ? `${detail.success_message} · just now`
+                : detail.success_message;
+            const followOn = buildContactFamilySendFollowOnNotice({
+                associated: detail.associated,
+                outcome_key: detail.outcome_key,
+            });
+            setHandoffNotice(followOn ? `${sentLine} ${followOn}` : sentLine);
+            closeActionPanel();
+        };
+        window.addEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
+        return () =>
+            window.removeEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
+    }, [closeActionPanel, opportunityId]);
 
     // Consume one-shot workspace intents (action panel / record outcome) after mount.
     const workspaceIntent = coordination?.currentWorkWorkspace?.intent ?? null;
@@ -399,25 +429,33 @@ export default function CurrentWorkCard({
         : surface.status === "completed" ? "done"
         :   "neutral";
 
-    // #1: the drill-in to the focused surface is a CARD-LEVEL affordance, anchored in the card
-    // footer — never a second link stacked inside the "Still needed" requirement group (that
-    // group's own owner handoff is its navigation). Generic: shown for any configured work while
-    // the summary is presented, regardless of owner.
-    const canOpenFocused =
+    // Footer opens recent activity (same canonical preview as the Activity timeline), not a
+    // second work surface. Focused Current Work still opens via Work Items → Open work.
+    const canPreviewActivity =
         !isWorkspace
         && !stageWorkPending
         && !evidence.isEmpty
-        && completionPhase !== "complete"
-        && Boolean(coordination?.openCurrentWorkWorkspace);
-    const footerAction = canOpenFocused ? (
-        <button
-            type="button"
-            className="alloy-os-currentwork__summary-open"
-            data-work-action="open-focused"
-            onClick={() => openWorkspace({ kind: "drill_in" })}
-        >
-            View details →
-        </button>
+        && completionPhase !== "complete";
+    const footerAction = canPreviewActivity ? (
+        <div className="alloy-os-currentwork__activity-link-wrap relative">
+            <button
+                ref={openWorkspaceTriggerRef}
+                type="button"
+                className="alloy-os-currentwork__summary-open"
+                data-work-action="preview-activity"
+                aria-expanded={activityPreviewOpen}
+                onClick={() => setActivityPreviewOpen((open) => !open)}
+            >
+                View activity
+            </button>
+            <CurrentWorkActivityPreview
+                open={activityPreviewOpen}
+                items={activityPreviewItems}
+                onClose={handleCloseActivityPreview}
+                onViewFullActivity={handleViewFullActivity}
+                triggerRef={openWorkspaceTriggerRef}
+            />
+        </div>
     ) : null;
     const stageLabel = context.businessProcess?.stageKey ?? null;
     const ownerLabel = null;
@@ -438,6 +476,7 @@ export default function CurrentWorkCard({
             error={error}
             handoffNotice={handoffNotice}
             activityItems={activityPreviewItems}
+            truth={context.truth as Record<string, unknown>}
             onChecklistItem={handleChecklistItem}
             onAction={invokeAction}
             onWarm={warmAction}
@@ -493,8 +532,12 @@ export default function CurrentWorkCard({
         : isWorkspace ? focusedBody
         :   <SummaryBody
                 surface={surface}
+                context={context}
                 opportunityId={opportunityId}
                 focusedWorkItemId={focusedWorkItemId}
+                truth={context.truth as Record<string, unknown>}
+                activityItems={activityPreviewItems}
+                timeZone={viewerTimeZone}
                 onChecklistItem={handleChecklistItem}
                 onAction={invokeAction}
                 onWarm={warmAction}
@@ -529,7 +572,7 @@ export default function CurrentWorkCard({
             <UniversalCard
                 title={vm.microLabel}
                 insight={surface.title}
-                supportingInsight={capabilityActive ? null : surface.description}
+                supportingInsight={null}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype="status"
@@ -554,23 +597,37 @@ export { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWor
 
 function SummaryBody({
     surface,
+    context,
     opportunityId,
     focusedWorkItemId,
+    truth,
+    activityItems,
+    timeZone,
     onChecklistItem,
     onAction,
     onWarm,
 }: {
     surface: CurrentWorkSurfaceVM;
+    context: OperationalContext;
     opportunityId: string;
     focusedWorkItemId: string | null;
+    truth?: Record<string, unknown> | null;
+    activityItems: CurrentWorkActivityPreviewItem[];
+    timeZone?: string | null;
     onChecklistItem: (item: CurrentWorkChecklistItemVM) => void;
     onAction: (action: CurrentWorkActionVM) => void;
     onWarm: (action: CurrentWorkActionVM) => void;
 }) {
     // ONE shared derivation so the summary and the focused "View details" surface show the SAME
-    // buttons — a dominant command (or outcome when outcome-led), two helpful actions, and Record
-    // outcome as a subordinate button when a command leads.
+    // buttons — a dominant command (or outcome when outcome-led), configured helpful actions, and
+    // Record outcome as a subordinate button when a command leads.
     const { dominant, helpful, subordinateOutcome, dominantIsOutcome } = resolveCurrentWorkActionButtons(surface);
+    const card = buildWhatsNextCardPresentation({
+        surface,
+        context,
+        activityItems,
+        timeZone,
+    });
     const workId = surface.primaryWorkItem?.work_id?.trim() || "";
     const workItemsLinkActive =
         Boolean(workId) && (!focusedWorkItemId || focusedWorkItemId === workId);
@@ -583,22 +640,35 @@ function SummaryBody({
     const outcomeBlockReason =
         !surface.showOutcomeCompletion ? surface.outcomeCompletionBlockReason?.trim() || null : null;
 
+    const recentActivity = card.recentActivity;
+
     return (
         <div
             className="alloy-os-currentwork__summary"
             data-work-summary="true"
+            data-whats-next-card="v2"
+            data-summary-source={card.summarySource}
             data-focused-work-id={focusedWorkItemId ?? undefined}
             role="group"
             aria-label="What's Next summary"
         >
+            {card.summaryLine ?
+                <p className="alloy-os-currentwork__summary-line" data-work-summary-line="true">
+                    {card.summaryLine}
+                </p>
+            :   null}
             {outcomeBlockReason ?
                 <p className="alloy-os-currentwork__outcome-blocked" data-work-outcome-blocked="true" role="status">
                     {outcomeBlockReason}
                 </p>
             :   null}
+            {card.progress ?
+                <CurrentWorkProgressSummary progress={card.progress} />
+            :   null}
             <div className="alloy-os-currentwork__summary-controls">
-                {dominant ?
-                    <div className="alloy-os-currentwork__primary-row" data-work-primary-row="true">
+                <div className="alloy-os-currentwork__context-action-row" data-work-context-action-row="true">
+                    <CurrentWorkContextStrip surface={surface} truth={truth} facts={card.contextFacts} />
+                    {dominant ?
                         <button
                             type="button"
                             className="alloy-os-currentwork__primary-action"
@@ -610,19 +680,18 @@ function SummaryBody({
                         >
                             <CurrentWorkActionButtonContent action={dominant} />
                         </button>
-                        {helpful.map((action) => (
-                            <button
-                                key={action.key}
-                                type="button"
-                                className="alloy-os-currentwork__record-outcome alloy-os-currentwork__record-outcome--summary"
-                                data-work-supporting-action={action.key}
-                                onClick={() => onAction(action)}
-                                onMouseEnter={() => onWarm(action)}
-                                onFocus={() => onWarm(action)}
-                            >
-                                <CurrentWorkActionButtonContent action={action} />
-                            </button>
-                        ))}
+                    :   null}
+                </div>
+                {helpful.length > 0 || subordinateOutcome ?
+                    <div className="alloy-os-currentwork__primary-stack" data-work-primary-stack="true">
+                        {helpful.length > 0 ?
+                            <CurrentWorkTourGroupedActions
+                                actions={helpful}
+                                onAction={onAction}
+                                onWarm={onWarm}
+                                variant="summary"
+                            />
+                        :   null}
                         {subordinateOutcome ?
                             <button
                                 type="button"
@@ -635,11 +704,32 @@ function SummaryBody({
                         :   null}
                     </div>
                 :   null}
-                {/* WHAT'S NEXT — obligation-first. Obligation + one concise why live in the card header;
-                    the body leads with ONE dominant action, keeps secondary actions and outcome access
-                    visually subordinate, and shows a concise "Still needed" readiness summary. Detailed
-                    completeness is owned by the Required Information card and is not reproduced here. */}
-                <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                <div className="alloy-os-currentwork__still-activity-row" data-work-still-activity-row="true">
+                    <ReadinessSummary surface={surface} onNavigate={onChecklistItem} />
+                    {recentActivity.length > 0 ?
+                        <div className="alloy-os-currentwork__recent-activity" data-work-recent-activity="true">
+                            <p className="alloy-os-currentwork__context-label">Recent activity</p>
+                            <ul className="alloy-os-currentwork__recent-activity-list">
+                                {recentActivity.map((item) => (
+                                    <li key={item.key}>
+                                        <span className="alloy-os-currentwork__recent-activity-icon" aria-hidden>
+                                            <CurrentWorkActivityKindIcon
+                                                kind={item.kind as CurrentWorkActivityPreviewItem["kind"]}
+                                            />
+                                        </span>
+                                        <span className="alloy-os-currentwork__recent-activity-body">
+                                            <span className="alloy-os-currentwork__recent-activity-label">{item.label}</span>
+                                            {item.occurredAt ?
+                                                <span className="alloy-os-currentwork__recent-activity-when">{item.occurredAt}</span>
+                                            :   null}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    :   null}
+                </div>
+
                 {workId ?
                     <div
                         className="mt-2 flex flex-wrap items-center gap-2"

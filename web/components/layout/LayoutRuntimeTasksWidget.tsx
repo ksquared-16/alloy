@@ -55,6 +55,8 @@ export default function LayoutRuntimeTasksWidget({
     const visibleTasks = compact ? openTasks.slice(0, 2) : openTasks;
     const overflowCount = compact && openTasks.length > 2 ? openTasks.length - 2 : 0;
     const denseTaskRow = compact || chromeless;
+    const opportunityId =
+        String(record.id ?? record.opportunity_id ?? "").trim() || null;
     const [activeTask, setActiveTask] = useState<InquirySummaryTaskPreviewRow | null>(null);
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -78,7 +80,7 @@ export default function LayoutRuntimeTasksWidget({
         <div
             className={
                 chromeless ?
-                    "relative flex min-h-0 flex-col gap-1"
+                    "relative flex min-h-0 w-full min-w-0 flex-col gap-1 overflow-x-hidden"
                 : compact ?
                     `${LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE} border-l-2 border-l-alloy-juniper/50`
                 :   `${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`
@@ -100,7 +102,7 @@ export default function LayoutRuntimeTasksWidget({
             <div
                 className={
                     chromeless ?
-                        "relative flex flex-col gap-1"
+                        "relative flex w-full min-w-0 flex-col gap-1"
                     : compact ?
                         `${LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY} relative flex flex-col gap-1 overflow-hidden`
                     :   `relative flex flex-col gap-1.5 px-2.5 py-2 ${INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS}`
@@ -116,7 +118,7 @@ export default function LayoutRuntimeTasksWidget({
                             <button
                                 key={t.id}
                                 type="button"
-                                className={`${chipStyle.rowClassName} ${active ? "ring-1 ring-alloy-juniper/20" : ""}`}
+                                className={`${chipStyle.rowClassName} w-full min-w-0 ${active ? "ring-1 ring-alloy-juniper/20" : ""}`}
                                 data-inquiry-summary-task-preview-row={t.id}
                                 data-layout-runtime-task-chip="true"
                                 aria-expanded={active}
@@ -125,8 +127,8 @@ export default function LayoutRuntimeTasksWidget({
                                 <span
                                     className={
                                         denseTaskRow ?
-                                            "min-w-0 flex-1 truncate font-semibold text-alloy-midnight"
-                                        :   "truncate font-semibold text-alloy-midnight"
+                                            "min-w-0 flex-1 truncate text-left font-semibold text-alloy-midnight"
+                                        :   "min-w-0 truncate text-left font-semibold text-alloy-midnight"
                                     }
                                 >
                                     {t.title}
@@ -165,7 +167,12 @@ export default function LayoutRuntimeTasksWidget({
                     </div>
                 :   null}
                 {activeTask && anchorEl ?
-                    <LayoutRuntimeTaskDetailPopover task={activeTask} anchorEl={anchorEl} onClose={closePopover} />
+                    <LayoutRuntimeTaskDetailPopover
+                        task={activeTask}
+                        anchorEl={anchorEl}
+                        onClose={closePopover}
+                        opportunityId={opportunityId}
+                    />
                 :   null}
             </div>
         </div>

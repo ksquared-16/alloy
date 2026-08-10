@@ -80,6 +80,41 @@ vi.mock("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter", async (i
     };
 });
 
+vi.mock("@/lib/pos/processingIdentity/executor/executorPorts", () => ({
+    createExecutorPorts: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/pos/processingIdentity/operator/createLeadReviewPresentation", () => ({
+    buildCreateLeadReviewPresentation: vi.fn(() => ({
+        mode: "identity_review_required",
+        headline: "1 possible match needs review",
+        summary: "Review required",
+        subjects: [],
+        subjectsNeedingAction: 1,
+    })),
+}));
+
+vi.mock("@/lib/pos/processingIdentity/operator/operatorReviewService", () => {
+    class OperatorServiceError extends Error {
+        code: string;
+        constructor(code: string, message: string) {
+            super(message);
+            this.code = code;
+        }
+    }
+    return {
+        OperatorServiceError,
+        loadCaseReview: vi.fn().mockResolvedValue({
+            resolutions: [],
+            subjectEligibility: [],
+            planEligible: false,
+            readiness: "needs_identity_review",
+            identityBlockers: ["needs_review"],
+        }),
+        commitApprovedLeadForCase: vi.fn(),
+    };
+});
+
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
@@ -239,6 +274,20 @@ describe("executeCreateLeadAction validation", () => {
                 }
                 if (table === "opportunity_customer_members") {
                     return { insert: ocmInsert };
+                }
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                eq: vi.fn().mockReturnValue({
+                                    maybeSingle: vi.fn().mockResolvedValue({
+                                        data: { key: "lifecycle_wu_lead" },
+                                        error: null,
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
                 }
                 return { select: vi.fn(), insert: vi.fn() };
             }),

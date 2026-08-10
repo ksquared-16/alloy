@@ -819,7 +819,6 @@ export default function HouseholdCard({
                 isOpen={Boolean(pendingPrimary)}
                 personName={pendingPrimary?.displayName ?? ""}
                 currentPrimaryName={evidence.primaryContact?.name ?? null}
-                scopeLabels={["This household", "Linked opportunities"]}
                 isLoading={primarySaving}
                 onClose={() => {
                     if (primarySaving) return;
@@ -1042,7 +1041,7 @@ function CollapsedBody({
                                 {showMakePrimary ? (
                                     <button
                                         type="button"
-                                        className="mt-1 text-left text-[11px] font-medium text-alloy-blue hover:underline disabled:opacity-50"
+                                        className="mt-1 bg-transparent p-0 text-left text-[10.5px] font-medium text-alloy-slate hover:text-alloy-bend-pine focus-visible:text-alloy-bend-pine focus-visible:outline-none disabled:opacity-50"
                                         data-household-make-primary-contact="true"
                                         data-person-id={record.id}
                                         disabled={primarySavingPersonId === record.id}
@@ -1398,7 +1397,7 @@ function GroupRows({
                                   <button
                                       key={`make-primary-${record.id}`}
                                       type="button"
-                                      className="mt-1 text-left text-[11px] font-medium text-alloy-blue hover:underline disabled:opacity-50"
+                                      className="mt-1 bg-transparent p-0 text-left text-[10.5px] font-medium text-alloy-slate hover:text-alloy-bend-pine focus-visible:text-alloy-bend-pine focus-visible:outline-none disabled:opacity-50"
                                       data-household-make-primary-contact="true"
                                       data-person-id={record.id}
                                       disabled={primarySavingPersonId === record.id}

@@ -61,7 +61,16 @@ import {
     type IdentityResolutionEligibility,
 } from "./identityResolutionEligibility";
 import { applyCreateLeadPostCommitPersistence } from "./applyCreateLeadPostCommitPersistence";
-import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE } from "@/lib/pos/processingCase/classification/trustGovernanceGapDb";
+import { TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES } from "@/lib/pos/trustGovernance/gapExceptionTypes";
+import {
+    recordOperatorDecisionLifecycle,
+    type IdentityLineageDeps,
+    type IdentityLineageOutcome,
+} from "../trustAdapter/identityLineageService";
+import {
+    bindCommitOutcomeToTrust,
+    type ExecutionLineageDeps,
+} from "../trustAdapter/executionLineageService";
 
 export class OperatorServiceError extends Error {
     code: string;
@@ -80,6 +89,20 @@ export type OperatorReviewDeps = {
     actorAuthorized: boolean;
     executorPorts: ExecutorPorts;
     now?: () => string;
+    /**
+     * Trust supersession lineage (Phase 1.6). Defaults ON in production.
+     * `false` suppresses it entirely — the control arm proving the operator
+     * decision behaves identically with and without Trust. An object injects
+     * certification seams.
+     */
+    trustLineage?: false | IdentityLineageDeps;
+    /**
+     * Trust execution binding (Phase 1.7). Defaults ON in production.
+     * `false` suppresses it entirely — the control arm proving plan generation,
+     * approval, preflight and execution are byte-identical with and without
+     * Trust. An object injects certification seams.
+     */
+    trustExecution?: false | ExecutionLineageDeps;
 };
 
 export type CaseReviewState = {
@@ -148,16 +171,22 @@ export async function loadCaseReview(
     }
 
     // A Trust governance gap is NOT an identity exception. It records that a
-    // Decision Package could not be captured; the Processing classification
-    // committed and is authoritative, and nothing about identity review changed.
-    // Counting it here would flip the review lane to `exception` purely because
-    // Trust was unavailable — exactly the coupling AD-P1-8 forbids.
-    const { count: openExceptionCount } = await deps.supabase
-        .from("processing_exceptions")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", deps.orgId)
-        .eq("case_id", caseId)
-        .neq("exception_type", TRUST_GOVERNANCE_GAP_EXCEPTION_TYPE);
+    // Decision Package could not be captured; the Processing work committed and
+    // is authoritative, and nothing about identity review changed. Counting one
+    // here would flip the review lane to `exception` purely because Trust was
+    // unavailable — exactly the coupling AD-P1-8 forbids.
+    //
+    // Excluded by SHARED LIST, so a new capability's gap type is isolated here
+    // the moment it is registered rather than the next time someone remembers.
+    const openExceptionQuery = TRUST_GOVERNANCE_GAP_EXCEPTION_TYPES.reduce(
+        (query, gapType) => query.neq("exception_type", gapType),
+        deps.supabase
+            .from("processing_exceptions")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", deps.orgId)
+            .eq("case_id", caseId),
+    );
+    const { count: openExceptionCount } = await openExceptionQuery;
 
     const blockingConflictCount = countBlockingConflicts(resolutions);
     const caseEligibility = evaluateCasePlanEligibility(resolutions);
@@ -228,7 +257,7 @@ export async function recordResolutionDecision(
         createNewOverrideReason?: string | null;
         createNewOverrideReasonCode?: string | null;
     },
-): Promise<void> {
+): Promise<{ trustLineage: IdentityLineageOutcome | null }> {
     const rows = await listProcessingResolutionsByCase(deps.supabase, deps.orgId, input.caseId);
     const existing = rows.find((r) => r.id === input.resolutionId);
     if (!existing) throw new OperatorServiceError("resolution_not_found", "Resolution not found in this case/org");
@@ -287,6 +316,28 @@ export async function recordResolutionDecision(
     if (!data || (Array.isArray(data) && data.length === 0)) {
         throw new OperatorServiceError("resolution_not_found", "Resolution not found in this case/org");
     }
+
+    // ---- Trust adoption Phase 1.6 -------------------------------------------
+    // The operator decision is now DURABLE and authoritative. Only here may the
+    // prior engine judgment be declared non-current — and the decision itself
+    // never becomes a Decision Package, because a human decision is a Processing
+    // act, not deterministic reasoning.
+    //
+    // Additive and non-blocking by construction: it never throws, it cannot
+    // change a resolution row, and a Trust outage produces a durable,
+    // readiness-neutral lineage gap rather than failing this correction.
+    let trustLineage: IdentityLineageOutcome | null = null;
+    if (deps.trustLineage !== false) {
+        trustLineage = await recordOperatorDecisionLifecycle(deps.supabase, {
+            orgId: deps.orgId,
+            caseId: input.caseId,
+            resolutionId: input.resolutionId,
+            // Authoritative server context, never the request body.
+            actorId: deps.actorId,
+            deps: typeof deps.trustLineage === "object" ? deps.trustLineage : undefined,
+        });
+    }
+    return { trustLineage };
 }
 
 // ---------------------------------------------------------------------------
@@ -455,8 +506,18 @@ export async function executeApprovedPlanForCase(
     );
 
     // Persist the attempt (append-only) unless it is an idempotent replay of a prior committed attempt.
+    //
+    // `insertCommitAttempt` returns the DURABLE row id, which was previously
+    // discarded. It is captured now because it is the only identifier that
+    // PROVES the result persisted: a replayed attempt was loaded from the
+    // database and already carries the row id in `attemptId`, while a freshly
+    // executed one carries the synthetic `${planId}:attempt:${n}` until the
+    // insert returns.
+    let commitAttemptId: string | null = null;
     if (!(priorAttempt && attempt.attemptId === priorAttempt.attemptId)) {
-        await insertCommitAttempt(deps.supabase, attempt);
+        commitAttemptId = await insertCommitAttempt(deps.supabase, attempt);
+    } else {
+        commitAttemptId = priorAttempt.attemptId;
     }
 
     if (attempt.outcome === "preflight_rejected" || attempt.outcome === "failed") {
@@ -484,6 +545,26 @@ export async function executeApprovedPlanForCase(
             orgId: deps.orgId,
             caseId: input.caseId,
             attempt,
+        });
+    }
+
+    // ---- Trust adoption Phase 1.7 -------------------------------------------
+    // The commit result is now DURABLE. Only here may the real-world outcome of
+    // a governed judgment be observed — and only downstream: this records what
+    // the Processing executor DID. Nothing here can execute, approve or alter a
+    // plan, and Trust never initiates.
+    //
+    // Additive and non-blocking by construction: it never throws, it cannot
+    // change a Processing row, and a Trust outage produces durable,
+    // readiness-neutral per-package gaps rather than failing this execution.
+    if (deps.trustExecution !== false && commitAttemptId) {
+        await bindCommitOutcomeToTrust(deps.supabase, {
+            orgId: deps.orgId,
+            plan,
+            attempt,
+            commitAttemptId,
+            actorId: deps.actorId,
+            deps: typeof deps.trustExecution === "object" ? deps.trustExecution : undefined,
         });
     }
 

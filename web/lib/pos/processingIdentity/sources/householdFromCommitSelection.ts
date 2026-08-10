@@ -14,6 +14,8 @@ function personFromRecord(
     record: CreateLeadCommitSelection["parents"][0] | CreateLeadCommitSelection["children"][0],
     role: IntakePersonCandidate["role"],
 ): IntakePersonCandidate {
+    const genderRaw = trim(record.extra_payload_values?.gender ?? "");
+    const gender = genderRaw === "female" || genderRaw === "male" ? genderRaw : null;
     return {
         candidate_id: record.candidate_id,
         role,
@@ -24,6 +26,7 @@ function personFromRecord(
         dob: record.dob,
         age_years: null,
         calculated_age: null,
+        gender,
         program_interest: record.program_interest,
         source_fact_ids: record.source_fact_ids ?? [],
         confidence: record.validation_state === "valid" ? "high" : "medium",

@@ -39,12 +39,12 @@ import {
     prefixTextareaLines,
     wrapTextareaSelection,
 } from "@/app/adminV2/communications/activityEmbedTextFormatting";
+import { formatComposerBodyForDisplay, composerMarkupToPlainText } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
 import {
     COMMS_ACCENT_BG_SUBTLE_CLASS,
     COMMS_ACCENT_BORDER_CLASS,
     COMMS_ACTIVITY_PRIMARY_BTN_CLASS,
     COMMS_ACTIVITY_SECONDARY_BTN_CLASS,
-    COMMS_BOS_HEADER_BTN_CLASS,
     COMMS_NOTE_BANNER_CLASS,
     COMMS_OUTBOUND_BUBBLE_CLASS,
     COMMS_PRIMARY_BTN_CLASS,
@@ -236,7 +236,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const [composerLocalEmails, setComposerLocalEmails] = useState<string[]>([]);
     const [composerCcEmails, setComposerCcEmails] = useState<string[]>([]);
     const [composerBccEmails, setComposerBccEmails] = useState<string[]>([]);
-    // Canonical composer footer controls (Send later / BOS Assist) — wired to the shared modals.
+    // Canonical composer footer controls (Send later / BOS) — wired to the shared modals.
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [bosOpen, setBosOpen] = useState(false);
     const scheduleContext = resolveComposeNewScheduleContext({
@@ -244,7 +244,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         recipientPersonIds: selectedRecipientIds,
     });
     const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const bodyEditableRef = useRef<HTMLDivElement | null>(null);
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+    const emailComposer = workspaceMode === "email";
 
     useEffect(() => {
         if (!usesReplyLifecycle) return;
@@ -258,6 +260,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
             timelineScrollRef.current?.scrollTo({ top: timelineScrollRef.current.scrollHeight, behavior: "smooth" });
         });
     }, [usesReplyLifecycle, sendCompleteToken]);
+
+    useEffect(() => {
+        if (!emailComposer || !bodyEditableRef.current) return;
+        if (!bodyDraft.trim() && bodyEditableRef.current.innerHTML !== "") {
+            bodyEditableRef.current.innerHTML = "";
+        }
+    }, [bodyDraft, emailComposer]);
 
     const expandReplyComposer = useCallback(() => {
         setReplyComposerExpanded(true);
@@ -288,6 +297,20 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
 
     const applyBodyFormat = useCallback(
         (kind: "bold" | "italic" | "underline" | "list" | "link") => {
+            if (emailComposer && bodyEditableRef.current) {
+                const el = bodyEditableRef.current;
+                el.focus();
+                if (kind === "bold") document.execCommand("bold");
+                else if (kind === "italic") document.execCommand("italic");
+                else if (kind === "underline") document.execCommand("underline");
+                else if (kind === "list") document.execCommand("insertUnorderedList");
+                else if (kind === "link") {
+                    const url = window.prompt("Link URL", "https://");
+                    if (url?.trim()) document.execCommand("createLink", false, url.trim());
+                }
+                onBodyChange(el.innerHTML);
+                return;
+            }
             const el = bodyTextareaRef.current;
             if (!el) return;
             const start = el.selectionStart ?? 0;
@@ -305,7 +328,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 el.setSelectionRange(result!.cursorStart, result!.cursorEnd);
             });
         },
-        [bodyDraft, onBodyChange],
+        [bodyDraft, emailComposer, onBodyChange],
     );
 
     const addComposerLocalEmail = useCallback((raw: string, target: "to" | "cc" | "bcc") => {
@@ -546,13 +569,27 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                             </div>
                                             <div
                                                 data-cc-msg-bubble
-                                                className={`max-w-full break-words rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm [overflow-wrap:anywhere] whitespace-pre-wrap ${
+                                                className={`max-w-full break-words rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm [overflow-wrap:anywhere] ${
                                                     out
                                                         ? COMMS_OUTBOUND_BUBBLE_CLASS
                                                         : "rounded-tl-sm border border-alloy-stone/15 bg-white text-alloy-midnight"
                                                 }`}
                                             >
-                                                {m.body ?? ""}
+                                                {(() => {
+                                                    const formatted = formatComposerBodyForDisplay(
+                                                        m.body ?? "",
+                                                        m.channel,
+                                                    );
+                                                    if (formatted.kind === "html") {
+                                                        return (
+                                                            <span
+                                                                className="[&_strong]:font-semibold [&_em]:italic [&_u]:underline"
+                                                                dangerouslySetInnerHTML={{ __html: formatted.html }}
+                                                            />
+                                                        );
+                                                    }
+                                                    return <span className="whitespace-pre-wrap">{formatted.text}</span>;
+                                                })()}
                                             </div>
                                         </div>
                                     </li>
@@ -821,18 +858,42 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     }`}
                 >
                     <div className={`flex items-center gap-0.5 border-b border-alloy-stone/20 ${COMMS_SURFACE_MUTED_CLASS} px-1.5 py-1`}>
-                        <button type="button" aria-label="Bold" className={toolbarBtn} onClick={() => applyBodyFormat("bold")}><Bold className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label="Italic" className={toolbarBtn} onClick={() => applyBodyFormat("italic")}><Italic className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label="Underline" className={toolbarBtn} onClick={() => applyBodyFormat("underline")}><Underline className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Bold" className={toolbarBtn} onClick={() => applyBodyFormat("bold")} disabled={workspaceMode === "sms"}><Bold className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Italic" className={toolbarBtn} onClick={() => applyBodyFormat("italic")} disabled={workspaceMode === "sms"}><Italic className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Underline" className={toolbarBtn} onClick={() => applyBodyFormat("underline")} disabled={workspaceMode === "sms"}><Underline className="h-3.5 w-3.5" /></button>
                         <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
-                        <button type="button" aria-label="Bulleted list" className={toolbarBtn} onClick={() => applyBodyFormat("list")}><List className="h-3.5 w-3.5" /></button>
-                        <button type="button" aria-label="Insert link" className={toolbarBtn} onClick={() => applyBodyFormat("link")}><Link2 className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Bulleted list" className={toolbarBtn} onClick={() => applyBodyFormat("list")} disabled={workspaceMode === "sms"}><List className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Insert link" className={toolbarBtn} onClick={() => applyBodyFormat("link")} disabled={workspaceMode === "sms"}><Link2 className="h-3.5 w-3.5" /></button>
                         <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
                         <span className="ml-auto flex items-center gap-0.5">
                             <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
                             <button type="button" aria-label="Templates" className={toolbarBtn}><FileText className="h-3.5 w-3.5" /></button>
                         </span>
                     </div>
+                    {emailComposer ? (
+                        <div
+                            ref={bodyEditableRef}
+                            role="textbox"
+                            aria-multiline="true"
+                            aria-label="Message body"
+                            contentEditable
+                            suppressContentEditableWarning
+                            data-cc-email-composer="true"
+                            data-placeholder={
+                                isNewMessageMode
+                                    ? `Write a new message to ${detail ? detail.contactName : (selected.family_label ?? "the family")}…`
+                                    : `Reply in ${selectedThread ? threadDisplayTitle(selectedThread, timelineMessages) : "this thread"}…`
+                            }
+                            onInput={(e) => onBodyChange((e.currentTarget as HTMLDivElement).innerHTML)}
+                            className={`w-full resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight focus:outline-none empty:before:pointer-events-none empty:before:text-alloy-midnight/35 empty:before:content-[attr(data-placeholder)] [&_strong]:font-semibold [&_em]:italic [&_u]:underline ${
+                                isActivityEmbed
+                                    ? isNewMessageMode
+                                        ? "min-h-[9.5rem] flex-1"
+                                        : "min-h-[5.5rem]"
+                                    : "min-h-0 flex-1"
+                            }`}
+                        />
+                    ) : (
                     <textarea
                         ref={bodyTextareaRef}
                         aria-label="Message body"
@@ -851,22 +912,93 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 : "min-h-0 flex-1"
                         }`}
                     />
+                    )}
                 </div>
 
                 {LIVE_WORKSPACE && (sendResult || sendError) ? (
-                    <div data-cc-send-review className="mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] shadow-sm">
-                        {sendError ? <div className="text-alloy-ember">{sendError}</div> : null}
-                        {sendResult ? (
+                    <div
+                        data-cc-send-review
+                        data-cc-send-confirm={sendResult?.mode === "preflight" ? "true" : undefined}
+                        className={
+                            sendResult?.mode === "preflight"
+                                ? "mt-2 rounded-xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.04] px-3.5 py-3 shadow-sm"
+                                : "mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] shadow-sm"
+                        }
+                    >
+                        {sendError ? <div className="text-sm text-alloy-ember">{sendError}</div> : null}
+                        {sendResult?.mode === "preflight" ? (
+                            <>
+                                <p className="text-[15px] font-semibold tracking-tight text-alloy-midnight">
+                                    Ready to send
+                                </p>
+                                <p className="mt-1 text-[13px] text-alloy-midnight/55" data-cc-send-confirm-recipient="true">
+                                    {workspaceMode === "sms" ? "SMS" : "Email"}
+                                    {" to "}
+                                    {sendResult.results
+                                        .filter((r) => r.status === "ready")
+                                        .map((r) => r.display_name)
+                                        .join(", ")
+                                        || selectionSummary(selectedRecipientIds, allLiveRecipients)
+                                        || "selected recipients"}
+                                    {sendResult.summary.blocked > 0
+                                        ? ` · ${sendResult.summary.blocked} blocked`
+                                        : ""}
+                                </p>
+                                <div
+                                    className="mt-3 rounded-lg border border-alloy-stone/20 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-alloy-midnight"
+                                    data-cc-send-confirm-preview="true"
+                                >
+                                    {workspaceMode === "email" && subjectDraft.trim() ?
+                                        <p className="mb-1.5 font-medium text-alloy-midnight">{subjectDraft.trim()}</p>
+                                    :   null}
+                                    <p className="whitespace-pre-wrap text-alloy-midnight/90">
+                                        {composerMarkupToPlainText(bodyDraft).trim() || "(Empty message)"}
+                                    </p>
+                                </div>
+                                {sendResult.results.some((r) => r.status === "blocked") ?
+                                    <ul className="mt-2 space-y-0.5 text-[11px] text-alloy-midnight/55">
+                                        {sendResult.results
+                                            .filter((r) => r.status === "blocked")
+                                            .map((r) => (
+                                                <li key={r.person_id}>
+                                                    {r.display_name}
+                                                    {r.reason ? ` — ${r.reason}` : " — blocked"}
+                                                </li>
+                                            ))}
+                                    </ul>
+                                :   null}
+                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={onDismissSend}
+                                        className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}
+                                        data-cc-send-back="true"
+                                    >
+                                        Back to edit
+                                    </button>
+                                    {sendResult.summary.ready > 0 ?
+                                        <button
+                                            type="button"
+                                            disabled={sending}
+                                            onClick={onConfirmSend}
+                                            className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}
+                                            data-cc-send-confirm-action="true"
+                                        >
+                                            <Send className="h-3.5 w-3.5" />
+                                            {sending ? "Sending…" : "Confirm send"}
+                                        </button>
+                                    :   null}
+                                </div>
+                            </>
+                        ) : sendResult ? (
                             <>
                                 <div className="mb-1 font-semibold text-alloy-midnight">
-                                    {sendResult.mode === "preflight" ? "Review before sending" : "Send results"}
+                                    Send results
                                     <span className="ml-1 font-normal text-alloy-midnight/55">
-                                        {sendResult.mode === "preflight"
-                                            ? `${sendResult.summary.ready} ready · ${sendResult.summary.blocked} blocked`
-                                            : `${sendResult.summary.sent} sent · ${sendResult.summary.blocked} blocked · ${sendResult.summary.failed} failed`}
+                                        {`${sendResult.summary.sent} sent · ${sendResult.summary.blocked} blocked · ${sendResult.summary.failed} failed`}
                                     </span>
                                 </div>
-                                <ul className="space-y-0.5">
+                                <ul className="space-y-0.5 text-[11px]">
                                     {sendResult.results.map((r) => (
                                         <li key={r.person_id} className="flex items-center gap-1.5">
                                             <span className={`inline-block h-1.5 w-1.5 rounded-full ${r.status === "sent" || r.status === "ready" ? "bg-alloy-juniper" : r.status === "blocked" ? "bg-alloy-amber" : "bg-red-500"}`} />
@@ -876,28 +1008,33 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     ))}
                                 </ul>
                                 <div className="mt-1.5 flex items-center gap-1.5">
-                                    {sendResult.mode === "preflight" && sendResult.summary.ready > 0 ? (
-                                        <button type="button" disabled={sending} onClick={onConfirmSend} className={isActivityEmbed ? COMMS_ACTIVITY_PRIMARY_BTN_CLASS : "rounded-md bg-alloy-juniper px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"}>Confirm send ({sendResult.summary.ready})</button>
-                                    ) : null}
-                                    <button type="button" onClick={onDismissSend} className={isActivityEmbed ? COMMS_ACTIVITY_SECONDARY_BTN_CLASS : "rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-[11px] text-alloy-midnight"}>{sendResult.mode === "sent" ? "Done" : "Cancel"}</button>
+                                    <button
+                                        type="button"
+                                        onClick={onDismissSend}
+                                        className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}
+                                    >
+                                        Done
+                                    </button>
                                 </div>
                             </>
                         ) : null}
                     </div>
                 ) : null}
-                <div className="mt-2.5 flex items-center gap-1.5">
+                {!(LIVE_WORKSPACE && sendResult?.mode === "preflight") ? (
+                <div className="mt-2.5 flex items-center gap-1.5" data-cc-composer-footer>
                     <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
-                    {/* Send later + BOS Assist are canonical composer controls in EVERY mode (incl. new
+                    {/* Send later + BOS are canonical composer controls in EVERY mode (incl. new
                         message), matching Activity mode. Wired to the shared schedule/enhance modals. */}
-                    <button type="button" aria-label="Send later" onClick={() => setScheduleOpen(true)} className={`inline-flex shrink-0 items-center gap-1 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
-                    <button type="button" data-bos-assist-button="true" aria-label="BOS Assist" onClick={() => setBosOpen(true)} className={isActivityEmbed ? `${COMMS_ACTIVITY_SECONDARY_BTN_CLASS} min-w-[4.5rem]` : COMMS_BOS_HEADER_BTN_CLASS}>
+                    <button type="button" aria-label="Send later" onClick={() => setScheduleOpen(true)} className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
+                    <button type="button" data-bos-assist-button="true" aria-label="BOS" onClick={() => setBosOpen(true)} className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}>
                         <BosMark size="sm" horizon />
-                        BOS Assist
+                        BOS
                     </button>
                     {!isActivityEmbed ? (
                         <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
                     ) : null}
                 </div>
+                ) : null}
                 </>
                 ) : null}
             <ComposerScheduleSendModal

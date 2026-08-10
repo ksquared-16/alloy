@@ -96,16 +96,24 @@ The UI **never writes `stage_key` directly**. Outcome execution uses `useWorkInt
 
 ## Surface behavior
 
-### Summary (compact)
+### Summary (compact) — What's Next Card V2
 
-- Micro-label: **What's Next** · subtle status badge (**Open** / **In progress** / **Completed**)
-- Title + description from work template (config/runtime — not hardcoded)
-- **Progress bar** + `N of M complete`
-- **Horizontal checklist stepper** (readiness/config requirements — clickable when actionRef or handoff exists)
-- **Work primary card** — large bordered CTA with work title + description (expands inline on summary)
-- **Helpful actions** — 2-column grid on summary (supporting + communication from config/registry)
-- **Footer** — last activity + View all activity →
-- Footer control: **Details →** (not “Open work”)
+Reusable presentation grammar over the same Current Work surface VM (no new runtime):
+
+- Micro-label: **What's Next** · status chip (**Open** / **Blocked** / …) · optional due chip
+- **Title** from configured work template
+- **Summary line** — deterministic description/purpose today; same field is the future BOS contextual-summary seam (`summarySource`)
+- **Progress** — compact sequence from configured/runtime work:
+  - Mode A sequential milestones (distinct templates)
+  - Mode B repeated attempts (attempt policy / same-template instances)
+  - Selection prefers recently completed · current · next; collapses older history
+- **Context facts** — optional compact facts from existing Focus Panel signals/truth (tour booking, billing balance, contact, due)
+- **Still needed** — readiness gaps only; omit when empty
+- **Recent activity** — 1–2 operator-facing rows + View activity
+- **Primary action** (Bend Pine) from action recommendation — not a peer toolbar button
+- **Helpful actions** — configured supporting commands; **Record outcome** as an action (never inline outcome menu)
+
+Tour richness (date/time, invitation/status, schedule/reschedule/cancel) flows through the same context-fact + action model when those facts/actions already exist — never a Tour-specific What's Next card.
 
 ### Focus (expanded inline)
 

@@ -258,6 +258,19 @@ function pushChildBlockEntries(
                 dedupe_key: `dob:child:${lineNum}:${entry.first_name}:${entry.dob}`,
             });
         }
+        if (entry.gender) {
+            pushFact(out, seen, {
+                fact_type: "gender",
+                raw_value: entry.gender,
+                normalized_value: entry.gender,
+                confidence: "high",
+                validation_state: "valid",
+                source_line: lineNum,
+                evidence: `Child gender for ${entry.first_name}`,
+                role_hint: "child",
+                dedupe_key: `gender:child:${lineNum}:${entry.first_name}:${entry.gender}`,
+            });
+        }
     }
     return true;
 }

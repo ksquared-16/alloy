@@ -193,7 +193,8 @@ function childRecordFromCandidate(
         start_date: household.start_date,
         program_room_cohort_key: null,
         schedule_type: null,
-        extra_payload_values: {},
+        extra_payload_values:
+            person.gender === "female" || person.gender === "male" ? { gender: person.gender } : {},
         include_in_commit: false,
         primary: index === 0,
         validation_state: "unknown",

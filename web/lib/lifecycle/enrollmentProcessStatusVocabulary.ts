@@ -71,9 +71,17 @@ export function enrollmentStatusVocabularyForStage(
 }
 
 /**
- * Which durable states land in each enrollment stage (for Stage Context "membership" display).
- * Membership itself is the persisted `stage_key`; this maps a stage to the durable status value(s)
- * a record in that stage carries, so operators can see how a record lands here.
+ * COMPATIBILITY MAP — example stage keys to the durable states a record in them would carry.
+ *
+ * NOT a list of stages an Enrollment process must have, and not an authority over configured
+ * grain. Which stages exist, and what grain each carries, is configuration's decision; this map
+ * is consulted only where configuration is SILENT — chiefly stages authored before `grain` was an
+ * explicit field, and the Stage Context "membership" display.
+ *
+ * `resolveStageGrain` ranks this BELOW both configured declarations for exactly that reason. It
+ * previously outranked configured metadata, which let a platform-owned list of names overrule a
+ * tenant's own process. Do not reintroduce that precedence, and do not add a runtime invariant
+ * that requires any key here to exist.
  */
 export const ENROLLMENT_STAGE_DURABLE_STATES: Record<
     string,

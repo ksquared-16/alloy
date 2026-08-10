@@ -18,6 +18,9 @@ export type ResolveCreateLeadDefaultLocationResult = {
     source: "workspace_site" | "form_value" | "single_permitted_site" | "none";
 };
 
+/** Evidence note stamped when Create Lead seeds location from the workspace site filter. */
+export const CREATE_LEAD_WORKSPACE_LOCATION_NOTE = "From your location";
+
 function trimUuid(v: unknown): string | null {
     const t = v != null ? String(v).trim() : "";
     return t || null;
@@ -53,4 +56,21 @@ export function applyCreateLeadDefaultLocationToValues(
 ): Record<string, string> {
     if (!resolved.location_id || trimUuid(values.location_id)) return values;
     return { ...values, location_id: resolved.location_id };
+}
+
+/**
+ * Whether Create Lead should write the implied workspace/single-site location into the draft.
+ * Re-applies when empty (e.g. after analyze wiped it) or when a prior system-implied value
+ * should track a newly selected campus. Never clobbers operator-entered / parsed locations.
+ */
+export function shouldApplyImpliedCreateLeadLocation(args: {
+    currentLocationId?: string | null;
+    impliedLocationId?: string | null;
+    currentIsWorkspaceImplied?: boolean;
+}): boolean {
+    const implied = trimUuid(args.impliedLocationId);
+    if (!implied) return false;
+    const current = trimUuid(args.currentLocationId);
+    if (!current) return true;
+    return Boolean(args.currentIsWorkspaceImplied) && current !== implied;
 }

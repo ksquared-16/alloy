@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Activity, Calendar, CheckSquare2, MessageSquare, StickyNote } from "lucide-react";
 
 import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/ComposerFloatingPopover";
+import type { LeadActivityPreviewKind } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 
 export type CurrentWorkActivityPreviewItem = {
     label: string;
     detail?: string | null;
     category?: string | null;
+    kind?: LeadActivityPreviewKind | null;
     occurredAt?: string | null;
 };
 
@@ -20,6 +23,26 @@ type Props = {
     onViewFullActivity?: () => void;
     triggerRef: React.RefObject<HTMLElement | null>;
 };
+
+function ActivityKindIcon({ kind }: { kind?: LeadActivityPreviewKind | null }) {
+    switch (kind) {
+        case "note":
+            return <StickyNote className="h-3 w-3" aria-hidden />;
+        case "communication":
+            return <MessageSquare className="h-3 w-3" aria-hidden />;
+        case "task":
+            return <CheckSquare2 className="h-3 w-3" aria-hidden />;
+        case "created":
+        case "updated":
+            return <Calendar className="h-3 w-3" aria-hidden />;
+        default:
+            return <Activity className="h-3 w-3" aria-hidden />;
+    }
+}
+
+export function CurrentWorkActivityKindIcon({ kind }: { kind?: LeadActivityPreviewKind | null }) {
+    return <ActivityKindIcon kind={kind} />;
+}
 
 export default function CurrentWorkActivityPreview({
     open,
@@ -82,15 +105,20 @@ export default function CurrentWorkActivityPreview({
                 :   <ul className="alloy-os-currentwork__activity-preview-list">
                         {items.map((item, index) => (
                             <li key={`${item.label}-${item.occurredAt ?? item.detail ?? index}`}>
-                                {item.occurredAt ?
-                                    <span className="alloy-os-currentwork__activity-preview-when">{item.occurredAt}</span>
-                                :   null}
-                                <span className="alloy-os-currentwork__activity-preview-label">{item.label}</span>
-                                {item.category ?
-                                    <span className="alloy-os-currentwork__activity-preview-detail">{item.category}</span>
-                                : item.detail ?
-                                    <span className="alloy-os-currentwork__activity-preview-detail">{item.detail}</span>
-                                :   null}
+                                <span className="alloy-os-currentwork__activity-preview-icon" aria-hidden>
+                                    <ActivityKindIcon kind={item.kind} />
+                                </span>
+                                <span className="alloy-os-currentwork__activity-preview-body">
+                                    {item.occurredAt ?
+                                        <span className="alloy-os-currentwork__activity-preview-when">{item.occurredAt}</span>
+                                    :   null}
+                                    <span className="alloy-os-currentwork__activity-preview-label">{item.label}</span>
+                                    {item.category ?
+                                        <span className="alloy-os-currentwork__activity-preview-detail">{item.category}</span>
+                                    : item.detail ?
+                                        <span className="alloy-os-currentwork__activity-preview-detail">{item.detail}</span>
+                                    :   null}
+                                </span>
                             </li>
                         ))}
                     </ul>

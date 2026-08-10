@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-07
+supersedes: []
+---
+
 # Business Process configuration — writer inventory
 
 Law 4 completion. Every code path that can durably write `departments.metadata.lifecycle_builder_v1`,
@@ -66,14 +73,14 @@ precisely so these need no change.
 
 | Path : line | Key(s) |
 |---|---|
-| `app/api/admin/departments/[id]/lifecycle-activation/route.ts:99` | `lifecycle_activation_v1` |
-| `app/api/admin/departments/[id]/lifecycle-actions-matrix/route.ts:125` | `lifecycle_actions_matrix_order_v1` |
-| `app/api/admin/departments/[id]/lifecycle-requirements/route.ts:189,:278,:325` | `lifecycle_progression_requirements_v1`, `lifecycle_builder_stage_field_rules_v1` |
+| `app/api/admin/departments/[id]/lifecycle-actions-matrix/route.ts` | `lifecycle_actions_matrix_order_v1` (category F via `mergeCategoryFDepartmentMetadata`); `command_set_v1` upserts go through `editProcessInDraft` + publish — never the projection |
+| `app/api/admin/departments/[id]/lifecycle-requirements/route.ts:189,:278,:325` | `lifecycle_progression_requirements_v1`, `lifecycle_builder_stage_field_rules_v1` (pinned via `mergeCategoryFDepartmentMetadata`) |
 | `lib/lifecycle/persistLifecycleStageFieldRules.ts:97` | same two |
 | `scripts/ensureEnrollmentPipelineWorkUnitV1.ts:266` | `opportunity_attention_rules` (+ nested `readiness_projection_v1`) |
 | `lib/lifecycle/repairLifecycleWorkspaceVisibility.ts:143` | `lifecycle_builder_owned_v1`, `lifecycle_activation_v1` |
 | `scripts/seedAccessValidationDemo.ts:217` INSERT | demo markers |
 | `lib/lifecycle/syncLifecycleDepartmentDescription.ts:33` | `description` column only |
+| `app/api/admin/departments/[id]/lifecycle-activation/route.ts` | `lifecycle_activation_v1` (pinned via `mergeCategoryFDepartmentMetadata`) |
 
 **Outside** `lifecycle_builder_v1` (top-level siblings): `lifecycle_activation_v1`,
 `lifecycle_builder_owned_v1`, `lifecycle_builder_stage_field_rules_v1`,

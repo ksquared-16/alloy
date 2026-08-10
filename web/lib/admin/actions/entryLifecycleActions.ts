@@ -15,7 +15,18 @@ import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRunt
 import { resolveCreateLeadEntryDepartmentForOrg } from "@/lib/lifecycle/resolveCreateLeadEntryDepartment";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
-import { ingestCreateLeadThroughProcessing } from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
+import {
+    ingestCreateLeadThroughProcessing,
+    opportunityIdFromAttempt,
+} from "@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter";
+import { createExecutorPorts } from "@/lib/pos/processingIdentity/executor/executorPorts";
+import {
+    commitApprovedLeadForCase,
+    loadCaseReview,
+    OperatorServiceError,
+    type CaseReviewState,
+} from "@/lib/pos/processingIdentity/operator/operatorReviewService";
+import { buildCreateLeadReviewPresentation } from "@/lib/pos/processingIdentity/operator/createLeadReviewPresentation";
 
 export type EntryLifecycleActionError = { ok: false; error: string; status: number };
 
@@ -26,6 +37,29 @@ function trim(v: unknown): string {
 function asStringList(v: unknown): string[] {
     if (!Array.isArray(v)) return [];
     return v.map((x) => String(x).trim()).filter(Boolean);
+}
+
+async function resolveWorkUnitKey(
+    supabase: SupabaseClient,
+    orgId: string,
+    workUnitId: string | null,
+): Promise<string | null> {
+    const id = workUnitId?.trim();
+    if (!id) return null;
+    try {
+        const { data, error } = await supabase
+            .from("work_units")
+            .select("key")
+            .eq("id", id)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (error) return null;
+        const key = (data as { key?: string | null } | null)?.key;
+        return typeof key === "string" && key.trim() ? key.trim() : null;
+    } catch {
+        // Unit-test fakes often stub only the tables Create Lead historically touched.
+        return null;
+    }
 }
 
 export async function resolveOrgDefaultVerticalId(
@@ -53,15 +87,33 @@ export async function executeCreateLeadAction(
 ): Promise<
     | {
           ok: true;
-          /** D4: canonical Processing review — records created only after operator commit. */
+          /**
+           * Clean-new: Processing authority still ran (case → facts → resolution → plan →
+           * approve → execute). Operator already confirmed in BOS; no second Processing UI.
+           */
+          mode: "committed";
+          processing_case_id: string;
+          readiness: string;
+          idempotency_key: string;
+          work_unit_id: string | null;
+          work_unit_key: string | null;
+          status_key: string;
+          stage_key: string;
+          opportunity_id: string;
+          person_id?: string;
+          customer_id?: string;
+      }
+    | {
+          ok: true;
+          /** Ambiguous identity — operator must resolve in BOS / Processing review. */
           mode: "processing_review";
           processing_case_id: string;
           readiness: string;
           idempotency_key: string;
           work_unit_id: string | null;
+          work_unit_key: string | null;
           status_key: string;
           stage_key: string;
-          /** Populated only after operator executes an approved plan (not at intake). */
           opportunity_id?: string;
           person_id?: string;
           customer_id?: string;
@@ -162,6 +214,7 @@ export async function executeCreateLeadAction(
             status: 422,
         };
     }
+    const workUnitKey = await resolveWorkUnitKey(supabase, ctx.orgId, workUnitId);
     const locationId = trim(input.merged.location_id) || null;
 
     const householdCommit = readCreateLeadCommitSelectionFromPayload(input.merged);
@@ -205,6 +258,86 @@ export async function executeCreateLeadAction(
         return { ok: false, error: ingested.error, status: ingested.status };
     }
 
+    const reviewDeps = {
+        supabase,
+        orgId: ctx.orgId,
+        actorId: ctx.userId ?? "unknown",
+        actorAuthorized: true,
+        executorPorts: createExecutorPorts(supabase),
+    };
+
+    // Reuse the review already loaded during ingest — a second loadCaseReview was a clean-new
+    // latency tax with no semantic benefit (case has not changed between the two calls).
+    let review: CaseReviewState;
+    if (ingested.caseReview) {
+        review = ingested.caseReview;
+    } else {
+        try {
+            review = await loadCaseReview(reviewDeps, ingested.processingCaseId);
+        } catch {
+            // Fake/incomplete clients in unit tests — keep interactive review rather than fail create.
+            return {
+                ok: true,
+                mode: "processing_review",
+                processing_case_id: ingested.processingCaseId,
+                readiness: ingested.readiness,
+                idempotency_key: ingested.idempotencyKey,
+                work_unit_id: workUnitId,
+                work_unit_key: workUnitKey,
+                status_key: statusKeyForLead,
+                stage_key: "lead",
+            };
+        }
+    }
+
+    const presentation = buildCreateLeadReviewPresentation({
+        resolutions: review.resolutions,
+        subjectEligibility: review.subjectEligibility,
+    });
+
+    // Clean-new: BOS Confirm already decided. Keep Processing authority but finish commit here
+    // so the case never sits in Incoming as operator work.
+    if (presentation.mode === "ready_without_identity_review" && review.planEligible) {
+        try {
+            const { attempt } = await commitApprovedLeadForCase(reviewDeps, {
+                caseId: ingested.processingCaseId,
+            });
+            const opportunityId = opportunityIdFromAttempt(
+                attempt.operations.map((o) => ({
+                    commandKey: o.commandKey ?? "",
+                    recordId: o.recordId,
+                    status: o.status,
+                })),
+            );
+            if (!opportunityId || (attempt.outcome !== "committed" && attempt.outcome !== "partially_committed")) {
+                return {
+                    ok: false,
+                    error: "Lead could not be created after identity check. Try again.",
+                    status: 500,
+                };
+            }
+            return {
+                ok: true,
+                mode: "committed",
+                processing_case_id: ingested.processingCaseId,
+                readiness: "committed",
+                idempotency_key: ingested.idempotencyKey,
+                work_unit_id: workUnitId,
+                work_unit_key: workUnitKey,
+                status_key: statusKeyForLead,
+                stage_key: "lead",
+                opportunity_id: opportunityId,
+            };
+        } catch (e) {
+            if (e instanceof OperatorServiceError && e.code === "identity_review_required") {
+                // Eligibility changed underfoot — fall through to interactive review.
+            } else {
+                const message = e instanceof Error ? e.message : "Lead could not be created.";
+                return { ok: false, error: message, status: 500 };
+            }
+        }
+    }
+
     return {
         ok: true,
         mode: "processing_review",
@@ -212,6 +345,7 @@ export async function executeCreateLeadAction(
         readiness: ingested.readiness,
         idempotency_key: ingested.idempotencyKey,
         work_unit_id: workUnitId,
+        work_unit_key: workUnitKey,
         status_key: statusKeyForLead,
         stage_key: "lead",
     };

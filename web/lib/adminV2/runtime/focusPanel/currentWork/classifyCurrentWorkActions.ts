@@ -2,7 +2,7 @@ import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin
 import { canonicalActionDefinition } from "@/lib/admin/actions/canonicalActionRegistry";
 import { normalizeActionRefToIntentKey, workTemplateActionIntentForKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
 
-import { resolveCurrentWorkTemplateAction } from "./resolveCurrentWorkTemplateAction";
+import { resolveCurrentWorkTemplateAction, relatedSubjectResolutionForExecutionKey } from "./resolveCurrentWorkTemplateAction";
 import {
     actionCompetesWithCurrentWorkCompletion,
     isGenericUmbrellaLifecycleAction,
@@ -29,6 +29,7 @@ function toActionVM(
         handlerKey: action.key,
         actionRef: action.key,
         resolved: action,
+        relatedSubjectResolution: relatedSubjectResolutionForExecutionKey(action.key),
     };
 }
 
@@ -232,6 +233,11 @@ export function actionsFromConfigRefs(
             handlerKey: resolved.handlerKey,
             actionRef: resolved.actionRef,
             resolved: null,
+            relatedSubjectResolution: resolved.relatedSubjectResolution,
+            requiresSubjectPicker: resolved.requiresSubjectPicker,
+            ...(resolved.blockedReason
+                ? { disabled: true, disabledReason: resolved.blockedReason, blockedReason: resolved.blockedReason }
+                : { blockedReason: null }),
         });
     }
     return out;

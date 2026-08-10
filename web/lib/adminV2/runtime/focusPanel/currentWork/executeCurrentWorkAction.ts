@@ -48,6 +48,7 @@ export function planCurrentWorkActionExecution(
     switch (surface) {
         case "inline_form":
         case "form_delivery":
+        case "subject_selector":
             return { kind: "open_inline_panel", action, surface };
         case "process_transition": {
             const nextStatusKey = (action.actionRef ?? action.key).trim();

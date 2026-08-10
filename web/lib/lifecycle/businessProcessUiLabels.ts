@@ -37,7 +37,7 @@ export const BUSINESS_PROCESS_NAV_PARTICIPATION = "Participation";
 export const BUSINESS_PROCESS_NAV_STAGES = "Stages";
 export const BUSINESS_PROCESS_NAV_WORK_VIEWS = "Work Views";
 export const BUSINESS_PROCESS_NAV_PRESENTATION = "Presentation";
-export const BUSINESS_PROCESS_NAV_ACTIONS = "Actions";
+export const BUSINESS_PROCESS_NAV_ACTIONS = "Commands";
 export const BUSINESS_PROCESS_NAV_AUTOMATION = "Automation";
 export const BUSINESS_PROCESS_NAV_HEALTH = "Configuration Health";
 export const BUSINESS_PROCESS_NAV_HISTORY = "History";
@@ -88,7 +88,7 @@ export const BUSINESS_PROCESS_COLLECTION_EMPTY_SEARCH = "No processes match this
 
 export const BUSINESS_PROCESS_NO_SELECTION_TITLE = "Choose a Business Process";
 export const BUSINESS_PROCESS_NO_SELECTION_DESCRIPTION =
-    "Select a Process to configure its stages, work views, actions, automation, and health.";
+    "Select a Process to configure its stages, work views, commands, automation, and health.";
 
 export const BUSINESS_PROCESS_EDIT_ACTION = "Edit Process";
 export const BUSINESS_PROCESS_MORE_ACTION = "More";
@@ -111,7 +111,7 @@ export const BUSINESS_PROCESS_OVERVIEW_AVAILABILITY_NOTE =
     "This process is defined once for the organization. Location-level availability overrides are Planned — none are invented here.";
 export const BUSINESS_PROCESS_OVERVIEW_OPEN_STAGES = "Open Stages";
 export const BUSINESS_PROCESS_OVERVIEW_OPEN_WORK_VIEWS = "Open Work Views";
-export const BUSINESS_PROCESS_OVERVIEW_OPEN_ACTIONS = "Open Actions";
+export const BUSINESS_PROCESS_OVERVIEW_OPEN_ACTIONS = "Open Commands";
 
 /** History tab — Planned, no fabricated events. */
 export const BUSINESS_PROCESS_HISTORY_TITLE = "History";
@@ -150,12 +150,12 @@ export const BUSINESS_PROCESS_STAGE_REQUIREMENTS_HELPER =
 export const BUSINESS_PROCESS_STAGE_REQUIREMENTS_FIELD_SOURCE_NOTE =
     "Fields come from your org field registry (Fields settings) plus platform enrollment defaults. Stage requiredness is stored separately from Layout placement — see configuration-ownership-doctrine.";
 
-export const BUSINESS_PROCESS_SECTION_ACTIONS = "Actions in this stage";
+export const BUSINESS_PROCESS_SECTION_ACTIONS = "Commands in this stage";
 export const BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY =
-    "Actions available to staff while records are in this stage.";
-export const BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE = "Process Actions";
+    "Commands available to staff while records are in this stage.";
+export const BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE = "Process Commands";
 export const BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY =
-    "Configure which actions are available in this process and where they appear.";
+    "Configure which commands are available in this process and where they appear.";
 export const BUSINESS_PROCESS_SECTION_READY = "Ready Check";
 export const BUSINESS_PROCESS_SECTION_READY_SUMMARY =
     "Confirm this stage is ready for staff on the workspace.";
@@ -182,7 +182,7 @@ export const BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY =
 /** Top-level stage section — groups purpose, work, success, and attention rules. */
 export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN = "Operating Plan";
 export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY =
-    "What staff should do in this stage: purpose, expected work, success criteria, and when records need attention. Process Actions are configured at the process level below the stage list.";
+    "What staff should do in this stage: purpose, expected work, success criteria, and when records need attention. Process Commands are configured at the process level below the stage list.";
 
 export const BUSINESS_PROCESS_SECTION_PERSPECTIVES = "Work Views";
 export const BUSINESS_PROCESS_SECTION_PERSPECTIVES_SUMMARY =
@@ -246,7 +246,7 @@ export const BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY =
 export const BUSINESS_PROCESS_SECTION_ATTENTION_ORG_DEFAULTS_LINK = "Org-wide attention defaults";
 
 export const BUSINESS_PROCESS_PROCESS_ACTIONS_GUIDANCE =
-    "Enable and restrict actions for this process in Process Actions — not per-stage queue settings.";
+    "Enable and restrict commands for this process in Process Commands — not per-stage queue settings.";
 
 export const BUSINESS_PROCESS_SECTION_PURPOSE = "Purpose";
 export const BUSINESS_PROCESS_SECTION_SUCCESS = "Success Criteria";

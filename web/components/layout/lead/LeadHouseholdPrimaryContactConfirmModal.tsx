@@ -1,92 +1,111 @@
 "use client";
 
+import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
+
 type Props = {
     isOpen: boolean;
     personName: string;
     currentPrimaryName?: string | null;
+    /** @deprecated Prefer consequence copy; retained for callers that still pass scope chips. */
     scopeLabels?: string[];
     isLoading?: boolean;
     onClose: () => void;
     onConfirm: () => void | Promise<void>;
 };
 
-/** Confirmation before reassigning household primary contact — shows current vs new and affected scope. */
+function firstName(full: string | null | undefined): string {
+    const trimmed = String(full ?? "").trim();
+    if (!trimmed) return "";
+    return trimmed.split(/\s+/)[0] ?? trimmed;
+}
+
+/** Confirmation before reassigning household primary contact — card-style Focus Panel confirmation. */
 export default function LeadHouseholdPrimaryContactConfirmModal({
     isOpen,
     personName,
     currentPrimaryName,
-    scopeLabels,
     isLoading = false,
     onClose,
     onConfirm,
 }: Props) {
-    if (!isOpen) return null;
-
     const handleConfirm = () => {
         void Promise.resolve(onConfirm()).catch(() => {});
     };
 
-    const scopes = (scopeLabels ?? []).filter(Boolean);
+    const newName = (personName || "").trim() || "this person";
+    const currentName = (currentPrimaryName ?? "").trim();
+    const newFirst = firstName(newName) || newName;
+    const currentFirst = firstName(currentName) || currentName;
+
+    const consequence =
+        currentFirst ?
+            `${newFirst} will become the primary contact for this household and its linked opportunities. ${currentFirst} will remain a household contact.`
+        :   `${newFirst} will become the primary contact for this household and its linked opportunities.`;
 
     return (
-        <div
-            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="lead-primary-contact-modal-title"
-            onClick={onClose}
+        <ActionModalOverlayShell
+            open={isOpen}
+            onClose={onClose}
+            busy={isLoading}
+            panelClassName="mx-4 w-full max-w-[400px] overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white p-5 shadow-2xl"
+            data-testid="lead-household-primary-contact-confirm"
         >
-            <div
-                className="mx-4 w-full max-w-md rounded-lg border border-alloy-stone/30 bg-white p-5 shadow-lg"
-                onClick={(e) => e.stopPropagation()}
+            <h3
+                id="lead-primary-contact-modal-title"
+                className="text-[15px] font-semibold tracking-tight text-alloy-midnight"
             >
-                <h3 id="lead-primary-contact-modal-title" className="mb-2 text-base font-semibold text-alloy-midnight">
-                    Change primary contact?
-                </h3>
-                <div className="mb-4 space-y-2 text-sm text-alloy-midnight/80">
-                    {currentPrimaryName ?
-                        <p>
-                            <span className="text-alloy-midnight/60">Current primary:</span>{" "}
-                            <strong>{currentPrimaryName}</strong>
+                Change primary contact?
+            </h3>
+
+            <div className="mt-4 space-y-3">
+                {currentName ?
+                    <div className="space-y-0.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-slate">
+                            Current
                         </p>
-                    :   null}
-                    <p>
-                        <span className="text-alloy-midnight/60">New primary:</span>{" "}
-                        <strong>{personName || "this person"}</strong>
-                    </p>
-                    {scopes.length > 0 ?
-                        <div>
-                            <p className="text-alloy-midnight/60">Affected scope:</p>
-                            <ul className="mt-1 list-inside list-disc">
-                                {scopes.map((scope) => (
-                                    <li key={scope}>{scope}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    :   null}
-                    <p className="text-alloy-midnight/70">
-                        The previous primary contact will remain linked as an additional household contact.
-                    </p>
-                </div>
-                <div className="flex justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        disabled={isLoading}
-                        className="rounded border border-alloy-stone/40 px-3 py-1.5 text-sm hover:bg-alloy-stone/20 disabled:opacity-50"
+                        <p className="text-[14px] font-semibold text-alloy-midnight">{currentName}</p>
+                    </div>
+                :   null}
+
+                {currentName ?
+                    <div
+                        className="flex items-center gap-2 text-alloy-slate"
+                        aria-hidden="true"
                     >
-                        Cancel
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleConfirm}
-                        disabled={isLoading}
-                        className="rounded bg-alloy-blue px-3 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-50"
-                    >
-                        {isLoading ? "Saving…" : "Make primary contact"}
-                    </button>
+                        <span className="h-px flex-1 bg-alloy-stone/30" />
+                        <span className="text-[12px] leading-none">↓</span>
+                        <span className="h-px flex-1 bg-alloy-stone/30" />
+                    </div>
+                :   null}
+
+                <div className="space-y-0.5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-alloy-slate">
+                        New primary
+                    </p>
+                    <p className="text-[14px] font-semibold text-alloy-midnight">{newName}</p>
                 </div>
+
+                <p className="text-[13px] leading-snug text-alloy-slate">{consequence}</p>
             </div>
-        </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={isLoading}
+                    className="rounded-lg border border-alloy-stone/40 bg-white px-3 py-1.5 text-sm font-medium text-alloy-midnight hover:bg-alloy-stone/15 disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={isLoading}
+                    className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-bend-pine/90 disabled:opacity-50"
+                >
+                    {isLoading ? "Saving…" : "Make primary contact"}
+                </button>
+            </div>
+        </ActionModalOverlayShell>
     );
 }

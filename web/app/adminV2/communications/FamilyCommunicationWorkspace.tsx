@@ -18,6 +18,7 @@ export default function FamilyCommunicationWorkspace(props: {
     /** Activity cockpit embed — compact loading shell while warm cache resolves. */
     compactActivityLoading?: boolean;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
+    entryContext?: "current_work" | null;
 }) {
     const adminAuth = useAdminAuthOptional();
     const runtime = useFamilyCommunicationRuntime(props);

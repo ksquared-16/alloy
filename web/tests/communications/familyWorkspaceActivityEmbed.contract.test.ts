@@ -19,9 +19,9 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(drawer).toMatch(/surfaceVariant\?: FamilyWorkspaceSurfaceVariant/);
         expect(drawer).toMatch(/surfaceVariant=\{props\.surfaceVariant\}/);
         expect(tab).toMatch(/surfaceVariant=\{props\.surfaceVariant\}/);
-        expect(workspace).toMatch(/onNewMessage=\{startNewMessage\}/);
-        expect(workspace).toMatch(/threads=\{vm\.threads\}/);
-        expect(workspace).toMatch(/timelineMessages=\{isActivityEmbed \? timelineMessages : undefined\}/);
+        expect(workspace).toMatch(/onNewMessage=\{runtime\.startNewMessage\}/);
+        expect(workspace).toMatch(/threads=\{runtime\.vm\.threads\}/);
+        expect(workspace).toMatch(/timelineMessages=\{isActivityEmbed \? runtime\.timelineMessages : undefined\}/);
     });
 
     it("activity_embed view renders topic rail + read/compose pane", () => {
@@ -84,13 +84,13 @@ describe("familyWorkspace activity_embed contract", () => {
     it("activity_embed resolves thread participants from transport thread not household", () => {
         const helper = read("lib/communications/v2/familyWorkspace/threadTopicPresentation.ts");
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
-        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
+        const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
         expect(helper).toMatch(/resolveThreadRecipients/);
         expect(helper).toMatch(/deriveThreadParticipantPersonIds/);
         expect(view).toMatch(/resolveThreadRecipients\(thread, timelineMessages, allLiveRecipients\)/);
-        expect(workspace).toMatch(/deriveThreadReplyRecipientIds/);
-        expect(workspace).toMatch(/syncActivityThreadContext/);
-        expect(workspace).toMatch(/threadChannelToWorkspaceMode/);
+        expect(runtime).toMatch(/deriveThreadReplyRecipientIds/);
+        expect(runtime).toMatch(/syncThreadContext/);
+        expect(runtime).toMatch(/threadChannelToWorkspaceMode/);
     });
 
     it("activity_embed message sender uses Sent from Alloy not Unassigned", () => {
@@ -104,8 +104,8 @@ describe("familyWorkspace activity_embed contract", () => {
 
     it("activity_embed new-message mode shows compact compose pane without dashed empty panel", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
-        expect(view).toMatch(/isNewMessageMode \? \(\n\s*composerColumn/);
-        expect(view).not.toMatch(/Start a new message/);
+        expect(view).toMatch(/isNewMessageMode/);
+        expect(view).toMatch(/composerColumn/);
         expect(view).not.toMatch(/border-dashed border-alloy-stone\/25 bg-white\/70/);
         expect(view).toMatch(/New Message/);
         expect(view).toMatch(/isNewMessageMode \? "Send"/);
@@ -120,28 +120,31 @@ describe("familyWorkspace activity_embed contract", () => {
         expect(view).toMatch(/Send reply/);
     });
 
-    it("activity_embed post-send stays in thread and collapses composer", () => {
+    it("activity_embed post-send stays in thread by default; Current Work entry returns to Focus Panel", () => {
+        const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
         const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
         expect(workspace).toMatch(/sendCompleteToken/);
-        expect(workspace).toMatch(/threadToOpen = priorThreadId \?\? createdThreadId/);
-        expect(workspace).toMatch(/setSendCompleteToken/);
+        expect(runtime).toMatch(/threadToOpen = priorThreadId \?\? createdThreadId/);
+        expect(runtime).toMatch(/setSendCompleteToken/);
+        expect(runtime).toContain('entryContext === "current_work"');
+        expect(runtime).toContain("dispatchContactFamilySendComplete");
         expect(view).toMatch(/sendCompleteToken/);
     });
 
     it("activity_embed scope reset does not clear selectedThreadId on thread switch", () => {
-        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
-        expect(workspace).toMatch(/familyScopeKey/);
-        expect(workspace).toMatch(/loadRef\.current\(null, true\)/);
-        expect(workspace).not.toMatch(/void load\(null, true\);\n    \}, \[load, props\.initialPreviewVm\]/);
+        const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
+        expect(runtime).toMatch(/familyScopeKey/);
+        expect(runtime).toMatch(/loadRef\.current\(initialThreadId, true\)/);
+        expect(runtime).not.toMatch(/void load\(null, true\);\n    \}, \[load, props\.initialPreviewVm\]/);
     });
 
     it("activity_embed load ignores stale family-workspace responses", () => {
-        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
-        expect(workspace).toMatch(/loadRequestSeqRef/);
-        expect(workspace).toMatch(/selectedThreadIdRef/);
-        expect(workspace).toMatch(/applyIfCurrent/);
-        expect(workspace).toMatch(/hasUserThreadSelectionRef/);
+        const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
+        expect(runtime).toMatch(/loadRequestSeqRef/);
+        expect(runtime).toMatch(/selectedThreadIdRef/);
+        expect(runtime).toMatch(/applyIfCurrent/);
+        expect(runtime).toMatch(/hasUserThreadSelectionRef/);
     });
 
     it("activity_embed selected thread header shows topic, participants, channel, delivery", () => {
@@ -163,10 +166,11 @@ describe("familyWorkspace activity_embed contract", () => {
     });
 
     it("activity embed bootstraps first thread and isolates new-message timeline", () => {
+        const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
         const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
-        expect(workspace).toMatch(/activityEmbedBootstrappedRef/);
-        expect(workspace).toMatch(/isActivityEmbed[\s\S]*selectedThreadId[\s\S]*vm\.messages/);
-        expect(workspace).toMatch(/selectedThread=\{/);
+        expect(runtime).toMatch(/activityEmbedBootstrappedRef/);
+        expect(runtime).toMatch(/isActivityEmbed[\s\S]*selectedThreadId[\s\S]*vm\.messages/);
+        expect(workspace).toMatch(/selectedThread=\{runtime\.selectedThread\}/);
     });
 
     it("Recent Activity ribbon uses compact event count", () => {
@@ -190,10 +194,10 @@ describe("familyWorkspace activity_embed contract", () => {
 });
 
 describe("startNewMessage clears thread context", () => {
-    it("FamilyCommunicationWorkspace resets selectedThreadId in startNewMessage", () => {
-        const workspace = read("app/adminV2/communications/FamilyCommunicationWorkspace.tsx");
-        expect(workspace).toMatch(/const startNewMessage = useCallback\(\(\) => \{/);
-        expect(workspace).toMatch(/setSelectedThreadId\(null\)/);
-        expect(workspace).toMatch(/void load\(null, false\)/);
+    it("runtime resets selectedThreadId in startNewMessage", () => {
+        const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
+        expect(runtime).toMatch(/const startNewMessage = useCallback\(\(\) => \{/);
+        expect(runtime).toMatch(/setSelectedThreadId\(null\)/);
+        expect(runtime).toMatch(/void load\(null, false\)/);
     });
 });

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import { SURFACE_COMPOSER_LIBRARY_ATTR } from "@/lib/adminV2/settings/surfaces/surfaceComposer";
 import {
     PROCESSING_BUILDER_CANONICAL_FIELDS,
@@ -11,11 +12,20 @@ import {
     type ProcessingBuilderCanonicalField,
     type ProcessingBuilderLibraryGroup,
 } from "@/lib/forms/processingFormBuilderLibrary";
+import type {
+    ProcessingLibraryFieldOffer,
+    ProcessingLibraryGroupOffer,
+} from "@/lib/forms/processingFormFieldLibrary";
 import type { BuilderFieldType } from "@/lib/forms/formBuilderSchema";
 
 export type QuestionTypeItem = { type: BuilderFieldType; label: string; meta: string; category: string };
 
 type LibraryTab = "question-types" | "alloy-fields";
+
+const TIER_BADGE: Record<"required" | "recommended", string> = {
+    required: "Required for this stage",
+    recommended: "Recommended for this stage",
+};
 
 export default function ProcessingFormBuilderLibraryPanel({
     open,
@@ -24,6 +34,8 @@ export default function ProcessingFormBuilderLibraryPanel({
     questionCategoryLabels,
     onPickQuestionType,
     onPickCanonicalField,
+    onPickLibraryField,
+    fieldLibrary,
     onClose,
 }: {
     open: boolean;
@@ -32,6 +44,13 @@ export default function ProcessingFormBuilderLibraryPanel({
     questionCategoryLabels: Record<string, string>;
     onPickQuestionType: (type: BuilderFieldType) => void;
     onPickCanonicalField: (field: ProcessingBuilderCanonicalField) => void;
+    onPickLibraryField?: (offer: ProcessingLibraryFieldOffer) => void;
+    /**
+     * Stage-derived field library from the coverage payload — the same palette
+     * `/process → requirements` reads. When absent (stage not configured yet, or the fetch
+     * failed) the panel falls back to the curated static list so it is never empty.
+     */
+    fieldLibrary?: ProcessingLibraryGroupOffer[] | null;
     onClose: () => void;
 }) {
     const [tab, setTab] = useState<LibraryTab>("alloy-fields");
@@ -53,6 +72,24 @@ export default function ProcessingFormBuilderLibraryPanel({
         }));
     }, [questionTypes, questionCategoryLabels, search]);
 
+    /** Stage-derived library when available — everything the process can require. */
+    const derivedGroups = useMemo(() => {
+        if (!fieldLibrary?.length) return null;
+        const q = search.trim().toLowerCase();
+        return fieldLibrary
+            .map((g) => ({
+                group: g.group,
+                label: PROCESSING_BUILDER_GROUP_LABELS[g.group] ?? g.group,
+                items: q
+                    ? g.items.filter(
+                          (i) => i.label.toLowerCase().includes(q) || i.meta.toLowerCase().includes(q)
+                      )
+                    : g.items,
+            }))
+            .filter((g) => g.items.length > 0);
+    }, [fieldLibrary, search]);
+
+    /** Curated fallback — used only until a stage is configured or if coverage could not load. */
     const alloyGroups = useMemo(() => {
         const q = search.trim().toLowerCase();
         const byGroup = new Map<ProcessingBuilderLibraryGroup, ProcessingBuilderCanonicalField[]>();
@@ -70,20 +107,25 @@ export default function ProcessingFormBuilderLibraryPanel({
 
     if (!open || typeof document === "undefined") return null;
 
+    // Portals to `document.body`, so it escapes the Processing BOS modal shell's stacking context and
+    // must clear the shell itself (panel 97 / backdrop 96). At the old z-[70] this panel opened BEHIND
+    // the shell: "+ Add question" set state and rendered, but nothing was ever visible or clickable.
+    // Same root cause as ProcessingAlloyDialog's z-[80] → z-[110] repair (395026bf8).
     return createPortal(
         <div
-            className="pointer-events-auto fixed inset-0 z-[70] flex items-start justify-center bg-alloy-midnight/20 p-4 pt-16"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="pointer-events-auto fixed inset-0 flex items-start justify-center bg-alloy-midnight/20 p-4 pt-16"
             role="dialog"
             aria-label="Add question"
             {...{ [SURFACE_COMPOSER_LIBRARY_ATTR]: true }}
             onClick={onClose}
         >
             <div
-                className="max-h-[min(70vh,560px)] w-full max-w-lg overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
+                className="flex max-h-[min(85vh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-xl"
                 data-testid="processing-form-builder-library"
                 onClick={(e) => e.stopPropagation()}
             >
-                <header className="border-b border-alloy-stone/10 px-4 py-3">
+                <header className="shrink-0 border-b border-alloy-stone/10 px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                         <div>
                             <p className="text-sm font-semibold text-alloy-midnight">{sectionLabel}</p>
@@ -112,7 +154,7 @@ export default function ProcessingFormBuilderLibraryPanel({
                         </button>
                     </div>
                 </header>
-                <div className="border-b border-alloy-stone/10 px-4 py-2">
+                <div className="shrink-0 border-b border-alloy-stone/10 px-4 py-2">
                     <input
                         type="search"
                         value={search}
@@ -122,9 +164,61 @@ export default function ProcessingFormBuilderLibraryPanel({
                         data-testid="form-builder-library-search"
                     />
                 </div>
-                <div className="max-h-[min(50vh,420px)] overflow-y-auto p-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3" data-library-scroll>
                     {tab === "alloy-fields" ? (
-                        alloyGroups.length === 0 ? (
+                        derivedGroups ? (
+                            derivedGroups.length === 0 ? (
+                                <p className="px-2 py-4 text-[12px] text-alloy-midnight/45">No fields match your search.</p>
+                            ) : (
+                                derivedGroups.map((group) => (
+                                    <section key={group.group} className="mb-4" data-library-category={group.group}>
+                                        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/35">{group.label}</p>
+                                        <ul className="space-y-0.5">
+                                            {group.items.map((item) =>
+                                                item.captureUnsupported ? (
+                                                    <li key={item.id}>
+                                                        <div
+                                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left opacity-60"
+                                                            data-library-unavailable={item.id}
+                                                            title={item.meta}
+                                                        >
+                                                            <span className="text-[11px] text-alloy-stone/50">—</span>
+                                                            <span className="flex-1 text-[12px] text-alloy-midnight/55">{item.label}</span>
+                                                            <span className="shrink-0 text-[9px] text-alloy-midnight/40">Not form-capturable</span>
+                                                        </div>
+                                                    </li>
+                                                ) : (
+                                                    <li key={item.id}>
+                                                        <button
+                                                            type="button"
+                                                            data-library-item={`alloy-${item.id}`}
+                                                            data-library-item-tier={item.tier ?? undefined}
+                                                            onClick={() => onPickLibraryField?.(item)}
+                                                            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-alloy-bend-pine/[0.06]"
+                                                        >
+                                                            <span className="text-[11px] text-alloy-bend-pine">+</span>
+                                                            <span className="flex-1 truncate text-[12px] text-alloy-midnight/80">{item.label}</span>
+                                                            {item.tier ? (
+                                                                <span
+                                                                    className={`shrink-0 rounded-full px-1.5 py-px text-[8.5px] font-semibold uppercase tracking-wide ${
+                                                                        item.tier === "required"
+                                                                            ? "bg-alloy-ember/[0.10] text-alloy-ember"
+                                                                            : "bg-alloy-bend-pine/[0.10] text-alloy-bend-pine"
+                                                                    }`}
+                                                                    title={TIER_BADGE[item.tier]}
+                                                                >
+                                                                    {item.tier}
+                                                                </span>
+                                                            ) : null}
+                                                        </button>
+                                                    </li>
+                                                )
+                                            )}
+                                        </ul>
+                                    </section>
+                                ))
+                            )
+                        ) : alloyGroups.length === 0 ? (
                             <p className="py-6 text-center text-[12px] text-alloy-midnight/45">No Alloy fields match your search.</p>
                         ) : (
                             alloyGroups.map((group) => (

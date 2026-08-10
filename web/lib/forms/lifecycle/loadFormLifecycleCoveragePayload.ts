@@ -17,7 +17,16 @@ import {
     readFormLifecycleUsage,
     type FormsLifecycleUsageV1,
 } from "@/lib/forms/lifecycle/formLifecycleUsageMetadata";
-import { resolveFormsLifecycleRequirementContract } from "@/lib/forms/lifecycle/resolveFormsLifecycleRequirementContract";
+import {
+    parseLifecycleOperatorStage,
+    resolveFormsLifecycleRequirementContract,
+} from "@/lib/forms/lifecycle/resolveFormsLifecycleRequirementContract";
+import { effectiveFieldRulesForStage } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import { mergeLifecycleFieldPaletteForStage } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import {
+    buildProcessingFormFieldLibrary,
+    type ProcessingLibraryGroupOffer,
+} from "@/lib/forms/processingFormFieldLibrary";
 import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 
 export type FormLifecycleCoverageSchemaSource = "published" | "draft" | "none";
@@ -30,6 +39,8 @@ export type FormLifecycleCoveragePayload = {
     contract: FormsLifecycleRequirementContract | null;
     coverage: FormsLifecycleCoverageResult | null;
     presentation: ReturnType<typeof buildFormLifecycleCoveragePresentation>;
+    /** Offerable builder fields for the configured stage. Absent until a stage is configured. */
+    field_library?: ProcessingLibraryGroupOffer[];
     readiness?: import("@/lib/completion/readinessTypes").ReadinessResult;
 };
 
@@ -172,6 +183,17 @@ export async function loadFormLifecycleCoveragePayload(
         departmentMetadata: deptRow.metadata ?? null,
     });
 
+    // Field library for THIS stage, derived from the same palette `/process → requirements` reads,
+    // so the builder can offer everything the process is able to require — including org custom
+    // fields, which the old hardcoded picker could never surface.
+    const stage = parseLifecycleOperatorStage(usage.stage_key) ?? "lead";
+    const stageRules = effectiveFieldRulesForStage(stage, deptRow.metadata ?? null).rules;
+    const field_library = buildProcessingFormFieldLibrary({
+        palette: mergeLifecycleFieldPaletteForStage(stage, orgFieldDefinitions),
+        requiredRuleIds: stageRules.required_rule_ids,
+        recommendedRuleIds: stageRules.recommended_rule_ids,
+    });
+
     return {
         configured: true,
         lifecycle_usage: usage,
@@ -180,6 +202,7 @@ export async function loadFormLifecycleCoveragePayload(
         contract,
         coverage,
         presentation,
+        field_library,
         ...(readiness ? { readiness } : {}),
     };
 }

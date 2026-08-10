@@ -68,7 +68,6 @@ import type {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     readProcessTracks,
-    splitRuleForStage,
     stagesForTrack,
 } from "@/lib/businessProcesses/businessProcessConfigReader";
 import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
@@ -881,21 +880,26 @@ export default function LifecycleActivationBoard({
             });
             const j = (await res.json().catch(() => ({}))) as {
                 error?: string;
-                published?: { revision_number?: number };
+                published?: { revision_number?: number; already_published?: boolean };
                 summary?: LifecycleStageBootstrapPayload["configuration_state"];
             };
             if (!res.ok) {
                 if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
                 else await refreshConfigurationState();
-                throw new Error(j.error ?? "Publish failed");
+                throw new Error(j.error ?? "Could not apply your changes.");
             }
             if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            // Says what CHANGED for the operator, not which revision number was cut. `already_published`
+            // means the request was a no-op because this exact configuration was already live —
+            // telling them "applied" would imply something happened.
             setPublicationNotice(
-                `Published revision ${j.published?.revision_number ?? "?"}. Runtime is now using it.`,
+                j.published?.already_published === true
+                    ? "These changes were already applied — nothing to do."
+                    : "Changes applied. Your team is now working from them.",
             );
             bumpWorkspaceCache();
         } catch (e) {
-            setPublicationNotice(e instanceof Error ? e.message : "Publish failed");
+            setPublicationNotice(e instanceof Error ? e.message : "Could not apply your changes.");
         } finally {
             setPublicationBusy(false);
         }
@@ -1201,11 +1205,6 @@ export default function LifecycleActivationBoard({
         if (!processTracks || !builderProcess) return builderStages;
         return stagesForTrack(builderProcess, activeTrackKey);
     }, [activeTrackKey, builderProcess, builderStages, processTracks]);
-
-    const activeSplitRule = useMemo(() => {
-        if (!builderProcess || !stageKey) return null;
-        return splitRuleForStage(builderProcess, stageKey);
-    }, [builderProcess, stageKey]);
 
     const builderStageKeys = useMemo(() => {
         return builderProcess ? stageKeysForProcess(builderProcess) : [];
@@ -1977,15 +1976,6 @@ export default function LifecycleActivationBoard({
                                     departmentId={runtimeDepartmentId}
                                     processId={processId}
                                 />
-                            :   null}
-                            {activeSplitRule ?
-                                <p
-                                    className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2 text-xs text-alloy-midnight/65"
-                                    data-testid="lifecycle-split-rule-hint"
-                                >
-                                    At Decision, choose a path for each child:{" "}
-                                    {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
-                                </p>
                             :   null}
                             {showAddStage ?
                                 <div className="rounded-lg border border-dashed border-alloy-pine/30 bg-alloy-pine/5 p-3">

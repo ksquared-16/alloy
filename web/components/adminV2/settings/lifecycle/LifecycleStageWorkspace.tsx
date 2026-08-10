@@ -351,10 +351,20 @@ export default function LifecycleStageWorkspace({
                             onDirtyChange={setOperatingPlanDirty}
                             configuredActions={bootstrap?.actions ?? []}
                             processStages={
+                                // `configured_stages` — NOT `pipeline.queues`. Queues are work unit
+                                // definitions and carry no journey grain, which left the editor's
+                                // grain resolver blind to a stage whose configured metadata
+                                // disagrees with the canonical vocabulary.
+                                bootstrap?.configured_stages?.map((stage) => ({
+                                    key: stage.key,
+                                    label: stage.label,
+                                    ...(typeof stage.grain === "string" ? { grain: stage.grain } : {}),
+                                })) ??
                                 bootstrap?.pipeline?.queues?.map((lane) => ({
                                     key: lane.key,
                                     label: lane.label,
-                                })) ?? []
+                                })) ??
+                                []
                             }
                             configuredStatuses={
                                 // The record-status catalog, not the queue picker. The picker

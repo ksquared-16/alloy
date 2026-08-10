@@ -143,7 +143,7 @@ describe("Other Transitions ownership", () => {
         expect(editor).not.toContain("work-template-alternate-paths");
         expect(editor).not.toContain(">Alternate Paths<");
         expect(editor).toContain("work-template-transitions-note");
-        expect(editor).toContain("Helpful Actions");
+        expect(editor).toContain("Helpful Commands");
     });
 });
 

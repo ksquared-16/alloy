@@ -31,6 +31,8 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
 
     it("authors Available Outcomes and Outcome Definitions on the Work Template", () => {
         const editor = read("components/adminV2/settings/lifecycle/LifecycleStageWorkTemplateActionsEditor.tsx");
+        expect(editor).toContain("Actions &amp; Results");
+        expect(editor).toContain("data-stage-actions-results");
         expect(editor).toContain("Available Outcomes");
         expect(editor).not.toContain("Available Results");
         expect(editor).toContain("Direct Action");
@@ -40,15 +42,23 @@ describe("LifecycleStageWorkTemplateActionsEditor", () => {
         expect(editor).not.toContain("Completion Outcomes");
         expect(editor).not.toContain("work-template-alternate-paths");
         expect(editor).toContain("work-template-transitions-note");
+        expect(editor).toContain("workTemplateActionAppliesToLabel");
 
         const definitions = read("components/adminV2/settings/lifecycle/LifecycleStageOutcomeDefinitionsEditor.tsx");
         expect(definitions).toContain("Outcome Definitions");
         expect(definitions).toContain("workTemplateKey");
         expect(definitions).toContain("Define what operators can record for this work");
+        expect(definitions).toContain("filterGrainCompatibleStageDestinations");
 
         const operatingPlan = read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx");
         expect(operatingPlan).not.toContain("LifecycleStageOutcomeDefinitionsEditor");
         expect(operatingPlan).toContain("LifecycleStageOutgoingTransitionsEditor");
+
+        const waysOut = read("components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor.tsx");
+        expect(waysOut).toContain("filterGrainCompatibleStageDestinations");
+
+        const stageEditor = read("components/adminV2/settings/lifecycle/StageEditorV2.tsx");
+        expect(stageEditor).toContain("...(stage.grain ? { grain: stage.grain } : {})");
     });
 });
 

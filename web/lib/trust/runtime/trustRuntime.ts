@@ -31,11 +31,19 @@ import { TRUST_RUNTIME_VERSION } from "@/lib/trust/contract/decisionContractType
 import { DECISION_CLASS_REGISTRY_VERSION, resolveDecisionClass } from "@/lib/trust/decisionClasses/decisionClassRegistry";
 import { emitTrustEvent } from "@/lib/trust/events/trustEvents";
 import { assembleTrustEvidence } from "@/lib/trust/governance/trustEvidence";
+import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informationPackage";
 import type { KnowledgeProviderV1 } from "@/lib/trust/knowledge/knowledgeProvider";
 import { createEmptyKnowledgeProvider } from "@/lib/trust/knowledge/knowledgeProvider";
+import { executionCapabilityRationale, isProviderCapableStrategyKind } from "@/lib/trust/reasoning/executionCapability";
 import { parseProviderCostUnits, ZERO_COST_UNITS } from "@/lib/trust/economics/providerCostUnits";
-import type { DecisionPackageOutcome, DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
+import type {
+    DecisionPackageOutcome,
+    DecisionPackagePrivacyReport,
+    DecisionPackageV1,
+} from "@/lib/trust/package/decisionPackageTypes";
 import type { TrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
+import type { ReasoningCostReport } from "@/lib/trust/reasoning/reasoningStrategy";
+import type { ReasoningContextV1 } from "@/lib/trust/privacy/privacyEngine";
 import { resolvePrivacyPolicy, transformForReasoning } from "@/lib/trust/privacy/privacyEngine";
 import { selectStrategy } from "@/lib/trust/strategy/strategyEngine";
 import { orchestrateValidation, resolveValidationPolicyVersion } from "@/lib/trust/validation/validationOrchestrator";
@@ -84,11 +92,45 @@ export type TrustRuntimeInput = {
      * because authorization is not reasoning (Decision 019).
      */
     readonly authorization?: TrustRuntimeAuthorization;
+    /**
+     * A governed reasoning input produced from a Trust Information Package.
+     *
+     * **Required for any provider-capable strategy** (Phase 2.3.1). Optional
+     * here rather than mandatory because the deterministic capabilities
+     * certified in Phase 1 keep the compatibility path — `resolvedInformation`
+     * plus `semanticMap` — until a later convergence slice migrates them. The
+     * requirement is enforced by CAPABILITY, not by presence: a deterministic
+     * strategy may omit it, a provider-capable one may not.
+     *
+     * When supplied, privacy is NOT re-run. The package already applied it via
+     * the same `transformForReasoning`, and applying it twice would either be a
+     * no-op pretending to be work or, worse, a second authority.
+     */
+    readonly eligibleReasoningInput?: EligibleReasoningInputV1;
 };
 
 type PackageDraft = {
     outcome: DecisionPackageOutcome;
     explanation: string;
+};
+
+/**
+ * The privacy report for an execution in which privacy **never ran**.
+ *
+ * Truthful by omission rather than by assertion: no classes were present
+ * because none were classified, and no steps were taken because no transform
+ * executed. `transformations` is deliberately ABSENT — Phase 2.1 made that field
+ * optional precisely so "no record exists" and "a record exists and is empty"
+ * could stay distinguishable. Its absence is how a reader knows privacy did not
+ * execute, and that is the whole signal this constant carries.
+ *
+ * `pii_mode` is the platform's conservative default, not a claim that a mode was
+ * applied to anything.
+ */
+const PRIVACY_NOT_EXECUTED: DecisionPackagePrivacyReport = {
+    pii_mode: "strict",
+    classes_present: [],
+    redaction_steps: [],
 };
 
 /**
@@ -101,6 +143,35 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     const startedAt = clock();
     const trace: TrustRuntimeStep[] = [];
     const knowledgeProvider = input.knowledgeProvider ?? createEmptyKnowledgeProvider();
+
+    /**
+     * Privacy evidence, once privacy has produced any.
+     *
+     * `null` means privacy never executed, and `finish()` then reports
+     * {@link PRIVACY_NOT_EXECUTED}. Assigned exactly once, at the moment real
+     * evidence exists, and only ever READ afterwards — so every terminal path
+     * downstream of privacy reports what privacy actually did, and no path
+     * upstream of it can claim anything.
+     *
+     * Deliberately an execution-local binding rather than a package threaded
+     * through the call chain: it is owned by this one invocation, it cannot
+     * escape, and nothing else can mutate it. Nothing is recomputed at
+     * `finish()` — the value is the canonical transform's own output.
+     */
+    let privacyEvidence: DecisionPackagePrivacyReport | null = null;
+
+    /**
+     * Provider execution facts, once a strategy has reported any (Phase 2.5).
+     *
+     * Same ownership shape as `privacyEvidence`: execution-local, assigned once
+     * at the moment the facts exist, read afterwards. `null` means no provider
+     * participated, and telemetry then records nothing rather than zero.
+     *
+     * The runtime does not assemble these — it forwards what the strategy
+     * forwarded from the normalized execution result. Trust persists; the
+     * adapter never writes telemetry itself.
+     */
+    let providerExecution: ReasoningCostReport["provider_execution"] | null = null;
 
     await repository.insertContract(contract);
     await emitTrustEvent({
@@ -151,17 +222,45 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
         correlation_id: contract.correlation_id,
     });
 
+    // A governed input must belong to THIS decision, or it governs nothing.
+    // Checked before classification so a mismatched package can never reach a
+    // privacy or reasoning step at all.
+    const eligible = input.eligibleReasoningInput ?? null;
+    if (eligible) {
+        if (eligible.decision_class_key !== contract.decision_class_key) {
+            return finish({
+                outcome: "refused_policy",
+                explanation:
+                    `The supplied governed reasoning input was built for a different decision class than this contract declares, ` +
+                    `so it cannot be used to govern this decision.`,
+            });
+        }
+        if (eligible.privacy_policy_key !== decisionClass.privacy_policy_key) {
+            return finish({
+                outcome: "refused_policy",
+                explanation:
+                    `The supplied governed reasoning input was minimized under a different privacy policy than this decision class ` +
+                    `references, so the privacy applied to it is not the privacy this class requires.`,
+            });
+        }
+    }
+
     // ---- 2. classify information -------------------------------------------
+    // Classification is recorded either way. With a governed input it already
+    // happened, inside the package builder, using this same `classifyElements`
+    // — so the step is reported because the work occurred, not skipped as if it
+    // never mattered.
     trace.push("classify_information");
-    const elements = flattenDeclaredElements(input.resolvedInformation);
-    const classification = classifyElements(elements, input.semanticMap);
+    const classesPresent = eligible
+        ? eligible.classes_present
+        : classifyElements(flattenDeclaredElements(input.resolvedInformation), input.semanticMap).classes_present;
     await emitTrustEvent({
         org_id: contract.org_id,
         event_type: "trust_information_classified",
         contract_id: contract.id,
         decision_class_key: contract.decision_class_key,
         correlation_id: contract.correlation_id,
-        detail: { classes_present: classification.classes_present },
+        detail: { classes_present: classesPresent },
     });
 
     // ---- 3. apply privacy transformations ----------------------------------
@@ -173,17 +272,102 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             explanation: `No privacy policy is registered for key ${decisionClass.privacy_policy_key}; reasoning may not proceed without one.`,
         });
     }
-    const transformed = transformForReasoning({ classification, policy: privacyPolicy, knowledge: [] });
-    if (!transformed.ok) {
-        return finish({ outcome: "refused_privacy", explanation: transformed.detail });
+
+    let baseContext;
+    if (eligible) {
+        // Privacy is NOT re-run. `buildEligibleReasoningInput` already applied
+        // this exact engine under this exact policy; running it again would
+        // either be a no-op dressed as work or a second authority deciding the
+        // same question. The evidence travels with the input.
+        baseContext = {
+            transformed: eligible.elements,
+            knowledge: [],
+            redaction_steps: eligible.redaction_steps,
+            classes_present: eligible.classes_present,
+            pii_mode: eligible.pii_mode as ReasoningContextV1["pii_mode"],
+            transformations: eligible.transformations,
+            text_minimizations: eligible.text_minimizations,
+        };
+    } else {
+        const classification = classifyElements(
+            flattenDeclaredElements(input.resolvedInformation),
+            input.semanticMap,
+        );
+        const transformed = transformForReasoning({ classification, policy: privacyPolicy, knowledge: [] });
+        if (!transformed.ok) {
+            // Privacy RAN here — it ran and refused. The per-element records it
+            // produced before refusing are real evidence, and the classes it
+            // classified are real, so a `refused_privacy` package reports them
+            // rather than the never-executed default. Steps stay empty because
+            // structural minimization genuinely never ran: the transform aborted
+            // first. Nothing here is fabricated or inferred.
+            privacyEvidence = {
+                pii_mode: privacyPolicy.pii_mode,
+                classes_present: classification.classes_present,
+                redaction_steps: [],
+                // The REFUSED element's record is deliberately excluded, and the
+                // reason is the whole of Phase 2.1's key-leak lesson: a record
+                // carries the element's key, and the element that refuses is
+                // exactly the one whose key is caller-supplied. Preserving it
+                // would let a smuggled `provider_key` or `proposed_command`
+                // write its own name into an immutable package through the
+                // evidence — the same back door the refusal explanation was
+                // already hardened against.
+                //
+                // Every record that survives describes an ADMITTED element, and
+                // an admitted element was mapped by the capability's semantic
+                // map, so its key is declared rather than caller-invented. An
+                // unmapped key defaults to `identity` and refuses at its own
+                // position, so it can never appear among these.
+                //
+                // Nothing is lost: the outcome is `refused_privacy` and the
+                // explanation already names the information class and the
+                // transformation that could not be performed.
+                transformations: transformed.transformations
+                    .filter((t) => t.disposition !== "refused")
+                    .map((t) => ({
+                        key: t.key,
+                        information_class: t.information_class,
+                        transformation: t.transformation,
+                        disposition: t.disposition,
+                        support: t.support,
+                    })),
+                text_minimizations: [],
+            };
+            return finish({ outcome: "refused_privacy", explanation: transformed.detail });
+        }
+        baseContext = transformed.context;
     }
+
+    // Privacy has now executed and produced a full result. Captured ONCE, from
+    // the canonical transform's own output, so every terminal path after this
+    // line reports what privacy actually did. The success path below reads this
+    // same value, so a refusal and a recommendation cannot report differently.
+    privacyEvidence = {
+        pii_mode: baseContext.pii_mode,
+        classes_present: baseContext.classes_present,
+        redaction_steps: baseContext.redaction_steps.map((s) => ({ path: s.path, kind: s.kind })),
+        transformations: baseContext.transformations.map((t) => ({
+            key: t.key,
+            information_class: t.information_class,
+            transformation: t.transformation,
+            disposition: t.disposition,
+            support: t.support,
+        })),
+        text_minimizations: baseContext.text_minimizations.map((m) => ({
+            detector_key: m.detector_key,
+            redaction_kind: m.redaction_kind,
+            replaced_count: m.replaced_count,
+        })),
+    };
+
     await emitTrustEvent({
         org_id: contract.org_id,
         event_type: "trust_privacy_transformed",
         contract_id: contract.id,
         decision_class_key: contract.decision_class_key,
         correlation_id: contract.correlation_id,
-        detail: { redaction_steps_total: transformed.context.redaction_steps.length },
+        detail: { redaction_steps_total: baseContext.redaction_steps.length },
     });
 
     // ---- 4. retrieve authorized knowledge ----------------------------------
@@ -191,7 +375,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     // reasoning context only once the context has been minimized (Decision 021).
     trace.push("retrieve_authorized_knowledge");
     const knowledge = await knowledgeProvider.retrieve(decisionClass.knowledge_categories);
-    const context = { ...transformed.context, knowledge };
+    const context = { ...baseContext, knowledge };
     await emitTrustEvent({
         org_id: contract.org_id,
         event_type: "trust_knowledge_retrieved",
@@ -210,6 +394,36 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             explanation: selection.detail,
         });
     }
+    // ---- 5a. provider-capable reasoning requires a governed input ----------
+    // Phase 2.3.1. Placed here because capability is only knowable once a
+    // strategy is selected, and strictly before `execute_reasoning` — so a
+    // provider-capable strategy can never be handed raw capability-supplied
+    // information, whatever a caller passed.
+    //
+    // Capability comes from the strategy LADDER, not from `async` (a calling
+    // convention) and not from where a model runs (D-6: a local model is still
+    // model reasoning). Every strategy registered today is `deterministic`, so
+    // this refuses nothing that exists.
+    if (isProviderCapableStrategyKind(selection.strategy.kind) && !eligible) {
+        return finish(
+            {
+                outcome: "refused_policy",
+                explanation:
+                    `Reasoning of kind "${selection.strategy.kind}" is provider-capable and may only proceed from a governed ` +
+                    `Trust Information Package, which this execution did not supply. ` +
+                    `${executionCapabilityRationale(selection.strategy.kind)} ` +
+                    `Raw capability-supplied information carries storage-shaped keys and undeclared fields, so it is not a ` +
+                    `safe origin for reasoning that could leave the platform.`,
+            },
+            {
+                strategy: selection.strategy.key,
+                strategyKind: selection.strategy.kind,
+                level: selection.escalation_level,
+                strategyVersion: selection.strategy.version,
+            },
+        );
+    }
+
     await repository.advanceContractLifecycle({
         org_id: contract.org_id,
         contract_id: contract.id,
@@ -230,6 +444,9 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     // existing deterministic strategy behaves exactly as before.
     trace.push("execute_reasoning");
     const reasoning = await selection.strategy.reason({ context, nowIso });
+    // Captured before the cost check below, so a strategy whose COST report is
+    // unusable still records which provider produced that unusable report.
+    providerExecution = reasoning.provider_execution ?? null;
     // A strategy reports what it spent; the runtime never derives a cost. An
     // unusable report is refused rather than repaired — silently recording 0
     // for a NaN would report a provider-backed execution as free.
@@ -347,11 +564,10 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
         trust_semantics_version: trust.semantics_version,
         review_requirement: trust.review_requirement,
         validation: validation.report,
-        privacy_report: {
-            pii_mode: context.pii_mode,
-            classes_present: context.classes_present,
-            redaction_steps: context.redaction_steps.map((s) => ({ path: s.path, kind: s.kind })),
-        },
+        // The SAME captured evidence a refusal would report. One source, so a
+        // recommendation and a refusal from the same execution can never
+        // describe different privacy.
+        privacy_report: privacyEvidence ?? PRIVACY_NOT_EXECUTED,
         economics: {
             strategy_key: selection.strategy.key,
             strategy_kind: selection.strategy.kind,
@@ -403,6 +619,20 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             // the usage row is where provider economics are aggregated (ADR-2).
             provider_cost_units: p.economics.provider_cost_units,
             outcome: p.outcome,
+            // Provider identity and provider-reported usage, when a provider
+            // participated. Omitted entirely otherwise, so a deterministic row
+            // asserts no provider rather than an empty one.
+            ...(providerExecution
+                ? {
+                      provider_key: providerExecution.identity.provider_key,
+                      model_key: providerExecution.identity.model_key ?? null,
+                      model_version: providerExecution.identity.model_version ?? null,
+                      execution_location: providerExecution.identity.execution_location,
+                      input_units: providerExecution.usage?.input_units ?? null,
+                      output_units: providerExecution.usage?.output_units ?? null,
+                      provider_reported_cost_units: providerExecution.usage?.provider_cost_units ?? null,
+                  }
+                : {}),
         });
         await repository.advanceContractLifecycle({
             org_id: p.org_id,
@@ -454,7 +684,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             trust_semantics_version: null,
             review_requirement: decisionClass?.review_requirement ?? "operator_review",
             validation: null,
-            privacy_report: { pii_mode: "strict", classes_present: [], redaction_steps: [] },
+            privacy_report: privacyEvidence ?? PRIVACY_NOT_EXECUTED,
             economics: {
                 strategy_key: econ?.strategy ?? null,
                 strategy_kind: econ?.strategyKind ?? null,

@@ -174,6 +174,7 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
                     stage_label: "Lead",
                     intent_label: "Capture new enrollment lead",
                     entity_groups: [],
+                missing_required_labels: [],
                 },
             },
         });
@@ -224,6 +225,7 @@ describe("intakeRuntimeOrchestrationPresentation", () => {
                     stage_label: "Lead",
                     intent_label: "Capture new enrollment lead",
                     entity_groups: [],
+                missing_required_labels: [],
                 },
             },
         });

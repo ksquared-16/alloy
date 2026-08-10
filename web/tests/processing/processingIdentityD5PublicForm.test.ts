@@ -35,13 +35,28 @@ const intakeMeta: FormIntakeMeta = {
     },
 };
 
+/**
+ * The adapter reads `form_definitions` (admin category + case-title template)
+ * before it writes `processing_cases`. The stub originally provided only
+ * `update`, so that read threw `.select is not a function`, the adapter's own
+ * catch turned it into `{ ok: false }`, and both assertions below failed for a
+ * reason that had nothing to do with what they assert.
+ *
+ * Providing the read keeps the test's actual subject intact: it still proves the
+ * adapter opens a Processing case and writes NO CRM identity table.
+ */
 function supabaseStub() {
     const update = vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockResolvedValue({ error: null }),
         }),
     });
-    return { from: vi.fn().mockReturnValue({ update }) } as unknown as SupabaseClient;
+    const select = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+    });
+    return { from: vi.fn().mockReturnValue({ update, select }) } as unknown as SupabaseClient;
 }
 
 describe("D5 public form authoritative Processing intake", () => {

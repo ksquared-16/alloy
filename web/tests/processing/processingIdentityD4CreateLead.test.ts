@@ -39,6 +39,86 @@ vi.mock("@/lib/pos/processingIdentity/sources/createLeadIntakeAdapter", async (i
     };
 });
 
+vi.mock("@/lib/pos/processingIdentity/executor/executorPorts", () => ({
+    createExecutorPorts: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/pos/processingIdentity/operator/operatorReviewService", () => {
+    class OperatorServiceError extends Error {
+        code: string;
+        constructor(code: string, message: string) {
+            super(message);
+            this.code = code;
+        }
+    }
+    return {
+        OperatorServiceError,
+        loadCaseReview: vi.fn().mockResolvedValue({
+            caseId: "22222222-2222-4222-8222-222222222222",
+            facts: [],
+            resolutions: [
+                {
+                    id: "r1",
+                    subject_ref: "person-1",
+                    subject_role: "parent",
+                    decision_action: "review_required",
+                    selected_candidate_id: null,
+                    candidates: [
+                        {
+                            subjectRef: "person-1",
+                            recordId: "existing-1",
+                            entityType: "person",
+                            confidenceBand: "possible",
+                            signals: [],
+                            blockingConflicts: [],
+                            explanation: "possible",
+                            resolverVersion: "1",
+                        },
+                    ],
+                    provisional: { first_name: "Ada", last_name: "Lovelace" },
+                },
+            ],
+            plan: null,
+            planDiff: null,
+            approval: null,
+            latestAttempt: null,
+            readiness: "needs_identity_review",
+            blockingConflictCount: 0,
+            subjectEligibility: [
+                {
+                    subjectRef: "person-1",
+                    subjectRole: "parent",
+                    state: "needs_review",
+                    eligibleForPlan: false,
+                    blockingReasons: [],
+                    recommendationSummary: null,
+                },
+            ],
+            planEligible: false,
+            identityBlockers: ["plausible_match_needs_review: match"],
+        }),
+        commitApprovedLeadForCase: vi.fn(),
+    };
+});
+
+vi.mock("@/lib/pos/processingIdentity/operator/createLeadReviewPresentation", async (importOriginal) => {
+    const actual =
+        await importOriginal<
+            typeof import("@/lib/pos/processingIdentity/operator/createLeadReviewPresentation")
+        >();
+    return {
+        ...actual,
+        // Default unit tests keep the interactive Processing review path.
+        buildCreateLeadReviewPresentation: vi.fn(() => ({
+            mode: "identity_review_required",
+            headline: "1 possible match needs review",
+            summary: "Review required",
+            subjects: [],
+            subjectsNeedingAction: 1,
+        })),
+    };
+});
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 const CASE = "22222222-2222-4222-8222-222222222222";
 
@@ -86,6 +166,60 @@ describe("D4 Manual Create Lead authoritative cutover", () => {
             expect(res.opportunity_id).toBeUndefined();
         }
         expect(ingestCreateLeadThroughProcessing).toHaveBeenCalledTimes(1);
+        expect(findOrCreatePersonInOrgWithMeta).not.toHaveBeenCalled();
+    });
+
+    it("auto-commits clean-new through Processing without interactive review UI", async () => {
+        const { buildCreateLeadReviewPresentation } = await import(
+            "@/lib/pos/processingIdentity/operator/createLeadReviewPresentation"
+        );
+        const { loadCaseReview, commitApprovedLeadForCase } = await import(
+            "@/lib/pos/processingIdentity/operator/operatorReviewService"
+        );
+        vi.mocked(buildCreateLeadReviewPresentation).mockReturnValueOnce({
+            mode: "ready_without_identity_review",
+            headline: "Ready to create",
+            summary: "No possible duplicates were found.",
+            subjects: [],
+            subjectsNeedingAction: 0,
+        });
+        vi.mocked(loadCaseReview).mockResolvedValueOnce({
+            caseId: CASE,
+            facts: [],
+            resolutions: [],
+            plan: null,
+            planDiff: null,
+            approval: null,
+            latestAttempt: null,
+            readiness: "needs_plan_review",
+            blockingConflictCount: 0,
+            subjectEligibility: [],
+            planEligible: true,
+            identityBlockers: [],
+        } as never);
+        vi.mocked(commitApprovedLeadForCase).mockResolvedValueOnce({
+            plan: { planId: "plan-1", contentHash: "hash-1" },
+            approval: { approvalId: "ap-1" },
+            attempt: {
+                attemptId: "at-1",
+                outcome: "committed",
+                operations: [
+                    { commandKey: "create_lead", recordId: "opp-clean-1", status: "committed" },
+                ],
+            },
+        } as never);
+
+        const res = await executeCreateLeadAction(verticalSupabase(), { orgId: ORG, userId: "user-1" }, {
+            merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
+            context: { work_unit_id: "wu-enrollment" },
+        });
+        expect(res.ok).toBe(true);
+        if (res.ok) {
+            expect(res.mode).toBe("committed");
+            expect(res.opportunity_id).toBe("opp-clean-1");
+            expect(res.processing_case_id).toBe(CASE);
+        }
+        expect(commitApprovedLeadForCase).toHaveBeenCalled();
         expect(findOrCreatePersonInOrgWithMeta).not.toHaveBeenCalled();
     });
 

@@ -891,6 +891,7 @@ export default function StageEditorV2({
                                     _allStages?.map((stage) => ({
                                         key: stage.key,
                                         label: stage.label,
+                                        ...(stage.grain ? { grain: stage.grain } : {}),
                                     })) ?? []
                                 }
                                 processTracks={processTracks ?? null}

@@ -38,7 +38,31 @@ describe("BOS Create Lead conversation + form gather (WP-07/08)", () => {
         expect(ctrl).toContain("projectCreateLeadFormSections");
         expect(ctrl).toContain("applyOperatorFieldEdit");
         expect(ctrl).toContain("useInquiryChildPlacementCascade");
+        expect(ctrl).toContain("resolveCreateLeadDefaultLocation");
+        expect(ctrl).toContain("applyImpliedWorkspaceLocationToDraft");
+        expect(ctrl).not.toContain("impliedLocationSeededRef");
         expect(ctrl).not.toContain("CREATE_LEAD_GATHER_FIELDS");
         expect(ctrl).not.toContain("gatherSectionsFromFields");
+    });
+
+    it("TopNav site filter uses AlloySelect white + Bend Pine (not native gray menu)", () => {
+        const nav = readFileSync(
+            resolve(__dirname, "../../../app/adminV2/components/TopNavBar.tsx"),
+            "utf8"
+        );
+        expect(nav).toContain("AlloySelect");
+        expect(nav).toContain('data-adminv2-site-filter="true"');
+        expect(nav).toContain('placeholder="All locations"');
+        expect(nav).toContain("bg-white");
+        expect(nav).toContain("text-alloy-bend-pine");
+        expect(nav).not.toMatch(
+            /adminv2-workspace-site-filter[\s\S]{0,400}searchBgOnPrimary/
+        );
+        const css = readFileSync(
+            resolve(__dirname, "../../../app/adminV2/components/alloyOsRuntime.css"),
+            "utf8"
+        );
+        expect(css).toContain("[data-adminv2-site-filter]");
+        expect(css).toMatch(/data-adminv2-site-filter[\s\S]{0,200}bend-pine/);
     });
 });

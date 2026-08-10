@@ -39,6 +39,28 @@ export async function findResolutionByCaseSubjectGeneration(
     return (data as ProcessingResolutionRow | null) ?? null;
 }
 
+/**
+ * One resolution row by id, org-scoped.
+ *
+ * Exists so a caller can re-read the DURABLE row rather than trusting an
+ * in-memory copy — the difference between "we asked for a decision" and "the
+ * decision committed".
+ */
+export async function findResolutionById(
+    supabase: SupabaseClient,
+    input: { orgId: string; caseId: string; resolutionId: string },
+): Promise<ProcessingResolutionRow | null> {
+    const { data, error } = await supabase
+        .from("processing_resolutions")
+        .select("*")
+        .eq("org_id", input.orgId)
+        .eq("case_id", input.caseId)
+        .eq("id", input.resolutionId)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data as ProcessingResolutionRow | null) ?? null;
+}
+
 export async function insertProcessingResolution(
     supabase: SupabaseClient,
     row: Omit<ProcessingResolutionRow, "id" | "created_at" | "stale_at" | "superseded_by">,

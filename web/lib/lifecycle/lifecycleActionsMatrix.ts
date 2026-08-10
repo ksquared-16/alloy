@@ -19,6 +19,9 @@ import {
     parseLifecycleActionsMatrixOrder,
     sortBaseActionKeysByMatrixOrder,
 } from "@/lib/lifecycle/lifecycleActionsMatrixOrder";
+import type { LifecycleBuilderProcessRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { normalizeActionRefToIntentKey } from "@/lib/lifecycle/workTemplateActionIntentCatalog";
+import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import {
     lifecycleActivationBaseActionByKey,
     lifecycleActivationBaseActions,
@@ -40,6 +43,7 @@ export const LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER: readonly LifecycleBaseA
     "add_child",
     "send_form",
     "schedule_tour",
+    "send_tour_invitation",
     "create_task",
 ] as const;
 
@@ -155,12 +159,19 @@ export function buildLifecycleActionsMatrixRows(params: {
             }
         }
         const enabled = Boolean(configuredRow?.placements.some((p) => p.is_active && p.placement_id));
+        const storedLabel = configuredRow?.label?.trim() || "";
+        // action_definitions may still carry the legacy "Create Task" seed label — prefer the
+        // curated Process Action label until an operator sets a custom display name.
+        const label =
+            baseActionKey === "create_task" && (!storedLabel || storedLabel === "Create Task")
+                ? base.label
+                : storedLabel || base.label;
         rows.push({
             base_action_key: baseActionKey,
             default_label: base.label,
             saveable: saveableKeys.has(baseActionKey),
             enabled,
-            label: configuredRow?.label ?? base.label,
+            label,
             placement_ids: [...placementIds],
             stage_restrictions:
                 configuredRow?.action_scope === "stage" ? [...configuredRow.operator_stages] : [],
@@ -223,17 +234,91 @@ async function deactivateBuilderPlacementsForDefinition(
         .eq("action_definition_id", definitionId)
         .eq("is_active", true);
 
+    const ids: string[] = [];
     for (const p of placements ?? []) {
         const cc = (p as { condition_config?: unknown }).condition_config;
         if (!isLifecycleBuilderConfiguredPlacement(cc)) continue;
-        const { error } = await supabase
-            .from("action_placements")
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .eq("id", (p as { id: string }).id)
-            .eq("org_id", orgId);
-        if (error) throw new Error(error.message);
+        const id = String((p as { id?: string }).id ?? "").trim();
+        if (id) ids.push(id);
     }
+    if (!ids.length) return;
+
+    const { error } = await supabase
+        .from("action_placements")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .in("id", ids)
+        .eq("org_id", orgId);
+    if (error) throw new Error(error.message);
 }
+
+/**
+ * Capability key to store in process command_set_v1 for a Process Action definition key.
+ * Prefer the registry canonical (create_task → create_work_item), then intent aliases.
+ */
+export function processActionCapabilityKeyForDefinitionKey(definitionKey: string): string {
+    const key = definitionKey.trim();
+    if (!key) return key;
+    const resolved = tryResolvePlatformCapability(key);
+    if (resolved.status === "known") return resolved.capability.canonicalCommandKey;
+    return normalizeActionRefToIntentKey(key);
+}
+
+/**
+ * Ensure enabled Process Actions also appear in process command_set_v1 so Work Template Helpful
+ * Actions can select them (e.g. Waitlist Child → Move to Waitlist).
+ *
+ * Returns null when unchanged. Callers must persist via the draft writer (`editProcessInDraft`) —
+ * never by writing `departments.metadata.lifecycle_builder_v1` directly.
+ */
+export function upsertEnabledProcessActionsIntoCommandSet(
+    process: LifecycleBuilderProcessRecord,
+    enabledDefinitionKeys: readonly string[],
+): LifecycleBuilderProcessRecord | null {
+    const keys = [...new Set(enabledDefinitionKeys.map((k) => k.trim()).filter(Boolean))];
+    if (!keys.length) return null;
+
+    const existing = process.command_set_v1;
+    const commands = existing?.commands ? [...existing.commands] : [];
+    const presentCanonical = new Set(
+        commands.map((c) => processActionCapabilityKeyForDefinitionKey(c.capability_key)),
+    );
+    let changed = false;
+
+    for (const key of keys) {
+        const capability_key = processActionCapabilityKeyForDefinitionKey(key);
+        if (presentCanonical.has(capability_key)) {
+            const idx = commands.findIndex(
+                (c) => processActionCapabilityKeyForDefinitionKey(c.capability_key) === capability_key,
+            );
+            if (idx >= 0) {
+                const entry = commands[idx]!;
+                if (!entry.enabled || entry.capability_key.trim() !== capability_key) {
+                    // Re-enable and canonicalize (e.g. create_task → create_work_item).
+                    commands[idx] = { ...entry, capability_key, enabled: true };
+                    changed = true;
+                }
+            }
+            continue;
+        }
+        commands.push({ capability_key, enabled: true });
+        presentCanonical.add(capability_key);
+        changed = true;
+    }
+
+    if (!changed) return null;
+    return {
+        ...process,
+        command_set_v1: { version: 1 as const, commands },
+    };
+}
+
+export type LifecycleActionsMatrixSaveResult = {
+    saved: number;
+    /** Category-F only — never includes `lifecycle_builder_v1`. */
+    metadata_patch: Record<string, unknown>;
+    /** Enabled action definition keys to upsert into draft `command_set_v1`. */
+    enabled_definition_keys: string[];
+};
 
 export async function saveLifecycleActionsMatrix(
     supabase: SupabaseClient,
@@ -244,7 +329,7 @@ export async function saveLifecycleActionsMatrix(
         builderStageKeys?: readonly string[];
         existingMetadata?: Record<string, unknown> | null;
     }
-): Promise<{ saved: number; metadata_patch?: Record<string, unknown> }> {
+): Promise<LifecycleActionsMatrixSaveResult> {
     const primaryRecordLabel = opts?.primaryRecordLabel?.trim() || "Lead";
     const allStageKeys = opts?.builderStageKeys?.length
         ? opts?.builderStageKeys
@@ -257,14 +342,35 @@ export async function saveLifecycleActionsMatrix(
             (LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER as readonly string[]).includes(k)
         );
 
+    // Resolve saveability once — per-row DB lookups made saves take tens of seconds.
+    const uniqueBases = new Map<string, LifecycleBaseActionDefinition>();
+    for (const row of rows) {
+        const baseActionKey = String(row.base_action_key ?? "").trim() as LifecycleBaseActionKey;
+        const base = lifecycleActivationBaseActionByKey(baseActionKey, primaryRecordLabel);
+        if (base) uniqueBases.set(base.key, base);
+    }
+    const saveable = await filterSaveableLifecycleBaseActions(
+        supabase,
+        orgId,
+        [...uniqueBases.values()],
+    );
+    const saveableKeys = new Set(saveable.map((b) => b.key));
+    const enabledDefinitionKeys: string[] = [];
+
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex]!;
         const baseActionKey = String(row.base_action_key ?? "").trim() as LifecycleBaseActionKey;
         const base = lifecycleActivationBaseActionByKey(baseActionKey, primaryRecordLabel);
         if (!base) continue;
 
-        const candidates = await filterSaveableLifecycleBaseActions(supabase, orgId, [base]);
-        if (!candidates.length) continue;
+        if (!saveableKeys.has(base.key)) {
+            if (row.enabled) {
+                throw new Error(
+                    `${base.label} cannot be saved — its action definition is missing for this organization.`,
+                );
+            }
+            continue;
+        }
 
         if (!row.enabled) {
             const { data: defs } = await supabase
@@ -334,14 +440,17 @@ export async function saveLifecycleActionsMatrix(
             });
             if (insErr) throw new Error(insErr.message);
         }
+        enabledDefinitionKeys.push(base.definition_key);
         saved += 1;
     }
 
+    // Category F only — order lives outside publication-owned lifecycle_builder_v1.
+    // command_set_v1 upserts go through the draft writer in the route, never this patch.
     const metadata_patch = buildLifecycleActionsMatrixOrderPatch(
         orderedKeys.length ? orderedKeys : LIFECYCLE_ACTIONS_MATRIX_BASE_ACTION_ORDER,
-        opts?.existingMetadata ?? null
+        opts?.existingMetadata ?? null,
     );
-    return { saved, metadata_patch };
+    return { saved, metadata_patch, enabled_definition_keys: enabledDefinitionKeys };
 }
 
 export function baseActionKeyFromConfiguredRow(
