@@ -16,7 +16,10 @@ import requests
 from fastapi import APIRouter, Request, Response
 
 from ..services.activity_workflow_events import emit_message_lifecycle_event
-from ..services.communication_inbound import persist_inbound_communication_sms
+from ..services.communication_inbound import (
+    IDEMPOTENT_REPLAY_KEY,
+    persist_inbound_communication_sms,
+)
 from ..services.inbound_keyword_handler import handle_inbound_keyword
 from ..services.communications.binding_resolver import (
     find_binding_by_id,
@@ -176,6 +179,21 @@ def _handle_inbound_with_optional_binding(
                     external_sid=message_sid,
                     primary_entity_hint=None,
                 )
+                if row and row.get(IDEMPOTENT_REPLAY_KEY):
+                    # Already recorded. Every effect of this provider message —
+                    # canonical persistence, Activity, unread, thread state, and
+                    # the keyword handling below — ran on the first delivery.
+                    # Twilio retries until it gets a 2xx, so returning success is
+                    # what STOPS the duplicates; it is the correct outcome, not a
+                    # swallowed failure. Returning here also skips the legacy
+                    # insert, which is otherwise unconditional and would append a
+                    # duplicate row and a duplicate Activity event on every retry.
+                    logger.info(
+                        "sms_inbound: idempotent_replay message_id_tail=%s binding=%s",
+                        str(row.get("id"))[-8:],
+                        _mask_binding_id(eff_uuid),
+                    )
+                    return _empty_twiml()
                 if row and row.get("id"):
                     sid = str(row["id"])
                     logger.info(

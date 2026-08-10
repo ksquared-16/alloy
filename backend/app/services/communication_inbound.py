@@ -225,6 +225,60 @@ def _find_canonical_sms_thread(
     return str(rid) if rid else None
 
 
+#: Sentinel key added to a returned row when this provider message had already
+#: been recorded. NOT a database column — callers read it to know that every side
+#: effect for this message already ran and must not run a second time.
+IDEMPOTENT_REPLAY_KEY = "_idempotent_replay"
+
+
+def find_inbound_message_by_provider_identity(
+    base_url: str,
+    headers: Dict[str, str],
+    *,
+    org_id: str,
+    provider: str,
+    channel: str,
+    provider_message_id: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    The canonical inbound identity: (org, provider, channel, provider_message_id).
+
+    Twilio retries until it gets a 2xx and may redeliver regardless, so the same
+    MessageSid legitimately arrives more than once. This is the read side of the
+    uniqueness invariant declared by migration 20260810120000 — the database owns
+    the guarantee; this only lets the application recognise a replay and return the
+    message it already has instead of provoking a constraint violation.
+
+    Keyed on provider identity alone, deliberately: body, timestamp and sender are
+    not identity, and using them would collapse two genuinely distinct messages
+    that happen to say the same thing.
+    """
+    sid = (provider_message_id or "").strip()
+    if not sid or not _UUID_RE.match(org_id):
+        return None
+    url = f"{base_url}/communication_messages"
+    params = {
+        "org_id": f"eq.{org_id}",
+        "provider": f"eq.{provider}",
+        "channel": f"eq.{channel}",
+        "direction": "eq.inbound",
+        "provider_message_id": f"eq.{sid}",
+        "select": "*",
+        "limit": "1",
+    }
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if not r.ok:
+            return None
+        rows = r.json()
+        if not isinstance(rows, list) or not rows:
+            return None
+    except Exception:
+        return None
+    row = rows[0]
+    return row if isinstance(row, dict) else None
+
+
 def _patch_thread_inbound_state(
     base_url: str,
     headers: Dict[str, str],
@@ -330,6 +384,29 @@ def persist_inbound_communication_sms(
     base_url = _get_base_url()
     headers = _get_headers()
 
+    # Idempotency, BEFORE any thread resolution or creation. A redelivered
+    # MessageSid must not mint a second thread, a second unread, a second
+    # Activity entry, or a second execution of STOP — and the cheapest way to
+    # guarantee that is to never begin the work. The database index is the
+    # authority; this is the recognition step in front of it.
+    if external_sid and (external_sid or "").strip():
+        existing = find_inbound_message_by_provider_identity(
+            base_url,
+            headers,
+            org_id=org_id,
+            provider="twilio",
+            channel="sms",
+            provider_message_id=external_sid,
+        )
+        if existing and existing.get("id"):
+            logger.info(
+                "inbound_comm idempotent_replay message_id_tail=%s",
+                str(existing["id"])[-8:],
+            )
+            replay = dict(existing)
+            replay[IDEMPOTENT_REPLAY_KEY] = True
+            return replay
+
     if primary_entity_hint and len(primary_entity_hint) == 2:
         et_raw, eid_raw = primary_entity_hint
         entity_type = str(et_raw).strip()
@@ -409,6 +486,28 @@ def persist_inbound_communication_sms(
     try:
         rm = requests.post(url_msgs, headers=h, json=payload_msg, timeout=15)
         if not rm.ok:
+            # 409 = the inbound provider-identity index rejected this row, so a
+            # concurrent delivery of the same MessageSid won the race between our
+            # pre-check and this insert. That is the invariant working, not a
+            # failure: return the row that won so the caller treats this delivery
+            # as the replay it is and runs no side effects.
+            if rm.status_code == 409 and external_sid:
+                won = find_inbound_message_by_provider_identity(
+                    base_url,
+                    headers,
+                    org_id=org_id,
+                    provider="twilio",
+                    channel="sms",
+                    provider_message_id=external_sid,
+                )
+                if won and won.get("id"):
+                    logger.info(
+                        "inbound_comm idempotent_race_resolved message_id_tail=%s",
+                        str(won["id"])[-8:],
+                    )
+                    replay = dict(won)
+                    replay[IDEMPOTENT_REPLAY_KEY] = True
+                    return replay
             logger.error("inbound_comm msg insert fail %s %s", rm.status_code, rm.text[:400])
             return None
         jd = rm.json()
