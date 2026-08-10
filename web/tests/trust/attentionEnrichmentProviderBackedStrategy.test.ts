@@ -77,12 +77,10 @@ function adapter() {
 
 function strategy(overrides?: { deadline_ms?: number }) {
     return createProviderBackedAttentionEnrichmentStrategy({
-        eligible_input: eligibleInput(),
         adapter: adapter(),
         requested_provider_key: "openai",
         requested_model_key: "gpt-4o-mini",
         deadline_ms: overrides?.deadline_ms ?? 20_000,
-        correlation_id: "corr-1",
     });
 }
 
@@ -113,7 +111,7 @@ function completion(content: unknown, extra?: Record<string, unknown>) {
 function run(content: unknown, extra?: Record<string, unknown>) {
     const fetchMock = vi.fn().mockResolvedValue(completion(content, extra));
     vi.stubGlobal("fetch", fetchMock);
-    return { fetchMock, exec: () => strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z" }) };
+    return { fetchMock, exec: () => strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z", eligibleReasoningInput: eligibleInput(), correlation_id: "corr-1" }) };
 }
 
 afterEach(() => {
@@ -252,7 +250,7 @@ describe("P28GA-4 — telemetry facts are forwarded, never assembled", () => {
 
     it("identity is retained on FAILURE too — a call that failed still names who failed", async () => {
         vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
-        const outcome = await strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z" });
+        const outcome = await strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z", eligibleReasoningInput: eligibleInput(), correlation_id: "corr-1" });
         expect(outcome.ok).toBe(false);
         expect(outcome.provider_execution?.identity.provider_key).toBe("openai");
     });
@@ -264,6 +262,8 @@ describe("P28GA-5 — D-19 survives the migration", () => {
         const outcome = await strategy({ deadline_ms: 20 }).reason({
             context: {} as never,
             nowIso: "2026-08-10T00:00:00.000Z",
+            eligibleReasoningInput: eligibleInput(),
+            correlation_id: "corr-1",
         });
         expect(outcome.ok).toBe(false);
         expect(!outcome.ok && outcome.detail).toContain("timeout");
@@ -278,7 +278,7 @@ describe("P28GA-5 — D-19 survives the migration", () => {
                 return Promise.resolve(completion(VALID_ENRICHMENT));
             }),
         );
-        await strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z" });
+        await strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z", eligibleReasoningInput: eligibleInput(), correlation_id: "corr-1" });
         expect(seen[0]).toBeInstanceOf(AbortSignal);
     });
 });
@@ -293,7 +293,7 @@ describe("P28GA-6 — hostile provider output cannot reach durable evidence", ()
                 text: async () => JSON.stringify({ error: { message: `key ${API_KEY} invalid; mail evil@example.com` } }),
             } as unknown as Response),
         );
-        const outcome = await strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z" });
+        const outcome = await strategy().reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z", eligibleReasoningInput: eligibleInput(), correlation_id: "corr-1" });
         const blob = JSON.stringify(outcome);
         expect(blob).not.toContain(API_KEY);
         expect(blob).not.toContain("evil@example.com");

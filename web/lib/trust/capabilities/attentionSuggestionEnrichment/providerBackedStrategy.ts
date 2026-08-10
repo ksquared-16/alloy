@@ -29,29 +29,37 @@
  * up, exactly the duplicated authority Phase 2.8 exists to remove.
  */
 
-import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informationPackage";
 import type {
     GovernedProviderExecutionRequestV1,
     ProviderAdapterV1,
 } from "@/lib/trust/provider/governedProviderExecution";
 import { executeGovernedProviderReasoning } from "@/lib/trust/provider/governedProviderExecution";
-import type { ReasoningOutcome, ReasoningStrategyV1 } from "@/lib/trust/reasoning/reasoningStrategy";
+import type {
+    ReasoningOutcome,
+    ReasoningStrategyExecutionInputV1,
+    ReasoningStrategyV1,
+} from "@/lib/trust/reasoning/reasoningStrategy";
 import { ATTENTION_ENRICHMENT_DECISION_CLASS_KEY } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/informationSpec";
 import { validateAttentionEnrichmentResult } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/validationPolicy";
 
 export const PROVIDER_BACKED_ENRICHMENT_STRATEGY_KEY = "attention_enrichment_provider_backed" as const;
 export const PROVIDER_BACKED_ENRICHMENT_STRATEGY_VERSION = "1.0.0" as const;
 
+/**
+ * STABLE dependencies only — supplied once at composition time.
+ *
+ * Nothing request-scoped may live here. A registered strategy is constructed
+ * once and reused for every execution, so closing over a per-request Eligible
+ * Reasoning Input would leak one caller's governed artifact into another's
+ * execution. That artifact now arrives through `reason()` instead.
+ */
 export type ProviderBackedEnrichmentStrategyConfig = {
-    /** Governed, minimized, provenanced upstream. The ONLY reasoning payload. */
-    readonly eligible_input: EligibleReasoningInputV1;
     /** Configured outside Trust. This module never resolves a credential. */
     readonly adapter: ProviderAdapterV1;
     readonly requested_provider_key: string;
     readonly requested_model_key?: string;
-    /** Trust's wall. Owned by the caller's policy, enforced by governed execution. */
+    /** Trust's wall. Configuration, not request state — same for every execution. */
     readonly deadline_ms: number;
-    readonly correlation_id: string;
     /** Injected so latency is measurable without this module owning a clock. */
     readonly clock?: () => number;
 };
@@ -71,12 +79,26 @@ export function createProviderBackedAttentionEnrichmentStrategy(
         version: PROVIDER_BACKED_ENRICHMENT_STRATEGY_VERSION,
         decision_class_key: ATTENTION_ENRICHMENT_DECISION_CLASS_KEY,
 
-        async reason(): Promise<ReasoningOutcome> {
+        async reason(execution: ReasoningStrategyExecutionInputV1): Promise<ReasoningOutcome> {
+            // Per-request governed input arrives here, never via closure.
+            const eligible = execution.eligibleReasoningInput;
+            if (!eligible) {
+                // Belt and braces. The Phase 2.3.1 guard already refuses a
+                // provider-capable strategy without governed input, so this is
+                // unreachable through the runtime — but a strategy that would
+                // transmit on its absence must not exist at all.
+                return {
+                    ok: false,
+                    refusal_code: "REASONING_UNABLE",
+                    detail: "Provider-backed reasoning requires a governed Eligible Reasoning Input; none was supplied.",
+                };
+            }
+
             const request: GovernedProviderExecutionRequestV1 = {
                 schema_version: 1,
                 decision_class_key: ATTENTION_ENRICHMENT_DECISION_CLASS_KEY,
-                correlation_id: config.correlation_id,
-                input: config.eligible_input,
+                correlation_id: execution.correlation_id ?? eligible.content_hash,
+                input: eligible,
                 requested_strategy_kind: "small_reasoning",
                 requested_provider_key: config.requested_provider_key,
                 ...(config.requested_model_key ? { requested_model_key: config.requested_model_key } : {}),
@@ -130,12 +152,12 @@ export function createProviderBackedAttentionEnrichmentStrategy(
                     evidence: [
                         {
                             kind: "policy",
-                            reference: config.eligible_input.privacy_policy_key,
+                            reference: eligible.privacy_policy_key,
                             detail: "Provider input was the governed Eligible Reasoning Input produced by Trust privacy.",
                         },
                         {
                             kind: "observation",
-                            reference: config.eligible_input.content_hash,
+                            reference: eligible.content_hash,
                             detail: "Content hash of the exact facts sent to the provider.",
                         },
                     ],

@@ -131,7 +131,6 @@ async function legacy(): Promise<{ outcome: string; enriched: boolean }> {
 /** Governed observable outcome: did enrichment survive, and did reasoning succeed. */
 async function governed(s: AttentionSuggestionV1 = suggestion()): Promise<{ ok: boolean; enriched: boolean; detail?: string }> {
     const outcome = await createProviderBackedAttentionEnrichmentStrategy({
-        eligible_input: eligible(s),
         adapter: createOpenAiCompatibleProviderAdapter({
             provider_key: "openai",
             base_url: "https://api.openai.com",
@@ -141,8 +140,12 @@ async function governed(s: AttentionSuggestionV1 = suggestion()): Promise<{ ok: 
         requested_provider_key: "openai",
         requested_model_key: "gpt-4o-mini",
         deadline_ms: 20_000,
+    }).reason({
+        context: {} as never,
+        nowIso: "2026-08-10T00:00:00.000Z",
+        eligibleReasoningInput: eligible(s),
         correlation_id: "c1",
-    }).reason({ context: {} as never, nowIso: "2026-08-10T00:00:00.000Z" });
+    });
 
     return {
         ok: outcome.ok,

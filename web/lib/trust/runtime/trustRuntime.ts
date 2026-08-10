@@ -443,7 +443,15 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
     // path. `await` on a non-promise is a no-op beyond one microtask, so an
     // existing deterministic strategy behaves exactly as before.
     trace.push("execute_reasoning");
-    const reasoning = await selection.strategy.reason({ context, nowIso });
+    // The governed input is FORWARDED, not rebuilt, and privacy is not re-run:
+    // this is the same artifact the caller supplied and the Phase 2.3.1 guard
+    // above already checked. A deterministic strategy simply ignores it.
+    const reasoning = await selection.strategy.reason({
+        context,
+        nowIso,
+        ...(input.eligibleReasoningInput ? { eligibleReasoningInput: input.eligibleReasoningInput } : {}),
+        correlation_id: contract.correlation_id,
+    });
     // Captured before the cost check below, so a strategy whose COST report is
     // unusable still records which provider produced that unusable report.
     providerExecution = reasoning.provider_execution ?? null;
