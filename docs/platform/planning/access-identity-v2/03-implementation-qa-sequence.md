@@ -1089,6 +1089,49 @@ the repo invites someone to cite it.
 > weakness and would make it structural. `W-23` Q14 establishes the handler-level baseline; `W-14` declares
 > at the same grain.
 
+#### W-14 execution record — **DONE 2026-08-10, committed `ff3b1f88d`, not promoted**
+
+| Field | Value |
+|---|---|
+| Check | [`web/scripts/checkRouteCapabilities.mjs`](../../../../web/scripts/checkRouteCapabilities.mjs) — discovers routes and exported handlers from disk; declarations are read, never inferred |
+| Table | [`web/scripts/routeCapabilities.declared.json`](../../../../web/scripts/routeCapabilities.declared.json) — `declared` \| `none` (reason ≥ 40 chars) \| `pending` (ratcheted) |
+| Lock | `web/tests/access/routeCapabilityDeclaration.test.ts` — **11 tests, all green** (RL-10, §13), of which five are negative fixtures |
+| CI | `web/package.json` → `prebuild` runs `check:route-capabilities`; exits 1 on any undeclared handler, so `next build` cannot proceed past it |
+| Retired | `web/scripts/auditAuthorityPaths.mjs` **deleted**, and `audit:authority-paths` removed from `package.json`, per §8. Its two surviving mentions are prose recording why it was wrong |
+| Evidence | [`w14-declared-route-capability-table.json`](../vacilando-os/qa/access-identity-v2/w14-declared-route-capability-table.json) |
+
+##### The baseline
+
+| Measure | Count |
+|---|---|
+| API route files | **572** |
+| Exported HTTP handlers — **the real denominator** | **751** |
+| …`declared`, requiring a seeded catalog capability | **25** |
+| …`none`, reviewed and reasoned | **1** |
+| …`pending`, W-15's backlog | **725** |
+
+**The exit criterion held as a property, and it had to.** This workstream was sized against 539 routes,
+the M2 amendment re-measured 559, and there were **572** on the day it was built. No count-phrased
+criterion would have survived the eight days between them.
+
+**The file grain is blind to 31% of the surface.** 751 handlers across 572 files: a file-grained table
+asserts one answer for an average of 1.31 handlers. `05…§9`'s warning is now a measurement, and the
+first thing the method grain found was `app/api/admin/users/route.ts` — **`POST` requires
+`settings.users_roles`; `GET` returns every org member's email address behind portal admission alone.**
+The census counts that file as gated. It is declared `pending` with the finding recorded inline rather
+than `none`, because asserting that roster read needs no capability is `W-15`'s product decision to make,
+not this workstream's. Registered as `W14-F1`.
+
+**`W-11`'s tier A check landed here.** §7 records it as inexpressible until `W-14` supplied the declared
+set — *"W-11 lands the data change and W-14 lands the check that keeps it true."* RL-10 joins every
+declared capability to `discoverCatalog()`; all 25 resolve. A route gating on a capability the catalog
+does not seed is a permanent 403 that reads like a gate, and that class is now closed.
+
+**Sequencing note.** §4's chain puts `W-13` before `W-14`. `W-14` was built first because it consumes no
+`portal.access` and is not blocked by `D2`/`AD-2`, which decides only *which roles receive the grant* —
+and because `W-13`'s own tier A conformance is a lookup against this table, so building the table first
+removes a blocker rather than creating one.
+
 ### W-15 — Enforcement sweep *(L · I-17, I-23 · the long tail)*
 
 Bring every route to the G-A…G-D gate contract, using W-14's declarations and W-4's exception baseline.
@@ -1546,7 +1589,7 @@ contributor deleting one has to do it on purpose.
 | **RL-7** | Exactly one FK on `role_permission_grants.permission_key` | A | C3 / W-9 | proposed |
 | **RL-8** | No `SELECT` over the catalog in a grant seed | A | G5 / W-12 | proposed |
 | **RL-9** | No hard-coded portal role set (`PORTAL_ROLES`, `ALLOWED_ROLES`) | A | C6 / W-13 | proposed |
-| **RL-10** | Every route file appears in the declared capability table | A | C1 / W-14 | proposed |
+| **RL-10** | Every exported **handler** appears in the declared capability table | A | C1 / W-14 | **LIVE** — `web/tests/access/routeCapabilityDeclaration.test.ts` (11 tests, five of them negative fixtures) + `prebuild`. Subject is the handler, not the file: §8's execution record measures the file grain as blind to 31% of the surface |
 | **RL-11** | A principal cannot modify its own authority | B + C | G3 / W-2 | **LIVE (tier B)** — `web/tests/access/selfAuthorityMutation.test.ts`, covering all three self-authority paths |
 | **RL-12** | No authority path reads `user_profiles.role` or `app_users.role` | A | §2.1 / W-20 | proposed |
 | **RL-13** | Preview and runtime resolve identically across the fixture matrix | C | C11 / W-21 | proposed |
