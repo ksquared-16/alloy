@@ -35,6 +35,12 @@ import {
     type ConfiguredScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+import {
+    heldRoleKeys,
+    replacementIsNoOp,
+    roleAssignmentLabel,
+    rolesDiscardedByReplacement,
+} from "@/lib/access/memberRoleAssignment";
 
 type MemberRow = {
     user_id: string;
@@ -129,6 +135,12 @@ export default function AccessUsersConfigurationPage() {
 
     const [editRole, setEditRole] = useState("");
     const [roleSaving, setRoleSaving] = useState(false);
+    /**
+     * `M2-17`. Acknowledgement that a replacement will delete the other roles this membership
+     * holds. It starts false and is reset by any change of selection or of the target role, so an
+     * acknowledgement can never outlive the statement it was given for.
+     */
+    const [confirmRoleReplace, setConfirmRoleReplace] = useState(false);
 
     /**
      * W-47: the editor's scope state carries `unset` too. Prefilling `all` for a membership that
@@ -187,20 +199,45 @@ export default function AccessUsersConfigurationPage() {
         [roleLabelByKey],
     );
 
+    /**
+     * W-51 / `IA-7`. Every role the membership holds, labelled — `null` when it holds none, which
+     * the callers render as an explicit unknown rather than a plausible word.
+     */
+    const rolesLabelFor = useCallback(
+        (member: MemberRow) => roleAssignmentLabel(member, roleLabelFor),
+        [roleLabelFor],
+    );
+
     const visibleMembers = useMemo(() => {
         const query = search.trim().toLowerCase();
         return members
             .filter((m) => {
                 if (!query) return true;
-                const haystack = `${displayName(m)} ${m.email ?? ""} ${roleLabelFor(m.primary_role)}`.toLowerCase();
+                // Searching a role the operator can see must find the people who hold it. Against
+                // the collapsed value, a member holding {admin, regional_lead} was unfindable by
+                // "regional lead" — the union is searched, not the survivor.
+                const haystack = `${displayName(m)} ${m.email ?? ""} ${rolesLabelFor(m) ?? ""}`.toLowerCase();
                 return haystack.includes(query);
             })
             .sort((a, b) => displayName(a).localeCompare(displayName(b)));
-    }, [members, search, roleLabelFor]);
+    }, [members, search, rolesLabelFor]);
 
     const selected = useMemo(
         () => (selectedUserId ? members.find((m) => m.user_id === selectedUserId) ?? null : null),
         [members, selectedUserId],
+    );
+
+    /** The union this membership actually holds. Empty is a real answer and is rendered as one. */
+    const selectedHeldRoles = useMemo(() => (selected ? heldRoleKeys(selected) : []), [selected]);
+
+    /**
+     * `M2-17`. The roles the replacement `PATCH` would delete if submitted as it stands. The write
+     * replaces every role row for the pair, so this is *everything held except the selection* —
+     * and until it is empty or acknowledged, the save does not fire.
+     */
+    const rolesLostBySave = useMemo(
+        () => (selected ? rolesDiscardedByReplacement(selected, editRole) : []),
+        [selected, editRole],
     );
 
     useEffect(() => {
@@ -218,6 +255,7 @@ export default function AccessUsersConfigurationPage() {
         setSelDeptIds([...selected.department_ids]);
         setSelSiteIds([...selected.site_location_ids]);
         setConfirmRemove(false);
+        setConfirmRoleReplace(false);
         setActionsOpen(false);
     }, [selected]);
 
@@ -275,6 +313,11 @@ export default function AccessUsersConfigurationPage() {
 
     const saveRole = async () => {
         if (!selected) return;
+        // M2-17, asserted rather than assumed. The button is already disabled in both cases, but a
+        // destructive replacement must not be reachable from a stale render or a programmatic
+        // click either — the guard that matters is the one in front of the write.
+        if (replacementIsNoOp(selected, editRole)) return;
+        if (rolesDiscardedByReplacement(selected, editRole).length > 0 && !confirmRoleReplace) return;
         setRoleSaving(true);
         setMessage(null);
         setError(null);
@@ -287,6 +330,7 @@ export default function AccessUsersConfigurationPage() {
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role save failed");
             setMessage("Role updated.");
+            setConfirmRoleReplace(false);
             await reload();
             /** Re-run settings layout server props so `AdminAuthProvider` roleKeys match fresh `user_roles`. */
             router.refresh();
@@ -457,7 +501,7 @@ export default function AccessUsersConfigurationPage() {
                                                 <span className="locations-collection-row__name">{displayName(m)}</span>
                                                 <span className="locations-collection-row__place">{m.email ?? "No email on file"}</span>
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
-                                                    {roleLabelFor(m.primary_role)} ·{" "}
+                                                    {rolesLabelFor(m) ?? "No role assigned"} ·{" "}
                                                     {locationSummary(m, siteLocations).label} ·{" "}
                                                     {departmentSummary(m, departments).label}
                                                 </span>
@@ -518,7 +562,7 @@ export default function AccessUsersConfigurationPage() {
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-sm text-alloy-midnight/55">
-                                                    {roleLabelFor(selected.primary_role)} ·{" "}
+                                                    {rolesLabelFor(selected) ?? "No role assigned"} ·{" "}
                                                     {locationSummary(selected, siteLocations).label} ·{" "}
                                                     {authenticationMethodLabel(selected.authentication)}
                                                 </p>
@@ -596,9 +640,24 @@ export default function AccessUsersConfigurationPage() {
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Email</dt>
                                                         <dd className="mt-0.5">{selected.email ?? "No email on file"}</dd>
                                                     </div>
+                                                    {/*
+                                                      * W-51 / IA-7. The label follows the record: a membership
+                                                      * holding two roles is titled "Roles", because `user_roles`
+                                                      * is keyed on (user_id, org_id, role) and a singular heading
+                                                      * over a union states a model the schema does not have.
+                                                      */}
                                                     <div>
-                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">Role</dt>
-                                                        <dd className="mt-0.5">{roleLabelFor(selected.primary_role)}</dd>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            {selectedHeldRoles.length > 1 ? "Roles" : "Role"}
+                                                        </dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-roles">
+                                                            {rolesLabelFor(selected) ?? (
+                                                                <UnknownValue
+                                                                    reason="This membership has no role rows in this organization."
+                                                                    testId="access-user-overview-roles-none"
+                                                                />
+                                                            )}
+                                                        </dd>
                                                     </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Status</dt>
@@ -727,17 +786,52 @@ export default function AccessUsersConfigurationPage() {
                                             </ConfigWorkspaceCard>
                                         </div>
                                     : tab === "roles" ?
-                                        <ConfigWorkspaceCard testId="access-user-roles" title="Assigned Role">
+                                        <ConfigWorkspaceCard
+                                            testId="access-user-roles"
+                                            title={selectedHeldRoles.length > 1 ? "Assigned Roles" : "Assigned Role"}
+                                        >
+                                            {/*
+                                              * W-51 / IA-7. The card previously stated "One role is supported per
+                                              * user today." `user_roles` is keyed on (user_id, org_id, role) and
+                                              * the resolver unions every row, so that sentence described the
+                                              * PICKER, not the platform — and the picker is the thing at fault.
+                                              */}
                                             <p className="text-sm text-alloy-midnight/60">
-                                                This user receives the permissions of their assigned role. One role is
-                                                supported per user today.
+                                                This user receives the permissions of every role they hold.
                                             </p>
+                                            <div className="mt-3" data-testid="access-user-roles-held">
+                                                <span className="config-typo-field-label">
+                                                    {selectedHeldRoles.length > 1 ? "Roles held" : "Role held"}
+                                                </span>
+                                                {selectedHeldRoles.length === 0 ?
+                                                    <p className="mt-1">
+                                                        <UnknownValue
+                                                            reason="This membership has no role rows in this organization."
+                                                            testId="access-user-roles-held-none"
+                                                        />
+                                                    </p>
+                                                :   <ul className="mt-1 flex flex-wrap gap-1.5">
+                                                        {selectedHeldRoles.map((roleKey) => (
+                                                            <li
+                                                                key={roleKey}
+                                                                className="rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
+                                                                data-testid={`access-user-role-held-${roleKey}`}
+                                                            >
+                                                                {roleLabelFor(roleKey)}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                }
+                                            </div>
                                             <label className="mt-3 block max-w-sm">
-                                                <span className="config-typo-field-label">Role</span>
+                                                <span className="config-typo-field-label">Replace with</span>
                                                 <select
                                                     className="config-runtime-select mt-1"
                                                     value={editRole}
-                                                    onChange={(event) => setEditRole(event.target.value)}
+                                                    onChange={(event) => {
+                                                        setEditRole(event.target.value);
+                                                        setConfirmRoleReplace(false);
+                                                    }}
                                                     data-testid="access-user-role-select"
                                                 >
                                                     {activeRoles.map((r) => (
@@ -747,9 +841,60 @@ export default function AccessUsersConfigurationPage() {
                                                     ))}
                                                 </select>
                                             </label>
+                                            {/*
+                                              * M2-17. `PATCH …/role` replaces every role row for the pair, so a
+                                              * membership holding {admin, regional_lead} loses `regional_lead` the
+                                              * moment the visible role changes. The loss was silent because the
+                                              * screen never showed the second role. It is now named, itemized, and
+                                              * requires a deliberate acknowledgement before the save can fire.
+                                              * W-17 makes the write additive and retires this block.
+                                              */}
+                                            {rolesLostBySave.length > 0 ?
+                                                <div
+                                                    className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
+                                                    role="note"
+                                                    data-testid="access-user-role-replace-warning"
+                                                >
+                                                    <p className="font-medium">
+                                                        Saving removes{" "}
+                                                        {rolesLostBySave.length === 1 ? "another role" : (
+                                                            `${rolesLostBySave.length} other roles`
+                                                        )}
+                                                        .
+                                                    </p>
+                                                    <p className="mt-1">
+                                                        This control replaces the whole assignment rather than adding
+                                                        to it. These would be removed:{" "}
+                                                        <span className="font-medium">
+                                                            {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}
+                                                        </span>
+                                                        .
+                                                    </p>
+                                                    <label className="mt-2 flex items-start gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="mt-0.5"
+                                                            checked={confirmRoleReplace}
+                                                            onChange={(event) =>
+                                                                setConfirmRoleReplace(event.target.checked)
+                                                            }
+                                                            data-testid="access-user-role-replace-confirm"
+                                                        />
+                                                        <span>
+                                                            Remove{" "}
+                                                            {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}{" "}
+                                                            and leave only {roleLabelFor(editRole)}.
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            :   null}
                                             <ConfigurationPrimaryButton
                                                 className="mt-3"
-                                                disabled={roleSaving || editRole === selected.primary_role}
+                                                disabled={
+                                                    roleSaving ||
+                                                    replacementIsNoOp(selected, editRole) ||
+                                                    (rolesLostBySave.length > 0 && !confirmRoleReplace)
+                                                }
                                                 onClick={() => void saveRole()}
                                                 data-testid="access-user-role-save"
                                             >

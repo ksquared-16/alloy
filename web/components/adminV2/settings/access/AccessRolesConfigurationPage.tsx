@@ -35,11 +35,24 @@ import {
     type PermissionGridLevel,
 } from "@/lib/admin/permissionGrid";
 import { accessWorkspaceChapterHref } from "@/lib/access/accessChapterRoutes";
+import { heldRoleKeys, memberHoldsRole } from "@/lib/access/memberRoleAssignment";
 
 type RoleTab = "overview" | "permissions" | "users" | "experience" | "history";
 
 type RoleRow = { role_key: string; role_label: string; is_system: boolean; is_active: boolean; created_at: string | null };
-type MemberRow = { user_id: string; email: string | null; display_name: string | null; primary_role: string };
+/**
+ * W-51 / `IA-7`. `role_keys` is the union `user_roles` stores; `primary_role` is the collapsed
+ * display value. Both are carried because the shape must not quietly drop the authority half — a
+ * hand-written member type that omitted `role_keys` is exactly how this chapter came to count
+ * members by the survivor of the collapse.
+ */
+type MemberRow = {
+    user_id: string;
+    email: string | null;
+    display_name: string | null;
+    role_keys: string[];
+    primary_role: string;
+};
 type PermissionRow = { key: string; group_key: string; label: string };
 
 function memberDisplayName(m: MemberRow): string {
@@ -106,10 +119,19 @@ export default function AccessRolesConfigurationPage() {
         if (initialRoleKey) setSelectedRoleKey(initialRoleKey);
     }, [initialRoleKey]);
 
+    /**
+     * W-51 / `IA-7`. A member counts toward **every** role they hold, not the one that survived
+     * `displayRoleForAdminPicker`. Counting the collapsed value reported zero for any role that is
+     * never anyone's primary — `regional_lead` beside `admin` is the plan's own example — so the
+     * Roles chapter told the operator a role had no holders while the resolver was unioning its
+     * grants into live requests.
+     */
     const memberCountByRole = useMemo(() => {
         const map = new Map<string, number>();
         for (const m of members) {
-            map.set(m.primary_role, (map.get(m.primary_role) ?? 0) + 1);
+            for (const roleKey of heldRoleKeys(m)) {
+                map.set(roleKey, (map.get(roleKey) ?? 0) + 1);
+            }
         }
         return map;
     }, [members]);
@@ -268,8 +290,9 @@ export default function AccessRolesConfigurationPage() {
         setGrantKeys((prev) => applyGridRowSelection({ row, level, granted: prev }));
     };
 
+    /** Everyone who holds this role — the same predicate as the count, so the two cannot disagree. */
     const usersWithRole = useMemo(
-        () => (selected ? members.filter((m) => m.primary_role === selected.role_key) : []),
+        () => (selected ? members.filter((m) => memberHoldsRole(m, selected.role_key)) : []),
         [members, selected],
     );
 
