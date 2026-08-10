@@ -385,6 +385,9 @@ export async function enqueueCanonicalOutboundMessage(params: {
         category,
         channel: mc,
         toAddress,
+        // The provider destination is half of the unresolved-STOP hold identity.
+        // Without it the hold can never match and the STOP stays unenforced.
+        fromAddress: params.fromAddress ?? null,
     });
 
     const decision = context.lookupFailed
@@ -397,6 +400,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
               audience,
               category,
               channel: mc,
+              unresolvedInboundStopHold: context.unresolvedInboundStopHold,
               purpose: params.purpose ?? null,
               recipientPersonId: params.recipientPersonId ?? null,
               preferenceState: context.preferenceState,

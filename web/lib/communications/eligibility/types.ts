@@ -57,7 +57,8 @@ export type EligibilityBlockCode =
     | "IDENTITY_UNUSABLE"
     | "SUPPRESSED"
     | "EMERGENCY_NOT_PERMITTED"
-    | "INTERNAL_TO_PROVIDER";
+    | "INTERNAL_TO_PROVIDER"
+    | "UNRESOLVED_INBOUND_STOP_HOLD";
 
 export type EligibilityDecision = {
     allowed: boolean;
@@ -91,6 +92,17 @@ export type EligibilityInput = {
 
     /** Hard bounce / spam complaint suppression. */
     suppressed?: boolean;
+
+    /**
+     * A valid STOP arrived from this exact endpoint pair (their address ← our
+     * provider destination) while Alloy could not determine which organization
+     * owned it, so no Person preference could be written.
+     *
+     * This is NOT a Person opt-out and must never be reported as one: nobody
+     * knows whose opt-out it is yet. It exists so a STOP still changes future
+     * behaviour while ownership is unresolved.
+     */
+    unresolvedInboundStopHold?: boolean;
 
     /** Channel usable at all (address present, identity active and outbound-enabled). */
     channelUsable?: boolean;

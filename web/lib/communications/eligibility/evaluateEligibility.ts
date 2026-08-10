@@ -143,6 +143,26 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
         return block("SUPPRESSED", "Recipient address is suppressed after a bounce or complaint.");
     }
 
+    // 5b. A STOP arrived from this exact endpoint pair while Alloy could not tell
+    //     which organization owned it, so no Person preference could be written.
+    //     The consent is real even though its owner is unknown, and continuing to
+    //     send over the same pair would ignore it.
+    //
+    //     Every non-emergency category is blocked, transactional included. The
+    //     usual per-category nuance depends on knowing who the recipient is, and
+    //     that is precisely what is missing here, so the narrow reading is the
+    //     only safe one.
+    //
+    //     Deliberately NOT reported as OPTED_OUT: nobody knows whose opt-out this
+    //     is, and recording it as a Person's consent decision would put a claim in
+    //     the audit trail that Alloy cannot support.
+    if (input.unresolvedInboundStopHold === true && input.category !== "emergency") {
+        return block(
+            "UNRESOLVED_INBOUND_STOP_HOLD",
+            "This number replied STOP to a destination Alloy could not attribute to an organization. Sending is held until ownership is resolved."
+        );
+    }
+
     // 6. Channel usability applies to EVERY category, including transactional
     //    and emergency: an unusable channel cannot deliver regardless of class.
     if (input.channelUsable === false) {
