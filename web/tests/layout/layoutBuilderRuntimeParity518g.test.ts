@@ -12,12 +12,13 @@ import { addSectionFieldItem } from "@/lib/layout/layoutEditorSectionComposition
 import { createExperienceBuilderCard } from "@/lib/layout/layoutBuilderCardAuthoring";
 import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import {
-    filterLayoutBuilderPreviewSearchHits,
-    layoutBuilderPreviewSelectionFromHit,
-    resolvePreviewOpportunityIdFromSearchHit,
+    filterLayoutBuilderPreviewSelections,
+    layoutBuilderPreviewSelectionFrom,
+    resolvePreviewOpportunityIdFromSelection,
 } from "@/lib/layout/layoutBuilderPreviewRecordSearch";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
-import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+import type { SearchResult } from "@/lib/search/searchContracts";
+import { searchSelectionFromResult } from "@/lib/search/searchSelectionAdapter";
 
 function mkRecord(layoutKey: string, version: number, status: "published" | "draft" = "published"): EntityLayoutRecord {
     const base = buildLeadDrawerDefaultDoc();
@@ -73,41 +74,62 @@ describe("layoutBuilderRuntimeParity 5.18G", () => {
         expect(validation.ok).toBe(true);
     });
 
-    it("resolves preview opportunity id from lead search hits", () => {
-        const hit: GlobalRecordSearchHit = {
-            entity_type: "opportunities",
-            entity_id: "opp-123",
-            group: "leads",
-            name: "Nguyen Household",
-            type_label: "Lead",
-            household_name: "Nguyen Household",
-            opportunity_name: "Nguyen Household",
-            lead_short_label: "Nguyen",
-            status_label: "Qualified",
-            location_label: "North Campus",
-            opportunity_id: "opp-123",
+    it("resolves preview opportunity id from a lead SUBJECT result", () => {
+        // Search V2 returns subjects; the preview picker reads the opportunity
+        // behind the subject via the platform selection projection.
+        const result: SearchResult = {
+            subject: { kind: "household", id: "cust-1", display_name: "Nguyen Household", household_id: "cust-1" },
+            recognition: { type_label: "Lead", location_label: "North Campus" },
+            contexts: [],
+            destinations: [
+                {
+                    key: "subject",
+                    label: "Open Nguyen Household",
+                    target: "open_drawer",
+                    entity_type: "opportunities",
+                    entity_id: "opp-123",
+                    primary: true,
+                },
+            ],
+            ranking: { score: 1, reasons: [] },
         };
-        expect(resolvePreviewOpportunityIdFromSearchHit(hit)).toBe("opp-123");
-        const selection = layoutBuilderPreviewSelectionFromHit(hit);
-        expect(selection?.opportunityId).toBe("opp-123");
-        expect(selection?.label).toContain("Nguyen");
-        expect(filterLayoutBuilderPreviewSearchHits([hit])).toHaveLength(1);
+        const selection = searchSelectionFromResult(result)!;
+        expect(resolvePreviewOpportunityIdFromSelection(selection)).toBe("opp-123");
+        const preview = layoutBuilderPreviewSelectionFrom(selection);
+        expect(preview?.opportunityId).toBe("opp-123");
+        expect(preview?.label).toContain("Nguyen");
+        expect(filterLayoutBuilderPreviewSelections([result])).toHaveLength(1);
     });
 
-    it("filters out location-only global search hits from preview picker", () => {
-        const locationHit: GlobalRecordSearchHit = {
-            entity_type: "locations",
-            entity_id: "loc-1",
-            group: "locations",
-            name: "North Campus",
-            type_label: "Campus",
-            household_name: null,
-            opportunity_name: null,
-            lead_short_label: null,
-            status_label: null,
-            location_label: null,
+    it("resolves the opportunity behind a CHILD subject participating in a process", () => {
+        // A child opens as a person but participates in an opportunity — the
+        // preview must still find that opportunity.
+        const result: SearchResult = {
+            subject: { kind: "child", id: "cm-1", display_name: "Joe Smith", person_id: "p-1", household_id: "cust-1" },
+            recognition: { type_label: "Child" },
+            contexts: [],
+            destinations: [
+                { key: "subject", label: "Open Joe", target: "open_drawer", entity_type: "persons", entity_id: "p-1", primary: true },
+                { key: "process:enrollment", label: "Enrollment", target: "open_drawer", entity_type: "opportunities", entity_id: "opp-9" },
+            ],
+            ranking: { score: 1, reasons: [] },
         };
-        expect(filterLayoutBuilderPreviewSearchHits([locationHit])).toHaveLength(0);
+        const selection = searchSelectionFromResult(result)!;
+        expect(selection.entity_type).toBe("persons");
+        expect(resolvePreviewOpportunityIdFromSelection(selection)).toBe("opp-9");
+    });
+
+    it("filters out campus subjects from the preview picker", () => {
+        const locationResult: SearchResult = {
+            subject: { kind: "location", id: "loc-1", display_name: "North Campus" },
+            recognition: { type_label: "Campus" },
+            contexts: [],
+            destinations: [
+                { key: "subject", label: "Open North Campus", target: "route", href: "/organization/locations?locationId=loc-1", primary: true },
+            ],
+            ranking: { score: 1, reasons: [] },
+        };
+        expect(filterLayoutBuilderPreviewSelections([locationResult])).toHaveLength(0);
     });
 
     it("registry fallback still works when no published records exist", () => {
