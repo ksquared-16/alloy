@@ -9,6 +9,7 @@
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
 import { inquiryChildProfileFieldsFromRaw } from "@/lib/admin/drawer/inquiryChildrenHydration";
+import { resolveIdentityPhotoUrlFromRaw } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 import {
     buildHouseholdChildrenLookup,
     mergeInquiryChildProfileFromHousehold,
@@ -470,6 +471,9 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
     const activeProfile = activeInquiryRaw
         ? mergeInquiryChildProfileFromHousehold(activeInquiryRaw, householdLookup)
         : null;
+    const subjectImageUrl = activeInquiryRaw
+        ? resolveIdentityPhotoUrlFromRaw(activeInquiryRaw)
+        : null;
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -479,6 +483,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             subject_id: active.subjectId,
             display_name: active.displayName,
             ...(activeProfile ?? {}),
+            ...(subjectImageUrl ? { image_url: subjectImageUrl } : {}),
         },
         row_count: 1,
         row_count_unit:

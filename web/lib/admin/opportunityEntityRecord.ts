@@ -57,6 +57,8 @@ import { normalizeIsoDateOnly } from "@/lib/fields/inquiryChildFieldRegistry";
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { enrichInquiryChildrenWithPlacementOptionLabels } from "@/lib/admin/drawer/enrichInquiryChildrenPlacementLabels";
 import { attachCustomerMemberProfileToInquiryChildren } from "@/lib/admin/drawer/attachCustomerMemberProfileToInquiryChildren";
+import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { projectResolvedProfilePhotosOntoRows } from "@/lib/documents/projectPersonProfilePhotos";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -81,6 +83,17 @@ function warmPersonPhotoUrl(person: WarmPersonRow | null | undefined): string | 
     if (value != null && String(value).trim() !== "") return String(value).trim();
   }
   return null;
+}
+
+/** Warm-person map → metadata bag for profile-photo projection. */
+function metadataByPersonIdFromWarmMap(
+  pmap: Map<string, WarmPersonRow>,
+): Map<string, Record<string, unknown> | null | undefined> {
+  const out = new Map<string, Record<string, unknown> | null | undefined>();
+  for (const [id, person] of pmap) {
+    out.set(id, person.metadata ?? null);
+  }
+  return out;
 }
 
 function trimOrNull(v: unknown): string | null {
@@ -749,6 +762,7 @@ export async function attachOpportunityInquiryChildrenShell(
   supabase: AdminSupabase,
   orgId: string,
   host: Record<string, unknown>,
+  documentActor?: DocumentActor | null,
 ): Promise<void> {
   const opportunityId = trimOrNull(host.id);
   if (!opportunityId) {
@@ -910,6 +924,16 @@ export async function attachOpportunityInquiryChildrenShell(
     inquiryChildrenOut,
   );
 
+  // Actor-scoped profile photos — person_id key (not OCM/inquiry-child id).
+  inquiryChildrenOut = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: inquiryChildrenOut as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  }) as typeof inquiryChildrenOut;
+
   host._inquiry_children = inquiryChildrenOut;
   host._enrollment_participation_by_member = buildEnrollmentParticipationByMemberMap(processInstances);
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
@@ -929,6 +953,7 @@ export async function attachOpportunityPersonsShell(
   supabase: AdminSupabase,
   orgId: string,
   host: Record<string, unknown>,
+  documentActor?: DocumentActor | null,
 ): Promise<void> {
   const opportunityId = trimOrNull(host.id);
   if (!opportunityId) {
@@ -971,10 +996,17 @@ export async function attachOpportunityPersonsShell(
         photo_url: warmPersonPhotoUrl(p),
       };
     });
-  host._opportunity_persons = mapped;
-  host._additional_contacts_shell_count = mapped.filter(
-    (r) => !primaryPersonId || r.person_id !== primaryPersonId,
-  ).length;
+  host._opportunity_persons = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: mapped as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  });
+  host._additional_contacts_shell_count = (
+    host._opportunity_persons as Array<{ person_id?: string }>
+  ).filter((r) => !primaryPersonId || r.person_id !== primaryPersonId).length;
 }
 
 /** Household guardians for inquiry lead summary — merges with `_opportunity_persons` in FamilyContactsPanel. */
@@ -982,6 +1014,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
   supabase: AdminSupabase,
   orgId: string,
   host: Record<string, unknown>,
+  documentActor?: DocumentActor | null,
 ): Promise<void> {
   const householdId =
     typeof host.customer_id === "string" && host.customer_id.trim() ? host.customer_id.trim() : null;
@@ -1032,7 +1065,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
     }
   }
 
-  host._customer_persons = ((cpRows ?? []) as {
+  const customerPersonsMapped = ((cpRows ?? []) as {
     person_id: string;
     role_type?: string | null;
     is_primary?: boolean | null;
@@ -1048,6 +1081,14 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
       email: trimOrNull(p?.email),
       photo_url: warmPersonPhotoUrl(p),
     };
+  });
+  host._customer_persons = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: customerPersonsMapped as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
   });
 }
 
@@ -1109,6 +1150,7 @@ async function respondOpportunityRelationshipMemberOverlay(
   },
   opportunityRouteStartedAt: number,
   request: NextRequest,
+  documentActor?: DocumentActor | null,
 ): Promise<NextResponse> {
   const hydrateGraphTimings: Record<string, number> = {};
   const oppMeta =
@@ -1292,6 +1334,14 @@ async function respondOpportunityRelationshipMemberOverlay(
   inquiryBlocks = await overlayDurableOperationalFacts(supabase, orgId, inquiryBlocks);
   // Pre-materialization: participation facts come from process_instances.metadata (no OCM).
   inquiryBlocks = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryBlocks);
+  inquiryBlocks = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: inquiryBlocks as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  }) as typeof inquiryBlocks;
 
   const overlayRecord: Record<string, unknown> = {
     id: opportunityId,
@@ -1349,6 +1399,8 @@ export type BuildOpportunityDrawerVisiblePayloadOptions = {
   hintPrimaryPersonName?: string | null;
   hintPrimaryPersonEmail?: string | null;
   hintPrimaryPersonPhone?: string | null;
+  /** Admin document actor for request-scoped profile-photo URL minting. */
+  documentActor?: DocumentActor | null;
 };
 
 export async function buildOpportunityDrawerVisiblePayload(
@@ -1548,9 +1600,10 @@ export async function buildOpportunityDrawerVisiblePayload(
   );
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
+  const documentActor = options?.documentActor ?? null;
   await Promise.all([
-    attachOpportunityInquiryChildrenShell(supabase, orgId, vis),
-    attachOpportunityPersonsShell(supabase, orgId, vis),
+    attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor),
+    attachOpportunityPersonsShell(supabase, orgId, vis, documentActor),
     attachOpportunityActivitySignalShell(supabase, orgId, vis),
     attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis),
   ]);
@@ -1607,6 +1660,7 @@ export async function respondOpportunityEntityGet(
   id: string,
   request: NextRequest,
   accessDim?: AdminAccessScopeDimensions | null,
+  documentActor?: DocumentActor | null,
 ): Promise<NextResponse> {
   const opportunityRouteStartedAt = Date.now();
   const { data, error } = await withDbTiming(
@@ -1663,6 +1717,7 @@ export async function respondOpportunityEntityGet(
       opp,
       opportunityRouteStartedAt,
       request,
+      documentActor,
     );
   }
 
@@ -1684,7 +1739,9 @@ export async function respondOpportunityEntityGet(
     const enrichStartedAt = Date.now();
     const enrichPhaseMs: Record<string, number> = {};
     const tVis0 = Date.now();
-    const vis = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data);
+    const vis = await buildOpportunityDrawerVisiblePayload(supabase, orgId, data, {
+      documentActor,
+    });
     enrichPhaseMs.visible_build_ms = Date.now() - tVis0;
     const enrichTotalMsV = Date.now() - enrichStartedAt;
     const enrichHeaderV =
@@ -1742,6 +1799,7 @@ export async function respondOpportunityEntityGet(
       hintPrimaryPersonName: openerHints.primaryPersonName,
       hintPrimaryPersonEmail: openerHints.primaryPersonEmail,
       hintPrimaryPersonPhone: openerHints.primaryPersonPhone,
+      documentActor,
     });
     enrichPhaseMs.drawer_primary_build_ms = Date.now() - tPrimary0;
     const primaryPhases = (out._drawer_primary_phase_ms ?? {}) as Record<string, number>;
@@ -2387,6 +2445,14 @@ export async function respondOpportunityEntityGet(
     orgId,
     inquiryChildrenOut,
   );
+  inquiryChildrenOut = await projectResolvedProfilePhotosOntoRows({
+    supabase,
+    orgId,
+    actor: documentActor,
+    rows: inquiryChildrenOut as unknown as Array<Record<string, unknown>>,
+    personIdKey: "person_id",
+    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+  }) as typeof inquiryChildrenOut;
   out._inquiry_children = inquiryChildrenOut;
   attachOpportunityChildLifecycleSummary(out);
   {
@@ -2476,7 +2542,7 @@ export async function respondOpportunityEntityGet(
 
     lapSegment("opportunity_persons_person_merge_small_batch");
 
-    out._opportunity_persons = ((opRows ?? []) as OppPersonLite[]).map((r) => {
+    const oppPersonsMapped = ((opRows ?? []) as OppPersonLite[]).map((r) => {
       const p = (pmap.get(r.person_id) ?? null) as PersonRowAgg | null;
       return {
         id: r.id,
@@ -2487,6 +2553,14 @@ export async function respondOpportunityEntityGet(
         email: trimOrNull(p?.email),
         photo_url: warmPersonPhotoUrl(p),
       };
+    });
+    out._opportunity_persons = await projectResolvedProfilePhotosOntoRows({
+      supabase,
+      orgId,
+      actor: documentActor,
+      rows: oppPersonsMapped as unknown as Array<Record<string, unknown>>,
+      personIdKey: "person_id",
+      metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
     });
 
     if (householdId) {
@@ -2513,7 +2587,7 @@ export async function respondOpportunityEntityGet(
           pmap.set(row.id, row);
         }
       }
-      out._customer_persons = ((cpRows ?? []) as {
+      const customerPersonsMapped = ((cpRows ?? []) as {
         person_id: string;
         role_type?: string | null;
         is_primary?: boolean | null;
@@ -2529,6 +2603,14 @@ export async function respondOpportunityEntityGet(
           email: trimOrNull(p?.email),
           photo_url: warmPersonPhotoUrl(p),
         };
+      });
+      out._customer_persons = await projectResolvedProfilePhotosOntoRows({
+        supabase,
+        orgId,
+        actor: documentActor,
+        rows: customerPersonsMapped as unknown as Array<Record<string, unknown>>,
+        personIdKey: "person_id",
+        metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
       });
     }
   }

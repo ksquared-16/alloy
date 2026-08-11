@@ -39,6 +39,7 @@ import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import { patchHouseholdPrimaryContact } from "@/lib/admin/person/patchHouseholdPrimaryContact";
 import { applyLeadPrimaryContactToOpportunityRecord } from "@/lib/admin/person/applyLeadPrimaryContactToOpportunityRecord";
+import { RESOLVED_PHOTO_URL_KEY } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 import {
     dispatchOpportunityTourUpdated,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
@@ -603,12 +604,18 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     return { ok: false, status: res.status, error: json.error ?? "Could not save photo" };
                 }
 
+                // Session preview for immediate chrome; merge uses resolved_photo_url so
+                // evidence adapters accept the actor-scoped URL (signed photo_url alone is dropped).
                 setChildAvatarSessionPreview(childId, json.photoUrl);
 
                 const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
                     childId,
                     row: { person_id: pid },
-                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: json.photoUrl } },
+                    patch: {
+                        identityPatch: {},
+                        ocmPatch: {},
+                        profilePatch: { [RESOLVED_PHOTO_URL_KEY]: json.photoUrl },
+                    },
                 });
                 dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
                 dispatchDrawerLayoutRuntimeBodyRecordPatch({
@@ -638,7 +645,11 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
                     childId,
                     row: { person_id: pid },
-                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: null } },
+                    patch: {
+                        identityPatch: {},
+                        ocmPatch: {},
+                        profilePatch: { [RESOLVED_PHOTO_URL_KEY]: null, photo_url: null },
+                    },
                 });
                 dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
                 dispatchDrawerLayoutRuntimeBodyRecordPatch({

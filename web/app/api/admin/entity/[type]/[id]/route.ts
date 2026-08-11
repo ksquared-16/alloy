@@ -24,6 +24,7 @@ import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
 import { respondOpportunityEntityGet } from "@/lib/admin/opportunityEntityRecord";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
 import { apiError, apiOk } from "@/lib/api/apiResponse";
 
 /**
@@ -176,7 +177,21 @@ async function getEntityImpl(
             return entityOk({ ...resolved.flat, _rrs: resolved.rrs }, request);
         }
         if (type === "opportunities") {
-            return respondOpportunityEntityGet(supabase, orgId, id, request, scopeDim);
+            return respondOpportunityEntityGet(
+                supabase,
+                orgId,
+                id,
+                request,
+                scopeDim,
+                documentActorFromAdminParts({
+                    ok: true,
+                    userId: ctx.userId,
+                    orgId: ctx.orgId,
+                    role: ctx.role,
+                    roleKeys: access.roleKeys,
+                    permissionKeys: access.permissionKeys,
+                }),
+            );
         }
         if (type === "contacts") {
             if (id === "new") {

@@ -70,6 +70,11 @@ export type QueueRowSubjectPresentation = {
     age_label?: string | null;
     /** Gender label when hydrated on queue row inquiry child payload. */
     gender_label?: string | null;
+    /**
+     * Request-scoped profile image URL (from `resolved_photo_url` / identity photo adapter).
+     * Optional + additive — CondensedQueueRow shows an image when present, else initials.
+     */
+    image_url?: string | null;
 };
 
 export type QueueRowCaseContext = {

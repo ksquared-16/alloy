@@ -78,6 +78,8 @@ import {
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { loadLocationProgramCategoriesForOrg } from "@/lib/locations/loadLocationProgramCategoriesForOrg";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { projectResolvedProfilePhotosOntoInquiryChildrenRows } from "@/lib/documents/projectPersonProfilePhotos";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
@@ -1189,6 +1191,8 @@ async function enrichOpportunityRows(params: {
     queueStageKey?: string | null;
     /** Access / workspace location scope for Effective Process Position rollup. */
     allowedLocationIds?: readonly string[] | null;
+    /** When set, batch-resolves child profile photos onto `_inquiry_children` (no N+1). */
+    documentActor?: DocumentActor | null;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
     const {
         supabase,
@@ -1201,6 +1205,7 @@ async function enrichOpportunityRows(params: {
         viewerDisplayTimeZoneIana: viewerTzRaw,
         opportunityAttentionResolution,
         skipOptionalEnrichmentFetches = false,
+        documentActor = null,
     } = params;
     const displayTz = typeof viewerTzRaw === "string" && viewerTzRaw.trim() ? viewerTzRaw.trim() : UTC_FALLBACK_IANA;
     const previewLite =
@@ -1518,7 +1523,7 @@ async function enrichOpportunityRows(params: {
                   async () => {
                       const { data } = await supabase
                           .from("persons")
-                          .select("id, date_of_birth")
+                          .select("id, date_of_birth, metadata")
                           .eq("org_id", orgId)
                           .in("id", childPersonIdsToFetch as any);
                       return data ?? [];
@@ -1526,15 +1531,24 @@ async function enrichOpportunityRows(params: {
               )
             : ([] as any[]);
     const childDobByPersonId = new Map<string, string>();
+    const childMetadataByPersonId = new Map<string, Record<string, unknown> | null | undefined>();
     for (const p of (childPersons ?? []) as any[]) {
         const id = String(p.id ?? "").trim();
         const dob = String(p.date_of_birth ?? "").trim();
         if (id && dob) childDobByPersonId.set(id, dob);
+        if (id) {
+            childMetadataByPersonId.set(
+                id,
+                p.metadata && typeof p.metadata === "object" && !Array.isArray(p.metadata)
+                    ? (p.metadata as Record<string, unknown>)
+                    : null,
+            );
+        }
     }
     const childResolutionMs = Date.now() - tChild0;
 
     const tMap0 = Date.now();
-    const mapped = rows.map((r) => {
+    let mapped = rows.map((r) => {
         const pid = (r as unknown as { primary_person_id?: string | null }).primary_person_id ?? null;
         const person = pid ? personById.get(pid) : null;
         const contact = r.primary_contact_id ? contactById.get(r.primary_contact_id) : null;
@@ -1844,6 +1858,16 @@ async function enrichOpportunityRows(params: {
                 : {}),
         };
     });
+    // Batch profile-photo projection onto `_inquiry_children` (person_id keyed) before row context attach.
+    if (documentActor?.ok) {
+        mapped = await projectResolvedProfilePhotosOntoInquiryChildrenRows({
+            supabase,
+            orgId,
+            actor: documentActor,
+            rows: mapped,
+            metadataByPersonId: childMetadataByPersonId,
+        });
+    }
     // QueueRowContext attached on API return via withOpportunityQueueRowContext (QueueService finalize paths).
     const mapMs = Date.now() - tMap0;
     const enrichMs = Date.now() - tEnrich0;
@@ -2986,6 +3010,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
@@ -3082,6 +3107,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
@@ -3165,6 +3191,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         enrichOpportunityRows({
                             supabase,
                             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                             rows: rows as OpportunityRowPreview[],
                             enrichment: "queue_preview",
@@ -3290,6 +3317,7 @@ export async function getWorkUnitQueueSummaries(params: {
             const { rows: preview } = await enrichOpportunityRows({
                 supabase,
                 orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                 rows: previewRows,
                 effectiveStatusDefs: preloadStatusDefs,
@@ -3403,6 +3431,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const { rows: preview } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: previewRows,
             effectiveStatusDefs,
@@ -3749,6 +3778,8 @@ export async function getWorkUnitQueueItems(params: {
     rowEnrichment?: "queue_list" | "queue_reveal" | "count_only";
     /** When set, skips departments.metadata fetch inside opportunity row loader. */
     preloadedDepartmentMetadata?: unknown | null;
+    /** Admin document actor for request-scoped child profile-photo projection on queue rows. */
+    documentActor?: DocumentActor | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
@@ -4116,6 +4147,7 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
@@ -4199,6 +4231,7 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
@@ -4277,6 +4310,7 @@ export async function getWorkUnitQueueItems(params: {
                     return enrichOpportunityRows({
                         supabase,
                         orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
@@ -4398,6 +4432,7 @@ export async function getWorkUnitQueueItems(params: {
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: slice,
             effectiveStatusDefs,
@@ -4509,6 +4544,7 @@ export async function getWorkUnitQueueItems(params: {
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
+            documentActor: params.documentActor ?? null,
             allowedLocationIds: scopeFilter?.locationIds ?? null,
             rows: itemRows,
             effectiveStatusDefs,
@@ -4639,7 +4675,8 @@ export async function getWorkUnitQueueItems(params: {
     const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
         supabase,
         orgId: params.orgId,
-                            allowedLocationIds: scopeFilter?.locationIds ?? null,
+        documentActor: params.documentActor ?? null,
+        allowedLocationIds: scopeFilter?.locationIds ?? null,
         rows: itemRows,
         effectiveStatusDefs,
         enrichment: enrichMode,
