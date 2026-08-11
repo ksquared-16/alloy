@@ -20,6 +20,7 @@ import { getMission, updateMission } from "./commands/missions.mjs";
 import { getBrief } from "./mission-brief.mjs";
 import { getOpenDeliverableReview } from "./deliverable-review.mjs";
 import { liveWorkProgressVm } from "./presentation/mission-conversation.mjs";
+import { missionHealthVm } from "./presentation/mission-health.mjs";
 import {
   parseWaveStartIntent,
   ensureNextImplementationWave,
@@ -42,10 +43,14 @@ export function classifyMissionComposerIntent(text) {
   const lower = raw.toLowerCase();
   const isQuestion = /\?/.test(raw)
     || /^(what|why|how|when|who|which|where|can|could|should|would|did|does|is|are|was|were)\b/i.test(raw)
-    || /\b(where are we|recap|status|summary|recommend|what next|what still|what did)\b/i.test(lower);
+    || /\b(where are we|recap|status|summary|recommend|what next|what still|what did|why aren'?t we done|why aren'?t we finished)\b/i.test(lower);
   const isGuidance = /\b(i don't like|i do not like|don't like|simplify|prefer|change this|instead|feedback|please make|want the|want you to)\b/i.test(lower)
     || /\b(without changing|preserving|keep the)\b/i.test(lower);
-  const isAction = /\b(conti?nue|conintue|proceed|begin implementation|start implementation|start the server|stop the server|open the pr|have claude|have cursor|send this to|fix it|investigate)\b/i.test(lower)
+  const isStopIdle = /\b(stop (working|for now)|leave (it|this) (idle|alone)|don'?t (do|work|implement) (anything|more)|park (it|this)|done for now)\b/i.test(lower)
+    || /^(stop|idle|hold)\.?$/i.test(raw);
+  const isCloseMission = /\b(close (the )?mission|stop treating this|end this mission)\b/i.test(lower);
+  const isAction = isStopIdle || isCloseMission
+    || /\b(conti?nue|conintue|proceed|begin implementation|start implementation|start the server|stop the server|open the pr|have claude|have cursor|send this to|fix it|investigate)\b/i.test(lower)
     || /\bnext\s+wave\b/i.test(lower)
     || /\b(open|start|begin|launch|dispatch|run)\b.{0,40}\b(wave|w-?\d+)\b/i.test(lower)
     || /\b(wave\s*\d+|w-?\d+)\b.{0,20}\b(open|start|begin|launch)\b/i.test(lower)
@@ -58,7 +63,11 @@ export function classifyMissionComposerIntent(text) {
     return { mode: "guidance", kind: "context", persistGuidance: true };
   }
   if (isAction) {
-    return { mode: "action", kind: "ask", persistGuidance: false };
+    return {
+      mode: "action",
+      kind: isCloseMission ? "close_mission" : (isStopIdle ? "idle_mission" : "ask"),
+      persistGuidance: false,
+    };
   }
   // Default: treat as ask/context so Director always answers
   return { mode: "question", kind: "ask", persistGuidance: false };
@@ -103,6 +112,7 @@ export function buildMissionDirectorContext(missionId, { recentLimit = 8 } = {})
     result: e.test_run_status || e.result || null,
   }));
   const liveProgress = liveWorkProgressVm(missionId);
+  const health = missionHealthVm(missionId, { posture });
 
   return {
     schema_version: "vacilando.mission_director_context.v1",
@@ -111,6 +121,7 @@ export function buildMissionDirectorContext(missionId, { recentLimit = 8 } = {})
     postureId: posture?.id || null,
     postureLabel: posture?.label || null,
     postureDetail: posture?.detail || null,
+    missionHealth: health,
     recommendation: posture?.primaryAction?.label
       || summary?.what_happens_next
       || summary?.answers?.what_happens_next
@@ -192,6 +203,83 @@ export function composeMissionDirectorResponse(ctx, { operatorText, intent } = {
     const beyond = isBeyondRegisterObjective(q);
     const nextPhase = peekNextImplementationPhase(ctx.missionId);
     const waveIntent = beyond ? null : parseWaveStartIntent(q);
+
+    if (intent?.kind === "idle_mission") {
+      try {
+        updateMission(ctx.missionId, {
+          status: "idle",
+          kickoff_status: "executing",
+          outcome_parked_at: new Date().toISOString(),
+          pending_question: null,
+        });
+      } catch { /* best-effort */ }
+      return {
+        summary: line([
+          "Understood — leaving this Mission idle.",
+          "It remains an ongoing responsibility. Nothing launches until you ask me to continue or name a new outcome.",
+          "I am not closing the Mission.",
+        ]),
+        proposedAction: null,
+        mode: "action",
+      };
+    }
+
+    if (intent?.kind === "close_mission") {
+      return {
+        summary: line([
+          "Closing a durable Mission is intentional and uncommon.",
+          "Confirm with the Close mission control only if you want Vacilando to stop treating this as an actively managed area.",
+          "Otherwise say “leave it idle” and I will keep the Mission open without launching work.",
+        ]),
+        proposedAction: {
+          kind: "certify_completion",
+          label: "Close mission (confirm)",
+          missionId: ctx.missionId,
+        },
+        mode: "action",
+      };
+    }
+
+    // Continue / what’s next — peek next plan phase; else stay idle with grounded remaining work.
+    if (/\b(conti?nue|conintue|proceed|what('?s| is) next|keep going)\b/i.test(lower)
+      || /^(go|next)\.?$/i.test(q)) {
+      const nextPhase = peekNextImplementationPhase(ctx.missionId);
+      if (nextPhase) {
+        const opened = ensureNextImplementationWave(ctx.missionId, {
+          actor: "operator",
+          waveHint: { phaseId: nextPhase.phaseId, title: nextPhase.title },
+          response: q.slice(0, 240),
+        });
+        if (opened?.ok) {
+          const title = opened.readyAssignment?.title || opened.phase?.title || nextPhase.title;
+          const canDispatch = opened.nextAction?.kind === "dispatch_ready";
+          return {
+            summary: line([
+              opened.reused ? `${title} is already queued.` : `Opened ${title} from the plan.`,
+              canDispatch
+                ? "Dispatching a worker onto it now."
+                : "It is queued — confirm Start work when ready.",
+            ]),
+            proposedAction: opened.nextAction || null,
+            mode: "action",
+            waveOpen: opened,
+            autoDispatch: Boolean(canDispatch),
+          };
+        }
+      }
+      const h = ctx.missionHealth;
+      const remaining = (h?.knownRemaining || []).map((r) => r.label).filter(Boolean).slice(0, 3);
+      return {
+        summary: line([
+          "Current work register is complete and no further phase is queued in the plan register.",
+          "The Mission stays Ongoing / Idle — register completion is not Mission completion.",
+          remaining.length ? `Known remaining: ${remaining.join("; ")}.` : null,
+          "Name the next outcome (for example promotion or certification), or leave this Mission idle until you need it.",
+        ]),
+        proposedAction: null,
+        mode: "action",
+      };
+    }
 
     // Register exhausted + promotion/certification brief → open a real assignment.
     if (beyond && !nextPhase) {
@@ -313,12 +401,30 @@ export function composeMissionDirectorResponse(ctx, { operatorText, intent } = {
   // Question / recap
   const bits = [];
   bits.push(ctx.title ? `${String(ctx.title).split(/[.\n]/)[0].slice(0, 80)}.` : "Here is where this mission stands.");
+  if (/\bwhy aren'?t we (done|finished)\b/i.test(lower) || /\bare we done\b/i.test(lower)) {
+    const h = ctx.missionHealth;
+    bits.push("The current work register can be complete while the Mission stays ongoing.");
+    bits.push("Register completion is not Mission completion.");
+    if (h?.register?.line) bits.push(`Current work: ${h.register.line}.`);
+    if (h?.missionProgressLabel) bits.push(`Mission: ${h.missionProgressLabel}.`);
+    if (h?.lifecycleLabel) bits.push(`Status: ${h.lifecycleLabel}.`);
+    else if (ctx.postureLabel) bits.push(`Status: ${ctx.postureLabel}.`);
+    if (h?.directorNext) bits.push(h.directorNext);
+    else if (ctx.recommendation) bits.push(ctx.recommendation);
+    if (h?.waitingOnYou) bits.push("A real operator decision is open.");
+    else bits.push("I am not waiting on you solely because the register is empty.");
+    return {
+      summary: bits.filter(Boolean).join(" "),
+      proposedAction: ctx.primaryAction || null,
+      mode: "question",
+    };
+  }
   if (ctx.phase) bits.push(`Current phase: ${ctx.phase}.`);
   if (ctx.postureLabel) bits.push(`Status: ${ctx.postureLabel}.`);
   const lp = ctx.liveProgress;
   if (lp?.active) {
     bits.push(
-      `Progress: ${lp.percentLabel}${lp.doneCount != null && lp.totalCount ? ` (${lp.doneCount}/${lp.totalCount} assignments closed)` : ""}.`,
+      `Current work progress: ${lp.percentLabel}${lp.doneCount != null && lp.totalCount ? ` (${lp.doneCount}/${lp.totalCount} assignments closed)` : ""}.`,
     );
     bits.push(`Worker status: ${lp.freshnessLabel}${lp.heartbeatLabel ? ` · ${lp.heartbeatLabel}` : ""}.`);
     if (lp.activity) bits.push(`Now: ${lp.activity}.`);

@@ -260,13 +260,68 @@ window.renderMissionRail = function renderMissionRail(missions) {
     const id = m.missionId || m.workspaceId;
     const badge = m.needsYou || m.needsCount
       ? `<span class="badge">${escRail(String(m.needsCount || "!"))}</span>`
-      : "";
-    const meta = [m.provider, m.slot != null ? `slot ${m.slot}` : null].filter(Boolean).join(" · ");
-    return `<a class="mission-rail-item" data-route="workspaces/${escRail(id)}" title="${escRail(m.title || id)}">
-      <span class="mission-rail-title">${escRail(m.title || id)}${meta ? `<span class="mission-rail-meta">${escRail(meta)}</span>` : ""}</span>${badge}
-    </a>`;
+      : (m.free ? `<span class="badge" style="background:#5a7a62">free</span>` : "");
+    const meta = [
+      m.subtitle || null,
+      !m.subtitle && m.slot != null ? `slot ${m.slot}` : null,
+      !m.subtitle && m.provider ? m.provider : null,
+    ].filter(Boolean).join(" · ");
+    // Diagnostic worker controls stay available but secondary — confirm before use.
+    const actions = Array.isArray(m.actions) && m.actions.length && m.occupied
+      ? `<details class="mission-rail-diag"><summary>Worker controls</summary><div class="mission-rail-actions">${m.actions.slice(0, 4).map((a) =>
+          `<button type="button" class="mission-rail-act" data-cmd="${escRail(a.command || a.key)}" data-slot="${escRail(String(m.slot ?? ""))}" data-label="${escRail(a.label || a.key)}" title="${escRail(a.label || a.key)}">${escRail((a.label || a.key || "?").slice(0, 8))}</button>`
+        ).join("")}</div></details>`
+      : (Array.isArray(m.actions) && m.actions.length && m.free
+        ? `<div class="mission-rail-actions">${m.actions.slice(0, 1).map((a) =>
+            `<button type="button" class="mission-rail-act" data-cmd="${escRail(a.command || a.key)}" data-slot="${escRail(String(m.slot ?? ""))}" data-label="${escRail(a.label || a.key)}" title="${escRail(a.label || a.key)}">${escRail((a.label || a.key || "?").slice(0, 8))}</button>`
+          ).join("")}</div>`
+        : "");
+    const route = String(id).startsWith("slot_")
+      ? `workers?slot=${escRail(String(m.slot))}`
+      : `workspaces/${escRail(id)}`;
+    return `<div class="mission-rail-block">
+      <a class="mission-rail-item${m.free ? " is-free" : ""}" data-route="${route}" title="${escRail(m.title || id)}">
+        <span class="mission-rail-title">${escRail(m.title || id)}${meta ? `<span class="mission-rail-meta">${escRail(meta)}</span>` : ""}</span>${badge}
+      </a>${actions}
+    </div>`;
   }).join("");
   setActiveNav(parseRoute().name);
+  el.querySelectorAll(".mission-rail-act").forEach((btn) => {
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const cmd = btn.dataset.cmd;
+      const slot = Number(btn.dataset.slot);
+      if (!cmd || !slot) return;
+      if (!window.confirm(`${btn.dataset.label || cmd} on slot ${slot}?`)) return;
+      try {
+        // Prefer the board's governed execute() when available.
+        if (typeof window.execute === "function") {
+          await window.execute(cmd, { slot }, true);
+        } else if (typeof execute === "function") {
+          await execute(cmd, { slot }, true);
+        } else {
+          const preview = await fetch("/api/commands/preview", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ command: cmd, input: { slot } }),
+          }).then((r) => r.json());
+          const body = { command: cmd, input: { slot }, confirmed: true, actor: "operator" };
+          if (preview?.confirmation_token) body.confirmation_token = preview.confirmation_token;
+          const r = await fetch("/api/commands", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || j?.ok === false) alert(j?.error || j?.reason || `Command failed: ${cmd}`);
+        }
+        fetchMissionRail();
+      } catch (e) {
+        alert(String(e?.message || e));
+      }
+    });
+  });
 };
 
 async function fetchMissionRail() {
@@ -276,6 +331,7 @@ async function fetchMissionRail() {
     if (j?.missions) window.renderMissionRail(j.missions);
   } catch { /* keep stub */ }
 }
+window.fetchMissionRail = fetchMissionRail;
 
 /**
  * Cutover: empty hash lands on Identity conversation (V3-4).
@@ -1303,6 +1359,7 @@ function watchServerReady(slot, port) {
     }
   }, 2000);
 }
+window.execute = execute;
 function loadAuditIfOpen() { if (route() === "history") { state._audit = null; fetchAudit(); } }
 function showConfirm(pv, onConfirm) {
   const ov = el("div", "ov");

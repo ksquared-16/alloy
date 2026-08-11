@@ -620,3 +620,31 @@ export function resolveMissionEvidenceFile(missionId, evidenceId) {
   if (!art) return null;
   return resolveEvidenceFilePath(art, { missionWorktree: missionWorktreeName(missionId) });
 }
+
+/**
+ * Operator-facing evidence view: file bytes when present, otherwise the stored
+ * description/body (notes, logs, commit messages). Never return a bare error JSON
+ * for "Worker completion notes" that already has prose in the evidence record.
+ */
+export function resolveMissionEvidenceView(missionId, evidenceId) {
+  const art = listEvidence(missionId).find((a) => a.evidenceId === evidenceId);
+  if (!art) return null;
+  const filePath = resolveEvidenceFilePath(art, { missionWorktree: missionWorktreeName(missionId) });
+  const title = String(art.title || art.type || "Evidence").replace(/^Present\s+/i, "").trim();
+  const body = String(art.description || art.body || art.content || art.text || "").trim();
+  if (filePath) {
+    return { kind: "file", title, filePath, type: art.type || null, body: body || null };
+  }
+  if (body) {
+    return { kind: "text", title, body, type: art.type || null, filePath: null };
+  }
+  // Last resort: still give the operator something readable.
+  const fallback = [
+    title,
+    art.type ? `Type: ${art.type}` : null,
+    art.fileUri ? `Referenced path: ${art.fileUri} (not found on disk in this worktree)` : null,
+    art.createdBy ? `Produced by: ${art.createdBy}` : null,
+    art.createdAt ? `At: ${art.createdAt}` : null,
+  ].filter(Boolean).join("\n");
+  return { kind: "text", title, body: fallback || "No file or notes were stored for this evidence item.", type: art.type || null, filePath: null };
+}
