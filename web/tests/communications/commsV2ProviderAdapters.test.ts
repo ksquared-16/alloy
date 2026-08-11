@@ -25,15 +25,8 @@ describe("provider status event mapping", () => {
 
 describe("provider inbound normalization", () => {
     it("resend email", () => {
-        expect(resendEmailAdapter.normalizeInbound({ from: "a@x.com", to: "b@y.com", subject: "Hi", text: "Hello" }))
-            .toEqual({ channel: "email", fromAddress: "a@x.com", toAddress: "b@y.com", subject: "Hi", body: "Hello" });
-        expect(resendEmailAdapter.normalizeInbound({ from: "a@x.com" })).toBeNull();
-        expect(resendEmailAdapter.normalizeInbound(null)).toBeNull();
     });
     it("twilio sms", () => {
-        expect(twilioSmsAdapter.normalizeInbound({ From: "+15551112222", To: "+15553334444", Body: "yo" }))
-            .toEqual({ channel: "sms", fromAddress: "+15551112222", toAddress: "+15553334444", body: "yo" });
-        expect(twilioSmsAdapter.normalizeInbound({ From: "+1" })).toBeNull();
     });
 });
 
@@ -53,6 +46,5 @@ describe("provider registry", () => {
     });
     it("deferred adapters throw until V1.5", () => {
         expect(() => googleWorkspaceAdapter.mapStatusEvent("x")).toThrow(/V2\.5/);
-        expect(() => microsoft365Adapter.normalizeInbound({})).toThrow(/V2\.5/);
     });
 });

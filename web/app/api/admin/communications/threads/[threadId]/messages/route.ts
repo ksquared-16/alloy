@@ -41,7 +41,11 @@ export async function GET(
     const { data: msgs, error: mErr } = await supabase
         .from("communication_messages")
         .select(
-            "id, created_at, direction, channel, status, body, from_address, to_address, provider, sent_at, provider_message_id, metadata, delivered_at"
+            // `subject` is email truth: an SMS has none, but for an email
+            // conversation it is the first thing an operator reads. It was absent
+            // from this projection, so the Command Center rendered email bodies
+            // with no subject at all — invisible until the browser proved it.
+            "id, created_at, direction, channel, status, subject, body, from_address, to_address, provider, sent_at, provider_message_id, metadata, delivered_at"
         )
         .eq("thread_id", threadId)
         .eq("org_id", ctx.orgId)

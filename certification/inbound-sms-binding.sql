@@ -65,3 +65,50 @@ where o.slug = 'northwind-early-learning'
 on conflict (id) do update set
     phone = '+15557770002',
     updated_at = now();
+
+-- Inbound EMAIL receiving identity for the certification tenant.
+--
+-- Same reasoning as the SMS destination above: inbound routing asks which
+-- organization owns the address the mail was received for, and the canonical seed
+-- declares none, so without this every certification email would quarantine as
+-- org-less and prove only the quarantine.
+--
+-- The unique index on (provider, channel, lower(inbound_address)) has no org_id,
+-- so this address can only ever belong to one tenant.
+insert into public.communication_provider_bindings
+    (org_id, channel, provider, scope, inbound_address, display_label, status, is_primary, secret_ref, config)
+select
+    o.id, 'email', 'resend', 'org',
+    'hello@northwind-cert.invalid',
+    'Certification inbound email',
+    'active', true, 'env:RESEND_API_KEY', '{"from_email": "hello@northwind-cert.invalid"}'::jsonb
+from public.orgs o
+where o.slug = 'northwind-early-learning'
+on conflict (provider, channel, lower(inbound_address)) where inbound_address is not null
+do update set status = 'active', is_primary = true, updated_at = now();
+
+-- A DISABLED receiving address, so certification can prove that a configured but
+-- switched-off binding quarantines rather than delivering into a tenant that has
+-- not turned receiving on.
+insert into public.communication_provider_bindings
+    (org_id, channel, provider, scope, inbound_address, display_label, status, is_primary, secret_ref, config)
+select
+    o.id, 'email', 'resend', 'org',
+    'disabled@northwind-cert.invalid',
+    'Certification disabled inbound email',
+    'disabled', false, 'env:RESEND_API_KEY', '{}'::jsonb
+from public.orgs o
+where o.slug = 'northwind-early-learning'
+on conflict (provider, channel, lower(inbound_address)) where inbound_address is not null
+do update set status = 'disabled', updated_at = now();
+
+-- The same two certification people also share an EMAIL address, so the
+-- shared-household case can be certified on email as it is on SMS. Without it the
+-- ambiguity branch is unreachable and certification would report it green having
+-- never entered it.
+update public.persons
+set email = 'cert.shared@northwind.invalid', updated_at = now()
+where id in (
+    '00000000-0000-4000-8000-900000000001',
+    '00000000-0000-4000-8000-900000000002'
+);
