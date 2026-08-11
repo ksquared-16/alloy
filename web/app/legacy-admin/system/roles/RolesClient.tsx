@@ -4,6 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import {
+    AUTHORITY_SET_LOADING,
+    type AuthoritySetLoad,
+    authoritySetFailed,
+    authoritySetIsWritable,
+    authoritySetKeysForDisplay,
+    authoritySetLoaded,
+    authoritySetWriteRefusal,
+} from "@/lib/access/authoritySetLoad";
 
 type RoleRow = {
     role_key: string;
@@ -38,7 +47,17 @@ export default function RolesClient({ embedded }: { embedded?: boolean }) {
     const [selectedRoleKey, setSelectedRoleKey] = useState<string | null>(null);
     const [roleLabel, setRoleLabel] = useState("");
     const [roleActive, setRoleActive] = useState(true);
-    const [grantKeys, setGrantKeys] = useState<Set<string>>(new Set());
+    /** W-56. The grant set is a LOAD — see `lib/access/authoritySetLoad`. Unknown is not empty. */
+    const [grantLoad, setGrantLoad] = useState<AuthoritySetLoad>(AUTHORITY_SET_LOADING);
+    const grantKeys = authoritySetKeysForDisplay(grantLoad);
+    /**
+     * Editing a not-known set would manufacture a confident answer out of a failed read: the
+     * operator ticks one box and the other keys become a deliberate-looking empty set. The three
+     * mutators below are unchanged; they simply cannot reach a set that was never loaded.
+     */
+    const setGrantKeys = (update: (prev: Set<string>) => Set<string>) => {
+        setGrantLoad((prev) => (prev.status === "loaded" ? authoritySetLoaded(update(new Set(prev.keys))) : prev));
+    };
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [newRoleOpen, setNewRoleOpen] = useState(false);
@@ -71,15 +90,26 @@ export default function RolesClient({ embedded }: { embedded?: boolean }) {
         }
     }, []);
 
+    /**
+     * W-56 / `T-22`, `S-11`. This surface carried the SAME total-revocation chain as the canonical
+     * Access chapter, and swallowed its error entirely: a failed grants read cleared the set, the
+     * grid rendered all-*None*, and `handleSave` `PUT`s `Array.from(grantKeys)` — which the route
+     * implements as delete-all-then-skip-insert. `01…§52` named only the canonical surface; the
+     * `S-11` lock is stated over every authority surface, and this is what it found.
+     *
+     * `W-59` still owns retiring this editor. Until it does, the page is live, and a live total
+     * revocation is not left in place on the grounds that a later workstream will delete the file.
+     */
     const fetchGrants = useCallback(async (role_key: string) => {
+        setGrantLoad(AUTHORITY_SET_LOADING);
         try {
             const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(role_key)}`);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json.error as string) || "Failed to load grants");
             const keys = (json as { permission_keys?: string[] }).permission_keys ?? [];
-            setGrantKeys(new Set(keys));
+            setGrantLoad(authoritySetLoaded(keys));
         } catch (e) {
-            setGrantKeys(new Set());
+            setGrantLoad(authoritySetFailed(e));
         }
     }, []);
 
@@ -93,7 +123,8 @@ export default function RolesClient({ embedded }: { embedded?: boolean }) {
         if (!selectedRoleKey) {
             setRoleLabel("");
             setRoleActive(true);
-            setGrantKeys(new Set());
+            // No role selected is not a failed read: there is nothing to know, and nothing to save.
+            setGrantLoad(authoritySetLoaded([]));
             return;
         }
         const role = roles.find((r) => r.role_key === selectedRoleKey);
@@ -136,6 +167,15 @@ export default function RolesClient({ embedded }: { embedded?: boolean }) {
 
     const handleSave = async () => {
         if (!selectedRoleKey || !canMutate) return;
+        /**
+         * W-56 / `S-11`. In front of the write, not only on the button. This save `PUT`s the grant
+         * set, and the route replaces the role's grants with whatever it receives — so an unknown
+         * set must never reach it.
+         */
+        if (!authoritySetIsWritable(grantLoad)) {
+            setSaveError(authoritySetWriteRefusal(grantLoad));
+            return;
+        }
         setSaving(true);
         setSaveError(null);
         try {
@@ -344,12 +384,18 @@ export default function RolesClient({ embedded }: { embedded?: boolean }) {
                                         );
                                     })}
                                 </div>
+                                {/* W-56: an unknown grant set says so, and cannot be saved over. */}
+                                {grantLoad.status === "failed" && (
+                                    <p role="alert" className="mt-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+                                        {authoritySetWriteRefusal(grantLoad)}
+                                    </p>
+                                )}
                                 {canMutate && (
                                     <div className="mt-6 flex items-center gap-4">
                                         <button
                                             type="button"
                                             onClick={handleSave}
-                                            disabled={saving}
+                                            disabled={saving || !authoritySetIsWritable(grantLoad)}
                                             className="rounded-md bg-alloy-blue px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                                         >
                                             {saving ? "Saving…" : "Save"}

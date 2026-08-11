@@ -44,15 +44,29 @@ export default function UsersClient() {
     fetchUsers();
   }, [fetchUsers]);
 
+  /**
+   * W-54 / `I-34`ᴬ. This surface collapses a membership to one value and cannot render a set, so
+   * the route refuses a replacement that would delete a role it never showed (HTTP 409). The
+   * refusal has to be reported: `if (res.ok) fetchUsers()` discarded every non-2xx silently, which
+   * would leave the operator looking at a changed dropdown and an unchanged database. A surface
+   * that cannot express the fact must not be able to delete it — and must not pretend it did.
+   */
   const handleRoleChange = async (userId: string, role: string) => {
     setRoleLoadingId(userId);
+    setError(null);
     try {
       const res = await fetch(`/api/admin/users/${userId}/role`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
       });
-      if (res.ok) fetchUsers();
+      if (res.ok) {
+        fetchUsers();
+        return;
+      }
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(json.error ?? "Failed to update role");
+      fetchUsers();
     } finally {
       setRoleLoadingId(null);
     }
@@ -61,12 +75,23 @@ export default function UsersClient() {
   const handleSendReset = async (u: UserRow) => {
     if (!u.email) return;
     setResetLoadingId(u.user_id);
+    setError(null);
     try {
-      await fetch("/api/admin/send-password-reset", {
+      /**
+       * `S-11`. The response was never read, so every failure reported success. This is not
+       * hypothetical here: `W49-F1` records that this route enforces `ctx.role !== "admin"` while
+       * the surface offers the control to any holder of `settings.users_roles` — so a grant-holder
+       * who is not org admin gets a 403 and, until now, saw a button that appeared to work.
+       */
+      const res = await fetch("/api/admin/send-password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: u.email }),
       });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(json.error ?? "Failed to send the password reset email");
+      }
     } finally {
       setResetLoadingId(null);
     }
@@ -75,6 +100,7 @@ export default function UsersClient() {
   const handleRemoveConfirm = async () => {
     if (!removeTarget) return;
     setRemoveLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/admin/users/${removeTarget.user_id}/remove`, {
         method: "POST",
@@ -82,6 +108,11 @@ export default function UsersClient() {
       if (res.ok) {
         setRemoveTarget(null);
         fetchUsers();
+      } else {
+        // `S-11`. A membership removal that failed must not leave the operator believing it
+        // succeeded — this is the revocation path, where a false success is the dangerous direction.
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(json.error ?? "Failed to remove this member");
       }
     } finally {
       setRemoveLoading(false);

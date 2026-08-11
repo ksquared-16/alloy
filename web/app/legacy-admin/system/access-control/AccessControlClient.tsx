@@ -51,14 +51,22 @@ export default function AccessControlClient() {
         }
     }, []);
 
+    /**
+     * W-56 / `S-11`. Both failure paths were silent: `!res.ok` returned without a word, and the
+     * `catch` emptied the list. An empty role picker then reads as *"this org defines no roles"*
+     * rather than *"we could not find out"* — `IA-R1`'s manufactured-certainty shape, and the same
+     * conflation of unknown with empty that made the grants read an S3 on the sibling surface.
+     * This list is not written back, so it is a truthfulness defect rather than a revocation one.
+     */
     const fetchRoles = useCallback(async () => {
         try {
             const res = await fetch("/api/admin/rbac/roles");
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) return;
+            if (!res.ok) throw new Error((json.error as string) || "Failed to load roles");
             const list = (json as { roles?: RoleOption[] }).roles ?? [];
             setRoles(list.filter((r) => r.is_active));
-        } catch {
+        } catch (e) {
+            setError((e as Error).message);
             setRoles([]);
         }
     }, []);
@@ -70,15 +78,27 @@ export default function AccessControlClient() {
         Promise.all([fetchUsers(), fetchRoles()]).finally(() => setLoading(false));
     }, [activeTab, fetchUsers, fetchRoles]);
 
+    /**
+     * W-54 / `I-34`ᴬ. See the note on the same handler in `legacy-admin/users/UsersClient.tsx`:
+     * this surface collapses the membership, the route now refuses a replacement that would delete
+     * an unshown role, and a discarded non-2xx would render as a success that wrote nothing.
+     */
     const handleRoleChange = async (userId: string, role: string) => {
         setRoleLoadingId(userId);
+        setError(null);
         try {
             const res = await fetch(`/api/admin/users/${userId}/role`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ role }),
             });
-            if (res.ok) fetchUsers();
+            if (res.ok) {
+                fetchUsers();
+                return;
+            }
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            setError(json.error ?? "Failed to update role");
+            fetchUsers();
         } finally {
             setRoleLoadingId(null);
         }
@@ -87,12 +107,18 @@ export default function AccessControlClient() {
     const handleSendReset = async (u: UserRow) => {
         if (!u.email) return;
         setResetLoadingId(u.user_id);
+        setError(null);
         try {
-            await fetch("/api/admin/send-password-reset", {
+            /** `S-11` — see the same handler in `legacy-admin/users/UsersClient.tsx` (`W49-F1`). */
+            const res = await fetch("/api/admin/send-password-reset", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: u.email }),
             });
+            if (!res.ok) {
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                setError(json.error ?? "Failed to send the password reset email");
+            }
         } finally {
             setResetLoadingId(null);
         }
@@ -101,11 +127,16 @@ export default function AccessControlClient() {
     const handleRemoveConfirm = async () => {
         if (!removeTarget) return;
         setRemoveLoading(true);
+        setError(null);
         try {
             const res = await fetch(`/api/admin/users/${removeTarget.user_id}/remove`, { method: "POST" });
             if (res.ok) {
                 setRemoveTarget(null);
                 fetchUsers();
+            } else {
+                /** `S-11`. A failed revocation must not read as a completed one. */
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                setError(json.error ?? "Failed to remove this member");
             }
         } finally {
             setRemoveLoading(false);

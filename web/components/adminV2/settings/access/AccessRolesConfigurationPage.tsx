@@ -35,6 +35,15 @@ import {
     type PermissionGridLevel,
 } from "@/lib/admin/permissionGrid";
 import { accessWorkspaceChapterHref } from "@/lib/access/accessChapterRoutes";
+import {
+    AUTHORITY_SET_LOADING,
+    type AuthoritySetLoad,
+    authoritySetFailed,
+    authoritySetIsWritable,
+    authoritySetKeysForDisplay,
+    authoritySetLoaded,
+    authoritySetWriteRefusal,
+} from "@/lib/access/authoritySetLoad";
 import { heldRoleKeys, memberHoldsRole } from "@/lib/access/memberRoleAssignment";
 
 type RoleTab = "overview" | "permissions" | "users" | "experience" | "history";
@@ -68,7 +77,14 @@ export default function AccessRolesConfigurationPage() {
     const [roles, setRoles] = useState<RoleRow[]>([]);
     const [members, setMembers] = useState<MemberRow[]>([]);
     const [permissions, setPermissions] = useState<PermissionRow[]>([]);
-    const [grantKeys, setGrantKeys] = useState<Set<string>>(new Set());
+    /**
+     * W-56 / `T-22`. The grants read is a LOAD, not a set. It was `Set<string>`, and both failure
+     * paths collapsed to `new Set()` — so an unreadable role and a role with no grants were the same
+     * value, the grid rendered all-*None* for both, and Save wrote the empty set over the real one.
+     */
+    const [grantLoad, setGrantLoad] = useState<AuthoritySetLoad>(AUTHORITY_SET_LOADING);
+    const grantKeys = useMemo(() => authoritySetKeysForDisplay(grantLoad), [grantLoad]);
+    const grantWriteRefusal = authoritySetWriteRefusal(grantLoad);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
@@ -148,17 +164,25 @@ export default function AccessRolesConfigurationPage() {
         [roles, selectedRoleKey],
     );
 
+    /**
+     * W-56. Every exit from this function sets a state that says what happened. The two that used to
+     * say nothing — `!res.ok` and `catch` — now record a FAILED load, which disables the save and
+     * renders. `T-22`: *"a failed read becomes a silent total revocation on the next save."*
+     */
     const fetchGrants = useCallback(async (roleKey: string) => {
+        setGrantLoad(AUTHORITY_SET_LOADING);
         try {
             const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(roleKey)}`);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-                setGrantKeys(new Set());
+                setGrantLoad(
+                    authoritySetFailed(typeof json.error === "string" ? json.error : "Failed to load permissions."),
+                );
                 return;
             }
-            setGrantKeys(new Set((json as { permission_keys?: string[] }).permission_keys ?? []));
-        } catch {
-            setGrantKeys(new Set());
+            setGrantLoad(authoritySetLoaded((json as { permission_keys?: string[] }).permission_keys ?? []));
+        } catch (err) {
+            setGrantLoad(authoritySetFailed(err));
         }
     }, []);
 
@@ -166,7 +190,8 @@ export default function AccessRolesConfigurationPage() {
         if (!selected) {
             setRoleLabel("");
             setRoleActive(true);
-            setGrantKeys(new Set());
+            // No role selected is not a failed read: there is nothing to know, and nothing to save.
+            setGrantLoad(authoritySetLoaded([]));
             return;
         }
         setRoleLabel(selected.role_label);
@@ -265,6 +290,17 @@ export default function AccessRolesConfigurationPage() {
 
     const saveGrants = async () => {
         if (!selected) return;
+        /**
+         * W-56 / `S-11`. The guard sits in front of the write, not only on the button. `IA-7` made
+         * this exact argument in this exact chapter: a `disabled` attribute is a presentation fact,
+         * and a save reachable from a stale render or a programmatic click would still perform the
+         * total revocation. The refusal is stated to the operator rather than failing silently.
+         */
+        if (!authoritySetIsWritable(grantLoad)) {
+            setMessage(null);
+            setError(grantWriteRefusal);
+            return;
+        }
         setGrantsSaving(true);
         setMessage(null);
         setError(null);
@@ -284,10 +320,17 @@ export default function AccessRolesConfigurationPage() {
         }
     };
 
+    /**
+     * W-56. An edit against a not-known set would manufacture a `loaded` state out of a failed read
+     * — the operator would touch one radio and the other 31 keys would become a confident empty set.
+     * Editing is refused for the same reason saving is.
+     */
     const setGridLevel = (rowId: string, level: PermissionGridLevel) => {
         const row = gridRows.find((r) => r.id === rowId);
         if (!row) return;
-        setGrantKeys((prev) => applyGridRowSelection({ row, level, granted: prev }));
+        if (grantLoad.status !== "loaded") return;
+        const granted = grantLoad.keys;
+        setGrantLoad(authoritySetLoaded(applyGridRowSelection({ row, level, granted: new Set(granted) })));
     };
 
     /** Everyone who holds this role — the same predicate as the count, so the two cannot disagree. */
@@ -512,6 +555,21 @@ export default function AccessRolesConfigurationPage() {
                                         </div>
                                     : tab === "permissions" ?
                                         <ConfigWorkspaceCard testId="access-role-permissions" title="Permissions">
+                                            {/**
+                                             * W-56 / `T-22`. A failed grants read used to render as a
+                                             * legitimate all-*None* grid. It now says so, in place, and the
+                                             * save below is disabled — an unknown authority state must never
+                                             * be presented as an empty one.
+                                             */}
+                                            {grantLoad.status === "failed" && (
+                                                <p
+                                                    data-testid="access-role-permissions-load-error"
+                                                    role="alert"
+                                                    className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800"
+                                                >
+                                                    {grantWriteRefusal}
+                                                </p>
+                                            )}
                                             <p className="text-sm text-alloy-midnight/55">
                                                 No access, Read, or Write/Manage per capability area. Write includes Read.
                                                 Every area below is a capability the platform defines — this grid is
@@ -647,16 +705,16 @@ export default function AccessRolesConfigurationPage() {
                                                 </table>
                                             </div>
                                             {/*
-                                              * The grid is now a projection, so a failed catalog read renders an
-                                              * empty grid rather than a stale one. H2 keeps that non-destructive —
-                                              * an untouched save PUTs the grants exactly as fetched — but an
-                                              * operator must not be invited to save a surface showing nothing.
-                                              * The full S-11 remedy (surface the read failure, disable on unknown
-                                              * state) is T-22's and is not taken here.
+                                              * The grid is a projection, so a failed CATALOG read renders an empty
+                                              * grid rather than a stale one, and H2 keeps that non-destructive.
+                                              * W-56 / T-22 now takes the other half — the failed GRANTS read. The
+                                              * save is disabled whenever the grant set is not known, which is the
+                                              * S-11 remedy this comment previously recorded as not taken. The
+                                              * button is the second guard; the first is in `saveGrants` itself.
                                               */}
                                             <ConfigurationPrimaryButton
                                                 className="mt-3"
-                                                disabled={grantsSaving || gridRows.length === 0}
+                                                disabled={grantsSaving || gridRows.length === 0 || !authoritySetIsWritable(grantLoad)}
                                                 onClick={() => void saveGrants()}
                                                 data-testid="access-role-permissions-save"
                                             >
