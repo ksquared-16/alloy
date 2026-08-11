@@ -155,11 +155,29 @@ export async function POST(request: NextRequest) {
             const stages = bpProcess ? activeStagesForProcess(bpProcess) : [];
             const childViews: WorkViewConfigV1Stored[] = [];
             const laneViews: WorkViewConfigV1Stored[] = [];
+            const unknownViews: WorkViewConfigV1Stored[] = [];
             for (const v of requestedViews) {
                 const grain = resolveLensRowGrain(v, stages);
-                // Resolved, never guessed: a lens whose grain will not resolve keeps the existing lane
-                // behaviour rather than being assumed into either path.
-                (grain.ok && grain.grain === "child" ? childViews : laneViews).push(v);
+                // Grain must resolve the same way for pills and rows. Ambiguous / refused lenses
+                // must NOT fall through to lane population counts (pill=1 / rows=0).
+                if (!grain.ok) {
+                    unknownViews.push(v);
+                } else if (grain.grain === "child") {
+                    childViews.push(v);
+                } else {
+                    laneViews.push(v);
+                }
+            }
+
+            const unknownTotals = new Map<string, TotalOut>();
+            for (const view of unknownViews) {
+                unknownTotals.set(view.id, {
+                    workUnitId: group.workUnitId,
+                    queueKey: group.queueKey,
+                    workViewId: view.id,
+                    count: null,
+                    known: false,
+                });
             }
 
             const childTotals = new Map<string, TotalOut>();
@@ -181,11 +199,12 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // Every requested view is a child lens → the opportunity lane is never read.
+            // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
             if (laneViews.length === 0) {
                 return [...group.viewIds].map(
                     (workViewId) =>
-                        childTotals.get(workViewId) ?? {
+                        childTotals.get(workViewId) ??
+                        unknownTotals.get(workViewId) ?? {
                             workUnitId: group.workUnitId,
                             queueKey: group.queueKey,
                             workViewId,
@@ -265,6 +284,8 @@ export async function POST(request: NextRequest) {
             return [...group.viewIds].map((workViewId) => {
                 const child = childTotals.get(workViewId);
                 if (child) return child;
+                const unknown = unknownTotals.get(workViewId);
+                if (unknown) return unknown;
                 const t = totals[workViewId];
                 return {
                     workUnitId: group.workUnitId,

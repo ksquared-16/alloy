@@ -21,6 +21,13 @@ export const OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS: Record<string, string> = {
     new_inquiry: "New Lead",
     contact_attempted: "Contact Attempted",
     tour_scheduled: "Tour Scheduled",
+    lead: "Lead",
+    waitlist: "Waitlist",
+    waitlisted: "Waitlist",
+    on_waitlist: "Waitlist",
+    tour: "Tour",
+    assignment: "Assignment",
+    enrolled: "Enrolled",
 };
 
 const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
@@ -31,9 +38,9 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     intake_case_operationalized: "Lead ready in pipeline",
     intake_case_review_required: "Intake review required",
     intake_case_linked: "Intake linked to family",
-    opportunity_status_changed: "Status changed",
-    entity_status_changed: "Status changed",
-    child_lifecycle_status_changed: "Child lifecycle changed",
+    opportunity_status_changed: "Moved",
+    entity_status_changed: "Moved",
+    child_lifecycle_status_changed: "Moved",
     message_received: "Message received",
     message_sent: "Message sent",
     message_delivered: "Message delivered",
@@ -72,7 +79,20 @@ export function formatOpportunityActivityTimelineEvent(event: ActivityTimelineEv
             : {};
     const base = formatActivityTimelineEvent(event, opportunityActivityTimelineOptions);
     const intakeDetail = resolveFormIntakeActivityDetail(event.event_type, payload);
-    return { ...base, detail: intakeDetail ?? base.detail };
+    const detail = intakeDetail ?? base.detail;
+    const eventType = (event.event_type ?? "").trim().toLowerCase();
+    // Stage/lifecycle movements: prefer the canonical transition as the primary label
+    // ("Lead → Waitlist") so What's Next and Activity tab share one operator-facing string.
+    if (
+        (eventType === "opportunity_status_changed"
+            || eventType === "entity_status_changed"
+            || eventType === "child_lifecycle_status_changed")
+        && detail
+        && detail.includes("→")
+    ) {
+        return { ...base, title: detail, detail: null };
+    }
+    return { ...base, detail };
 }
 
 function resolveFormIntakeActivityDetail(

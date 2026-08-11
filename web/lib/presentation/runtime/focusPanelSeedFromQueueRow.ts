@@ -27,9 +27,12 @@ function rowAnswersToSubject(row: QueueRowModel, subjectId: string): boolean {
 }
 
 /**
- * Build the instant-identity seed for one queue row. Opportunity rows only (the Focus Panel
- * is the opportunity record surface); other grains return null. Returns null when the row has
- * no frozen context to read an identity from — the header then keeps its generic fallback.
+ * Build the instant-identity seed for one queue row. Opportunity + child rows (Focus Panel
+ * Settlement is opportunity-shaped; child Attention still seeds the pending header from the row).
+ * Returns null when the row has no frozen context to read an identity from.
+ *
+ * Note: QueueRowModel.entityType stays `"opportunity"` for Enrollment process rows (including
+ * child-grain subjects). Child identity is detected from `context.row_subject.subject_type`.
  */
 export function focusPanelSeedFromQueueRow(
     row: QueueRowModel,
@@ -41,18 +44,26 @@ export function focusPanelSeedFromQueueRow(
 
     const rowConfig = row.rowConfig ?? defaultRowConfig ?? undefined;
     const focus = row.focus;
+    const isChildSubject =
+        context.row_subject?.subject_type === "child"
+        || context.row_subject?.subject_type === "candidate";
 
     const title =
         resolveCompactSlotDisplay("subject", context, rowConfig?.subject, focus)?.trim() ||
         focus?.primary.display_name?.trim() ||
-        queueRowSubjectDisplayName(context).trim();
+        queueRowSubjectDisplayName(context).trim() ||
+        (isChildSubject ? context.case_context?.display_name?.trim() : null) ||
+        "";
     if (!title) return null;
 
     // The compact card carries ONE status/stage pill (the `status` slot). Seed it as the header's
     // status chip only. The loading header must NOT carry the primary contact's phone/email (Kelly:
     // it produced a second header variant that flickered against the resolved one) — the identity is
     // the family name + status; contact details belong to the settled record surface, not the seed.
-    const statusLabel = resolveCompactSlotDisplay("status", context, rowConfig?.status, focus)?.trim() || null;
+    const statusLabel =
+        resolveCompactSlotDisplay("status", context, rowConfig?.status, focus)?.trim() ||
+        context.row_stage?.trim() ||
+        null;
 
     return { title, statusLabel };
 }

@@ -56,9 +56,10 @@ export function WorkUnitSurfaceBodyFromModel({
         model.workViews.find((view) => view.isActive) ??
         model.workViews.find((view) => view.id === model.activeWorkViewId) ??
         null;
-    // Selection already lives on the committed model — drive the shared header Focus state
-    // without touching Focus Panel payload, reveal, or VM authority.
-    const headerDensity = model.selectedRecordId ? "focus" : "browse";
+    // Workspace shell anatomy is STABLE across Work Views and grains (family / child / candidate).
+    // Selected subject identity belongs in the Focus Panel — never demote Enrollment/Pipeline chrome
+    // into "focus" density when a row is selected (that made Waitlist look like a different page).
+    const headerDensity = "browse" as const;
     return (
         <>
             <BosWorkspaceScopeSync

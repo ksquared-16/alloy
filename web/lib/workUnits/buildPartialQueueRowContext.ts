@@ -334,6 +334,8 @@ function buildRelatedSubjectsSummary(
 
 /**
  * Process / lifecycle stage label for the queue row Stage field.
+ * Prefer Effective Process Position rollup (participant stages) when attached —
+ * family inventory must not show raw opportunity stage as the sole current position.
  * Prefer the record's stage_key (or membership stage_key) — never the Work View /
  * queue lane label (e.g. "New Leads"), which is a filter surface, not the stage.
  */
@@ -341,6 +343,22 @@ function resolveProcessStageLabel(
     row: Record<string, unknown>,
     queue: PartialQueueRowContextQueueMeta,
 ): string {
+    const eppRollup = trimOrNull(row._effective_stage_rollup_label);
+    if (eppRollup) {
+        // Title-case snake tokens inside "waitlist · lead" / keep "N active stages".
+        if (/\d+\s+active stages/i.test(eppRollup)) return eppRollup;
+        return eppRollup
+            .split(" · ")
+            .map((part) => {
+                const t = part.trim();
+                if (!t) return t;
+                if (/^[a-z0-9_]+$/i.test(t)) return humanizeSnakeCaseToken(t);
+                return t;
+            })
+            .filter(Boolean)
+            .join(" · ");
+    }
+
     const fromRow =
         trimOrNull(row._lifecycle_stage_title)
         ?? trimOrNull(row.stage_label)
@@ -386,8 +404,30 @@ function mergePlacementWithOpportunityFallback(
     fromChildren: SubjectPlacementContext | undefined,
     row: Record<string, unknown>,
 ): SubjectPlacementContext | undefined {
+    const eppLocation = trimOrNull(row._effective_location_rollup_label);
     const fromOpportunity = resolveOpportunityPlacementFallback(row);
-    if (!fromChildren) return fromOpportunity;
+    if (!fromChildren) {
+        if (eppLocation) {
+            return {
+                location_id: fromOpportunity?.location_id ?? null,
+                location_label: eppLocation,
+                program_key: null,
+                program_label: null,
+                room_id: null,
+                room_label: null,
+                schedule_key: null,
+                schedule_label: null,
+            };
+        }
+        return fromOpportunity;
+    }
+    if (eppLocation) {
+        return {
+            ...fromChildren,
+            location_label: eppLocation,
+            location_id: fromChildren.location_id ?? fromOpportunity?.location_id ?? null,
+        };
+    }
     if (fromChildren.location_id || fromChildren.location_label) return fromChildren;
     if (!fromOpportunity) return fromChildren;
     return {

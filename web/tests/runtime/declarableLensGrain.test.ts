@@ -68,10 +68,12 @@ describe("derivation is unchanged for a stage-scoped lens", () => {
         if (!r.ok) expect(r.reason).toMatch(/grain-ambiguous/);
     });
 
-    it("an UNDECLARED stage-independent lens still refuses — that is the blocking fact this fixes", () => {
+    it("an UNDECLARED stage-independent lens defaults to family (process inventory base)", () => {
+        // Child inventory must declare row_grain_v1: "child". Empty-filter inventory without a
+        // declaration defaults to family (process case population). Stage-filtered views (e.g.
+        // Stage equals Lead) derive grain from included stages — they are never empty-filter.
         const r = resolveLensRowGrain(view({}), STAGES);
-        expect(r.ok).toBe(false);
-        if (!r.ok) expect(r.reason).toMatch(/grain-ambiguous/);
+        expect(r).toEqual({ ok: true, grain: "family" });
     });
 });
 

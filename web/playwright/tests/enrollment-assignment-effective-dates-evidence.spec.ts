@@ -575,9 +575,12 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         };
         writeJson("quote-generate.json", { status: quoteRes.status(), quoteJson });
 
-        // Prefer UI Generate Quote when control present
+        // Prefer UI tuition embed when present (legacy Generate Quote button retired)
+        const tuitionEmbed = page.locator("[data-assignment-tuition-embed='true']").first();
         const genBtn = page.locator("[data-testid='assignment-generate-quote']").first();
-        if ((await genBtn.count()) > 0) {
+        if ((await tuitionEmbed.count()) > 0) {
+            await snap(page, "09-tuition-embed-ui");
+        } else if ((await genBtn.count()) > 0) {
             await genBtn.click();
             await page.waitForTimeout(2000);
             await snap(page, "09-quote-generated-ui");
@@ -587,11 +590,11 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         await openFirstChildAssignments(page);
         await page.waitForTimeout(1500);
         await snap(page, "10-quote-after-reload");
-        const commercialText = await page.locator("[data-assignment-offer='true']").first().innerText().catch(() => "");
+        const commercialText = await page.locator("[data-assignment-offer='true'], [data-assignment-tuition-embed='true'], [data-schedule-billing='true']").first().innerText().catch(() => "");
         const quotePersisted =
             /quote|\$|tuition|plan|Generated/i.test(commercialText)
             || Boolean(quoteJson.snapshot)
-            || (await page.locator("[data-assignment-field='quote'], [data-assignment-quote-label='true']").count()) > 0;
+            || (await page.locator("[data-assignment-field='quote'], [data-assignment-quote-label='true'], [data-assignment-tuition-embed='true']").count()) > 0;
 
         // Ledger consequence probe — opportunity billing/ledger endpoints if present
         const ledgerProbes: Array<{ url: string; status: number; snippet: string }> = [];
@@ -612,7 +615,9 @@ test.describe("Enrollment Assignment browser certification (slot 3)", () => {
         mark(
             10,
             "Select valid tuition plan and generate quote",
-            quoteRes.ok() || (await genBtn.count()) > 0 ? (quoteRes.ok() ? "pass" : "partial") : "fail",
+            quoteRes.ok() || (await tuitionEmbed.count()) > 0 || (await genBtn.count()) > 0
+                ? (quoteRes.ok() ? "pass" : "partial")
+                : "fail",
             quoteRes.ok()
                 ? `snapshot=${quoteJson.snapshot?.offering_label ?? quoteJson.snapshot?.amount_cents ?? "ok"}`
                 : `quote status ${quoteRes.status()} ${quoteJson.error ?? ""}`,

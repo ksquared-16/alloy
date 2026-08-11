@@ -361,7 +361,7 @@ describe("resolveCompactSlotDisplay", () => {
                 },
             },
         };
-        expect(resolveCompactSlotDisplay("groupCount", ctx, slots, null)).toBe("Lennon · 2y, Wrigley · 3m");
+        expect(resolveCompactSlotDisplay("groupCount", ctx, slots, null)).toBe("Lennon (2y), Wrigley (3m)");
     });
 
     it("renders children collection field with configured presentation", () => {

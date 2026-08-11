@@ -176,6 +176,10 @@ opens its own work view, evaluates its own predicates, and shows its own count. 
   filters/relabels existing `queue_definition` lanes); converting it to render every configured Work View
   with its own predicate-derived count is the follow-up, tracked with the Stage roll-up modeling.
 
+### Work View draft vs published labels
+
+Work View authoring **Save** persists draft configuration only. Operator-facing nav pills, queue labels, and catch-all cohort copy come from the **published** Business Process revision. After editing Work Views, operators must use **Apply changes** on the publication bar (`BusinessProcessPublicationBar`) before live runtime labels update. Runtime must not invent substitute labels when published config is authoritative.
+
 ### Operational Projection — one source of runtime truth
 
 Every operational surface must agree because they derive from **one projection**, not from independent

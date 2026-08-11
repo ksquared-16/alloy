@@ -90,6 +90,8 @@ export function isWorkViewCatchAll(
  * Include-all Work Views (empty `filters_v1`) must resolve on the department aggregate host
  * and all-records lane — not a stage-specific `compat_queue_key`. Strip erroneous bindings at
  * load time so runtime counts/rows and pill routing agree with predicate-only semantics.
+ *
+ * Operator-configured labels are NEVER rewritten here — published Work View label is authoritative.
  */
 export function normalizeCatchAllWorkViewCompatBinding(
     view: WorkViewConfigV1Stored,

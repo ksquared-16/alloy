@@ -48,6 +48,13 @@ export async function POST(request: NextRequest) {
     if (!opportunityId) {
         return NextResponse.json({ error: "Missing opportunity_id" }, { status: 400 });
     }
+    // Operator must lock in an explicit plan — never silent auto-match on persist.
+    if (!offeringId) {
+        return NextResponse.json(
+            { error: "Select a tuition plan to lock in the quote." },
+            { status: 400 },
+        );
+    }
 
     const supabase = createAdminClient();
 

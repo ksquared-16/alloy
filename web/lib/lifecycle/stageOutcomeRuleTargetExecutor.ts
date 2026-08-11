@@ -35,6 +35,7 @@ import {
 } from "@/lib/lifecycle/stageGrainResolution";
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import { emitChildLifecycleStatusChangedEvent } from "@/lib/opportunities/emitChildLifecycleStatusChangedEvent";
+import { emitEvent } from "@/lib/emitEvent";
 // BOUNDARY (platform↔childcare): the generic outcome runtime touches the childcare domain only here,
 // inside the enrolled disposition, gated by the childcare feature flag. Target decoupling is a childcare
 // event subscriber on child_lifecycle_status_changed (deferred — see docs/sprints/archive/07_2026/
@@ -601,17 +602,21 @@ export async function applyStageOutcomeRuleTarget(
 
             const nowIso = new Date().toISOString();
             let undoStageMove: (() => Promise<void>) | undefined;
+            let stageMovePreviousKey: string | null = null;
+            let stageMoveChildId: string | null = null;
             if (subject.journey_segment === "child") {
                 // Authoritative + only writer: the child's process instance owns stage_key.
                 // (The OCM stage_key mirror write was removed — OCM is no longer a runtime dependency
                 // for child movement.)
                 const childId = await resolveChildSubjectId(supabase, orgId, subject);
                 if (!childId) return { error: "Child enrollment track required for move_to_stage" };
+                stageMoveChildId = childId;
                 const priorStage = await readEnrollmentInstanceStageKey(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
                     customerMemberId: childId,
                 });
+                stageMovePreviousKey = priorStage;
                 const pi = await moveEnrollmentInstanceStageByScope(supabase, {
                     orgId,
                     opportunityId: subject.opportunity_id,
@@ -651,17 +656,18 @@ export async function applyStageOutcomeRuleTarget(
                     .eq("id", subject.opportunity_id)
                     .eq("org_id", orgId)
                     .maybeSingle();
+                const prior = priorOpp as {
+                    stage_key?: string | null;
+                    stage_entered_at?: string | null;
+                } | null;
+                stageMovePreviousKey = prior?.stage_key?.trim() || null;
                 const { error } = await supabase
                     .from("opportunities")
                     .update({ stage_key: targetStageKey, stage_entered_at: nowIso, updated_at: nowIso })
                     .eq("id", subject.opportunity_id)
                     .eq("org_id", orgId);
                 if (error) return { error: error.message };
-                if (priorOpp) {
-                    const prior = priorOpp as {
-                        stage_key?: string | null;
-                        stage_entered_at?: string | null;
-                    };
+                if (prior) {
                     undoStageMove = async () => {
                         const { error: undoErr } = await supabase
                             .from("opportunities")
@@ -674,6 +680,58 @@ export async function applyStageOutcomeRuleTarget(
                             .eq("org_id", orgId);
                         if (undoErr) throw new Error(`restore family stage: ${undoErr.message}`);
                     };
+                }
+            }
+
+            // Activity timeline: stage moves historically wrote no workflow_event, so
+            // What's Next / Activity never showed "Lead → Waitlist". Prefer the OCM-scoped
+            // child lifecycle event when the bridge exists (workflows + related activity fetch);
+            // otherwise emit on the opportunity entity so opportunity activity loaders see it.
+            if ((stageMovePreviousKey ?? "").trim() !== targetStageKey) {
+                try {
+                    const ocmBridgeId = subject.opportunity_customer_member_id?.trim() || null;
+                    let emitted = false;
+                    if (subject.journey_segment === "child" && ocmBridgeId) {
+                        const row = await emitChildLifecycleStatusChangedEvent({
+                            supabase,
+                            orgId,
+                            opportunityId: subject.opportunity_id,
+                            opportunityCustomerMemberId: ocmBridgeId,
+                            previousStatusKey: stageMovePreviousKey,
+                            nextStatusKey: targetStageKey,
+                            actorUserId: userId,
+                            source: "stage_operating_plan_v1",
+                            rowGrain: "child",
+                        });
+                        emitted = Boolean(row);
+                    }
+                    if (!emitted) {
+                        await emitEvent({
+                            org_id: orgId,
+                            event_type:
+                                subject.journey_segment === "child"
+                                    ? "child_lifecycle_status_changed"
+                                    : "opportunity_status_changed",
+                            entity_type: "opportunities",
+                            entity_id: subject.opportunity_id,
+                            occurred_at: nowIso,
+                            payload: {
+                                opportunity_id: subject.opportunity_id,
+                                previous_status_key: stageMovePreviousKey,
+                                next_status_key: targetStageKey,
+                                old_status_key: stageMovePreviousKey,
+                                new_status_key: targetStageKey,
+                                source: "stage_operating_plan_v1",
+                                row_grain: subject.journey_segment,
+                                ...(stageMoveChildId ? { customer_member_id: stageMoveChildId } : {}),
+                                ...(ocmBridgeId ? { opportunity_customer_member_id: ocmBridgeId } : {}),
+                                ...(userId ? { actor_user_id: userId } : {}),
+                            },
+                        });
+                    }
+                } catch (e) {
+                    // Do not roll back a completed stage move for activity emission failure.
+                    console.error("[stageOutcomeRuleTargetExecutor] stage move activity event", e);
                 }
             }
 

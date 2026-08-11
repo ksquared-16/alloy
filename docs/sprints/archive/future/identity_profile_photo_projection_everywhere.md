@@ -19,6 +19,12 @@ Operators can upload a child profile photo from Surfaces → context facts, and 
 
 This is a **shared identity projection** gap — not an Assignment-only feature.
 
+### Observed (2026-08, EPP / Waitlist runtime)
+
+Upload persists the durable pointer `persons.metadata.profile_photo_document_id` and returns a **short-lived signed URL** (≤ ~15 minutes). Signed URLs are intentionally **not** written back to `persons.metadata.photo_url`. Focus Panel keeps the signed URL in session/client state, so the face appears immediately after upload — then vanishes on refresh, remount, or expiry.
+
+`resolveProfilePhotosForActor` (mint a fresh actor-scoped URL from the document id) exists and is covered by unit tests, but is **not yet wired** into opportunity / `_inquiry_children` loads (`opportunityEntityRecord` still uses `warmPersonPhotoUrl` against metadata URL keys). Evidence adapters also drop legacy signed URLs on purpose. This is **not** a localhost-only quirk; localhost remounts just make it more visible.
+
 ---
 
 ## Goal

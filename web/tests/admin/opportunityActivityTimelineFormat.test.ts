@@ -11,9 +11,10 @@ import {
 
 describe("opportunityActivityTimelineFormat", () => {
     it("humanizes configured and generic snake_case", () => {
-        expect(humanizeOpportunitySnakeCaseToken("new_inquiry")).toBe("New Inquiry");
+        expect(humanizeOpportunitySnakeCaseToken("new_inquiry")).toBe("New Lead");
         expect(humanizeOpportunitySnakeCaseToken("contact_attempted")).toBe("Contact Attempted");
         expect(humanizeOpportunitySnakeCaseToken("tour_scheduled")).toBe("Tour Scheduled");
+        expect(humanizeOpportunitySnakeCaseToken("waitlist")).toBe("Waitlist");
         expect(humanizeOpportunitySnakeCaseToken("won")).toBe("Won");
     });
 
@@ -33,7 +34,8 @@ describe("opportunityActivityTimelineFormat", () => {
     });
 
     it("titles use friendly labels", () => {
-        expect(getWorkflowActivityEventTitle("opportunity_status_changed")).toBe("Status changed");
+        expect(getWorkflowActivityEventTitle("opportunity_status_changed")).toBe("Moved");
+        expect(getWorkflowActivityEventTitle("child_lifecycle_status_changed")).toBe("Moved");
         expect(getWorkflowActivityEventTitle("action_executed")).toBe("Action completed");
         expect(getWorkflowActivityEventTitle("message_received")).toBe("Message received");
         expect(getWorkflowActivityEventTitle("message_received", { channel: "sms" })).toBe("SMS received");
@@ -47,7 +49,9 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_submitted_for_review")).toBe(
             "Packet submitted for review"
         );
-        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_review_decision")).toBe("Packet review decision");
+        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_review_decision")).toBe(
+            "Packet review decision",
+        );
     });
 
     it("enrollment projection detail uses payload.summary", () => {
@@ -61,7 +65,7 @@ describe("opportunityActivityTimelineFormat", () => {
         const d = getWorkflowActivityEventDetail("opportunity_status_changed", {
             summary: "new_inquiry -> tour_scheduled",
         });
-        expect(d).toBe("New Inquiry → Tour Scheduled");
+        expect(d).toBe("New Lead → Tour Scheduled");
     });
 
     it("detail falls back to humanized status transition", () => {
@@ -69,7 +73,15 @@ describe("opportunityActivityTimelineFormat", () => {
             old_status_key: "new_inquiry",
             new_status_key: "contact_attempted",
         });
-        expect(d).toBe("New Inquiry → Contact Attempted");
+        expect(d).toBe("New Lead → Contact Attempted");
+    });
+
+    it("child lifecycle transitions humanize Lead → Waitlist", () => {
+        const d = getWorkflowActivityEventDetail("child_lifecycle_status_changed", {
+            previous_status_key: "lead",
+            next_status_key: "waitlist",
+        });
+        expect(d).toBe("Lead → Waitlist");
     });
 
     it("actor prefers name then email then Staff", () => {

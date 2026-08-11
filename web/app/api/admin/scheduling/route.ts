@@ -433,7 +433,7 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json({ error: "start_date must be YYYY-MM-DD", code: "invalid_input" }, { status: 400 });
             }
             const dateEnd = addDaysYmd(dateStart, 6);
-            const options = await generatePlacementOptions(supabase, {
+            const { options, fitContext } = await generatePlacementOptions(supabase, {
                 orgId: ctx.orgId,
                 siteLocationId,
                 childAgreementId,
@@ -445,7 +445,13 @@ export async function GET(request: NextRequest) {
             // Echo the resolved program category back so clients that pass none can
             // adopt the server-resolved value for subsequent client-side room filtering
             // (e.g. re-filtering after a Category change without a full refetch).
-            return NextResponse.json({ view, options, range: { dateStart, dateEnd }, programCategoryId });
+            return NextResponse.json({
+                view,
+                options,
+                fitContext,
+                range: { dateStart, dateEnd },
+                programCategoryId,
+            });
         }
 
         if (view === "projection") {

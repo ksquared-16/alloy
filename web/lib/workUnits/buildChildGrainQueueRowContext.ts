@@ -375,14 +375,34 @@ function resolveStageKey(queue: PartialQueueRowContextQueueMeta, activeStageKey:
  */
 function resolveWaitlistContext(
     row: Record<string, unknown>,
-): { position_label?: string | null; wait_since?: string | null } | undefined {
+): {
+    position_label?: string | null;
+    wait_since?: string | null;
+    priority?: number | null;
+    placement_candidate_id?: string | null;
+    can_adjust_placement?: boolean | null;
+} | undefined {
     const proj = row._placement_waitlist_row;
     if (proj == null || typeof proj !== "object" || Array.isArray(proj)) return undefined;
     const p = proj as Record<string, unknown>;
     const positionLabel = trimOrNull(p.runtime_position_label);
     const waitSince = trimOrNull(p.wait_since);
-    if (!positionLabel && !waitSince) return undefined;
-    return { position_label: positionLabel, wait_since: waitSince };
+    const candidateId =
+        trimOrNull(p.placement_candidate_id) ?? trimOrNull(row.placement_candidate_id);
+    const priorityV2 = p.placement_priority_v2;
+    const score =
+        priorityV2 != null && typeof priorityV2 === "object" && !Array.isArray(priorityV2)
+            && typeof (priorityV2 as { score?: unknown }).score === "number"
+            ? ((priorityV2 as { score: number }).score)
+            : null;
+    if (!positionLabel && !waitSince && score == null && !candidateId) return undefined;
+    return {
+        position_label: positionLabel,
+        wait_since: waitSince,
+        priority: score,
+        placement_candidate_id: candidateId,
+        can_adjust_placement: Boolean(candidateId),
+    };
 }
 
 /** Whether this row should receive honest child/candidate QueueRowContext. */
@@ -434,7 +454,10 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             : null;
 
     const placement_context = resolvePlacementContext(row, subjectType === "child" ? active.subjectId : null);
-    const waitlist_context = subjectType === "candidate" ? resolveWaitlistContext(row) : undefined;
+    // Waitlist ranking fields are Placement-owned. Candidate grain always carries the projection;
+    // child-grain Waitlist provisioning now attaches the same `_placement_waitlist_row` shape.
+    const waitlist_context =
+        subjectType === "candidate" || subjectType === "child" ? resolveWaitlistContext(row) : undefined;
 
     const activeInquiryRaw = readInquiryChildrenFromRow(row).find((entry) => {
         if (entry == null || typeof entry !== "object" || Array.isArray(entry)) return false;

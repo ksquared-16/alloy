@@ -331,8 +331,15 @@ function outcomeCompletionBlockReason(
     item: StageWorkItemProjection | null,
     outcomes: ReturnType<typeof completionOutcomesForPicker>,
     canMutate: boolean,
+    /**
+     * When the published stage plan already resolves a template sequence / primary title,
+     * absence of an open provisioned task is not "no configured work" — Record Outcome stays
+     * unavailable without a contradictory operator warning.
+     */
+    configuredStageWorkResolved?: boolean,
 ): string | null {
     if (!item) {
+        if (configuredStageWorkResolved) return null;
         return "No open work here matches this stage's configured work items, so there is no outcome to record.";
     }
     if (item.state !== "open") return "This work is already complete — there is no outcome left to record.";
@@ -777,10 +784,21 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
     const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
         actions.map((action) => withActionExecution(action)!);
 
+    const configuredStageWorkResolved = Boolean(
+        templateConfig != null
+            || (runtime?.template_keys?.length ?? 0) > 0
+            || runtime?.primary != null
+            || (title.trim() !== "" && title !== "No current work configured"),
+    );
     const resolvedAlternatePaths = withActionExecutionAll(alternatePaths);
     const resolvedOutcomeBlockReason = showOutcomeCompletion
         ? null
-        : outcomeCompletionBlockReason(actionableWorkItem, pickerOutcomes, context.capabilities.canMutate);
+        : outcomeCompletionBlockReason(
+              actionableWorkItem,
+              pickerOutcomes,
+              context.capabilities.canMutate,
+              configuredStageWorkResolved,
+          );
     const resolvedPrimaryWorkItem = actionableWorkItem ?? primaryWorkItem;
 
     // Generic resolution contract (Slice D): configured outcomes + BP transitions unified.

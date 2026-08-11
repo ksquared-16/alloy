@@ -46,12 +46,14 @@ import {
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
     QUEUE_ROW_CARD_SHELL_CLASS,
 } from "@/lib/presentation/runtime/queueRowCardShell";
+import { compactWaitlistPositionLabel } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import {
     occurrenceKeyFromQueueRowContext,
     resolveRowUnseen,
     useLocallySeenOccurrenceCount,
 } from "@/lib/queues/queuePersonalSeenSession";
+import { WaitlistPlacementAdjustControl } from "@/components/presentation/workUnit/WaitlistPlacementAdjustControl";
 
 const CARD_BUTTON_CLASS =
     `${QUEUE_ROW_CARD_SHELL_CLASS} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine`;
@@ -137,8 +139,9 @@ export function CondensedQueueRow({
 
     if (!context) {
         return (
-            <button
-                type="button"
+            <div
+                role="button"
+                tabIndex={0}
                 {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRow)}
                 data-entity-id={row.entityId}
                 data-entity-type={row.entityType}
@@ -148,12 +151,18 @@ export function CondensedQueueRow({
                 onPointerEnter={warm}
                 onFocus={warm}
                 onClick={() => onOpen(row)}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onOpen(row);
+                    }
+                }}
                 className={cardClass}
             >
                 <span className="block min-w-0 truncate text-[13px] leading-4 text-alloy-midnight/70">
                     {row.entityId}
                 </span>
-            </button>
+            </div>
         );
     }
 
@@ -196,7 +205,10 @@ export function CondensedQueueRow({
         ? resolveCompactSlotDisplay("contact", context, rowConfig?.contact, focus, { publishedAuthority })
         : null;
     const secondaryBand = showGroupCount
-        ? resolveCompactSecondaryBand(context, rowConfig?.groupCount, { publishedAuthority })
+        ? resolveCompactSecondaryBand(context, rowConfig?.groupCount, {
+              publishedAuthority,
+              focus: focus ?? null,
+          })
         : null;
     const workLabel = showWork
         ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus, { publishedAuthority })
@@ -208,11 +220,24 @@ export function CondensedQueueRow({
               ?? null
             : null;
     const hasWorkFooter = workLabel != null || dueLabel != null;
-    const secondaryRendered = secondaryBand?.left || secondaryBand?.right || null;
+    const placementCandidateId = context.waitlist_context?.placement_candidate_id?.trim() || null;
+    const showPlacementAdjust =
+        Boolean(placementCandidateId)
+        && context.waitlist_context?.can_adjust_placement !== false;
+    const compactRank = compactWaitlistPositionLabel(context.waitlist_context?.position_label);
+    // Rank lives top-right above Adjust — strip from secondary so it is not duplicated.
+    // Age/time-in-stage lives bottom-right only (never also top-right).
+    const secondaryForRender = pinSingleAgeBottomRight(
+        stripWaitlistRankFromSecondaryBand(secondaryBand, compactRank),
+        context.waitlist_context?.wait_since?.trim() || null,
+        context.operational_state?.age_compact?.trim() || null,
+    );
+    const secondaryRendered = secondaryForRender?.left || secondaryForRender?.right || null;
 
     return (
-        <button
-            type="button"
+        <div
+            role="button"
+            tabIndex={0}
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRow)}
             data-entity-id={row.entityId}
             data-entity-type={row.entityType}
@@ -225,10 +250,17 @@ export function CondensedQueueRow({
             data-queue-row-rendered-contact={line2 ?? undefined}
             data-queue-row-rendered-group={secondaryRendered ?? undefined}
             data-queue-row-has-secondary={secondaryBand ? "true" : undefined}
+            data-queue-row-can-adjust-placement={showPlacementAdjust ? "true" : undefined}
             onPointerDown={warm}
             onPointerEnter={warm}
             onFocus={warm}
             onClick={() => onOpen(row)}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpen(row);
+                }
+            }}
             className={cardClass}
         >
             <span className="flex items-start gap-2.5">
@@ -252,29 +284,39 @@ export function CondensedQueueRow({
                                 {displayName}
                             </span>
                         </span>
-                        <span className="flex shrink-0 items-center gap-1.5">
-                            {context.operational_state?.age_compact ? (
-                                <span
-                                    data-queue-row-operational-age
-                                    className="tabular-nums text-[11px] font-medium leading-4 text-alloy-midnight/55"
-                                    title={
-                                        context.operational_state.age_accessible
-                                        ?? undefined
-                                    }
-                                    aria-label={
-                                        context.operational_state.age_accessible
-                                        ?? undefined
-                                    }
-                                >
-                                    {context.operational_state.age_compact}
-                                </span>
-                            ) : null}
+                        <span className="flex shrink-0 items-start gap-1.5">
                             {stageLabel ? (
                                 <span
                                     data-queue-row-stage
                                     className="max-w-[10rem] truncate rounded-full border border-alloy-pine/30 bg-alloy-pine/10 px-2 py-0.5 text-[10px] font-semibold leading-[13px] text-alloy-pine"
                                 >
                                     {stageLabel}
+                                </span>
+                            ) : null}
+                            {compactRank || showPlacementAdjust ? (
+                                <span
+                                    className="inline-flex shrink-0 flex-col items-end gap-0.5"
+                                    data-queue-row-waitlist-rank-cluster
+                                >
+                                    {compactRank ? (
+                                        <span
+                                            data-queue-row-waitlist-rank
+                                            className="tabular-nums text-[11px] font-semibold leading-4 text-alloy-midnight/70"
+                                            title={context.waitlist_context?.position_label ?? compactRank}
+                                        >
+                                            {compactRank}
+                                        </span>
+                                    ) : null}
+                                    {showPlacementAdjust && placementCandidateId ? (
+                                        <WaitlistPlacementAdjustControl
+                                            placementCandidateId={placementCandidateId}
+                                            currentPositionLabel={
+                                                compactRank
+                                                ?? context.waitlist_context?.position_label
+                                            }
+                                            childDisplayName={displayName}
+                                        />
+                                    ) : null}
                                 </span>
                             ) : null}
                         </span>
@@ -288,30 +330,30 @@ export function CondensedQueueRow({
                             {line2}
                         </span>
                     ) : null}
-                    {secondaryBand ? (
+                    {secondaryForRender ? (
                         <span
                             data-queue-row-secondary
                             className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 text-[11px] leading-4 text-alloy-midnight/60"
                         >
-                            {secondaryBand.left ? (
+                            {secondaryForRender.left ? (
                                 <span
                                     data-queue-row-secondary-left
                                     className="min-w-0 truncate"
-                                    title={secondaryBand.left}
+                                    title={secondaryForRender.left}
                                 >
-                                    {secondaryBand.left}
+                                    {secondaryForRender.left}
                                 </span>
                             ) : (
                                 <span />
                             )}
-                            {secondaryBand.right ? (
+                            {secondaryForRender.right ? (
                                 <span
                                     data-queue-row-secondary-right
                                     data-queue-row-count
                                     className="shrink-0 whitespace-nowrap text-alloy-midnight/55"
-                                    title={secondaryBand.right}
+                                    title={secondaryForRender.right}
                                 >
-                                    {secondaryBand.right}
+                                    {secondaryForRender.right}
                                 </span>
                             ) : null}
                         </span>
@@ -352,6 +394,57 @@ export function CondensedQueueRow({
                     ) : null}
                 </span>
             </span>
-        </button>
+        </div>
     );
+}
+
+const RANK_TOKEN_RE = /^(?:Preview\s+)?(?:position\s+)?#?\d+\s*\/\s*\d+$/i;
+const AGE_TOKEN_RE = /^\d+[hdwm]$/i;
+
+function stripWaitlistRankFromSecondaryBand(
+    band: { left: string | null; right: string | null } | null,
+    compactRank: string | null,
+): { left: string | null; right: string | null } | null {
+    if (!band) return null;
+    const stripPart = (value: string | null): string | null => {
+        if (!value) return null;
+        const next = value
+            .split(" · ")
+            .map((part) => part.trim())
+            .filter((part) => {
+                if (!part) return false;
+                if (compactRank && part === compactRank) return false;
+                return !RANK_TOKEN_RE.test(part);
+            })
+            .join(" · ");
+        return next || null;
+    };
+    const left = stripPart(band.left);
+    const right = stripPart(band.right);
+    if (!left && !right) return null;
+    return { left, right };
+}
+
+/** One age/wait-since chip, bottom-right — never duplicated with top-right or secondary left. */
+function pinSingleAgeBottomRight(
+    band: { left: string | null; right: string | null } | null,
+    waitSince: string | null,
+    operationalAge: string | null,
+): { left: string | null; right: string | null } | null {
+    const preferredAge = waitSince || operationalAge;
+    const stripAgeParts = (value: string | null): string | null => {
+        if (!value) return null;
+        const next = value
+            .split(" · ")
+            .map((part) => part.trim())
+            .filter((part) => part && !AGE_TOKEN_RE.test(part) && part !== preferredAge)
+            .join(" · ");
+        return next || null;
+    };
+    const left = stripAgeParts(band?.left ?? null);
+    const rightRaw = band?.right?.trim() || null;
+    const rightIsAge = Boolean(rightRaw && (AGE_TOKEN_RE.test(rightRaw) || rightRaw === preferredAge));
+    const right = rightIsAge ? (preferredAge || rightRaw) : rightRaw || preferredAge || null;
+    if (!left && !right) return preferredAge ? { left: null, right: preferredAge } : null;
+    return { left, right };
 }
