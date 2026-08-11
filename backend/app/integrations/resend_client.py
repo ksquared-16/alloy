@@ -24,6 +24,7 @@ def send_resend_email(
     from_email: str,
     api_key: str,
     message_id: str | None = None,
+    extra_headers: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     if not api_key.strip():
         raise RuntimeError("Resend API key missing")
@@ -50,6 +51,10 @@ def send_resend_email(
     # provider Alloy eventually uses to RECEIVE mail.
     if message_id:
         payload["headers"] = {**(payload.get("headers") or {}), "Message-ID": message_id}
+    # In-Reply-To / References, so the reply threads in the PARENT'S mail client
+    # and not only inside Alloy. Server-owned: the UI constructs none of these.
+    if extra_headers:
+        payload["headers"] = {**(payload.get("headers") or {}), **extra_headers}
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=20)

@@ -38,7 +38,22 @@ export type UnidentifiedConversationMessage = {
     status: string | null;
     body: string | null;
     created_at: string | null;
+    /** Email only. SMS has no subject. */
+    subject?: string | null;
+    metadata?: Record<string, unknown> | null;
 };
+
+/**
+ * The operator-facing note when a message arrived with attachments.
+ *
+ * Read from metadata the inbound seam recorded rather than recomputed, so the
+ * conversation cannot claim something different from what was received. WS11 owns
+ * retrieval; this exists so an attachment is never silently invisible.
+ */
+export function attachmentNoticeOf(message: UnidentifiedConversationMessage): string | null {
+    const note = message.metadata?.attachment_notice;
+    return typeof note === "string" && note.trim() ? note.trim() : null;
+}
 
 /**
  * What an outbound row actually means.
@@ -246,7 +261,29 @@ export default function UnidentifiedConversationPanel({ conversation, onReplied 
                                               : "self-end bg-[#E8F6F2] text-alloy-midnight"
                                     }`}
                                 >
+                                    {m.subject?.trim() ? (
+                                        <p className="mb-0.5 font-semibold" data-cc-message-subject="true">
+                                            {m.subject}
+                                        </p>
+                                    ) : null}
+                                    {/*
+                                      * Rendered as TEXT, never as HTML. The canonical body is the
+                                      * safe plain-text representation and the provider's HTML is
+                                      * deliberately not persisted on the message row — so there is
+                                      * no sanitization gap here, because there is nothing to
+                                      * sanitize. Scripts cannot run and remote or data-URI content
+                                      * cannot load, including the tracking pixels that would
+                                      * otherwise turn opening Command Center into a read receipt.
+                                      */}
                                     <p className="whitespace-pre-wrap">{m.body ?? ""}</p>
+                                    {attachmentNoticeOf(m) ? (
+                                        <p
+                                            className="mt-1 rounded border border-alloy-stone/20 bg-white/70 px-1.5 py-0.5 text-[10px] text-alloy-midnight/70"
+                                            data-cc-attachment-notice="true"
+                                        >
+                                            {attachmentNoticeOf(m)}
+                                        </p>
+                                    ) : null}
                                     <p
                                         className={`mt-0.5 text-[10px] ${
                                             undelivered ? "font-semibold text-alloy-ember" : "text-alloy-midnight/45"
