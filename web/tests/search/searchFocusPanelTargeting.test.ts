@@ -1,13 +1,6 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { FOCUS_PANEL_CARD_KEYS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
-import {
-    isValidFocusPanelTarget,
-    latestFocusPanelRequest,
-    nextFocusPanelRequestId,
-    resetFocusPanelRequestIdForTests,
-    type FocusPanelTargetEventDetail,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelTarget";
 import { SEARCH_CARD_KEYS, resolveSearchDestinations } from "@/lib/search/searchDestinations";
 import type { SearchContext, SearchSubject } from "@/lib/search/searchContracts";
 
@@ -159,40 +152,38 @@ describe("destination dedupe keys on operator context, not record address", () =
     });
 });
 
-describe("focus target contract", () => {
-    beforeEach(() => resetFocusPanelRequestIdForTests());
-
-    it("rejects a target with no card", () => {
-        expect(isValidFocusPanelTarget({ subject: { type: "child", id: "x" }, focus: {} })).toBe(false);
+describe("Search uses the ONE canonical selection authority", () => {
+    it("the control selects through AdminDrawerContext, not a Search-owned mechanism", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
+        expect(src).toContain("useAdminDrawer");
+        expect(src).toContain("drawerSubjectContext");
+        // The competing event mechanism is gone.
+        expect(src).not.toContain("requestFocusPanelTarget");
+        expect(src).not.toContain("focusPanelTarget");
     });
 
-    it("rejects a target with no subject id", () => {
-        expect(isValidFocusPanelTarget({ subject: { type: "child", id: "" }, focus: { cardKey: "children" } })).toBe(false);
+    it("navigates to the configured work-unit host BEFORE selecting", async () => {
+        // Selecting first would briefly mount the modal on /workspace — the very
+        // overlay this work removes. Order is the fix, not a detail.
+        const { readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
+        const nav = src.indexOf("operatorWorkUnitHrefFromKey");
+        const select = src.indexOf("openDrawer({");
+        expect(nav).toBeGreaterThan(-1);
+        expect(select).toBeGreaterThan(nav);
     });
 
-    it("accepts a complete target", () => {
-        expect(
-            isValidFocusPanelTarget({ subject: { type: "child", id: "cm-1" }, focus: { cardKey: "children", itemId: "cm-1" } })
-        ).toBe(true);
+    it("a child destination names a configured host work unit", () => {
+        const primary = resolve(child, [enrollment])[0];
+        expect(primary.host_work_unit_key).toBe("enrollment");
     });
 
-    it("STALE PROTECTION: a newer request always wins", () => {
-        const mk = (id: number): FocusPanelTargetEventDetail => ({
-            subject: { type: "child", id: `cm-${id}` },
-            focus: { cardKey: "children" },
-            requestId: id,
-        });
-        const lennon = mk(nextFocusPanelRequestId());
-        const wrigley = mk(nextFocusPanelRequestId());
-
-        expect(latestFocusPanelRequest(lennon, wrigley).subject.id).toBe(wrigley.subject.id);
-        // Lennon's slower hydration arriving afterwards must not win.
-        expect(latestFocusPanelRequest(wrigley, lennon).subject.id).toBe(wrigley.subject.id);
-    });
-
-    it("request ids increase monotonically", () => {
-        expect(nextFocusPanelRequestId()).toBe(1);
-        expect(nextFocusPanelRequestId()).toBe(2);
+    it("a process destination hosts on ITS OWN configured work unit", () => {
+        const process = resolve(child, [enrollment]).find((d) => d.key === "process:enrollment");
+        expect(process!.host_work_unit_key).toBe("enrollment");
     });
 });
 
@@ -203,7 +194,7 @@ describe("the obsolete drawer product is unreachable from Search", () => {
         const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
         expect(src).not.toContain("launchGlobalRecordSearchOpen");
         expect(src).not.toContain("open_drawer");
-        expect(src).toContain("requestFocusPanelTarget");
+        expect(src).toContain("drawerSubjectContext");
     });
 
     it("the drawer open-intent product no longer exists", async () => {

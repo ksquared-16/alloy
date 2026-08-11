@@ -57,6 +57,18 @@ const PROCESS_CONTEXT_HOST_TYPES: Record<string, string> = {
  * operator asked for a child. Falls back to the household shell only when there
  * is no participation at all.
  */
+function resolveHostWorkUnitKey(contexts: readonly SearchContext[], preferred?: string | null): string | null {
+    const wanted = (preferred ?? "").trim();
+    if (wanted) {
+        const exact = contexts.find((c) => c.kind === "process" && c.key === wanted);
+        if (exact) return exact.key;
+    }
+    // Default host = the subject's first configured participation. Configuration
+    // decides which processes exist and in what order; Search does not.
+    const first = contexts.find((c) => c.kind === "process");
+    return first ? first.key : null;
+}
+
 function resolveHost(
     subject: SearchSubject,
     contexts: readonly SearchContext[]
@@ -112,6 +124,7 @@ export function resolveSubjectDestination(
             item_id: subject.id,
             host_entity_type: host.type,
             host_entity_id: host.id,
+            host_work_unit_key: resolveHostWorkUnitKey(contexts),
             primary: true,
         };
     }
@@ -125,6 +138,7 @@ export function resolveSubjectDestination(
             item_id: subject.person_id ?? subject.id,
             host_entity_type: host.type,
             host_entity_id: host.id,
+            host_work_unit_key: resolveHostWorkUnitKey(contexts),
             primary: true,
         };
     }
@@ -137,6 +151,7 @@ export function resolveSubjectDestination(
         card_key: SEARCH_CARD_KEYS.household,
         host_entity_type: host.type,
         host_entity_id: host.id,
+        host_work_unit_key: resolveHostWorkUnitKey(contexts),
         primary: true,
     };
 }
@@ -156,6 +171,7 @@ function resolveHouseholdDestination(
         card_key: SEARCH_CARD_KEYS.household,
         host_entity_type: host.type,
         host_entity_id: host.id,
+        host_work_unit_key: resolveHostWorkUnitKey(contexts),
     };
 }
 
@@ -167,7 +183,7 @@ function resolveHouseholdDestination(
  */
 const CONTEXT_DESTINATION_RESOLVERS: Record<
     SearchContext["kind"],
-    (context: SearchContext, subject: SearchSubject, host: { type: string; id: string } | null) => SearchDestination | null
+    (context: SearchContext, subject: SearchSubject, host: { type: string; id: string } | null, allContexts: readonly SearchContext[]) => SearchDestination | null
 > = {
     /**
      * A configured process is worked on the Current Work card, with the process
@@ -175,7 +191,7 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
      * configured `process_key` — no process name is hardcoded, so a tenant that
      * renames or adds a process needs no code change.
      */
-    process: (context, subject, host) => {
+    process: (context, subject, host, allContexts) => {
         if (!host) return null;
         return {
             key: `process:${context.key}`,
@@ -186,6 +202,8 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             context_key: context.key,
             host_entity_type: host.type,
             host_entity_id: host.id,
+            // A process destination hosts on ITS OWN configured work unit.
+            host_work_unit_key: resolveHostWorkUnitKey(allContexts, context.key),
         };
     },
     /**
@@ -193,7 +211,7 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
      * emitted nothing because no drawer could address a card — the context could
      * rank and display but never be opened.
      */
-    schedule: (_context, subject, host) => {
+    schedule: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {
             key: "assignment",
@@ -203,10 +221,11 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             item_id: subject.id,
             host_entity_type: host.type,
             host_entity_id: host.id,
+            host_work_unit_key: resolveHostWorkUnitKey(allContexts),
         };
     },
     relationship: () => null,
-    placement: (_context, subject, host) => {
+    placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {
             key: "assignment",
@@ -240,7 +259,7 @@ export function resolveSearchDestinations(args: {
     const secondary: SearchDestination[] = [];
 
     for (const context of contexts) {
-        const resolved = CONTEXT_DESTINATION_RESOLVERS[context.kind]?.(context, subject, host) ?? null;
+        const resolved = CONTEXT_DESTINATION_RESOLVERS[context.kind]?.(context, subject, host, contexts) ?? null;
         if (resolved) secondary.push(resolved);
     }
 

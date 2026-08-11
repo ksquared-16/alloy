@@ -147,6 +147,16 @@ export type SearchDestination = {
      */
     host_entity_type?: string | null;
     host_entity_id?: string | null;
+    /**
+     * The configured work-unit / Work View that should HOST this subject.
+     *
+     * Search resolves it from the subject's configured process participation, so
+     * a tenant that renames or adds a process needs no code change — there is no
+     * hardcoded route here. Clicking navigates to this host so the INLINE Focus
+     * Panel owns rendering; without it the modal branch mounts on /workspace,
+     * which is the overlay this work exists to remove.
+     */
+    host_work_unit_key?: string | null;
     /** Canonical route when `target === "route"`. */
     href?: string | null;
     /**

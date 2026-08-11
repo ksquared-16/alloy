@@ -12,10 +12,9 @@ import {
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
-import {
-    requestFocusPanelTarget,
-    type FocusPanelSubjectType,
-} from "@/lib/adminV2/runtime/focusPanel/focusPanelTarget";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
+import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
@@ -161,6 +160,7 @@ function SearchResultRow({
 
 export default function GlobalSearchBox() {
     const router = useRouter();
+    const { openDrawer } = useAdminDrawer();
     const wrapRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -267,28 +267,39 @@ export default function GlobalSearchBox() {
                 router.push(destination.href);
                 return;
             }
-            if (destination.target !== "focus_panel" || !destination.card_key) return;
+            const hostType = (destination.host_entity_type ?? "").trim();
+            const hostId = (destination.host_entity_id ?? "").trim();
+            if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return;
 
+            // Dismiss FIRST — the click is acknowledged immediately even though the
+            // destination is not revealed until it is Operational.
             dismiss();
-            requestFocusPanelTarget(
-                {
-                    subject: {
-                        type: subject.kind as FocusPanelSubjectType,
-                        id: subject.id,
-                        hostEntityType:
-                            (destination.host_entity_type as "opportunities" | "customers" | "persons" | null) ?? null,
-                        hostEntityId: destination.host_entity_id ?? null,
-                    },
-                    focus: {
-                        cardKey: destination.card_key as never,
-                        itemId: destination.item_id ?? null,
-                        contextKey: destination.context_key ?? null,
+
+            // Navigate to the configured work-unit host BEFORE selecting. On a
+            // work-unit surface `AdminEntityDrawer` returns null and the INLINE
+            // Focus Panel owns rendering; selecting first would briefly mount the
+            // modal on /workspace, which is the overlay this replaces.
+            const hostKey = (destination.host_work_unit_key ?? "").trim();
+            if (hostKey) router.push(operatorWorkUnitHrefFromKey(hostKey, hostId));
+
+            // One selection authority — the same context the inline panel reads.
+            openDrawer({
+                type: hostType as AdminDrawerEntityType,
+                id: hostId,
+                source: "global_search",
+                drawerSubjectContext: {
+                    focus_mode: subject.kind === "household" ? "case_default" : "subject_highlight",
+                    lifecycle_visual_stage_key: "",
+                    related_subjects: [],
+                    card_focus: {
+                        card_key: destination.card_key,
+                        item_id: destination.item_id ?? null,
+                        context_key: destination.context_key ?? null,
                     },
                 },
-                "global_search"
-            );
+            });
         },
-        [dismiss, router]
+        [dismiss, router, openDrawer]
     );
 
     const openSubject = useCallback(
