@@ -14,7 +14,17 @@ export type {
     AiStructuredProvider,
 } from "@/lib/ai/providerTypes";
 
-export { createDisabledAiProvider, createAiProviderForPolicy, type ResolveStructuredAiProviderOptions } from "@/lib/ai/disabledProvider";
+/**
+ * Phase 2.8 Gate D removed `createAiProviderForPolicy` and
+ * `resolveStructuredAiProviderForPolicy` from this barrel along with the modules
+ * behind them. They resolved an UNGOVERNED structured provider, and the only
+ * provider they could resolve — the OpenAI-compatible one — no longer exists.
+ *
+ * What remains here sends nothing anywhere: the disabled provider refuses, and
+ * the stub composes an overlay locally. Provider-backed reasoning is reached
+ * exclusively through Trust, via `lib/ai/trust/governedReasoningProviderPort`.
+ */
+export { createDisabledAiProvider } from "@/lib/ai/disabledStructuredProvider";
 
 export {
     AI_POLICY_METADATA_KEY,
@@ -43,6 +53,7 @@ export {
     aiUsageTelemetryPayloadV1ToJson,
     aiEnrichmentEnvelopeV1ToJson,
     operationalSummaryV1ToJson,
+    NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
 } from "@/lib/ai/enrichmentContracts";
 
 export { aiUsageTelemetryPayloadV1Schema, safeParseAiUsageTelemetryPayloadV1 } from "@/lib/ai/aiUsageTelemetrySchema";
@@ -69,15 +80,6 @@ export {
 } from "@/lib/ai/openAiModelCapabilities";
 
 export { createStubAiProvider } from "@/lib/ai/stubProvider";
-
-export { resolveStructuredAiProviderForPolicy } from "@/lib/ai/resolveStructuredAiProvider";
-
-export {
-    enrichAttentionSuggestionStubEnvelope,
-    NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
-    type EnrichAttentionSuggestionStubInput,
-    type EnrichAttentionSuggestionStubResult,
-} from "@/lib/ai/enrichAttentionSuggestionStub";
 
 export {
     maybeEmitAiEnrichmentTelemetryEvent,

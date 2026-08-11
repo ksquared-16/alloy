@@ -5,7 +5,7 @@
  * provider responses, so differences are attributable to architecture rather
  * than to fixtures:
  *
- *   legacy   : createOpenAiCompatibleStructuredProvider  (validates in transport)
+ *   legacy   : the ungoverned structured provider, which validated in transport
  *   governed : Information Package → privacy → Eligible Reasoning Input
  *              → executeGovernedProviderReasoning → adapter → Trust validation
  *
@@ -15,16 +15,30 @@
  * deliberate change of authority, and product-equivalent where the operator
  * outcome matches.
  *
+ * ## Gate D retired the legacy arm (read this before looking for it)
+ *
+ * This harness originally drove BOTH implementations through one intercepted
+ * transport. Gate D deleted the ungoverned provider, so the legacy arm cannot
+ * be driven any more — there is nothing left to drive.
+ *
+ * It was not replaced by a test-only replica. A replica can drift from the
+ * original it is standing in for, so it would prove parity with a fiction; and
+ * re-adding a second module that opens a socket to a completions endpoint is
+ * exactly what the Gate D unreachability control exists to forbid. The parity
+ * finding itself is certified evidence and stays in the record.
+ *
+ * What survives is the half that is still checkable — and it is the half that
+ * matters going forward, because it describes the path that actually runs:
+ * which facts reach a provider, which cannot, and what the governed pipeline
+ * does with each provider response.
+ *
  * No network, no credential, no live provider, no route import.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
-import { createOpenAiCompatibleStructuredProvider } from "@/lib/ai/openAiCompatibleStructuredProvider";
 import { createDisabledAiProvider } from "@/lib/ai/disabledStructuredProvider";
-import type { AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
 import { createOpenAiCompatibleProviderAdapter } from "@/lib/ai/trust/openAiCompatibleProviderAdapter";
 import { buildEligibleReasoningInput, buildInformationPackage } from "@/lib/trust/information/informationPackage";
 import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informationPackage";
@@ -35,17 +49,6 @@ import { orchestrateValidation } from "@/lib/trust/validation/validationOrchestr
 
 const AGENT_KEY = "needs_attention_suggestion_enrichment";
 const PRIVACY: PrivacyPolicyV1 = { key: "operator_safe_v1", pii_mode: "standard", prohibited_classes: [] };
-// Built from the REAL producer and then narrowed, rather than cast into shape.
-// A cast here hid fixture defects until CI typechecked the file; the default
-// supplies `schema_version`, `logging_mode` and `retention_mode` I would
-// otherwise have had to guess.
-const AI_POLICY: ResolvedAiOrgPolicyV1 = {
-    ...parseAiPolicyFromMetadata({}),
-    enabled: true,
-    provider: "openai",
-    pii_mode: "standard",
-    allowed_features: ["draft_enrichment"],
-};
 
 function suggestion(overrides?: {
     last_activity_summary?: string;
@@ -114,21 +117,6 @@ function completion(content: unknown) {
     return { model: "gpt-4o-mini-2024-07-18", choices: [{ message: { content: JSON.stringify(content) } }] };
 }
 
-/** Legacy observable outcome: did enrichment survive, and under what outcome code. */
-async function legacy(): Promise<{ outcome: string; enriched: boolean }> {
-    const req: AiStructuredRequestV1 = {
-        schema_version: 1,
-        request_id: "r1",
-        correlation_id: "c1",
-        feature: "needs_attention_draft_enrichment",
-        org_id: "org-1",
-        payload: { primary_reason_code: "tour_no_followup" },
-        requested_at_iso: "2026-08-10T00:00:00.000Z",
-    };
-    const res = await createOpenAiCompatibleStructuredProvider(AI_POLICY).completeStructured(req);
-    return { outcome: res.outcome, enriched: res.outcome === "ok" && res.data != null };
-}
-
 /**
  * Governed observable outcome: did enrichment survive, and did reasoning succeed.
  *
@@ -174,35 +162,26 @@ async function governed(s: AttentionSuggestionV1 = suggestion()): Promise<{ ok: 
     };
 }
 
-const ORIGINAL_KEY = process.env.OPENAI_API_KEY;
-const ORIGINAL_MODEL = process.env.OPENAI_MODEL;
-
 afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    if (ORIGINAL_KEY === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = ORIGINAL_KEY;
-    if (ORIGINAL_MODEL === undefined) delete process.env.OPENAI_MODEL;
-    else process.env.OPENAI_MODEL = ORIGINAL_MODEL;
 });
 
-/** The legacy provider reads env directly; parity requires it be configured. */
-function configureLegacyEnv() {
-    process.env.OPENAI_API_KEY = "sk-test-parity";
-    process.env.OPENAI_MODEL = "gpt-4o-mini";
-}
-
-describe("P28B-1 — outcome parity across the twelve scenarios", () => {
-    it("valid success: both produce enrichment", async () => {
-        configureLegacyEnv();
+/**
+ * The scenario matrix, governed arm only.
+ *
+ * Each case kept its provider response and its governed expectation; what it
+ * lost is the legacy comparison, which Gate D made unrunnable. Read a failure
+ * here as "the governed pipeline changed", not as "parity broke" — parity is
+ * settled and recorded.
+ */
+describe("P28B-1 — the governed pipeline across the scenario matrix", () => {
+    it("valid success: enrichment survives", async () => {
         vi.stubGlobal("fetch", stubTransport(completion(VALID)));
-        const l = await legacy();
-        const g = await governed();
-        expect(l.enriched).toBe(true);
-        expect(g.enriched).toBe(true);
+        expect((await governed()).enriched).toBe(true);
     });
 
-    it("provider disabled: legacy yields disabled+no enrichment; governed never reaches a provider", async () => {
+    it("provider disabled: the disabled provider refuses, and governed reaches no provider at all", async () => {
         const disabled = await createDisabledAiProvider().completeStructured({
             schema_version: 1,
             request_id: "r",
@@ -214,87 +193,72 @@ describe("P28B-1 — outcome parity across the twelve scenarios", () => {
         });
         expect(disabled.outcome).toBe("disabled");
         expect(disabled.data == null).toBe(true);
-        // Governed equivalent is structural: with no adapter configured the
+        // Governed equivalent is structural: with no port configured the
         // capability has no provider to call, so no enrichment is produced.
         // Product-observable result is identical: enrichment absent.
     });
 
-    it("malformed envelope: neither produces enrichment", async () => {
-        configureLegacyEnv();
+    it("malformed envelope: no enrichment", async () => {
         vi.stubGlobal("fetch", stubTransport("<html>gateway</html>"));
-        expect((await legacy()).enriched).toBe(false);
         expect((await governed()).enriched).toBe(false);
     });
 
-    it("invalid enum: neither produces enrichment", async () => {
-        configureLegacyEnv();
+    it("invalid enum: no enrichment", async () => {
         vi.stubGlobal("fetch", stubTransport(completion({ ...VALID, provider_report: { provider_key: "impostor", execution_mode: "live" } })));
-        expect((await legacy()).enriched).toBe(false);
         expect((await governed()).enriched).toBe(false);
     });
 
-    it("missing required field: neither produces enrichment", async () => {
-        configureLegacyEnv();
+    it("missing required field: no enrichment", async () => {
         const { generated_at_iso: _drop, ...missing } = VALID;
         vi.stubGlobal("fetch", stubTransport(completion(missing)));
-        expect((await legacy()).enriched).toBe(false);
         expect((await governed()).enriched).toBe(false);
     });
 
-    it("smuggled extra field: neither produces enrichment", async () => {
-        configureLegacyEnv();
+    it("smuggled extra field: no enrichment", async () => {
         vi.stubGlobal("fetch", stubTransport(completion({ ...VALID, trust_score: 99 })));
-        expect((await legacy()).enriched).toBe(false);
         expect((await governed()).enriched).toBe(false);
     });
 
-    it("timeout: both fail without enrichment", async () => {
-        configureLegacyEnv();
+    it("timeout: fails, and says so in Trust's own vocabulary", async () => {
         const abort = new Error("aborted");
         abort.name = "AbortError";
         vi.stubGlobal("fetch", stubTransport(null, { reject: abort }));
-        const l = await legacy();
         const g = await governed();
-        expect(l.outcome).toBe("timeout");
         expect(g.ok).toBe(false);
         expect(g.detail).toContain("timeout");
     });
 
-    it("provider unavailable (429): both fail without enrichment", async () => {
-        configureLegacyEnv();
+    it("provider unavailable (429): fails as provider_unavailable", async () => {
         vi.stubGlobal("fetch", stubTransport({ error: { message: "rate limited" } }, { status: 429 }));
-        expect((await legacy()).enriched).toBe(false);
         const g = await governed();
         expect(g.ok).toBe(false);
         expect(g.detail).toContain("provider_unavailable");
     });
 
-    it("provider refusal (content_filter): governed reports it distinctly", async () => {
-        configureLegacyEnv();
+    it("provider refusal (content_filter): reported distinctly, not as a generic error", async () => {
         vi.stubGlobal(
             "fetch",
             stubTransport({ model: "m", choices: [{ finish_reason: "content_filter", message: { content: null } }] }),
         );
-        // Legacy has no vocabulary for a safety stop — it becomes a generic error.
-        expect((await legacy()).enriched).toBe(false);
+        // This is the one place the migration made the answer strictly better:
+        // the deleted implementation had no vocabulary for a safety stop and
+        // collapsed it into a generic error.
         const g = await governed();
         expect(g.ok).toBe(false);
         expect(g.detail).toContain("provider_refused");
     });
 
-    it("usage supplied / absent: governed carries truthfully, legacy carries neither", async () => {
-        configureLegacyEnv();
-        vi.stubGlobal("fetch", stubTransport(completion(VALID)));
-        const l = await legacy();
-        // The legacy envelope has no usage field at all — it never extracted any.
-        expect(Object.keys(l)).not.toContain("usage");
-        expect((await governed()).enriched).toBe(true);
+    it("a failing response never leaks provider prose into the outcome", async () => {
+        vi.stubGlobal("fetch", stubTransport({ error: { message: "contact ops@example.com about key sk-leak" } }, { status: 401 }));
+        const g = await governed();
+        expect(g.ok).toBe(false);
+        expect(JSON.stringify(g)).not.toContain("ops@example.com");
+        expect(JSON.stringify(g)).not.toContain("sk-leak");
     });
 });
 
-describe("P28B-2 — privacy parity: what actually crosses the wire", () => {
-    it("legacy sends the caller's payload; governed sends only governed facts", async () => {
-        configureLegacyEnv();
+describe("P28B-2 — privacy: what actually crosses the wire", () => {
+    it("governed sends only governed facts — no identity, no prose", async () => {
         const fetchMock = stubTransport(completion(VALID));
         vi.stubGlobal("fetch", fetchMock);
         await governed();
@@ -307,7 +271,6 @@ describe("P28B-2 — privacy parity: what actually crosses the wire", () => {
 
 describe("P28B-3 — Class 1: structured facts alone support enrichment", () => {
     it("distinct legitimate cases remain distinguishable to the provider", async () => {
-        configureLegacyEnv();
         const seen: string[] = [];
         vi.stubGlobal(
             "fetch",
@@ -333,7 +296,6 @@ describe("P28B-3 — Class 1: structured facts alone support enrichment", () => 
 
 describe("P28B-4 — Class 2: prose wording is not load-bearing", () => {
     it("identical structured facts + different prose ⇒ IDENTICAL provider input", async () => {
-        configureLegacyEnv();
         const seen: string[] = [];
         vi.stubGlobal(
             "fetch",
@@ -358,7 +320,6 @@ describe("P28B-4 — Class 2: prose wording is not load-bearing", () => {
     });
 
     it("and the governed result is unchanged across those wordings", async () => {
-        configureLegacyEnv();
         vi.stubGlobal("fetch", stubTransport(completion(VALID)));
         const a = await governed(suggestion({ last_activity_summary: "Tour completed" }));
         const b = await governed(suggestion({ last_activity_summary: "Totally different words here" }));
@@ -368,7 +329,6 @@ describe("P28B-4 — Class 2: prose wording is not load-bearing", () => {
 
 describe("P28B-5 — Class 3: adversarial decision-relevance probe", () => {
     it("a genuinely different SITUATION still changes provider input — the package is not blind", async () => {
-        configureLegacyEnv();
         const seen: string[] = [];
         vi.stubGlobal(
             "fetch",
@@ -407,7 +367,6 @@ describe("P28B-5 — Class 3: adversarial decision-relevance probe", () => {
 
 describe("P28B-6 — draft overlay parity without the rendered body", () => {
     it("a contract-valid overlay is produced without contact identity ever being sent", async () => {
-        configureLegacyEnv();
         const fetchMock = stubTransport(completion(VALID));
         vi.stubGlobal("fetch", fetchMock);
 

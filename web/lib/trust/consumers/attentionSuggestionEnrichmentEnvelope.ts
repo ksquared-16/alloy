@@ -10,18 +10,23 @@
  * differs is which decision class the capability submitted, and therefore
  * whether a provider participated at all.
  *
- * The legacy `enrichAttentionSuggestionStubEnvelope` still exists but no longer
- * serves the live-provider case. Retiring it — and making it structurally
- * unreachable rather than merely uncalled — is Gate D (D-45).
+ * As of Gate D this is the ONLY enrichment envelope. The ungoverned one, and
+ * the provider it could reach, were deleted rather than left uncalled — D-45
+ * holds that a bypass is closed only when it is unreachable, and an unimported
+ * module is one import away from being reachable again.
  */
 
 import { randomUUID } from "crypto";
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
-import type { AiEnrichmentEnvelopeV1, AiTelemetryOutcome, AiUsageTelemetryPayloadV1 } from "@/lib/ai/enrichmentContracts";
+import {
+    NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
+    type AiEnrichmentEnvelopeV1,
+    type AiTelemetryOutcome,
+    type AiUsageTelemetryPayloadV1,
+} from "@/lib/ai/enrichmentContracts";
 import { maybeEmitAiEnrichmentTelemetryEvent } from "@/lib/ai/enrichmentTelemetry";
-import { NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE } from "@/lib/ai/enrichAttentionSuggestionStub";
 import { asAiProviderKey } from "@/lib/ai/providerTypes";
 import type { TrustAuthorizationDecision } from "@/lib/trust/authorization/trustAuthorizationDecision";
 import { captureOutcome } from "@/lib/trust/observation/captureOutcome";
