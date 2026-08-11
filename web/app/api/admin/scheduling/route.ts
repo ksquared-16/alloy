@@ -101,12 +101,16 @@ function presentRoster(model: RosterReadModel) {
             const committed = cell.occupancy ?? 0;
             const planned = cell.plannedOccupancy ?? 0;
             const projected = committed + planned;
+            // Demand and supply are shown as two numbers, never one. "2 staff
+            // required" said nothing about whether anyone is actually scheduled.
             const ratioLabel =
                 cell.requiredStaff != null
-                    ? `${cell.requiredStaff} staff required`
-                    : cell.capacity != null
-                        ? `${projected} / ${cell.capacity} projected`
-                        : "Capacity unavailable";
+                    ? `${cell.scheduledStaffCount} of ${cell.requiredStaff} staff scheduled`
+                    : cell.scheduledStaffCount > 0
+                        ? `${cell.scheduledStaffCount} staff scheduled`
+                        : cell.capacity != null
+                            ? `${projected} / ${cell.capacity} projected`
+                            : "Capacity unavailable";
             return {
                 dayKey: String(cell.weekday),
                 dayLabel: DAY_SHORT[cell.weekday],
@@ -115,6 +119,9 @@ function presentRoster(model: RosterReadModel) {
                 projected,
                 capacity: cell.capacity,
                 requiredStaff: cell.requiredStaff,
+                scheduledStaffCount: cell.scheduledStaffCount,
+                scheduledStaff: cell.scheduledStaff,
+                staffingSufficiency: cell.staffingSufficiency,
                 pct,
                 ratioLabel,
                 tone,
@@ -155,7 +162,15 @@ function presentRoster(model: RosterReadModel) {
     const isCurrentWeek = model.weekStart === mondayYmd(model.todayYmd);
     const weekLabel = isCurrentWeek ? "This week" : `${fmtMonthDay(model.weekStart)}–${fmtMonthDay(model.weekEnd)}`;
 
-    return { weekStart: model.weekStart, weekEnd: model.weekEnd, weekLabel, days, rooms };
+    return {
+        weekStart: model.weekStart,
+        weekEnd: model.weekEnd,
+        weekLabel,
+        days,
+        rooms,
+        staffingSufficiency: model.staffingSufficiency,
+        unroomedStaff: model.unroomedStaff,
+    };
 }
 
 function param(request: NextRequest, key: string): string {
@@ -357,7 +372,7 @@ export async function GET(request: NextRequest) {
                 siteLocationId,
                 subjects: model.subjects,
                 totalAssignments: model.totalAssignments,
-                staffReady: model.staffReady,
+                staffSubjectCount: model.staffSubjectCount,
             });
         }
 

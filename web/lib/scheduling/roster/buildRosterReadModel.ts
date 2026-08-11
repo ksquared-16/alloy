@@ -19,6 +19,16 @@ import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectation
 import { buildRoomConfigResolvers } from "@/lib/childcareOperational/config/roomConfigResolvers";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
 import { readLocationSchedulingConfig } from "@/lib/locations/locationSchedulingConfig";
+import {
+    buildStaffSupply,
+    staffSupplyCellKey,
+    type ScheduledStaffMember,
+} from "@/lib/scheduling/supply/buildStaffSupply";
+import {
+    resolveStaffingSufficiency,
+    rollUpStaffingSufficiency,
+    type StaffingSufficiency,
+} from "@/lib/scheduling/supply/staffingSufficiency";
 
 export type RosterDayFact = {
     date: string;
@@ -32,7 +42,21 @@ export type RosterDayFact = {
      */
     plannedOccupancy: number;
     capacity: number | null;
+    /**
+     * Staffing DEMAND — how many staff this room·day requires, from the configured
+     * ratio tiers. Null when no ratio configuration resolves. Never a count of people.
+     */
     requiredStaff: number | null;
+    /**
+     * Staffing SUPPLY — how many employed people are scheduled here on this date,
+     * from committed `subject_type = 'staff'` assignments. A different truth from
+     * `requiredStaff`; the two never share a field.
+     */
+    scheduledStaffCount: number;
+    /** The scheduled people themselves — the minimum a roster needs to place them. */
+    scheduledStaff: ScheduledStaffMember[];
+    /** sufficient | short | unknown. Never green merely because demand is unresolvable. */
+    staffingSufficiency: StaffingSufficiency;
     /** Occupancy exceeds the binding capacity for the room on this date. */
     capacityExceeded: boolean;
     /** Occupancy exceeds the highest configured ratio tier. */
@@ -58,6 +82,16 @@ export type RosterReadModel = {
     days: { date: string; weekday: number }[];
     todayYmd: string;
     rooms: RosterRoomFact[];
+    /**
+     * Site-wide staffing verdict for the week. `unknown` whenever any room·day
+     * could not be evaluated — partial knowledge must never read as staffed.
+     */
+    staffingSufficiency: StaffingSufficiency;
+    /**
+     * Staff scheduled at the site but not assigned to a room. They are real
+     * supply and must not silently disappear from the site's picture.
+     */
+    unroomedStaff: ScheduledStaffMember[];
 };
 
 const WEEKDAY_MON_FIRST = [1, 2, 3, 4, 5, 6, 0]; // Mon..Sun
@@ -138,13 +172,32 @@ export async function buildRosterReadModel(
 
     const rooms = await resolveRoomsForLocation(supabase, input.orgId, input.siteLocationId);
     if (rooms.length === 0) {
-        return { siteLocationId: input.siteLocationId, weekStart, weekEnd, days, todayYmd: input.todayYmd, rooms: [] };
+        return {
+            siteLocationId: input.siteLocationId,
+            weekStart,
+            weekEnd,
+            days,
+            todayYmd: input.todayYmd,
+            rooms: [],
+            staffingSufficiency: "unknown",
+            unroomedStaff: [],
+        };
     }
 
-    const inputs = await loadOperationalExpectationInputs(supabase, {
-        orgId: input.orgId,
-        siteLocationId: input.siteLocationId,
-    });
+    const [inputs, staffSupply] = await Promise.all([
+        loadOperationalExpectationInputs(supabase, {
+            orgId: input.orgId,
+            siteLocationId: input.siteLocationId,
+        }),
+        // Supply is a separate load from a separate ledger slice — child
+        // expectations are scoped to `subject_type = 'child'` and must stay that way.
+        buildStaffSupply(supabase, {
+            orgId: input.orgId,
+            siteLocationId: input.siteLocationId,
+            dateStart: weekStart,
+            dateEnd: weekEnd,
+        }),
+    ]);
 
     // Resolve age groups for EVERY room (incl. empty ones) so capacity/ratio context
     // resolves even where no child is currently placed.
@@ -199,6 +252,9 @@ export async function buildRosterReadModel(
         }
     }
 
+    const supplyByKey = new Map(staffSupply.cells.map((c) => [staffSupplyCellKey(c.roomLocationId, c.date), c]));
+    const cellVerdicts: StaffingSufficiency[] = [];
+
     const roomFacts: RosterRoomFact[] = rooms.map((room) => {
         const capacities: number[] = [];
         const cells: RosterDayFact[] = days.map((day) => {
@@ -208,13 +264,24 @@ export async function buildRosterReadModel(
             const staff = staffByKey.get(key) ?? null;
             const capacity = resolveCapacityBinding(room.id, day.date);
             if (capacity != null) capacities.push(capacity);
+            const supplyCell = supplyByKey.get(staffSupplyCellKey(room.id, day.date)) ?? null;
+            const requiredStaff = staff?.requiredStaff ?? null;
+            const scheduledStaff = supplyCell?.scheduledStaff ?? [];
+            const staffingSufficiency = resolveStaffingSufficiency({
+                requiredStaff,
+                scheduledStaffCount: scheduledStaff.length,
+            });
+            cellVerdicts.push(staffingSufficiency);
             return {
                 date: day.date,
                 weekday: day.weekday,
                 occupancy,
                 plannedOccupancy,
                 capacity,
-                requiredStaff: staff?.requiredStaff ?? null,
+                requiredStaff,
+                scheduledStaffCount: scheduledStaff.length,
+                scheduledStaff,
+                staffingSufficiency,
                 capacityExceeded: capacityExceededKeys.has(key),
                 ratioBreach: staff?.exceedsDefinedTiers ?? false,
             };
@@ -232,5 +299,16 @@ export async function buildRosterReadModel(
         };
     });
 
-    return { siteLocationId: input.siteLocationId, weekStart, weekEnd, days, todayYmd: input.todayYmd, rooms: roomFacts };
+    const unroomedStaff = staffSupply.members.filter((m) => m.roomLocationId == null);
+
+    return {
+        siteLocationId: input.siteLocationId,
+        weekStart,
+        weekEnd,
+        days,
+        todayYmd: input.todayYmd,
+        rooms: roomFacts,
+        staffingSufficiency: rollUpStaffingSufficiency(cellVerdicts),
+        unroomedStaff,
+    };
 }

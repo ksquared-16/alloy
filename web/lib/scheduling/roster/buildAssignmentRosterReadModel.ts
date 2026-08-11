@@ -24,11 +24,22 @@ import {
 
 export type AssignmentRosterRow = {
     assignmentId: string;
-    agreementId: string;
-    customerMemberId: string;
-    childName: string;
+    /**
+     * Stable grouping key for the subject this row belongs to. Namespaced by
+     * subject type so a child and a staff member can never collide:
+     * `agreement:<id>` / `member:<id>` for children, `staff:<personId>` for staff.
+     */
+    subjectKey: string;
+    /** Child or staff display name. */
+    subjectName: string;
+    /** Child subjects only. Null for staff — the DB constraint requires it. */
+    customerMemberId: string | null;
+    /** Child subjects only. Null for staff and for proposed member-scoped rows. */
+    enrollmentAgreementId: string | null;
     /** The child/staff person id backing this row, when resolved — used for avatar lookup. */
     personId?: string | null;
+    /** Staff subjects only — configured position from the covering employment. */
+    positionLabel?: string | null;
     subjectType: "child" | "staff";
     isPrimary: boolean;
     roleLabel: "Primary" | "Secondary";
@@ -46,9 +57,11 @@ export type AssignmentRosterRow = {
 };
 
 export type AssignmentRosterSubject = {
-    agreementId: string;
-    customerMemberId: string;
-    childName: string;
+    subjectKey: string;
+    subjectName: string;
+    customerMemberId: string | null;
+    enrollmentAgreementId: string | null;
+    positionLabel?: string | null;
     subjectType: "child" | "staff";
     assignmentCount: number;
     primaryRoom: string | null;
@@ -60,7 +73,8 @@ export type AssignmentRosterSubject = {
 export type AssignmentRosterReadModel = {
     subjects: AssignmentRosterSubject[];
     totalAssignments: number;
-    staffReady: boolean;
+    /** How many of `subjects` are staff — 0 is a fact, not an absence of support. */
+    staffSubjectCount: number;
 };
 
 type AgreementRow = {
@@ -73,6 +87,7 @@ type AssignmentRow = {
     id: string;
     enrollment_agreement_id: string | null;
     customer_member_id: string | null;
+    site_location_id: string | null;
     subject_type: string | null;
     subject_person_id: string | null;
     is_primary: boolean | null;
@@ -92,6 +107,15 @@ type TypeRow = {
 
 function memberSubjectKey(customerMemberId: string): string {
     return `member:${customerMemberId}`;
+}
+
+function agreementSubjectKey(agreementId: string): string {
+    return `agreement:${agreementId}`;
+}
+
+/** Staff never share a namespace with children — one person, one staff subject. */
+function staffSubjectKey(personId: string): string {
+    return `staff:${personId}`;
 }
 
 async function resolvePersonNames(
@@ -247,6 +271,62 @@ async function resolveAssignmentTypes(
     return map;
 }
 
+/**
+ * Configured position label per staff person, from the covering employment.
+ * Employment is the owner of "in what capacity" — the assignment ledger is not.
+ */
+async function resolveStaffPositionLabels(
+    supabase: SupabaseClient,
+    orgId: string,
+    personIds: string[]
+): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    const distinct = [...new Set(personIds.filter(Boolean))];
+    if (distinct.length === 0) return map;
+
+    const { data: employments } = await supabase
+        .from("employments")
+        .select("person_id, position_id, employment_status, start_date")
+        .eq("org_id", orgId)
+        .in("person_id", distinct);
+
+    const rows = (employments ?? []) as {
+        person_id: string;
+        position_id: string | null;
+        employment_status: string;
+        start_date: string;
+    }[];
+    const positionIds = [...new Set(rows.map((r) => r.position_id).filter((v): v is string => Boolean(v)))];
+    if (positionIds.length === 0) return map;
+
+    const { data: positions } = await supabase
+        .from("employment_positions")
+        .select("id, label")
+        .eq("org_id", orgId)
+        .in("id", positionIds);
+    const labelById = new Map(((positions ?? []) as { id: string; label: string }[]).map((p) => [p.id, p.label]));
+
+    // Prefer the open employment; fall back to the most recent period so an
+    // ended staff member still reads as what they were.
+    const byPerson = new Map<string, { position_id: string | null; open: boolean; start_date: string }>();
+    for (const r of rows) {
+        const open = ["pending_start", "active", "ending"].includes(r.employment_status);
+        const current = byPerson.get(r.person_id);
+        const better =
+            !current ||
+            (open && !current.open) ||
+            (open === current.open && r.start_date > current.start_date);
+        if (better) byPerson.set(r.person_id, { position_id: r.position_id, open, start_date: r.start_date });
+    }
+    for (const [personId, entry] of byPerson) {
+        if (entry.position_id) {
+            const label = labelById.get(entry.position_id);
+            if (label) map.set(personId, label);
+        }
+    }
+    return map;
+}
+
 /** Load the site Assignment roster — agreement-backed + proposed member-scoped rows. */
 export async function buildAssignmentRosterReadModel(
     supabase: SupabaseClient,
@@ -271,7 +351,7 @@ export async function buildAssignmentRosterReadModel(
     const { data: assignmentData, error: assignmentError } = await supabase
         .from("schedule_assignments")
         .select(
-            "id, enrollment_agreement_id, customer_member_id, subject_type, subject_person_id, is_primary, operational_assignment_type_id, schedule_pattern_id, room_location_id, start_date, end_date, status, commitment_kind"
+            "id, enrollment_agreement_id, customer_member_id, site_location_id, subject_type, subject_person_id, is_primary, operational_assignment_type_id, schedule_pattern_id, room_location_id, start_date, end_date, status, commitment_kind"
         )
         .eq("org_id", orgId)
         .eq("site_location_id", siteLocationId)
@@ -282,7 +362,7 @@ export async function buildAssignmentRosterReadModel(
 
     const rows = (assignmentData ?? []) as AssignmentRow[];
     if (rows.length === 0) {
-        return { subjects: [], totalAssignments: 0, staffReady: true };
+        return { subjects: [], totalAssignments: 0, staffSubjectCount: 0 };
     }
 
     const memberIds = [
@@ -293,10 +373,19 @@ export async function buildAssignmentRosterReadModel(
         ),
     ];
     const memberPersonIds = await resolveMemberPersonIds(supabase, orgId, memberIds);
+    const staffPersonIds = [
+        ...new Set(
+            rows
+                .filter((r) => r.subject_type === "staff")
+                .map((r) => r.subject_person_id)
+                .filter((id): id is string => Boolean(id))
+        ),
+    ];
     const personIds = [
         ...new Set([
             ...agreements.map((a) => a.person_id).filter((id): id is string => Boolean(id)),
             ...memberPersonIds.values(),
+            ...staffPersonIds,
         ]),
     ];
     const { names: nameByPersonId, imageUrls: imageUrlByPersonId } = await resolvePersonNames(
@@ -312,26 +401,52 @@ export async function buildAssignmentRosterReadModel(
         .map((r) => r.operational_assignment_type_id)
         .filter((id): id is string => Boolean(id));
 
-    const [roomLabels, { weekdaysById: patternWeekdays, timeLabelById: patternTimeLabels }, typeMap] = await Promise.all([
-        resolveLocationLabels(supabase, orgId, roomIds),
-        resolvePatternWeekdays(supabase, orgId, patternIds),
-        resolveAssignmentTypes(supabase, orgId, typeIds),
-    ]);
+    const [roomLabels, { weekdaysById: patternWeekdays, timeLabelById: patternTimeLabels }, typeMap, staffPositions] =
+        await Promise.all([
+            resolveLocationLabels(supabase, orgId, roomIds),
+            resolvePatternWeekdays(supabase, orgId, patternIds),
+            resolveAssignmentTypes(supabase, orgId, typeIds),
+            resolveStaffPositionLabels(supabase, orgId, staffPersonIds),
+        ]);
 
     const bySubject = new Map<string, AssignmentRosterRow[]>();
-    const personIdBySubject = new Map<string, string>();
     for (const row of rows) {
-        const memberId = row.customer_member_id;
-        if (!memberId) continue;
-        const agreement =
-            (row.enrollment_agreement_id
-                ? agreements.find((a) => a.id === row.enrollment_agreement_id)
-                : null) ?? agreementByMember.get(memberId) ?? null;
-        const subjectKey = agreement?.id ?? memberSubjectKey(memberId);
-        const personId = agreement?.person_id ?? memberPersonIds.get(memberId) ?? null;
-        const childName = (personId && nameByPersonId.get(personId)) || "Unnamed child";
-        if (personId) personIdBySubject.set(subjectKey, personId);
         const subjectType = row.subject_type === "staff" ? "staff" : "child";
+
+        // Subject-aware resolution. The ledger is one table with two subject
+        // shapes; each is read through its own declared identity, and neither is
+        // coerced into the other. Previously every staff row was dropped here
+        // because `customer_member_id` is NULL for staff BY CONSTRAINT.
+        let subjectKey: string;
+        let subjectName: string;
+        let personId: string | null;
+        let customerMemberId: string | null;
+        let enrollmentAgreementId: string | null;
+        let positionLabel: string | null = null;
+
+        if (subjectType === "staff") {
+            const staffPersonId = row.subject_person_id;
+            if (!staffPersonId) continue; // malformed staff row — no identity to project
+            subjectKey = staffSubjectKey(staffPersonId);
+            personId = staffPersonId;
+            subjectName = nameByPersonId.get(staffPersonId) || "Unnamed staff";
+            customerMemberId = null;
+            enrollmentAgreementId = null;
+            positionLabel = staffPositions.get(staffPersonId) ?? null;
+        } else {
+            const memberId = row.customer_member_id;
+            if (!memberId) continue; // child rows require a member — integrity unchanged
+            const agreement =
+                (row.enrollment_agreement_id
+                    ? agreements.find((a) => a.id === row.enrollment_agreement_id)
+                    : null) ?? agreementByMember.get(memberId) ?? null;
+            subjectKey = agreement ? agreementSubjectKey(agreement.id) : memberSubjectKey(memberId);
+            personId = agreement?.person_id ?? memberPersonIds.get(memberId) ?? null;
+            subjectName = (personId && nameByPersonId.get(personId)) || "Unnamed child";
+            customerMemberId = memberId;
+            enrollmentAgreementId = agreement?.id ?? null;
+        }
+
         const weekdays = (row.schedule_pattern_id ? patternWeekdays.get(row.schedule_pattern_id) : []) ?? [];
         const timeLabel = (row.schedule_pattern_id ? patternTimeLabels.get(row.schedule_pattern_id) : null) ?? null;
         const type = row.operational_assignment_type_id
@@ -348,10 +463,12 @@ export async function buildAssignmentRosterReadModel(
         });
         const rosterRow: AssignmentRosterRow = {
             assignmentId: row.id,
-            agreementId: subjectKey,
-            customerMemberId: memberId,
-            childName,
+            subjectKey,
+            subjectName,
+            customerMemberId,
+            enrollmentAgreementId,
             personId,
+            positionLabel,
             subjectType,
             isPrimary: row.is_primary === true,
             roleLabel: row.is_primary ? "Primary" : "Secondary",
@@ -379,9 +496,11 @@ export async function buildAssignmentRosterReadModel(
         });
         const primary = assignments.find((a) => a.isPrimary) ?? assignments[0];
         subjects.push({
-            agreementId: subjectKey,
+            subjectKey,
+            subjectName: primary.subjectName,
             customerMemberId: primary.customerMemberId,
-            childName: primary.childName,
+            enrollmentAgreementId: primary.enrollmentAgreementId,
+            positionLabel: primary.positionLabel ?? null,
             subjectType: primary.subjectType,
             assignmentCount: assignments.length,
             primaryRoom: primary?.roomName ?? null,
@@ -390,11 +509,11 @@ export async function buildAssignmentRosterReadModel(
         });
     }
 
-    subjects.sort((a, b) => a.childName.localeCompare(b.childName));
+    subjects.sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 
     return {
         subjects,
         totalAssignments: rows.length,
-        staffReady: true,
+        staffSubjectCount: subjects.filter((s) => s.subjectType === "staff").length,
     };
 }

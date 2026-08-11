@@ -13,9 +13,14 @@ import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 
 export type AssignmentRosterSubject = {
-    agreementId: string;
-    customerMemberId: string;
-    childName: string;
+    subjectKey: string;
+    /** Null for staff subjects — the assignment ledger requires it. */
+    customerMemberId: string | null;
+    /** Null for staff subjects and for proposed member-scoped child rows. */
+    enrollmentAgreementId: string | null;
+    subjectName: string;
+    /** Staff subjects only — configured position from the covering employment. */
+    positionLabel?: string | null;
     subjectType: "child" | "staff";
     assignmentCount: number;
     primaryRoom: string | null;
@@ -38,8 +43,8 @@ export type AssignmentRosterSubject = {
 };
 
 export type BulkAssignmentPreviewRow = {
-    customerMemberId: string;
-    childName: string;
+    customerMemberId: string | null;
+    subjectName: string;
     status: "ready" | "blocked";
     reason?: string;
     payload: Record<string, unknown>;
@@ -48,7 +53,7 @@ export type BulkAssignmentPreviewRow = {
 export type AssignmentRosterBulkHandlers = {
     onCreateForChild?: (customerMemberId: string) => void;
     onBulkArchive?: (assignmentIds: string[]) => void | Promise<void>;
-    onBulkMakePrimary?: (payload: { agreementId: string; assignmentId: string; effectiveFrom: string }[]) => void | Promise<void>;
+    onBulkMakePrimary?: (payload: { subjectKey: string; assignmentId: string; effectiveFrom: string }[]) => void | Promise<void>;
     onBulkAssignment?: (
         subjects: AssignmentRosterSubject[],
         preview: BulkAssignmentPreviewRow[],
@@ -102,11 +107,11 @@ export default function AssignmentRosterPanel({
         [subjects]
     );
 
-    const toggle = (agreementId: string) => {
+    const toggle = (subjectKey: string) => {
         setExpanded((prev) => {
             const next = new Set(prev);
-            if (next.has(agreementId)) next.delete(agreementId);
-            else next.add(agreementId);
+            if (next.has(subjectKey)) next.delete(subjectKey);
+            else next.add(subjectKey);
             return next;
         });
     };
@@ -121,12 +126,12 @@ export default function AssignmentRosterPanel({
     };
 
     const selectedAssignments = useMemo(() => {
-        const rows: { agreementId: string; assignmentId: string; isPrimary: boolean; effectiveFrom: string }[] = [];
+        const rows: { subjectKey: string; assignmentId: string; isPrimary: boolean; effectiveFrom: string }[] = [];
         for (const s of subjects) {
             for (const a of s.assignments) {
                 if (selected.has(a.assignmentId)) {
                     rows.push({
-                        agreementId: s.agreementId,
+                        subjectKey: s.subjectKey,
                         assignmentId: a.assignmentId,
                         isPrimary: a.isPrimary,
                         effectiveFrom: a.effectiveFrom,
@@ -138,23 +143,35 @@ export default function AssignmentRosterPanel({
     }, [subjects, selected]);
 
     const selectedSubjects = useMemo(() => {
-        const agreementIds = new Set(selectedAssignments.map((r) => r.agreementId));
-        return subjects.filter((s) => agreementIds.has(s.agreementId));
+        const selectedKeys = new Set(selectedAssignments.map((r) => r.subjectKey));
+        return subjects.filter((s) => selectedKeys.has(s.subjectKey));
     }, [subjects, selectedAssignments]);
 
     const bulkAssignmentPreview = useMemo((): BulkAssignmentPreviewRow[] => {
         if (!bulkMode || bulkMode !== "assignment") return [];
         const type = bulk?.assignmentTypes?.find((t) => t.id === bulkTypeId);
         return selectedSubjects.map((s) => {
-            const blocked = !bulkTypeId || !bulkPatternId || !bulkRoomId || !bulkStartDate;
+            // Staff assignments are authored through the assignment action with a
+            // person subject; this bulk path builds child payloads only. Blocking
+            // is deliberate — coercing a staff subject into an enrollment-shaped
+            // payload is exactly the bug this phase removed from the read model.
+            const isStaff = s.subjectType === "staff";
+            const incomplete = !bulkTypeId || !bulkPatternId || !bulkRoomId || !bulkStartDate;
+            const blocked = isStaff || incomplete || !s.enrollmentAgreementId;
             return {
                 customerMemberId: s.customerMemberId,
-                childName: s.childName,
+                subjectName: s.subjectName,
                 status: blocked ? "blocked" : "ready",
-                reason: blocked ? "Complete type, pattern, room, and start date" : undefined,
+                reason: isStaff
+                    ? "Staff assignments are authored from the staff member, not bulk child assignment"
+                    : !s.enrollmentAgreementId
+                      ? "This child has no enrollment agreement yet"
+                      : incomplete
+                        ? "Complete type, pattern, room, and start date"
+                        : undefined,
                 payload: {
                     subject_type: "child",
-                    enrollment_agreement_id: s.agreementId,
+                    enrollment_agreement_id: s.enrollmentAgreementId,
                     schedule_pattern_id: bulkPatternId,
                     start_date: bulkStartDate,
                     room_location_id: bulkRoomId,
@@ -303,7 +320,7 @@ export default function AssignmentRosterPanel({
                     <ul className="mt-2 space-y-1">
                         {bulkAssignmentPreview.map((row) => (
                             <li key={row.customerMemberId} className="text-[11px] text-alloy-slate">
-                                {row.childName} ·{" "}
+                                {row.subjectName} ·{" "}
                                 <span
                                     className={
                                         row.status === "ready" ? "text-alloy-bend-pine" : "text-alloy-ember"
@@ -366,7 +383,7 @@ export default function AssignmentRosterPanel({
                             disabled={bulk?.busy || !bulkRoomId || selectedAssignments.length === 0}
                             onClick={() => {
                                 const rows = selectedAssignments.map((r) => {
-                                    const subject = subjects.find((s) => s.agreementId === r.agreementId);
+                                    const subject = subjects.find((s) => s.subjectKey === r.subjectKey);
                                     const assignment = subject?.assignments.find(
                                         (a) => a.assignmentId === r.assignmentId,
                                     );
@@ -374,7 +391,7 @@ export default function AssignmentRosterPanel({
                                         customerMemberId: subject?.customerMemberId ?? "",
                                         payload: {
                                             subject_type: "child",
-                                            enrollment_agreement_id: r.agreementId,
+                                            enrollment_agreement_id: subject?.enrollmentAgreementId ?? null,
                                             schedule_pattern_id: bulkPatternId || undefined,
                                             start_date: bulkStartDate,
                                             room_location_id: bulkRoomId,
@@ -408,15 +425,15 @@ export default function AssignmentRosterPanel({
             >
                 <ul className="divide-y divide-alloy-stone/8">
                     {subjects.map((subject) => {
-                        const isOpen = expanded.has(subject.agreementId);
+                        const isOpen = expanded.has(subject.subjectKey);
                         const primary = subject.assignments.find((a) => a.isPrimary) ?? subject.assignments[0];
                         const primaryLifecycle = primary?.lifecycleLabel ?? null;
                         const subjectSelected = subject.assignments.some((a) => selected.has(a.assignmentId));
                         return (
                             <li
-                                key={subject.agreementId}
+                                key={subject.subjectKey}
                                 className="px-3 py-2.5"
-                                data-assignment-roster-subject={subject.agreementId}
+                                data-assignment-roster-subject={subject.subjectKey}
                             >
                                 <div className="flex items-start gap-2.5">
                                     <label className="mt-1.5 flex shrink-0 items-center justify-center">
@@ -435,7 +452,7 @@ export default function AssignmentRosterPanel({
                                                     toggleSelect(primary.assignmentId);
                                                 }
                                             }}
-                                            aria-label={`Select ${subject.childName}`}
+                                            aria-label={`Select ${subject.subjectName}`}
                                         />
                                     </label>
                                     <button
@@ -443,22 +460,22 @@ export default function AssignmentRosterPanel({
                                         className="min-w-0 flex-1 text-left"
                                         onClick={() => {
                                             if (subject.assignmentCount > 1) {
-                                                toggle(subject.agreementId);
+                                                toggle(subject.subjectKey);
                                                 return;
                                             }
                                             if (primary) setDetailAssignmentId(primary.assignmentId);
                                         }}
                                         aria-expanded={isOpen}
-                                        data-assignment-roster-child={subject.agreementId}
+                                        data-assignment-roster-child={subject.subjectKey}
                                     >
                                         <div className="flex items-start gap-2.5">
-                                            <span className="mt-0.5 shrink-0" data-assignment-roster-avatar={subject.agreementId}>
-                                                <CardAvatar name={subject.childName} imageUrl={subject.imageUrl} size={32} />
+                                            <span className="mt-0.5 shrink-0" data-assignment-roster-avatar={subject.subjectKey}>
+                                                <CardAvatar name={subject.subjectName} imageUrl={subject.imageUrl} size={32} />
                                             </span>
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                                     <span className="text-[13px] font-semibold text-alloy-midnight">
-                                                        {subject.childName}
+                                                        {subject.subjectName}
                                                     </span>
                                                     {primaryLifecycle ? (
                                                         <span
@@ -566,7 +583,7 @@ export default function AssignmentRosterPanel({
                                 Assignment detail
                             </p>
                             <p className="text-[13px] font-semibold text-alloy-midnight">
-                                {detailAssignment.subject.childName}
+                                {detailAssignment.subject.subjectName}
                             </p>
                         </div>
                         <button

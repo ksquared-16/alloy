@@ -33,6 +33,11 @@ const DEFAULT_TABLES = [
     "employments",
     "employment_positions",
     "locations",
+    "schedule_assignments",
+    "schedule_patterns",
+    "customer_members",
+    "child_enrollment_agreements",
+    "operational_assignment_types",
     "field_definitions",
     "field_values",
     "user_roles",
@@ -107,6 +112,14 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
                 "i"
             );
             filters.push((r) => (r[col] == null ? false : rx.test(String(r[col]))));
+            return api;
+        };
+        api.lte = (col: string, val: unknown) => {
+            filters.push((r) => r[col] != null && String(r[col]) <= String(val));
+            return api;
+        };
+        api.gte = (col: string, val: unknown) => {
+            filters.push((r) => r[col] != null && String(r[col]) >= String(val));
             return api;
         };
         api.order = () => api;
