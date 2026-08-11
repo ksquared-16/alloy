@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "lib/search/**/*.ts",
+    "lib/workUnits/lifecycleSubjectContracts.ts",
+    "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx",
+    "components/admin/focusPanel/OpportunityFocusPanelModeBody.tsx",
+    "app/adminV2/components/GlobalSearchBox.tsx",
+    "next-env.d.ts"
+  ]
+}

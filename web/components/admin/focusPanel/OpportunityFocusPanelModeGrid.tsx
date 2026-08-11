@@ -47,7 +47,7 @@ import {
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
-import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { FOCUS_PANEL_CARD_KEYS, type FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
@@ -107,6 +107,16 @@ type Props = {
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
     onModeChange?: (mode: FocusPanelMode) => void;
+    /**
+     * A card the SELECTION asked to land on (today: Search).
+     *
+     * Passed in rather than read from the drawer context because this component is
+     * deliberately source-agnostic — it renders a model and must not know where the
+     * selection came from. `subject_key` scopes the request so switching subject
+     * re-applies focus, while unrelated re-renders do not fight an operator who has
+     * since focused something else.
+     */
+    requestedCardFocus?: { card_key: string; item_id?: string | null; subject_key?: string | null } | null;
 };
 
 /** Renders a mode grid from a source-agnostic `FocusPanelWorkModeModel` — never the drawer VM. */
@@ -115,6 +125,7 @@ export default function OpportunityFocusPanelModeGrid({
     onSelectTab,
     onHeaderAction,
     onModeChange,
+    requestedCardFocus,
 }: Props) {
     // Source-agnostic: the model is produced identically from the provisioning answer (commit-critical)
     // or the drawer VM (enriched). The grid never knows which — configuration determines composition,
@@ -239,6 +250,30 @@ export default function OpportunityFocusPanelModeGrid({
     // host raises that card and recedes the rest — no route, no drawer, no modal.
     // Declared before requestFocus so Linked-card opens can elevate immediately.
     const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
+
+    // Selection-requested card focus.
+    //
+    // A caller (today: Search) can ask for a specific card via the SAME selection
+    // authority that already carries the subject — `drawerSubjectContext.card_focus`.
+    // Clicking a child therefore lands on Children rather than the panel's default
+    // composition, without the caller touching the DOM or owning a second focus
+    // state: this drives the existing `activeDepth`/`elevatedCellKey` machinery.
+    //
+    // Keyed on the REQUEST identity (subject + card + item) so a rapid subject
+    // switch re-applies, while a re-render for any other reason does not fight the
+    // operator if they have since focused something else themselves.
+    const requestedFocusKey = requestedCardFocus
+        ? `${requestedCardFocus.subject_key ?? ""}:${requestedCardFocus.card_key}:${requestedCardFocus.item_id ?? ""}`
+        : null;
+    const appliedFocusKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!requestedCardFocus || !requestedFocusKey) return;
+        if (appliedFocusKeyRef.current === requestedFocusKey) return;
+        const card = requestedCardFocus.card_key;
+        if (!(FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(card)) return;
+        appliedFocusKeyRef.current = requestedFocusKey;
+        setActiveDepth({ card: card as FocusPanelCardKey, level: "focused" });
+    }, [requestedCardFocus, requestedFocusKey]);
 
     const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         focusNonceRef.current += 1;

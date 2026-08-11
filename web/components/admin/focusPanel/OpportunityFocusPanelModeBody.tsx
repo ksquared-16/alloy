@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -40,6 +41,7 @@ export default function OpportunityFocusPanelModeBody({
     onModeChange,
 }: Props) {
     const perspective = useActiveRuntimePerspective();
+    const { drawer } = useAdminDrawer();
     const model = useMemo(
         () =>
             focusPanelWorkModeModelFromDrawerVm({
@@ -57,6 +59,18 @@ export default function OpportunityFocusPanelModeBody({
     return (
         <OpportunityFocusPanelModeGrid
             model={model}
+            requestedCardFocus={
+                // Bridge the SELECTION's card request into the source-agnostic grid.
+                // This component already translates drawer VM → model, so it is the
+                // right seam; the grid itself stays unaware of where selection lives.
+                drawer.drawerSubjectContext?.card_focus
+                    ? {
+                          card_key: drawer.drawerSubjectContext.card_focus.card_key,
+                          item_id: drawer.drawerSubjectContext.card_focus.item_id ?? null,
+                          subject_key: `${drawer.type}:${drawer.id}`,
+                      }
+                    : null
+            }
             onSelectTab={onSelectTab}
             onHeaderAction={onHeaderAction}
             onModeChange={onModeChange}
