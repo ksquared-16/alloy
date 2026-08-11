@@ -211,10 +211,34 @@ export function chooseOrgAndRoleKeysFromMembershipRows(
  * `error` — exists because incidental closure is one refactor away from being incidental opening.
  * Making it deliberate costs nothing and is checkable.
  */
-async function fetchLegacyAdminOpsOrgAndRole(
+export type LegacyAdminOpsAuthorityRead =
+    | { status: "absent" }
+    | { status: "present"; orgId: string; role: "admin" | "ops" }
+    | { status: "unknown"; table: string; reason: string };
+
+/**
+ * W-20 / `T-19` — the same read, with the third state kept instead of collapsed.
+ *
+ * `fetchLegacyAdminOpsOrgAndRole` returns `null` for two different facts: *this principal has no
+ * legacy grant* and *we could not find out*. For the resolver those are one answer, because both
+ * must deny — so the collapse is correct there and the wrapper below performs it.
+ *
+ * They are **not** one answer for a caller asking whether removing a membership actually revokes
+ * authority. There, "no legacy grant" permits the removal and "could not find out" must refuse it:
+ * an unknown treated as absent reports a revocation that may not have happened, which is the
+ * failure direction `W-43` and `W-56` each closed one layer away. This is `W-56`'s argument about
+ * `Set<string>` applied to a nullable return — the type had already lost the fact, so no care at the
+ * call site could recover it.
+ *
+ * Exported so the removal guard asks **this** function rather than re-deriving the fallback's
+ * precedence. A guard with its own copy of "when does the legacy path grant" is a second opinion
+ * about admission, and this initiative has already paid for that shape twice (`W-42`'s two role-key
+ * answers, the duplicated permission catalog).
+ */
+export async function readLegacyAdminOpsAuthority(
     supabase: SupabaseClient,
     userId: string
-): Promise<{ orgId: string; role: "admin" | "ops" } | null> {
+): Promise<LegacyAdminOpsAuthorityRead> {
     const { data: profile, error: profileErr } = await supabase
         .from("user_profiles")
         .select("role")
@@ -222,12 +246,13 @@ async function fetchLegacyAdminOpsOrgAndRole(
         .maybeSingle();
     if (profileErr) {
         logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "user_profiles", userId, null, profileErr.message);
-        return null;
+        return { status: "unknown", table: "user_profiles", reason: profileErr.message };
     }
     const pr = normalizeRoleKey((profile as { role?: unknown } | null)?.role);
     if (pr === "admin" || pr === "ops") {
-        const orgFromAu = await fetchOrgIdFromAppUsers(supabase, userId);
-        if (orgFromAu) return { orgId: orgFromAu, role: pr };
+        const orgFromAu = await readOrgIdFromAppUsers(supabase, userId);
+        if (orgFromAu.status === "unknown") return orgFromAu;
+        if (orgFromAu.status === "present") return { status: "present", orgId: orgFromAu.orgId, role: pr };
     }
 
     const { data: au, error: auErr } = await supabase
@@ -237,13 +262,13 @@ async function fetchLegacyAdminOpsOrgAndRole(
         .maybeSingle();
     if (auErr) {
         logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "app_users", userId, null, auErr.message);
-        return null;
+        return { status: "unknown", table: "app_users", reason: auErr.message };
     }
     const auRow = au as { role?: unknown; org_id?: unknown } | null;
     const ar = normalizeRoleKey(auRow?.role);
     const oid = auRow && typeof auRow.org_id === "string" ? auRow.org_id : "";
     if ((ar === "admin" || ar === "ops") && oid) {
-        return { orgId: oid, role: ar };
+        return { status: "present", orgId: oid, role: ar };
     }
 
     const { data: au2, error: au2Err } = await supabase
@@ -253,20 +278,45 @@ async function fetchLegacyAdminOpsOrgAndRole(
         .maybeSingle();
     if (au2Err) {
         logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "app_users", userId, null, au2Err.message);
-        return null;
+        return { status: "unknown", table: "app_users", reason: au2Err.message };
     }
     const au2Row = au2 as { role?: unknown; org_id?: unknown } | null;
     const ar2 = normalizeRoleKey(au2Row?.role);
     const oid2 = au2Row && typeof au2Row.org_id === "string" ? au2Row.org_id : "";
     if ((ar2 === "admin" || ar2 === "ops") && oid2) {
-        return { orgId: oid2, role: ar2 };
+        return { status: "present", orgId: oid2, role: ar2 };
     }
 
-    return null;
+    return { status: "absent" };
 }
 
-/** W-43 — a failed org read denies the legacy grant rather than falling through to the next lookup. */
-async function fetchOrgIdFromAppUsers(supabase: SupabaseClient, userId: string): Promise<string | null> {
+/**
+ * The resolver's view of the same read: anything that is not a established grant denies.
+ *
+ * Behaviour is byte-for-byte what it was before the three-state existed — a failed read already
+ * returned `null` here and `null` already denied. The collapse is performed in **one** place so it
+ * cannot be re-performed accidentally by a caller for whom it is wrong.
+ */
+async function fetchLegacyAdminOpsOrgAndRole(
+    supabase: SupabaseClient,
+    userId: string
+): Promise<{ orgId: string; role: "admin" | "ops" } | null> {
+    const read = await readLegacyAdminOpsAuthority(supabase, userId);
+    return read.status === "present" ? { orgId: read.orgId, role: read.role } : null;
+}
+
+/**
+ * W-43 — a failed org read denies the legacy grant rather than falling through to the next lookup.
+ *
+ * W-20 correction: that is what W-43's note has always *said*, and returning a bare `null` did not
+ * achieve it. The caller's `if (orgFromAu)` test could not tell a failed org read from a missing
+ * `org_id`, so a failure fell through to the next `app_users` read and could still grant. The
+ * three-state makes the call site honour the rule the comment states.
+ */
+async function readOrgIdFromAppUsers(
+    supabase: SupabaseClient,
+    userId: string
+): Promise<{ status: "absent" } | { status: "present"; orgId: string } | { status: "unknown"; table: string; reason: string }> {
     const { data: au, error: auErr } = await supabase
         .from("app_users")
         .select("org_id")
@@ -274,10 +324,10 @@ async function fetchOrgIdFromAppUsers(supabase: SupabaseClient, userId: string):
         .maybeSingle();
     if (auErr) {
         logAccessReadFailure("fetchOrgIdFromAppUsers", "app_users", userId, null, auErr.message);
-        return null;
+        return { status: "unknown", table: "app_users", reason: auErr.message };
     }
     const o = (au as { org_id?: string | null } | null)?.org_id ?? null;
-    if (typeof o === "string" && o.length > 0) return o;
+    if (typeof o === "string" && o.length > 0) return { status: "present", orgId: o };
 
     const { data: auAuth, error: auAuthErr } = await supabase
         .from("app_users")
@@ -286,10 +336,10 @@ async function fetchOrgIdFromAppUsers(supabase: SupabaseClient, userId: string):
         .maybeSingle();
     if (auAuthErr) {
         logAccessReadFailure("fetchOrgIdFromAppUsers", "app_users", userId, null, auAuthErr.message);
-        return null;
+        return { status: "unknown", table: "app_users", reason: auAuthErr.message };
     }
     const o2 = (auAuth as { org_id?: string | null } | null)?.org_id ?? null;
-    return typeof o2 === "string" && o2.length > 0 ? o2 : null;
+    return typeof o2 === "string" && o2.length > 0 ? { status: "present", orgId: o2 } : { status: "absent" };
 }
 
 /**

@@ -33,6 +33,8 @@ export default function AccessControlClient() {
     const [resetLoadingId, setResetLoadingId] = useState<string | null>(null);
     const [removeTarget, setRemoveTarget] = useState<UserRow | null>(null);
     const [removeLoading, setRemoveLoading] = useState(false);
+    /** `W-20`/`T-19` — the route's statement that this removal would not revoke access. */
+    const [removeResidual, setRemoveResidual] = useState<string | null>(null);
     const [inviteOpen, setInviteOpen] = useState(false);
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteRole, setInviteRole] = useState("");
@@ -124,19 +126,29 @@ export default function AccessControlClient() {
         }
     };
 
-    const handleRemoveConfirm = async () => {
+    const handleRemoveConfirm = async (acknowledgeResidual = false) => {
         if (!removeTarget) return;
         setRemoveLoading(true);
         setError(null);
         try {
-            const res = await fetch(`/api/admin/users/${removeTarget.user_id}/remove`, { method: "POST" });
+            const res = await fetch(`/api/admin/users/${removeTarget.user_id}/remove`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ acknowledge_residual_authority: acknowledgeResidual }),
+            });
             if (res.ok) {
                 setRemoveTarget(null);
+                setRemoveResidual(null);
                 fetchUsers();
             } else {
                 /** `S-11`. A failed revocation must not read as a completed one. */
-                const json = (await res.json().catch(() => ({}))) as { error?: string };
-                setError(json.error ?? "Failed to remove this member");
+                const json = (await res.json().catch(() => ({}))) as { error?: string; acknowledgeable?: boolean };
+                /** `W-20`/`T-19` — a removal that would revoke nothing is stated in the dialog, not the banner. */
+                if (res.status === 409 && json.acknowledgeable === true && json.error) {
+                    setRemoveResidual(json.error);
+                } else {
+                    setError(json.error ?? "Failed to remove this member");
+                }
             }
         } finally {
             setRemoveLoading(false);
@@ -318,13 +330,22 @@ export default function AccessControlClient() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
                     <div className="mx-4 w-full max-w-md rounded-lg border border-alloy-stone/30 bg-white p-6 shadow-lg">
                         <h3 className="mb-2 text-lg font-semibold text-alloy-midnight">Remove from org</h3>
+                        {/* `W-20`/`T-19` — "They will lose access" is the claim the legacy fallback falsifies. */}
                         <p className="mb-4 text-sm text-alloy-midnight/80">
-                            Remove <strong>{removeTarget.email ?? removeTarget.user_id}</strong> from this org? They will lose access. Their account (auth) is not deleted.
+                            Remove <strong>{removeTarget.email ?? removeTarget.user_id}</strong> from this org? Their membership in this org is deleted. Their account (auth) is not deleted.
                         </p>
+                        {removeResidual && (
+                            <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                {removeResidual}
+                            </div>
+                        )}
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => setRemoveTarget(null)}
+                                onClick={() => {
+                                    setRemoveTarget(null);
+                                    setRemoveResidual(null);
+                                }}
                                 disabled={removeLoading}
                                 className="rounded border border-alloy-stone/40 px-3 py-1.5 text-sm hover:bg-alloy-stone/20 disabled:opacity-50"
                             >
@@ -332,11 +353,15 @@ export default function AccessControlClient() {
                             </button>
                             <button
                                 type="button"
-                                onClick={handleRemoveConfirm}
+                                onClick={() => handleRemoveConfirm(removeResidual !== null)}
                                 disabled={removeLoading}
                                 className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                             >
-                                {removeLoading ? "Removing…" : "Remove"}
+                                {removeLoading
+                                    ? "Removing…"
+                                    : removeResidual
+                                      ? "Remove membership anyway"
+                                      : "Remove"}
                             </button>
                         </div>
                     </div>

@@ -21,6 +21,8 @@ export default function UsersClient() {
   const [resetLoadingId, setResetLoadingId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<UserRow | null>(null);
   const [removeLoading, setRemoveLoading] = useState(false);
+  /** `W-20`/`T-19` — the route's statement that this removal would not revoke access. */
+  const [removeResidual, setRemoveResidual] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -97,22 +99,34 @@ export default function UsersClient() {
     }
   };
 
-  const handleRemoveConfirm = async () => {
+  /**
+   * `W-20`/`T-19`. The route refuses a removal that would revoke nothing, and says why. That
+   * refusal belongs in the dialog rather than the page banner: it is a fact about the member in
+   * front of the operator, and the operator may legitimately proceed once they have read it.
+   */
+  const handleRemoveConfirm = async (acknowledgeResidual = false) => {
     if (!removeTarget) return;
     setRemoveLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/admin/users/${removeTarget.user_id}/remove`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acknowledge_residual_authority: acknowledgeResidual }),
       });
       if (res.ok) {
         setRemoveTarget(null);
+        setRemoveResidual(null);
         fetchUsers();
       } else {
         // `S-11`. A membership removal that failed must not leave the operator believing it
         // succeeded — this is the revocation path, where a false success is the dangerous direction.
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(json.error ?? "Failed to remove this member");
+        const json = (await res.json().catch(() => ({}))) as { error?: string; acknowledgeable?: boolean };
+        if (res.status === 409 && json.acknowledgeable === true && json.error) {
+          setRemoveResidual(json.error);
+        } else {
+          setError(json.error ?? "Failed to remove this member");
+        }
       }
     } finally {
       setRemoveLoading(false);
@@ -204,13 +218,27 @@ export default function UsersClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
           <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Remove from org</h3>
+            {/*
+              `W-20`/`T-19`: this copy used to assert "They will lose access to the admin portal",
+              which is precisely the claim the legacy identity fallback can falsify. The dialog now
+              states what the removal does — it deletes the membership — and the route supplies the
+              access consequence when it is not the obvious one.
+            */}
             <p className="text-sm text-alloy-midnight/80 mb-4">
-              Remove <strong>{removeTarget.email ?? removeTarget.user_id}</strong> from this org? They will lose access to the admin portal. Their account (auth) is not deleted.
+              Remove <strong>{removeTarget.email ?? removeTarget.user_id}</strong> from this org? Their membership in this org is deleted. Their account (auth) is not deleted.
             </p>
+            {removeResidual && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded text-amber-900 text-sm">
+                {removeResidual}
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button
                 type="button"
-                onClick={() => setRemoveTarget(null)}
+                onClick={() => {
+                  setRemoveTarget(null);
+                  setRemoveResidual(null);
+                }}
                 disabled={removeLoading}
                 className="px-3 py-1.5 text-sm border border-alloy-stone/40 rounded hover:bg-alloy-stone/20 disabled:opacity-50"
               >
@@ -218,11 +246,15 @@ export default function UsersClient() {
               </button>
               <button
                 type="button"
-                onClick={handleRemoveConfirm}
+                onClick={() => handleRemoveConfirm(removeResidual !== null)}
                 disabled={removeLoading}
                 className="px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded hover:opacity-90 disabled:opacity-50"
               >
-                {removeLoading ? "Removing…" : "Remove"}
+                {removeLoading
+                  ? "Removing…"
+                  : removeResidual
+                    ? "Remove membership anyway"
+                    : "Remove"}
               </button>
             </div>
           </div>
