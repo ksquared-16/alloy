@@ -18,9 +18,9 @@
  * payload — a second payload would be the second search data model the doctrine
  * forbids.
  *
- * Derivation rule: the record reference is the subject's PRIMARY destination,
- * because that destination already names the canonical surface the platform
- * considers authoritative for that subject. Nothing new is invented here.
+ * Derivation rule: the record reference is the HOST record named by the subject's
+ * PRIMARY destination — the record whose Focus Panel renders that subject. The
+ * platform already decided that binding, so nothing new is invented here.
  */
 
 import type { SearchResult } from "@/lib/search/searchContracts";
@@ -52,11 +52,10 @@ export type SearchSelection = {
     opportunity_id?: string | null;
 };
 
-function firstDestination(result: SearchResult, entityType: string): string | null {
+function firstHostOfType(result: SearchResult, entityType: string): string | null {
     for (const destination of result.destinations) {
-        if (destination.target !== "open_drawer") continue;
-        if (destination.entity_type !== entityType) continue;
-        const id = (destination.entity_id ?? "").trim();
+        if (destination.host_entity_type !== entityType) continue;
+        const id = (destination.host_entity_id ?? "").trim();
         if (id) return id;
     }
     return null;
@@ -76,9 +75,11 @@ export function searchSelectionFromResult(result: SearchResult): SearchSelection
     let entityType: SearchSelectionEntityType | null = null;
     let entityId: string | null = null;
 
-    if (primary?.target === "open_drawer") {
-        const type = (primary.entity_type ?? "").trim();
-        const id = (primary.entity_id ?? "").trim();
+    // Destinations are Focus Panel targets now, so the flat record reference is
+    // the HOST record that renders the subject's panel — not a drawer address.
+    if (primary?.target === "focus_panel") {
+        const type = (primary.host_entity_type ?? "").trim();
+        const id = (primary.host_entity_id ?? "").trim();
         if (id && isSelectionEntityType(type)) {
             entityType = type;
             entityId = id;
@@ -95,7 +96,7 @@ export function searchSelectionFromResult(result: SearchResult): SearchSelection
     if (!entityType || !entityId) return null;
 
     const opportunityId =
-        entityType === "opportunities" ? entityId : firstDestination(result, "opportunities");
+        entityType === "opportunities" ? entityId : firstHostOfType(result, "opportunities");
 
     return {
         entity_type: entityType,

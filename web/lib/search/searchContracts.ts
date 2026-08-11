@@ -109,21 +109,44 @@ export type SearchContext = {
 /**
  * Where an operator can go. Destinations point at AUTHORITATIVE Alloy surfaces.
  *
- * `open_drawer` targets the canonical Focus Panel for an entity; `route` targets
- * a canonical Alloy route. A destination NEVER carries mutation intent and never
- * carries a hand-built URL string assembled inside a component.
+ * `focus_panel` — commit a subject and focus a CARD in the existing Focus Panel.
+ * `route`       — a canonical Alloy route (campus settings, a configured Work View).
+ *
+ * `open_drawer` is deliberately gone. It addressed a record but never a card, so
+ * "open Lennon" and "open Lennon's enrollment" resolved to the same address and
+ * one was always dropped as a duplicate — that is why a child often showed only
+ * Household. It also opened the generic drawer overlay on top of the workspace,
+ * which is not an Alloy operator destination.
+ *
+ * A destination NEVER carries mutation intent and never carries a hand-built URL
+ * assembled inside a component.
  */
-export type SearchDestinationTargetKind = "open_drawer" | "route";
+export type SearchDestinationTargetKind = "focus_panel" | "route";
 
 export type SearchDestination = {
-    /** Stable key for tests/telemetry, e.g. "subject", "process:enrollment", "schedule". */
+    /**
+     * Stable OPERATOR-CONTEXT identity, e.g. "subject", "process:enrollment",
+     * "assignment". Deduplication keys on THIS, never on the underlying record —
+     * two different operator intents can legitimately share one payload.
+     */
     key: string;
     /** Operator-facing label. Configured where the destination is configured. */
     label: string;
     target: SearchDestinationTargetKind;
-    /** Drawer entity type when `target === "open_drawer"`. */
-    entity_type?: string | null;
-    entity_id?: string | null;
+    /** Which card to focus when `target === "focus_panel"`. */
+    card_key?: string | null;
+    /** Which row inside a collection card (child id, person id, …). */
+    item_id?: string | null;
+    /** Configured operational context within the card, e.g. a `process_key`. */
+    context_key?: string | null;
+    /**
+     * The record whose Focus Panel hosts this subject. A child's world is
+     * rendered by the case it participates in; the subject remains the child.
+     * Flat record consumers (POS picker, Experience Builder preview) read this
+     * through `searchSelectionFromResult`.
+     */
+    host_entity_type?: string | null;
+    host_entity_id?: string | null;
     /** Canonical route when `target === "route"`. */
     href?: string | null;
     /**

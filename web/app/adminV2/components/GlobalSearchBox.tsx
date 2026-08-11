@@ -11,12 +11,12 @@ import {
     type SearchResult,
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
+import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
 import {
-    GLOBAL_SEARCH_DROPDOWN_Z_INDEX,
-    launchGlobalRecordSearchOpen,
-} from "@/lib/adminV2/globalRecordSearchOpen";
-import { isGlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
-import { warmSearchDestinationDrawerIntent } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
+    requestFocusPanelTarget,
+    type FocusPanelSubjectType,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelTarget";
+import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
 /**
@@ -251,27 +251,42 @@ export default function GlobalSearchBox() {
     }, []);
 
     /**
-     * Navigate to a destination. Drawer targets go through the canonical AdminV2
-     * open path; route targets use the canonical href resolved server-side. This
-     * component never constructs a URL.
+     * Go to a destination.
+     *
+     * Search DISMISSES FIRST, before anything asynchronous: the operator's click
+     * is acknowledged immediately even though the Focus Panel will not reveal the
+     * destination until K3 says it is Operational. Perceived speed comes from that
+     * acknowledgement plus warm prefetch — never from painting an unready card.
+     *
+     * This component never constructs a URL and never opens an overlay.
      */
     const openDestination = useCallback(
-        (destination: SearchDestination) => {
+        (destination: SearchDestination, subject: SearchResult["subject"]) => {
             if (destination.target === "route" && destination.href) {
                 dismiss();
                 router.push(destination.href);
                 return;
             }
-            const entityType = destination.entity_type ?? "";
-            const entityId = destination.entity_id ?? "";
-            if (!entityId || !isGlobalSearchAdminV2DrawerEntityType(entityType)) return;
+            if (destination.target !== "focus_panel" || !destination.card_key) return;
 
-            const navigateTo = launchGlobalRecordSearchOpen({
-                open_entity_type: entityType,
-                open_entity_id: entityId,
-            });
             dismiss();
-            if (navigateTo) router.push(navigateTo);
+            requestFocusPanelTarget(
+                {
+                    subject: {
+                        type: subject.kind as FocusPanelSubjectType,
+                        id: subject.id,
+                        hostEntityType:
+                            (destination.host_entity_type as "opportunities" | "customers" | "persons" | null) ?? null,
+                        hostEntityId: destination.host_entity_id ?? null,
+                    },
+                    focus: {
+                        cardKey: destination.card_key as never,
+                        itemId: destination.item_id ?? null,
+                        contextKey: destination.context_key ?? null,
+                    },
+                },
+                "global_search"
+            );
         },
         [dismiss, router]
     );
@@ -279,7 +294,7 @@ export default function GlobalSearchBox() {
     const openSubject = useCallback(
         (result: SearchResult) => {
             const primary = result.destinations.find((d) => d.primary);
-            if (primary) openDestination(primary);
+            if (primary) openDestination(primary, result.subject);
         },
         [openDestination]
     );
@@ -386,16 +401,13 @@ export default function GlobalSearchBox() {
                                 onHover={() => {
                                     setActiveIndex(index);
                                     // Warm the subject's drawer before the click lands.
+                                    // Warm the target BEFORE the click so K3's
+                                    // preparation.terminal arrives sooner.
                                     const primary = result.destinations.find((d) => d.primary);
-                                    if (primary) {
-                                        warmSearchDestinationDrawerIntent({
-                                            ...primary,
-                                            subject_kind: result.subject.kind,
-                                        });
-                                    }
+                                    if (primary) warmSearchFocusTarget(primary);
                                 }}
                                 onOpenSubject={() => openSubject(result)}
-                                onOpenDestination={openDestination}
+                                onOpenDestination={(d) => openDestination(d, result.subject)}
                             />
                         ))}
                     </ul>
