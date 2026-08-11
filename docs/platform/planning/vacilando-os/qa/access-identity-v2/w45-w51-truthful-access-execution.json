@@ -11,11 +11,11 @@
     "worktree": "/Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation",
     "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
     "head_at_session_start": "f44f6a38a",
-    "head_at_report": "16302dff3",
+    "head_at_report": "0c79ba6c6",
     "promoted": false,
     "pushed": false,
     "generated": "2026-08-10",
-    "record_covers_multiple_sessions": "This file is EXTENDED per session rather than forked, for the reason given in `supersedes`. Session 1 ended at 45e6488ed. Session 2 (W-51/IA-8, W49-F1) ended at 65520202c. Session 3 (W14-F1, backing-route completeness) ends at 16302dff3."
+    "record_covers_multiple_sessions": "This file is EXTENDED per session rather than forked, for the reason given in `supersedes`. Session 1 ended at 45e6488ed. Session 2 (W-51/IA-8, W49-F1) ended at 65520202c. Session 3 (W14-F1, backing-route completeness) ended at 16302dff3. Session 4 (the declaration binding, and W-15 sizing) ends at 0c79ba6c6."
   },
 
   "what_this_milestone_is": "The mission's product milestone: /organization/access derives and displays authoritative state, and the authorization paths underlying those claims are enforced. Presentation reflects authorization; presentation does not create authorization.",
@@ -80,12 +80,49 @@
       "remedy": "The declaration is completed, and the new lock's subject is DISCOVERED from each chapter's own source, with dynamic segments normalised on both sides so `[userId]` and `${encodeURIComponent(id)}` compare as one path.",
       "grain_decides_the_classification": "capabilitiesDeclaredBy unions over a file's methods, and the divergence ratchet asserts a divergent route does NOT declare the capability. rbac/roles, rbac/grants and rbac/permissions read through requirePortalOrUsersRolesManageAuth, which admits portal-eligible principals lacking the grant — wider than the chapter's gate. They are still BACKING routes, because their files DO declare settings.users_roles; the wider read leg is recorded in W-14's table as W-13's portal.access question. Listing them as divergent would have failed the ratchet and stated something false.",
       "non_vacuity": "Removing rbac/permissions from the roles declaration makes the lock name that exact route and fail."
+    },
+    {
+      "commit": "713a6fbe4",
+      "session": 4,
+      "workstream": "W-15 prerequisite — the declared capability stops being a sentence in a JSON file",
+      "defect_class": "A control that asserts rather than checks. As W-14 shipped it, {\"status\":\"declared\",\"capability\":\"settings.users_roles\"} said nothing about the handler: deleting the guard it named left the check green. The mission's requirement is that the declaration BECOME enforcement.",
+      "why_this_had_to_precede_the_burndown": "Driving 725 pending entries to `declared` against an unbound table would have produced 751 unfalsifiable claims instead of 25. The burndown's value is entirely contingent on the declaration meaning something.",
+      "three_joins": "Each declared entry naming a helper must survive: (1) the exported handler's OWN body calls that helper — method grain, so a guard on GET cannot vouch for DELETE in the same file; (2) a verdict bound to an identifier is TESTED, because a returned verdict nobody branches on is not a gate; (3) the module defining the helper names the declared capability on an executable line.",
+      "not_the_retired_census": "The census read source and INFERRED a gate, over-reporting enforcement by ~30×. This reads a stated claim and tries to FALSIFY it. Inference invents authorization nobody wrote; falsification can only remove a claim the table already makes.",
+      "finding_over_declaration": "configuration/programs POST declared helper `canWriteProgramPublication` — a function that exists nowhere in the repository. The gate was real and correct throughout (POST has always called canManageProgramPublication, requiring settings.manage), but the table named an enforcement site a reviewer could not follow. Corrected, with the history kept in the note so it is not misread as a behaviour change.",
+      "finding_under_declaration": "persons/[id]/profile-photo GET calls the very assertDocumentAccess that documents/[id]/signed-url declares as documents.read, while sitting `pending`. The table under-reports as well as over-reports. Its POST and DELETE stay off the worklist deliberately: they gate on `ctx.role !== \"admin\"`, a gate but not a capability gate, and which key replaces a raw role check is W-15's product call.",
+      "own_defects_caught_by_fixtures_not_inspection": "Both would have convicted working code. Blanking string DELIMITERS as well as contents erased the token structure that tells an import from prose; and taking the first `{` after a handler name yields the destructured `{ params }` parameter rather than the body.",
+      "non_vacuity": "Each join is proved to bite against a fixture built to fail exactly that one — including the shape table mutation cannot reach: a handler that calls the gate and discards the verdict, which reads as gated, greps as gated, and admits everyone. Fixtures live in a temp directory, never under app/api, so a run killed mid-test cannot leave a stray route in the app tree.",
+      "result": "25 declared / 25 bound."
+    },
+    {
+      "commit": "0c79ba6c6",
+      "session": 4,
+      "workstream": "W-15 sizing — the lane acquires a shape",
+      "why": "725 pending is a number, not a plan. Reading each pending handler's own body at method grain reports what gate evidence it carries, so the lane can be released by decision class rather than walked in directory order.",
+      "buckets": {
+        "capability_evidence_catalog_judged": 2,
+        "gate_helper_but_not_a_capability_gate": 276,
+        "role_or_permissionKeys_inline": 143,
+        "authenticated_context_only": 237,
+        "no_gate_evidence_discovered": 67,
+        "unreadable": 0
+      },
+      "load_bearing_figure": "304 — the last three buckets. Handlers with no discovered authorization beyond authentication. That is W-15's risk concentration, and a far smaller thing to reason about than 725.",
+      "direction_of_error_is_the_whole_argument": "The census's load-bearing output was 'this route is protected', which is unsafe when wrong because it retires scrutiny. This one's is 'no gate found here', which is conservative when wrong. A false alarm costs a reviewer five minutes; a false all-clear costs an exposure nobody looks for again. Nothing here feeds pass/fail.",
+      "corrections_from_disbelieving_the_first_number": [
+        "`none` first read 107, with analytics/placements in it while calling requireAnalyticsV2AdminContext. A first-party require/assert/ensure/can helper whose verdict the handler tests IS a gate — just not a capability gate. Converting those 276 is the actual substance of W-15, so they get their own bucket.",
+        "`capability` first read 80, on literals like `customer_id.is.null` and `person.email` — supabase filters and column paths that satisfy the key grammar and are not permission keys. That is C1's error at small scale. The grammar is now a prefilter and the catalog is the judge, taking the bucket to 2 — both already-known open items, which is the tool declining to invent a third."
+      ],
+      "duplicate_catalog_is_locked_not_trusted": "Judging by catalog needs the catalog inside a .mjs that runs in prebuild, where the TypeScript discovery helper cannot be imported. Two independent catalog parsers that silently disagree is how the '35 keys' figure survived three workstreams, so the copy is asserted equal to the original.",
+      "scanner_now_reads_every_handler": "Four handlers were unreadable. documents/entity-options nests a template literal inside another's interpolation, and a scanner taking the first backtick as the closing one loses brace balance for the rest of the file; three v2 drawer routes are pure `export { GET } from …` re-exports whose bodies live in their v1 counterparts. The tokenizer now carries a mode stack and re-exports are followed. Unreadable is 0 across all 751 handlers, and both fixes have fixtures — 'could not read' silently equalling 'fine' is the failure §10.2 already records."
     }
   ],
 
   "tests": {
     "command": "cd web && npx vitest run tests/access/",
-    "result": "18 files passed, 1 skipped — 341 passed, 6 skipped, 0 failed (at 16302dff3)",
+    "result": "18 files passed, 1 skipped — 362 passed, 6 skipped, 0 failed (at 0c79ba6c6)",
+    "result_session_3": "18 files passed, 1 skipped — 341 passed, 6 skipped, 0 failed (at 16302dff3)",
     "result_session_1": "16 files passed, 1 skipped — 300 passed, 6 skipped, 0 failed",
     "at_session_start": "213 passed",
     "pre_existing_failures_outside_this_lane": "tests/admin/operationalWork/opportunityOperationalCompactStrip.contract.test.ts fails 3 of 6 ('My Tasks supports assignee filters and display', 'drawer strip uses operational work gate not Task Assist gate', 'My Tasks and nav badge use operational work gate'). It reads OpportunityOperationalCompactStrip.tsx, AdminEntityDrawer.tsx, MyTasksPanel.tsx and OperationalTasksNavBadge.tsx — four files no Access commit touches — and fails identically at HEAD. Recorded as a LIST, not a count, per the standing rule that a count cannot distinguish a fixed failure from a new one.",
@@ -103,13 +140,13 @@
     "restrictions_and_inheritance": "PARTIAL — the render leg of GAP-3 is done; GAP-12 closes only when W-24 (cache) and W-43 (resolver) land, and neither is started",
     "chapter_surface_availability": "TRUE — W-49 + W49-F2, from actual capabilities, one declaration",
     "inert_capability_presentation": "TRUE — W-50 presentation clause",
-    "route_enforcement": "PARTIAL — 25 declared / 1 reasoned-none / 725 pending platform-wide. W-15 is the burndown and is not started. SCOPED TO THIS MILESTONE, however, the picture is stronger and is now certified: every route the Access surface calls is named in its declaration and declares settings.users_roles. The mission's clause — a hidden surface must not remain reachable by URL/API — holds for the Access surface itself.",
+    "route_enforcement": "PARTIAL, materially stronger — 25 declared and now 25 BOUND TO SOURCE through three joins, 1 reasoned-none, 725 pending platform-wide. Session 4 closed W-15's prerequisite: a declaration is no longer a claim the check takes on trust, and the 725 is now sized by gate evidence (304 handlers carry no discovered authorization beyond authentication). The burndown itself is still not started, and it is gated on product decisions per class rather than on engineering. SCOPED TO THIS MILESTONE, however, the picture is stronger and is now certified: every route the Access surface calls is named in its declaration and declares settings.users_roles. The mission's clause — a hidden surface must not remain reachable by URL/API — holds for the Access surface itself.",
     "member_directory_disclosure": "TRUE — W14-F1 disclosure half. The org's address list is no longer readable by everyone the portal admits.",
     "backing_route_record": "TRUE and self-auditing — the join's subject is discovered from chapter source, so an omission fails rather than passing silently."
   },
 
   "certification_state": {
-    "tier_A_static": "GREEN — RL-36, the W-50 both-directions lock, and the IA-7 chapter scan, all with subjects discovered from disk and non-vacuity proved by convicting the exact lines removed",
+    "tier_A_static": "GREEN and materially stronger — RL-36, the W-50 both-directions lock, the IA-7 chapter scan, and (session 4) RL-10's declaration binding, all with subjects discovered from disk and non-vacuity proved by convicting the exact lines removed. RL-10 previously checked the table's SHAPE; it now checks the table's CLAIM against route source.",
     "tier_C_authorization": "GREEN — the eleven-fixture matrix, exercising the real route helper. This is the mission's 'automated authorization evidence' and it did not exist at session start.",
     "tier_D_browser": "NOT RUN — BLOCKED, see blockers.tier_D_environment below. No browser rendered /organization/access this session.",
     "shared_environment": "NOT EXERCISED — nothing here was promoted and no migration was applied",
@@ -126,6 +163,7 @@
         "Slot 6's stored auth reports `missing`, so even the registered tree has no QA identity session.",
         "web/.env.local.agent carries only public/anon values, by design — no service-role key. Every Access admin route calls createAdminClient(), so an unbrokered server would fail on exactly the routes under certification."
       ],
+      "re_verified_session_4": "Still true, checked rather than inherited. `alloy-dev-start wt6-director-experience-dx5-5-continuation` returns 'unknown worktree metadata'; `alloy-agent-status` resolves slot 6 to wt6-search-platform-certification — a different path, on branch agent/claude/6-search-platform-certification, auth 'missing'. Nothing about the blocker has changed and nothing was worked around.",
       "re_verified_session_3": "Still true, checked rather than inherited. `alloy-dev-start wt6-director-experience-dx5-5-continuation` returns 'unknown worktree metadata'; the metadata directory holds seven entries and this worktree is not among them; slot 6 resolves to wt6-search-platform-certification (a different path, on branch agent/claude/6-search-platform-certification, auth 'missing'). Nothing about the blocker has changed and nothing was worked around.",
       "what_would_unblock_it": "Register this worktree with the dev toolkit (or re-point slot 6 at it) and run alloy-agent-login, after which alloy-agent-verify can produce route evidence for /organization/access.",
       "not_worked_around": "No dev server was started by another path. The governance forbids bare `next dev`, and privileged values are deliberately absent from the worktree; manufacturing a server here would have produced evidence from an environment the product does not run in."
@@ -136,7 +174,7 @@
     "IA-8_duplicate_route_deletion": "DEFERRED, with reason. W-49 already gates both rendering routes identically, so the duplicate is NOT a live bypass and the milestone's enforcement requirement does not depend on deleting it. Deletion touches six test files owned by the Configuration Runtime initiative (organizationDomainLandings, configurationRuntimeDoctrineCleanup, settingsLegacyFieldAlignment, configurationRuntimeSettingsRollout, accessProductUi, surfaceCapabilityDeclaration), several of which pin the duplicate's existence. That is the 'source-text controls pinned the very branch being removed' shape; it is a cleanup worth doing deliberately, not as a coda to a truthfulness wave.",
     "IA-9_overview": "Needs the rest of the wave; an overview of access is a summary of states the product is only now able to compute.",
     "W-13": "Portal admission becomes a capability. Needs decision D2 — which roles receive portal.access. Operator-owned.",
-    "W-15": "Enforcement sweep, 725 pending handlers. Sized L. Several entries need product decisions (W14-F1, W49-F1) rather than mechanical declaration.",
+    "W-15": "Enforcement sweep, 725 pending handlers. Its PREREQUISITE is now closed (the declaration binds to source) and the lane is SIZED by gate evidence, but the sweep itself is not started. It is gated on product decisions per class rather than on engineering: the 276 gate-helper handlers and the 143 role-comparison handlers each need a ruling on which capability replaces the gate they have, and every such ruling is a widening or a narrowing of who may act. W14-F1 and W49-F1 are two already-isolated instances of exactly that shape.",
     "W-17": "The additive role write. IA-7's display half is closed without it; the write half is explicitly still replace-not-add.",
     "W-48": "Effective access from the enforcing resolver. Sequenced after W-41/W-42, neither started."
   },
@@ -154,5 +192,6 @@
     "OD-6": "AD-22 / AD-25 — the 'reduce to four layers' directive resolves into two decisions the owning document explicitly declines to make."
   },
 
+  "recommended_next_milestone_session_4": "Unchanged in direction, sharper in shape. W-15 remains the next milestone, and session 4 removed the two reasons it could not start well: its declarations now mean something, and its 725 is now four decision classes with a 304-handler risk concentration. What it needs from the operator is not 725 rulings but a POLICY for the two large classes — what capability a non-capability gate becomes, and whether that conversion may widen access. Everything downstream of that policy is mechanical and Director-owned.",
   "recommended_next_milestone": "Not the simplified role/access editor — it is gated on AD-22/AD-25 (OD-6) and the mission forbids beginning a decision-gated redesign. The next coherent milestone is W-15, the enforcement sweep over 725 pending handlers, because it is what converts W-14's declarations into the enforcement the truthful surface is now presenting. It carries two product decisions already isolated by name (W14-F1, W49-F1), which is the smallest possible operator ask to release a large lane."
 }
