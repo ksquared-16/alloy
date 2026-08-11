@@ -62,6 +62,13 @@ class TestParse:
         assert parse_alloy_message_id("<alloy.hello@school.example>") is None
         assert parse_alloy_message_id("<alloy.../etc/passwd@school.example>") is None
 
+    def test_refuses_a_forged_id_from_another_domain(self):
+        # Six characters then a real UUID. Slicing the prefix LENGTH off blindly
+        # would yield a valid-looking message id and hand an attacker a lookup
+        # key; the `alloy.` prefix check is what refuses it.
+        assert parse_alloy_message_id(f"<xxxxxx{MSG}@attacker.example>") is None
+        assert parse_alloy_message_id(f"<notus.{MSG}@attacker.example>") is None
+
     def test_ignores_malformed_and_missing_headers(self):
         assert parse_alloy_message_id(None) is None
         assert parse_alloy_message_id("") is None
