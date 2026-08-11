@@ -124,6 +124,53 @@ export async function isPersonEmployedOn(
     return data === true;
 }
 
+/**
+ * Guard for staff-subject callers (scheduling assignments today).
+ *
+ * The database trigger enforces the same rule; this exists so the caller fails
+ * with an operator-readable message instead of a raw 23514, and so no service
+ * re-derives "is this person staff" from `persons.is_employee` — which is a
+ * waitlist priority flag and would reject every validly employed person.
+ *
+ * `onDate` is the assignment's own effective date, so a historical assignment
+ * inside a since-ended employment window stays valid.
+ */
+export async function assertStaffPersonEligible(
+    supabase: SupabaseClient,
+    orgId: string,
+    personId: string,
+    onDate: string
+): Promise<void> {
+    const { data, error } = await supabase
+        .from("persons")
+        .select("id, org_id, archived_at")
+        .eq("org_id", requireId(orgId, "orgId"))
+        .eq("id", requireId(personId, "personId"))
+        .maybeSingle();
+    if (error) rethrowDbError(error.message);
+
+    const person = data as { id: string; archived_at: string | null } | null;
+    if (!person) {
+        throw new EmploymentServiceError(
+            "not_found",
+            "Staff assignments require a person in this organization",
+            { person_id: personId }
+        );
+    }
+    if (person.archived_at != null) {
+        throw new EmploymentServiceError("invalid_state", "Staff subject person is archived", {
+            person_id: personId,
+        });
+    }
+    if (!(await isPersonEmployedOn(supabase, orgId, personId, onDate))) {
+        throw new EmploymentServiceError(
+            "invalid_state",
+            "Staff assignments require canonical employment covering the assignment date",
+            { person_id: personId, on_date: onDate }
+        );
+    }
+}
+
 export async function listEmploymentPositions(
     supabase: SupabaseClient,
     orgId: string,

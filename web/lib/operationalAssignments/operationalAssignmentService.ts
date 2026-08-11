@@ -15,6 +15,7 @@ import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOp
 import { assertValidIsoDate, computePriorRowCloseDate } from "@/lib/childcareOperational/effectiveDating";
 import { getAgreementById } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
+import { assertStaffPersonEligibleForAssignment } from "@/lib/operationalAssignments/staffAssignmentEligibility";
 
 export type OperationalAssignmentSubject =
     | {
@@ -82,7 +83,9 @@ async function resolveSubjectSite(
     supabase: SupabaseClient,
     orgId: string,
     subject: OperationalAssignmentSubject,
-    commitmentKind: "proposed" | "committed"
+    commitmentKind: "proposed" | "committed",
+    /** Assignment effective date — employment eligibility is answered at that date. */
+    onDate: string
 ): Promise<{
     siteLocationId: string;
     enrollmentAgreementId: string | null;
@@ -138,21 +141,9 @@ async function resolveSubjectSite(
 
     const personId = assertNonBlank(trimOrNull(subject.personId), "personId");
     const siteLocationId = assertNonBlank(trimOrNull(subject.siteLocationId), "siteLocationId");
-    const { data, error } = await supabase
-        .from("persons")
-        .select("id, org_id, is_employee, archived_at")
-        .eq("org_id", orgId)
-        .eq("id", personId)
-        .maybeSingle();
-    if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
-    const person = data as { id: string; is_employee: boolean | null; archived_at: string | null } | null;
-    if (!person || person.is_employee !== true || person.archived_at != null) {
-        throw new OperationalEnrollmentServiceError(
-            "validation_failed",
-            "Staff assignments require an active employee person",
-            { person_id: personId }
-        );
-    }
+    // Eligibility is canonical EMPLOYMENT, never persons.is_employee (a waitlist
+    // household-priority flag). Same authority the database trigger enforces.
+    await assertStaffPersonEligibleForAssignment(supabase, orgId, personId, onDate);
     return {
         siteLocationId,
         enrollmentAgreementId: null,
@@ -180,7 +171,7 @@ export async function createOperationalAssignment(
             ? "proposed"
             : "committed");
 
-    const subject = await resolveSubjectSite(supabase, input.orgId, input.subject, requestedKind);
+    const subject = await resolveSubjectSite(supabase, input.orgId, input.subject, requestedKind, startDate);
     const patternCheck = await validateSchedulePatternForSite(
         supabase,
         input.orgId,

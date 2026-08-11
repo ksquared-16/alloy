@@ -38,6 +38,7 @@ export type OperationalEnrollmentMockStore = {
     locations: Row[];
     location_program_categories: Row[];
     persons: Row[];
+    employments: Row[];
     customer_members: Row[];
     opportunities: Row[];
     opportunity_customer_members: Row[];
@@ -80,6 +81,7 @@ export function createOperationalEnrollmentMockStore(
         locations: seed?.locations ?? [],
         location_program_categories: seed?.location_program_categories ?? [],
         persons: seed?.persons ?? [],
+        employments: seed?.employments ?? [],
         customer_members: seed?.customer_members ?? [],
         opportunities: seed?.opportunities ?? [],
         opportunity_customer_members: seed?.opportunity_customer_members ?? [],
@@ -655,6 +657,20 @@ export function createOperationalEnrollmentMockSupabase(
                 counters,
                 opts?.reconcileFault,
             );
+        }
+        if (fnName === "person_is_employed_on") {
+            // Mirrors public.person_is_employed_on: window-based, so an ENDED
+            // employment still covers dates inside its own window.
+            const onDate = String(params.p_on_date);
+            const employed = (store.employments ?? []).some(
+                (e) =>
+                    e.org_id === params.p_org_id &&
+                    e.person_id === params.p_person_id &&
+                    e.employment_status !== "canceled" &&
+                    String(e.start_date) <= onDate &&
+                    (e.end_date == null || String(e.end_date) >= onDate),
+            );
+            return { data: employed, error: null };
         }
         return { data: null, error: { message: `unknown rpc: ${fnName}` } };
     });
