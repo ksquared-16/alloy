@@ -153,7 +153,62 @@ async function hasUnresolvedInboundStopHold(params: {
         console.error("[eligibility] inbound stop hold lookup failed", { code: error.code });
         return false;
     }
-    return Array.isArray(data) && data.length > 0;
+    if (Array.isArray(data) && data.length > 0) return true;
+
+    return hasUnattributedCanonicalStop(params);
+}
+
+/**
+ * Did an unidentified sender text STOP on a conversation this organization owns?
+ *
+ * The ingress hold above covers messages Alloy could not attribute to ANY
+ * organization. It does not cover the middle case: the destination resolved to a
+ * tenant, so the message became canonical conversation truth, but the sender
+ * matched no Person — so the keyword handler could write no preference, because
+ * preferences are owned per person and inventing one would opt out whoever
+ * happens to share the number.
+ *
+ * That was harmless while such conversations could not be answered. They can be
+ * now, so the STOP has to bind somewhere. It binds to the endpoint pair, read
+ * from the keyword the inbound seam stamped onto the message rather than by
+ * re-parsing bodies here — the keyword vocabulary keeps exactly one owner.
+ *
+ * The most recent keyword on the pair wins, so a later START releases the hold
+ * and a second STOP re-applies it: the release path is the parent's own word,
+ * not an operator override. Still not a Person opt-out and still not an org-wide
+ * suppression — this pair, this channel.
+ *
+ * Fails OPEN on lookup error, matching the ingress hold and `isAddressSuppressed`.
+ */
+async function hasUnattributedCanonicalStop(params: {
+    supabase: SupabaseClient;
+    channel: MessageChannel;
+    toAddress?: string | null;
+    fromAddress?: string | null;
+}): Promise<boolean> {
+    const theirAddress = params.toAddress?.trim();
+    const ourDestination = params.fromAddress?.trim();
+    if (!theirAddress || !ourDestination) return false;
+
+    const { data, error } = await params.supabase
+        .from("communication_messages")
+        .select("metadata, created_at")
+        .eq("direction", "inbound")
+        .eq("channel", params.channel)
+        .eq("from_address", theirAddress)
+        .eq("to_address", ourDestination)
+        .not("metadata->>compliance_keyword", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+    if (error) {
+        console.error("[eligibility] unattributed canonical stop lookup failed", { code: error.code });
+        return false;
+    }
+    if (!Array.isArray(data) || data.length === 0) return false;
+
+    const metadata = (data[0] as { metadata?: Record<string, unknown> | null }).metadata;
+    return String(metadata?.compliance_keyword ?? "").trim().toLowerCase() === "stop";
 }
 
 /**

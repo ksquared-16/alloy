@@ -44,7 +44,11 @@ describe("unresolved inbound STOP hold", () => {
         const d = evaluateEligibility(input({ unresolvedInboundStopHold: true }));
 
         expect(d.code).not.toBe("OPTED_OUT");
-        expect(d.reason).toMatch(/could not attribute|ownership/i);
+        // The hold now covers two shapes — unattributable to any organization, and
+        // owned by this organization but matching no Person — so the wording is
+        // about the request rather than about which lookup came up empty.
+        expect(d.reason).toMatch(/asked to stop/i);
+        expect(d.reason).toMatch(/cannot tell which record/i);
     });
 
     it("blocks transactional too", () => {

@@ -25,6 +25,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
+import requests
+
+from ..supabase_client import _get_base_url, _get_headers
 from .communication_preferences import apply_preference_changes, load_current_states
 from .sms_keywords import (
     AFFECTED_CATEGORIES,
@@ -65,6 +68,44 @@ def resolve_person_id(message_row: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+#: Metadata key carrying the compliance keyword on an inbound message whose
+#: sender could not be attributed. Read by the outbound eligibility gate.
+COMPLIANCE_KEYWORD_METADATA_KEY = "compliance_keyword"
+
+
+def stamp_compliance_keyword_on_message(message_row: Dict[str, Any], keyword: str) -> bool:
+    """
+    Record the keyword on the inbound message, preserving existing metadata.
+
+    Best-effort by design. The message itself is already durable, and this runs
+    after persistence for the same reason the whole keyword step does: a failure
+    here must never cost us the conversation record. It returns whether the stamp
+    landed so the caller can say so plainly rather than imply a hold exists.
+    """
+    message_id = message_row.get("id")
+    if not message_id:
+        return False
+
+    existing = message_row.get("metadata")
+    metadata: Dict[str, Any] = dict(existing) if isinstance(existing, dict) else {}
+    metadata[COMPLIANCE_KEYWORD_METADATA_KEY] = keyword
+
+    try:
+        base_url = _get_base_url()
+        headers = dict(_get_headers())
+        headers.update({"Content-Type": "application/json", "Prefer": "return=minimal"})
+        resp = requests.patch(
+            f"{base_url}/communication_messages?id=eq.{message_id}",
+            headers=headers,
+            json={"metadata": metadata},
+            timeout=15,
+        )
+        return bool(resp.ok)
+    except Exception as e:  # noqa: BLE001
+        logger.error("inbound_keyword: could not stamp compliance keyword %s", e)
+        return False
+
+
 def handle_inbound_keyword(
     *,
     org_id: str,
@@ -96,14 +137,34 @@ def handle_inbound_keyword(
         }
 
     if not person_id:
-        # Recorded, not applied. An operator resolution surface is Phase 5 work;
-        # until then this is visible in the message record and the logs.
+        # No preference row may be written — there is no person to own it, and
+        # guessing one is how an entire family gets opted out because two people
+        # share a number. That reasoning is unchanged.
+        #
+        # What changed is the consequence. An unidentified but tenant-owned
+        # conversation is now replyable, so "recorded but unenforced" stopped being
+        # harmless: a parent could text STOP and be answered anyway. The keyword is
+        # therefore stamped onto the message it arrived on, giving the outbound
+        # eligibility gate a durable signal keyed on the ENDPOINT rather than on a
+        # person — the same shape as the ingress hold, and narrow in the same way:
+        # this endpoint pair only, never an org-wide suppression, and superseded by
+        # a later START on the same pair.
+        #
+        # Stamped here rather than parsed downstream so the keyword vocabulary
+        # keeps exactly one owner (`sms_keywords.py`).
+        stamped = stamp_compliance_keyword_on_message(message_row, keyword)
         logger.warning(
-            "inbound_keyword: %s from an unresolved sender org=%s — recorded, NOT applied",
+            "inbound_keyword: %s from an unresolved sender org=%s — endpoint hold %s, preference NOT applied",
             keyword.upper(),
             org_id,
+            "recorded" if stamped else "NOT recorded",
         )
-        return {"keyword": keyword, "applied": False, "reason": "sender_unresolved"}
+        return {
+            "keyword": keyword,
+            "applied": False,
+            "reason": "sender_unresolved",
+            "endpoint_hold_recorded": stamped,
+        }
 
     current = load_current_states(org_id, person_id, AFFECTED_CATEGORIES)
     changes = build_preference_changes(

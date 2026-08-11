@@ -159,7 +159,12 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
     if (input.unresolvedInboundStopHold === true && input.category !== "emergency") {
         return block(
             "UNRESOLVED_INBOUND_STOP_HOLD",
-            "This number replied STOP to a destination Alloy could not attribute to an organization. Sending is held until ownership is resolved."
+            // Two shapes reach here now: a STOP Alloy could not attribute to any
+            // organization, and a STOP on a conversation this organization owns
+            // whose sender matched no Person. In both, someone asked to stop and
+            // there is no Person to record the decision against — so the wording
+            // is about the request, not about which lookup came up empty.
+            "This number asked to stop receiving messages. Alloy cannot tell which record the request belongs to, so sending is held until the sender is identified or they text START."
         );
     }
 
