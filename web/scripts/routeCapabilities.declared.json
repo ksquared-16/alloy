@@ -2,32 +2,37 @@
   "reviewed": "2026-08-10 — W-14 initial issuance (assignment asg_0232d36df9694c)",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 722
+    "max_pending": 695
   },
   "routes": {
     "app/api/action-links/consume-accept-job/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Admission is the action-link token in the request, which IS the credential. There is no org principal to hold a capability: the recipient is a vendor or contact acting on a link mailed to them, and requiring a capability would make the route unusable by everyone it exists for. The token is the authorization boundary, and its strength is a token-lifecycle question (W-36's surface), not a capability question."
       }
     },
     "app/api/action-links/consume-reschedule/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Action-link token, as consume-accept-job. Bearer admission by design; no org principal exists to carry a capability."
       }
     },
     "app/api/action-links/resolve/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Action-link token, as consume-accept-job. Resolves what the link refers to before the recipient acts on it; the token scopes the answer."
       }
     },
     "app/api/action/[token]/consume/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The token is in the path and is the credential. Same class as action-links, different generation of the same feature — the duplication is real and is IA-8's territory, not a capability question."
       }
     },
     "app/api/action/[token]/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Resolves what the path token refers to, before the recipient acts on it. Bearer admission by the token, as action/[token]/consume."
       }
     },
     "app/api/admin/access-scope-debug/route.ts": {
@@ -3352,50 +3357,60 @@
     },
     "app/api/build-info/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Build metadata. Reads no database and no caller — there is nothing tenant-scoped to authorize."
       }
     },
     "app/api/leads/gutters/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Public inbound lead capture: an anonymous marketing form creates a lead. Unauthenticated by design — the whole purpose is to hear from someone who has no account. RESIDUAL RISK, recorded rather than resolved here: an unauthenticated write with no rate limit is an abuse surface. That is a throttling concern, not an authorization one — there is no principal to authorize — so it does not belong in this table and is not silently closed by this entry."
       }
     },
     "app/api/marketing/demo-request/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Public inbound demo request, same class and same residual risk as leads/gutters."
       }
     },
     "app/api/public/booking-config/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Renders the public booking form for the single org named by ALLOY_PUBLIC_ORG_ID. The org is taken from environment, never from the request, so a caller cannot steer it at another tenant — which is what would make an unauthenticated read dangerous here. Pricing and catalog data intended for anonymous display."
       }
     },
     "app/api/public/field-definitions/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The custom fields flagged for public booking, for the ALLOY_PUBLIC_ORG_ID org. Same shape as booking-config: the org comes from environment rather than the request, and the projection is restricted to fields explicitly marked public. Service-role access with an org filter the caller cannot influence."
       }
     },
     "app/api/public/forms/[token]/resolve/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Resolves the form schema the path token names, so a respondent can render it. Token-scoped; the respondent holds no org membership."
       }
     },
     "app/api/public/forms/[token]/submissions/[submissionId]/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Public form fill by opaque token: the token in the path is the credential and scopes the submission. The respondent is a family or applicant with no org membership, so there is no principal to hold a capability — requiring one would make the form unfillable by everyone it is for."
       },
       "PATCH": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The respondent saving their own in-progress answers, admitted by the same path token as the GET. A write, but a write to the record the token names."
       }
     },
     "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The respondent submitting the form the path token names. Token-scoped, as the rest of the public forms surface."
       }
     },
     "app/api/public/forms/[token]/submissions/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Starts a submission against the form the path token names. Token-scoped."
       }
     },
     "app/api/public/tour-booking/[token]/book/route.ts": {
@@ -3405,32 +3420,38 @@
     },
     "app/api/public/tour-booking/[token]/cancel-intent/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "A prospective family acting on the tour link mailed to them. The path token is the credential and scopes the booking; the family holds no org membership, so there is no capability for them to hold. NOTE — `book` and `slots` on this same surface are deliberately NOT declared here: they classified into other gate-evidence buckets and were never measured as ungated, and declaring a route this session did not examine is the inference this table exists to refuse."
       }
     },
     "app/api/public/tour-booking/[token]/cancel/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The family cancelling the booking their path token names. Token-scoped admission, as cancel-intent; no org membership exists to carry a capability."
       }
     },
     "app/api/public/tour-booking/[token]/confirm/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The family confirming the booking their path token names. Token-scoped admission, as cancel-intent."
       }
     },
     "app/api/public/tour-booking/[token]/decline/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The family declining the booking their path token names. Token-scoped admission, as cancel-intent."
       }
     },
     "app/api/public/tour-booking/[token]/reschedule/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The family rescheduling the booking their path token names. Token-scoped admission, as cancel-intent."
       }
     },
     "app/api/public/tour-booking/[token]/resolve/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Resolves the booking the path token names, so the family can see what they are acting on. Token-scoped."
       }
     },
     "app/api/public/tour-booking/[token]/slots/route.ts": {
@@ -3440,32 +3461,38 @@
     },
     "app/api/runtime-info/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Runtime metadata. Reads no database and no caller, as build-info."
       }
     },
     "app/api/vendor-application/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Public inbound vendor application, same class and same residual risk as leads/gutters."
       }
     },
     "app/api/verticals/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The platform vertical catalog — not tenant data and not org-scoped. Read through the service-role client because the list is platform-level, and there is no caller to scope it to."
       }
     },
     "app/api/webhooks/resend/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Provider callback from Resend. Admission is the Svix signature, verified against RESEND_WEBHOOK_SECRET, and the handler FAILS CLOSED — 503 when the secret is unconfigured, 400 when the signature headers are absent. The caller is a delivery provider, not a principal; there is no membership and therefore no capability. The signature is the boundary."
       }
     },
     "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Twilio delivery-status callback, scoped to one provider binding. The binding's secret_ref resolves the verification token, falling back to the global TWILIO_AUTH_TOKEN, and the handler fails closed with 503 when no token resolves. Signature admission, as resend."
       }
     },
     "app/api/webhooks/twilio/sms-status/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
       }
     }
   }
