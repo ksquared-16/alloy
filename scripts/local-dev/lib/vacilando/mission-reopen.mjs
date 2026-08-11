@@ -23,30 +23,28 @@ export function parkMissionOutcome(missionId, {
 
   const at = new Date(nowMs ?? Date.now()).toISOString();
   updateMission(missionId, {
-    status: "waiting_for_operator",
+    status: "idle",
     kickoff_status: "executing",
     outcome_reviewed_at: at,
     outcome_reviewed_by: actor,
     outcome_parked_at: at,
-    completion_rejected_at: at,
-    completion_rejected_by: actor,
-    completion_rejection_reason: response || "Operator parked after review — no worker launch",
-    pending_question: "Parked after outcome review. Choose accept or more work when ready.",
+    // Park ≠ reject — do not set completion_rejected_* (that forced Waiting on you).
+    pending_question: null,
     pending_approval: null,
   }, { nowMs });
 
   try {
     appendTimelineEvent(missionId, {
       type: "progress",
-      headline: "You parked the mission after review",
-      summary: response || "Outcome reviewed. Mission stays open; nothing launches until you choose accept or more work.",
+      headline: "Mission idle",
+      summary: response || "Mission left idle — durable responsibility remains open; nothing launches.",
       visibility: "summary",
       actor,
       nowMs,
     });
   } catch { /* optional */ }
 
-  return { ok: true, mission: getMission(missionId) };
+  return { ok: true, mission: getMission(missionId), posture: deriveMissionPosture(missionId) };
 }
 
 /**

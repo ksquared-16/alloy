@@ -126,13 +126,24 @@ if (!card) {
 
 assert.equal(card.soft, true, `expected soft card, got soft=${card.soft} posture=${posture?.id}`);
 assert.ok(card.brief, "soft card must expose director brief");
-assert.match(String(card.brief.verdictLabel || ""), /Accept|Complete|Criteria/i);
+assert.match(String(card.brief.verdictLabel || ""), /Accept|Complete|Criteria|ongoing|Current work/i);
 assert.ok(card.brief.problem || card.brief.fix || card.summary);
-assert.equal(card.recommendation, "Accept this deliverable");
-assert.ok(card.buttons.some((b) => b.kind === "park_outcome" && /Accept/i.test(b.label)));
+// Durable Mission: register may continue into next plan phase — never require Park/Done for now.
 assert.ok(
-  card.buttons[0]?.kind === "park_outcome" || card.buttons[0]?.kind === "dispatch_ready",
-  "Accept/hold (or start next) must lead — not Request More Discovery",
+  /Continuing|Continue|Current work complete|Accept/i.test(String(card.recommendation || "")),
+  `unexpected recommendation: ${card.recommendation}`,
+);
+assert.ok(
+  !card.buttons.some((b) => b.kind === "park_outcome"),
+  "soft card must not lead with Done for now / park after register work",
+);
+assert.ok(
+  card.buttons.length === 0
+  || card.buttons[0]?.kind === "open_next_wave"
+  || card.buttons[0]?.kind === "dispatch_ready"
+  || card.buttons[0]?.kind === "advance_implementation"
+  || card.buttons[0]?.kind === "toggle_screenshots",
+  `unexpected lead button ${card.buttons[0]?.kind}`,
 );
 assert.ok(!/^Request More Discovery$/i.test(card.recommendation));
 

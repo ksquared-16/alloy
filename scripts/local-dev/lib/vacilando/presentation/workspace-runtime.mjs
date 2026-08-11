@@ -31,6 +31,9 @@ import {
   displayMissionTitle,
   liveWorkProgressVm,
 } from "./mission-conversation.mjs";
+import { progressBoardVm } from "../progress-board.mjs";
+import { missionHealthVm } from "./mission-health.mjs";
+import { ensureRegisterCompleteDirectorSynthesis } from "../register-complete-synthesis.mjs";
 import { executeMissionDirectorTurn } from "../mission-conversation-director.mjs";
 
 /** V3-1 single workspace seed — Identity Platform (still the primary conversation). */
@@ -359,13 +362,25 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     settings: { workspaceId: missionId },
     operational,
   };
+  const inlineReview = inlineReviewCardVm(missionId);
+  const progressBoard = inlineReview?.progressBoard || progressBoardVm(missionId);
+  const missionHealth = inlineReview?.missionHealth || missionHealthVm(missionId);
+  // Idempotent: when register is complete and Mission is idle, Director posts one
+  // continuity synthesis so the operator is never left wondering what to click.
+  try {
+    if (missionHealth?.register?.complete && !missionHealth?.waitingOnYou) {
+      ensureRegisterCompleteDirectorSynthesis(missionId);
+    }
+  } catch { /* best-effort */ }
   const currentStateCompact = compressCurrentState(currentState, {
     provider: operational.worker?.provider,
     slot: operational.worker?.slot,
     serverStatus: operational.server?.statusLabel || operational.server?.status,
     liveProgress,
+    completionBrief: inlineReview?.brief || null,
+    progressBoard,
+    missionHealth,
   });
-  const inlineReview = inlineReviewCardVm(missionId);
   // Defer expensive since-last-visit off the critical shell path (V3-4 Opening fix)
   const sinceLastVisit = null;
   // Mission-local Needs You only (never full portfolio scan — that freezes the shell).
@@ -392,6 +407,10 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     }
     const posture = deriveMissionPosture(missionId);
     if (posture?.needsYou && posture.id !== "decision_required") {
+      // Register-complete idle must never enter Needs You from posture alone.
+      if (posture.id === "mission_idle" || posture.id === "director_reconciling") {
+        /* skip */
+      } else {
       items.push({
         kind: "needs_you_item",
         type: posture.id,
@@ -401,6 +420,7 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
         urgency: "Needs you",
         primaryAction: posture.primaryAction || null,
       });
+      }
     }
     attention = { items, count: items.length };
   } catch { /* best-effort */ }
@@ -412,6 +432,8 @@ export function workspaceShellVm(workspaceId = V3_1_WORKSPACE.workspaceId, {
     currentState,
     currentStateCompact,
     liveProgress,
+    progressBoard,
+    missionHealth,
     context,
     operational,
     inlineReview,

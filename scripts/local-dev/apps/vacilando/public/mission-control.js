@@ -763,8 +763,11 @@ We'll capture the context automatically.</p>
     if (j.shell?.missionId) V2.state.selectedMissionId = j.shell.missionId;
         V2.state.workspaceLiveProgress = j.shell?.liveProgress || null;
         markFetched(`workspace-shell:${id}`);
-        if (typeof window.renderMissionRail === "function") {
-          window.renderMissionRail(V2.state.workspaceList);
+        // Left rail is owned by /api/v2/views/mission-rail (slots + missions).
+        // Do NOT repaint it from shell.missions — that list is Identity-only and
+        // was flashing slots then collapsing back to one mission.
+        if (typeof window.fetchMissionRail === "function") {
+          window.fetchMissionRail();
         }
         const wt = j.shell?.operational?.worker?.worktree;
         const br = j.shell?.operational?.worker?.branch;
@@ -923,9 +926,8 @@ We'll capture the context automatically.</p>
     }
     const ws = rt.workspace || {};
     if (rt.missions?.length) V2.state.workspaceList = rt.missions;
-    if (typeof window.renderMissionRail === "function") {
-      window.renderMissionRail(V2.state.workspaceList || rt.missions || []);
-    }
+    // Rail paint is owned by fetchMissionRail (slot missions). Never overwrite
+    // with shell.missions here — that caused the flash-then-Identity-only bug.
     const compact = rt.currentStateCompact || {};
     const ops = rt.operational || rt.context?.operational || {};
     const worker = ops.worker || rt.context?.worker || {};
@@ -1005,6 +1007,67 @@ We'll capture the context automatically.</p>
       </section>`;
     })() : "";
 
+    const progressBoardHtml = (board) => {
+      if (!board || !board.hasDepth) return "";
+      const mig = board.migrations;
+      const blocks = (board.executionBlocks || []);
+      const wsRowsData = (board.workstreams || []);
+      const reg = board.register;
+      const blockRows = blocks.map((b) =>
+        `<tr><th scope="row">${esc(b.label)}</th><td>${esc(b.status)}${b.detail ? `<div class="ws-pb-detail">${esc(b.detail)}</div>` : ""}</td></tr>`
+      ).join("");
+      const migRows = mig ? [
+        mig.branchFiles != null ? ["Branch migration files", mig.branchFiles] : null,
+        mig.uniqueVersions != null ? ["Unique versions", mig.uniqueVersions] : null,
+        mig.applied != null ? ["Applied cert ledger versions", mig.applied] : null,
+        mig.pending != null ? ["Pending cert versions", mig.pending] : null,
+        mig.verifiedThrough ? ["Real-schema verified through", mig.verifiedThrough] : null,
+        mig.collisions ? ["Known version collisions", mig.collisions] : null,
+        mig.detail ? ["Notes", mig.detail] : null,
+      ].filter(Boolean).map(([k, v]) =>
+        `<tr><th scope="row">${esc(k)}</th><td>${esc(String(v))}</td></tr>`
+      ).join("") : "";
+      const wsRows = wsRowsData.map((w) =>
+        `<tr>
+          <td class="ws-pb-id">${esc(w.id)}</td>
+          <td>${esc(w.label)}</td>
+          <td>${esc(w.status)}</td>
+          <td>${w.approx != null ? esc(String(w.approx)) : "—"}</td>
+          <td>${esc(w.detail || "—")}</td>
+        </tr>`
+      ).join("");
+      const registerComplete = board.register?.percent === 100
+        || (board.register?.done != null && board.register?.total != null
+          && board.register.done === board.register.total && board.register.total > 0);
+      const workstreamBlock = wsRows
+        ? (registerComplete
+          ? `<details class="ws-pb-depth"><summary>Workstream detail (${wsRowsData.length})</summary>
+              <table class="ws-pb-table ws-pb-ws"><caption>Workstreams</caption>
+                <thead><tr><th>WS</th><th>Workstream</th><th>Status</th><th>Approx.</th><th>What changed / remaining</th></tr></thead>
+                <tbody>${wsRows}</tbody></table>
+            </details>`
+          : `<table class="ws-pb-table ws-pb-ws"><caption>Workstreams</caption>
+              <thead><tr><th>WS</th><th>Workstream</th><th>Status</th><th>Approx.</th><th>What changed / remaining</th></tr></thead>
+              <tbody>${wsRows}</tbody></table>`)
+        : "";
+      return `<div class="ws-progress-board" aria-label="Progress board">
+        <div class="ws-pb-h">
+          <span class="ws-pb-k">Current work register</span>
+          ${board.register?.percent != null ? `<span class="ws-pb-pct">${esc(String(board.register.percent))}%</span>` : ""}
+        </div>
+        ${board.headline ? `<p class="ws-pb-headline">${esc(board.headline)}</p>` : ""}
+        ${reg?.line ? `<p class="ws-pb-register">${esc(reg.label || "Current work")}: ${esc(reg.line)}</p>` : ""}
+        <p class="ws-pb-register muted">Register % is not Mission progress. Durable Missions stay Ongoing until intentionally closed.</p>
+        ${blockRows ? `<table class="ws-pb-table"><caption>Execution blocks</caption>
+          <thead><tr><th>Block</th><th>Status</th></tr></thead>
+          <tbody>${blockRows}</tbody></table>` : ""}
+        ${migRows ? `<table class="ws-pb-table"><caption>Migration state</caption>
+          <thead><tr><th>Fact</th><th>Status</th></tr></thead>
+          <tbody>${migRows}</tbody></table>` : ""}
+        ${workstreamBlock}
+      </div>`;
+    };
+
     const reviewHtml = (() => {
       if (!inlineReview) return "";
       const brief = inlineReview.brief || null;
@@ -1034,6 +1097,7 @@ We'll capture the context automatically.</p>
         <button type="button" class="btn ghost sm" data-ws-inline-review-close>Close</button>
       </header>
       ${briefBlocks}
+      ${progressBoardHtml(inlineReview.progressBoard)}
       ${(inlineReview.findings || []).length ? `<div class="ws-inline-block"><div class="ws-inline-k">Still open / risks</div>
         <ul class="ws-inline-findings">${inlineReview.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
       </div>` : ""}
@@ -1096,11 +1160,31 @@ We'll capture the context automatically.</p>
 
     const stateCompact = `<div class="ws-state-compact">
       ${(compact.summaryLines || []).map((l) => `<div class="ws-state-line">${esc(l)}</div>`).join("") || `<div class="ws-state-line">${esc(compact.phase || "—")}</div>`}
+      ${(() => {
+        const h = compact.missionHealth || rt.missionHealth;
+        if (!h) return "";
+        return `<div class="ws-mission-health">
+          <div class="ws-ctx-k">${esc(h.title || "Mission")} · ${esc(h.missionProgressLabel || "Ongoing")}</div>
+          <dl class="ws-state-mini">
+            <div><dt>Objective</dt><dd>${esc(h.currentObjective || "—")}</dd></div>
+            <div><dt>Objective status</dt><dd>${esc(h.objectiveStatusLabel || "—")}</dd></div>
+            <div><dt>Current work</dt><dd>${esc(h.register?.line || "—")}</dd></div>
+            <div><dt>Next</dt><dd>${esc(h.directorNext || "—")}</dd></div>
+            <div><dt>Decisions</dt><dd>${h.waitingOnYou && h.decision
+              ? esc(h.decision.title)
+              : "No operator decisions currently required"}</dd></div>
+          </dl>
+        </div>`;
+      })()}
       <dl class="ws-state-mini">
-        <div><dt>Goal</dt><dd>${esc(compact.goal || "—")}</dd></div>
-        <div><dt>Next</dt><dd>${esc(compact.next || "—")}</dd></div>
+        <div><dt>${compact.completionBrief?.problem ? "Problem" : "Goal"}</dt><dd>${esc(compact.goal || "—")}</dd></div>
+        <div><dt>${compact.completionBrief?.fix ? "Fix" : "Next"}</dt><dd>${esc(compact.next || "—")}</dd></div>
         ${compact.blockedBy ? `<div><dt>Blocked</dt><dd>${esc(compact.blockedBy)}</dd></div>` : ""}
       </dl>
+      ${(compact.completionBrief?.doneBullets || []).length ? `<div class="ws-state-brief"><div class="ws-ctx-k">Changed</div><ul>${compact.completionBrief.doneBullets.map((d) => `<li><code>${esc(d)}</code></li>`).join("")}</ul></div>` : ""}
+      ${(compact.completionBrief?.proofLines || []).length ? `<div class="ws-state-brief"><div class="ws-ctx-k">Proof</div><ul>${compact.completionBrief.proofLines.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div>` : ""}
+      ${compact.completionBrief?.summary && !compact.completionBrief?.problem ? `<div class="ws-state-brief"><div class="ws-ctx-k">Summary</div><p>${esc(compact.completionBrief.summary)}</p></div>` : ""}
+      ${progressBoardHtml(compact.progressBoard || rt.progressBoard)}
     </div>`;
 
     const serverActions = (server.actions || []).map((a) => actionBtn(a)).join("");

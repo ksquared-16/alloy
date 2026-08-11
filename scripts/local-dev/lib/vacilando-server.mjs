@@ -626,6 +626,13 @@ function conductorTick() {
       }
     } catch { /* never break conductor */ }
 
+    // Orphan compute permits (dead holders) — reclaim so typecheck/cert cannot
+    // strand the machine for half an hour after a crashed process.
+    try {
+      const computeBin = join(dirname(fileURLToPath(import.meta.url)), "..", "alloy-compute");
+      execFileSync(computeBin, ["reap", "--confirm"], { timeout: 20000, stdio: "ignore" });
+    } catch { /* never break conductor */ }
+
     // V2 missions: silent workers → Director auto-resume (no operator babysitting).
     // Also auto-dispatch ready queues when VACILANDO_AUTO_DISPATCH is on (default).
     if (!silentRecoverInFlight) {
@@ -788,6 +795,22 @@ export function createVacilandoServer() {
               "Cache-Control": "no-store",
             });
             return createReadStream(full).pipe(res);
+          }
+          if (out?.html != null) {
+            res.writeHead(out.status || 200, {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": "no-store",
+            });
+            res.end(out.html);
+            return;
+          }
+          if (out?.text != null) {
+            res.writeHead(out.status || 200, {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Cache-Control": "no-store",
+            });
+            res.end(out.text);
+            return;
           }
           if (out) return sendJson(res, out.status, out.body);
         }

@@ -988,10 +988,28 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     if (!missionId || !evidenceId) {
       return { status: 400, body: { ok: false, error: "missing_mission_or_evidence_id" } };
     }
-    const { resolveMissionEvidenceFile } = await import("./presentation/evidence-experience.mjs");
-    const full = resolveMissionEvidenceFile(missionId, evidenceId);
-    if (!full) return { status: 404, body: { ok: false, error: "evidence_file_not_found" } };
-    return { status: 200, filePath: full };
+    const { resolveMissionEvidenceView } = await import("./presentation/evidence-experience.mjs");
+    const view = resolveMissionEvidenceView(missionId, evidenceId);
+    if (!view) return { status: 404, body: { ok: false, error: "evidence_file_not_found" } };
+    if (view.kind === "file" && view.filePath) {
+      return { status: 200, filePath: view.filePath };
+    }
+    // Inline text (notes / logs / commits without a disk file) — serve as a
+    // readable HTML page so the artifact modal never shows raw API error JSON.
+    const esc = (s) => String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(view.title)}</title>
+<style>
+  body{font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;margin:0;padding:20px 24px;color:#1a1a1a;background:#faf9f7}
+  h1{font-size:15px;margin:0 0 12px;font-weight:650}
+  .meta{font-size:12px;color:#666;margin-bottom:14px}
+  pre{white-space:pre-wrap;word-break:break-word;margin:0;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;border:1px solid #e8e4dc;border-radius:10px;padding:14px 16px}
+</style></head><body>
+<h1>${esc(view.title)}</h1>
+${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
+<pre>${esc(view.body)}</pre>
+</body></html>`;
+    return { status: 200, html };
   }
   if (path === "/api/v2/views/mission/kickoff") {
     const id = q("id") || q("mission_id");
