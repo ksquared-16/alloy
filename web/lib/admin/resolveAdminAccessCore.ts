@@ -18,6 +18,30 @@ export type ResolvedAdminAccessCore = {
 const PORTAL_ROLES = new Set(["admin", "ops"]);
 
 /**
+ * W-42 (`I-28`ᴬ, `RL-24`) — THE normal form for a role key. One function, applied at the boundary.
+ *
+ * `02…§18` (`M2-11`): the enforcing resolver built `roleKeys` **raw** and the preview built them
+ * **trimmed**, so a membership row holding `"admin "` produced two different answers — the
+ * enforcing path yielded `portalEligible: false` and an empty capability set while the preview
+ * yielded `portalEligible: true` and the full `admin` grant set. *"Settings → Users & Roles shows a
+ * working portal administrator; every runtime gate returns 401/403."*
+ *
+ * **The finding is that the model has no defined normal form**, not that padded rows exist. The
+ * product's own assignment path already trims, so this state is not reachable through the UI — it
+ * is reachable through the writers `M2-2` shows are unconstrained: seeds, imports, direct SQL.
+ *
+ * **Admission-set consequence, recorded rather than buried.** Normalizing is what the plan
+ * specifies (`W-42`, gated by nothing), and it resolves the divergence in the direction of the
+ * operator's evident intent: a row written as `"admin "` or `"Admin"` was meant to be `admin`. It
+ * therefore WIDENS enforcement for such a row — from "admitted by the preview, refused by every
+ * gate" to "admitted by both". It cannot widen anything for a row that is already normal, which is
+ * every row the product itself has ever written.
+ */
+export function normalizeRoleKey(raw: unknown): string {
+    return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+}
+
+/**
  * W-7 (I-19, lockout class L1) — absent scope denies.
  *
  * Which answer the resolver *enforces* when a membership has no `user_access_profiles` row.
@@ -161,12 +185,18 @@ export function chooseOrgAndRoleKeysFromMembershipRows(
     rows: { org_id: string; role: string }[]
 ): { orgId: string; roleKeys: string[] } | null {
     if (!rows?.length) return null;
-    const adminOpsRows = rows.filter((r) => PORTAL_ROLES.has(r.role));
-    const pool = adminOpsRows.length > 0 ? adminOpsRows : rows;
+    // W-42 — normalized before the membership is classified, not after. Comparing the RAW value
+    // here was the enforcing half of `I-28`ᴬ: a row holding `"admin "` matched no portal role, so
+    // the principal resolved `portalEligible: false` with an empty capability set while the preview
+    // (which trimmed) showed a working portal administrator.
+    const normalized = rows.map((r) => ({ org_id: r.org_id, role: normalizeRoleKey(r.role) })).filter((r) => r.role);
+    if (!normalized.length) return null;
+    const adminOpsRows = normalized.filter((r) => PORTAL_ROLES.has(r.role));
+    const pool = adminOpsRows.length > 0 ? adminOpsRows : normalized;
     const chosenOrg = [...new Set(pool.map((r) => r.org_id))].sort()[0];
     if (!chosenOrg) return null;
     const roleKeys = [
-        ...new Set(rows.filter((r) => r.org_id === chosenOrg).map((r) => r.role)),
+        ...new Set(normalized.filter((r) => r.org_id === chosenOrg).map((r) => r.role)),
     ].sort();
     return roleKeys.length ? { orgId: chosenOrg, roleKeys } : null;
 }
@@ -194,10 +224,7 @@ async function fetchLegacyAdminOpsOrgAndRole(
         logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "user_profiles", userId, null, profileErr.message);
         return null;
     }
-    const pr =
-        profile && typeof (profile as { role?: unknown }).role === "string"
-            ? ((profile as { role: string }).role as string).trim()
-            : "";
+    const pr = normalizeRoleKey((profile as { role?: unknown } | null)?.role);
     if (pr === "admin" || pr === "ops") {
         const orgFromAu = await fetchOrgIdFromAppUsers(supabase, userId);
         if (orgFromAu) return { orgId: orgFromAu, role: pr };
@@ -213,7 +240,7 @@ async function fetchLegacyAdminOpsOrgAndRole(
         return null;
     }
     const auRow = au as { role?: unknown; org_id?: unknown } | null;
-    const ar = auRow && typeof auRow.role === "string" ? auRow.role.trim() : "";
+    const ar = normalizeRoleKey(auRow?.role);
     const oid = auRow && typeof auRow.org_id === "string" ? auRow.org_id : "";
     if ((ar === "admin" || ar === "ops") && oid) {
         return { orgId: oid, role: ar };
@@ -229,7 +256,7 @@ async function fetchLegacyAdminOpsOrgAndRole(
         return null;
     }
     const au2Row = au2 as { role?: unknown; org_id?: unknown } | null;
-    const ar2 = au2Row && typeof au2Row.role === "string" ? au2Row.role.trim() : "";
+    const ar2 = normalizeRoleKey(au2Row?.role);
     const oid2 = au2Row && typeof au2Row.org_id === "string" ? au2Row.org_id : "";
     if ((ar2 === "admin" || ar2 === "ops") && oid2) {
         return { orgId: oid2, role: ar2 };
@@ -441,7 +468,11 @@ export async function resolveAdminAccessDimensionsForOrgMember(
 
     if (urErr || !urRows?.length) return null;
 
-    const roleKeys = [...new Set(urRows.map((r) => String((r as { role: string }).role).trim()).filter(Boolean))].sort();
+    // W-42 — the same normal form as the enforcing path, from the same function. A local `.trim()`
+    // here is exactly what made preview and runtime disagree.
+    const roleKeys = [
+        ...new Set(urRows.map((r) => normalizeRoleKey((r as { role: unknown }).role)).filter(Boolean)),
+    ].sort();
     if (!roleKeys.length) return null;
 
     const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));

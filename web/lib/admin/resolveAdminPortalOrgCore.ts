@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     chooseOrgAndRoleKeysFromMembershipRows,
+    normalizeRoleKey,
     type ResolvedAdminAccessCore,
 } from "@/lib/admin/resolveAdminAccessCore";
 
@@ -31,10 +32,7 @@ async function fetchLegacyAdminOpsOrgAndRole(
         logPortalReadFailure("user_profiles", userId, profileErr.message);
         return null;
     }
-    const pr =
-        profile && typeof (profile as { role?: unknown }).role === "string"
-            ? ((profile as { role: string }).role as string).trim()
-            : "";
+    const pr = normalizeRoleKey((profile as { role?: unknown } | null)?.role);
     if (pr === "admin" || pr === "ops") {
         const orgFromAu = await fetchOrgIdFromAppUsers(supabase, userId);
         if (orgFromAu) return { orgId: orgFromAu, role: pr };
@@ -50,7 +48,7 @@ async function fetchLegacyAdminOpsOrgAndRole(
         return null;
     }
     const auRow = au as { role?: unknown; org_id?: unknown } | null;
-    const ar = auRow && typeof auRow.role === "string" ? auRow.role.trim() : "";
+    const ar = normalizeRoleKey(auRow?.role);
     const oid = auRow && typeof auRow.org_id === "string" ? auRow.org_id : "";
     if ((ar === "admin" || ar === "ops") && oid) {
         return { orgId: oid, role: ar };
@@ -66,7 +64,7 @@ async function fetchLegacyAdminOpsOrgAndRole(
         return null;
     }
     const au2Row = au2 as { role?: unknown; org_id?: unknown } | null;
-    const ar2 = au2Row && typeof au2Row.role === "string" ? au2Row.role.trim() : "";
+    const ar2 = normalizeRoleKey(au2Row?.role);
     const oid2 = au2Row && typeof au2Row.org_id === "string" ? au2Row.org_id : "";
     if ((ar2 === "admin" || ar2 === "ops") && oid2) {
         return { orgId: oid2, role: ar2 };
