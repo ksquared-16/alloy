@@ -134,6 +134,12 @@ cmd_inbound_up() {
     local api service
     api="$(echo "$status" | sed -n 's/^API_URL="\(.*\)"$/\1/p')"
     service="$(echo "$status" | sed -n 's/^SERVICE_ROLE_KEY="\(.*\)"$/\1/p')"
+    # A half-up stack — the database container running while kong/auth are not —
+    # still answers `supabase status`, but with these fields EMPTY. Starting the
+    # webhook anyway produces a process that accepts every request and answers 500
+    # from `_get_headers()`, which reads as a product defect and is not one.
+    [ -n "$api" ] && [ -n "$service" ] \
+        || die "cert stack is only half up (empty API_URL/SERVICE_ROLE_KEY) — check: curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54421/auth/v1/health"
     mkdir -p "$CERT_DIR/.run"
     info "Starting inbound webhook at $INBOUND_URL against the cert tenant…"
     (
@@ -190,6 +196,11 @@ NEXT_PUBLIC_ALLOY_OS_RUNTIME=1
 # objective result (queued/sent) but nothing leaves the machine. Auth emails are
 # caught locally by the stack's mail catcher (inbucket :54424).
 ALLOY_CERTIFICATION=1
+# The ingress quarantine is RLS-locked to service_role, so the only way to prove
+# it retains an unattributable message WITHOUT exposing the parent's words is to
+# read the diagnostic projection. Enabled here so that withholding is certified
+# rather than asserted; it is env-gated and off by default everywhere else.
+COMMUNICATIONS_INGRESS_DIAGNOSTICS=1
 EOF
     green "Configuration written ($ENV_FILE) — url/anon/tenant known, no discovery"
 }

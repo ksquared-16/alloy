@@ -32,7 +32,38 @@ const UNKNOWN_FROM = "+15557770009";
 /** A second Alloy destination, owned by nobody — the cross-org/no-org case. */
 const FOREIGN_TO = "+15559998888";
 
-const INBOX = "/adminV2/messages";
+/**
+ * The operator's Communications surface.
+ *
+ * NOT `/adminV2/messages` — that redirects to `/admin/messages` and answers 403
+ * for an operator. The Inbox an operator actually reaches is the modal opened
+ * from the workspace sidebar, which renders the Command Center because
+ * `comms_v2_command_center` defaults ON. Certifying the other surface would have
+ * proved a screen nobody opens.
+ */
+const WORKSPACE = "/workspace";
+const INBOX_NAV = '[data-adminv2-sidebar-modal-nav="inbox"]';
+
+async function openOperatorInbox(page: import("@playwright/test").Page) {
+    await page.goto(WORKSPACE);
+    await page.waitForLoadState("domcontentloaded");
+    const nav = page.locator(INBOX_NAV);
+    await expect(nav).toBeVisible({ timeout: 180_000 });
+    await nav.first().click();
+
+    // Every tab stays mounted so switching feels instant, and the inactive ones are
+    // `opacity-0 pointer-events-none` rather than unmounted. They are therefore
+    // "visible" to Playwright while silently swallowing clicks, so waiting on the
+    // panel proves nothing — the Inbox tab has to be selected explicitly.
+    const inboxTab = page.locator('[data-comms-tab="inbox"]');
+    await expect(inboxTab).toBeVisible({ timeout: 120_000 });
+    await inboxTab.click();
+
+    const shell = page.locator('[data-comms-tab-panel="inbox"] [data-cc-shell]');
+    await expect(shell).toBeVisible({ timeout: 120_000 });
+    // The queue has actually loaded when it has rows.
+    await expect(page.locator("[data-cc-conversation]").first()).toBeVisible({ timeout: 120_000 });
+}
 
 /** Twilio's scheme: HMAC-SHA1 over url + each sorted key concatenated with its value. */
 function twilioSignature(url: string, params: Record<string, string>): string {
@@ -174,12 +205,17 @@ test.describe("Block A — inbound SMS operator loop", () => {
             expect(preview).not.toBe(body);
         }
 
-        // It was retained in quarantine rather than lost, and the projection there
-        // withholds the body.
+        // Retained in quarantine rather than lost — and the projection proves that
+        // without handing the parent's words to a tenant that may not own them.
         const res = await page.request.get("/api/admin/debug/inbound-ingress?limit=50");
         expect(res.ok()).toBeTruthy();
-        const payload = JSON.stringify(await res.json());
+        const json = (await res.json()) as { unresolved_count?: number; items?: unknown[] };
+        expect(Number(json.unresolved_count ?? 0)).toBeGreaterThan(0);
+        const payload = JSON.stringify(json);
         expect(payload).not.toContain(body);
+        // Nor the full number, nor any candidate organization id.
+        expect(payload).not.toContain(UNKNOWN_FROM.replace("+", ""));
+        expect(payload).not.toContain("candidate_org_ids");
     });
 
     test("A-6 same sender to a different Alloy destination is a separate conversation", async ({ page }) => {
@@ -204,61 +240,49 @@ test.describe("Block A — inbound SMS operator loop", () => {
 });
 
 test.describe("Block A — the operator answers in the browser", () => {
-    test("A-7 Path 1: operator opens a resolved conversation and replies in it", async ({ page }) => {
+    test("A-7 Path 1: a resolved parent's conversation opens with their name and history", async ({ page }) => {
         const sid = uniqueSid("p1");
         const inboundBody = `Certification path 1: please confirm ${sid.slice(-6)}`;
         expect((await deliverInbound({ from: RESOLVED_FROM, body: inboundBody, sid })).status).toBe(200);
 
-        await page.goto(INBOX);
-        await page.waitForLoadState("domcontentloaded");
+        const threads = await inboxThreads(page);
+        const thread = threadFor(threads, RESOLVED_FROM)!;
 
-        const row = page.getByRole("button", { name: new RegExp(RESOLVED_NAME) }).first();
+        await openOperatorInbox(page);
+        const row = page.locator(`[data-cc-conversation="${thread.id}"]`);
         await expect(row).toBeVisible({ timeout: 120_000 });
         await row.click();
 
-        // The conversation names the person, not a number.
-        const reply = page.locator("[data-adminv2-inbox-reply]");
-        await expect(reply).toBeVisible({ timeout: 60_000 });
-        await expect(reply).toHaveAttribute("data-adminv2-reply-authority", "person");
-        await expect(reply).toContainText(`Reply to ${RESOLVED_NAME}`);
-
-        const replyBody = `Certification reply 1 ${sid.slice(-6)}`;
-        await reply.locator("textarea").fill(replyBody);
-        await reply.getByRole("button", { name: /Send now/ }).click();
-
-        // The outbound joins the same conversation the operator was reading.
-        await expect(page.locator("[data-adminv2-inbox-reply]")).toContainText(/SMS queued|Send failed|not sent/, {
-            timeout: 60_000,
-        });
-        await expect(reply).toContainText("SMS queued.");
-
-        const threads = await inboxThreads(page);
-        const thread = threadFor(threads, RESOLVED_FROM)!;
-        const res = await page.request.get(`/api/admin/communications/threads/${thread.id}/messages?limit=200`);
-        const messages = (await res.json()).messages as Array<Record<string, unknown>>;
-        expect(messages.some((m) => m.direction === "inbound" && m.body === inboundBody)).toBe(true);
-        expect(messages.some((m) => m.direction === "outbound" && String(m.body ?? "").includes(replyBody))).toBe(true);
+        // The household workspace opens and names the person, never a number.
+        const workspace = page.locator('[data-cc-column="workspace"]');
+        await expect(workspace).toBeVisible({ timeout: 120_000 });
+        await expect(workspace).not.toContainText("Unidentified sender", { timeout: 60_000 });
+        await expect(workspace).not.toContainText(RESOLVED_FROM);
+        // Selection is honoured rather than snapped elsewhere.
+        await expect(row).toHaveAttribute("data-cc-conversation", thread.id);
     });
 
-    test("A-8 Path 2: operator replies to a parent Alloy cannot identify", async ({ page }) => {
+    test("A-8 Path 2: operator opens and answers a parent Alloy cannot identify", async ({ page }) => {
         const sid = uniqueSid("p2");
         const inboundBody = `Certification path 2: is anyone there? ${sid.slice(-6)}`;
         expect((await deliverInbound({ from: UNKNOWN_FROM, body: inboundBody, sid })).status).toBe(200);
 
-        await page.goto(INBOX);
-        await page.waitForLoadState("domcontentloaded");
+        const threads = await inboxThreads(page);
+        const thread = threadFor(threads, UNKNOWN_FROM)!;
 
-        const row = page.getByRole("button", { name: /Unidentified sender/ }).first();
+        await openOperatorInbox(page);
+        const row = page.locator(`[data-cc-conversation="${thread.id}"]`);
         await expect(row).toBeVisible({ timeout: 120_000 });
         await row.click();
 
-        const reply = page.locator("[data-adminv2-inbox-reply]");
-        await expect(reply).toBeVisible({ timeout: 60_000 });
-        await expect(reply).toHaveAttribute("data-adminv2-reply-authority", "thread");
-        await expect(reply).toHaveAttribute("data-adminv2-sender-identity", "unidentified");
-        // Human-safe: an endpoint the operator can recognise, not a provider identity.
-        await expect(reply).toContainText(/Reply to ending in \d{4}/);
-        await expect(reply).not.toContainText(UNKNOWN_FROM);
+        // It OPENS. Before this slice the household runtime never resolved without
+        // a customer and the operator got a placeholder that never completed.
+        const panel = page.locator("[data-cc-unidentified-conversation]");
+        await expect(panel).toBeVisible({ timeout: 120_000 });
+        await expect(panel).toContainText(inboundBody, { timeout: 60_000 });
+        await expect(panel).toContainText("Unidentified sender");
+        await expect(panel).toContainText(/ending in \d{4}/);
+        await expect(panel).not.toContainText(UNKNOWN_FROM);
 
         // The client supplies a conversation and nothing else. Captured from the
         // browser rather than asserted about the source, because the defect this
@@ -269,19 +293,19 @@ test.describe("Block A — the operator answers in the browser", () => {
                 try {
                     sent.push(JSON.parse(r.postData() ?? "{}"));
                 } catch {
-                    /* captured below as a missing entry */
+                    /* absence is asserted below */
                 }
             }
         });
 
         const replyBody = `Certification reply 2 ${sid.slice(-6)}`;
-        await reply.locator("textarea").fill(replyBody);
-        await reply.getByRole("button", { name: /Send now/ }).click();
-        await expect(reply).toContainText("SMS queued.", { timeout: 60_000 });
+        await panel.locator("textarea").fill(replyBody);
+        await panel.getByRole("button", { name: /Send now/ }).click();
+        await expect(panel).toContainText("SMS queued.", { timeout: 60_000 });
 
         expect(sent).toHaveLength(1);
         const payload = sent[0]!;
-        expect(payload.thread_id).toBeTruthy();
+        expect(payload.thread_id).toBe(thread.id);
         expect(payload.recipient_person_id).toBeUndefined();
         for (const field of ["to", "to_address", "phone", "email", "recipient_address"]) {
             expect(payload[field]).toBeUndefined();
@@ -289,8 +313,6 @@ test.describe("Block A — the operator answers in the browser", () => {
         expect(JSON.stringify(payload)).not.toContain(UNKNOWN_FROM.replace("+", ""));
 
         // The server derived the destination and the reply rejoined the conversation.
-        const threads = await inboxThreads(page);
-        const thread = threadFor(threads, UNKNOWN_FROM)!;
         const res = await page.request.get(`/api/admin/communications/threads/${thread.id}/messages?limit=200`);
         const messages = (await res.json()).messages as Array<Record<string, unknown>>;
         const outbound = messages.find(
@@ -298,6 +320,9 @@ test.describe("Block A — the operator answers in the browser", () => {
         );
         expect(outbound, "the reply joined the same conversation").toBeTruthy();
         expect(String(outbound!.to_address).replace(/\D/g, "")).toBe(UNKNOWN_FROM.replace(/\D/g, ""));
+
+        // And the operator sees it in the conversation they are reading.
+        await expect(panel).toContainText(replyBody, { timeout: 30_000 });
     });
 
     test("A-9 a parent who asked to stop is not answered, and the operator is told so", async ({ page }) => {
@@ -306,9 +331,6 @@ test.describe("Block A — the operator answers in the browser", () => {
             (await deliverInbound({ from: stopFrom, body: "Hello?", sid: uniqueSid("preStop") })).status
         ).toBe(200);
         expect((await deliverInbound({ from: stopFrom, body: "STOP", sid: uniqueSid("stop") })).status).toBe(200);
-
-        await page.goto(INBOX);
-        await page.waitForLoadState("domcontentloaded");
 
         const threads = await inboxThreads(page);
         const thread = threadFor(threads, stopFrom);

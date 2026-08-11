@@ -595,7 +595,18 @@ export default function CommandCenterShell() {
                             />
                         </div>
                     :   null}
-                    {selected && runtime.vm ? (
+                    {/*
+                      * `selectedLoadable` is load-bearing, not belt-and-braces. The
+                      * runtime keeps the last household's view model when the new
+                      * selection has no customer, so switching from a family
+                      * conversation to an unidentified one left this branch matching
+                      * on STALE `runtime.vm` — the previous family's name, children,
+                      * preferences and history rendered under a different
+                      * conversation. Requiring the selection to be the one the view
+                      * model actually describes is what makes the two mutually
+                      * exclusive.
+                      */}
+                    {selected && selectedLoadable && runtime.vm ? (
                         <FamilyCommunicationWorkspaceView
                             surfaceVariant="workspace_inbox"
                             selected={selected}
@@ -658,6 +669,18 @@ export default function CommandCenterShell() {
                             viewerUserId={adminAuth?.userId ?? null}
                             sendCompleteToken={runtime.sendCompleteToken}
                         />
+                    ) : selected && isUnidentifiedConversation(selected) ? (
+                        // Ordered BEFORE the workspace-error branch deliberately.
+                        // `resolveCommandCenterWorkspaceError` answers "Not linked to a
+                        // family yet — review the connection before replying" for every
+                        // unresolved or ambiguous conversation, which is true and is a
+                        // dead end: a real parent's message, received and retained, with
+                        // no way to answer it. Not being linked to a household is a fact
+                        // about routing, not a reason to leave someone unanswered.
+                        <UnidentifiedConversationPanel
+                            conversation={selected}
+                            onReplied={() => refreshOperationalCommunicationsWork(selected.id)}
+                        />
                     ) : workspaceLoading ? (
                         <CommsWorkspacePanelReserve label="Loading conversation" />
                     ) : workspaceError ? (
@@ -676,16 +699,6 @@ export default function CommandCenterShell() {
                         </div>
                     ) : workspaceHydrating ? (
                         <CommsWorkspacePanelReserve label="Loading first conversation" />
-                    ) : selected && isUnidentifiedConversation(selected) ? (
-                        // The family workspace loads from a household this conversation
-                        // does not have, so `runtime.vm` never resolved and selection fell
-                        // through to a "Loading conversation" placeholder that stayed
-                        // forever. The parent's message was received, retained and listed
-                        // in the queue — and unanswerable.
-                        <UnidentifiedConversationPanel
-                            conversation={selected}
-                            onReplied={() => refreshOperationalCommunicationsWork(selected.id)}
-                        />
                     ) : selected ? (
                         <CommsWorkspacePanelReserve label="Loading conversation" />
                     ) : !loading && filtered.length === 0 ? (
