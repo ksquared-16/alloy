@@ -1,61 +1,93 @@
 /**
- * A Resend `email.received` event, reduced to the truth Alloy stores.
+ * A received email, reduced to the truth Alloy stores.
  *
- * Pure and defensive. Inbound is an unauthenticated surface once the signature is
- * verified — the SIGNATURE proves Resend sent it, not that its contents are
- * well-formed or benign — so every field is optional until proven, and a shape
- * this does not recognise yields `null` rather than a half-built message.
+ * THE PROVIDER CONTRACT IS TWO STEPS, and that shapes everything here. Per
+ * Resend's documentation (see RESEND-INBOUND-CONTRACT.md), the `email.received`
+ * webhook carries METADATA ONLY — no body, no headers. The body and the RFC
+ * headers that make threading possible come from `GET /emails/receiving/{id}`.
  *
- * PROVIDER CONTRACT NOT YET CONFIRMED LIVE. The field names below follow Resend's
- * documented inbound shape, and several plausible spellings are accepted for the
- * same fact because the exact payload has not been observed against a real
- * account. `headerValue()` is case-insensitive for the same reason: RFC header
- * names are case-insensitive and providers differ on how they normalise them.
- * This must be reconciled against a real event before inbound email is called
- * production-ready — recorded alongside the standing live-provider requirement.
+ * So the two halves are modelled separately and deliberately:
  *
- * Attachments are WS11. Their METADATA is retained here so an operator can be
- * told an attachment arrived; nothing is fetched or stored.
+ *   ResendReceivedEvent     what the signed webhook actually tells us
+ *   ResendRetrievedEmail    what the follow-up fetch adds
+ *
+ * A canonical message is only built once BOTH exist. Keeping them apart is what
+ * lets a retrieval failure be retried without inventing a half-message, and stops
+ * anyone assuming the webhook contained a body it never had.
+ *
+ * Everything is pure. A verified signature proves Resend sent the event, not that
+ * its contents are well-formed, so each field is optional until proven and an
+ * unusable shape yields null rather than a partial record.
  */
 
 export type InboundEmailAttachmentMetadata = {
+    /** Provider attachment id — retrieval is WS11's problem, but the id is kept. */
+    id: string | null;
     filename: string | null;
     contentType: string | null;
-    /** Provider-reported size in bytes, when given. Never trusted for allocation. */
+    /** `inline` attachments are usually embedded images, not documents. */
+    contentDisposition: string | null;
     size: number | null;
 };
 
-export type NormalizedInboundEmail = {
-    /** Stable provider identity for this received message — the idempotency key. */
-    providerMessageId: string;
+/** Step 1 — the Svix-verified `email.received` webhook. Metadata only. */
+export type ResendReceivedEvent = {
+    /** Resend's own id. The idempotency key, and the retrieval key. */
+    emailId: string;
     fromAddress: string;
-    /** Every destination the provider reported; tenant ownership is resolved from these. */
+    /** Addressed recipients. */
     toAddresses: string[];
+    ccAddresses: string[];
+    /**
+     * Addresses that actually caused Resend to receive this. For forwarded mail
+     * `to` is the sender's addressee while this is the Alloy-owned address, so
+     * tenant ownership must consider both.
+     */
+    receivedFor: string[];
+    /** The SENDER's RFC Message-ID, not Resend's id. */
+    messageId: string | null;
     subject: string | null;
+    receivedAt: string;
+    attachments: InboundEmailAttachmentMetadata[];
+};
+
+/** Step 2 — `GET /emails/receiving/{id}`. Body and headers. */
+export type ResendRetrievedEmail = {
+    text: string | null;
+    html: string | null;
+    /** `data_uri` means inline images are embedded rather than remote. */
+    htmlFormat: string | null;
+    /** Header map; `In-Reply-To` and `References` live here, not at top level. */
+    headers: unknown;
+};
+
+export type NormalizedInboundEmail = ResendReceivedEvent & {
     /** Always present: a safe plain-text representation, derived from HTML if needed. */
     text: string;
-    /** Retained unsanitized; sanitizing is the RENDERER's job, not the parser's. */
+    /** Retained unsanitized — sanitizing is the RENDERER's job, not the parser's. */
     html: string | null;
-    receivedAt: string;
-    messageId: string | null;
+    htmlFormat: string | null;
     inReplyTo: string | null;
     references: string | null;
-    attachments: InboundEmailAttachmentMetadata[];
 };
 
 function str(value: unknown): string | null {
     return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function asArray(value: unknown): string[] {
+function strArray(value: unknown): string[] {
     if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string" && v.trim() !== "");
     const single = str(value);
     return single ? [single] : [];
 }
 
 /**
- * An RFC header by name, case-insensitively, from either an object map or an
- * array of {name,value} pairs. Providers use both shapes.
+ * An RFC header by name, case-insensitively.
+ *
+ * Resend's documented example map is lowercased (`return-path`, `mime-version`),
+ * but header names are case-insensitive by RFC and Alloy must not depend on one
+ * provider's casing. The array-of-pairs shape is accepted too, since that is the
+ * other common representation.
  */
 export function headerValue(headers: unknown, name: string): string | null {
     const wanted = name.toLowerCase();
@@ -78,11 +110,10 @@ export function headerValue(headers: unknown, name: string): string | null {
 /**
  * A readable plain-text rendering of an HTML body.
  *
- * Deliberately crude. The goal is that a safe text representation ALWAYS exists,
- * not that it is a faithful rendering — truthful ugly text beats an elaborate
- * parser that alters meaning. Script and style contents are dropped rather than
- * flattened, because their text is not message content and would read as if the
- * parent had written it.
+ * Deliberately crude: the goal is that a safe text representation ALWAYS exists,
+ * not that it is faithful — truthful ugly text beats an elaborate parser that
+ * alters meaning. Script and style CONTENT is dropped rather than flattened,
+ * because it is not message content and would read as something the sender wrote.
  */
 export function htmlToSafeText(html: string): string {
     return html
@@ -99,8 +130,7 @@ export function htmlToSafeText(html: string): string {
         .replace(/&#39;/gi, "'")
         .replace(/[ \t]+/g, " ")
         // Stripping an opening tag leaves a space where the tag was, so every line
-        // after a block break starts with one. Collapse padding around newlines
-        // before limiting blank runs.
+        // after a block break starts with one.
         .replace(/[ \t]*\n[ \t]*/g, "\n")
         .replace(/\n{3,}/g, "\n\n")
         .trim();
@@ -110,60 +140,96 @@ function normalizeAttachments(raw: unknown): InboundEmailAttachmentMetadata[] {
     if (!Array.isArray(raw)) return [];
     return raw.slice(0, 50).map((entry) => {
         const e = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
-        const size = typeof e.size === "number" && Number.isFinite(e.size) ? e.size : null;
         return {
-            filename: str(e.filename) ?? str(e.name),
-            contentType: str(e.content_type) ?? str(e.contentType) ?? str(e.type),
-            size,
+            id: str(e.id),
+            filename: str(e.filename),
+            contentType: str(e.content_type),
+            contentDisposition: str(e.content_disposition),
+            size: typeof e.size === "number" && Number.isFinite(e.size) ? e.size : null,
         };
     });
 }
 
 /**
- * Reduce a provider payload to canonical inbound truth, or null if it is not a
- * usable received email.
+ * Read the `data` object of an `email.received` webhook.
  *
- * `null` is returned rather than a partial record when the sender, a destination
- * or the provider identity is missing: without any one of them the message cannot
- * be attributed, deduplicated, or answered, and storing it would create a row
- * nothing can act on.
+ * Returns null when the provider identity, sender, or every destination is
+ * missing: without them the message cannot be retrieved, attributed or
+ * deduplicated, and storing it would create a row nothing can act on.
  */
-export function normalizeResendInboundEmail(
-    payload: unknown,
-    opts: { fallbackProviderMessageId?: string | null; receivedAtFallback: string }
-): NormalizedInboundEmail | null {
-    if (!payload || typeof payload !== "object") return null;
-    const p = payload as Record<string, unknown>;
+export function normalizeResendReceivedEvent(
+    data: unknown,
+    opts: { receivedAtFallback: string }
+): ResendReceivedEvent | null {
+    if (!data || typeof data !== "object") return null;
+    const d = data as Record<string, unknown>;
 
-    const headers = p.headers;
-    const fromAddress = str(p.from) ?? headerValue(headers, "from");
-    const toAddresses = asArray(p.to).length > 0 ? asArray(p.to) : asArray(headerValue(headers, "to"));
+    const emailId = str(d.email_id);
+    const fromAddress = str(d.from);
+    const toAddresses = strArray(d.to);
+    const receivedFor = strArray(d.received_for);
 
-    // Provider identity, preferred over the RFC Message-ID: the provider's own id
-    // is what a REDELIVERY repeats. A sender controls their Message-ID and could
-    // reuse or omit it, which would make it a poor idempotency key.
-    const providerMessageId =
-        str(p.email_id) ?? str(p.id) ?? str(opts.fallbackProviderMessageId) ?? null;
-
-    if (!fromAddress || toAddresses.length === 0 || !providerMessageId) return null;
-
-    const html = str(p.html);
-    const rawText = str(p.text);
-    const text = rawText ?? (html ? htmlToSafeText(html) : "");
+    if (!emailId || !fromAddress || (toAddresses.length === 0 && receivedFor.length === 0)) return null;
 
     return {
-        providerMessageId,
+        emailId,
         fromAddress,
         toAddresses,
-        subject: str(p.subject) ?? headerValue(headers, "subject"),
+        ccAddresses: strArray(d.cc),
+        receivedFor,
+        messageId: str(d.message_id),
+        subject: str(d.subject),
+        receivedAt: str(d.created_at) ?? opts.receivedAtFallback,
+        attachments: normalizeAttachments(d.attachments),
+    };
+}
+
+/** Read the body and headers returned by `GET /emails/receiving/{id}`. */
+export function normalizeResendRetrievedEmail(payload: unknown): ResendRetrievedEmail | null {
+    if (!payload || typeof payload !== "object") return null;
+    const p = payload as Record<string, unknown>;
+    return {
+        text: str(p.text),
+        html: str(p.html),
+        htmlFormat: str(p.html_format),
+        headers: p.headers ?? null,
+    };
+}
+
+/**
+ * Combine both provider steps into canonical inbound truth.
+ *
+ * The event is authoritative for identity, addressing and subject; retrieval is
+ * authoritative for body and headers. Retrieval may legitimately be absent when a
+ * message genuinely has no body, so an empty text is not a failure — but the
+ * CALLER decides whether to proceed without a successful fetch, because "the
+ * fetch failed" and "the email was empty" must not look alike here.
+ */
+export function combineInboundEmail(
+    event: ResendReceivedEvent,
+    retrieved: ResendRetrievedEmail | null
+): NormalizedInboundEmail {
+    const html = retrieved?.html ?? null;
+    const text = retrieved?.text ?? (html ? htmlToSafeText(html) : "");
+    return {
+        ...event,
         text,
         html,
-        receivedAt: str(p.created_at) ?? str(p.received_at) ?? opts.receivedAtFallback,
-        messageId: headerValue(headers, "message-id") ?? str(p.message_id),
-        inReplyTo: headerValue(headers, "in-reply-to") ?? str(p.in_reply_to),
-        references: headerValue(headers, "references") ?? str(p.references),
-        attachments: normalizeAttachments(p.attachments),
+        htmlFormat: retrieved?.htmlFormat ?? null,
+        inReplyTo: headerValue(retrieved?.headers, "in-reply-to"),
+        references: headerValue(retrieved?.headers, "references"),
     };
+}
+
+/**
+ * Every address that could make this email Alloy's to own.
+ *
+ * `received_for` first: on forwarded mail it is the Alloy-owned address while
+ * `to` is whoever the sender wrote to. Considering only `to` would quarantine
+ * forwarded mail as unowned.
+ */
+export function ownershipCandidateAddresses(event: ResendReceivedEvent): string[] {
+    return [...event.receivedFor, ...event.toAddresses, ...event.ccAddresses];
 }
 
 /** Operator-facing note when an email arrived carrying attachments. WS11 owns the rest. */
