@@ -146,12 +146,16 @@ function exportedMethods(file) {
  * not a call, and a brace inside a string would derail the handler-body match.
  *
  * `stripComments` above is regex-based and guards `https://` with a `[^:]` lookbehind — adequate for
- * counting keys, not for offset arithmetic. This scanner is a real one-pass tokenizer, and it is
- * deliberately conservative about template literals: a plain template is blanked, but one carrying
- * `${…}` is left intact, because its interpolation is executable code and brace-balanced. A template
- * whose interpolation held an unbalanced brace inside a nested string would truncate a handler body
- * and raise a violation — loud and investigable, never a silent pass. That is the safe direction for
- * a control whose failure mode is otherwise "authorization nobody wrote".
+ * counting keys, not for offset arithmetic. This is a real one-pass tokenizer with a mode stack, so
+ * a template literal nested inside another's `${…}` is handled rather than approximated. That case
+ * is not hypothetical: `documents/entity-options` writes
+ * `` `Visit ${start}${r.job_id ? ` · job ${…}` : ""}` ``, and a scanner that takes the first backtick
+ * it sees as the closing one loses brace balance for the rest of the file — which is exactly how
+ * that route's GET became unreadable.
+ *
+ * Template TEXT is blanked; interpolated `${…}` is executable code and survives, contributing a
+ * balanced brace pair. String DELIMITERS survive too — blanking the quotes as well as the contents
+ * erases the token structure that tells an import statement from prose.
  */
 export function skeleton(source) {
     const n = source.length;
@@ -160,10 +164,33 @@ export function skeleton(source) {
         for (let k = from; k < to && k < n; k += 1) if (out[k] !== "\n") out[k] = " ";
     };
 
+    const stack = [];
     let i = 0;
     while (i < n) {
+        const mode = stack[stack.length - 1];
         const c = source[i];
         const d = source[i + 1];
+
+        if (mode && mode.type === "template") {
+            if (c === "\\") {
+                blank(i, i + 2);
+                i += 2;
+                continue;
+            }
+            if (c === "$" && d === "{") {
+                stack.push({ type: "interp", depth: 1 });
+                i += 2;
+                continue;
+            }
+            if (c === "`") {
+                stack.pop();
+                i += 1;
+                continue;
+            }
+            blank(i, i + 1);
+            i += 1;
+            continue;
+        }
 
         if (c === "/" && d === "/") {
             let j = i;
@@ -191,28 +218,25 @@ export function skeleton(source) {
                 j += 1;
             }
             const end = Math.min(j + 1, n);
-            // The DELIMITERS survive; only the contents are blanked. Blanking the quotes too erases
-            // the token structure that tells an import statement from prose.
             blank(i + 1, end - 1);
             i = end;
             continue;
         }
         if (c === "`") {
-            let j = i + 1;
-            let interpolated = false;
-            while (j < n) {
-                if (source[j] === "\\") {
-                    j += 2;
+            stack.push({ type: "template" });
+            i += 1;
+            continue;
+        }
+        if (mode && mode.type === "interp") {
+            if (c === "{") mode.depth += 1;
+            else if (c === "}") {
+                mode.depth -= 1;
+                if (mode.depth === 0) {
+                    stack.pop();
+                    i += 1;
                     continue;
                 }
-                if (source[j] === "$" && source[j + 1] === "{") interpolated = true;
-                if (source[j] === "`") break;
-                j += 1;
             }
-            const end = Math.min(j + 1, n);
-            if (!interpolated) blank(i + 1, end - 1);
-            i = end;
-            continue;
         }
         i += 1;
     }
@@ -263,8 +287,26 @@ function bodyBlock(skel, from) {
  * violation rather than skipped: "I could not read this one" must never be indistinguishable from
  * "this one is fine", which is the exact confusion §10.2 records.
  */
-export function handlerBody(file, method) {
+export function handlerBody(file, method, seen = new Set()) {
+    if (seen.has(file)) return null;
+    seen.add(file);
     const skel = skeleton(read(file));
+
+    // `export { GET } from "@/app/api/…"` — the handler is real, its body simply lives elsewhere.
+    // Three v2 drawer routes are pure re-exports of their v1 counterparts. Refusing to follow them
+    // would report a gated handler as unreadable, and an unreadable handler is a reviewer's problem
+    // rather than an author's.
+    for (const stmt of skel.matchAll(/export\s*\{([^}]*)\}\s*from/g)) {
+        const names = stmt[1].split(",").map((clause) => {
+            const parts = clause.trim().split(/\s+as\s+/);
+            return { local: (parts[0] ?? "").trim(), exported: (parts[1] ?? parts[0] ?? "").trim() };
+        });
+        const hit = names.find((x) => x.exported === method);
+        if (!hit) continue;
+        const spec = /from\s*["']([^"']+)["']/.exec(read(file).slice(stmt.index, stmt.index + stmt[0].length + 200));
+        const target = spec ? resolveImport(spec[1], file) : null;
+        if (target) return handlerBody(target, hit.local, seen);
+    }
 
     const direct = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\b`).exec(skel);
     if (direct) {
@@ -404,6 +446,149 @@ export function pendingWithKnownGates(table) {
         }
     }
     return found;
+}
+
+/**
+ * The permission catalog, discovered from the migration tree by REGION rather than by tuple shape.
+ *
+ * This mirrors `tests/access/permissionCatalogDiscovery.ts`, which carries the full reasoning: a
+ * parser pinned to one `INSERT` shape found 35 keys where the catalog holds 57, because
+ * `seed_default_rbac` transposes `label`/`group_key` and the wave-C migration seeds through a
+ * `FOR … IN VALUES` loop whose keys are variables. Discovery is therefore by region — find every
+ * part of a migration that can write a catalog row, take every key-shaped literal in it.
+ *
+ * Duplicating that helper would be the drift hazard this initiative has already paid for twice, so
+ * `routeCapabilityDeclaration.test.ts` asserts the two implementations return the SAME key set. The
+ * copy exists only because this file is `.mjs` and runs in `prebuild`, where the TypeScript test
+ * helper cannot be imported; the lock is what makes the copy safe.
+ */
+export function discoverCatalogKeys() {
+    const dir = join(WEB, "..", "supabase", "migrations");
+    const keys = new Set();
+    if (!existsSync(dir)) return keys;
+
+    const CATALOG_WRITE = /INSERT\s+INTO\s+(?:public\.)?(?:permission_definitions|permission_keys|permissions)\b/i;
+    const SQL_STRING = /'((?:[^']|'')*)'/g;
+
+    for (const file of readdirSync(dir).sort()) {
+        if (!file.endsWith(".sql")) continue;
+        const sql = readFileSync(join(dir, file), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, " ")
+            .replace(/--[^\n]*/g, " ");
+
+        const regions = [];
+        const dollarQuoted = /(?:DO|AS)\s+(\$[a-zA-Z_]*\$)([\s\S]*?)\1/g;
+        for (const block of sql.matchAll(dollarQuoted)) {
+            if (CATALOG_WRITE.test(block[2])) regions.push(block[2]);
+        }
+        for (const statement of sql.replace(dollarQuoted, " ").split(";")) {
+            if (CATALOG_WRITE.test(statement)) regions.push(statement);
+        }
+
+        for (const region of regions) {
+            for (const literal of region.matchAll(SQL_STRING)) {
+                const key = literal[1].replace(/''/g, "'");
+                if (PERMISSION_KEY_GRAMMAR.test(key)) keys.add(key);
+            }
+        }
+    }
+    return keys;
+}
+
+/**
+ * W-15 sizing — what gate evidence, if any, each `pending` handler carries.
+ *
+ * **This is not the census returning.** `auditAuthorityPaths.mjs` was retired because it classified
+ * a route as ENFORCED by walking its import closure, and over-reported enforcement by ~30×. The
+ * difference here is the direction of the error, and it is deliberate:
+ *
+ *   - the census's load-bearing output was "this route is protected" — a claim that is unsafe when
+ *     wrong, because it retires scrutiny;
+ *   - this function's load-bearing output is `none`: handlers where NO gate evidence was found.
+ *     That claim is conservative when wrong. A false `none` costs a reviewer five minutes; a false
+ *     "enforced" costs an exposure nobody looks for again.
+ *
+ * So the buckets other than `none` are explicitly NOT enforcement verdicts. They say what a reviewer
+ * will find when they open the file, which is how 725 undifferentiated entries become a lane with a
+ * shape. Nothing here feeds pass/fail; `runRouteCapabilityCheck` never calls it.
+ *
+ * Evidence is read from the handler's OWN body at method grain, and imported identifiers are
+ * resolved exactly one hop — never a closure walk. One hop is what makes an answer checkable by
+ * opening two files.
+ */
+export function gateInventory(table, catalogKeys = discoverCatalogKeys()) {
+    const buckets = { capability: [], gateHelper: [], role: [], authenticated: [], none: [], unreadable: [] };
+
+    for (const [route, methods] of Object.entries(table.routes ?? {})) {
+        const abs = join(WEB, route);
+        if (!existsSync(abs)) continue;
+
+        const skel = skeleton(read(abs));
+        const imported = new Map();
+        for (const stmt of skel.matchAll(/import\s+([\s\S]*?)\s+from\s*["']([^"']*)["']/g)) {
+            const spec = /from\s*["']([^"']+)["']/.exec(read(abs).slice(stmt.index, stmt.index + stmt[0].length + 2));
+            const target = spec ? resolveImport(spec[1], abs) : null;
+            if (!target) continue;
+            for (const name of stmt[1].replace(/[{}]/g, " ").split(/[,\s]+/)) {
+                const id = name.trim().replace(/^type$/, "");
+                if (id && /^[A-Za-z_$][\w$]*$/.test(id)) imported.set(id, target);
+            }
+        }
+
+        for (const [method, decl] of Object.entries(methods)) {
+            if (decl.status !== "pending") continue;
+            const body = handlerBody(abs, method);
+            if (body === null) {
+                buckets.unreadable.push({ route, method });
+                continue;
+            }
+
+            const called = new Set();
+            for (const m of body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) called.add(m[1]);
+
+            let capabilityVia = null;
+            let gateVia = null;
+            for (const id of called) {
+                const mod = imported.get(id);
+                if (!mod || !existsSync(mod)) continue;
+                // A key must be one the CATALOG actually holds. The grammar alone matches
+                // `customer_id.is.null` and `person.email` — supabase filters and column paths —
+                // and bucketing on it credited 80 handlers with capability gates most of which had
+                // none. That is precisely the retired census's error at small scale, so the
+                // grammar is a prefilter and the catalog is the judge.
+                const keys = [...new Set([...stripComments(read(mod)).matchAll(TS_KEY_LITERAL)]
+                    .map((k) => k[1])
+                    .filter((k) => catalogKeys.has(k)))].sort();
+                if (keys.length) {
+                    capabilityVia = { helper: id, module: relative(WEB, mod).split("\\").join("/"), keys };
+                    break;
+                }
+                // A first-party `require*`/`assert*`/`ensure*`/`can*` whose verdict this handler
+                // tests IS a gate — it simply is not a CAPABILITY gate. Without this signal the
+                // `none` bucket over-claimed: analytics/placements calls
+                // requireAnalyticsV2AdminContext and was being reported as ungated. Converting
+                // these to declared capabilities is the substance of W-15, so they need their own
+                // bucket rather than being lost in either direction.
+                if (!gateVia && /^(require|assert|ensure|can)[A-Z]/.test(id)) {
+                    const bound = verdictBinding(body, id);
+                    if (!bound || new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+                        gateVia = { helper: id, module: relative(WEB, mod).split("\\").join("/") };
+                    }
+                }
+            }
+
+            const roleGate = /\brole\s*[!=]==?|\broleKeys\b|\bpermissionKeys\b/.test(body);
+            const contextLoad = [...called].some((id) => /getAdmin\w*Context|loadAdminAccessBundle|requireAuth|getServerUser/.test(id));
+
+            if (capabilityVia) buckets.capability.push({ route, method, ...capabilityVia });
+            else if (gateVia) buckets.gateHelper.push({ route, method, ...gateVia });
+            else if (roleGate) buckets.role.push({ route, method });
+            else if (contextLoad) buckets.authenticated.push({ route, method });
+            else buckets.none.push({ route, method });
+        }
+    }
+
+    return buckets;
 }
 
 // ---------------------------------------------------------------------------
@@ -645,6 +830,32 @@ if (invokedDirectly) {
                     .filter(([, d]) => d.status === "pending")
                     .map(([m]) => m);
                 if (methods.length) console.log(`  ${route}  [${methods.join(", ")}]`);
+            }
+        }
+
+        if (process.argv.includes("--gate-inventory")) {
+            const table = JSON.parse(readFileSync(TABLE_PATH, "utf8"));
+            const inv = gateInventory(table);
+            const total = Object.values(inv).reduce((n, b) => n + b.length, 0);
+            console.log(`\n--- W-15 sizing: gate evidence in the ${total} pending handlers ---`);
+            console.log(`  capability evidence (helper module names a key)  ${String(inv.capability.length).padStart(4)}`);
+            console.log(`  gate helper, but NOT a capability gate          ${String(inv.gateHelper.length).padStart(4)}`);
+            console.log(`  role / permissionKeys comparison in the body     ${String(inv.role.length).padStart(4)}`);
+            console.log(`  authenticated context loaded, no gate found      ${String(inv.authenticated.length).padStart(4)}`);
+            console.log(`  NO gate evidence discovered — review first       ${String(inv.none.length).padStart(4)}`);
+            console.log(`  body unreadable by this scanner                  ${String(inv.unreadable.length).padStart(4)}`);
+            console.log(`\n  Only the last two are claims. The first four say what a reviewer will find,`);
+            console.log(`  not that the handler is enforced — see gateInventory's contract.`);
+            console.log(`  The last three total ${inv.authenticated.length + inv.none.length + inv.unreadable.length}: handlers with no discovered authorization beyond`);
+            console.log(`  authentication. That is W-15's risk concentration, not its 725.`);
+            if (process.argv.includes("--verbose")) {
+                for (const [bucket, rows] of Object.entries(inv)) {
+                    console.log(`\n  [${bucket}]`);
+                    for (const r of rows) {
+                        const via = r.helper ? `  via ${r.helper}${r.keys ? ` (${r.keys.join(", ")})` : ""}` : "";
+                        console.log(`    ${r.route}  ${r.method}${via}`);
+                    }
+                }
             }
         }
 

@@ -31,6 +31,8 @@ import {
     bindDeclaration,
     handlerBody,
     pendingWithKnownGates,
+    gateInventory,
+    discoverCatalogKeys,
     // @ts-expect-error - .mjs check script, no type declarations
 } from "../../scripts/checkRouteCapabilities.mjs";
 import { discoverCatalog } from "./permissionCatalogDiscovery";
@@ -296,6 +298,36 @@ describe("W-15 prerequisite — the declaration binding falsifies a false claim"
         expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
     });
 
+    it("survives a template literal nested inside another's interpolation", () => {
+        // documents/entity-options builds `Visit ${start}${x ? ` · job ${id}` : ""}`. A scanner that
+        // takes the first backtick it meets as the closing one loses brace balance for the rest of
+        // the file, and that route's GET was reported unreadable for exactly this reason.
+        const p = write(
+            "nestedtemplate",
+            `${IMPORT}export async function GET() {\n` +
+                `  const auth = await requireUsersRolesManageAuth();\n` +
+                `  if (!auth.ok) return auth.response;\n` +
+                "  const label = `Visit ${auth.access.orgId}${auth.ok ? ` · job ${auth.access.orgId}` : \"\"}`;\n" +
+                `  return Response.json({ label });\n}\n`
+        );
+        expect((bindDeclaration(p, "fixture", "GET", DECL) as Binding).violations).toEqual([]);
+    });
+
+    it("follows `export { GET } from …` to the module that holds the body", () => {
+        // Three v2 drawer routes are pure re-exports of their v1 counterparts. Reporting a gated
+        // handler as unreadable makes it a reviewer's problem instead of an author's.
+        write(
+            "reexport-target",
+            `${IMPORT}export async function GET() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n`
+        );
+        // A relative specifier, as `resolveImport` accepts (the real drawer routes use `@/…`).
+        const p = write("reexport", `export { GET } from "./reexport-target.route";\n`);
+        expect(handlerBody(p, "GET")).not.toBeNull();
+        expect((bindDeclaration(p, "fixture", "GET", DECL) as Binding).violations.map((v) => v.kind)).not.toContain(
+            "unresolvable-handler"
+        );
+    });
+
     it("does not mistake a helper NAMED in a string or comment for a call", () => {
         const p = write(
             "mentioned",
@@ -348,6 +380,53 @@ describe("W-15 — the burndown worklist is discovered from source", () => {
         for (const f of found) {
             expect(table.routes[f.route]?.[f.method]?.status).toBe("pending");
         }
+    });
+});
+
+/**
+ * The sizing inventory that turns "725 pending" into a lane with a shape — and the two properties
+ * that keep it from becoming the census it replaced.
+ */
+describe("W-15 — gate sizing is conservative where it matters", () => {
+    const table = JSON.parse(readFileSync(TABLE_PATH, "utf8")) as {
+        routes: Record<string, Record<string, Declaration>>;
+    };
+
+    it("discovers the SAME catalog as the TypeScript helper it duplicates", () => {
+        // The .mjs copy exists only because prebuild cannot import the .ts helper. Two independent
+        // catalog parsers that silently disagree is how the "35 keys" figure survived three
+        // workstreams, so the copy is locked to the original rather than trusted.
+        const fromScript = [...(discoverCatalogKeys() as Set<string>)].sort();
+        const fromHelper = [...discoverCatalog().keys()].sort();
+        expect(fromScript).toEqual(fromHelper);
+        expect(fromScript.length).toBeGreaterThan(50);
+    });
+
+    it("judges capability evidence by the CATALOG, not by the key grammar", () => {
+        // Bucketing on the grammar alone credited 80 handlers with capability gates, on the strength
+        // of literals like `customer_id.is.null` and `person.email`. Passing a catalog that holds
+        // nothing must therefore empty the bucket — if it does not, the grammar is still judging.
+        const real = gateInventory(table) as { capability: unknown[] };
+        const withNoCatalog = gateInventory(table, new Set()) as { capability: unknown[] };
+        expect(withNoCatalog.capability).toHaveLength(0);
+        expect(real.capability.length).toBeLessThan(20);
+    });
+
+    it("never reports a handler the table has already declared", () => {
+        const inv = gateInventory(table) as Record<string, { route: string; method: string }[]>;
+        for (const rows of Object.values(inv)) {
+            for (const r of rows) expect(table.routes[r.route]?.[r.method]?.status).toBe("pending");
+        }
+    });
+
+    it("accounts for every pending handler exactly once", () => {
+        // A bucket total that does not reconcile to the ratchet means handlers are being dropped —
+        // and a dropped handler reads as a clean one.
+        const inv = gateInventory(table) as Record<string, unknown[]>;
+        const pending = Object.values(table.routes).flatMap((m) =>
+            Object.values(m).filter((d) => d.status === "pending")
+        ).length;
+        expect(Object.values(inv).reduce((n, b) => n + b.length, 0)).toBe(pending);
     });
 });
 
