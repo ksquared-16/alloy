@@ -91,6 +91,51 @@ export function dualReadScopeAnswer(profileRow: ProfileScopeRow): {
     return { enforced, shadow, diverges };
 }
 
+/**
+ * W-43 (`I-30`ᴬ, GAP-3's read-error leg) — the scope answer a FAILED read yields.
+ *
+ * Derived from W-7's denial rather than restated, so the two cannot drift into two different
+ * meanings of "deny". Denial is `restricted` *plus* explicitly empty allow-lists (`denyAll`), for
+ * the reason {@link ScopeAnswer.denyAll} records.
+ *
+ * **This is a different population from {@link ABSENT_PROFILE_ENFORCEMENT}, and that is why it can
+ * ship while that constant is still pinned to `legacy-all`.** That constant governs a membership
+ * whose profile row is genuinely ABSENT — 2 known `(user, org)` pairs — and flipping it before the
+ * M1 backfill locks those principals out. A read FAILURE is not that population: it is a transient
+ * fault affecting whoever happens to be mid-request. Denying it changes nothing for any healthy
+ * read, so it carries no lockout risk and does not wait on the migration.
+ *
+ * `01…§14` `T-9` / `02…§18` `M2-12`: *"a transient read failure is indistinguishable from absence
+ * and resolves the same way — so the fix must cover both, which is why `I-30` is stated in terms of
+ * failure, not absence."*
+ */
+export function scopeAnswerForFailedProfileRead(): ScopeAnswer {
+    return resolveScopeAnswerFromProfile(null, "deny");
+}
+
+/**
+ * W-43 — a read that FAILED is recorded on its own channel, deliberately not
+ * {@link logScopeDivergence}.
+ *
+ * That log is W-7's observation window: it is the evidence an operator will read to decide whether
+ * flipping `ABSENT_PROFILE_ENFORCEMENT` is safe, and every line in it is supposed to mean "a
+ * membership exists with no profile row". Emitting read failures there with
+ * `reason=absent_profile_row` would inflate that count with events that are not that thing, and
+ * corrupt the evidence base for a lockout-sensitive decision. Separate cause, separate channel.
+ */
+function logAccessReadFailure(
+    where: string,
+    table: string,
+    userId: string,
+    orgId: string | null,
+    message: string
+): void {
+    console.error(
+        `[access-identity][W-43][read-failure] where=${where} table=${table} user_id=${userId} ` +
+            `org_id=${orgId ?? "unresolved"} outcome=deny reason=read_error message=${message}`
+    );
+}
+
 /** Stable, greppable divergence record for W-7's observation window. Identifiers only — no free text. */
 function logScopeDivergence(
     where: string,
@@ -126,11 +171,29 @@ export function chooseOrgAndRoleKeysFromMembershipRows(
     return roleKeys.length ? { orgId: chosenOrg, roleKeys } : null;
 }
 
+/**
+ * W-43 — this is the legacy path that GRANTS `admin`/`ops`, so every read in it destructures its
+ * error and refuses on one.
+ *
+ * The behaviour is unchanged: a failed read already yielded `data: null`, which fell through every
+ * branch to `return null`. It failed closed **incidentally**, as a side effect of the null checks,
+ * and `02…§19`'s Tier A rule — no Supabase call in the resolution path destructures `data` without
+ * `error` — exists because incidental closure is one refactor away from being incidental opening.
+ * Making it deliberate costs nothing and is checkable.
+ */
 async function fetchLegacyAdminOpsOrgAndRole(
     supabase: SupabaseClient,
     userId: string
 ): Promise<{ orgId: string; role: "admin" | "ops" } | null> {
-    const { data: profile } = await supabase.from("user_profiles").select("role").eq("id", userId).maybeSingle();
+    const { data: profile, error: profileErr } = await supabase
+        .from("user_profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+    if (profileErr) {
+        logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "user_profiles", userId, null, profileErr.message);
+        return null;
+    }
     const pr =
         profile && typeof (profile as { role?: unknown }).role === "string"
             ? ((profile as { role: string }).role as string).trim()
@@ -140,7 +203,15 @@ async function fetchLegacyAdminOpsOrgAndRole(
         if (orgFromAu) return { orgId: orgFromAu, role: pr };
     }
 
-    const { data: au } = await supabase.from("app_users").select("role, org_id").eq("id", userId).maybeSingle();
+    const { data: au, error: auErr } = await supabase
+        .from("app_users")
+        .select("role, org_id")
+        .eq("id", userId)
+        .maybeSingle();
+    if (auErr) {
+        logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "app_users", userId, null, auErr.message);
+        return null;
+    }
     const auRow = au as { role?: unknown; org_id?: unknown } | null;
     const ar = auRow && typeof auRow.role === "string" ? auRow.role.trim() : "";
     const oid = auRow && typeof auRow.org_id === "string" ? auRow.org_id : "";
@@ -148,7 +219,15 @@ async function fetchLegacyAdminOpsOrgAndRole(
         return { orgId: oid, role: ar };
     }
 
-    const { data: au2 } = await supabase.from("app_users").select("role, org_id").eq("auth_user_id", userId).maybeSingle();
+    const { data: au2, error: au2Err } = await supabase
+        .from("app_users")
+        .select("role, org_id")
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+    if (au2Err) {
+        logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "app_users", userId, null, au2Err.message);
+        return null;
+    }
     const au2Row = au2 as { role?: unknown; org_id?: unknown } | null;
     const ar2 = au2Row && typeof au2Row.role === "string" ? au2Row.role.trim() : "";
     const oid2 = au2Row && typeof au2Row.org_id === "string" ? au2Row.org_id : "";
@@ -159,21 +238,48 @@ async function fetchLegacyAdminOpsOrgAndRole(
     return null;
 }
 
+/** W-43 — a failed org read denies the legacy grant rather than falling through to the next lookup. */
 async function fetchOrgIdFromAppUsers(supabase: SupabaseClient, userId: string): Promise<string | null> {
-    const { data: au } = await supabase.from("app_users").select("org_id").eq("id", userId).maybeSingle();
+    const { data: au, error: auErr } = await supabase
+        .from("app_users")
+        .select("org_id")
+        .eq("id", userId)
+        .maybeSingle();
+    if (auErr) {
+        logAccessReadFailure("fetchOrgIdFromAppUsers", "app_users", userId, null, auErr.message);
+        return null;
+    }
     const o = (au as { org_id?: string | null } | null)?.org_id ?? null;
     if (typeof o === "string" && o.length > 0) return o;
 
-    const { data: auAuth } = await supabase.from("app_users").select("org_id").eq("auth_user_id", userId).maybeSingle();
+    const { data: auAuth, error: auAuthErr } = await supabase
+        .from("app_users")
+        .select("org_id")
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+    if (auAuthErr) {
+        logAccessReadFailure("fetchOrgIdFromAppUsers", "app_users", userId, null, auAuthErr.message);
+        return null;
+    }
     const o2 = (auAuth as { org_id?: string | null } | null)?.org_id ?? null;
     return typeof o2 === "string" && o2.length > 0 ? o2 : null;
 }
 
+/**
+ * W-43 — returns `null` when the grant read FAILED, which is not the same answer as `[]`.
+ *
+ * `[]` is a legitimate result: a role may hold no grants. Collapsing a failed read onto it made the
+ * failure **open** for the 131-of-132 surfaces that gate on admission alone — they never consult
+ * `permissionKeys`, so an empty set costs them nothing and the caller sails through with authority
+ * nobody verified. The caller now denies instead.
+ */
 async function fetchPermissionKeys(
     supabase: SupabaseClient,
     orgId: string,
-    roleKeys: string[]
-): Promise<string[]> {
+    roleKeys: string[],
+    where: string,
+    userId: string
+): Promise<string[] | null> {
     if (!roleKeys.length) return [];
     const { data, error } = await supabase
         .from("role_permission_grants")
@@ -182,8 +288,8 @@ async function fetchPermissionKeys(
         .in("role_key", roleKeys)
         .eq("allowed", true);
     if (error) {
-        console.error("[resolveAdminAccessCore] role_permission_grants error:", error.message);
-        return [];
+        logAccessReadFailure(where, "role_permission_grants", userId, orgId, error.message);
+        return null;
     }
     const keys = [...new Set((data ?? []).map((r) => (r as { permission_key: string }).permission_key).filter(Boolean))];
     return keys.sort();
@@ -229,17 +335,37 @@ export async function resolveAdminAccessCore(
     }
 
     const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));
-    const permissionKeys = await fetchPermissionKeys(supabase, orgId, roleKeys);
+    const permissionKeys = await fetchPermissionKeys(
+        supabase,
+        orgId,
+        roleKeys,
+        "resolveAdminAccessCore",
+        userId
+    );
+    // W-43 — a failed grant read denies rather than resolving to "no permissions", which most
+    // surfaces cannot tell apart from a successful read of an unprivileged role.
+    if (permissionKeys === null) return null;
 
-    const { data: profileRow } = await supabase
+    const { data: profileRow, error: profileErr } = await supabase
         .from("user_access_profiles")
         .select("department_scope, site_scope")
         .eq("user_id", userId)
         .eq("org_id", orgId)
         .maybeSingle();
 
-    const { enforced, shadow, diverges } = dualReadScopeAnswer(profileRow as ProfileScopeRow);
-    if (diverges) logScopeDivergence("resolveAdminAccessCore", userId, orgId, enforced, shadow);
+    // W-43 — this read's error was previously not destructured at all, which made a transient
+    // failure indistinguishable from "no row" and therefore resolved it the widest possible way:
+    // both scopes `all`. A failure now denies, and does NOT enter W-7's divergence window, because
+    // it is not evidence about absent profile rows.
+    let enforced: ScopeAnswer;
+    if (profileErr) {
+        logAccessReadFailure("resolveAdminAccessCore", "user_access_profiles", userId, orgId, profileErr.message);
+        enforced = scopeAnswerForFailedProfileRead();
+    } else {
+        const dual = dualReadScopeAnswer(profileRow as ProfileScopeRow);
+        enforced = dual.enforced;
+        if (dual.diverges) logScopeDivergence("resolveAdminAccessCore", userId, orgId, enforced, dual.shadow);
+    }
 
     const departmentScope: DepartmentScopeMode = enforced.departmentScope;
     const siteScope: SiteScopeMode = enforced.siteScope;
@@ -319,9 +445,18 @@ export async function resolveAdminAccessDimensionsForOrgMember(
     if (!roleKeys.length) return null;
 
     const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));
-    const permissionKeys = await fetchPermissionKeys(supabase, orgId, roleKeys);
+    const permissionKeys = await fetchPermissionKeys(
+        supabase,
+        orgId,
+        roleKeys,
+        "resolveAdminAccessDimensionsForOrgMember",
+        userId
+    );
+    // W-43 — as the enforcement path. The preview denies on a failed grant read too: a preview that
+    // stays readable when enforcement has denied is the divergence this pair exists to prevent.
+    if (permissionKeys === null) return null;
 
-    const { data: profileRow } = await supabase
+    const { data: profileRow, error: profileErr } = await supabase
         .from("user_access_profiles")
         .select("department_scope, site_scope")
         .eq("user_id", userId)
@@ -332,8 +467,27 @@ export async function resolveAdminAccessDimensionsForOrgMember(
     // settings preview, and if it kept its own fallback the switch would leave displayed authority
     // reading `all` while actual authority denied. Behaviour is unchanged today — both read
     // ABSENT_PROFILE_ENFORCEMENT, so both flip together.
-    const { enforced, shadow, diverges } = dualReadScopeAnswer(profileRow as ProfileScopeRow);
-    if (diverges) logScopeDivergence("resolveAdminAccessDimensionsForOrgMember", userId, orgId, enforced, shadow);
+    //
+    // W-43 applies to this resolver for the same reason: a read failure here would render
+    // "All locations · All departments" on the very surface the mission requires to stop
+    // manufacturing that claim.
+    let enforced: ScopeAnswer;
+    if (profileErr) {
+        logAccessReadFailure(
+            "resolveAdminAccessDimensionsForOrgMember",
+            "user_access_profiles",
+            userId,
+            orgId,
+            profileErr.message
+        );
+        enforced = scopeAnswerForFailedProfileRead();
+    } else {
+        const dual = dualReadScopeAnswer(profileRow as ProfileScopeRow);
+        enforced = dual.enforced;
+        if (dual.diverges) {
+            logScopeDivergence("resolveAdminAccessDimensionsForOrgMember", userId, orgId, enforced, dual.shadow);
+        }
+    }
 
     const departmentScope: DepartmentScopeMode = enforced.departmentScope;
     const siteScope: SiteScopeMode = enforced.siteScope;
