@@ -105,9 +105,9 @@ describe("projectResolvedProfilePhotosOntoRows", () => {
             personIdKey: "person_id",
         });
 
-        expect(out[0]![RESOLVED_PHOTO_URL_KEY]).toBe(RESOLVED);
-        expect(resolveIdentityPhotoUrlFromRaw(out[0]!)).toBe(RESOLVED);
-        expect(resolveChildPhotoUrlFromRaw(out[0]!)).toBe(RESOLVED);
+        expect((out[0] as Record<string, unknown>)[RESOLVED_PHOTO_URL_KEY]).toBe(RESOLVED);
+        expect(resolveIdentityPhotoUrlFromRaw(out[0] as Record<string, unknown>)).toBe(RESOLVED);
+        expect(resolveChildPhotoUrlFromRaw(out[0] as Record<string, unknown>)).toBe(RESOLVED);
     });
 
     it("is a silent no-op when mapped with inquiry-child id instead of person_id", () => {
@@ -115,12 +115,12 @@ describe("projectResolvedProfilePhotosOntoRows", () => {
         const rows = [{ id: OCM_ID, person_id: PERSON_A }];
         // Wrong key (default "id" = OCM id) → no injection
         const wrong = applyResolvedPhotoUrls(rows, resolved);
-        expect(wrong[0]![RESOLVED_PHOTO_URL_KEY]).toBeUndefined();
-        expect(resolveChildPhotoUrlFromRaw(wrong[0]! as Record<string, unknown>)).toBeNull();
+        expect((wrong[0] as Record<string, unknown>)[RESOLVED_PHOTO_URL_KEY]).toBeUndefined();
+        expect(resolveChildPhotoUrlFromRaw(wrong[0] as Record<string, unknown>)).toBeNull();
 
         const right = applyResolvedPhotoUrls(rows, resolved, "person_id");
-        expect(right[0]![RESOLVED_PHOTO_URL_KEY]).toBe(RESOLVED);
-        expect(resolveChildPhotoUrlFromRaw(right[0]! as Record<string, unknown>)).toBe(RESOLVED);
+        expect((right[0] as Record<string, unknown>)[RESOLVED_PHOTO_URL_KEY]).toBe(RESOLVED);
+        expect(resolveChildPhotoUrlFromRaw(right[0] as Record<string, unknown>)).toBe(RESOLVED);
     });
 
     it("skips when actor is missing (initials fallback)", async () => {
@@ -134,7 +134,7 @@ describe("projectResolvedProfilePhotosOntoRows", () => {
             rows,
             personIdKey: "person_id",
         });
-        expect(out[0]![RESOLVED_PHOTO_URL_KEY]).toBeUndefined();
+        expect((out[0] as Record<string, unknown>)[RESOLVED_PHOTO_URL_KEY]).toBeUndefined();
         expect(createSignedUrl).not.toHaveBeenCalled();
     });
 });

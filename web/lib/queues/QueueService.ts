@@ -1860,13 +1860,13 @@ async function enrichOpportunityRows(params: {
     });
     // Batch profile-photo projection onto `_inquiry_children` (person_id keyed) before row context attach.
     if (documentActor?.ok) {
-        mapped = await projectResolvedProfilePhotosOntoInquiryChildrenRows({
+        mapped = (await projectResolvedProfilePhotosOntoInquiryChildrenRows({
             supabase,
             orgId,
             actor: documentActor,
-            rows: mapped,
+            rows: mapped as Array<Record<string, unknown>>,
             metadataByPersonId: childMetadataByPersonId,
-        });
+        })) as typeof mapped;
     }
     // QueueRowContext attached on API return via withOpportunityQueueRowContext (QueueService finalize paths).
     const mapMs = Date.now() - tMap0;
@@ -2703,6 +2703,8 @@ export async function getWorkUnitQueueSummaries(params: {
     recordScopeConstraints?: RecordScopeConstraints | null;
     /** Restricted viewer scope could not resolve any rows — return zeroed summaries (never org-wide). */
     recordScopeImpossible?: boolean;
+    /** Admin document actor for request-scoped child profile-photo projection on summary previews. */
+    documentActor?: DocumentActor | null;
 }): Promise<WorkUnitQueueSummariesResult> {
     const includePreviews = params.includePreviews !== false;
     const countSel = queueCountSelect(params.countAccuracy);
