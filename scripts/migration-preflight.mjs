@@ -18,6 +18,14 @@
  *   node scripts/migration-preflight.mjs --db-url "$URL" --allow-pending
  *
  * Exit 0 = promotable. Non-zero = do not push.
+ *
+ * The repo-only scan is EXPORTED as {@link checkMigrationRepo} so a certification
+ * test can drive it over fixtures. That export exists because this file was
+ * already correct and already detected the 2026-08-07 duplicate-version
+ * collision — it simply was not wired to anything that could fail a merge. The
+ * answer was a second caller, not a second parser: a re-implementation would be
+ * one more thing to keep in agreement with this one, and the first time they
+ * disagreed the laxer one would be the one guarding the merge.
  */
 
 import { readdirSync } from "node:fs";
@@ -32,34 +40,60 @@ const args = process.argv.slice(2);
 const dbUrl = args.includes("--db-url") ? args[args.indexOf("--db-url") + 1] : null;
 const allowPending = args.includes("--allow-pending");
 
-const failures = [];
+/**
+ * The repo-only scan. Pure: reads a directory, returns findings, exits nothing.
+ *
+ * Returns `{ files, versions, failures }` so a caller can decide what a finding
+ * means. The CLI turns a non-empty `failures` into exit 1; the certification
+ * test asserts on the array directly.
+ */
+export function checkMigrationRepo(migrationsDir) {
+    const failures = [];
+    const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
+    const byVersion = new Map();
+
+    for (const file of files) {
+        const match = /^(\d{14})_(.+)\.sql$/.exec(file);
+        if (!match) {
+            failures.push(`filename shape: ${file} is not <14-digit-version>_<name>.sql`);
+            continue;
+        }
+        const version = match[1];
+        if (byVersion.has(version)) {
+            // The collision that matters: `supabase_migrations.schema_migrations`
+            // is PRIMARY KEY (version), so two files sharing a version can never
+            // both be recorded. `supabase db push` does not check this before it
+            // starts executing, so the failure lands mid-chain on a live database.
+            failures.push(`duplicate version ${version}: ${byVersion.get(version)} and ${file}`);
+            continue;
+        }
+        byVersion.set(version, file);
+    }
+
+    const versions = [...byVersion.keys()].sort();
+    for (let i = 1; i < versions.length; i++) {
+        if (versions[i] <= versions[i - 1]) {
+            failures.push(`ordering: ${versions[i]} does not follow ${versions[i - 1]}`);
+        }
+    }
+
+    return { files, versions, failures };
+}
+
+// Same guard idiom as scripts/docs-lint.mjs: importing this module must run
+// nothing. Without it, a test that imports `checkMigrationRepo` would execute
+// the CLI — including its `process.exit`.
+if (import.meta.url === `file://${process.argv[1]}`) {
+    runCli();
+}
+
+function runCli() {
+const repoScan = checkMigrationRepo(MIGRATIONS);
+const failures = [...repoScan.failures];
 const fail = (msg) => failures.push(msg);
+const local = repoScan.versions;
 
-// --- repo-only -------------------------------------------------------------
-
-const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
-const byVersion = new Map();
-
-for (const file of files) {
-    const match = /^(\d{14})_(.+)\.sql$/.exec(file);
-    if (!match) {
-        fail(`filename shape: ${file} is not <14-digit-version>_<name>.sql`);
-        continue;
-    }
-    const version = match[1];
-    if (byVersion.has(version)) {
-        fail(`duplicate version ${version}: ${byVersion.get(version)} and ${file}`);
-        continue;
-    }
-    byVersion.set(version, file);
-}
-
-const local = [...byVersion.keys()].sort();
-for (let i = 1; i < local.length; i++) {
-    if (local[i] <= local[i - 1]) fail(`ordering: ${local[i]} does not follow ${local[i - 1]}`);
-}
-
-console.log(`repo: ${files.length} files, ${local.length} unique versions`);
+console.log(`repo: ${repoScan.files.length} files, ${local.length} unique versions`);
 
 // --- ledger ----------------------------------------------------------------
 
@@ -108,3 +142,4 @@ if (failures.length) {
     process.exit(1);
 }
 console.log("preflight OK — migration history is consistent");
+}

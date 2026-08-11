@@ -1,6 +1,7 @@
 {
   "scripts": {
     "test:trust-db-certification": "bash scripts/certify-trust-db.sh",
+    "verify:migration-versions": "node scripts/migration-preflight.mjs",
     "smoke:field-registry-api": "npx tsx scripts/smoke/api_field_registry_smoke.ts",
     "export:supabase-schema": "node scripts/supabase/export_schema_reference.mjs",
     "generate:schema-docs": "node scripts/generate-schema-docs.mjs",
