@@ -45,13 +45,25 @@ describe("Work View label authority", () => {
         expect(repaired.label).toBe("Some Operator Label");
     });
 
-    it("undeclared catch-all resolves family grain so pill and rows share cohort", () => {
-        expect(
-            resolveLensRowGrain(
-                { id: "all_family", label: "All Family Leads", filters_v1: [] },
-                STAGES,
-            ),
-        ).toEqual({ ok: true, grain: "family" });
+    it("undeclared empty-filter inventory resolves family grain (declaration optional when stage-independent)", () => {
+        // Not tied to any operator-facing Work View name. Empty filters_v1 + no row_grain_v1
+        // means process inventory at family grain; child inventory must declare row_grain_v1.
+        const r = resolveLensRowGrain(view({ id: "inventory_a", label: "Some Operator Label", filters_v1: [] }), STAGES);
+        expect(r).toEqual({ ok: true, grain: "family" });
+    });
+
+    it("stage-filtered Lead views resolve family from included stages — never via catch-all", () => {
+        const r = resolveLensRowGrain(
+            view({
+                id: "new_leads",
+                label: "New Family Leads",
+                filters_v1: stageFilter("lead"),
+                row_grain_v1: "family",
+            }),
+            STAGES,
+        );
+        expect(r).toEqual({ ok: true, grain: "family" });
+        expect(lensStageKeys(view({ filters_v1: stageFilter("lead") }))).toEqual(["lead"]);
     });
 });
 

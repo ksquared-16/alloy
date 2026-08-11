@@ -11,6 +11,7 @@ import { childQueueRowContext } from "@/lib/runtime/provisioning/childGrainSurfa
 import type { ChildProvisioningRowWithPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import { waitlistContextFromPlacementProjection } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import {
+    isWorkViewCatchAll,
     normalizeCatchAllWorkViewCompatBinding,
 } from "@/lib/lifecycle/workViewsConfigV1";
 import { QUEUE_ROW_CONTEXT_CONTRACT_VERSION, type QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
@@ -145,8 +146,8 @@ describe("child Waitlist placement context parity", () => {
     });
 });
 
-describe("All Family Leads catch-all label authority", () => {
-    it("preserves operator-configured catch-all labels (never renames to a code-owned label)", () => {
+describe("Work View label authority (published config wins)", () => {
+    it("preserves operator-configured empty-filter labels (never renames to a code-owned label)", () => {
         const repaired = normalizeCatchAllWorkViewCompatBinding({
             id: "new_work_view_6",
             label: "All Family Leads",
@@ -158,25 +159,26 @@ describe("All Family Leads catch-all label authority", () => {
         expect(repaired.filters_v1).toEqual([]);
     });
 
-    it("preserves legacy All Leads label when an operator still uses it", () => {
+    it("preserves any operator label on empty-filter inventory — including legacy wording", () => {
         const repaired = normalizeCatchAllWorkViewCompatBinding({
-            id: "all_leads",
-            label: "All Leads",
+            id: "inventory_view",
+            label: "Some Operator Label",
             display_order: 1,
             visible_in_runtime: true,
             filters_v1: [],
         });
-        expect(repaired.label).toBe("All Leads");
+        expect(repaired.label).toBe("Some Operator Label");
     });
 
-    it("does not rename stage-filtered Leads views", () => {
+    it("does not treat stage-filtered Lead views as empty-filter inventory", () => {
         const repaired = normalizeCatchAllWorkViewCompatBinding({
             id: "new_leads",
-            label: "New Leads",
+            label: "New Family Leads",
             display_order: 1,
             visible_in_runtime: true,
             filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
         });
-        expect(repaired.label).toBe("New Leads");
+        expect(repaired.label).toBe("New Family Leads");
+        expect(isWorkViewCatchAll(repaired)).toBe(false);
     });
 });
