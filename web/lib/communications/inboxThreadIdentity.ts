@@ -1,5 +1,9 @@
 import type { InboxMessagePreview, InboxThreadListItem } from "@/lib/communications/inboxThreadTypes";
 import { sanitizeInboxEntityLabel } from "@/lib/communications/inboxThreadDisplayLabels";
+import {
+    UNKNOWN_SENDER_ENTITY_TYPE,
+    maskInboxEndpointForDisplay,
+} from "@/lib/communications/inboxThreadRoutingState";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const REPLY_ENTITY_TYPES = new Set(["opportunities", "jobs", "persons"]);
@@ -113,92 +117,129 @@ export function resolveInboxRecordLabel(
     return record;
 }
 
+/**
+ * What a reply on this thread may carry — and never an address.
+ *
+ * This shape used to expose a `toAddress` lifted out of `recipient_key`, and the
+ * reply box put it on the wire as `to`. The send route refuses `to` outright
+ * (free text is how a send reaches an unconsented destination with no person to
+ * evaluate), so that field could only ever produce a rejected send. It is gone
+ * rather than merely unused: while the address is reachable from this shape, the
+ * next caller can put it back.
+ *
+ * Exactly one authority is set when `canReply`:
+ *   person — a resolved Person; the server derives the address from their record
+ *   thread — an unattributed conversation; the server derives the address from
+ *            the inbound message it actually received on that thread
+ */
+export type InboxReplyAuthorityKind = "person" | "thread" | "none";
+
 export type InboxReplyTarget = {
     canReply: boolean;
     entityType: "opportunities" | "jobs" | "persons" | null;
     entityId: string | null;
+    authority: InboxReplyAuthorityKind;
     recipientPersonId: string | null;
-    toAddress: string | null;
+    threadId: string | null;
+    /** "Jordan Smith" or "ending in 1234". Never the number or address itself. */
+    displayLabel: string | null;
     disabledReason: string | null;
     channel: "email" | "sms" | "in_app" | null;
 };
 
+type ReplyTargetThread = Pick<
+    InboxThreadListItem,
+    | "id"
+    | "primary_entity_type"
+    | "primary_entity_id"
+    | "channel"
+    | "recipient_key"
+    | "reply_person_id"
+    | "channel_contact_display"
+    | "reply_email_available"
+    | "reply_sms_available"
+> &
+    Partial<Pick<InboxThreadListItem, "sender_identity_state" | "contact_display">>;
+
+function unreplyable(
+    reason: string,
+    channel: InboxReplyTarget["channel"],
+    entity?: { entityType: InboxReplyTarget["entityType"]; entityId: string | null }
+): InboxReplyTarget {
+    return {
+        canReply: false,
+        entityType: entity?.entityType ?? null,
+        entityId: entity?.entityId ?? null,
+        authority: "none",
+        recipientPersonId: null,
+        threadId: null,
+        displayLabel: null,
+        disabledReason: reason,
+        channel,
+    };
+}
+
 export function resolveInboxReplyTarget(
-    thread: Pick<
-        InboxThreadListItem,
-        | "primary_entity_type"
-        | "primary_entity_id"
-        | "channel"
-        | "recipient_key"
-        | "reply_person_id"
-        | "channel_contact_display"
-        | "reply_email_available"
-        | "reply_sms_available"
-    >,
+    thread: ReplyTargetThread,
     channelOverride?: string | null
 ): InboxReplyTarget {
     const channel = (channelOverride ?? thread.channel).trim().toLowerCase();
 
     if (channel === "in_app") {
-        return {
-            canReply: false,
-            entityType: null,
-            entityId: null,
-            recipientPersonId: null,
-            toAddress: null,
-            disabledReason: "Internal messages reply in record drawers (coming soon).",
-            channel: "in_app",
-        };
+        return unreplyable("Internal messages reply in record drawers (coming soon).", "in_app");
     }
 
     if (channel !== "email" && channel !== "sms") {
-        return {
-            canReply: false,
-            entityType: null,
-            entityId: null,
-            recipientPersonId: null,
-            toAddress: null,
-            disabledReason: "This channel cannot be replied to from the inbox yet.",
-            channel: null,
-        };
-    }
-
-    if (channel === "email" && thread.reply_email_available === false) {
-        return {
-            canReply: false,
-            entityType: null,
-            entityId: null,
-            recipientPersonId: null,
-            toAddress: null,
-            disabledReason: "No email address available for this contact.",
-            channel: "email",
-        };
-    }
-
-    if (channel === "sms" && thread.reply_sms_available === false) {
-        return {
-            canReply: false,
-            entityType: null,
-            entityId: null,
-            recipientPersonId: null,
-            toAddress: null,
-            disabledReason: "No mobile number available for this contact.",
-            channel: "sms",
-        };
+        return unreplyable("This channel cannot be replied to from the inbox yet.", null);
     }
 
     const entityType = thread.primary_entity_type.trim().toLowerCase();
     const entityId = thread.primary_entity_id.trim();
-    if (!REPLY_ENTITY_TYPES.has(entityType) || !UUID_RE.test(entityId)) {
+    const unidentified =
+        thread.sender_identity_state === "unidentified" || entityType === UNKNOWN_SENDER_ENTITY_TYPE;
+
+    // ------------------------------------------------------------- thread mode
+    //
+    // Checked before the person-oriented gates below, because every one of them
+    // asks a question about a Person and an unattributed conversation has none.
+    // Channel availability is likewise a fact about a Person's record, so it is
+    // not consulted here: the destination is the endpoint that wrote to us.
+    if (unidentified) {
+        // A reply must go out on the channel the message came in on. There is no
+        // second endpoint for this sender to switch to.
+        if (channel !== thread.channel.trim().toLowerCase()) {
+            return unreplyable(
+                "This conversation can only be answered on the channel it arrived on.",
+                channel
+            );
+        }
+        if (!UUID_RE.test(thread.id.trim())) {
+            return unreplyable("No reply path for this conversation.", channel);
+        }
         return {
-            canReply: false,
+            canReply: true,
             entityType: null,
             entityId: null,
+            authority: "thread",
             recipientPersonId: null,
-            toAddress: null,
-            disabledReason: "No reply path for this conversation record.",
-            channel: channel as "email" | "sms",
+            threadId: thread.id.trim(),
+            displayLabel: maskInboxEndpointForDisplay(thread.recipient_key, channel),
+            disabledReason: null,
+            channel,
         };
+    }
+
+    // ------------------------------------------------------------- person mode
+    if (channel === "email" && thread.reply_email_available === false) {
+        return unreplyable("No email address available for this contact.", "email");
+    }
+
+    if (channel === "sms" && thread.reply_sms_available === false) {
+        return unreplyable("No mobile number available for this contact.", "sms");
+    }
+
+    if (!REPLY_ENTITY_TYPES.has(entityType) || !UUID_RE.test(entityId)) {
+        return unreplyable("No reply path for this conversation record.", channel);
     }
 
     const recipientPersonId =
@@ -208,38 +249,26 @@ export function resolveInboxReplyTarget(
               ? entityId
               : null;
 
-    const key = (thread.recipient_key ?? "").trim();
-    let toAddress: string | null = null;
-    if (key && key !== "_empty" && key !== "_in_app") {
-        if (channel === "email" && key.includes("@")) toAddress = key;
-        if (channel === "sms" && !key.includes("@")) toAddress = key;
-    }
-    if (!toAddress && thread.channel_contact_display?.trim()) {
-        const contact = thread.channel_contact_display.trim();
-        if (channel === "email" && contact.includes("@")) toAddress = contact;
-        if (channel === "sms" && !contact.includes("@")) toAddress = contact;
-    }
-
-    if (!recipientPersonId && !toAddress) {
-        return {
-            canReply: false,
+    if (!recipientPersonId) {
+        // No Person and not flagged unattributed — the thread is internally
+        // inconsistent, so nothing is sent. Falling back to the address here is
+        // exactly the free-text path the send route refuses.
+        return unreplyable("No recipient on file for this conversation.", channel, {
             entityType: entityType as InboxReplyTarget["entityType"],
             entityId,
-            recipientPersonId: null,
-            toAddress: null,
-            disabledReason: "Missing recipient address for this thread.",
-            channel: channel as "email" | "sms",
-        };
+        });
     }
 
     return {
         canReply: true,
         entityType: entityType as InboxReplyTarget["entityType"],
         entityId,
+        authority: "person",
         recipientPersonId,
-        toAddress,
+        threadId: null,
+        displayLabel: thread.contact_display?.trim() || null,
         disabledReason: null,
-        channel: channel as "email" | "sms",
+        channel,
     };
 }
 
