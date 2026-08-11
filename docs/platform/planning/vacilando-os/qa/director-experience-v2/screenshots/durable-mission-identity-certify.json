@@ -1,0 +1,60 @@
+{
+  "at": "2026-08-11T16:38:27.716Z",
+  "missionId": "msn_f74ed02c126c88d7ff",
+  "postureId": "mission_idle",
+  "health": {
+    "kind": "mission_health_vm",
+    "missionId": "msn_f74ed02c126c88d7ff",
+    "title": "Identity Platform",
+    "lifecycle": "idle",
+    "lifecycleLabel": "Idle",
+    "missionOngoing": true,
+    "missionProgressLabel": "Ongoing",
+    "missionPercent": null,
+    "currentObjective": "Access & Identity V2 — promotion, certification, remaining plan",
+    "objectiveStatus": "current_work_complete",
+    "objectiveStatusLabel": "Current work complete",
+    "register": {
+      "done": 25,
+      "total": 25,
+      "complete": true,
+      "percent": 100,
+      "label": "Current work",
+      "line": "25 / 25 assignments complete"
+    },
+    "needsOperatorDecision": false,
+    "waitingOnYou": false,
+    "decision": null,
+    "nextPhase": null,
+    "knownRemaining": [
+      {
+        "id": "beyond_register",
+        "label": "Broader mission work may remain beyond the current register — ask Director to continue or name the next outcome",
+        "kind": "durable_mission"
+      }
+    ],
+    "directorNext": "Mission is idle and ongoing — message Director to continue, or leave it until you need this area again",
+    "lastFinished": {
+      "title": "Access & Identity V2 — promotion, certification, remaining plan",
+      "assignmentId": "asg_a5742bef764395",
+      "phaseId": "impl_obj_f97e641353"
+    },
+    "beyondRegisterHint": true,
+    "postureId": "mission_idle",
+    "postureLabel": "Idle"
+  },
+  "compactLines": [
+    "Mission Ongoing",
+    "Idle",
+    "Complete — worker recommends Accept",
+    "Current work 25/25 complete",
+    "claude",
+    "Server Running"
+  ],
+  "failures": [],
+  "ok": true,
+  "shots": {
+    "health": "durable-identity-mission-health.png",
+    "workspace": "durable-identity-workspace.png"
+  }
+}

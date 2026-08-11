@@ -17,6 +17,7 @@ import {
 } from "./mission-context.mjs";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { listEvidence, missingRequiredEvidence, attachEvidence } from "./evidence.mjs";
+import { writeProgressBoard } from "./progress-board-store.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const DIR = join(RUNTIME_ROOT, "vacilando", "assignments");
@@ -509,10 +510,13 @@ export function submitWorkerCompletion({
   followUpItems = [],
   confidence = "medium",
   recommendation = "",
+  progressBoard = null,
+  progress_board = null,
   nowMs,
 } = {}) {
   const a = getAssignment(missionId, assignmentId);
   if (!a) return { ok: false, error: "assignment_not_found" };
+  const boardIn = progressBoard || progress_board || null;
 
   // Persist any inline evidence artifacts first
   for (const ev of evidence) {
@@ -572,6 +576,8 @@ export function submitWorkerCompletion({
     followUpItems,
     confidence,
     recommendation,
+    progressBoard: boardIn || null,
+    progress_board: boardIn || null,
     at: iso(nowMs),
   };
 
@@ -579,6 +585,17 @@ export function submitWorkerCompletion({
     asg.completionReport = report;
     asg.status = status === "complete" ? "verification" : status === "blocked" ? "blocked" : "failed";
   }, { nowMs });
+
+  // Persist operator progress board (execution blocks / WS matrix) when supplied.
+  if (boardIn) {
+    try {
+      writeProgressBoard(missionId, {
+        ...boardIn,
+        source: "worker_completion",
+        at: report.at,
+      });
+    } catch { /* best-effort — board is additive UX, never block completion */ }
+  }
 
   return { ok: true, report, assignment: getAssignment(missionId, assignmentId) };
 }

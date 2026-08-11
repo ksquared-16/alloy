@@ -28,6 +28,8 @@ import { readTimeline } from "../timeline.mjs";
 import { missionContinuationVm } from "./mission-continuation.mjs";
 import { canAdvanceToImplementation, peekNextImplementationPhase, shouldAutoContinueImplementation, scheduleImplementationChainContinue } from "../mission-advance.mjs";
 import { isFixtureMission } from "./mission-filters.mjs";
+import { progressBoardVm } from "../progress-board.mjs";
+import { missionHealthVm } from "./mission-health.mjs";
 
 const _autoChainOnce = new Set();
 function scheduleChainOnce(missionId, fromAssignmentId) {
@@ -271,19 +273,37 @@ export function compressCurrentState(cs, {
   slot = null,
   serverStatus = null,
   liveProgress = null,
+  completionBrief = null,
+  progressBoard = null,
+  missionHealth = null,
 } = {}) {
   if (!cs) return null;
   const lines = [];
-  if (cs.currentPhase) lines.push(String(cs.currentPhase).slice(0, 40));
+  if (missionHealth?.missionProgressLabel) {
+    lines.push(`Mission ${missionHealth.missionProgressLabel}`);
+  }
+  if (missionHealth?.lifecycleLabel) {
+    lines.push(missionHealth.lifecycleLabel);
+  } else if (cs.currentPhase) {
+    lines.push(String(cs.currentPhase).slice(0, 40));
+  }
+
+  // Waiting on you ONLY for real operator decisions (or kickoff) — never register empty.
   const waiting =
-    cs.postureId === "operator_review"
+    missionHealth?.waitingOnYou
     || cs.postureId === "decision_required"
-    || cs.postureId === "deliverable_review"
-    || cs.postureId === "awaiting_completion"
-    || /waiting on you/i.test(String(cs.recommendation || ""))
-    || /waiting on you/i.test(String(cs.currentPhase || ""));
-  if (waiting && !lines.some((l) => /waiting on you/i.test(l))) {
-    lines.push("Waiting on You");
+    || cs.postureId === "awaiting_kickoff"
+    || (/waiting on you/i.test(String(cs.recommendation || "")) && missionHealth?.waitingOnYou);
+  if (waiting && !lines.some((l) => /waiting on you|needs decision/i.test(l))) {
+    lines.push(missionHealth?.decision?.title ? "Needs decision" : "Waiting on You");
+  }
+  if (completionBrief?.verdictLabel && !/waiting on your decision/i.test(completionBrief.verdictLabel)) {
+    lines.push(String(completionBrief.verdictLabel).slice(0, 48));
+  }
+  if (missionHealth?.register?.complete) {
+    lines.push(`Current work ${missionHealth.register.done}/${missionHealth.register.total} complete`);
+  } else if (missionHealth?.register?.total) {
+    lines.push(`Current work ${missionHealth.register.done}/${missionHealth.register.total}`);
   }
   if (liveProgress?.active) {
     const pct = liveProgress.percent != null ? `${liveProgress.percent}%` : null;
@@ -293,24 +313,50 @@ export function compressCurrentState(cs, {
   const workerBits = [provider, slot != null ? `Slot ${slot}` : null].filter(Boolean).join(" · ");
   if (workerBits) lines.push(workerBits);
   if (serverStatus) lines.push(`Server ${serverStatus}`);
-  const goal = liveProgress?.workingOn || cs.workingOn || cs.currentGoal || "—";
-  const next = liveProgress?.active
-    ? (liveProgress.activity || liveProgress.eta || cs.nextExpectedCheckpoint || cs.recommendation || "—")
-    : (cs.nextExpectedCheckpoint || cs.recommendation || "—");
+
+  const goal = missionHealth?.currentObjective
+    || completionBrief?.problem
+    || liveProgress?.workingOn
+    || cs.workingOn
+    || cs.currentGoal
+    || "—";
+  const next = missionHealth?.directorNext
+    || completionBrief?.fix
+    || (liveProgress?.active
+      ? (liveProgress.activity || liveProgress.eta || cs.nextExpectedCheckpoint || cs.recommendation || "—")
+      : (completionBrief?.workerRecommendation
+        || cs.nextExpectedCheckpoint
+        || cs.recommendation
+        || "—"));
+  const doneBits = (completionBrief?.doneBullets || []).slice(0, 4);
+  const proofBits = (completionBrief?.proofLines || []).slice(0, 3);
   return {
     kind: "current_state_compact",
     derived: true,
     editable: false,
     phase: cs.currentPhase || "—",
-    goal: String(goal).slice(0, 64),
-    next: String(next).slice(0, 64),
+    goal: String(goal).slice(0, 160),
+    next: String(next).slice(0, 200),
     blockedBy: cs.blockedBy && cs.blockedBy !== "Nothing" ? String(cs.blockedBy).slice(0, 48) : null,
     recommendation: cs.recommendation || null,
     postureId: cs.postureId || null,
-    summaryLines: lines.slice(0, 4),
+    summaryLines: lines.slice(0, 7),
     primaryAction: cs.primaryAction || null,
     secondaryAction: cs.secondaryAction || null,
     liveProgress: liveProgress?.active ? liveProgress : null,
+    missionHealth: missionHealth || null,
+    progressBoard: progressBoard?.hasDepth ? progressBoard : null,
+    completionBrief: completionBrief
+      ? {
+          verdictLabel: completionBrief.verdictLabel || null,
+          problem: completionBrief.problem || null,
+          fix: completionBrief.fix || null,
+          doneBullets: doneBits,
+          proofLines: proofBits,
+          summary: completionBrief.summary || null,
+          workerRecommendation: completionBrief.workerRecommendation || null,
+        }
+      : null,
   };
 }
 
@@ -688,6 +734,7 @@ export function inlineReviewCardVm(missionId) {
         ? (listAssignments(missionId) || []).find((a) => (a.assignmentId || a.id) === asgId)
         : null;
       const brief = directorBriefFromCompletion(asg?.completionReport || null, asg, { posture: null });
+      const board = progressBoardVm(missionId, { report: asg?.completionReport || null });
       const hardBrief = {
         verdictId: vm.operatorMayApprove ? "ready_to_approve" : brief.verdictId,
         verdictLabel: vm.operatorMayApprove
@@ -715,6 +762,7 @@ export function inlineReviewCardVm(missionId) {
         whatFinished: asg?.title || vm.waveLabel || vm.headline || null,
         statusFacts: hardBrief.proofLines,
         brief: hardBrief,
+        progressBoard: board,
         summary: brief.summary
           || vm.executiveSummary?.text
           || (vm.executiveSummary?.sentences || []).join(" ")
@@ -744,7 +792,16 @@ export function inlineReviewCardVm(missionId) {
   }
 
   const posture = deriveMissionPosture(missionId);
-  if (!posture || !["operator_review", "deliverable_review", "awaiting_completion", "decision_required"].includes(posture.id)) {
+  const health = missionHealthVm(missionId, { posture });
+  const softPostures = new Set([
+    "operator_review",
+    "deliverable_review",
+    "awaiting_completion",
+    "decision_required",
+    "mission_idle",
+    "director_reconciling",
+  ]);
+  if (!posture || !softPostures.has(posture.id)) {
     return null;
   }
 
@@ -769,6 +826,12 @@ export function inlineReviewCardVm(missionId) {
   const recommended = cont?.recommended || null;
 
   const brief = directorBriefFromCompletion(report, lastDone, { readyNext, posture });
+  if (health?.register?.complete && !health?.waitingOnYou && brief.verdictId === "decision_needed") {
+    brief.verdictId = "current_work_complete";
+    brief.verdictLabel = "Current work complete — Mission ongoing";
+    brief.postureLabel = posture.label || "Idle";
+  }
+  const board = progressBoardVm(missionId, { report });
 
   const findings = [];
   for (const risk of (report?.residualRisks || []).slice(0, 3)) {
@@ -840,17 +903,17 @@ export function inlineReviewCardVm(missionId) {
         phaseId: plannedNext.phaseId,
       };
     } else {
-      recommendation = wave2Done ? "Wave 2 is complete" : "Milestone reached";
-      recommendationDetail = wave2Done
-        ? "W-0 through W-8 are done. No further phase is in the Director register yet — say “open Wave 3” when you want catalog work (W-9…), or park/close."
-        : "Criteria met. Nothing else is queued in the implementation register.";
-      nextStep = "Park keeps the mission open idle. Close ends it. Or ask Director to open the next wave.";
-      primaryAction = {
-        kind: "park_outcome",
-        label: "Done for now",
-        missionId,
-      };
+      recommendation = "Current work complete — Mission ongoing";
+      recommendationDetail = health?.directorNext
+        || "The current assignment register is finished. This durable Mission is idle until you give Director a new outcome (e.g. “Continue”, “What’s next?”, or name the next goal). Closing the Mission is rare and intentional.";
+      nextStep = "Message Director in the conversation — you do not need to Park or Close.";
+      primaryAction = null;
     }
+  } else if (posture.id === "mission_idle" || posture.id === "director_reconciling") {
+    recommendation = "Current work complete — Mission ongoing";
+    recommendationDetail = health?.directorNext || posture.detail;
+    nextStep = posture.next || "Message Director to continue.";
+    primaryAction = posture.primaryAction || null;
   } else if (recommended?.action) {
     recommendation = recommended.buttonLabel || recommended.title || "Choose a next step";
     recommendationDetail = [
@@ -876,6 +939,9 @@ export function inlineReviewCardVm(missionId) {
   const seenKinds = new Set();
   function pushBtn(action) {
     if (!action?.kind || !action.missionId) return;
+    if (health?.register?.complete && !health?.waitingOnYou) {
+      if (["park_outcome", "certify_completion", "reopen_work"].includes(action.kind)) return;
+    }
     const key = `${action.kind}:${action.label || ""}`;
     if (seenKinds.has(key)) return;
     seenKinds.add(key);
@@ -890,13 +956,6 @@ export function inlineReviewCardVm(missionId) {
       missionId,
     });
   }
-  if (brief.accepts && primaryAction?.kind === "open_next_wave") {
-    pushBtn({ kind: "park_outcome", label: "Stop here for now", missionId });
-    pushBtn({ kind: "reopen_work", label: "Request More Discovery", missionId });
-  }
-  if (brief.accepts && primaryAction?.kind === "park_outcome") {
-    pushBtn({ kind: "reopen_work", label: "Request More Discovery", missionId });
-  }
   if (recommended?.action && recommended.action.kind !== primaryAction?.kind) {
     pushBtn({
       ...recommended.action,
@@ -907,33 +966,23 @@ export function inlineReviewCardVm(missionId) {
   for (const alt of (cont?.alternatives || []).slice(0, 4)) {
     if (alt.presentationOnly) continue;
     if (!alt.action?.kind) continue;
-    if (["review_findings", "provide_feedback"].includes(alt.action.kind)) continue;
-    if (brief.accepts && alt.action.kind === "reopen_work" && primaryAction?.kind === "park_outcome") {
-      continue; // already pushed as secondary
-    }
-    if (primaryAction?.kind === "park_outcome" && alt.action.kind === "park_outcome") {
-      continue; // already leading with Accept & hold
-    }
+    if (["review_findings", "provide_feedback", "park_outcome", "certify_completion", "reopen_work"].includes(alt.action.kind)) continue;
     pushBtn({
       ...alt.action,
       label: alt.buttonLabel || alt.action.label,
       missionId,
     });
   }
-  pushBtn({ kind: "provide_feedback", label: "Give Feedback", missionId });
   if (mediaEvidence.length) {
     pushBtn({ kind: "toggle_screenshots", label: "View Screenshots", missionId });
   }
-  if (!buttons.length) {
-    pushBtn({ kind: "reopen_work", label: "Continue Discovery", missionId });
-  }
 
-  const statusFacts = brief.proofLines.length
-    ? brief.proofLines
-    : [
-      lastDone?.title ? `Just finished: ${lastDone.title}` : null,
-      posture.label || "Waiting on you",
-    ].filter(Boolean);
+  const statusFacts = [
+    health?.missionProgressLabel ? `Mission ${health.missionProgressLabel}` : null,
+    health?.register?.line ? `Current work: ${health.register.line}` : null,
+    ...(brief.proofLines.length ? brief.proofLines : []),
+    lastDone?.title ? `Just finished: ${lastDone.title}` : null,
+  ].filter(Boolean).slice(0, 6);
 
   return {
     kind: "inline_review",
@@ -942,7 +991,7 @@ export function inlineReviewCardVm(missionId) {
     soft: true,
     headline: lastDone?.title
       ? `${lastDone.title}`
-      : "Review Outcome",
+      : (health?.currentObjective || "Current work complete"),
     waveLabel: brief.verdictLabel,
     whatFinished: lastDone?.title || null,
     statusFacts,
@@ -955,6 +1004,8 @@ export function inlineReviewCardVm(missionId) {
       proofLines: brief.proofLines,
       workerRecommendation: brief.workerRecommendation,
     },
+    progressBoard: board,
+    missionHealth: health,
     summary: brief.summary,
     findings,
     recommendation,

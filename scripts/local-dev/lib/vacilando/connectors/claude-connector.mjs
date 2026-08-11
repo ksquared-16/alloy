@@ -59,16 +59,33 @@ then <<VACILANDO status=waiting_for_operator>>
 
 When the deliverable is done, emit:
 \`\`\`vacilando-report
-{ "implementation_summary": "...",
-  "changed_files": [],
-  "tests": {"ran": false, "results": null},
+{ "implementation_summary": "OPERATOR-FACING brief (required). Write 4–8 sentences a non-engineer can use: (1) what was wrong / the problem, (2) what you fixed, (3) files/areas changed, (4) tests/proof that ran and the result, (5) what is still blocked or next. Do not write a vague 'done' — this text is shown verbatim in Vacilando as Worker completion notes.",
+  "changed_files": ["path/relative/to/repo"],
+  "tests": {"ran": true, "results": "e.g. 424 passed, 0 failed across tests/access"},
   "deliverables": [{"id":"D1","produced":true,"path":"..."}],
   "criterion_evidence": [{"criterion_id":"AC1","status":"met","evidence_ref":"..."}],
   "residual_risks": [],
   "follow_up_items": [],
-  "provider_completion_claim": true }
+  "recommendation": "Accept deliverable | Request rework | More discovery",
+  "provider_completion_claim": true,
+  "progress_board": {
+    "headline": "One-line overall stance (e.g. Block A ~85%; register 5/8)",
+    "overall_percent": 62.5,
+    "execution_blocks": [
+      {"id":"foundation","label":"Foundation — Tasks 1–4","status":"Complete","detail":null,"percent":100},
+      {"id":"block_a","label":"Block A — Operator Conversation Loop","status":"~85%","detail":"A1 ✅ A3 ✅ · A2, A5, UI Reply outstanding","percent":85}
+    ],
+    "register": {"label":"8-task register","done":5,"total":8,"line":"1 ✅ · 2 ✅ · 3 ✅ · 4 ✅ · 5 ✅ · 6 partial · 7 not started · 8 not started → 5 / 8 = 62.5%"},
+    "migrations": {"branch_files":321,"unique_versions":320,"applied":320,"pending":0,"verified_through":"20260810180000","collisions":"20260807090000 — governance follow-up"},
+    "workstreams": [
+      {"id":"WS4","label":"Composer Convergence","status":"Partial","approx":72,"detail":"HTTP reachable; UI wiring outstanding"}
+    ]
+  }
+}
 \`\`\`
 then <<VACILANDO status=completed>>
+
+The implementation_summary is the operator's primary narrative in Vacilando. progress_board is the operator's primary STATUS MATRIX — always include it when the mission has execution blocks / workstreams / a task register. If it is thin or missing, the UI cannot show where things stand.
 
 Mission: ${brief?.title || assignment.missionId}
 Phase: ${assignment.title}
@@ -336,6 +353,7 @@ export async function runClaudeExecutionSession(session, {
     risks: report.residual_risks || [],
     followUp: report.follow_up_items || [],
     recommendation: report.recommendation || "Accept deliverable",
+    progressBoard: report.progress_board || report.progressBoard || null,
   });
   completionPackage.deliverables = report.deliverables || [];
 
@@ -588,6 +606,8 @@ async function runClaudeExecutionSessionWithMessage(session, message, {
     validation: report.criterion_evidence || [],
     risks: report.residual_risks || [],
     followUp: report.follow_up_items || [],
+    recommendation: report.recommendation || "Accept deliverable",
+    progressBoard: report.progress_board || report.progressBoard || null,
   });
 
   return updateExecutionSession(session.sessionId, {

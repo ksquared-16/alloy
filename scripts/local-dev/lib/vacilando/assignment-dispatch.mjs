@@ -444,10 +444,11 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
       status: "met",
     })),
     tests: pkg.tests?.ran ? [pkg.tests] : [],
-    residualRisks: pkg.risks || [],
-    followUpItems: pkg.followUp || [],
+    residualRisks: pkg.risks || pkg.unresolvedRisks || [],
+    followUpItems: pkg.followUp || pkg.recommendedNextWork || [],
     confidence: "medium",
     recommendation: pkg.recommendation || "Accept deliverable",
+    progressBoard: pkg.progressBoard || pkg.progress_board || null,
     nowMs,
   });
 
@@ -472,6 +473,7 @@ async function dispatchViaClaudeSession(missionId, assignmentId, { slot, actor, 
       acceptanceCriteriaResults: (assignment.acceptanceCriteriaIds || []).map((id) => ({ id, status: "met" })),
       confidence: "medium",
       recommendation: "Accept deliverable",
+      progressBoard: pkg.progressBoard || pkg.progress_board || null,
       nowMs,
     });
   }
@@ -944,6 +946,7 @@ export async function resumeAfterDecisionAnswer({
         acceptanceCriteriaResults: (assignment?.acceptanceCriteriaIds || []).map((id) => ({ id, status: "met" })),
         confidence: "medium",
         recommendation: pkg.recommendation || "Accept deliverable",
+        progressBoard: pkg.progressBoard || pkg.progress_board || null,
         nowMs,
       });
       const validated = validateAssignmentCompletion(missionId, assignmentId, { actor, nowMs });

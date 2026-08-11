@@ -145,6 +145,7 @@ export function buildCompletionPackage({
   risks = [],
   followUp = [],
   recommendation = "Accept deliverable",
+  progressBoard = null,
 } = {}) {
   return {
     summary: summary || "",
@@ -161,5 +162,10 @@ export function buildCompletionPackage({
     unresolvedRisks: risks || [],
     recommendedNextWork: followUp || [],
     recommendation,
+    // Alias fields dispatch historically looked for
+    risks: risks || [],
+    followUp: followUp || [],
+    progressBoard: progressBoard || null,
+    progress_board: progressBoard || null,
   };
 }

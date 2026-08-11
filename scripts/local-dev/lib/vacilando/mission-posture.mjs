@@ -410,98 +410,79 @@ export function deriveMissionPosture(missionId) {
     };
   }
 
-  // Worker finished (or compiler closed the lane) — not certified by you.
+  // Current work register finished — NOT mission complete, NOT Waiting on you.
   if (allComplete) {
-    const rejected = Boolean(mission?.completion_rejected_at);
+    const nextPhase = peekNextImplementationPhase(missionId);
+    const autoGate = shouldAutoContinueImplementation(missionId);
     const advance = canAdvanceToImplementation(missionId);
-    if (rejected || !cert.ready || advance?.ok) {
-      const choices = [
-        advance?.ok
-          ? {
-              id: "advance",
-              kind: "advance_implementation",
-              label: "Advance to implementation",
-              explanation:
-                "Keep this same mission. Accept discovery as the basis and open the next implementation phases (Wave 0 first). Nothing closes.",
-              missionId,
-            }
-          : null,
-        {
-          id: "more_work",
-          kind: "reopen_work",
-          label: "Need more discovery work",
-          explanation: "Reopen discovery if the package is incomplete or wrong. Does not start implementation.",
-          missionId,
-        },
-        {
-          id: "park",
-          kind: "park_outcome",
-          label: "Park for later",
-          explanation: "Stay open and idle. No worker launches.",
-          missionId,
-        },
-        {
-          id: "close",
-          kind: "certify_completion",
-          label: "Close mission (no implementation)",
-          explanation:
-            "End this mission without implementing. Only use if you truly do not want continuation here.",
-          missionId,
-        },
-      ].filter(Boolean);
 
+    // Discovery finished and implementation can begin on this same Mission.
+    if (advance?.ok) {
       return {
         ...base,
-        id: "operator_review",
-        status: "waiting_for_operator",
-        label: "Waiting on you",
-        detail: advance?.ok
-          ? "Discovery finished. Advance this same mission into implementation — or park / request more discovery."
-          : "A worker finished. Read the outcome, then choose one next step — reviewing alone does not change anything.",
-        next: advance?.ok
-          ? "Recommended: Advance to implementation on this mission"
-          : "Choose: more discovery, park, or close",
-        needsYou: true,
-        primaryAction: action("review_outcome", "Review outcome", { missionId }),
-        secondaryAction: advance?.ok
-          ? action("advance_implementation", "Advance to implementation", { missionId })
-          : null,
-        choices,
+        id: "director_reconciling",
+        status: "executing",
+        label: "Director planning",
+        detail: "Discovery work is complete. Director can advance this same Mission into implementation — Mission remains ongoing.",
+        next: "Message Director “Continue” / “Begin implementation”, or Start implementation",
+        needsYou: false,
+        registerComplete: true,
+        primaryAction: action("advance_implementation", "Begin implementation", { missionId }),
+        choices: [],
       };
     }
+
+    // Executable next phase exists → Director continues (or offers start), no Needs You.
+    if (nextPhase && autoGate.ok) {
+      scheduleImplementationChainContinue(missionId, {
+        fromAssignmentId: claimedRunning[0]?.assignmentId || null,
+        actor: "director",
+      });
+      return {
+        ...base,
+        id: "executing",
+        status: "auto_continuing",
+        label: "Continuing",
+        detail: `Current work register is complete. Director is opening ${nextPhase.title}.`,
+        next: `Running ${nextPhase.title}`,
+        needsYou: false,
+        registerComplete: true,
+        primaryAction: action("open_mission", "Open mission", { href: `missions/${missionId}`, missionId }),
+      };
+    }
+    if (nextPhase) {
+      return {
+        ...base,
+        id: "director_reconciling",
+        status: "executing",
+        label: "Director planning",
+        detail: `Current work is complete (${assignments.length}/${assignments.length}). Next plan phase is ${nextPhase.title}. Mission remains ongoing.`,
+        next: `Message Director to continue, or Start: ${nextPhase.title}`,
+        needsYou: false,
+        registerComplete: true,
+        primaryAction: action("open_next_wave", `Start ${String(nextPhase.title).slice(0, 42)}`, {
+          missionId,
+          phaseId: nextPhase.phaseId,
+        }),
+        choices: [],
+      };
+    }
+
+    // Register exhausted, durable mission still open → healthy idle / Director reconcile.
+    // Never label this "Waiting on you" and never treat register 100% as Mission closed.
     return {
       ...base,
-      id: "awaiting_completion",
-      status: "awaiting_completion_approval",
-      label: "Ready for your review",
-      detail: "A worker finished and Director thinks it may be certifiable. Read the outcome, then choose deliberately.",
-      next: "Choose next step on the outcome panel",
-      needsYou: true,
-      primaryAction: action("review_outcome", "Review outcome", { missionId }),
+      id: "mission_idle",
+      status: "idle",
+      label: "Idle",
+      detail: `Current work register is complete (${assignments.length}/${assignments.length}). This Mission remains an ongoing responsibility — Director is idle until you give a new outcome or ask to continue.`,
+      next: "Message Director (e.g. “Continue”, “What’s next?”, or name the next outcome). Closing the Mission is rare and intentional.",
+      needsYou: false,
+      registerComplete: true,
+      missionOngoing: true,
+      primaryAction: null,
       secondaryAction: null,
-      choices: [
-        {
-          id: "close",
-          kind: "certify_completion",
-          label: "Accept and close",
-          explanation: "Certify completion and close the mission.",
-          missionId,
-        },
-        {
-          id: "more_work",
-          kind: "reopen_work",
-          label: "Need more work",
-          explanation: "Reopen so a worker can continue.",
-          missionId,
-        },
-        {
-          id: "park",
-          kind: "park_outcome",
-          label: "Park for later",
-          explanation: "Stay open without launching anyone.",
-          missionId,
-        },
-      ],
+      choices: [],
     };
   }
 

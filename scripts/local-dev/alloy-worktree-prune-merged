@@ -119,7 +119,7 @@ main() {
     name="${candidates[$i]}"
     path="${candidate_paths[$i]}"
     branch="${candidate_branches[$i]}"
-    echo "Removing $name…"
+    echo "Removing ${name}..."
     if ! alloy_git "$ALLOY_REPO" worktree remove "$path"; then
       alloy_git "$ALLOY_REPO" worktree unlock "$path" 2>/dev/null || true
       if ! alloy_git "$ALLOY_REPO" worktree remove "$path"; then

@@ -103,6 +103,7 @@ Also, just before the control token, emit a fenced JSON block labelled vacilando
   "deliverables": [{"id":"D1","produced":true,"path":"..."}],
   "criterion_evidence": [{"criterion_id":"AC1","status":"met|partial|unmet|not_evidenced","evidence_ref":"..."}],
   "migrations": [{"path":"supabase/migrations/….sql","status":"applied|awaiting_authorization|not_required","target":"local|shared|none","note":"...","preflight":{"ok":true,"summary":"…","evidence_path":"docs/…/…-preflight.json"}}],
+  "progress_board": {"headline":"…","overall_percent":0,"execution_blocks":[],"register":{"done":0,"total":0},"workstreams":[]},
   "deviations_from_package": [], "unresolved_items": [], "provider_completion_claim": true }
 \`\`\`
 `.trim();

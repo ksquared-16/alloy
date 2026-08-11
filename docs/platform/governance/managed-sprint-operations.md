@@ -56,7 +56,8 @@ Lower-level primitives (`alloy-agent-create`, `alloy-worktree-create`, `alloy-de
 | `alloy-worker-pause <slot\|--all>` | Overnight / stop owned provider+server+browser |
 | `alloy-worker-resume <slot\|--all>` | Morning — restore only resources that were active |
 | `alloy-worker-doctor <slot\|--all> [--recover]` | Diagnose drift; mutate only with `--recover` |
-| `alloy-sprint-finish <slot>` | Free the slot; preserve worktree; never delete/push/merge/PR |
+| `alloy-sprint-finish <slot>` | Free the slot; **reap worktree when HEAD ∈ origin/staging** (pass `--keep-worktree` to preserve); never push/merge/PR |
+| `alloy-worktree-prune-merged [--accounted] [--yes]` | Remove merged (or origin-accounted) worktrees; active slots protected |
 
 Continuation brief: `<worktree>/.alloy-continuation.md`  
 Pause state: `~/.local/state/alloy-dev/pause-state/`  
