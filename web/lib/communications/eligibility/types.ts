@@ -87,6 +87,20 @@ export type EligibilityInput = {
     /** Resolved recipient. Absent means unresolved — external sends fail closed. */
     recipientPersonId?: string | null;
 
+    /**
+     * A verified endpoint owned by a canonical tenant conversation, standing in
+     * for recipient resolution when no Person is known.
+     *
+     * Set only by a thread-bound reply, where the destination came from an
+     * inbound message Alloy actually received on a thread this org owns. It
+     * satisfies "we know where this is going and it is really ours" WITHOUT
+     * asserting whose address it is.
+     *
+     * It does NOT stand in for consent: preference state is per Person and stays
+     * unevaluable here, which the decision reports rather than guesses.
+     */
+    verifiedThreadEndpoint?: boolean;
+
     /** Current preference state for the (category, channel) pair. */
     preferenceState?: "opted_in" | "opted_out" | "unset";
 

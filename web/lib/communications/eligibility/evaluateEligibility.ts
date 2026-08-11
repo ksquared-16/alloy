@@ -131,7 +131,7 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
     // 4. External sends require a resolved recipient. The previous gate skipped
     //    itself when recipient_person_id was absent, which made a free-text `to`
     //    a complete bypass. Fail closed instead.
-    if (!input.recipientPersonId) {
+    if (!input.recipientPersonId && input.verifiedThreadEndpoint !== true) {
         return block(
             "RECIPIENT_UNRESOLVED",
             "External send has no resolved recipient identity; eligibility cannot be established."
@@ -170,12 +170,36 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
     }
 
     // 7. Consent.
-    const state = input.preferenceState ?? "unset";
-    if (state === "opted_out" && !isOptOutExempt(input.category)) {
-        return block("OPTED_OUT", `Recipient opted out of ${input.category} messages.`);
-    }
-    if (input.category === "marketing" && state !== "opted_in") {
-        return block("MARKETING_REQUIRES_OPT_IN", "Marketing sends require explicit opt-in.");
+    //
+    // Preference is per Person. On a thread-bound reply there is no Person, so
+    // consent is genuinely unevaluable — and an unevaluable policy must not be
+    // reported as a policy that passed. The send is still permitted here because
+    // everything that COULD be checked was: the endpoint is one this org verifiably
+    // received a message from, suppression and channel usability were enforced
+    // above, and an unresolved STOP hold would already have blocked it.
+    //
+    // Marketing is the exception. It requires affirmative opt-in, and "we could
+    // not check" is the opposite of affirmative, so it stays blocked.
+    const consentUnevaluable = !input.recipientPersonId && input.verifiedThreadEndpoint === true;
+    if (consentUnevaluable) {
+        if (input.category === "marketing") {
+            return block(
+                "MARKETING_REQUIRES_OPT_IN",
+                "Marketing requires explicit opt-in, which cannot be established for an unidentified sender."
+            );
+        }
+        // Falls through to quiet hours DELIBERATELY. Quiet hours derive from the
+        // location/organization window, not from the recipient, so they remain
+        // fully evaluable here — an early return would have skipped a policy that
+        // still applies.
+    } else {
+        const state = input.preferenceState ?? "unset";
+        if (state === "opted_out" && !isOptOutExempt(input.category)) {
+            return block("OPTED_OUT", `Recipient opted out of ${input.category} messages.`);
+        }
+        if (input.category === "marketing" && state !== "opted_in") {
+            return block("MARKETING_REQUIRES_OPT_IN", "Marketing sends require explicit opt-in.");
+        }
     }
 
     // 8. Quiet hours — time-dependent, so this is the check most likely to flip

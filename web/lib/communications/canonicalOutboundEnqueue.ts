@@ -278,6 +278,12 @@ export async function enqueueCanonicalOutboundMessage(params: {
     channelUsable?: boolean;
     /** Quiet-hours window, when one applies. */
     quietHours?: QuietHoursWindow | null;
+    /**
+     * The destination came from an inbound message on a tenant-owned thread, so
+     * recipient resolution is satisfied without a Person. Set only by the
+     * thread-bound reply path — never accepted from a client.
+     */
+    verifiedThreadEndpoint?: boolean;
     /** Names the caller in fallback telemetry. */
     callSite?: string;
 
@@ -401,6 +407,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
               category,
               channel: mc,
               unresolvedInboundStopHold: context.unresolvedInboundStopHold,
+              verifiedThreadEndpoint: params.verifiedThreadEndpoint === true,
               purpose: params.purpose ?? null,
               recipientPersonId: params.recipientPersonId ?? null,
               preferenceState: context.preferenceState,

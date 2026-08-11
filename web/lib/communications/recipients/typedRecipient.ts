@@ -82,7 +82,34 @@ export type ExternalOperationalRecipient = {
     reason: string;
 };
 
-export type TypedRecipient = PersonRecipient | InternalUserRecipient | ExternalOperationalRecipient;
+/**
+ * Reply into a canonical tenant conversation whose sender is not a known Person.
+ *
+ * A parent can text an Alloy number before Alloy knows who they are. The
+ * conversation is real, tenant-owned and verified, but it anchors to
+ * `communications_unknown` with no `person_id` — so a PersonRecipient cannot
+ * express it, and the operator was simply unable to reply to the messages most in
+ * need of a reply.
+ *
+ * It carries a thread id and NOTHING else. That is the entire safety property:
+ * the client cannot name an address, so this cannot become the free-text
+ * recipient path that typed recipients were introduced to remove. The server
+ * derives the endpoint from canonical inbound truth on that thread.
+ *
+ * Structurally unable to reach platform quarantine: org-less and cross-org
+ * ingress have no `communication_threads` row at all, so there is no thread id to
+ * pass. That is a property of the data model, not a check that can be forgotten.
+ */
+export type CanonicalThreadRecipient = {
+    kind: "canonical_thread";
+    threadId: string;
+};
+
+export type TypedRecipient =
+    | PersonRecipient
+    | InternalUserRecipient
+    | ExternalOperationalRecipient
+    | CanonicalThreadRecipient;
 
 /**
  * Purposes an external-operational send may carry. Server-owned and
@@ -147,6 +174,24 @@ export function validateTypedRecipientShape(recipient: unknown): RecipientValida
     if (kind === "person") {
         if (typeof r.personId !== "string" || !UUID_RE.test(r.personId)) {
             return err("missing_person_id", "A person recipient requires a person_id (UUID).");
+        }
+        return null;
+    }
+
+    if (kind === "canonical_thread") {
+        if (typeof r.threadId !== "string" || !UUID_RE.test(r.threadId)) {
+            return err("missing_thread_id", "A canonical_thread recipient requires a thread_id (UUID).");
+        }
+        // Any address-bearing field is a caller trying to choose the destination.
+        // Refuse rather than ignore: silently dropping it would let a caller
+        // believe they had redirected the message.
+        for (const field of ["address", "to", "to_address", "phone", "email"]) {
+            if (r[field] != null && String(r[field]).trim() !== "") {
+                return err(
+                    "thread_recipient_address_not_permitted",
+                    "A canonical_thread reply derives its destination from the conversation. Remove the address."
+                );
+            }
         }
         return null;
     }
