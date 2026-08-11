@@ -23,6 +23,7 @@ def send_resend_email(
     text_body: str,
     from_email: str,
     api_key: str,
+    message_id: str | None = None,
 ) -> Dict[str, Any]:
     if not api_key.strip():
         raise RuntimeError("Resend API key missing")
@@ -39,6 +40,16 @@ def send_resend_email(
         payload["html"] = html_body
     else:
         payload["text"] = text_body.strip()
+
+    # RFC 5322 Message-ID, minted by Alloy from the canonical message's own id.
+    #
+    # Without it a reply's `In-Reply-To` names something Alloy has no record of:
+    # the id stored as `provider_message_id` is Resend's internal email id, not
+    # the header a parent's mail client echoes. Setting it here is what makes
+    # `In-Reply-To` correlation possible at all, and it is independent of whichever
+    # provider Alloy eventually uses to RECEIVE mail.
+    if message_id:
+        payload["headers"] = {**(payload.get("headers") or {}), "Message-ID": message_id}
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=20)
