@@ -43,7 +43,7 @@ export async function ensurePlacementCandidateForWaitlistedChildBySubject(
     // Child enrollment process instance (subject = customer_member, context = opportunity) — the fact source.
     const { data: pi } = await supabase
         .from("process_instances")
-        .select("id, metadata")
+        .select("id, metadata, stage_entered_at")
         .eq("org_id", orgId)
         .eq("process_key", ENROLLMENT_PROCESS_KEY)
         .eq("context_id", opportunityId)
@@ -51,6 +51,12 @@ export async function ensurePlacementCandidateForWaitlistedChildBySubject(
         .maybeSingle();
     const piId = (pi as { id?: string } | null)?.id ?? null;
     const facts = ((pi as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+    // Wait-since is the Waitlist stage clock — not opportunity created_at (lead age).
+    const stageEnteredAt =
+        typeof (pi as { stage_entered_at?: string | null } | null)?.stage_entered_at === "string"
+            ? String((pi as { stage_entered_at: string }).stage_entered_at).trim() || null
+            : null;
+    const waitSinceIso = stageEnteredAt ?? new Date().toISOString();
 
     const { data: cm } = await supabase
         .from("customer_members")
@@ -96,7 +102,7 @@ export async function ensurePlacementCandidateForWaitlistedChildBySubject(
         is_synthetic_fallback: false,
         program_room_cohort_key: cohort.program_room_cohort_key,
         program_room_group_label: cohort.program_room_group_label,
-        wait_since: (opp as { created_at?: string | null }).created_at ?? null,
+        wait_since: waitSinceIso,
         start_date: metaStr(facts, "start_date"),
         status: "active",
         seed_key: seedKey,

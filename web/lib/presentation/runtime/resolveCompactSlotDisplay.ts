@@ -17,6 +17,7 @@ import { queueRowSubjectDisplayName } from "@/lib/presentation/runtime/types";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { FocusedSubjectContext } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
 import type { CompactRowSlotConfig, CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
+import { canonicalizeCompactRowFieldKey } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 
 function contactLine(context: QueueRowContext): string | null {
     const parts: string[] = [];
@@ -87,6 +88,13 @@ export function resolveQueueRowFieldValueFromContext(
                 || context.placement_context?.room_label?.trim()
                 || null
             );
+        case "child.date_of_birth": {
+            const dob =
+                context.row_subject?.date_of_birth?.trim()
+                || context.row_subjects?.find((s) => s.date_of_birth)?.date_of_birth?.trim()
+                || null;
+            return dob || null;
+        }
         case "person.primary_contact_name":
             return context.primary_contact?.display_name?.trim() || null;
         case "person.phone":
@@ -177,9 +185,16 @@ export function resolveCompactSlotDisplay(
     const resolvedFocus = focus ?? null;
     if (config?.fieldKeys?.length) {
         const parts = config.fieldKeys
-            .map((key) => resolveConfiguredFieldDisplay(key, context, config))
+            .map((key) =>
+                resolveConfiguredFieldDisplay(key, context, config, {
+                    emptyPlaceholder: options?.publishedAuthority ? "—" : null,
+                }),
+            )
             .filter((value): value is string => Boolean(value?.trim()));
-        return parts.length ? parts.join(" · ") : null;
+        const meaningful = parts.filter((p) => p !== "—");
+        if (meaningful.length) return meaningful.join(" · ");
+        // All authored sparse fields empty — one placeholder, not "— · — · —".
+        return parts.length ? "—" : null;
     }
     // Published surfaces are sparse by contract — never inject Lead Status / contact-line /
     // group defaults into empty slots. Defaults only when no published authority exists.
@@ -193,6 +208,7 @@ function resolveConfiguredFieldDisplay(
     key: string,
     context: QueueRowContext,
     config: CompactRowSlotConfig | undefined,
+    options?: { emptyPlaceholder?: string | null },
 ): string | null {
     if (isCollectionFieldKey(key)) {
         return resolveQueueRowChildrenFieldFromContext(key, context, {
@@ -201,11 +217,31 @@ function resolveConfiguredFieldDisplay(
         });
     }
     const raw = resolveQueueRowFieldValueFromContext(key, context);
-    if (!raw?.trim()) return null;
+    if (!raw?.trim()) {
+        // Published Waitlist/Program fields must not vanish into a family-shaped fallback —
+        // show the configured empty placeholder when the key was authored but data is absent.
+        if (options?.emptyPlaceholder != null && isSparsePlacementFieldKey(key)) {
+            return options.emptyPlaceholder;
+        }
+        return null;
+    }
     if (key === "person.phone" || key === "person.primary_phone") {
         return formatQueueRowPhoneDisplay(raw);
     }
     return formatQueueRowNameDisplay(raw, config?.nameDisplayByFieldKey?.[key], key);
+}
+
+function isSparsePlacementFieldKey(key: string): boolean {
+    const k = canonicalizeCompactRowFieldKey(key);
+    return (
+        k === "waitlist.positionLabel" ||
+        k === "waitlist.waitSince" ||
+        k === "inquiry_child.program" ||
+        k === "inquiry_child.program_category" ||
+        k === "child.program" ||
+        k === "opportunity.program" ||
+        k === "placement.program"
+    );
 }
 
 export type CompactSecondaryBand = {
@@ -233,30 +269,47 @@ export function resolveCompactSecondaryBand(
         return fallback ? { left: fallback, right: null } : null;
     }
     const resolved = config.fieldKeys
-        .map((key) => ({ key, value: resolveConfiguredFieldDisplay(key, context, config) }))
+        .map((key) => ({
+            key,
+            value: resolveConfiguredFieldDisplay(key, context, config, {
+                emptyPlaceholder: options?.publishedAuthority ? "—" : null,
+            }),
+        }))
         .filter((row): row is { key: string; value: string } => Boolean(row.value?.trim()));
     if (!resolved.length) return null;
 
-    const names = resolved.find(
+    // Prefer real values over empty placeholders when mixing (e.g. Program · — · date),
+    // BUT keep authored Waitlist position as "—" so configured fields never silently vanish.
+    const meaningful = resolved.filter(
+        (row) =>
+            row.value !== "—"
+            || row.key === "waitlist.positionLabel"
+            || row.key === "waitlist.waitSince",
+    );
+    const displayRows = meaningful.length ? meaningful : resolved;
+
+    const names = displayRows.find(
         (row) =>
             row.key === "children.names"
             || row.key === "children"
             || row.key.endsWith(".names"),
     );
-    const count = resolved.find(
+    const count = displayRows.find(
         (row) => row.key === "children.count" || row.key.endsWith(".count"),
     );
     if (names && count) {
         return { left: names.value, right: count.value };
     }
-    if (resolved.length >= 2) {
+    if (displayRows.length >= 2) {
+        const allPlaceholder = displayRows.every((row) => row.value === "—");
+        if (allPlaceholder) return { left: "—", right: null };
         return {
-            left: resolved
+            left: displayRows
                 .slice(0, -1)
                 .map((row) => row.value)
                 .join(" · "),
-            right: resolved[resolved.length - 1]!.value,
+            right: displayRows[displayRows.length - 1]!.value,
         };
     }
-    return { left: resolved[0]!.value, right: null };
+    return { left: displayRows[0]!.value, right: null };
 }

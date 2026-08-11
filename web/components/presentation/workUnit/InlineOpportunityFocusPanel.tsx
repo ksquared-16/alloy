@@ -368,6 +368,9 @@ export function InlineOpportunityFocusPanel() {
         isChildSubject && typeof operational.subjectIdentityTruth?.["child.display_name"] === "string"
             ? (operational.subjectIdentityTruth["child.display_name"] as string).trim() || null
             : null;
+    // Attention subject leads. Settlement loads the family opportunity VM for Household/Children/
+    // Billing, but the header must still name the focused child — not "Kurzman Family".
+    const headerTitle = childDisplayName || (visible ? drawerTitle : null);
     const seedTitle =
         childDisplayName || drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
     const seedContextChips = useMemo(
@@ -489,7 +492,7 @@ export function InlineOpportunityFocusPanel() {
                 >
                     {visible ?
                         <OpportunityFocusPanelHeader
-                            title={drawerTitle}
+                            title={headerTitle || drawerTitle}
                             opportunityId={visible.displayVm.entity.id}
                             record={visible.record}
                             displayVm={visible.displayVm}
@@ -567,7 +570,7 @@ export function InlineOpportunityFocusPanel() {
                         // fills reserved cells in place.
                         <OpportunityFocusPanelBody
                             mode={focusPanelMode}
-                            title={visible ? drawerTitle : seedTitle}
+                            title={headerTitle || (visible ? drawerTitle : seedTitle)}
                             statusLabel={statusLabel}
                             canMutate={statusCanMutate}
                             enriched={visible ? { displayVm: visible.displayVm, record: visible.record } : null}

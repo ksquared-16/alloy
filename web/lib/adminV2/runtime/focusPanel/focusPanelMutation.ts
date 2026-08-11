@@ -430,6 +430,35 @@ export type BuildFocusPanelMutationInput = {
 };
 
 /**
+ * Mutations always key the family opportunity (Record of Truth), never the Attention subject.
+ *
+ * Child Attention overlays rewrite `model.subject.id` to the child / process-instance id.
+ * PATCH merges + drawer refresh events must still target `child.family_opportunity_id`
+ * (or settlement `truth.id`) so saves stick and the Work Unit Focus Panel re-merges.
+ */
+export function resolveFocusPanelMutationOpportunityId(args: {
+    subjectId: string;
+    grain?: string | null;
+    truth: Record<string, unknown> | null | undefined;
+}): string {
+    const subjectId = args.subjectId.trim();
+    const familyFromTruth =
+        typeof args.truth?.["child.family_opportunity_id"] === "string"
+            ? String(args.truth["child.family_opportunity_id"]).trim()
+            : "";
+    const truthId =
+        typeof args.truth?.id === "string" ? String(args.truth.id).trim() : "";
+
+    if (args.grain === "child") {
+        if (familyFromTruth) return familyFromTruth;
+        // Settlement truth id is the family opportunity; Attention subject is the child.
+        if (truthId && truthId !== subjectId) return truthId;
+    }
+    if (familyFromTruth) return familyFromTruth;
+    return subjectId;
+}
+
+/**
  * Build the opportunity Focus Panel mutation adapter. Wires:
  *  - Household contact save (existing person PATCH path)
  *  - Tour status actions (existing tour booking API)

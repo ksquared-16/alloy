@@ -36,6 +36,7 @@ import {
 } from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/mergeCompactSlotsInheritDefault";
+import { stripRedundantChildNameFromSecondary } from "@/lib/presentation/runtime/queueRowVariantResolve";
 import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import { resolveQueueRowSubjectFocus } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
@@ -87,7 +88,10 @@ function resolveRowVariantPresentation(
         typeof rowContext.row_subject?.subject_type === "string"
             ? rowContext.row_subject.subject_type
             : input.grain ?? null;
-    const rowConfig = mergeCompactSlotsInheritDefault(variantSlots, defaultSlots, { rowGrain });
+    const rowConfig = stripRedundantChildNameFromSecondary(
+        mergeCompactSlotsInheritDefault(variantSlots, defaultSlots, { rowGrain }),
+        rowGrain,
+    );
     const focus =
         matched.subjectFocus != null
             ? resolveQueueRowSubjectFocus(rowContext, matched.subjectFocus)

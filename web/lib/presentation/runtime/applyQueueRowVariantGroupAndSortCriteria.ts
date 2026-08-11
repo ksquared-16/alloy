@@ -12,6 +12,7 @@ import type {
 } from "@/lib/layout/queueRecordLayoutV3";
 import { applyQueueRowVariantSortCriteria } from "@/lib/presentation/runtime/applyQueueRowVariantSortCriteria";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { programLabelWithoutAgeRange } from "@/lib/childcare/childCareProgramFromDob";
 
 function readGroupValue(row: Record<string, unknown>, key: string): string {
     const k = key.trim().toLowerCase();
@@ -21,9 +22,12 @@ function readGroupValue(row: Record<string, unknown>, key: string): string {
     const childPlacement = row.placementWaitlistRow as Record<string, unknown> | null | undefined;
 
     if (k.includes("program") || k === "program_room" || k.includes("category") || k.includes("cohort")) {
-        return (
+        const raw =
             placement?.program_label?.trim() ||
             placement?.room_label?.trim() ||
+            (typeof (row as { inquiryProgramLabel?: unknown }).inquiryProgramLabel === "string"
+                ? String((row as { inquiryProgramLabel?: string }).inquiryProgramLabel).trim()
+                : "") ||
             (typeof waitlistProj?.program_room_group_label === "string"
                 ? waitlistProj.program_room_group_label.trim()
                 : "") ||
@@ -36,8 +40,8 @@ function readGroupValue(row: Record<string, unknown>, key: string): string {
             (typeof childPlacement?.runtime_position_section_key === "string"
                 ? childPlacement.runtime_position_section_key.trim()
                 : "") ||
-            ""
-        );
+            "";
+        return programLabelWithoutAgeRange(raw) || raw;
     }
     if (k.includes("location") || k.includes("site") || k.includes("campus")) {
         return (

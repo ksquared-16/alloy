@@ -27,7 +27,10 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
-import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import {
+    buildOpportunityFocusPanelMutation,
+    resolveFocusPanelMutationOpportunityId,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
@@ -127,7 +130,13 @@ export default function OpportunityFocusPanelModeGrid({
         perspective,
         canMutate,
     } = model;
-    const drawerId = model.subject.id;
+    // Attention subject may be the child; mutations + activity entity binding stay on the
+    // family opportunity (Record of Truth) so child-grain saves/photo patches stick.
+    const drawerId = resolveFocusPanelMutationOpportunityId({
+        subjectId: model.subject.id,
+        grain: operationalContext.grain,
+        truth: operationalContext.truth,
+    });
     const record = operationalContext.truth;
     const workflowActive = operationalContext.stageWorkRuntime?.primary?.state === "open";
     const defaultGrid = useMemo(() => resolveFocusPanelModeGrid(mode, workflowActive), [mode, workflowActive]);

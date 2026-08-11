@@ -268,6 +268,7 @@ function evaluateChildRule(
         weekdays: "Preferred days",
         tuition_plan_id: "Tuition plan",
         quote_accepted: "Quote accepted",
+        location_id: "Site / Location",
     };
 
     if (children.length === 0 && ruleId !== "child:first_name" && ruleId !== "child:last_name") {
@@ -283,6 +284,12 @@ function evaluateChildRule(
         ];
     }
 
+    // Effective site for location: owned child location OR opportunity/family site
+    // (same authority Children card / Identity display — do not require a duplicate owned write).
+    const opportunityLocationId =
+        trimOrNull(ctx.values.location_id as string | null)
+        ?? trimOrNull(ctx.values._location_id as string | null);
+
     for (const child of children) {
         const childId = trimOrNull(child.person_id) ?? trimOrNull(child.id) ?? "unknown";
         const value = (child as Record<string, unknown>)[childField];
@@ -291,6 +298,8 @@ function evaluateChildRule(
             if (Array.isArray(value) && value.length > 0) continue;
         } else if (childField === "quote_accepted") {
             if (value === true || value === "true" || value === 1) continue;
+        } else if (childField === "location_id") {
+            if (!completionValueEmpty(value) || !completionValueEmpty(opportunityLocationId)) continue;
         } else if (!completionValueEmpty(value)) {
             continue;
         }

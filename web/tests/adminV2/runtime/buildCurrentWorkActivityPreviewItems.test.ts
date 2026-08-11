@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCurrentWorkActivityPreviewItemsFromContext } from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
+import {
+    buildCurrentWorkActivityPreviewItemsFromContext,
+    resolveCanonicalCurrentWorkActivityEntries,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/buildCurrentWorkActivityPreviewItems";
 import type { OperationalContext, OperationalContextSignals } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 const NULL_SIGNALS: OperationalContextSignals = {
     work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
@@ -58,5 +62,40 @@ describe("buildCurrentWorkActivityPreviewItems", () => {
 
     it("returns empty array for genuine empty state", () => {
         expect(buildCurrentWorkActivityPreviewItemsFromContext(context({}))).toEqual([]);
+    });
+
+    it("canonical timeline is newest-first; What's Next subset shares labels/timestamps", () => {
+        const record = {
+            _activity_timeline_events: [
+                {
+                    id: "ev-old",
+                    event_type: "note_added",
+                    occurred_at: "2026-08-08T13:05:00.000Z",
+                    payload: { summary: "Contact Family" },
+                },
+                {
+                    id: "ev-new",
+                    event_type: "message_sent",
+                    occurred_at: "2026-08-08T16:05:00.000Z",
+                    payload: { summary: "Email sent", channel: "email" },
+                },
+            ],
+        } as ProofRuntimeRecord;
+
+        const canonical = resolveCanonicalCurrentWorkActivityEntries(record, { limit: 10 });
+        expect(canonical.length).toBeGreaterThanOrEqual(2);
+        // Newest first — message_sent (16:05) before note_added (13:05)
+        expect(canonical[0]?.kind).toBe("communication");
+        expect(canonical[1]?.kind).toBe("note");
+
+        const whatsNext = buildCurrentWorkActivityPreviewItemsFromContext(context(record), {
+            limit: 2,
+        });
+        expect(whatsNext.length).toBeGreaterThan(0);
+        expect(whatsNext[0]?.kind).toBe("communication");
+        expect(whatsNext[0]?.occurredAt).toBe(canonical[0]?.at);
+        for (const item of whatsNext) {
+            expect(canonical.some((c) => c.at === item.occurredAt && c.kind === item.kind)).toBe(true);
+        }
     });
 });

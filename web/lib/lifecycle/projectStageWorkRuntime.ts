@@ -124,6 +124,34 @@ function legacyIntentWorkDefinitionKey(workIntentKey: string | null): string | n
     return null;
 }
 
+/**
+ * Stage the task was SPAWNED for — from durable provenance, not from fields that stage-move
+ * reconciliation may rewrite (`lifecycle_stage_key` / `operating_plan_template_key`).
+ *
+ * Live bug: Lead `Contact Family` rows were rewritten to `waitlist` + `review_waitlist_position`
+ * while provenance still encodes `:lead:contact_family`. Trust spawn provenance for matching.
+ */
+function spawnStageFromTaskProvenance(md: Record<string, unknown>): string | null {
+    const dedupe = trimOrNull(md.dedupe_key);
+    if (dedupe) {
+        const fromDedupe = dedupe.match(/:stage:([^|:]+)/i);
+        if (fromDedupe?.[1]) return fromDedupe[1].trim() || null;
+    }
+    const provenance = md.provenance;
+    if (provenance && typeof provenance === "object" && !Array.isArray(provenance)) {
+        const idem = trimOrNull((provenance as Record<string, unknown>).idempotency_key);
+        // lifecycle_intent:{orgId}:{opportunityId}:{stageKey}:{templateKey}
+        if (idem?.startsWith("lifecycle_intent:")) {
+            const parts = idem.split(":");
+            if (parts.length >= 5) {
+                const stage = parts[parts.length - 2]?.trim();
+                if (stage) return stage;
+            }
+        }
+    }
+    return null;
+}
+
 export function taskMatchesStageWorkTemplate(
     row: TaskDbRow,
     stageKey: string,
@@ -137,7 +165,9 @@ export function taskMatchesStageWorkTemplate(
     const mdStage = trimOrNull(md.lifecycle_stage_key);
     const work = parseOperationalWorkViewFromTaskRow(taskRowFromDb(row, "", ""));
     const snapshotStage = trimOrNull(work.context_snapshot?.lifecycle_stage_key);
-    const stage = mdStage ?? snapshotStage;
+    const spawnStage = spawnStageFromTaskProvenance(md);
+    // Prefer spawn provenance over rewritten stage fields after cross-stage reconciliation.
+    const stage = spawnStage ?? mdStage ?? snapshotStage;
 
     // Template-key identity still requires stage alignment when the task declares a stage.
     // Otherwise Lead `contact_family` can bind onto a Waitlist plan that reuses the same key.
@@ -145,6 +175,8 @@ export function taskMatchesStageWorkTemplate(
         (mdTemplateKey != null && mdTemplateKey === templateKey)
         || (mdWorkIntent != null && mdWorkIntent === templateKey);
     if (templateKeyMatches) {
+        // Spawned for a different stage → never bind, even if reconciliation rewrote template_key.
+        if (spawnStage && spawnStage !== stageKey) return false;
         if (stage && stage !== stageKey) return false;
         return true;
     }
@@ -159,10 +191,11 @@ export function taskMatchesStageWorkTemplate(
         return false;
     }
 
-    // Same platform work definition — bind only when stage aligns (or stage is unknown on legacy rows).
-    // Do NOT use lifecycle_provenance to bypass stage: Lead `contact_family` tasks must not
-    // overwrite Waitlist `review_waitlist_position` labels via shared definition binding.
-    if (!stage || stage === stageKey) return true;
+    // Same platform work definition — bind only when stage aligns.
+    // Do NOT treat missing stage as a wildcard: Lead `contact_family` tasks without
+    // lifecycle_stage_key were painting as Waitlist `review_waitlist_position`.
+    if (spawnStage && spawnStage !== stageKey) return false;
+    if (stage && stage === stageKey) return true;
 
     return false;
 }

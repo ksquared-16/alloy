@@ -127,6 +127,7 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
         "child.program",
         "inquiry_child.schedule_type",
         "child.room",
+        "child.date_of_birth",
         // Waitlist Secondary band — position + wait-since belong with Program, not the status pill.
         "waitlist.positionLabel",
         "waitlist.waitSince",

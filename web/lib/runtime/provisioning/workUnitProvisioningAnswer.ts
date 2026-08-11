@@ -80,6 +80,7 @@ import {
 } from "@/lib/adminV2/settings/surfaces/queueRowVariantDisplayControls";
 import { attachChildGrainWaitlistPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import type { ChildProvisioningRowWithPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
+import { attachChildGrainInquiryProgramFallback } from "@/lib/runtime/provisioning/attachChildGrainInquiryProgramFallback";
 import {
     enrichOperationalProjectionRows,
     queueRowContextOf,
@@ -1102,6 +1103,11 @@ export async function composeWorkUnitProvisioningAnswer(
             placementQueueKeys: ["waitlisted", "waitlist", activeView.id],
             childRows,
             familyNamesByOpportunityId,
+        });
+        childRows = await attachChildGrainInquiryProgramFallback({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            childRows: childRows as ChildProvisioningRowWithPlacement[],
         });
     }
 

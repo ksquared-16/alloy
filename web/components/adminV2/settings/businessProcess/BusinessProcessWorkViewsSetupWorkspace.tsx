@@ -10,12 +10,15 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
     stageGrains = [],
     stageGrainByKey,
     queueLanes = [],
+    onDraftSaved,
 }: {
     workUnitKey: string | null;
     stageGrains?: (StageGrain | undefined)[];
     /** stage key → grain. When provided, mixed-grain is evaluated per-view (its filtered stages), not process-wide. */
     stageGrainByKey?: Record<string, StageGrain | undefined>;
     queueLanes?: import("@/lib/lifecycle/workViewsRuntimeConvergence").WorkViewCompatQueueLane[];
+    /** Called after a successful draft save so the process Apply bar can refresh. */
+    onDraftSaved?: () => void | Promise<void>;
 }) {
     const {
         selected,
@@ -50,6 +53,11 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
         <div className="space-y-3" data-testid="business-process-work-views-workspace">
             <p className="px-1 text-[11px] text-alloy-midnight/45">
                 Work Views define how operators consume process work. They choose which stages/work to include, how to group and sort them, and which surfaces present the rows.
+                {" "}
+                <span className="font-medium text-alloy-midnight/60">
+                    Save only stores a draft. Labels and filters go live after{" "}
+                    <span className="text-alloy-pine">Apply changes</span> in the bar above this page.
+                </span>
             </p>
             {error ?
                 <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
@@ -67,12 +75,19 @@ export default function BusinessProcessWorkViewsSetupWorkspace({
                     <span className="text-xs font-medium text-amber-800">Unsaved changes</span>
                 :   null}
                 {savedFlash ?
-                    <span className="text-xs font-medium text-alloy-pine">Saved</span>
+                    <span className="text-xs font-medium text-alloy-pine" data-testid="work-views-saved-draft-flash">
+                        Saved to draft · Apply changes to go live
+                    </span>
                 :   null}
                 <button
                     type="button"
                     disabled={!dirty || saving || isMixedGrain}
-                    onClick={() => void save()}
+                    onClick={() => {
+                        void (async () => {
+                            const ok = await save();
+                            if (ok) await onDraftSaved?.();
+                        })();
+                    }}
                     className="config-primary-btn config-primary-btn--sm"
                     data-testid="business-process-save-work-views"
                 >

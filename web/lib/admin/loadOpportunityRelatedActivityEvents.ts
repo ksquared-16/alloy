@@ -15,6 +15,11 @@ export const OPPORTUNITY_RELATED_FORM_ACTIVITY_EVENT_TYPES = [
     "intake_case_linked",
 ] as const;
 
+/** Child stage/disposition moves emit on OCM / process_instances — still scoped by opportunity_id. */
+export const OPPORTUNITY_RELATED_CHILD_ACTIVITY_EVENT_TYPES = [
+    "child_lifecycle_status_changed",
+] as const;
+
 export type WorkflowActivityEventRow = {
     id: string;
     occurred_at: string;
@@ -39,6 +44,10 @@ export async function loadOpportunityActivityEvents(params: {
 }): Promise<WorkflowActivityEventRow[]> {
     const { supabase, orgId, opportunityId, limit } = params;
 
+    const relatedEventTypes = [
+        ...OPPORTUNITY_RELATED_FORM_ACTIVITY_EVENT_TYPES,
+        ...OPPORTUNITY_RELATED_CHILD_ACTIVITY_EVENT_TYPES,
+    ];
     const [directRes, relatedRes] = await Promise.all([
         supabase
             .from("workflow_events")
@@ -52,7 +61,7 @@ export async function loadOpportunityActivityEvents(params: {
             .from("workflow_events")
             .select("id, occurred_at, event_type, entity_type, entity_id, action_type, payload")
             .eq("org_id", orgId)
-            .in("event_type", [...OPPORTUNITY_RELATED_FORM_ACTIVITY_EVENT_TYPES])
+            .in("event_type", relatedEventTypes)
             .filter("payload->>opportunity_id", "eq", opportunityId)
             .order("occurred_at", { ascending: false })
             .limit(limit),

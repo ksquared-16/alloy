@@ -26,10 +26,30 @@ describe("buildChildGrainQueueRowContext — waitlist_context", () => {
             queue,
         });
         expect(ctx?.row_subject.subject_type).toBe("candidate");
-        expect(ctx?.waitlist_context).toEqual({ position_label: "#3 of 12", wait_since: "2026-05-01" });
+        expect(ctx?.waitlist_context).toEqual({
+            position_label: "#3 of 12",
+            wait_since: "2026-05-01",
+            priority: null,
+            placement_candidate_id: "pc-1",
+            can_adjust_placement: true,
+        });
     });
 
-    it("omits waitlist_context when the projection carries no rank/wait", () => {
+    it("omits waitlist_context when the projection carries no rank/wait/candidate", () => {
+        const ctx = buildChildGrainQueueRowContext({
+            row: {
+                id: "pcrow:opp-1:pc-empty",
+                row_grain: "candidate",
+                opportunity_id: "opp-1",
+                _child_display_name: "Ava",
+                _placement_waitlist_row: {},
+            },
+            queue,
+        });
+        expect(ctx?.waitlist_context).toBeUndefined();
+    });
+
+    it("keeps waitlist_context when candidate id is present without rank (Adjust eligible)", () => {
         const ctx = buildChildGrainQueueRowContext({
             row: {
                 id: "pcrow:opp-1:pc-1",
@@ -41,7 +61,8 @@ describe("buildChildGrainQueueRowContext — waitlist_context", () => {
             },
             queue,
         });
-        expect(ctx?.waitlist_context).toBeUndefined();
+        expect(ctx?.waitlist_context?.placement_candidate_id).toBe("pc-1");
+        expect(ctx?.waitlist_context?.can_adjust_placement).toBe(true);
     });
 
     it("child-grain rows carry no waitlist_context", () => {

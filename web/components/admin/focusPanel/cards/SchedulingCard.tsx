@@ -5,8 +5,6 @@ import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-rea
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
-import AssignmentCardSections from "@/components/admin/focusPanel/cards/AssignmentCardSections";
-import AssignmentProposalControls from "@/components/admin/focusPanel/cards/AssignmentProposalControls";
 import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
 import { buildAssignmentCardModelForChild } from "@/lib/enrollment/buildAssignmentCardModelFromTruth";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -45,6 +43,8 @@ import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmMo
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { AlloyTimeInput } from "@/components/workspace/AlloyTimeInput";
+import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 
 type Props = {
     model: FocusPanelCardModel;
@@ -337,7 +337,11 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             })),
         [evidence]
     );
-    const opportunityId = context.subject.type === "opportunity" ? context.subject.id : null;
+    const opportunityId = resolveFocusPanelMutationOpportunityId({
+        subjectId: context.subject.id,
+        grain: context.grain,
+        truth: context.truth as Record<string, unknown>,
+    });
 
     // Prebuilt projection: composed server-side into context.truth by the Focus Panel
     // first-paint runtime (like Household), so the card reveals WITH the panel and opens
@@ -415,19 +419,6 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     }, [requestNonce, children]);
 
     const activeChild = children.find((c) => c.id === activeChildId) ?? null;
-    const activeOfferModel = activeChild
-        ? buildAssignmentCardModelForChild({
-              truth: context.truth as Record<string, unknown>,
-              customerMemberId: activeChild.id,
-              projection: (projById[activeChild.id] as never) ?? null,
-              requiredRuleIds: Array.isArray(
-                  (context.truth as Record<string, unknown>)._assignment_requirement_rule_ids,
-              )
-                  ? ((context.truth as Record<string, unknown>)
-                        ._assignment_requirement_rule_ids as string[])
-                  : ["child:start_date", "child:desired_schedule", "child:program_interest"],
-          })
-        : null;
     // While the Linked host elevates Scheduling, keep reporting focused even before
     // the request effect resolves activeChildId (avoids a mount-time "base" flash).
     const hostElevated = coordination?.activeDepth?.card === "scheduling";
@@ -463,36 +454,13 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             receded={receded}
         >
             {/*
-              Assignment offer — site/program/room/schedule/start/tuition/quote with
-              compact readiness. Family-request fields belong on Children when configured.
+              Assignment work surface — create/edit schedule + embedded tuition.
+              Requirements checklist and separate Generate Quote chrome were removed:
+              tuition/$ lives on the assignment itself (quote on the opportunity during enrollment).
             */}
             <div data-scheduling-card="true" data-assignments-card="true">
-                {activeChild && activeOfferModel ? (
-                    <>
-                        <AssignmentCardSections
-                            model={activeOfferModel}
-                            childId={activeChild.id}
-                            childName={activeChild.name}
-                            style={{ marginBottom: 12 }}
-                        />
-                        <AssignmentProposalControls
-                            customerMemberId={activeChild.id}
-                            opportunityId={opportunityId}
-                            participationMetadata={
-                                ((context.truth as Record<string, unknown>)
-                                    ._enrollment_participation_by_member as
-                                    | Record<string, Record<string, unknown>>
-                                    | undefined)?.[activeChild.id] ?? null
-                            }
-                            canCommit={activeOfferModel.readinessReady}
-                            commitBlockedReason={
-                                activeOfferModel.readinessReady
-                                    ? null
-                                    : `Cannot commit yet — ${activeOfferModel.readinessSummary.toLowerCase()}.`
-                            }
-                            style={{ marginBottom: 12 }}
-                        />
-                        <ScheduleWorkSurface
+                {activeChild ? (
+                    <ScheduleWorkSurface
                         child={activeChild}
                         opportunityId={opportunityId}
                         projection={projById[activeChild.id] ?? null}
@@ -505,7 +473,6 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                             coordination?.back?.();
                         }}
                     />
-                    </>
                 ) : children.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: T.muted }}>Link children to add assignments.</p>
                 ) : (
@@ -1042,6 +1009,7 @@ function ScheduleWorkSurface({
                 opportunityId={opportunityId}
                 proj={proj}
                 config={config}
+                truth={truth}
                 existing={mode === "edit" ? existing : editingAssignment ? {
                     effectiveFrom: editingAssignment.effectiveFrom,
                     effectiveTo: editingAssignment.effectiveTo,
@@ -1081,7 +1049,7 @@ function ScheduleWorkSurface({
                             supersedes_assignment_id: editingAssignmentId,
                         }),
                     });
-                    await onSaved();
+                    // onSaved is owned by ScheduleEditor.save so tuition quote can persist first.
                 }}
             />
         </div>
@@ -1257,7 +1225,14 @@ function DayPills({ days, interactive, allowed, onToggle }: { days: number[]; in
 }
 
 /** The billing consequence box — identical treatment in Detail and Edit. */
-function BillingConsequence({ billing }: { billing: BillingProjection | null }) {
+function BillingConsequence({
+    billing,
+    tuitionSelect,
+}: {
+    billing: BillingProjection | null;
+    /** Editor-only: embed tuition/$ selection on the assignment (quote lives on the opportunity). */
+    tuitionSelect?: ReactNode;
+}) {
     const family = billing?.totals ? money(billing.totals.familyResponsibility, billing.totals.recurringFrequency) : null;
     return (
         <div
@@ -1273,14 +1248,17 @@ function BillingConsequence({ billing }: { billing: BillingProjection | null }) 
         >
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: T.mid40 }}>
                 <Wallet size={12.5} strokeWidth={2} />
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Recurring tuition</span>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>
+                    {tuitionSelect ? "Tuition" : "Recurring tuition"}
+                </span>
             </div>
+            {tuitionSelect ? <div data-assignment-tuition-embed="true">{tuitionSelect}</div> : null}
             {family ? (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: T.forge }}>
                     <span>Family responsibility</span>
                     <span style={{ fontVariantNumeric: "tabular-nums" }}>{family}</span>
                 </div>
-            ) : (
+            ) : tuitionSelect ? null : (
                 <div style={{ fontSize: 12, color: T.muted, fontStyle: "italic" }}>Pending — becomes final when Billing is configured for this schedule.</div>
             )}
         </div>
@@ -1301,6 +1279,7 @@ function ScheduleRegions({
     billing,
     footer,
     surface,
+    tuitionSelect,
 }: {
     child: SchedChild;
     state: ScheduleState;
@@ -1311,6 +1290,7 @@ function ScheduleRegions({
     billing: BillingProjection | null;
     footer: ReactNode;
     surface: "detail" | "editor";
+    tuitionSelect?: ReactNode;
 }) {
     return (
         <div
@@ -1334,7 +1314,7 @@ function ScheduleRegions({
                 </div>
                 <Region icon={DoorOpen} label="Room">{siteRoom}</Region>
                 <Region icon={CalendarRange} label="Effective">{effective}</Region>
-                <BillingConsequence billing={billing} />
+                <BillingConsequence billing={billing} tuitionSelect={tuitionSelect} />
             </div>
             <div
                 data-schedule-footer="true"
@@ -1393,11 +1373,25 @@ function AssignmentListSurface({
 }
 
 // ── The editor — same regions, transformed into controls in place ────────────
+function tuitionPlanIdFromTruth(truth: Record<string, unknown> | null | undefined, memberId: string): string {
+    if (!truth) return "";
+    const bag = truth._enrollment_participation_by_member;
+    if (bag && typeof bag === "object" && !Array.isArray(bag)) {
+        const row = (bag as Record<string, unknown>)[memberId];
+        if (row && typeof row === "object" && !Array.isArray(row)) {
+            const id = (row as Record<string, unknown>).tuition_plan_id;
+            if (typeof id === "string" && id.trim()) return id.trim();
+        }
+    }
+    return "";
+}
+
 function ScheduleEditor({
     child,
     opportunityId,
     proj,
     config,
+    truth = null,
     existing,
     mode,
     createAsSecondary = false,
@@ -1412,6 +1406,7 @@ function ScheduleEditor({
     opportunityId: string | null;
     proj: ChildProj | null;
     config: SchedConfig;
+    truth?: Record<string, unknown> | null;
     existing: ProjView | null;
     mode: "edit" | "create";
     /** When true, create an independent secondary assignment (not a schedule successor). */
@@ -1468,8 +1463,49 @@ function ScheduleEditor({
     const patternsReqRef = useRef<Promise<Pattern[]> | null>(config.patterns.length ? Promise.resolve(config.patterns) : null);
     const [billing, setBilling] = useState<BillingProjection | null>(null);
 
+    // Tuition/$ embedded on the assignment — quote snapshot lives on the opportunity
+    // enrollment process (no separate Generate Quote chrome).
+    const [offeringId, setOfferingId] = useState(() => tuitionPlanIdFromTruth(truth, child.id));
+    const [rateOptions, setRateOptions] = useState<Array<{ id: string; label: string }>>([]);
+
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!opportunityId) return;
+        let cancelled = false;
+        fetch(`/api/admin/financial-config/opportunity/${opportunityId}`, { credentials: "include" })
+            .then(async (res) => {
+                if (!res.ok) return null;
+                return (await res.json()) as FinancialConfigApiResponse;
+            })
+            .then((payload) => {
+                if (cancelled || !payload?.enrollments?.length) return;
+                const childName = child.name.trim().toLowerCase();
+                const ranked = [...payload.enrollments].sort((a, b) => {
+                    const aHit =
+                        childName && a.childLabel.trim().toLowerCase().includes(childName) ? 0 : 1;
+                    const bHit =
+                        childName && b.childLabel.trim().toLowerCase().includes(childName) ? 0 : 1;
+                    return aHit - bHit;
+                });
+                const opts: Array<{ id: string; label: string }> = [];
+                for (const row of ranked) {
+                    if (!row.resolvedRate) continue;
+                    opts.push({
+                        id: row.resolvedRate.rateId,
+                        label: `${row.childLabel}: ${row.resolvedRate.rateLabel}`,
+                    });
+                }
+                if (opts.length) setRateOptions(opts);
+            })
+            .catch(() => {
+                /* optional — operator still selects an explicit plan before lock-in */
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [opportunityId, child.id]);
 
     /** Resolve site patterns once (preloaded if first-paint carried them). */
     const ensurePatterns = useCallback((): Promise<Pattern[]> => {
@@ -1554,6 +1590,28 @@ function ScheduleEditor({
         (!createAsSecondary || Boolean(assignmentTypeLabel)) &&
         (!roomRequired || Boolean(roomId));
 
+    async function persistAssignmentQuote(): Promise<void> {
+        if (!opportunityId) return;
+        const lockedOfferingId = offeringId.trim();
+        // Require an explicit lock-in — never persist via silent auto-match.
+        if (!lockedOfferingId) return;
+        const res = await fetch("/api/admin/enrollment/assignment-quote", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                customer_member_id: child.id,
+                opportunity_id: opportunityId,
+                offering_id: lockedOfferingId,
+            }),
+        });
+        if (!res.ok) {
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            // Schedule already saved — surface quote failure without rolling back.
+            throw new Error(json.error ?? "Tuition quote could not be saved on the opportunity.");
+        }
+    }
+
     async function save() {
         setBusy(true);
         setError(null);
@@ -1576,6 +1634,10 @@ function ScheduleEditor({
                     room_location_id: roomId || null,
                     assignment_type_label: assignmentTypeLabel || "Assignment",
                 });
+                await persistAssignmentQuote().catch(() => {
+                    /* schedule write succeeded — quote is opportunistic on opportunity */
+                });
+                await onSaved();
                 return;
             }
             const times = {
@@ -1600,6 +1662,9 @@ function ScheduleEditor({
                     // Effective-dated intent: Create makes the next schedule; Edit changes the current.
                     change_kind: mode === "create" && existing ? "successor" : "current",
                 }),
+            });
+            await persistAssignmentQuote().catch(() => {
+                /* schedule write succeeded — quote is opportunistic on opportunity */
             });
             await onSaved();
         } catch (e) {
@@ -1650,6 +1715,46 @@ function ScheduleEditor({
                 child={child}
                 state={editState}
                 billing={billing}
+                tuitionSelect={
+                    opportunityId ? (
+                        <div style={{ display: "grid", gap: 4 }}>
+                            <label
+                                htmlFor={`assignment-tuition-embed-${child.id}`}
+                                style={{ fontSize: 11, fontWeight: 650, color: T.slate }}
+                            >
+                                Tuition / quote amount
+                            </label>
+                            <select
+                                id={`assignment-tuition-embed-${child.id}`}
+                                value={offeringId}
+                                data-assignment-tuition-plan={child.id}
+                                data-assignment-tuition-embed="true"
+                                onChange={(e) => setOfferingId(e.target.value)}
+                                style={{
+                                    padding: "6px 8px",
+                                    fontSize: 13,
+                                    borderRadius: 6,
+                                    border: `1px solid ${T.border}`,
+                                    color: T.forge,
+                                    background: "#fff",
+                                    width: "100%",
+                                    maxWidth: "100%",
+                                }}
+                            >
+                                <option value="">Select best match to lock in…</option>
+                                {rateOptions.map((r, idx) => (
+                                    <option key={r.id} value={r.id}>
+                                        {idx === 0 ? `Best match — ${r.label}` : r.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <div style={{ fontSize: 10.5, color: T.mid40 }}>
+                                Best match uses room, program, and schedule. Select a plan to lock it
+                                onto the enrollment opportunity.
+                            </div>
+                        </div>
+                    ) : undefined
+                }
                 days={
                     <div style={{ display: "grid", gap: 8 }}>
                         <DayPills days={days} interactive allowed={allowedDays} onToggle={toggleDay} />
@@ -1880,20 +1985,30 @@ function RoomPicker({
         return scoped.map((r) => ({
             roomId: r.roomId,
             roomName: r.roomName,
+            // Pending — never flash "Eligible" before scored fit returns.
             classification: "eligible" as const,
-            reason: "Operational space",
+            reason: "Checking eligibility…",
             programCategoryId: r.programCategoryId,
         }));
     }, [seedRooms, purposeBehavior]);
 
     const [scored, setScored] = useState<PlacementOption[] | null>(null);
+    const [fitContext, setFitContext] = useState<{
+        dateOfBirth: string | null;
+        childAgeMonths: number | null;
+        asOf: string;
+        dobSource: string;
+    } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [overridePending, setOverridePending] = useState<PlacementOption | null>(null);
+    const eligibilityReady = scored != null;
 
     useEffect(() => {
         if (!patternId) return;
         let cancelled = false;
         setError(null);
+        setScored(null);
+        setFitContext(null);
         (async () => {
             try {
                 const o = await schedApi(
@@ -1910,6 +2025,14 @@ function RoomPicker({
                     purposeBehavior ?? {},
                 );
                 setScored(scoped);
+                if (o.fitContext && typeof o.fitContext === "object") {
+                    setFitContext(o.fitContext as {
+                        dateOfBirth: string | null;
+                        childAgeMonths: number | null;
+                        asOf: string;
+                        dobSource: string;
+                    });
+                }
                 if (!programCategoryId && typeof o.programCategoryId === "string" && o.programCategoryId) {
                     onProgramResolved?.(o.programCategoryId);
                 }
@@ -1927,12 +2050,14 @@ function RoomPicker({
 
     const options = useMemo(() => {
         const list = scored ?? seedOptions;
+        if (!scored) return list;
         const rank = (c: PlacementOption["classification"]) =>
             c === "recommended" ? 0 : c === "eligible" ? 1 : 2;
         return [...list].sort((a, b) => rank(a.classification) - rank(b.classification));
     }, [scored, seedOptions]);
 
     function choose(option: PlacementOption) {
+        if (!eligibilityReady) return;
         if (option.classification === "blocked") {
             setOverridePending(option);
             return;
@@ -1940,6 +2065,14 @@ function RoomPicker({
         setOverridePending(null);
         onPick(option.roomId, option.roomName, option.classification === "recommended");
     }
+
+    const ageHint = (() => {
+        if (!fitContext) return null;
+        if (fitContext.childAgeMonths == null || !fitContext.dateOfBirth) {
+            return `Age as of ${fitContext.asOf}: unknown (no DOB on person/member)`;
+        }
+        return `Age as of ${fitContext.asOf}: ${fitContext.childAgeMonths} mo (DOB ${fitContext.dateOfBirth})`;
+    })();
 
     return (
         <div style={{ display: "grid", gap: 10, paddingTop: 4, minHeight: 0 }} data-room-picker="true">
@@ -1965,6 +2098,13 @@ function RoomPicker({
                 Eligible rooms match this child&rsquo;s age and program as of the start date. Ineligible rooms stay
                 listed — you can override when needed.
             </p>
+            {ageHint ? (
+                <p style={{ margin: 0, fontSize: 11, color: T.muted }} data-room-fit-age-hint="true">
+                    {ageHint}
+                </p>
+            ) : !eligibilityReady && patternId ? (
+                <p style={{ margin: 0, fontSize: 11, color: T.muted }}>Checking eligibility…</p>
+            ) : null}
             {error && <ErrorNote message={error} />}
             {options.length === 0 ? (
                 <span style={{ fontSize: 12, color: T.muted }}>
@@ -1974,23 +2114,31 @@ function RoomPicker({
             ) : (
                 <div
                     style={{ display: "grid", gap: 6, maxHeight: "min(42vh, 320px)", overflowY: "auto" }}
-                    data-room-options-ready={scored ? "scored" : "seed"}
+                    data-room-options-ready={scored ? "scored" : "pending"}
                 >
                     {options.map((o) => {
-                        const blocked = o.classification === "blocked";
+                        const blocked = eligibilityReady && o.classification === "blocked";
                         const selected = o.roomId === selectedRoomId;
                         const pending = overridePending?.roomId === o.roomId;
+                        const badge = !eligibilityReady
+                            ? "Checking"
+                            : o.classification === "recommended"
+                              ? "Recommended"
+                              : o.classification === "blocked"
+                                ? "Ineligible"
+                                : "Eligible";
                         return (
                             <button
                                 key={o.roomId}
                                 type="button"
                                 onClick={() => choose(o)}
                                 data-room-option={o.roomId}
-                                data-room-classification={o.classification}
+                                data-room-classification={eligibilityReady ? o.classification : "pending"}
                                 data-room-override-pending={pending ? "true" : undefined}
+                                disabled={!eligibilityReady}
                                 style={{
                                     all: "unset",
-                                    cursor: "pointer",
+                                    cursor: eligibilityReady ? "pointer" : "wait",
                                     display: "flex",
                                     justifyContent: "space-between",
                                     alignItems: "center",
@@ -2008,11 +2156,14 @@ function RoomPicker({
                                           : "#fff",
                                     borderRadius: 8,
                                     padding: "8px 12px",
+                                    opacity: eligibilityReady ? 1 : 0.85,
                                 }}
                             >
                                 <span style={{ color: blocked ? T.muted : T.forge, minWidth: 0 }}>
                                     <span style={{ fontWeight: 600 }}>{o.roomName ?? "Room"}</span>
-                                    <span style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}>{o.reason}</span>
+                                    <span style={{ color: T.muted, marginLeft: 8, fontSize: 11.5 }}>
+                                        {eligibilityReady ? o.reason : "Checking eligibility…"}
+                                    </span>
                                 </span>
                                 <span
                                     style={{
@@ -2021,19 +2172,17 @@ function RoomPicker({
                                         textTransform: "uppercase",
                                         letterSpacing: ".04em",
                                         color:
-                                            o.classification === "recommended"
-                                                ? T.pine
-                                                : blocked
-                                                  ? T.ember
-                                                  : T.muted,
+                                            !eligibilityReady
+                                                ? T.muted
+                                                : o.classification === "recommended"
+                                                  ? T.pine
+                                                  : blocked
+                                                    ? T.ember
+                                                    : T.muted,
                                         flex: "0 0 auto",
                                     }}
                                 >
-                                    {o.classification === "recommended"
-                                        ? "Recommended"
-                                        : o.classification === "blocked"
-                                          ? "Ineligible"
-                                          : "Eligible"}
+                                    {badge}
                                 </span>
                             </button>
                         );

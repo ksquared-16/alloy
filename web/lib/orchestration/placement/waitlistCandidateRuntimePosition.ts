@@ -34,7 +34,21 @@ export function formatWaitlistRuntimePositionLabel(
 ): string {
     const n = Math.max(1, Math.floor(position));
     const t = Math.max(n, Math.floor(total));
-    return mode === "preview" ? `Preview position ${n}/${t}` : `Position ${n}/${t}`;
+    // Compact queue scan: `#1/4`. Preview keeps an explicit prefix so operators know it is not live.
+    return mode === "preview" ? `Preview #${n}/${t}` : `#${n}/${t}`;
+}
+
+/** Parse compact / legacy position labels into `{n}/{t}` for row chrome. */
+export function compactWaitlistPositionLabel(label: string | null | undefined): string | null {
+    const raw = typeof label === "string" ? label.trim() : "";
+    if (!raw) return null;
+    if (/^#\d+\/\d+$/.test(raw)) return raw;
+    const m = raw.match(/(?:Preview\s+)?(?:position\s+)?#?(\d+)\s*\/\s*(\d+)/i);
+    if (!m) return null;
+    const n = Math.max(1, Number(m[1]));
+    const t = Math.max(n, Number(m[2]));
+    if (!Number.isFinite(n) || !Number.isFinite(t)) return null;
+    return raw.toLowerCase().includes("preview") ? `Preview #${n}/${t}` : `#${n}/${t}`;
 }
 
 function readSortTuple(row: Record<string, unknown>): Array<string | number | null> | null {

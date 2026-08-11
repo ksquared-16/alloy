@@ -1,6 +1,13 @@
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import type { LeadActivityPreviewEntry, LeadActivityPreviewKind } from "@/lib/layout/runtime/resolveLeadActivityPreview";
-import { resolveLeadActivityPreview } from "@/lib/layout/runtime/resolveLeadActivityPreview";
+import {
+    defaultActivityTimelineConfigForSurface,
+    type LayoutEditorActivityTimelineConfig,
+} from "@/lib/layout/layoutEditorActivityTimelineConfig";
+import {
+    resolveLayoutRuntimeActivityTimeline,
+    type ActivityTimelineEntry,
+} from "@/lib/layout/runtime/resolveLayoutRuntimeActivityTimeline";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 
@@ -17,6 +24,15 @@ const KIND_CATEGORY: Record<LeadActivityPreviewKind, string> = {
     updated: "Record update",
 };
 
+function timelineEventToPreviewKind(eventType: ActivityTimelineEntry["eventType"]): LeadActivityPreviewKind {
+    if (eventType === "communications") return "communication";
+    if (eventType === "notes") return "note";
+    if (eventType === "tasks_work") return "task";
+    if (eventType === "created") return "created";
+    if (eventType === "updated") return "updated";
+    return "activity";
+}
+
 function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPreviewItem {
     return {
         label: entry.detail ?? entry.label,
@@ -27,7 +43,37 @@ function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPrev
     };
 }
 
-/** Prefer newest-first source order for What's Next / Recent activity (not kind priority). */
+/**
+ * Canonical What's Next activity feed — same source + newest-first order as Activity tab.
+ * Always goes through {@link resolveLayoutRuntimeActivityTimeline} (workflow events when present,
+ * otherwise lead/person/child preview with canonical atSortKey sorting).
+ */
+export function resolveCanonicalCurrentWorkActivityEntries(
+    record: ProofRuntimeRecord,
+    options?: { timeZone?: string; limit?: number },
+): LeadActivityPreviewEntry[] {
+    const limit = options?.limit ?? 3;
+    const config: LayoutEditorActivityTimelineConfig = {
+        ...defaultActivityTimelineConfigForSurface("opportunity_drawer"),
+        displayMode: "vertical_timeline",
+        timelineDirection: "newest_first",
+        maxItems: Math.max(limit, 24),
+    };
+    const timeline = resolveLayoutRuntimeActivityTimeline({
+        record,
+        surfaceKey: "opportunity_drawer",
+        config,
+    });
+    return timeline.slice(0, limit).map((entry) => ({
+        kind: timelineEventToPreviewKind(entry.eventType),
+        label: entry.title,
+        detail: entry.detail,
+        at: entry.at,
+        atSortKey: entry.atSortKey,
+    }));
+}
+
+/** Prefer newest-first canonical source for What's Next / Recent activity. */
 export function buildCurrentWorkActivityPreviewItems(input: {
     activityItems?: CanonicalActivityItemVM[];
     context: OperationalContext;
@@ -40,7 +86,10 @@ export function buildCurrentWorkActivityPreviewItems(input: {
     const limit = input.limit ?? 3;
     const canonical =
         input.activityItems
-        ?? resolveLeadActivityPreview(input.context.truth as ProofRuntimeRecord, input.timeZone);
+        ?? resolveCanonicalCurrentWorkActivityEntries(
+            input.context.truth as ProofRuntimeRecord,
+            { timeZone: input.timeZone, limit },
+        );
 
     const items = canonical.map(toPreviewItem);
 

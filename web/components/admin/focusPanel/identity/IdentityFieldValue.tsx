@@ -391,7 +391,9 @@ export default function IdentityFieldValue({
     const eyebrow = cell.labelMode === "eyebrow";
     const canInlineEdit = Boolean(cell.editable && inlineEdit);
     const canLegacyEdit = Boolean(cell.editable && onEdit && !inlineEdit);
-    const canLink = Boolean(cell.linked && onLink && !canInlineEdit);
+    // Linked enrollment fields navigate to the owning card. When both Linked and Editable
+    // are authored, value-click navigates; the Edit control still opens inline edit.
+    const canLink = Boolean(cell.linked && onLink);
     const valueText = cell.value?.trim() ?? "";
     const displayValueText = (() => {
         if (editControl.kind === "date" && valueText) {
@@ -463,13 +465,12 @@ export default function IdentityFieldValue({
             ) : null}
             {inlineEdit?.isEditing ? (
                 <span className="identity-field-value__value-row">
-                    {!showLabel ? (
-                        <span className="identity-field-value__icon-slot" aria-hidden>
-                            {Icon ? (
-                                <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
-                            ) : null}
-                        </span>
-                    ) : null}
+                    {/* Same left gutter as the label so value text lines up under the label text. */}
+                    <span className="identity-field-value__icon-slot" aria-hidden>
+                        {!showLabel && Icon ? (
+                            <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
+                        ) : null}
+                    </span>
                     <IdentityInlineEditInput
                         cell={cell}
                         editControl={editControl}
@@ -488,29 +489,13 @@ export default function IdentityFieldValue({
                 </span>
             ) : (
                 <span className="identity-field-value__value-row">
-                    {!showLabel ? (
-                        <span className="identity-field-value__icon-slot" aria-hidden>
-                            {Icon ? (
-                                <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
-                            ) : null}
-                        </span>
-                    ) : null}
-                    {canInlineEdit && inlineEdit ? (
-                        <button
-                            type="button"
-                            className="identity-field-value__value identity-field-value__value--clickable"
-                            title={cell.value ? String(cell.value) : undefined}
-                            onClick={inlineEdit.onStartEdit}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault();
-                                    inlineEdit.onStartEdit();
-                                }
-                            }}
-                        >
-                            {displayValueText || "—"}
-                        </button>
-                    ) : canLink && onLink ? (
+                    {/* Same left gutter as the label so value text lines up under the label text. */}
+                    <span className="identity-field-value__icon-slot" aria-hidden>
+                        {!showLabel && Icon ? (
+                            <Icon className="identity-field-value__icon identity-field-value__icon--solo" />
+                        ) : null}
+                    </span>
+                    {canLink && onLink ? (
                         <button
                             type="button"
                             className="identity-field-value__value identity-field-value__value--clickable identity-field-value__value--linked"
@@ -527,6 +512,21 @@ export default function IdentityFieldValue({
                             <span className="identity-field-value__nav-cue" aria-hidden>
                                 →
                             </span>
+                        </button>
+                    ) : canInlineEdit && inlineEdit ? (
+                        <button
+                            type="button"
+                            className="identity-field-value__value identity-field-value__value--clickable"
+                            title={cell.value ? String(cell.value) : undefined}
+                            onClick={inlineEdit.onStartEdit}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    inlineEdit.onStartEdit();
+                                }
+                            }}
+                        >
+                            {displayValueText || "—"}
                         </button>
                     ) : (
                         <span

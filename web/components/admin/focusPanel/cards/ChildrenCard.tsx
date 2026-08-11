@@ -111,6 +111,7 @@ import { identityDisclosureCoordinationLevel } from "@/lib/adminV2/runtime/focus
 import { backIdentityDisclosure } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import type { IdentityConfigurationPurpose } from "@/lib/adminV2/settings/surfaces/identityDisclosureLayers";
 import { prefetchOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
+import { prefetchInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 
 type ChildrenComposerPreview = {
     perspective: "roster" | "child_focus" | "child_edit";
@@ -169,8 +170,8 @@ function childLiveImageUrl(child: ChildrenEvidenceChild): string | null {
 }
 
 /**
- * Live avatar: upload only on Context Facts (`allowUpload`).
- * Summary / Details show the kept photo without Add/Change controls.
+ * Live avatar: upload when `allowUpload` and mutation are set.
+ * Summary may hide upload chrome; Details / Context Facts enable it when Surfaces show avatar.
  */
 function childLiveAvatar(args: {
     child: ChildrenEvidenceChild;
@@ -420,44 +421,49 @@ export default function ChildrenCard({
         }
     };
 
-    // Fresh queue subject → Summary default (no stale Lennon after Wrigley select).
-    // Child Attention: re-select the focused child in the roster so Settlement household
-    // chrome does not look like an unfocused family panel.
+    /**
+     * Fresh Attention subject → reset edit chrome.
+     * Child Attention must NOT auto-elevate the Children card (enterContext/selectIdentity).
+     * That reported `focused` perspective and made Children the primary Focus surface while
+     * What's Next / header already own Attention. Children stays supporting Settlement chrome;
+     * the operator opens it deliberately.
+     */
+    const childAttentionMemberId =
+        typeof context.truth?.["child.customer_member_id"] === "string"
+            ? String(context.truth["child.customer_member_id"]).trim()
+            : "";
+    const attentionSubjectKey = `${context.grain}:${context.subject.id?.trim() ?? ""}:${childAttentionMemberId}`;
+
+    const rosterIdentityKey = useMemo(
+        () =>
+            evidence.children
+                .map((row) => `${row.id}:${row.customerMemberId ?? ""}:${row.personId ?? ""}`)
+                .join("|"),
+        [evidence.children],
+    );
+
     useEffect(() => {
         setEditing(false);
         setRelatedViewId(null);
-        resetDisclosure();
         setCardLinkNav(createEmptyFocusPanelCardLinkNavState());
-        if (context.grain !== "child") return;
-        const focusedId = context.subject.id?.trim();
-        const memberFromTruth =
-            typeof context.truth?.["child.customer_member_id"] === "string"
-                ? String(context.truth["child.customer_member_id"]).trim()
-                : null;
-        if (!focusedId && !memberFromTruth) return;
-        const match =
-            (focusedId
-                ? evidence.children.find((row) => row.id === focusedId)
-                  ?? evidence.children.find((row) => row.customerMemberId === focusedId)
-                  ?? evidence.children.find((row) => row.personId === focusedId)
-                : null)
-            ?? (memberFromTruth
-                ? evidence.children.find((row) => row.customerMemberId === memberFromTruth)
-                  ?? evidence.children.find((row) => row.id === memberFromTruth)
-                : null)
-            ?? null;
-        if (!match) return;
-        enterContext();
-        selectIdentity(match.id, "roster");
+        // Child Attention: keep Summary (supporting). Do not drill into Collection/Details.
+        if (context.grain === "child") {
+            resetDisclosure();
+            return;
+        }
+        resetDisclosure();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- attentionSubjectKey / rosterIdentityKey gate re-apply
     }, [
-        context.subject.id,
+        attentionSubjectKey,
+        rosterIdentityKey,
         context.grain,
-        context.truth,
-        evidence.children,
         resetDisclosure,
-        enterContext,
-        selectIdentity,
     ]);
+
+    /** Warm Program/Room option caches before the operator opens a placement select. */
+    useEffect(() => {
+        prefetchInquiryChildPlacementCascade();
+    }, []);
 
     const request = coordination?.request;
     const requestNonce = request?.card === "children" ? request.nonce : null;
@@ -843,7 +849,7 @@ export default function ChildrenCard({
                 )}
             </IdentityComposeCanvasShell>
         );
-    } else if (focused && editing && editSeed && disclosure.depth === "details") {
+    } else if (focused && editing && editSeed) {
         lifecycle = "edit";
         body = (
             <ChildFocusEdit
@@ -880,9 +886,17 @@ export default function ChildrenCard({
                     personId={focused.personId ?? null}
                     customerMemberId={focused.customerMemberId ?? null}
                     photoUrl={childLiveImageUrl(focused)}
-                    // Photo upload is Context Facts only — Details shows the kept photo.
-                    onSavePhoto={undefined}
-                    onClearPhoto={undefined}
+                    // Surfaces avatar + canMutate: upload on Details (child grain lands here).
+                    onSavePhoto={
+                        canMutateIdentity && mutation?.savePersonChildPhoto
+                            ? mutation.savePersonChildPhoto
+                            : undefined
+                    }
+                    onClearPhoto={
+                        canMutateIdentity && mutation?.clearPersonChildPhoto
+                            ? mutation.clearPersonChildPhoto
+                            : undefined
+                    }
                 />
                 {disclosure.depth === "details" && emergencyContactsSection && childrenSurfaceConfig ? (
                     <EmergencyContactsSection
@@ -1562,8 +1576,9 @@ function FocusedChild({
                             ? childLiveAvatar({
                                   child,
                                   size: 40,
-                                  // Details/Evidence: display kept photo only (upload on Context Facts).
-                                  allowUpload: false,
+                                  allowUpload: Boolean(mutation?.savePersonChildPhoto),
+                                  onSavePhoto: mutation?.savePersonChildPhoto,
+                                  onClearPhoto: mutation?.clearPersonChildPhoto,
                               })
                             : undefined
                     }

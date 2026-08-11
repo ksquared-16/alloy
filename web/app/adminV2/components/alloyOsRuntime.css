@@ -5196,6 +5196,14 @@ html[data-alloy-os-runtime-split="true"]
 .alloy-os-children__roster .identity-field-grid__row--triple {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+/* Roster Program/Gender cells: label + value share a left edge (no centered orphan values). */
+.alloy-os-children__roster .identity-field-value,
+.alloy-os-children__roster .identity-field-value__label,
+.alloy-os-children__roster .identity-field-value__value-row,
+.alloy-os-children__roster .identity-field-value__value {
+  text-align: left;
+  justify-content: flex-start;
+}
 .alloy-os-children__summary-row:hover { background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 5%, #fff); }
 .alloy-os-children__summary-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
 .alloy-os-children__summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -6113,6 +6121,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .alloy-os-currentwork__header-meta {
@@ -7035,7 +7045,7 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px 12px;
   align-items: start;
-  margin-top: 0;
+  margin-top: auto;
   padding-top: 2px;
 }
 
@@ -7043,9 +7053,18 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   grid-column: 1 / -1;
 }
 
+/* Recent Activity alone stays in the right column so the slot is stable across stages. */
+.alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__recent-activity:only-child {
+  grid-column: 2;
+}
+
 @media (max-width: 640px) {
   .alloy-os-currentwork__still-activity-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__recent-activity:only-child {
+    grid-column: 1;
   }
 }
 
@@ -8997,8 +9016,29 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  width: 100%;
+  justify-content: flex-start;
   color: var(--alloy-os-text-secondary, #6b7280);
   font-size: 10px;
+  text-align: left;
+}
+
+/*
+ * Stacked label → value: left-align both on the same icon gutter.
+ * Label and value-row share gap + icon-slot width so "Program"/"Toddler"
+ * (and "Gender"/"Female") share one left edge — never center the value under a short label.
+ */
+.identity-field-value:has(.identity-field-value__label) {
+  align-items: stretch;
+  justify-items: start;
+  text-align: left;
+}
+.identity-field-value:has(.identity-field-value__label) .identity-field-value__value-row {
+  display: inline-flex;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 4px; /* match label gap — was 5px and shifted value text */
+  text-align: left;
 }
 
 .identity-field-value__label--eyebrow {

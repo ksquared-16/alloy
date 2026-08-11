@@ -387,6 +387,14 @@ P4.S1 classifies impact as **`replace`** (strong_confirm, displaced impact requi
 - Primary row: read-only **badge**; non-primary row: **Make Primary Contact** button → confirm →
   `PATCH /api/admin/customers/:id/household-primary-contact` → `setHouseholdPrimaryContactForCustomer`.
 - Displaces prior household primary (`is_primary`); previous contact remains linked.
+
+### Copy from primary (Household Focus Panel)
+
+- Operator affordance on **secondary / other parent-guardian** rows (alongside Make primary).
+- Copies primary Context Detail channels onto the target adult: `email`, `phone`, address fields.
+- **Never** copies `first_name` / `last_name`. Empty primary values are skipped.
+- Confirm modal → existing `savePersonContact` person PATCH (no new mutation type).
+- Helpers: `copyPrimaryContactDetails.ts`; UI: `HouseholdCopyPrimaryContactConfirmModal`.
 - **Command Runtime:** P4.S2 facade allowlisted for preview/commit (replacement adapter). Domain
   write remains `setHouseholdPrimaryContactForCustomer`. Capability owner `admin_action` — not
   `executeRelationshipAction`. Direct customer PATCH remains compatibility (Option A).

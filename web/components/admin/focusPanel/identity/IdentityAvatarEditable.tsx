@@ -4,8 +4,9 @@
  * Shared identity avatar with optional upload/replace for live Work Unit cards.
  * Honors Surfaces avatar visibility; persists through canonical person profile-photo API.
  *
- * Upload is staged: pick file → local preview → Save (upload+bind) → keep durable URL.
- * Blob previews are never written to session storage (revoked on remount).
+ * Upload is one-shot: pick file → local preview → auto upload+bind → keep durable URL.
+ * On failure, Retry save / Cancel remain. Blob previews are never written to session storage
+ * (revoked on remount).
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -169,6 +170,8 @@ export default function IdentityAvatarEditable({
         setLocalBlobUrl(blobUrl);
         setPendingFile(file);
         setResolvedUrl(blobUrl);
+        // One-shot persist: preview instantly, then upload+bind without a second Save click.
+        void persistPhotoFile(file);
     };
 
     const onCancelDraft = () => {
@@ -186,8 +189,8 @@ export default function IdentityAvatarEditable({
         );
     };
 
-    const onSaveDraft = async () => {
-        if (!pendingFile || !onSavePhoto || !recordId) return;
+    const persistPhotoFile = async (file: File) => {
+        if (!onSavePhoto || !recordId) return;
         setUploading(true);
         setError(null);
         try {
@@ -200,7 +203,7 @@ export default function IdentityAvatarEditable({
 
             const uploaded = await uploadPersonProfilePhotoDocument({
                 personId: resolved.personId,
-                file: pendingFile,
+                file,
                 title: `${name} profile photo`,
             });
             if (!uploaded.ok) throw new Error(uploaded.error);
@@ -230,6 +233,11 @@ export default function IdentityAvatarEditable({
         } finally {
             setUploading(false);
         }
+    };
+
+    const onSaveDraft = async () => {
+        if (!pendingFile) return;
+        await persistPhotoFile(pendingFile);
     };
 
     const onRemove = async () => {
@@ -290,7 +298,7 @@ export default function IdentityAvatarEditable({
                                 disabled={uploading || !canAttemptUpload}
                                 onClick={() => void onSaveDraft()}
                             >
-                                {uploading ? "Saving…" : "Save photo"}
+                                {uploading ? "Saving…" : "Retry save"}
                             </button>
                             <button
                                 type="button"
@@ -318,7 +326,7 @@ export default function IdentityAvatarEditable({
                                     inputRef.current?.click();
                                 }}
                             >
-                                {resolvedUrl ? "Change" : "Add photo"}
+                                {uploading ? "Saving…" : resolvedUrl ? "Change" : "Add photo"}
                             </button>
                             {resolvedUrl && (onClearPhoto || resolvedPersonId || customerMemberId) ? (
                                 <button

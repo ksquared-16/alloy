@@ -119,6 +119,10 @@ function previewEntryToTimelineEntry(
     source: "direct" | "related",
     relatedScope?: ActivityTimelineRelatedScope,
 ): ActivityTimelineEntry {
+    const atSortKey =
+        "atSortKey" in entry && typeof entry.atSortKey === "number"
+            ? entry.atSortKey
+            : parseSortKey(entry.at);
     return {
         id: `preview-${source}-${relatedScope ?? "direct"}-${entry.kind}-${index}`,
         eventType: PREVIEW_KIND_TO_EVENT_TYPE[entry.kind] ?? "activity",
@@ -126,7 +130,7 @@ function previewEntryToTimelineEntry(
         detail: entry.detail,
         actorLabel: null,
         at: entry.at,
-        atSortKey: parseSortKey(entry.at),
+        atSortKey,
         source,
         ...(relatedScope ? { relatedScope } : {}),
     };

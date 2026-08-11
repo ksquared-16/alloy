@@ -7,8 +7,9 @@
  * variant matching started working. Inheritance preserves Default content unless the
  * variant explicitly assigns fields to that slot.
  *
- * Exception: child / candidate grain rows must NOT inherit family `children.*` groupCount —
- * that produces duplicate subject name + "1 child" on Waitlist child-grain rows.
+ * Exception: child / candidate grain rows must NOT inherit family `children.*` into
+ * groupCount OR work — that produces duplicate subject name + "1 child" on Waitlist
+ * child-grain rows even when the published Waitlist variant matched.
  */
 
 import type { CompactRowSlotConfig, CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
@@ -63,7 +64,7 @@ export function mergeCompactSlotsInheritDefault(
         if (!slotHasConfiguredFields(variantSlots[key]) && slotHasConfiguredFields(defaultSlots[key])) {
             if (
                 skipFamilyChildrenInherit &&
-                key === "groupCount" &&
+                (key === "groupCount" || key === "work") &&
                 isFamilyChildrenCollectionSlot(defaultSlots[key])
             ) {
                 out[key] = variantSlots[key];

@@ -21,8 +21,9 @@ import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/s
 import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { loadLocationProgramCategoriesForOrg } from "@/lib/locations/loadLocationProgramCategoriesForOrg";
 import type { PlacementCandidatesByOpportunityId } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
+import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
-import { formatDateUtcAudit } from "@/lib/adminFormatters";
+import { formatCompactRelativeDurationIso } from "@/lib/format/formatCompactRelativeDuration";
 
 export type ChildProvisioningRowWithPlacement = ChildProvisioningRow & {
     /** Canonical waitlist candidate projection when a placement_candidate matches this child. */
@@ -30,16 +31,27 @@ export type ChildProvisioningRowWithPlacement = ChildProvisioningRow & {
     /** Internal sort tuple for within-section priority (stripped after sort when needed). */
     placementSortTuple?: Array<string | number | null> | null;
     placementCandidateId?: string | null;
+    /**
+     * Inquiry-owned Program label (`desired_program` / category) when Placement attach found no
+     * candidate — same truth the Children card paints for `inquiry_child.program`.
+     */
+    inquiryProgramLabel?: string | null;
+    /** Stage/inquiry wait-since display when Placement wait_since is absent. */
+    inquiryWaitSinceLabel?: string | null;
+    /** Process-instance stage entry (canonical stage clock for wait-since / operational age). */
+    stageEnteredAtIso?: string | null;
+    /** Child DOB (YYYY-MM-DD) for compact queue fields. */
+    dateOfBirthIso?: string | null;
 };
 
 function str(v: unknown): string | null {
     return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 }
 
-function formatWaitSinceDisplay(iso: string | null | undefined): string | null {
+function formatWaitSinceDisplay(iso: string | null | undefined, nowMs: number = Date.now()): string | null {
     if (!iso?.trim()) return null;
-    const f = formatDateUtcAudit(iso.trim());
-    return f && f !== "—" ? f : null;
+    // Canonical compact temporal grammar (`3d`, `12m`, `4w`) — same utility as operational age.
+    return formatCompactRelativeDurationIso(iso.trim(), nowMs)?.compact ?? null;
 }
 
 function candidateIdsForChild(
@@ -131,6 +143,26 @@ export async function attachChildGrainWaitlistPlacement(params: {
     ];
     if (!opportunityIds.length) return rows;
 
+    // Ensure placement_candidates exist for waitlisted PI children (idempotent) BEFORE the
+    // placement-config gate. Missing candidates are the root cause of rank "—" — create via
+    // the existing lifecycle hook even when ranking attach is later fail-open.
+    try {
+        await Promise.all(
+            rows.map(async (child) => {
+                const oppId = str(child.contextId);
+                const memberId = str(child.subjectId);
+                if (!oppId || !memberId) return;
+                await ensurePlacementCandidateForWaitlistedChildBySubject(params.supabase, {
+                    orgId: params.orgId,
+                    opportunityId: oppId,
+                    customerMemberId: memberId,
+                });
+            }),
+        );
+    } catch {
+        // Fail-open on ensure — ranking may still attach existing candidates below.
+    }
+
     const queueKeys = params.placementQueueKeys?.length
         ? params.placementQueueKeys
         : (["waitlisted", "waitlist"] as const);
@@ -149,7 +181,7 @@ export async function attachChildGrainWaitlistPlacement(params: {
         });
     }
 
-    if (placementResolved.status !== "enabled" || placementResolved.engine_version !== "v2") {
+    if (placementResolved.status !== "enabled") {
         return rows;
     }
 
@@ -185,6 +217,9 @@ export async function attachChildGrainWaitlistPlacement(params: {
         const queueKey =
             placementResolved.status === "enabled" ? placementResolved.queue_key : queueKeys[0]!;
 
+        // Child Waitlist ranking uses candidate expansion + runtime positions. Tenant Waitlist
+        // metadata may still resolve as engine v1 (profile childcare_enrollment_waitlist_v1);
+        // coerce to the V2 apply helper the same way QueueService does when candidates exist.
         const v2Out = applyPlacementV2ToOpportunityQueueRows({
             rows: oppRows,
             placement: { ...placementResolved, engine_version: "v2" },
@@ -210,6 +245,35 @@ export async function attachChildGrainWaitlistPlacement(params: {
                 (proj as PlacementWaitlistCandidateRowProjection).row_projection === "placement_candidate"
             );
         });
+
+        // One candidate row per child before Program-section rank — duplicate cohort seeds
+        // (infant + infant_0_18_months) must not inflate Position n/total for a single child.
+        const deduped: Array<Record<string, unknown>> = [];
+        const seenChildKeys = new Set<string>();
+        for (const row of expandedRows) {
+            const proj = row._placement_waitlist_row as PlacementWaitlistCandidateRowProjection;
+            const candId = str(proj.placement_candidate_id);
+            let childKey: string | null = null;
+            if (candId) {
+                for (const bundles of candidatesByOpportunityId.values()) {
+                    const hit = bundles.find((b) => b.candidate.id === candId);
+                    if (hit) {
+                        childKey =
+                            str(hit.candidate.customer_member_id)
+                            ?? str(hit.candidate.opportunity_customer_member_id)
+                            ?? null;
+                        break;
+                    }
+                }
+            }
+            childKey =
+                childKey
+                ?? `${str(proj.opportunity_id) ?? ""}:${str(proj.child_display_name)?.toLowerCase() ?? ""}`;
+            if (seenChildKeys.has(childKey)) continue;
+            seenChildKeys.add(childKey);
+            deduped.push(row);
+        }
+        expandedRows = deduped;
 
         const shadowMode = placementResolved.options.shadow_mode;
         expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode, waitlistCategoryContext);
@@ -251,16 +315,25 @@ export async function attachChildGrainWaitlistPlacement(params: {
 /** Build waitlist_context fields from an attached placement projection. */
 export function waitlistContextFromPlacementProjection(
     proj: PlacementWaitlistCandidateRowProjection | null | undefined,
-): { position_label?: string | null; wait_since?: string | null; priority?: number | null } | undefined {
+): {
+    position_label?: string | null;
+    wait_since?: string | null;
+    priority?: number | null;
+    placement_candidate_id?: string | null;
+    can_adjust_placement?: boolean | null;
+} | undefined {
     if (!proj) return undefined;
     const positionLabel = str(proj.runtime_position_label);
     const waitSince = str(proj.wait_since);
     const score =
         typeof proj.placement_priority_v2?.score === "number" ? proj.placement_priority_v2.score : null;
-    if (!positionLabel && !waitSince && score == null) return undefined;
+    const candidateId = str(proj.placement_candidate_id);
+    if (!positionLabel && !waitSince && score == null && !candidateId) return undefined;
     return {
         position_label: positionLabel,
         wait_since: waitSince,
         priority: score,
+        placement_candidate_id: candidateId,
+        can_adjust_placement: Boolean(candidateId),
     };
 }

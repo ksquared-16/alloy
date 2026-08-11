@@ -16,6 +16,12 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
 
+declare global {
+    interface Window {
+        __ALLOY_FOCUS_CHILD_MISSION_DIAG__?: Record<string, unknown>;
+    }
+}
+
 export type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
 
 /** Enriched (settled drawer VM) input — present once Settlement has resolved the record VM. */
@@ -71,11 +77,65 @@ export default function OpportunityFocusPanelBody({
             // Child Attention must keep the child's published stage mission after Settlement
             // loads the family opportunity VM (which carries the family's persisted Lead work).
             if (commitCritical?.subjectGrain?.grain === "child") {
-                return overlayChildMissionOntoSettledFocusModel(settled, commitCritical);
+                const overlaid = overlayChildMissionOntoSettledFocusModel(settled, commitCritical);
+                if (typeof window !== "undefined") {
+                    const settledCw = settled.cardModels.get("current_work");
+                    const overlaidCw = overlaid.cardModels.get("current_work");
+                    window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                        path: "enriched+overlay",
+                        subjectId: commitCritical.subjectId,
+                        subjectGrain: commitCritical.subjectGrain,
+                        situation: commitCritical.situation,
+                        primaryAction: commitCritical.primaryAction,
+                        actionAbsence: commitCritical.actionAbsence ?? null,
+                        stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                        stageWorkSummary: commitCritical.stageWorkRuntime
+                            ? {
+                                  stage_key: commitCritical.stageWorkRuntime.stage_key,
+                                  stage_label: commitCritical.stageWorkRuntime.stage_label,
+                                  journey_segment: commitCritical.stageWorkRuntime.journey_segment,
+                                  template_keys: commitCritical.stageWorkRuntime.template_keys,
+                                  primary_label: commitCritical.stageWorkRuntime.primary?.label ?? null,
+                                  primary_template_key:
+                                      commitCritical.stageWorkRuntime.primary?.template_key ?? null,
+                                  primary_work_id: commitCritical.stageWorkRuntime.primary?.work_id ?? null,
+                                  primary_attempt_count:
+                                      commitCritical.stageWorkRuntime.primary?.attempt_count ?? null,
+                              }
+                            : null,
+                        subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                        settledTitle: settled.title,
+                        overlaidTitle: overlaid.title,
+                        settledCurrentWorkTitle:
+                            settledCw && "title" in settledCw ? settledCw.title : null,
+                        overlaidCurrentWorkTitle:
+                            overlaidCw && "title" in overlaidCw ? overlaidCw.title : null,
+                    };
+                }
+                return overlaid;
+            }
+            if (typeof window !== "undefined") {
+                window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                    path: "enriched_no_overlay",
+                    subjectId: commitCritical?.subjectId ?? null,
+                    subjectGrain: commitCritical?.subjectGrain ?? null,
+                    settledTitle: settled.title,
+                    reason: "subjectGrain.grain !== child",
+                };
             }
             return settled;
         }
         if (commitCritical) {
+            if (typeof window !== "undefined") {
+                window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                    path: "commitCritical_only",
+                    subjectId: commitCritical.subjectId,
+                    subjectGrain: commitCritical.subjectGrain,
+                    situation: commitCritical.situation,
+                    primaryAction: commitCritical.primaryAction,
+                    stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                };
+            }
             return focusPanelWorkModeModelFromProvisioningAnswer({
                 mode,
                 subjectId: commitCritical.subjectId,

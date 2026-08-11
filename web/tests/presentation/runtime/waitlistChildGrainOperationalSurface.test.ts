@@ -48,7 +48,7 @@ function placementProj(
             active_override_kinds: [],
         },
         shadow_mode: false,
-        runtime_position_label: `Position ${overrides.runtime_position}/2`,
+        runtime_position_label: `#${overrides.runtime_position}/2`,
         runtime_position_total: 2,
         runtime_position_mode: "live",
         ...overrides,
@@ -82,12 +82,76 @@ describe("child Waitlist placement context parity", () => {
             lifecycleKey: "enrollment",
             familyName: "Kurzman Family",
         });
-        expect(ctx?.waitlist_context?.position_label).toBe("Position 1/2");
+        expect(ctx?.waitlist_context?.position_label).toBe("#1/2");
         expect(ctx?.waitlist_context?.wait_since).toBe("Aug 8");
         expect(ctx?.placement_context?.program_label).toBe("Infant");
-        expect(resolveQueueRowFieldValueFromContext("waitlist.positionLabel", ctx!)).toBe("Position 1/2");
+        expect(resolveQueueRowFieldValueFromContext("waitlist.positionLabel", ctx!)).toBe("#1/2");
         expect(resolveQueueRowFieldValueFromContext("child.program", ctx!)).toBe("Infant");
         expect(resolveQueueRowFieldValueFromContext("waitlist.waitSince", ctx!)).toBe("Aug 8");
+    });
+
+    it("prefers process-instance stage wait-since over placement wait_since for display", () => {
+        const row: ChildProvisioningRowWithPlacement = {
+            subjectId: "cm-lennon",
+            participationId: "pi-lennon",
+            contextId: "opp-kurzman",
+            legacyOcmId: null,
+            stageKey: "waitlist",
+            statusKey: "waitlisted",
+            title: "Lennon Kurzman",
+            updatedAt: null,
+            placementWaitlistRow: placementProj({
+                placement_candidate_id: "pc-1",
+                opportunity_id: "opp-kurzman",
+                child_display_name: "Lennon Kurzman",
+                program_room_group_label: "Toddler — 2–3 years",
+                runtime_position: 1,
+                wait_since: "4d",
+            }),
+            placementCandidateId: "pc-1",
+            inquiryWaitSinceLabel: "1d",
+            stageEnteredAtIso: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+            dateOfBirthIso: "2024-01-15",
+        };
+        const ctx = childQueueRowContext({
+            row,
+            stageLabel: "Waitlist",
+            stageLabelsByKey: { waitlist: "Waitlist" },
+            lifecycleKey: "enrollment",
+            familyName: "Kurzman Family",
+        });
+        expect(ctx?.waitlist_context?.wait_since).toBe("1d");
+        expect(ctx?.placement_context?.program_label).toBe("Toddler");
+        expect(ctx?.row_subject?.date_of_birth).toBe("2024-01-15");
+        expect(ctx?.operational_state?.entered_at).toBe(row.stageEnteredAtIso);
+        expect(resolveQueueRowFieldValueFromContext("child.date_of_birth", ctx!)).toBe("2024-01-15");
+        expect(resolveQueueRowFieldValueFromContext("queue_row.operational_age", ctx!)).toBe("1d");
+    });
+
+    it("strips age ranges from Program group headers", () => {
+        const mk = (id: string, program: string, position: number): Record<string, unknown> => ({
+            id,
+            _placement_waitlist_row: {
+                runtime_position: position,
+                program_room_group_label: program,
+            },
+            context: {
+                contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
+                placement_context: { location_id: null, program_label: program },
+                waitlist_context: { position_label: `#${position}/1` },
+            } as QueueRowContext,
+        });
+        const sorted = applyQueueRowVariantGroupAndSortCriteria(
+            [
+                mk("a", "Infant — 0–18 months", 1),
+                mk("b", "Toddler — 2–3 years", 1),
+                mk("c", "Infant — 0–18 months", 2),
+            ],
+            [{ key: "program" }],
+            [{ key: "waitlist.position", direction: "asc" }],
+        );
+        // Same program after strip → contiguous; Infant before Toddler alphabetically.
+        expect(sorted.map((r) => r.id)).toEqual(["a", "c", "b"]);
     });
 
     it("groups by Program then sorts by waitlist position within each group", () => {
@@ -105,7 +169,7 @@ describe("child Waitlist placement context parity", () => {
             context: {
                 contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
                 placement_context: { location_id: null, program_label: program },
-                waitlist_context: { position_label: `Position ${position}/2` },
+                waitlist_context: { position_label: `#${position}/2` },
             } as QueueRowContext,
         });
         const sorted = applyQueueRowVariantGroupAndSortCriteria(
@@ -125,7 +189,7 @@ describe("child Waitlist placement context parity", () => {
         expect(
             waitlistContextFromPlacementProjection(
                 placementProj({
-                    placement_candidate_id: "pc",
+                    placement_candidate_id: null as unknown as string,
                     opportunity_id: "opp",
                     child_display_name: "A",
                     program_room_group_label: "Infant",
@@ -143,6 +207,28 @@ describe("child Waitlist placement context parity", () => {
                 }),
             ),
         ).toBeUndefined();
+        // Candidate id alone is enough to surface Adjust authority.
+        expect(
+            waitlistContextFromPlacementProjection(
+                placementProj({
+                    placement_candidate_id: "pc",
+                    opportunity_id: "opp",
+                    child_display_name: "A",
+                    program_room_group_label: "Infant",
+                    runtime_position: 1,
+                    runtime_position_label: null as unknown as string,
+                    wait_since: null,
+                    placement_priority_v2: {
+                        placement_candidate_id: "pc",
+                        program_room_cohort_key: "infant",
+                        bucket: "standard",
+                        sort_tuple: [],
+                        link_mode: "independent",
+                        active_override_kinds: [],
+                    },
+                }),
+            )?.placement_candidate_id,
+        ).toBe("pc");
     });
 });
 

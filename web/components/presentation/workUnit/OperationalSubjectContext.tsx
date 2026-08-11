@@ -204,7 +204,12 @@ export function isOperationallyResolved(s: OperationalSubject): boolean {
     // Requiring `action != null` outright made "this stage configures no action for a child", a fully
     // resolved and perfectly ordinary state, render as a permanent loading spinner. The family path is
     // unchanged by this: it always carries an action, and never an absence.
-    return s.subjectId != null && s.situation != null && (s.action != null || s.actionAbsence != null);
+    if (s.subjectId == null || s.situation == null) return false;
+    if (s.action != null || s.actionAbsence != null) return true;
+    // Child stages often author Work Templates without a primary action_ref. What's Next still
+    // commits from stage-work / situation. Treating that as unresolved drops commitCritical after
+    // Settlement and lets the family Lead mission (Contact Family) paint on a Waitlist child.
+    return s.subjectGrain?.grain === "child";
 }
 
 /** The one read for "who is the operator working on". */

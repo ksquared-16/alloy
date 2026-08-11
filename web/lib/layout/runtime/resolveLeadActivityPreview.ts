@@ -18,6 +18,8 @@ export type LeadActivityPreviewEntry = {
     label: string;
     detail: string | null;
     at: string | null;
+    /** Epoch ms for canonical newest-first sorting — never derive from formatted `at`. */
+    atSortKey?: number;
 };
 
 const MAX_ENTRIES = 5;
@@ -48,6 +50,17 @@ function formatAt(raw: unknown, timeZone?: string): string | null {
     // Canonical local-time doctrine: route through the platform formatter WITH the resolved
     // operator timezone. Without it, `formatActivityTimestamp` defaults to UTC (the bug).
     return formatActivityTimestamp(text, timeZone ? { timeZone } : undefined) || text;
+}
+
+function sortKeyFromRaw(raw: unknown): number {
+    const text = pickLine(raw);
+    if (!text) return 0;
+    const ms = Date.parse(text);
+    return Number.isFinite(ms) ? ms : 0;
+}
+
+function entryAt(raw: unknown, timeZone?: string): Pick<LeadActivityPreviewEntry, "at" | "atSortKey"> {
+    return { at: formatAt(raw, timeZone), atSortKey: sortKeyFromRaw(raw) };
 }
 
 function readOpenTasks(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] {
@@ -98,7 +111,7 @@ export function resolveLeadActivityPreview(
     const overview = overviewRecord(record);
     const entries: LeadActivityPreviewEntry[] = [];
     // Every timestamp in this preview renders in the resolved operator timezone.
-    const fmtAt = (raw: unknown): string | null => formatAt(raw, timeZone);
+    const atFields = (raw: unknown) => entryAt(raw, timeZone);
 
     const followUp = pickLine(record.follow_up_notes, overview.follow_up_notes);
     if (followUp) {
@@ -107,6 +120,7 @@ export function resolveLeadActivityPreview(
             label: "Note",
             detail: truncate(followUp),
             at: null,
+            atSortKey: 0,
         });
     }
 
@@ -119,7 +133,7 @@ export function resolveLeadActivityPreview(
                 kind: "note",
                 label: pickLine(note.title, note.label) ?? "Note",
                 detail: truncate(body),
-                at: fmtAt(note.created_at ?? note.at),
+                ...atFields(note.created_at ?? note.at),
             });
         }
     }
@@ -133,7 +147,7 @@ export function resolveLeadActivityPreview(
                 kind: "communication",
                 label: pickLine(item.channel, item.type) ?? "Communication",
                 detail: truncate(primary),
-                at: fmtAt(item.at ?? item.when ?? item.sent_at ?? item.created_at),
+                ...atFields(item.at ?? item.when ?? item.sent_at ?? item.created_at),
             });
         }
     }
@@ -145,7 +159,7 @@ export function resolveLeadActivityPreview(
             kind: "task",
             label: "Open task",
             detail: truncate(task.title ?? "Task"),
-            at: fmtAt(task.due_at),
+            ...atFields(task.due_at),
         });
     }
 
@@ -169,7 +183,7 @@ export function resolveLeadActivityPreview(
             kind: "activity",
             label: "Last activity",
             detail: activitySummary ? truncate(activitySummary) : null,
-            at: fmtAt(activityAt),
+            ...atFields(activityAt),
         });
     }
 
@@ -190,6 +204,7 @@ export function resolveLeadActivityPreview(
             label: "Lifecycle",
             detail: truncate(formatLifecyclePreviewDetail(lifecycleDisplay)),
             at: null,
+            atSortKey: 0,
         });
     }
 
@@ -200,7 +215,7 @@ export function resolveLeadActivityPreview(
             kind: "activity",
             label: "Status",
             detail: truncate(formatStatusPreviewDetail(statusLabelRaw)),
-            at: fmtAt(statusAt),
+            ...atFields(statusAt),
         });
     }
 
@@ -210,7 +225,7 @@ export function resolveLeadActivityPreview(
             kind: "created",
             label: "Created",
             detail: null,
-            at: fmtAt(createdRaw),
+            ...atFields(createdRaw),
         });
     }
 
@@ -220,7 +235,7 @@ export function resolveLeadActivityPreview(
             kind: "updated",
             label: "Updated",
             detail: null,
-            at: fmtAt(updatedRaw),
+            ...atFields(updatedRaw),
         });
     }
 

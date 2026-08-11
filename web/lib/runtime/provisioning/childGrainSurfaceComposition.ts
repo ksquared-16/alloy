@@ -54,24 +54,14 @@ import {
 } from "@/lib/workUnits/lifecycleSubjectContracts";
 // Type-only: erased at build time, so this does NOT create an import cycle back into the answer.
 import type { CurrentBusinessState, TruthfulPrimaryAction } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import type { ChildPrimaryActionAbsence } from "@/lib/runtime/provisioning/childPrimaryActionAbsenceCopy";
+import { programLabelWithoutAgeRange } from "@/lib/childcare/childCareProgramFromDob";
+import { buildOperationalStateQueueContext } from "@/lib/workUnits/buildOperationalStateQueueContext";
+import { approximateAgeMonthsFromDobIso } from "@/lib/childcare/childCareProgramFromDob";
 
-/**
- * Why a child surface carries no primary action. Rendered, never swallowed — an operator must be able
- * to tell "this stage configures nothing for a child" from "something went wrong".
- */
-export type ChildPrimaryActionAbsence =
-    | "stage_is_family_segment"
-    | "stage_has_no_operating_plan"
-    | "stage_configures_no_child_work"
-    | "work_template_has_no_action";
-
-export const CHILD_PRIMARY_ACTION_ABSENCE_COPY: Record<ChildPrimaryActionAbsence, string> = {
-    stage_is_family_segment:
-        "This child is at a stage whose work belongs to the family, so there is no child action here.",
-    stage_has_no_operating_plan: "This stage has no operating plan, so no action is configured.",
-    stage_configures_no_child_work: "This stage configures no work for a child.",
-    work_template_has_no_action: "This stage's work configures no action.",
-};
+export type { ChildPrimaryActionAbsence } from "@/lib/runtime/provisioning/childPrimaryActionAbsenceCopy";
+// Do not re-export CHILD_PRIMARY_ACTION_ABSENCE_COPY from this module — client surfaces must import
+// the copy module directly so Turbopack does not treat this provisioning composer as a client entry.
 
 /** The child's family context — identity only, resolved from rows the answer already holds. */
 export type ChildFamilyContext = {
@@ -229,13 +219,24 @@ function placementContextFromChildPlacement(
     row: ChildProvisioningRowWithPlacement,
 ): SubjectPlacementContext | undefined {
     const proj = row.placementWaitlistRow;
-    if (!proj) return undefined;
+    const inquiryProgram = programLabelWithoutAgeRange(row.inquiryProgramLabel) ?? null;
+    if (!proj) {
+        if (!inquiryProgram) return undefined;
+        return {
+            location_id: null,
+            program_key: null,
+            program_label: inquiryProgram,
+            room_id: null,
+            room_label: inquiryProgram,
+        };
+    }
     const locationId = typeof proj.site_id === "string" ? proj.site_id.trim() || null : null;
     const programKey = typeof proj.program_key === "string" ? proj.program_key.trim() || null : null;
     const programLabel =
-        (typeof proj.program_room_group_label === "string" && proj.program_room_group_label.trim()) ||
-        programKey ||
-        null;
+        programLabelWithoutAgeRange(proj.program_room_group_label)
+        || programKey
+        || inquiryProgram
+        || null;
     const roomId =
         (typeof proj.program_room_cohort_key === "string" && proj.program_room_cohort_key.trim()) || null;
     if (!locationId && !programKey && !programLabel && !roomId) return undefined;
@@ -270,8 +271,49 @@ export function childQueueRowContext(params: {
     } as LifecycleSubjectRef;
 
     const withPlacement = row as ChildProvisioningRowWithPlacement;
-    const waitlist_context = waitlistContextFromPlacementProjection(withPlacement.placementWaitlistRow);
+    const fromProjection = waitlistContextFromPlacementProjection(withPlacement.placementWaitlistRow);
+    // Prefer process-instance stage entry for wait-since (canonical stage clock). Placement
+    // candidates historically stamped opportunity.created_at, which freezes lead age.
+    const stageEnteredIso = withPlacement.stageEnteredAtIso?.trim() || null;
+    const waitlist_context = (() => {
+        const base =
+            fromProjection
+            ?? (withPlacement.inquiryWaitSinceLabel?.trim() || withPlacement.placementCandidateId
+                ? {
+                      position_label: null as string | null,
+                      wait_since: withPlacement.inquiryWaitSinceLabel?.trim() ?? null,
+                      priority: null as number | null,
+                      placement_candidate_id: withPlacement.placementCandidateId ?? null,
+                      can_adjust_placement: Boolean(withPlacement.placementCandidateId),
+                  }
+                : undefined);
+        if (!base) return undefined;
+        if (withPlacement.inquiryWaitSinceLabel?.trim()) {
+            return { ...base, wait_since: withPlacement.inquiryWaitSinceLabel.trim() };
+        }
+        return base;
+    })();
     const placement_context = placementContextFromChildPlacement(withPlacement);
+
+    const dobIso = withPlacement.dateOfBirthIso?.trim() || null;
+    const ageMonths = dobIso ? approximateAgeMonthsFromDobIso(dobIso) : null;
+    const ageLabel =
+        ageMonths != null
+            ? ageMonths < 24
+                ? `${ageMonths}m`
+                : `${Math.floor(ageMonths / 12)}y${ageMonths % 12 ? `${ageMonths % 12}m` : ""}`
+            : null;
+
+    const operational_state = buildOperationalStateQueueContext({
+        orgId: "",
+        grain: "child",
+        subjectType: "customer_members",
+        subjectId: row.subjectId,
+        currentStageKey: row.stageKey,
+        persistedStageEnteredAt: stageEnteredIso,
+        intakeCreatedAt: null,
+        neverTransitioned: false,
+    });
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -282,6 +324,8 @@ export function childQueueRowContext(params: {
             display_name: row.title ?? "Child",
             // Effective stage key — required for Queue Row variant matching (Waitlist appliesWhen.stage_key).
             stage_key: row.stageKey ?? null,
+            date_of_birth: dobIso,
+            age_label: ageLabel,
         },
         row_stage: params.stageLabel,
         // Machine stage key for variant match input (labels alone cannot match authored stage_key rules).
@@ -306,6 +350,7 @@ export function childQueueRowContext(params: {
         work_summary: null,
         current_work_summary: null,
         next_best_action: null,
+        operational_state,
         drawer_open: {
             entity_type: "opportunities",
             entity_id: row.contextId ?? "",
