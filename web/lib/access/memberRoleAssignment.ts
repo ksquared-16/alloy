@@ -118,3 +118,87 @@ export function replacementIsNoOp(
     const held = heldRoleKeys(member);
     return held.length === 1 && held[0] === next;
 }
+
+/** What a refused replacement was going to destroy, and which part of it the caller never saw. */
+export type ReplacementRemovalRefusal = {
+    /** Every role the replacement would delete. */
+    removed: string[];
+    /** Of those, the ones the request did not carry — the reason it is refused. */
+    unacknowledged: string[];
+};
+
+/**
+ * W-54 / `I-34`ᴬ — the route refuses a destructive replacement submitted from a partial view.
+ *
+ * **Why this exists when `IA-7` already added a confirmation.** `IA-7` (session 1) made the loss
+ * *nameable* and put an acknowledgement in front of the canonical surface's save. That closed the
+ * display half. It did not close this one: the request body was still `{ role }` alone, so the
+ * acknowledgement never left the browser and the route could not tell an operator who had been
+ * shown `{admin, regional_lead}` and accepted the loss from one who had been shown a single
+ * collapsed value and had no idea the other row existed. The two legacy role editors are the second
+ * case by construction — they cannot render a set. This is the same argument `IA-7` itself made one
+ * layer up: a `disabled` attribute is a presentation fact, and presentation must not be where
+ * authority is decided.
+ *
+ * **The rule is about the VIEW, not about the removal.** Every replacement removes something — a
+ * single-role membership changed from `coordinator` to `admin` removes `coordinator`, and that is
+ * the operation the operator asked for, not collateral. What makes a removal illegitimate is that
+ * the caller could not have seen it. So:
+ *
+ * - **The request carried no acknowledgement.** A caller that cannot send the set is a caller that
+ *   collapsed it, and a collapsed view is accurate only when there was nothing to collapse. Permit
+ *   a single-role membership; refuse a multi-role one.
+ * - **The request carried an acknowledgement.** Refuse when the principal holds a role the request
+ *   did not list — the view was stale or partial, whatever it claimed.
+ *
+ * `I-34`ᴬ: *"until `W-17` lands, the editor must not be able to reach the destructive path with a
+ * partial view."* Rejection is the correct verb, because a surface that cannot express a fact MUST
+ * NOT be able to delete it.
+ *
+ * **What this deliberately does NOT do.** It does not make the write additive — that is `W-17`, and
+ * a caller carrying the full held set may still replace, because that is a loss the operator has
+ * been shown. It is also not a concurrency control: the read and the write are two statements, so a
+ * role added between them is not caught. Atomicity is `W-28`/`S-12`. What is closed is the
+ * partial-view path, which is the one the product ships a button for.
+ *
+ * **Ordinary use of either legacy surface is unaffected**, because a single-role membership — the
+ * overwhelming majority — is permitted with no acknowledgement at all. They are refused exactly
+ * where they would otherwise have destroyed a row they never rendered.
+ */
+export function replacementRemovalRefusal(params: {
+    /** What the principal holds right now, read at the route. */
+    currentRoleKeys: readonly string[] | null | undefined;
+    /** The single role being written. */
+    nextRoleKey: string;
+    /** The full held set the request carried, or null/undefined when it carried none. */
+    acknowledgedRoleKeys: readonly string[] | null | undefined;
+}): ReplacementRemovalRefusal | null {
+    const next = typeof params.nextRoleKey === "string" ? params.nextRoleKey.trim() : "";
+    const current = normalizeHeldRoleKeys(params.currentRoleKeys);
+    const removed = current.filter((key) => key !== next);
+    if (removed.length === 0) return null;
+
+    const acknowledged = normalizeHeldRoleKeys(params.acknowledgedRoleKeys);
+
+    if (acknowledged.length === 0) {
+        // No acknowledgement: legitimate only if there was nothing a collapsed view could have hidden.
+        if (current.length <= 1) return null;
+        return { removed, unacknowledged: removed };
+    }
+
+    // Acknowledged: the view is stale if the principal holds anything the request did not list.
+    const unacknowledged = current.filter((key) => !acknowledged.includes(key));
+    if (unacknowledged.length === 0) return null;
+
+    return { removed, unacknowledged };
+}
+
+/** The operator-facing reason a replacement was refused. Names the roles, so the loss is legible. */
+export function replacementRemovalRefusalMessage(refusal: ReplacementRemovalRefusal): string {
+    const names = refusal.unacknowledged.join(", ");
+    return (
+        `This change would remove ${refusal.unacknowledged.length === 1 ? "the role" : "the roles"} `
+        + `${names}, which this request did not include. Reload the member and try again so the full `
+        + `set of assigned roles is shown before it is replaced.`
+    );
+}

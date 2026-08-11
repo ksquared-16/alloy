@@ -336,7 +336,14 @@ export default function AccessUsersConfigurationPage({
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/role`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ role: editRole }),
+                /**
+                 * W-54 / `I-34`ᴬ. The set this surface actually rendered travels with the write, so
+                 * the route can tell an acknowledged replacement from one submitted against a
+                 * collapsed view. Sent from `heldRoleKeys(selected)` — the same predicate the screen
+                 * displayed and the confirmation itemized — rather than re-derived, or the
+                 * acknowledgement would attest to a set the operator was never shown.
+                 */
+                body: JSON.stringify({ role: editRole, expected_role_keys: heldRoleKeys(selected) }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role save failed");
