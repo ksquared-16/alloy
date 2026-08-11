@@ -175,7 +175,7 @@ describe("All Family Leads catch-all label authority", () => {
             label: "New Leads",
             display_order: 1,
             visible_in_runtime: true,
-            filters_v1: [{ field: "opportunity_stage", op: "equals", value: "lead" }],
+            filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
         });
         expect(repaired.label).toBe("New Leads");
     });

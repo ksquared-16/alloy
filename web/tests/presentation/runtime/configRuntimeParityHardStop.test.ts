@@ -23,12 +23,12 @@ const STAGES: LifecycleBuilderStageRecord[] = [
 
 function emptySlots(overrides?: Partial<CompactRowSlots>): CompactRowSlots {
     return {
-        subject: { visible: true, fieldKeys: ["child.name"] },
-        status: { visible: false },
-        contact: { visible: false },
-        attention: { visible: false },
-        work: { visible: false },
-        groupCount: { visible: false },
+        subject: { visible: true, label: null, fieldKeys: ["child.name"] },
+        status: { visible: false, label: null },
+        contact: { visible: false, label: null },
+        attention: { visible: false, label: null },
+        work: { visible: false, label: null },
+        groupCount: { visible: false, label: null },
         ...overrides,
     };
 }
@@ -178,10 +178,10 @@ describe("child mission overlay after family Settlement", () => {
 describe("child-grain queue variant inherit guard", () => {
     it("does not inherit Default children.count onto child rows", () => {
         const variant = emptySlots({
-            groupCount: { visible: false },
+            groupCount: { visible: false, label: null },
         });
         const defaults = emptySlots({
-            groupCount: { visible: true, fieldKeys: ["children.names", "children.count"] },
+            groupCount: { visible: true, label: null, fieldKeys: ["children.names", "children.count"] },
         });
         const merged = mergeCompactSlotsInheritDefault(variant, defaults, { rowGrain: "child" });
         expect(merged.groupCount.fieldKeys ?? []).not.toContain("children.count");
@@ -189,9 +189,9 @@ describe("child-grain queue variant inherit guard", () => {
     });
 
     it("still inherits Default children onto family/case rows", () => {
-        const variant = emptySlots({ groupCount: { visible: false } });
+        const variant = emptySlots({ groupCount: { visible: false, label: null } });
         const defaults = emptySlots({
-            groupCount: { visible: true, fieldKeys: ["children.names", "children.count"] },
+            groupCount: { visible: true, label: null, fieldKeys: ["children.names", "children.count"] },
         });
         const merged = mergeCompactSlotsInheritDefault(variant, defaults, { rowGrain: "case" });
         expect(merged.groupCount.fieldKeys).toEqual(["children.names", "children.count"]);

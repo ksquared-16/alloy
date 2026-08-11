@@ -145,8 +145,28 @@ describe("WorkUnitSurfaceBodyFromModel shell parity", () => {
             <WorkUnitSurfaceBodyFromModel
                 model={baseModel({
                     workViews: [
-                        { id: "leads", label: "Leads", isActive: true, count: 1, attentionCount: null },
-                        { id: "waitlist", label: "Waitlist", isActive: false, count: 2, attentionCount: null },
+                        {
+                            id: "leads",
+                            label: "Leads",
+                            isActive: true,
+                            count: 1,
+                            attentionCount: null,
+                            href: null,
+                            overdueCount: null,
+                            primaryGrainCount: null,
+                            supportingGrainCount: null,
+                        },
+                        {
+                            id: "waitlist",
+                            label: "Waitlist",
+                            isActive: false,
+                            count: 2,
+                            attentionCount: null,
+                            href: null,
+                            overdueCount: null,
+                            primaryGrainCount: null,
+                            supportingGrainCount: null,
+                        },
                     ],
                     activeWorkViewId: "leads",
                     selectedRecordId: "opp-kurzman",
