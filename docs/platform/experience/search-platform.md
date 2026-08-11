@@ -7,7 +7,8 @@ supersedes: []
 
 # Search Platform
 
-**Status:** V2 — canonical owning doctrine for Alloy Search.
+**Status:** V2 — **CERTIFIED COMPLETE** (2026-08-10). Canonical owning doctrine for
+Alloy Search. Ordinary maintenance from here; there is no Search V3 phase.
 **Owns:** global search retrieval, recognition, context enrichment, destination
 resolution, ranking, and the search authorization boundary.
 **Code:** `web/lib/search/`, `web/app/api/admin/global-search/route.ts`,
@@ -233,29 +234,19 @@ be explicitly derived, rebuildable, and search-only — never authoritative.
    property today, and inventing a parallel config path would violate the
    configuration boundary above. Sequenced as follow-up.
 
-4. **V1 removal — attempted, then DEFERRED.** `globalRecordSearchService` has
-   **zero** runtime importers, and its five dependencies (`…Clustering`,
-   `…ClusterLimits`, `…HitAssembly`, `…LocationContext`, `…HouseholdChildren`)
-   are imported only by it. The source deletion is genuinely isolated and was
-   carried out — then reverted.
+4. **V1 service — RETIRED.** `globalRecordSearchService` and the five modules
+   reachable only from it (`…Clustering`, `…ClusterLimits`, `…HitAssembly`,
+   `…LocationContext`, `…HouseholdChildren`) are deleted. The compatibility layer
+   still consumed by live surfaces is untouched: `…Types`, `…DrawerTarget`,
+   `…Open`, `…WarmPrefetch`, `…AgeLabel`, `…Scope`, `…ResultPresentation`,
+   `…PersonPresentation`, `…StatusLabel`, `…OpenResolution`,
+   `personDrawerOpenSeedFromGlobalSearchHit`.
 
-   The blocker is not the source, it is the tests. Removing the service strands
-   seven assertions across two files, three of which are source-text guards that
-   read `globalRecordSearchService.ts` off disk. Excising them cleanly from a
-   1100-line file proved fiddly enough to break brace balance twice, which is
-   past the "small and safe" bar this kind of cleanup has to meet.
-
-   | Module | Classification |
-   |---|---|
-   | `globalRecordSearchService` | **Safely removable** — zero runtime importers; blocked only by test surgery |
-   | `…Clustering`, `…ClusterLimits`, `…HitAssembly`, `…LocationContext`, `…HouseholdChildren` | **Removable with it** — imported by nothing else |
-   | `globalRecordSearchTypes` | **Compatibility dependency** — 10 of 13 importers are inside the V1 cluster; the 3 external ones import types only |
-   | `…DrawerTarget`, `…Open`, `…WarmPrefetch`, `…AgeLabel`, `…ResultPresentation` | **Still required** — V2 or live components use these |
-
-   Sequenced as its own change: delete the six modules, drop the three
-   service-source guards in `globalRecordSearch.test.ts`, the one in
-   `customerMembersStatusDeprecation.test.ts`, and the three tests that call
-   `runGlobalRecordSearch` / `buildGlobalSearchFamilyClusters`.
+   Tests that certified only dead implementation behaviour were removed. Two
+   source-text guards were re-pointed rather than deleted, because their
+   invariant is about SEARCH and not about a file existing: the
+   customer_members-status guard now asserts against `lib/search/`, and the
+   site-scope block keeps the live helper it shares.
 
 ---
 
@@ -278,6 +269,43 @@ endpoint keeps a single response model instead of growing a compatibility
 payload — which would be the second search data model this doctrine forbids.
 
 ---
+
+## Certification status
+
+Search Platform V2 is browser-certified against the disposable certification
+tenant (`certification/alloy-certify`, fixtures in
+`certification/search-platform/`, evidence in
+`certification/evidence/search-platform/`):
+
+| Capability | Proven |
+|---|---|
+| Child subject search | ✅ browser |
+| Parent / person search | ✅ browser |
+| Sibling schedule grain (child grain, no household rollup) | ✅ browser |
+| One child, three configured processes, one subject | ✅ browser |
+| Duplicate-name disambiguation | ✅ browser |
+| Permission-restricted absence + positive control | ✅ browser |
+| POS + Experience Builder search consumers | ✅ browser |
+| Tenant-configured process labels | ✅ browser, via a canonically PUBLISHED revision |
+| Keyboard navigation / subject open | ✅ browser |
+
+Latency on the certification tenant (local DB, 30 warm samples): cold 827 ms,
+p50 **63 ms**, p95 258 ms. An earlier p50 of ~1.9 s was remote-database
+round-trip, not Search work — no caching was added on the strength of a
+benchmark. Production-build numbers have not been taken.
+
+Two defects were found by certification that unit tests could not reach: a child
+with no `persons` row opened the household instead of its participation record,
+and a restricted operator's allow-list overflowed the PostgREST URI (HTTP 414),
+which additionally made a permission-absence assertion pass vacuously. Both are
+fixed and covered. **Every permission-absence test now carries a positive
+control** — without one, "the forbidden thing is missing" is satisfied by a
+broken query.
+
+External dependencies remain open and do NOT hold Search open:
+
+- no canonical operator Schedule destination (Scheduling domain)
+- no canonical staff/employment model (Identity/HR domain)
 
 ## Related doctrine
 

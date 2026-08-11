@@ -6,7 +6,12 @@
 --
 -- Published through the CANONICAL path — a validated draft handed to
 -- `publish_business_process_revision_v1` — not by writing
--- `departments.metadata.lifecycle_builder_v1` directly.
+-- `departments.metadata.lifecycle_builder_v1` directly, and with NO guard bypass.
+--
+-- An earlier revision of this file called `begin_lifecycle_projection_write`
+-- because the publish RPC was itself broken (migration 20260807090000 dropped its
+-- capability token). Migration 20260810220000 repaired the RPC, so the bypass is
+-- gone and certification now exercises the real publication path.
 --
 -- The first version of this script did write the projection directly, and the
 -- platform refused it:
@@ -85,7 +90,7 @@ BEGIN
       FROM public.departments d,
            LATERAL jsonb_array_elements(COALESCE(d.metadata -> 'lifecycle_builder_v1' -> 'processes', '[]'::jsonb)) p
      WHERE d.id = v_dept AND p ->> 'id' LIKE 'cert-p-%';
-    IF v_existing >= 3 THEN
+    IF v_existing >= 3 AND coalesce(current_setting('alloy.cert_force_publish', true), '') <> 'on' THEN
         RAISE NOTICE 'Search certification processes already published — skipping.';
         RETURN;
     END IF;
@@ -105,20 +110,6 @@ BEGIN
     UPDATE public.business_process_drafts
        SET draft_status = 'validated', validated_at = now(), validation_errors = '[]'::jsonb
      WHERE id = v_draft;
-
-    -- WORKAROUND for a PLATFORM DEFECT, not a shortcut.
-    --
-    -- `publish_business_process_revision_v1` is itself blocked by the projection
-    -- guard: migration 20260807090000 (publish idempotency) CREATE OR REPLACEd the
-    -- function and did not carry forward the
-    -- `set_config('alloy.lifecycle_write', ...)` token that 20260730130000 had
-    -- added, so the RPC can no longer write the projection it owns. Verified on the
-    -- live cert database — pg_get_functiondef contains no `lifecycle_write`.
-    --
-    -- The guard's own HINT documents this escape hatch for exceptional repair, and
-    -- a disposable certification tenant is exactly that. REVERT to the plain
-    -- publish call once the platform defect is fixed.
-    PERFORM public.begin_lifecycle_projection_write('migration');
 
     v_res := public.publish_business_process_revision_v1(v_org, v_dept, v_actor, v_checksum);
 
