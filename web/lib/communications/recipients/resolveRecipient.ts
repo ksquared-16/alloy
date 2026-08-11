@@ -37,6 +37,15 @@ export type ResolvedRecipientFacts = {
     channel: MessageChannel;
     /** The address the send will actually use. Server-selected, never caller-supplied. */
     toAddress: string;
+    /**
+     * OUR provider endpoint — the address the recipient would reply TO.
+     *
+     * The other half of the endpoint-scoped STOP hold, which matches on the pair.
+     * Read from the inbound message actually received, so it is as verified as the
+     * destination itself. Null where no inbound established it, and the hold
+     * simply cannot match without it.
+     */
+    ourEndpointAddress: string | null;
     displayName: string | null;
     /** Audit only — present for external operational recipients. */
     recipientRole: string | null;
@@ -130,7 +139,7 @@ export async function resolveRecipient(params: {
         // when no Person is known.
         const { data: inbound, error: mErr } = await supabase
             .from("communication_messages")
-            .select("from_address, created_at")
+            .select("from_address, to_address, created_at")
             .eq("thread_id", recipient.threadId)
             .eq("org_id", orgId)
             .eq("direction", "inbound")
@@ -156,6 +165,12 @@ export async function resolveRecipient(params: {
             status: "resolved",
             facts: {
                 kind: "canonical_thread",
+                // Our own destination on this conversation, from the same verified
+                // inbound row the reply address came from.
+                ourEndpointAddress:
+                    typeof latest?.to_address === "string"
+                        ? normalizeAddress(channel, latest.to_address)
+                        : null,
                 // Deliberately null. No Person is asserted, and downstream policy
                 // must see the absence rather than a fabricated identity.
                 personId: null,
@@ -238,6 +253,7 @@ export async function resolveRecipient(params: {
             facts: {
                 kind: "person",
                 personId: recipient.personId,
+                ourEndpointAddress: null,
                 userId: null,
                 channel,
                 toAddress,
@@ -272,6 +288,7 @@ export async function resolveRecipient(params: {
             status: "resolved",
             facts: {
                 kind: "internal_user",
+                ourEndpointAddress: null,
                 personId: recipient.personId ?? null,
                 userId: recipient.userId,
                 channel: "in_app",
@@ -300,6 +317,7 @@ export async function resolveRecipient(params: {
         status: "resolved",
         facts: {
             kind: "external_operational_recipient",
+            ourEndpointAddress: null,
             personId: null,
             userId: null,
             channel: recipient.channel,

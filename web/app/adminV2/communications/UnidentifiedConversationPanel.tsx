@@ -35,9 +35,33 @@ export type UnidentifiedConversationMessage = {
     id: string;
     direction: string;
     channel: string;
+    status: string | null;
     body: string | null;
     created_at: string | null;
 };
+
+/**
+ * What an outbound row actually means.
+ *
+ * A refused send is recorded durably rather than dropped, so that "we refused to
+ * send" is distinguishable from "nobody ever tried" (BLOCKED-SEND-VISIBILITY).
+ * That record is only honest if the conversation says so: labelling every
+ * outbound "Sent" would show the operator a reply the parent never received,
+ * which is the exact failure the durable row exists to prevent.
+ */
+export function outboundStatusLabel(status: string | null | undefined): string {
+    const s = (status ?? "").trim().toLowerCase();
+    if (s === "blocked") return "Not sent — blocked";
+    if (s === "failed") return "Not sent — failed";
+    if (s === "queued" || s === "queued_for_send") return "Queued";
+    return "Sent";
+}
+
+/** True when the row records an attempt that never reached the parent. */
+export function outboundWasNotDelivered(status: string | null | undefined): boolean {
+    const s = (status ?? "").trim().toLowerCase();
+    return s === "blocked" || s === "failed";
+}
 
 type Props = {
     conversation: ConversationSummary;
@@ -208,19 +232,27 @@ export default function UnidentifiedConversationPanel({ conversation, onReplied 
                     <ul className="flex flex-col gap-2">
                         {messages.map((m) => {
                             const inbound = String(m.direction).toLowerCase() === "inbound";
+                            const undelivered = !inbound && outboundWasNotDelivered(m.status);
                             return (
                                 <li
                                     key={m.id}
                                     data-cc-message-direction={inbound ? "inbound" : "outbound"}
+                                    data-cc-message-status={m.status ?? ""}
                                     className={`max-w-[85%] rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${
                                         inbound
                                             ? "self-start bg-alloy-stone/10 text-alloy-midnight"
-                                            : "self-end bg-[#E8F6F2] text-alloy-midnight"
+                                            : undelivered
+                                              ? "self-end border border-alloy-ember/30 bg-alloy-ember/[0.06] text-alloy-midnight"
+                                              : "self-end bg-[#E8F6F2] text-alloy-midnight"
                                     }`}
                                 >
                                     <p className="whitespace-pre-wrap">{m.body ?? ""}</p>
-                                    <p className="mt-0.5 text-[10px] text-alloy-midnight/45">
-                                        {inbound ? "Received" : "Sent"}
+                                    <p
+                                        className={`mt-0.5 text-[10px] ${
+                                            undelivered ? "font-semibold text-alloy-ember" : "text-alloy-midnight/45"
+                                        }`}
+                                    >
+                                        {inbound ? "Received" : outboundStatusLabel(m.status)}
                                         {m.created_at ? ` · ${formatMessagingDateTimeLocal(m.created_at)}` : ""}
                                     </p>
                                 </li>

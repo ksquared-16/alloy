@@ -336,13 +336,39 @@ test.describe("Block A — the operator answers in the browser", () => {
         const thread = threadFor(threads, stopFrom);
         expect(thread, "the stop request is visible in the conversation").toBeTruthy();
 
+        // The body must be unique per run. Idempotency is keyed on
+        // (thread, content), so a constant string returns the message an EARLIER
+        // run already sent — outcome `duplicate`, `ok: true` — which reads exactly
+        // like the hold having failed while nothing was actually dispatched.
+        const attemptBody = `Certification: after stop ${uniqueSid("afterStop").slice(-8)}`;
         const res = await page.request.post("/api/admin/communications/send", {
-            data: { thread_id: thread!.id, channel: "sms", body: "Certification: after stop", category: "operational" },
+            data: { thread_id: thread!.id, channel: "sms", body: attemptBody, category: "operational" },
         });
-        const json = (await res.json()) as { ok?: boolean; outcome?: string; message?: string };
-        // Truthful refusal — never a queued outcome.
-        expect(json.outcome).not.toBe("sent_to_queue");
+        const json = (await res.json()) as {
+            ok?: boolean;
+            outcome?: string;
+            reason?: string;
+            message?: string;
+        };
+        // Truthful refusal — never queued, never a fabricated success.
+        expect(json.outcome).toBe("blocked");
         expect(json.ok).not.toBe(true);
-        expect(String(json.message ?? "")).not.toBe("");
+        // Namespaced by the layer that refused, so the operator-facing reason says
+        // both which gate blocked and why.
+        expect(json.reason).toBe("eligibility_blocked:UNRESOLVED_INBOUND_STOP_HOLD");
+        expect(String(json.message ?? "")).toContain("asked to stop");
+
+        // The refusal is RECORDED, not dropped — "we refused to send" has to be
+        // distinguishable from "nobody ever tried" (BLOCKED-SEND-VISIBILITY). What
+        // must never happen is it counting as delivered.
+        const msgs = await page.request.get(
+            `/api/admin/communications/threads/${thread!.id}/messages?limit=200`
+        );
+        const messages = (await msgs.json()).messages as Array<Record<string, unknown>>;
+        const attempt = messages.find((m) => String(m.body ?? "").includes(attemptBody));
+        expect(attempt, "the refused attempt is durable, not silent").toBeTruthy();
+        expect(attempt!.status).toBe("blocked");
+        expect(attempt!.status).not.toBe("queued");
+        expect(attempt!.sent_at ?? null).toBeNull();
     });
 });

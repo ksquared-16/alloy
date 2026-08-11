@@ -256,6 +256,13 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
             primaryEntityId: req.primaryEntityId,
             channelRaw: facts.channel,
             toRaw: facts.toAddress,
+            // The provider destination is the other half of the endpoint-scoped
+            // STOP hold, which matches on the PAIR. It was never passed, so
+            // `fromAddress` reached eligibility as null and the hold could not match
+            // on any send routed through here — the STOP was recorded and evaluated
+            // and then had nothing to bind to. Browser certification queued a reply
+            // to a number that had just texted STOP because of exactly this.
+            fromAddress: facts.ourEndpointAddress,
             bodyRaw: req.bodyRaw,
             bodyIsHtml: req.bodyIsHtml === true && facts.channel === "email",
             emailSubjectRaw: req.subjectRaw ?? null,

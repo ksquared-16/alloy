@@ -21,6 +21,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import UnidentifiedConversationPanel, {
     isUnidentifiedConversation,
+    outboundStatusLabel,
+    outboundWasNotDelivered,
 } from "@/app/adminV2/communications/UnidentifiedConversationPanel";
 import {
     isQueueRowLoadable,
@@ -221,6 +223,19 @@ describe("the unidentified conversation workspace", () => {
         expect(container.textContent).not.toContain("SMS queued.");
         expect(onReplied).not.toHaveBeenCalled();
         expect(container.querySelector("textarea")!.value).toBe("Following up.");
+    });
+
+    it("never labels a refused send as delivered", () => {
+        // A refused send is recorded durably so "we refused" is distinguishable
+        // from "nobody tried". That record is only honest if the conversation says
+        // so — calling it "Sent" would show a reply the parent never received.
+        expect(outboundStatusLabel("blocked")).toBe("Not sent — blocked");
+        expect(outboundStatusLabel("failed")).toBe("Not sent — failed");
+        expect(outboundStatusLabel("queued")).toBe("Queued");
+        expect(outboundStatusLabel("sent")).toBe("Sent");
+        expect(outboundWasNotDelivered("blocked")).toBe(true);
+        expect(outboundWasNotDelivered("failed")).toBe(true);
+        expect(outboundWasNotDelivered("sent")).toBe(false);
     });
 
     it("offers only the channel the message arrived on", async () => {
