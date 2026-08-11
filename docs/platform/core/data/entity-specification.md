@@ -142,9 +142,24 @@ status mutation actions.
 | **attendance** | Daily presence records | `child_attendance_events` (consumes the enrollment agreement) |
 | **billing** | Invoices, payment methods | `customers` stripe refs; full billing TBD |
 | **tuition** | Rate plans, enrollment billing | Not implemented |
-| **staff / employees** | `persons` + employment relationship | Person grain; employment tables TBD |
 
 Do not treat these as canonical until entity ownership is frozen in platform docs and registries exist.
+
+### Staff / employees — now canonical
+
+**Staff is not an entity.** A staff member is a `persons` row plus an
+`employments` edge; there is no staff entity, no staff drawer, no staff view
+model, and no staff search subject kind. See
+[relationship-model → Employment relationship](relationship-model.md#employment-relationship).
+
+| Concern | Owner |
+|---------|-------|
+| Human identity | `persons` |
+| "Works here, in what capacity, since when" | `employments` |
+| Job/position vocabulary | `employment_positions` (org-configured) |
+| Tenant staff facts (credentials, checks, training) | `field_definitions` / `field_values`, `entity_type = 'employment'` |
+| Staff scheduling eligibility | `public.person_is_employed_on()` |
+| Login / roles / scope | `auth.users` → `user_roles` → `user_access_profiles` — **separate from employment** |
 
 ---
 
