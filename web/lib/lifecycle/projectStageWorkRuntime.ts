@@ -134,13 +134,20 @@ export function taskMatchesStageWorkTemplate(
     const mdWorkIntent = trimOrNull(md.work_intent_key);
     const mdTemplateKey = trimOrNull(md.operating_plan_template_key) ?? mdWorkIntent;
 
-    if (mdTemplateKey === templateKey) return true;
-    if (mdWorkIntent === templateKey) return true;
-
     const mdStage = trimOrNull(md.lifecycle_stage_key);
     const work = parseOperationalWorkViewFromTaskRow(taskRowFromDb(row, "", ""));
     const snapshotStage = trimOrNull(work.context_snapshot?.lifecycle_stage_key);
     const stage = mdStage ?? snapshotStage;
+
+    // Template-key identity still requires stage alignment when the task declares a stage.
+    // Otherwise Lead `contact_family` can bind onto a Waitlist plan that reuses the same key.
+    const templateKeyMatches =
+        (mdTemplateKey != null && mdTemplateKey === templateKey)
+        || (mdWorkIntent != null && mdWorkIntent === templateKey);
+    if (templateKeyMatches) {
+        if (stage && stage !== stageKey) return false;
+        return true;
+    }
 
     const templateDefinitionKey = templateWorkDefinitionKey(template);
     const rowDefinitionKey =

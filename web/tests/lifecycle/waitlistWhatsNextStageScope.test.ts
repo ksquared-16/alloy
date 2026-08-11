@@ -23,6 +23,27 @@ describe("taskMatchesStageWorkTemplate stage scope", () => {
         expect(matched).toBe(false);
     });
 
+    it("does not match Lead contact_family onto Waitlist when template keys collide across stages", () => {
+        const matched = taskMatchesStageWorkTemplate(
+            {
+                id: "task-3",
+                title: "Contact Family",
+                status: "open",
+                due_at: null,
+                updated_at: null,
+                metadata: {
+                    work_definition_key: "contact_family",
+                    operating_plan_template_key: "contact_family",
+                    lifecycle_stage_key: "lead",
+                    lifecycle_provenance: "lifecycle_template",
+                },
+            } as never,
+            "waitlist",
+            { template_key: "contact_family", work_definition_key: "contact_family" },
+        );
+        expect(matched).toBe(false);
+    });
+
     it("matches same-stage definition binding", () => {
         const matched = taskMatchesStageWorkTemplate(
             {

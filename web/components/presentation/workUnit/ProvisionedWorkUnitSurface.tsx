@@ -17,7 +17,7 @@ import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/u
 import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
 import {
     queueRowVariantMatchInputFromContext,
-    resolveQueueRowCompactSlots,
+    resolveQueueRowPresentation,
 } from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
@@ -82,9 +82,11 @@ export function ProvisionedWorkUnitSurface() {
                     if (!input.processKey && processKey) {
                         input.processKey = processKey;
                     }
+                    const presentation = resolveQueueRowPresentation(layout, row.context, input);
                     return {
                         ...row,
-                        rowConfig: resolveQueueRowCompactSlots(layout, input),
+                        rowConfig: presentation.rowConfig,
+                        ...(presentation.focus ? { focus: presentation.focus } : { focus: undefined }),
                     };
                 }),
             },
