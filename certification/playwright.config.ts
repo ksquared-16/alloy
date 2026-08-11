@@ -32,7 +32,14 @@ export default defineConfig({
     // The certification is a serial proving journey against one tenant. It is correct at exactly
     // one worker. CERT_WORKERS can raise it, but nothing about this suite is parallel-safe today.
     workers: Number(process.env.CERT_WORKERS || 1),
-    reporter: [["list"], ["html", { outputFolder: "./evidence/report", open: "never" }]],
+    // Redaction first — see web/playwright/redactingReporter.ts. Certification runs
+    // authenticated against a seeded tenant, so a failure would otherwise print the
+    // operator session into evidence that gets committed.
+    reporter: [
+        [path.join(__dirname, "..", "web", "playwright", "redactingReporter.ts")],
+        ["list"],
+        ["html", { outputFolder: "./evidence/report", open: "never" }],
+    ],
     use: {
         baseURL: process.env.CERT_APP_URL || "http://localhost:3011",
         screenshot: "on",

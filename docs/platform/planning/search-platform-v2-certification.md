@@ -81,37 +81,57 @@ anything hardcoded.
 
 ---
 
-## NOT certified in the browser — tenant lacks the data
+## Browser certification — COMPLETE (disposable tenant)
 
-Test 9 measured this rather than assuming it:
+Run against the disposable certification tenant (`certification/alloy-certify`,
+org `northwind-early-learning`, LOCAL Supabase on 54422) with the fixtures in
+`certification/search-platform/`. Evidence:
+`certification/evidence/search-platform/`.
 
-| Case | Requirement | Tenant reality |
-|---|---|---|
-| Case 3 (sibling schedules) | ≥2 siblings with different schedules | **0** subjects have any schedule context |
-| Case 4 (three processes) | ≥1 subject in ≥3 processes | **0**; every subject has exactly one (Enrollment) |
-| Duplicate-name disambiguation | ≥2 accessible same-named people | **0** duplicate display names |
-| Permission-restricted absence | a restricted operator | not exercised — no second QA identity with narrower scope |
-| Staff | canonical staff model | none exists in the platform |
+| Scenario | Result |
+|---|---|
+| Sibling schedule grain — `Joe Smith schedule` | **PASS** — Joe's own `Mon / Wed / Fri`, promoted by intent |
+| Sibling schedule grain — `Smith schedule` | **PASS** — Joe `Mon / Wed / Fri`, Emma `Tue / Thu`, household shows "2 children with active schedules" and carries NO schedule |
+| Multi-process child | **PASS** — one Joe subject with Enrollment / Annual Registration / Subsidy Renewal, configured stage labels (Enrolling, Needs documents, Review due) |
+| Duplicate-name disambiguation | **PASS** — Smith vs Rivers household, no ids or schema words in operator text |
+| Permission-restricted absence | **PASS** — Lakeside Joe and his household absent for the restricted operator |
+| Restricted positive control | **PASS** — the same operator DOES see Riverside subjects, so the absence above is scope, not emptiness |
+| Consumer regression (API) | **PASS** — every subject exposes a primary destination naming a real record |
+| Consumer regression (POS surface) | **PASS** — surface renders against Search V2 |
 
-**These four are proven by automated tests only.**
+Process and stage labels were resolved from a genuinely **published** revision,
+not a hand-written projection.
 
-**Correction to an earlier framing in this report's first draft:** the repository
-DOES have a sanctioned disposable fixture mechanism for exactly this —
-`certification/alloy-certify`, an isolated local operator tenant (Supabase project
-`alloy-cert`, seeded org `northwind-early-learning`, ports 544xx), explicitly "no
-production tenant, no shared hosted tenant".
+**No fake Schedule destination was introduced.** Schedule ranks and displays as a
+context; the destinations on a child row remain `Enrollment` and `Household`.
 
-So this is **actionable certification debt, not an absent capability**. Closing it
-means seeding four fixtures into the local cert tenant — sibling schedules, a
-subject in ≥3 processes, two same-named accessible children, and a site-restricted
-operator — and re-running `search-v2-certification.spec.ts` against it.
+## Performance baseline
 
-It was NOT done inside this promotion closeout because bringing up the cert stack
-touches the one shared local Docker stack and port 3011, which slot 1 currently
-holds. That is a scheduling conflict, not a technical blocker, and it is a
-separate certification pass rather than a merge prerequisite.
+Measured on the certification tenant with a LOCAL database, 30 warm samples over
+10 distinct queries:
 
----
+| Metric | Value |
+|---|---|
+| Cold request | **827 ms** |
+| Warm min | **54 ms** |
+| Warm **p50** | **63 ms** |
+| Warm p95 | **258 ms** |
+| Warm max | **306 ms** |
+| Warm mean | **105 ms** |
+| Samples / results | 30 requests, 90 results |
+
+This settles the previous sprint's open question. There, p50 was ~1.9 s against a
+REMOTE Supabase; here the same code answers in 63 ms against a local one. The
+latency was environment round-trip, not Search work — so no speculative caching
+was added on the strength of a benchmark.
+
+Almost no request crossed the 250 ms `[admin-timing]` warn threshold, which is
+why the server log is nearly silent: only the p95 outliers would have logged.
+
+**Production-build measurement was NOT obtained.** `next build` was SIGTERM-killed
+on this host (exit 144), the same resource ceiling that kills `tsc`. The numbers
+above are a dev-server build against a local DB and should be read as a
+lower-bound baseline, not a production claim.
 
 ## Defects found BY certification
 

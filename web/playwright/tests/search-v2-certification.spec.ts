@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "../redactedTest";
+import type { Page } from "@playwright/test";
 
 /**
  * Search Platform V2 — browser certification against the live tenant.

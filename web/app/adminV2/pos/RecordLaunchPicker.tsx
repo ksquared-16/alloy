@@ -4,10 +4,11 @@
  * RecordLaunchPicker — reusable operator control to search/select ONE existing record
  * (opportunity / customer / person / customer_member) for a packet's `launch_from_entity`.
  *
- * Reuses the existing admin global search (`GET /api/admin/global-search`) — its flat
- * `results` array is mapped to friendly options by the pure `buildRecordPickerOptions`
- * view-model. A raw-UUID fallback sits behind an "Enter ID manually" affordance. The
- * component is controlled: it emits the selected option (a launch target) or null.
+ * Reuses the existing admin global search (`GET /api/admin/global-search`). That endpoint
+ * returns SUBJECTS (Search Platform V2), so results are flattened to flat record
+ * references by `searchSelectionsFromResults` before the pure `buildRecordPickerOptions`
+ * view-model maps them to friendly options. A raw-UUID fallback sits behind an "Enter ID
+ * manually" affordance. The component is controlled: it emits the selected option or null.
  *
  * No packet-runtime, resolver, or duplicate-detection logic lives here.
  */
@@ -16,6 +17,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { LAUNCH_ENTITY_TYPES, parseLaunchFromEntityInput } from "@/lib/pos/packet/launchFromEntity";
 import { buildRecordPickerOptions, type RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
+import type { SearchResult } from "@/lib/search/searchContracts";
+import { searchSelectionsFromResults } from "@/lib/search/searchSelectionAdapter";
 
 const LAUNCH_TYPE_LABELS: Record<(typeof LAUNCH_ENTITY_TYPES)[number], string> = {
     opportunity: "Lead / opportunity",
@@ -87,9 +90,10 @@ export default function RecordLaunchPicker({
                 const res = await fetch(`/api/admin/global-search?q=${encodeURIComponent(q)}&limit=20`, {
                     credentials: "same-origin",
                 });
-                const body = (await res.json().catch(() => ({}))) as { ok?: boolean; results?: unknown[] };
+                const body = (await res.json().catch(() => ({}))) as { ok?: boolean; results?: SearchResult[] };
                 if (s !== seq.current) return;
-                const hits = Array.isArray(body.results) ? (body.results as Parameters<typeof buildRecordPickerOptions>[0]) : [];
+                // Search returns SUBJECTS; a picker wants a flat record reference.
+                const hits = searchSelectionsFromResults(Array.isArray(body.results) ? body.results : []);
                 setResults(res.ok && body.ok ? buildRecordPickerOptions(hits) : []);
             } catch {
                 if (s === seq.current) setResults([]);

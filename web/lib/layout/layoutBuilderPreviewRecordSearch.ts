@@ -1,12 +1,19 @@
 /**
- * Experience Builder preview — resolve opportunity id from global search hits.
+ * Experience Builder preview — resolve an opportunity id from global search.
+ *
+ * Global search returns SUBJECTS (Search Platform V2). The preview selector wants
+ * one thing: the opportunity behind a subject, because a layout preview renders
+ * against an opportunity record. Subjects are flattened by the platform's
+ * selection projection first, so this file holds preview policy only and no
+ * knowledge of the search payload shape.
  */
 
+import type { SearchResult } from "@/lib/search/searchContracts";
 import {
-    formatGlobalSearchHitPrimaryName,
-    formatGlobalSearchHitSecondaryLine,
-} from "@/lib/admin/globalSearch/globalRecordSearchResultPresentation";
-import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
+    searchSelectionFromResult,
+    searchSelectionsFromResults,
+    type SearchSelection,
+} from "@/lib/search/searchSelectionAdapter";
 
 export type LayoutBuilderPreviewRecordSelection = {
     opportunityId: string;
@@ -14,31 +21,51 @@ export type LayoutBuilderPreviewRecordSelection = {
     secondary?: string | null;
 };
 
-export function resolvePreviewOpportunityIdFromSearchHit(hit: GlobalRecordSearchHit): string | null {
-    if (hit.entity_type === "opportunities") {
-        return hit.entity_id?.trim() || hit.opportunity_id?.trim() || null;
+/** The opportunity behind a selection — the subject itself, or the one it participates in. */
+export function resolvePreviewOpportunityIdFromSelection(selection: SearchSelection): string | null {
+    if (selection.entity_type === "opportunities") {
+        return selection.entity_id.trim() || selection.opportunity_id?.trim() || null;
     }
-    const fromCluster = hit.opportunity_id?.trim();
-    if (fromCluster) return fromCluster;
-    if (hit.group === "leads") return hit.entity_id?.trim() || null;
-    return null;
+    return selection.opportunity_id?.trim() || null;
 }
 
-export function isLayoutBuilderPreviewSearchHit(hit: GlobalRecordSearchHit): boolean {
-    return resolvePreviewOpportunityIdFromSearchHit(hit) != null;
+export function isLayoutBuilderPreviewSelection(selection: SearchSelection): boolean {
+    return resolvePreviewOpportunityIdFromSelection(selection) != null;
 }
 
-export function layoutBuilderPreviewSelectionFromHit(hit: GlobalRecordSearchHit): LayoutBuilderPreviewRecordSelection | null {
-    const opportunityId = resolvePreviewOpportunityIdFromSearchHit(hit);
+function secondaryLine(selection: SearchSelection): string | null {
+    const parts = [selection.type_label, selection.household_name, selection.location_label]
+        .map((p) => (p ?? "").trim())
+        .filter(Boolean);
+    return parts.length ? parts.join(" · ") : null;
+}
+
+export function layoutBuilderPreviewSelectionFrom(
+    selection: SearchSelection
+): LayoutBuilderPreviewRecordSelection | null {
+    const opportunityId = resolvePreviewOpportunityIdFromSelection(selection);
     if (!opportunityId) return null;
     return {
         opportunityId,
-        label: formatGlobalSearchHitPrimaryName(hit),
-        secondary: formatGlobalSearchHitSecondaryLine(hit, { inCluster: false }),
+        label: selection.name,
+        secondary: secondaryLine(selection),
     };
 }
 
-/** Lead / opportunity hits only — excludes campuses and unsupported grains. */
-export function filterLayoutBuilderPreviewSearchHits(hits: GlobalRecordSearchHit[]): GlobalRecordSearchHit[] {
-    return hits.filter((hit) => hit.group === "leads" || isLayoutBuilderPreviewSearchHit(hit));
+/** Convenience: straight from a search result. */
+export function layoutBuilderPreviewSelectionFromResult(
+    result: SearchResult
+): LayoutBuilderPreviewRecordSelection | null {
+    const selection = searchSelectionFromResult(result);
+    return selection ? layoutBuilderPreviewSelectionFrom(selection) : null;
+}
+
+/**
+ * Opportunity-bearing subjects only — excludes campuses and any subject with no
+ * opportunity behind it.
+ */
+export function filterLayoutBuilderPreviewSelections(
+    results: readonly SearchResult[]
+): SearchSelection[] {
+    return searchSelectionsFromResults(results).filter(isLayoutBuilderPreviewSelection);
 }

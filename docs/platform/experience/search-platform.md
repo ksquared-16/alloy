@@ -7,7 +7,8 @@ supersedes: []
 
 # Search Platform
 
-**Status:** V2 — canonical owning doctrine for Alloy Search.
+**Status:** V2 — **CERTIFIED COMPLETE** (2026-08-10). Canonical owning doctrine for
+Alloy Search. Ordinary maintenance from here; there is no Search V3 phase.
 **Owns:** global search retrieval, recognition, context enrichment, destination
 resolution, ranking, and the search authorization boundary.
 **Code:** `web/lib/search/`, `web/app/api/admin/global-search/route.ts`,
@@ -233,13 +234,78 @@ be explicitly derived, rebuildable, and search-only — never authoritative.
    property today, and inventing a parallel config path would violate the
    configuration boundary above. Sequenced as follow-up.
 
-4. **V1 removal.** `globalRecordSearchService.ts` and its exclusive dependencies
-   are no longer reachable from the route. `globalRecordSearchTypes` still has 13
-   non-test importers across other surfaces, so V1 was left in place rather than
-   deleted in the same change as V2's introduction. Removal is a separate,
-   provable cleanup.
+4. **V1 service — RETIRED.** `globalRecordSearchService` and the five modules
+   reachable only from it (`…Clustering`, `…ClusterLimits`, `…HitAssembly`,
+   `…LocationContext`, `…HouseholdChildren`) are deleted. The compatibility layer
+   still consumed by live surfaces is untouched: `…Types`, `…DrawerTarget`,
+   `…Open`, `…WarmPrefetch`, `…AgeLabel`, `…Scope`, `…ResultPresentation`,
+   `…PersonPresentation`, `…StatusLabel`, `…OpenResolution`,
+   `personDrawerOpenSeedFromGlobalSearchHit`.
+
+   Tests that certified only dead implementation behaviour were removed. Two
+   source-text guards were re-pointed rather than deleted, because their
+   invariant is about SEARCH and not about a file existing: the
+   customer_members-status guard now asserts against `lib/search/`, and the
+   site-scope block keeps the live helper it shares.
 
 ---
+
+## The endpoint has THREE consumers
+
+`GET /api/admin/global-search` is consumed by:
+
+1. the global search control (`GlobalSearchBox`) — renders subjects
+2. the POS packet record picker (`RecordLaunchPicker`) — wants a flat record reference
+3. the Experience Builder preview selector (`LayoutBuilderPreviewRecordSelector`) — wants an opportunity id
+
+(2) and (3) do **not** want subjects. When V2 changed `results` to subjects and
+only (1) was updated, both silently filtered to zero results — no error, no
+failing test, shipped to staging. Anything that changes this response shape must
+account for all three.
+
+They are served by `searchSelectionFromResult`, the one place that flattens a
+subject back to a record reference (its PRIMARY destination). It exists so the
+endpoint keeps a single response model instead of growing a compatibility
+payload — which would be the second search data model this doctrine forbids.
+
+---
+
+## Certification status
+
+Search Platform V2 is browser-certified against the disposable certification
+tenant (`certification/alloy-certify`, fixtures in
+`certification/search-platform/`, evidence in
+`certification/evidence/search-platform/`):
+
+| Capability | Proven |
+|---|---|
+| Child subject search | ✅ browser |
+| Parent / person search | ✅ browser |
+| Sibling schedule grain (child grain, no household rollup) | ✅ browser |
+| One child, three configured processes, one subject | ✅ browser |
+| Duplicate-name disambiguation | ✅ browser |
+| Permission-restricted absence + positive control | ✅ browser |
+| POS + Experience Builder search consumers | ✅ browser |
+| Tenant-configured process labels | ✅ browser, via a canonically PUBLISHED revision |
+| Keyboard navigation / subject open | ✅ browser |
+
+Latency on the certification tenant (local DB, 30 warm samples): cold 827 ms,
+p50 **63 ms**, p95 258 ms. An earlier p50 of ~1.9 s was remote-database
+round-trip, not Search work — no caching was added on the strength of a
+benchmark. Production-build numbers have not been taken.
+
+Two defects were found by certification that unit tests could not reach: a child
+with no `persons` row opened the household instead of its participation record,
+and a restricted operator's allow-list overflowed the PostgREST URI (HTTP 414),
+which additionally made a permission-absence assertion pass vacuously. Both are
+fixed and covered. **Every permission-absence test now carries a positive
+control** — without one, "the forbidden thing is missing" is satisfied by a
+broken query.
+
+External dependencies remain open and do NOT hold Search open:
+
+- no canonical operator Schedule destination (Scheduling domain)
+- no canonical staff/employment model (Identity/HR domain)
 
 ## Related doctrine
 

@@ -59,6 +59,26 @@ Unchanged by that convergence, and load-bearing:
 - structural and referential validation stays blocking on save; command-set completeness is
   reported as `publication_readiness` on save and blocks at Validate and Publish.
 
+### The publication RPCs must hold the capability token — one migration silently dropped it
+
+`publish_business_process_revision_v1` and `rollback_business_process_to_revision_v1` are the ONLY
+writers of the projection, and they earn that by bracketing their `UPDATE` with
+`begin_lifecycle_projection_write('publish')` / `end_lifecycle_projection_write()`. Without the
+token they are refused by `guard_lifecycle_builder_projection()` — the guard cannot tell a
+publication RPC from any other caller, which is precisely what makes it trustworthy.
+
+This actually failed. `20260807090000_business_process_publish_idempotency` added idempotency by
+`CREATE OR REPLACE` on both functions and did not carry the two token calls forward, so from
+2026-08-07 until `20260810220000` **publishing any Business Process configuration was broken** —
+both RPCs were blocked by the guard they exist to satisfy. It surfaced only when Search Platform
+V2 certification tried to publish a process configuration into a disposable tenant.
+
+**Any future `CREATE OR REPLACE` of these functions must carry the token calls forward.**
+`certification/bp-config-integrity/05-publish-guarded-write.sql` asserts their presence via
+`pg_get_functiondef`, so a repeat fails there rather than in a tenant. It also proves the three
+properties that must hold together: publish succeeds through the canonical path, the token does
+not survive the RPC, and a direct projection write is still refused.
+
 ## The seven questions
 
 | Question | Answer |

@@ -95,13 +95,44 @@ export async function resolveSearchAccessEnvelope(
 }
 
 /**
- * Constrain a Supabase query by an allow-list resolved above.
+ * Maximum allow-list ids per query.
  *
- * `null` leaves the query untouched (unrestricted). An EMPTY allow-list must
- * still constrain — returning the query unchanged there would silently widen
- * a restricted operator to the whole org, which is exactly the leak this
- * module exists to prevent. `filterImpossible` reports that case so callers
- * skip the round trip entirely.
+ * PostgREST puts `.in(...)` in the QUERY STRING, so a restricted operator with a
+ * large reach produces a URI the server rejects with 414. Browser certification
+ * hit exactly that: on a tenant with ~1200 customers and ~1800 persons the
+ * restricted operator's search returned "URI too long" and rendered nothing —
+ * which also made the permission-absence assertion pass VACUOUSLY, because the
+ * inaccessible subject was missing only because everything was missing.
+ *
+ * Unit tests could not have caught this: they use a handful of ids. The bound is
+ * a URI-length property, not a logic property.
+ */
+export const SEARCH_ALLOW_LIST_CHUNK_SIZE = 120;
+
+/**
+ * Split an allow-list into query-sized chunks.
+ *
+ * `null` (unrestricted) yields a single `null` chunk, so callers run exactly one
+ * unconstrained query. An EMPTY allow-list yields one empty chunk, which
+ * `applySearchAllowList` turns into a sentinel that cannot match — returning an
+ * unconstrained query there would silently widen a restricted operator to the
+ * whole org.
+ */
+export function chunkSearchAllowList(allowed: string[] | null): Array<string[] | null> {
+    if (allowed === null) return [null];
+    if (allowed.length === 0) return [[]];
+    const chunks: string[][] = [];
+    for (let i = 0; i < allowed.length; i += SEARCH_ALLOW_LIST_CHUNK_SIZE) {
+        chunks.push(allowed.slice(i, i + SEARCH_ALLOW_LIST_CHUNK_SIZE));
+    }
+    return chunks;
+}
+
+/**
+ * Constrain a Supabase query by ONE allow-list chunk.
+ *
+ * `null` leaves the query untouched (unrestricted). An EMPTY chunk still
+ * constrains, to a sentinel that matches nothing.
  */
 export function applySearchAllowList<T>(query: T, column: string, allowed: string[] | null): T {
     if (allowed === null) return query;
