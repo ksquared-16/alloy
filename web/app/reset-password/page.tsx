@@ -4,8 +4,14 @@ import { useState, FormEvent, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 import PrimaryButton from "@/components/PrimaryButton";
+import PasswordField from "@/components/auth/PasswordField";
+import { PASSWORD_POLICY, passwordChangeViolation } from "@/lib/auth/passwordPolicy";
+import { passwordUpdateErrorMessage } from "@/lib/auth/signInErrorMessage";
 
 type Status = "loading" | "ready" | "success" | "expired";
+
+const resetInputClass =
+  "w-full rounded-md px-3 py-2 text-sm border border-alloy-stone/80 bg-white focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue";
 
 export default function ResetPasswordPage() {
   const [status, setStatus] = useState<Status>("loading");
@@ -35,12 +41,12 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    // W-31 — the policy is asked, not restated. It lives in one module so the eventual server-side
+    // enforcement point cannot disagree with this one. See `passwordPolicy.ts` for why W-31 is not
+    // closed: the product has no server-side password write to enforce it at.
+    const violation = passwordChangeViolation(password, confirm);
+    if (violation) {
+      setError(violation);
       return;
     }
 
@@ -49,7 +55,9 @@ export default function ResetPasswordPage() {
       const supabase = createClient();
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
-        setError(updateError.message || "Failed to update password.");
+        // W-32 — the provider's password-policy and session-state wording is not shown to an
+        // unauthenticated caller on the recovery path.
+        setError(passwordUpdateErrorMessage(updateError));
         setIsLoading(false);
         return;
       }
@@ -146,42 +154,31 @@ export default function ResetPasswordPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="password"
-              className="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
-            >
-              New password
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full rounded-md px-3 py-2 text-sm border border-alloy-stone/80 bg-white focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
-              placeholder="••••••••"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="confirm"
-              className="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
-            >
-              Confirm password
-            </label>
-            <input
-              type="password"
-              id="confirm"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              required
-              minLength={6}
-              className="w-full rounded-md px-3 py-2 text-sm border border-alloy-stone/80 bg-white focus:outline-none focus:ring-2 focus:ring-alloy-blue focus:border-alloy-blue"
-              placeholder="••••••••"
-            />
-          </div>
+          {/* W-30 — both fields come from the one shared component (`RL-37`). */}
+          <PasswordField
+            id="password"
+            label="New password"
+            labelClassName="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
+            value={password}
+            onChange={setPassword}
+            required
+            className={`${resetInputClass} pr-16`}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            minLength={PASSWORD_POLICY.minLength}
+          />
+          <PasswordField
+            id="confirm"
+            label="Confirm password"
+            labelClassName="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
+            value={confirm}
+            onChange={setConfirm}
+            required
+            className={`${resetInputClass} pr-16`}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            minLength={PASSWORD_POLICY.minLength}
+          />
           <div className="pt-2">
             <PrimaryButton
               type="submit"

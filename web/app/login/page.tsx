@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import { getPublicSupabaseAuthDebug } from "@/lib/supabase/publicAuthEnv";
 import CTAButton from "@/components/marketing/CTAButton";
+import PasswordField from "@/components/auth/PasswordField";
+import { signInErrorMessage } from "@/lib/auth/signInErrorMessage";
 import { MARKETING_BRAND } from "@/lib/marketing/artifactPaths";
 
 /** Dev-only: safe Supabase connectivity hints (hostname + booleans only). */
@@ -79,33 +81,25 @@ function LoginForm() {
         password,
       });
 
+      // W-32 / `I-33` — the provider's own words never reach the screen. `Email not confirmed` and
+      // friends are account-existence oracles for any address an attacker chooses to type, so an
+      // unrecognised provider string falls to the credential answer rather than being passed
+      // through. Environment misconfiguration is still reported, because it is true of every caller
+      // and says nothing about an account.
       if (signInError) {
-        setError(signInError.message || "Failed to sign in. Please check your credentials.");
+        setError(signInErrorMessage(signInError));
         return;
       }
 
       if (!data.user) {
-        setError("Sign in failed. Please try again.");
+        setError(signInErrorMessage(null));
         return;
       }
 
       router.push("/workspace");
       router.refresh();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("NEXT_PUBLIC_SUPABASE")) {
-        setError(
-          message.startsWith("Missing ")
-            ? "Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
-            : message
-        );
-      } else if (message === "Failed to fetch") {
-        setError(
-          "Could not reach Supabase (network). Confirm NEXT_PUBLIC_SUPABASE_URL is your real https://…supabase.co URL, restart `next dev` after editing .env.local, and check extensions/VPN are not blocking requests to *.supabase.co."
-        );
-      } else {
-        setError(message || "An unexpected error occurred. Please try again.");
-      }
+      setError(signInErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -197,21 +191,17 @@ function LoginForm() {
               />
             </div>
 
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-alloy-forge/80">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className={inputClass}
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </div>
+            {/* W-30 — the show/hide baseline, from the one shared component (`RL-37`). */}
+            <PasswordField
+              id="password"
+              label="Password"
+              value={password}
+              onChange={setPassword}
+              required
+              className={`${inputClass} pr-16`}
+              placeholder="••••••••"
+              autoComplete="current-password"
+            />
 
             <CTAButton type="submit" disabled={isLoading} className="w-full">
               {isLoading ? "Signing in…" : "Sign in"}
