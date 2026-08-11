@@ -572,7 +572,10 @@ export function InlineOpportunityFocusPanel() {
                             canMutate={statusCanMutate}
                             enriched={visible ? { displayVm: visible.displayVm, record: visible.record } : null}
                             commitCritical={
-                                !visible && operationallyResolved
+                                // Always keep commit-critical while operationally resolved — including
+                                // after Settlement — so child Attention can overlay the child's stage
+                                // mission onto the family Settlement VM (never replace with Lead work).
+                                operationallyResolved
                                     ? {
                                           subjectId: operationalSubjectId ?? "",
                                           statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,

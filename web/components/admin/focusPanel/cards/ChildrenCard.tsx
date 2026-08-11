@@ -421,12 +421,43 @@ export default function ChildrenCard({
     };
 
     // Fresh queue subject → Summary default (no stale Lennon after Wrigley select).
+    // Child Attention: re-select the focused child in the roster so Settlement household
+    // chrome does not look like an unfocused family panel.
     useEffect(() => {
         setEditing(false);
         setRelatedViewId(null);
         resetDisclosure();
         setCardLinkNav(createEmptyFocusPanelCardLinkNavState());
-    }, [context.subject.id, resetDisclosure]);
+        if (context.grain !== "child") return;
+        const focusedId = context.subject.id?.trim();
+        const memberFromTruth =
+            typeof context.truth?.["child.customer_member_id"] === "string"
+                ? String(context.truth["child.customer_member_id"]).trim()
+                : null;
+        if (!focusedId && !memberFromTruth) return;
+        const match =
+            (focusedId
+                ? evidence.children.find((row) => row.id === focusedId)
+                  ?? evidence.children.find((row) => row.customerMemberId === focusedId)
+                  ?? evidence.children.find((row) => row.personId === focusedId)
+                : null)
+            ?? (memberFromTruth
+                ? evidence.children.find((row) => row.customerMemberId === memberFromTruth)
+                  ?? evidence.children.find((row) => row.id === memberFromTruth)
+                : null)
+            ?? null;
+        if (!match) return;
+        enterContext();
+        selectIdentity(match.id, "roster");
+    }, [
+        context.subject.id,
+        context.grain,
+        context.truth,
+        evidence.children,
+        resetDisclosure,
+        enterContext,
+        selectIdentity,
+    ]);
 
     const request = coordination?.request;
     const requestNonce = request?.card === "children" ? request.nonce : null;

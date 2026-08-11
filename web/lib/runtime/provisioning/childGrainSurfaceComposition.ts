@@ -161,8 +161,12 @@ export function composeChildGrainSurface(params: {
     if (!childOwnsStageWork) primaryActionAbsence = "stage_is_family_segment";
     else if (!plan) primaryActionAbsence = "stage_has_no_operating_plan";
     else if (!template) primaryActionAbsence = "stage_configures_no_child_work";
-    else if (!actionRef) primaryActionAbsence = "work_template_has_no_action";
-    else {
+    else if (!actionRef) {
+        // Work Templates exist without a primary action_ref — What's Next still owns the stage
+        // work presentation. Do not claim "this stage's work configures no action" (contradicts
+        // configured work items / outcomes).
+        primaryActionAbsence = null;
+    } else {
         primaryAction = {
             actionRef,
             label: template.primary_action?.override_label ?? template.label,
