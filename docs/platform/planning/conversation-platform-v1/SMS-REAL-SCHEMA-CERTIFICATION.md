@@ -182,3 +182,65 @@ keyword the inbound seam stamps, with a later START releasing it.
   `supabase start` says "already running", `supabase status` still returns URLs,
   and psql works — while kong is down and the browser gets "Failed to fetch".
   `alloy-certify` now refuses to start the webhook on empty API_URL/SERVICE_ROLE_KEY.
+
+## Block B + C — compliance and convergence (2026-08-11)
+
+**Block B: 9 of 9. Block C regression (Block A + Block B together, after the
+deletions): 19 of 19.**
+
+Every keyword arrives through the one canonical seam — a signed Twilio POST to the
+backend webhook. The suite asserts effects on canonical authorities only, so a
+second keyword runtime would fail it.
+
+| Scenario | Result |
+|---|---|
+| B-1 unidentified STOP holds the endpoint, exactly once; replay adds nothing | PASS |
+| B-2 the STOP stays visible in the conversation | PASS |
+| B-3 START releases the hold it can prove, asserting no Person | PASS |
+| B-4 a START on one endpoint does not release another | PASS |
+| B-5 resolved Person STOP/START run through canonical WS8 preferences | PASS |
+| B-6 HELP persists once, changes nothing, replays without effect | PASS |
+| B-7 no reply emitted from quarantine, where ownership is unproven | PASS |
+| B-8 one received SMS → one canonical row, no legacy row | PASS |
+
+### Convergence — what was retired
+
+**Legacy `public.messages` inbound write.** Final audit found no production reader
+of a legacy INBOUND row: the one legacy SELECT filters `direction='outbound'`, the
+other two call sites are outbound inserts, and no view or function references the
+table. `public.messages` has no `org_id`, so an inbound row there was never scoped
+to a tenant. Outbound legacy usage untouched; no historical row deleted.
+
+Measured after retirement: **10 canonical inbound rows, 0 legacy inbound rows.**
+
+**Activity ownership is now structural.** The legacy path also emitted
+`message_received` and was passed `emit_activity=not canonical_persisted` to stop
+the double-fire. With the second emitter gone the duplicate is impossible rather
+than suppressed.
+
+**Dead TypeScript inbound path.** `inboundNormalization.ts` had one consumer — its
+own test. `providers/types` is KEPT: the Resend adapter uses it and inbound email
+will need it. Both invariants the module carried already hold canonically
+(`recipient_key_normalize_sms`; `test_most_recent_outbound_thread_wins` and
+`test_address_formatting_does_not_defeat_provenance`).
+
+Tests were migrated rather than dropped, inverting where the truth inverted:
+"keeps writing legacy during parity" → writes NO legacy row; "the legacy row is
+the only record of an unattributable message" → ingress is; "canonical suppresses
+the legacy event" → no second emitter exists; "an unroutable reply still gets a
+receive event" → it is retained at ingress, which is tenant-safe where a row with
+no `org_id` never was. The harness now spies on the HTTP client, so the absence is
+proven at the wire rather than by trusting a call site to stay deleted.
+
+### Open decision — automated keyword responses
+
+`keyword_response()` returns the contract's STOP/START/HELP text and **nothing
+consumes it**. The webhook always answers empty TwiML, so Alloy sends no
+confirmation or help reply today; carriers and Twilio Advanced Opt-Out generally
+handle the mandated replies.
+
+Emitting them from Alloy would require the canonical send path, which is
+TypeScript, while the inbound seam is Python — there is no internal send endpoint
+between them. Building one is a new surface, and writing a queued row directly
+from Python would fork the send runtime, which the plan explicitly forbids. Left
+as a decision rather than resolved silently in either direction.
