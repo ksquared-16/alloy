@@ -12,10 +12,15 @@ function readSortValue(row: Record<string, unknown>, key: string): unknown {
     const placement = row._placement_waitlist_row as Record<string, unknown> | null | undefined;
 
     if (k.includes("priority") || k.includes("score")) {
+        const pv2 = placement?.placement_priority_v2;
+        const pv2Score =
+            pv2 && typeof pv2 === "object" && typeof (pv2 as { score?: unknown }).score === "number"
+                ? (pv2 as { score: number }).score
+                : null;
         return (
             waitlist?.priority ??
             waitlist?.priority_score ??
-            placement?.placement_priority_v2?.score ??
+            pv2Score ??
             placement?.priority_score ??
             placement?.bucket_rank ??
             row.waitlist_priority ??

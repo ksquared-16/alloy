@@ -76,7 +76,13 @@ export function resolveQueueRowSubjectFocus(
 
     // placement_candidate_child — the candidate is the row subject; waitlist rank + household are
     // supporting; siblings as COUNT only. Rank is shown WHERE AVAILABLE (Phase 5 context).
-    if (resolved === "placement_candidate_child" && rowSubject.subject_type === "candidate") {
+    // Child-grain Waitlist rows use subject_type "child" with waitlist_context attached — same
+    // attention identity as candidate grain (do not fall through to household).
+    if (
+        resolved === "placement_candidate_child" &&
+        (rowSubject.subject_type === "candidate" ||
+            (rowSubject.subject_type === "child" && Boolean(context.waitlist_context)))
+    ) {
         return {
             focus: "placement_candidate_child",
             primary: rowSubject,

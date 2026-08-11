@@ -38,6 +38,7 @@ import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueR
 import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/mergeCompactSlotsInheritDefault";
 import type { QueueRowVariant, QueueRecordFixedControls } from "@/lib/layout/queueRecordLayoutV3";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { resolveQueueRowSubjectFocus } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
 import type { WorkspaceHeaderKpiVm, WorkspaceHeaderPresentationModel } from "@/lib/presentation/runtime/workspaceHeaderSurfaceConfig";
 import type { ProcessCardIcon, ProcessCardAccent } from "@/lib/presentation/runtime/workspaceProcessSurfaceConfig";
 import { provisioningErrorKind, type LensSetEntry, type ProvisioningAnswer } from "./workUnitProvisioningAnswer";
@@ -53,7 +54,7 @@ import type { OperationalPresentation } from "./operationalPresentation";
  * Empty variant columns inherit Default (return undefined → queue-level `rowConfig`).
  * Slots the variant does not configure inherit from `defaultSlots` (Default children/contact/work).
  */
-function resolveRowVariantSlots(
+function resolveRowVariantPresentation(
     context: unknown,
     variants: readonly QueueRowVariant[],
     fixedControls: QueueRecordFixedControls | null,
@@ -61,7 +62,7 @@ function resolveRowVariantSlots(
     workViewKey: string | null,
     processKey: string | null,
     defaultSlots: CompactRowSlots,
-): CompactRowSlots | undefined {
+): { rowConfig: CompactRowSlots; focus: ReturnType<typeof resolveQueueRowSubjectFocus> | null } | undefined {
     if (variants.length === 0 || !fixedControls) return undefined;
     const rowContext = (context ?? {}) as QueueRowContext;
     const input = queueRowVariantMatchInputFromContext(rowContext, {
@@ -82,7 +83,16 @@ function resolveRowVariantSlots(
         fixedControls: matched.fixedControls ?? fixedControls,
         variants: undefined,
     }).slots;
-    return mergeCompactSlotsInheritDefault(variantSlots, defaultSlots);
+    const rowGrain =
+        typeof rowContext.row_subject?.subject_type === "string"
+            ? rowContext.row_subject.subject_type
+            : input.grain ?? null;
+    const rowConfig = mergeCompactSlotsInheritDefault(variantSlots, defaultSlots, { rowGrain });
+    const focus =
+        matched.subjectFocus != null
+            ? resolveQueueRowSubjectFocus(rowContext, matched.subjectFocus)
+            : null;
+    return { rowConfig, focus };
 }
 
 /**
@@ -218,7 +228,7 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                       // keeps the queue-level default (`queue.rowConfig`) — so this is behavior-neutral
                       // until variants are authored, and Runtime-owned selected-row styling is unaffected.
                       if (model && queueRowVariants.length > 0) {
-                          const slots = resolveRowVariantSlots(
+                          const presentation = resolveRowVariantPresentation(
                               r.context,
                               queueRowVariants,
                               p.queue.rowVariantFixedControls,
@@ -227,7 +237,10 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
                               snapshot.businessProcess.key,
                               p.queue.rowSlots,
                           );
-                          if (slots) model.rowConfig = slots;
+                          if (presentation) {
+                              model.rowConfig = presentation.rowConfig;
+                              if (presentation.focus) model.focus = presentation.focus;
+                          }
                       }
                       return model;
                   })

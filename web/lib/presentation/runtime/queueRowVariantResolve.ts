@@ -69,7 +69,9 @@ export function resolveQueueRowCompactSlots(
         fixedControls: variant.fixedControls ?? config.fixedControls,
         variants: undefined,
     }).slots;
-    return mergeCompactSlotsInheritDefault(variantSlots, defaultSlots);
+    return mergeCompactSlotsInheritDefault(variantSlots, defaultSlots, {
+        rowGrain: input.grain ?? input.rowType ?? null,
+    });
 }
 
 /**

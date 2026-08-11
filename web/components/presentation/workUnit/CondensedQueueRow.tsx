@@ -196,7 +196,10 @@ export function CondensedQueueRow({
         ? resolveCompactSlotDisplay("contact", context, rowConfig?.contact, focus, { publishedAuthority })
         : null;
     const secondaryBand = showGroupCount
-        ? resolveCompactSecondaryBand(context, rowConfig?.groupCount, { publishedAuthority })
+        ? resolveCompactSecondaryBand(context, rowConfig?.groupCount, {
+              publishedAuthority,
+              focus: focus ?? null,
+          })
         : null;
     const workLabel = showWork
         ? resolveCompactSlotDisplay("work", context, rowConfig?.work, focus, { publishedAuthority })

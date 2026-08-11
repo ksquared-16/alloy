@@ -220,11 +220,16 @@ export type CompactSecondaryBand = {
 export function resolveCompactSecondaryBand(
     context: QueueRowContext,
     config: CompactRowSlotConfig | undefined,
-    options?: { publishedAuthority?: boolean },
+    options?: { publishedAuthority?: boolean; focus?: FocusedSubjectContext | null },
 ): CompactSecondaryBand | null {
     if (!config?.fieldKeys?.length) {
         if (options?.publishedAuthority || config?.visible === false) return null;
-        const fallback = defaultSlotDisplay("groupCount", context, null);
+        // Subject Focus sibling rollup feeds the count chip when no authored fieldKeys.
+        if (options?.focus?.siblings) {
+            const chip = focusSiblingChip(options.focus.siblings);
+            return chip ? { left: null, right: chip } : null;
+        }
+        const fallback = defaultSlotDisplay("groupCount", context, options?.focus ?? null);
         return fallback ? { left: fallback, right: null } : null;
     }
     const resolved = config.fieldKeys
