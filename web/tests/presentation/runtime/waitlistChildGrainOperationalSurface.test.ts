@@ -12,7 +12,6 @@ import type { ChildProvisioningRowWithPlacement } from "@/lib/runtime/provisioni
 import { waitlistContextFromPlacementProjection } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import {
     normalizeCatchAllWorkViewCompatBinding,
-    WORK_VIEW_CATCH_ALL_OPERATOR_LABEL,
 } from "@/lib/lifecycle/workViewsConfigV1";
 import { QUEUE_ROW_CONTEXT_CONTRACT_VERSION, type QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { PlacementWaitlistCandidateRowProjection } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
@@ -146,17 +145,28 @@ describe("child Waitlist placement context parity", () => {
     });
 });
 
-describe("All Leads catch-all label semantics", () => {
-    it("renames misleading All Leads catch-all label to All Enrollment without changing filters", () => {
+describe("All Family Leads catch-all label authority", () => {
+    it("preserves operator-configured catch-all labels (never renames to a code-owned label)", () => {
         const repaired = normalizeCatchAllWorkViewCompatBinding({
             id: "new_work_view_6",
+            label: "All Family Leads",
+            display_order: 1,
+            visible_in_runtime: true,
+            filters_v1: [],
+        });
+        expect(repaired.label).toBe("All Family Leads");
+        expect(repaired.filters_v1).toEqual([]);
+    });
+
+    it("preserves legacy All Leads label when an operator still uses it", () => {
+        const repaired = normalizeCatchAllWorkViewCompatBinding({
+            id: "all_leads",
             label: "All Leads",
             display_order: 1,
             visible_in_runtime: true,
             filters_v1: [],
         });
-        expect(repaired.label).toBe(WORK_VIEW_CATCH_ALL_OPERATOR_LABEL);
-        expect(repaired.filters_v1).toEqual([]);
+        expect(repaired.label).toBe("All Leads");
     });
 
     it("does not rename stage-filtered Leads views", () => {

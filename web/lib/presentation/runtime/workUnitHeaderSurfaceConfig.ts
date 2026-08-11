@@ -45,7 +45,9 @@ export const DEFAULT_WORK_UNIT_HEADER_KPIS: readonly WorkUnitHeaderKpiSlot[] = [
     {
         slot: 3,
         enabled: true,
-        label: "Pipeline Children",
+        // Prefer metric registry label (`Active leads`) when surface config leaves label null —
+        // never invent an operator-facing rename like "Pipeline Children" in code.
+        label: null,
         icon: "chart",
         sourceKey: "enrollment.active_leads",
         accent: null,

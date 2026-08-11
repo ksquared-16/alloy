@@ -535,6 +535,13 @@ export function resolveLensRowGrain(
         return { ok: true, grain: declared };
     }
 
+    // Stage-independent (catch-all / inventory) with no declaration: the process population base is
+    // family opportunities. Child inventory lenses MUST declare `row_grain_v1: "child"` (All Children).
+    // Undeclared stage-scoped multi-grain lenses still refuse below (G-1).
+    if (stageKeys.length === 0) {
+        return { ok: true, grain: "family" };
+    }
+
     if (grains.length === 1) return { ok: true, grain: grains[0] };
     if (grains.length === 0) return { ok: false, reason: "no stage in this lens declares a Row Grain" };
     return {

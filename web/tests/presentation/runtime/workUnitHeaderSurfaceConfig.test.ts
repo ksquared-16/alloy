@@ -16,7 +16,7 @@ describe("workUnitHeaderSurfaceConfig", () => {
         expect(config.kpis[0]?.sourceKey).toBe("ops.needs_attention_count");
         expect(config.kpis[1]?.accent).toBe("gold");
         expect(config.kpis[2]?.sourceKey).toBe("enrollment.active_leads");
-        expect(config.kpis[2]?.label).toBe("Pipeline Children");
+        expect(config.kpis[2]?.label).toBeNull();
     });
 
     it("buildWorkUnitHeaderPresentationForRuntime falls back to process and work-view labels", () => {
