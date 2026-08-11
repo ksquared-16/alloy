@@ -22,12 +22,17 @@
  * declared set — so W-11 lands the data change and W-14 lands the check that keeps it true."*
  * It is expressible now, so it is here.
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { tmpdir } from "node:os";
-// @ts-expect-error - .mjs check script, no type declarations
-import { runRouteCapabilityCheck } from "../../scripts/checkRouteCapabilities.mjs";
+import {
+    runRouteCapabilityCheck,
+    bindDeclaration,
+    handlerBody,
+    pendingWithKnownGates,
+    // @ts-expect-error - .mjs check script, no type declarations
+} from "../../scripts/checkRouteCapabilities.mjs";
 import { discoverCatalog } from "./permissionCatalogDiscovery";
 
 type Declaration =
@@ -37,12 +42,16 @@ type Declaration =
 
 type Report = {
     ok: boolean;
-    counts: { routes: number; methods: number; declared: number; none: number; pending: number };
+    counts: { routes: number; methods: number; declared: number; none: number; pending: number; bound: number };
     ratchet: { max_pending: number | null };
     violations: { route: string; kind: string; detail: string }[];
+    bindings: { route: string; method: string; helper: string; capability: string; enforcedIn: string }[];
     onDisk: [string, string[]][];
 };
 
+type Binding = { violations: { route: string; kind: string; detail: string }[]; evidence: unknown };
+
+const WEB = resolve(__dirname, "../..");
 const TABLE_PATH = resolve(__dirname, "../../scripts/routeCapabilities.declared.json");
 const table = JSON.parse(readFileSync(TABLE_PATH, "utf8")) as {
     reviewed: string;
@@ -159,6 +168,190 @@ describe("W-14 · RL-10 — the declared route capability table", () => {
         expect(report.counts.none).toBeGreaterThanOrEqual(1);
     });
 
+    it("every declared handler is BOUND to its source, not merely asserted", () => {
+        // The property W-14 shipped without. Before this, `{"status":"declared","capability":"…"}`
+        // was a sentence in a JSON file; deleting the guard it named left this check green.
+        expect(report.counts.bound).toBe(report.counts.declared);
+        expect(report.bindings).toHaveLength(report.counts.declared);
+        for (const b of report.bindings) {
+            expect(b.enforcedIn, `${b.route} ${b.method}`).toMatch(/\.tsx?$/);
+        }
+    });
+
+    it("the binding is at METHOD grain — a sibling method's guard cannot vouch for it", () => {
+        // The whole table is built on the claim that one route.ts may gate GET and not DELETE.
+        // If handlerBody returned the file, every join above would pass by accident.
+        const [victim, methods] = report.onDisk.find(([, m]) => m.length > 1)!;
+        const bodies = methods.map((m) => handlerBody(join(WEB, victim), m) as string | null);
+        for (const body of bodies) expect(body).not.toBeNull();
+        expect(new Set(bodies).size, `${victim} returned one body for ${methods.join("/")}`).toBe(methods.length);
+        for (const body of bodies) {
+            expect((body as string).length).toBeLessThan(readFileSync(join(WEB, victim), "utf8").length);
+        }
+    });
+});
+
+/**
+ * The three joins, proved to bite — each against a fixture built to fail exactly one of them.
+ *
+ * Table mutation alone cannot reach every join: `untested-verdict` is a property of route SOURCE, and
+ * the repository (correctly) contains no route that discards a verdict. A control whose failure path
+ * has never executed is a control nobody has tested, so the failing sources are constructed here.
+ */
+describe("W-15 prerequisite — the declaration binding falsifies a false claim", () => {
+    // The fixtures live in a temp directory, never under app/api. `@/…` resolves against the web
+    // root regardless of the importing file's location, so a fixture there still binds against the
+    // REAL helper module — while a run killed mid-test cannot leave a stray route in the app tree.
+    const scratch = mkdtempSync(join(tmpdir(), "w15-bind-"));
+    const write = (name: string, source: string) => {
+        const p = join(scratch, `${name}.route.ts`);
+        writeFileSync(p, source);
+        return p;
+    };
+
+    const DECL = { status: "declared", capability: "settings.users_roles", helper: "requireUsersRolesManageAuth" };
+    const IMPORT = `import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";\n`;
+
+    afterAll(() => {
+        rmSync(scratch, { recursive: true, force: true });
+    });
+
+    it("join 1 — convicts a handler that declares a gate it never calls", () => {
+        const p = write(
+            "uncalled",
+            `${IMPORT}export async function GET() { return Response.json({ ok: true }); }\n`
+        );
+        const { violations } = bindDeclaration(p, "fixture", "GET", DECL) as Binding;
+        expect(violations.map((v) => v.kind)).toContain("unbound-declaration");
+    });
+
+    it("join 1 — convicts a guard that sits in a SIBLING method", () => {
+        // The file is gated. This method is not. A file-grained join would call this compliant.
+        const p = write(
+            "sibling",
+            `${IMPORT}export async function GET() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n` +
+                `export async function DELETE() { return Response.json({ deleted: true }); }\n`
+        );
+        expect((bindDeclaration(p, "fixture", "GET", DECL) as Binding).violations).toEqual([]);
+        expect((bindDeclaration(p, "fixture", "DELETE", DECL) as Binding).violations.map((v) => v.kind)).toContain(
+            "unbound-declaration"
+        );
+    });
+
+    it("join 2 — convicts a handler that calls the gate and discards the verdict", () => {
+        // The most dangerous shape in the set: it reads as gated, greps as gated, and admits everyone.
+        const p = write(
+            "discarded",
+            `${IMPORT}export async function POST() {\n  const auth = await requireUsersRolesManageAuth();\n  return Response.json({ ok: true });\n}\n`
+        );
+        const { violations } = bindDeclaration(p, "fixture", "POST", DECL) as Binding;
+        expect(violations.map((v) => v.kind)).toContain("untested-verdict");
+    });
+
+    it("join 2 — accepts a verdict tested to DEGRADE rather than to refuse", () => {
+        // enrollment-packet-launch skips the send instead of returning 403. Acting on a verdict is
+        // the property; returning is one way to act on it, and a rule phrased as "must return"
+        // would have convicted working code.
+        const p = write(
+            "degrade",
+            `${IMPORT}export async function POST() {\n  const auth = await requireUsersRolesManageAuth();\n  let result = null;\n  if (!auth.ok) { result = { skipped: true }; } else { result = { sent: true }; }\n  return Response.json(result);\n}\n`
+        );
+        expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
+    });
+
+    it("join 3 — convicts a capability the named helper's module does not enforce", () => {
+        const p = write(
+            "wrongkey",
+            `${IMPORT}export async function GET() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\n`
+        );
+        const { violations } = bindDeclaration(p, "fixture", "GET", {
+            ...DECL,
+            capability: "documents.read",
+        }) as Binding;
+        expect(violations.map((v) => v.kind)).toContain("capability-not-enforced");
+    });
+
+    it("convicts a declaration that names no helper at all", () => {
+        const p = write("noaddress", `export async function GET() { return Response.json({}); }\n`);
+        const { violations } = bindDeclaration(p, "fixture", "GET", {
+            status: "declared",
+            capability: "settings.users_roles",
+        }) as Binding;
+        expect(violations.map((v) => v.kind)).toContain("unaddressed-declaration");
+    });
+
+    it("reports 'could not read' as a violation rather than as a pass", () => {
+        // §10.2's lesson: an unreadable subject must never be indistinguishable from a clean one.
+        const p = write("unreadable", `${IMPORT}export const GET = someFactory;\n`);
+        const { violations } = bindDeclaration(p, "fixture", "GET", DECL) as Binding;
+        expect(violations.map((v) => v.kind)).toContain("unresolvable-handler");
+    });
+
+    it("resolves the aliased `export { handler as POST }` form", () => {
+        // Under-reporting here would leave a real handler unbindable, so the alias is followed.
+        const p = write(
+            "aliased",
+            `${IMPORT}async function handler() {\n  const auth = await requireUsersRolesManageAuth();\n  if (!auth.ok) return auth.response;\n  return Response.json({ ok: true });\n}\nexport { handler as POST };\n`
+        );
+        expect((bindDeclaration(p, "fixture", "POST", DECL) as Binding).violations).toEqual([]);
+    });
+
+    it("does not mistake a helper NAMED in a string or comment for a call", () => {
+        const p = write(
+            "mentioned",
+            `${IMPORT}export async function GET() {\n  // requireUsersRolesManageAuth() belongs here\n  const note = "requireUsersRolesManageAuth()";\n  return Response.json({ note });\n}\n`
+        );
+        const { violations } = bindDeclaration(p, "fixture", "GET", DECL) as Binding;
+        expect(violations.map((v) => v.kind)).toContain("unbound-declaration");
+    });
+});
+
+/**
+ * W-15's backlog is 725 handlers. Ordering it by evidence rather than by directory listing is what
+ * makes it a burndown instead of a slog — and the first thing the ordering found was the table
+ * under-reporting a route that is already gated.
+ */
+describe("W-15 — the burndown worklist is discovered from source", () => {
+    const table = JSON.parse(readFileSync(TABLE_PATH, "utf8")) as {
+        routes: Record<string, Record<string, Declaration>>;
+    };
+    const found = pendingWithKnownGates(table) as {
+        route: string;
+        method: string;
+        helper: string;
+        capabilityElsewhere: string;
+    }[];
+
+    it("finds pending handlers that already call a declared gate", () => {
+        expect(found.length).toBeGreaterThan(0);
+    });
+
+    it("names profile-photo GET, which is enforced by the very helper signed-url declares", () => {
+        // Not a hypothetical: this sat `pending` while calling the assertDocumentAccess that
+        // documents/[id]/signed-url declares as documents.read.
+        const photo = found.filter((f) => f.route.includes("persons/[id]/profile-photo"));
+        expect(photo.map((f) => f.method).sort()).toEqual(["GET"]);
+        for (const f of photo) expect(f.helper).toBe("assertDocumentAccess");
+    });
+
+    it("does NOT claim profile-photo's mutations — they gate on a role, not a capability", () => {
+        // POST and DELETE guard with `ctx.role !== "admin"`. That is a gate, but not a capability
+        // gate, and the worklist must not imply a capability nobody has chosen. Which key replaces
+        // a raw role check is W-15's product call — precisely the decision this list must not make
+        // on its own. Asserted so a future widening of the worklist's heuristic has to face it.
+        const photo = found.filter((f) => f.route.includes("persons/[id]/profile-photo"));
+        expect(photo.map((f) => f.method)).not.toContain("POST");
+        expect(photo.map((f) => f.method)).not.toContain("DELETE");
+    });
+
+    it("never reports a handler that is already declared", () => {
+        for (const f of found) {
+            expect(table.routes[f.route]?.[f.method]?.status).toBe("pending");
+        }
+    });
+});
+
+describe("W-14 · RL-10 — table hygiene", () => {
     it("the retired census is gone", () => {
         // 03…§8: "Retire auditAuthorityPaths.mjs in this workstream — leaving a known-30×-wrong
         // census in the repo invites someone to cite it." C1 is that citation happening.

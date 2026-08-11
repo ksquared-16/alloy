@@ -32,6 +32,25 @@
  *                  count may shrink and may never grow. W-14 delivers the mechanism and the
  *                  pilot slice; W-15's exit criterion is that `pending` reaches zero.
  *
+ * **W-15 prerequisite — a declaration is a CLAIM, and the claim is now checked against the source.**
+ * As W-14 shipped it, `{"status":"declared","capability":"settings.users_roles"}` asserted nothing
+ * about the handler. A refactor that deleted the guard left the table green and lying, and the
+ * mission's requirement is that the declaration *become* enforcement. Driving 725 `pending` entries
+ * to `declared` against an unbound table would have produced 751 unfalsifiable claims instead of 25.
+ * So each `declared` entry naming a `helper` must now survive three joins:
+ *
+ *   1. the exported handler's own body calls that helper — method grain, not file grain, so a guard
+ *      on `GET` cannot vouch for `DELETE` in the same file;
+ *   2. if the helper's verdict is bound to an identifier, the handler TESTS it — a returned verdict
+ *      nobody branches on is not a gate;
+ *   3. the module the helper is imported from names the declared capability on an executable line.
+ *
+ * This is not the reachability inference the census got wrong (see below), and the difference is the
+ * direction of travel. The census read source and *inferred a gate*. This reads a stated claim and
+ * tries to *falsify* it. Inference invents authorization that was never written; falsification can
+ * only ever remove a claim the table already makes. Where the census over-reported by ~30×, an
+ * unfalsifiable declaration here fails loudly and names the join it broke.
+ *
  * Run: node web/scripts/checkRouteCapabilities.mjs [--json] [--pending] [--suggest] [--seed]
  */
 
@@ -116,6 +135,278 @@ function exportedMethods(file) {
 }
 
 // ---------------------------------------------------------------------------
+// Declaration binding — the three joins that turn a claim into evidence
+// ---------------------------------------------------------------------------
+
+/**
+ * A length-preserving source skeleton: comment and string bodies become spaces.
+ *
+ * Length preservation is what lets an offset found here be used against the ORIGINAL source, so a
+ * violation can quote real code. Blanking matters for two reasons: an identifier inside a string is
+ * not a call, and a brace inside a string would derail the handler-body match.
+ *
+ * `stripComments` above is regex-based and guards `https://` with a `[^:]` lookbehind — adequate for
+ * counting keys, not for offset arithmetic. This scanner is a real one-pass tokenizer, and it is
+ * deliberately conservative about template literals: a plain template is blanked, but one carrying
+ * `${…}` is left intact, because its interpolation is executable code and brace-balanced. A template
+ * whose interpolation held an unbalanced brace inside a nested string would truncate a handler body
+ * and raise a violation — loud and investigable, never a silent pass. That is the safe direction for
+ * a control whose failure mode is otherwise "authorization nobody wrote".
+ */
+export function skeleton(source) {
+    const n = source.length;
+    const out = source.split("");
+    const blank = (from, to) => {
+        for (let k = from; k < to && k < n; k += 1) if (out[k] !== "\n") out[k] = " ";
+    };
+
+    let i = 0;
+    while (i < n) {
+        const c = source[i];
+        const d = source[i + 1];
+
+        if (c === "/" && d === "/") {
+            let j = i;
+            while (j < n && source[j] !== "\n") j += 1;
+            blank(i, j);
+            i = j;
+            continue;
+        }
+        if (c === "/" && d === "*") {
+            let j = i + 2;
+            while (j < n && !(source[j] === "*" && source[j + 1] === "/")) j += 1;
+            j = Math.min(n, j + 2);
+            blank(i, j);
+            i = j;
+            continue;
+        }
+        if (c === '"' || c === "'") {
+            let j = i + 1;
+            while (j < n) {
+                if (source[j] === "\\") {
+                    j += 2;
+                    continue;
+                }
+                if (source[j] === c || source[j] === "\n") break;
+                j += 1;
+            }
+            const end = Math.min(j + 1, n);
+            // The DELIMITERS survive; only the contents are blanked. Blanking the quotes too erases
+            // the token structure that tells an import statement from prose.
+            blank(i + 1, end - 1);
+            i = end;
+            continue;
+        }
+        if (c === "`") {
+            let j = i + 1;
+            let interpolated = false;
+            while (j < n) {
+                if (source[j] === "\\") {
+                    j += 2;
+                    continue;
+                }
+                if (source[j] === "$" && source[j + 1] === "{") interpolated = true;
+                if (source[j] === "`") break;
+                j += 1;
+            }
+            const end = Math.min(j + 1, n);
+            if (!interpolated) blank(i + 1, end - 1);
+            i = end;
+            continue;
+        }
+        i += 1;
+    }
+    return out.join("");
+}
+
+/** The block opened by the `{` at `open`, and the index just past its match. */
+function matchBlock(skel, open) {
+    if (open < 0 || skel[open] !== "{") return null;
+    let depth = 0;
+    for (let k = open; k < skel.length; k += 1) {
+        if (skel[k] === "{") depth += 1;
+        else if (skel[k] === "}") {
+            depth -= 1;
+            if (depth === 0) return { start: open, end: k + 1 };
+        }
+    }
+    return null;
+}
+
+/**
+ * The function BODY following a signature that starts at `from`.
+ *
+ * The first `{` after a handler's name is very often not its body: `GET(request, { params })`
+ * destructures in the parameter list, and taking that brace yields a two-token "body" that contains
+ * no gate — which is exactly how a guarded route would be convicted of being unguarded. So the body
+ * is the first `{` at paren-depth zero. A `;` at depth zero means the declaration ended without a
+ * body at all (`export const GET = handler;`), which is reported rather than searched past.
+ */
+function bodyBlock(skel, from) {
+    let paren = 0;
+    for (let k = from; k < skel.length; k += 1) {
+        const ch = skel[k];
+        if (ch === "(") paren += 1;
+        else if (ch === ")") paren -= 1;
+        else if (ch === "{" && paren <= 0) return matchBlock(skel, k);
+        else if (ch === ";" && paren <= 0) return null;
+    }
+    return null;
+}
+
+/**
+ * The body of one exported handler, at method grain.
+ *
+ * Every export form `exportedMethods` recognises is resolved, including the aliased
+ * `export { handler as POST }` — which is followed back to the local declaration, because a handler
+ * reached through an alias is no less a handler. A form that cannot be resolved is reported as a
+ * violation rather than skipped: "I could not read this one" must never be indistinguishable from
+ * "this one is fine", which is the exact confusion §10.2 records.
+ */
+export function handlerBody(file, method) {
+    const skel = skeleton(read(file));
+
+    const direct = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\b`).exec(skel);
+    if (direct) {
+        const block = bodyBlock(skel, direct.index + direct[0].length);
+        if (block) return skel.slice(block.start, block.end);
+    }
+
+    const assigned = new RegExp(`export\\s+(?:const|let|var)\\s+${method}\\s*[:=]`).exec(skel);
+    if (assigned) {
+        const block = bodyBlock(skel, assigned.index + assigned[0].length);
+        if (block) return skel.slice(block.start, block.end);
+    }
+
+    // export { local as METHOD } — resolve `local`, then read its declaration.
+    for (const block of skel.matchAll(/export\s*\{([^}]*)\}/g)) {
+        for (const clause of block[1].split(",")) {
+            const parts = clause.trim().split(/\s+as\s+/);
+            const exported = (parts[1] ?? parts[0] ?? "").trim();
+            const local = (parts[0] ?? "").trim();
+            if (exported !== method || !local) continue;
+            const decl = new RegExp(`(?:async\\s+)?function\\s+${local}\\b|(?:const|let|var)\\s+${local}\\s*[:=]`).exec(skel);
+            if (!decl) continue;
+            const body = bodyBlock(skel, decl.index + decl[0].length);
+            if (body) return skel.slice(body.start, body.end);
+        }
+    }
+
+    return null;
+}
+
+/** The identifier a call's verdict is bound to, if it is bound at all. */
+function verdictBinding(body, helper) {
+    const m = new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:await\\s+)?${helper}\\s*\\(`).exec(body);
+    return m ? m[1] : null;
+}
+
+/**
+ * The module a helper enters the route from — an import if it is imported, otherwise the route file
+ * itself, since a route may define its own gate (`canReadProgramPublication` does).
+ */
+function helperModule(file, helper) {
+    const skel = skeleton(read(file));
+    for (const stmt of skel.matchAll(/import\s+([\s\S]*?)\s+from\s*["']([^"']*)["']/g)) {
+        if (!new RegExp(`\\b${helper}\\b`).test(stmt[1])) continue;
+        // The specifier lives in the ORIGINAL source: the skeleton blanked its contents.
+        const spec = /from\s*["']([^"']+)["']/.exec(read(file).slice(stmt.index, stmt.index + stmt[0].length + 2));
+        const target = spec ? resolveImport(spec[1], file) : null;
+        if (target) return target;
+    }
+    if (new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${helper}\\b|(?:const|let|var)\\s+${helper}\\s*[:=]`).test(skel)) {
+        return file;
+    }
+    return null;
+}
+
+/**
+ * The three joins, for one declared handler. Returns the violations it fails, and the evidence it
+ * passes on — the evidence is what makes a green run reviewable rather than merely quiet.
+ */
+export function bindDeclaration(file, route, method, decl) {
+    const violations = [];
+    const helper = decl.helper;
+    if (!helper) {
+        // A `declared` entry with no named helper cannot be bound to anything. It is a claim about
+        // enforcement with no address, and W-15 may not add more of them.
+        return { violations: [{ route, kind: "unaddressed-declaration", detail: `${method} declares ${decl.capability} but names no helper to bind it to` }], evidence: null };
+    }
+
+    const body = handlerBody(file, method);
+    if (body === null) {
+        return { violations: [{ route, kind: "unresolvable-handler", detail: `${method} is declared but its body could not be located to verify the ${helper} gate` }], evidence: null };
+    }
+
+    // Join 1 — this handler, not merely this file, calls the helper.
+    const calls = new RegExp(`\\b${helper}\\s*\\(`).test(body);
+    if (!calls) {
+        violations.push({ route, kind: "unbound-declaration", detail: `${method} declares capability ${decl.capability} via ${helper}, but ${method}'s body never calls ${helper}` });
+    }
+
+    // Join 2 — a verdict that is bound must be tested. A helper that throws binds nothing and needs
+    // no test; one that returns `{ok:false, response}` and is ignored is a gate in name only.
+    const bound = calls ? verdictBinding(body, helper) : null;
+    if (bound && !new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+        violations.push({ route, kind: "untested-verdict", detail: `${method} calls ${helper} and binds its verdict to '${bound}', but never tests '${bound}' — the verdict is discarded` });
+    }
+
+    // Join 3 — the helper's module actually names the declared capability.
+    const mod = helperModule(file, helper);
+    if (!mod) {
+        violations.push({ route, kind: "unresolvable-helper", detail: `${method} names helper ${helper}, which is neither imported nor defined in the route` });
+        return { violations, evidence: null };
+    }
+    const modSource = stripComments(read(mod));
+    if (!modSource.includes(`"${decl.capability}"`) && !modSource.includes(`'${decl.capability}'`)) {
+        violations.push({
+            route,
+            kind: "capability-not-enforced",
+            detail: `${method} declares ${decl.capability}, but ${relative(WEB, mod).split("\\").join("/")} (which defines ${helper}) never names that key on an executable line`,
+        });
+    }
+
+    return { violations, evidence: { route, method, helper, capability: decl.capability, enforcedIn: relative(WEB, mod).split("\\").join("/") } };
+}
+
+/**
+ * W-15's burndown, discovered rather than hand-listed.
+ *
+ * A `pending` handler whose body already calls one of the helpers the table uses elsewhere is a
+ * route that is *enforced but undeclared* — the table under-reporting rather than over-reporting.
+ * `persons/[id]/profile-photo` is the case that motivated this: all three of its methods sat
+ * `pending` while calling the very `assertDocumentAccess` that `documents/[id]/signed-url` declares
+ * as `documents.read`. This is advisory output, never a pass/fail input — the capability such a
+ * route requires is still a reviewed decision, and inferring it is the mistake this file replaces.
+ */
+export function pendingWithKnownGates(table) {
+    const helpers = new Map();
+    for (const methods of Object.values(table.routes ?? {})) {
+        for (const decl of Object.values(methods)) {
+            if (decl.status === "declared" && decl.helper) helpers.set(decl.helper, decl.capability);
+        }
+    }
+
+    const found = [];
+    for (const [route, methods] of Object.entries(table.routes ?? {})) {
+        const abs = join(WEB, route);
+        if (!existsSync(abs)) continue;
+        for (const [method, decl] of Object.entries(methods)) {
+            if (decl.status !== "pending") continue;
+            const body = handlerBody(abs, method);
+            if (!body) continue;
+            for (const [helper, capability] of helpers) {
+                if (new RegExp(`\\b${helper}\\s*\\(`).test(body)) {
+                    found.push({ route, method, helper, capabilityElsewhere: capability });
+                    break;
+                }
+            }
+        }
+    }
+    return found;
+}
+
+// ---------------------------------------------------------------------------
 // Capability-key evidence (advisory — for authoring the table, never for passing it)
 // ---------------------------------------------------------------------------
 
@@ -178,7 +469,8 @@ export function runRouteCapabilityCheck(tablePath = TABLE_PATH) {
     }
 
     const violations = [];
-    const counts = { routes: onDisk.size, methods: 0, declared: 0, none: 0, pending: 0 };
+    const counts = { routes: onDisk.size, methods: 0, declared: 0, none: 0, pending: 0, bound: 0 };
+    const bindings = [];
 
     for (const [route, methods] of onDisk) {
         const entry = declared[route];
@@ -205,6 +497,16 @@ export function runRouteCapabilityCheck(tablePath = TABLE_PATH) {
                         kind: "malformed-capability",
                         detail: `${method} is status 'declared' but capability ${JSON.stringify(decl.capability)} is not a catalog key`,
                     });
+                } else {
+                    // The claim is checked against the source. A declaration that survives this is
+                    // evidence; one that does not is a route the table describes and the code does
+                    // not implement.
+                    const bind = bindDeclaration(join(WEB, route), route, method, decl);
+                    violations.push(...bind.violations);
+                    if (bind.evidence && bind.violations.length === 0) {
+                        counts.bound += 1;
+                        bindings.push(bind.evidence);
+                    }
                 }
             } else if (decl.status === "none") {
                 counts.none += 1;
@@ -253,7 +555,7 @@ export function runRouteCapabilityCheck(tablePath = TABLE_PATH) {
         });
     }
 
-    return { ok: violations.length === 0, counts, ratchet: { max_pending: ceiling ?? null }, violations, onDisk: [...onDisk] };
+    return { ok: violations.length === 0, counts, ratchet: { max_pending: ceiling ?? null }, violations, bindings, onDisk: [...onDisk] };
 }
 
 /** Route → methods → suggested capability evidence. Authoring aid only. */
@@ -331,6 +633,7 @@ if (invokedDirectly) {
         const c = report.counts;
         console.log(`Declared route capability table (W-14 · I-24) — ${c.routes} API routes, ${c.methods} handlers\n`);
         console.log(`  declared (requires a capability)   ${String(c.declared).padStart(4)}`);
+        console.log(`    ↳ bound to source (3 joins)      ${String(c.bound).padStart(4)}`);
         console.log(`  none (reviewed, reason recorded)   ${String(c.none).padStart(4)}`);
         console.log(`  pending (W-15 backlog)             ${String(c.pending).padStart(4)}   ceiling ${report.ratchet.max_pending}`);
 
@@ -342,6 +645,16 @@ if (invokedDirectly) {
                     .filter(([, d]) => d.status === "pending")
                     .map(([m]) => m);
                 if (methods.length) console.log(`  ${route}  [${methods.join(", ")}]`);
+            }
+        }
+
+        if (process.argv.includes("--enforced-but-pending")) {
+            // W-15's burndown, ordered by evidence rather than by directory listing.
+            const table = JSON.parse(readFileSync(TABLE_PATH, "utf8"));
+            const found = pendingWithKnownGates(table);
+            console.log(`\n--- pending handlers that already call a known gate (${found.length}) ---`);
+            for (const f of found) {
+                console.log(`  ${f.route}  ${f.method}  calls ${f.helper}  (declared elsewhere as ${f.capabilityElsewhere})`);
             }
         }
 

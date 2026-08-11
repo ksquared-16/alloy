@@ -829,7 +829,8 @@
       "POST": {
         "status": "declared",
         "capability": "settings.manage",
-        "helper": "canWriteProgramPublication"
+        "helper": "canManageProgramPublication",
+        "note": "Was declared as 'canWriteProgramPublication', a function that does not exist anywhere in the repository. The gate itself was real and correct — POST has always called canManageProgramPublication, which requires settings.manage — but the table named an enforcement site a reviewer could not follow. Corrected when the W-15 binding join made the claim checkable."
       }
     },
     "app/api/admin/contact-options/route.ts": {
