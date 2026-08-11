@@ -507,17 +507,25 @@ describe("the production composition root", () => {
     it("registers exactly the declared Decision Classes, V1's still first and unchanged", () => {
         const expected = [
             ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY,
+            // Phase 2.8 Gate C. Same capability, same manifest position.
+            "attention_suggestion_enrichment_provider_backed",
             "processing_source_classification",
             "processing_identity_subject_resolution",
         ];
         expect(TRUST_REGISTRY.listDecisionClassKeys()).toEqual(expected);
         expect(listDecisionClassKeys()).toEqual(expected);
 
+        // The point of the assertion below is now sharper than when it was
+        // written: a SECOND class for the same capability exists, and V1's
+        // definition still says exactly what it always did. In particular its
+        // strategy preference is still deterministic-only, so nothing about
+        // adding provider-backed reasoning made the certified path escalate.
         const v1 = TRUST_REGISTRY.getDecisionClass(ATTENTION_SUGGESTION_ENRICHMENT_CLASS_KEY);
         expect(v1?.risk_tier).toBe("convenience");
         expect(v1?.requires_allowed_feature).toBe("draft_enrichment");
         expect(v1?.strategy_preference).toEqual(["deterministic"]);
         expect(v1?.trust_threshold).toBe(0.5);
+        expect(v1?.economic_policy.max_escalation_level).toBe(0);
     });
 
     it("ownership follows doctrine: the privacy policy is platform-owned, the rest capability-owned", () => {

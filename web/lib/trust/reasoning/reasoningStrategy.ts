@@ -12,6 +12,7 @@
 
 import type { ReasoningContextV1 } from "@/lib/trust/privacy/privacyEngine";
 import type { ProviderIdentityV1, ProviderUsageFactsV1 } from "@/lib/trust/provider/governedProviderExecution";
+import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informationPackage";
 
 /**
  * Strategy kinds, cheapest first. V1 implements `deterministic` only; the rest
@@ -134,5 +135,53 @@ export type ReasoningStrategyV1 = {
      * context, and it introduces no timeout, retry or cancellation semantics;
      * those belong to execution control, which is not part of this contract.
      */
-    reason(input: { context: ReasoningContextV1; nowIso: string }): ReasoningExecution;
+    reason(input: ReasoningStrategyExecutionInputV1): ReasoningExecution;
+};
+
+/**
+ * What a strategy is handed for ONE execution.
+ *
+ * Introduced because the runtime already required an `eligibleReasoningInput`
+ * for provider-capable strategies and then never gave it to them — so a
+ * registry-selected provider strategy could not reach the governed artifact it
+ * was obliged to send. The only alternatives were a per-request strategy
+ * override or a capability-constructed strategy, and both would have moved
+ * selection authority out of the registry.
+ *
+ * A widening, not a replacement, in the same spirit as {@link ReasoningExecution}:
+ * every field beyond `context` and `nowIso` is optional, so the three
+ * deterministic strategies certified in Phase 1 need no edit and behave
+ * identically.
+ *
+ * Deliberately NOT a generic metadata bag. Each field is here because a
+ * registered strategy cannot obtain it any other way.
+ */
+export type ReasoningStrategyExecutionInputV1 = {
+    /** Post-privacy reasoning context. Unchanged. */
+    readonly context: ReasoningContextV1;
+    readonly nowIso: string;
+    /**
+     * The governed artifact privacy produced, forwarded verbatim.
+     *
+     * Kept SEPARATE from `context` on purpose. The context is what reasoning
+     * may think about; this is what may leave the platform. Collapsing them
+     * would make "safe to reason over" and "safe to transmit" the same claim,
+     * and they are not — that distinction is the whole of Phase 2.3.
+     *
+     * Optional because a deterministic strategy legitimately has none. Its
+     * absence for a provider-capable strategy is still refused upstream by the
+     * Phase 2.3.1 guard; this field does not replace that check.
+     */
+    readonly eligibleReasoningInput?: EligibleReasoningInputV1;
+    /**
+     * The contract's correlation id.
+     *
+     * Required by `GovernedProviderExecutionRequestV1`, and unobtainable
+     * otherwise: it is audit identity that ties an execution to its contract,
+     * and neither the context nor the governed input carries it. Notably it is
+     * NOT derivable from `content_hash` — a content digest and an audit
+     * correlation are different facts, and substituting one for the other would
+     * put a hash where a lineage identifier belongs.
+     */
+    readonly correlation_id?: string;
 };

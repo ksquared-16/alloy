@@ -5,18 +5,29 @@
  * enrichment route has always returned, except the overlay now comes out of a
  * Decision Package instead of a provider response.
  *
- * Deliberately additive: the legacy `enrichAttentionSuggestionStubEnvelope`
- * path is untouched and still serves the live-provider case, which Slice 1 does
- * not go near.
+ * As of Phase 2.8 Gate C this serves BOTH reasoning modes. The envelope, the
+ * telemetry payload and the operator's experience are the same on either; what
+ * differs is which decision class the capability submitted, and therefore
+ * whether a provider participated at all.
+ *
+ * As of Gate D this is the ONLY enrichment envelope. The ungoverned one, and
+ * the provider it could reach, were deleted rather than left uncalled — D-45
+ * holds that a bypass is closed only when it is unreachable, and an unimported
+ * module is one import away from being reachable again.
  */
 
 import { randomUUID } from "crypto";
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
-import type { AiEnrichmentEnvelopeV1, AiTelemetryOutcome, AiUsageTelemetryPayloadV1 } from "@/lib/ai/enrichmentContracts";
+import {
+    NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
+    type AiEnrichmentEnvelopeV1,
+    type AiTelemetryOutcome,
+    type AiUsageTelemetryPayloadV1,
+} from "@/lib/ai/enrichmentContracts";
 import { maybeEmitAiEnrichmentTelemetryEvent } from "@/lib/ai/enrichmentTelemetry";
-import { NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE } from "@/lib/ai/enrichAttentionSuggestionStub";
+import { asAiProviderKey } from "@/lib/ai/providerTypes";
 import type { TrustAuthorizationDecision } from "@/lib/trust/authorization/trustAuthorizationDecision";
 import { captureOutcome } from "@/lib/trust/observation/captureOutcome";
 import type { DecisionPackageV1 } from "@/lib/trust/package/decisionPackageTypes";
@@ -47,6 +58,8 @@ export type TrustAttentionEnrichmentResult = {
     readonly telemetry_payload: AiUsageTelemetryPayloadV1;
     readonly telemetry_emitted: boolean;
     readonly decision_package: DecisionPackageV1;
+    /** Which governed question executed. Reported, never chosen here. */
+    readonly reasoning_mode: "deterministic_local" | "provider_backed";
 };
 
 function policySnapshot(policy: ResolvedAiOrgPolicyV1): AiEnrichmentEnvelopeV1["policy_snapshot"] {
@@ -58,11 +71,23 @@ function policySnapshot(policy: ResolvedAiOrgPolicyV1): AiEnrichmentEnvelopeV1["
     };
 }
 
-/** Maps a Decision Package outcome onto the existing telemetry vocabulary. */
-function telemetryOutcomeFor(pkg: DecisionPackageV1): AiTelemetryOutcome {
+/**
+ * Maps a Decision Package outcome onto the existing telemetry vocabulary.
+ *
+ * `providerParticipated` distinguishes the two success values, and it is an
+ * OBSERVED fact — whether the port reported an identity — not the org policy's
+ * configured provider. The distinction is the point: policy records what was
+ * asked for, and a governed execution that refused before reaching transport
+ * had no provider participate however the org is configured.
+ *
+ * The legacy path reached `live_success` by comparing a resolved provider key to
+ * a literal. This reaches the same value from the same underlying fact, without
+ * either module naming a vendor.
+ */
+function telemetryOutcomeFor(pkg: DecisionPackageV1, providerParticipated: boolean): AiTelemetryOutcome {
     switch (pkg.outcome) {
         case "recommended":
-            return "stub_success";
+            return providerParticipated ? "live_success" : "stub_success";
         case "refused_policy":
         case "refused_permission":
             return "policy_denied";
@@ -109,6 +134,22 @@ export async function enrichAttentionSuggestionViaTrustRuntime(
         policy_snapshot: policySnapshot(policy),
     };
 
+    // Provider identity, from what ANSWERED rather than from what was
+    // configured (D-44). Absent when no provider participated, which is the
+    // deterministic path and every provider-backed execution that refused
+    // before transport.
+    //
+    // A reported identity outside the operator-facing vocabulary is not
+    // renamed: `asAiProviderKey` returns null and this falls back to the org
+    // policy's provider, which is a fact about configuration and is at least
+    // true of what was asked for. `provider_key` is set by local configuration
+    // and never by the provider, so this is unreachable today — it exists so a
+    // future deployment cannot make telemetry lie by widening the port.
+    const observedProviderKey = decision.provider_execution
+        ? asAiProviderKey(decision.provider_execution.identity.provider_key)
+        : null;
+    const providerParticipated = decision.provider_execution != null;
+
     const telemetry_payload: AiUsageTelemetryPayloadV1 = {
         schema_version: 1,
         event_kind: "enrichment_request",
@@ -118,10 +159,10 @@ export async function enrichAttentionSuggestionViaTrustRuntime(
         entity_type: input.deterministic?.target.entity_type ?? null,
         entity_id: input.deterministic?.target.entity_id ?? null,
         feature: NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
-        // No provider participated. Reporting `stub` keeps the existing
-        // operator-facing telemetry vocabulary unchanged for this slice.
-        provider_key: "stub",
-        outcome: telemetryOutcomeFor(decision.package),
+        // `stub` when nothing reached a provider — the deterministic path sends
+        // nowhere, and that has been the reported value since Slice 1.
+        provider_key: providerParticipated ? (observedProviderKey ?? policy.provider) : "stub",
+        outcome: telemetryOutcomeFor(decision.package, providerParticipated),
         latency_ms: decision.package.economics.latency_ms,
         redaction: {
             steps_total: decision.package.privacy_report.redaction_steps.length,
@@ -151,5 +192,11 @@ export async function enrichAttentionSuggestionViaTrustRuntime(
         detail: { outcome: decision.package.outcome },
     });
 
-    return { envelope, telemetry_payload, telemetry_emitted: emitted, decision_package: decision.package };
+    return {
+        envelope,
+        telemetry_payload,
+        telemetry_emitted: emitted,
+        decision_package: decision.package,
+        reasoning_mode: decision.reasoning_mode,
+    };
 }

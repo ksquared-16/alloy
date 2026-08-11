@@ -14,6 +14,17 @@ Phase 1 closeout merge `2d24b00da285fdefc0c696a6078721d232360591` (PR #356).
 This is a code-grounded implementation assessment. It implements nothing, redesigns neither Trust nor
 Communications, and modifies no canonical doctrine. Every claim below cites the file that proves it.
 
+> **F-1 was closed by Phase 2.8 Gate D (2026-08-10).** The ungoverned egress this document is built
+> around — `lib/ai/openAiCompatibleStructuredProvider.ts`, together with
+> `enrichAttentionSuggestionStub.ts`, `resolveStructuredAiProvider.ts`, `disabledProvider.ts` and
+> `scripts/validateOpenAiEnrichmentLocal.ts` — was **deleted**, not unlinked. The enrichment route
+> reaches a provider only through the governed Trust path, and
+> `tests/trust/ungovernedEgressRetired.test.ts` fails if any module in the tree reintroduces provider
+> egress, whether or not anything imports it.
+>
+> The paths and line numbers below are left exactly as written. They are the record of what was
+> assessed; rewriting them in place would erase the finding rather than close it.
+
 ---
 
 ## 0. The three findings that govern everything else

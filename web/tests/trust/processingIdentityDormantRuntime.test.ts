@@ -134,9 +134,14 @@ async function dryRun(recommendation: Readonly<Record<string, unknown>>, repo = 
 // ---------------------------------------------------------------------------
 
 describe("P14-A — the third class composes", () => {
-    it("registers exactly three classes, in deterministic order", () => {
+    it("registers exactly the declared classes, in deterministic order", () => {
+        // Phase 2.8 Gate C added the provider-backed enrichment class. It sits
+        // adjacent to the deterministic one because both come from the same
+        // capability contribution, and composition order follows the manifest —
+        // which is the property this assertion exists to hold.
         expect(listDecisionClassKeys()).toEqual([
             "attention_suggestion_enrichment",
+            "attention_suggestion_enrichment_provider_backed",
             "processing_source_classification",
             "processing_identity_subject_resolution",
         ]);

@@ -11,6 +11,20 @@ import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 export const NEEDS_ATTENTION_SUGGESTION_ENRICHMENT_AGENT_KEY = "needs_attention_suggestion_enrichment" as const;
 
 /**
+ * Telemetry feature key for needs-attention draft enrichment.
+ *
+ * Lives here as of Phase 2.8 Gate D. It used to be declared by the ungoverned
+ * enrichment envelope, which has been deleted — and an identifier that outlives
+ * the module it was declared in belongs with the contracts rather than with
+ * whichever implementation happened to define it first.
+ *
+ * The VALUE is deliberately unchanged, so operator telemetry stays continuous
+ * across the migration: a query written before Phase 2.8 still finds every
+ * enrichment request after it.
+ */
+export const NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE = "needs_attention_draft_enrichment" as const;
+
+/**
  * Optional overlay on {@link AttentionSuggestionV1} — wording / drafts / notes only.
  * Must not change resolver-derived action keys or membership.
  */
