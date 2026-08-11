@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import OpportunityDrawerOpenCoordinator from "@/components/admin/OpportunityDrawerOpenCoordinator";
 import ContextualRecordOpenListener from "@/components/adminV2/ContextualRecordOpenListener";
+import SearchFocusSelectionListener from "@/components/adminV2/SearchFocusSelectionListener";
 import AlloyOsRuntimeSplitController from "@/app/adminV2/components/AlloyOsRuntimeSplitController";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 
@@ -19,6 +20,7 @@ export function AdminV2ShellDrawerScope({ children }: { children: ReactNode }) {
             <AlloyOsRuntimeSplitController />
             <OpportunityDrawerOpenCoordinator />
             <ContextualRecordOpenListener />
+            <SearchFocusSelectionListener />
         </AdminDrawerProvider>
     );
 }

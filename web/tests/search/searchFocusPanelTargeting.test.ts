@@ -157,11 +157,16 @@ describe("Search uses the ONE canonical selection authority", () => {
         const { readFileSync } = await import("node:fs");
         const { join } = await import("node:path");
         const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
-        expect(src).toContain("useAdminDrawer");
-        expect(src).toContain("drawerSubjectContext");
-        // The competing event mechanism is gone.
+        // The control states intent; a listener INSIDE AdminDrawerProvider applies
+        // it to the one selection authority. The control cannot use the hook itself
+        // — the top nav renders outside the provider and calling it there throws.
+        expect(src).toContain("dispatchSearchFocusSelection");
         expect(src).not.toContain("requestFocusPanelTarget");
-        expect(src).not.toContain("focusPanelTarget");
+
+        const listener = readFileSync(join(process.cwd(), "components/adminV2/SearchFocusSelectionListener.tsx"), "utf8");
+        expect(listener).toContain("useAdminDrawer");
+        expect(listener).toContain("drawerSubjectContext");
+        expect(listener).toContain("card_focus");
     });
 
     it("navigates to the configured work-unit host BEFORE selecting", async () => {
@@ -171,7 +176,7 @@ describe("Search uses the ONE canonical selection authority", () => {
         const { join } = await import("node:path");
         const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
         const nav = src.indexOf("operatorWorkUnitHrefFromKey");
-        const select = src.indexOf("openDrawer({");
+        const select = src.indexOf("dispatchSearchFocusSelection({");
         expect(nav).toBeGreaterThan(-1);
         expect(select).toBeGreaterThan(nav);
     });
@@ -194,7 +199,7 @@ describe("the obsolete drawer product is unreachable from Search", () => {
         const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
         expect(src).not.toContain("launchGlobalRecordSearchOpen");
         expect(src).not.toContain("open_drawer");
-        expect(src).toContain("drawerSubjectContext");
+        expect(src).toContain("dispatchSearchFocusSelection");
     });
 
     it("the drawer open-intent product no longer exists", async () => {

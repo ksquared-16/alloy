@@ -12,9 +12,8 @@ import {
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
-import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { dispatchSearchFocusSelection } from "@/lib/adminV2/searchFocusSelection";
 import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
@@ -160,7 +159,6 @@ function SearchResultRow({
 
 export default function GlobalSearchBox() {
     const router = useRouter();
-    const { openDrawer } = useAdminDrawer();
     const wrapRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -282,24 +280,23 @@ export default function GlobalSearchBox() {
             const hostKey = (destination.host_work_unit_key ?? "").trim();
             if (hostKey) router.push(operatorWorkUnitHrefFromKey(hostKey, hostId));
 
-            // One selection authority — the same context the inline panel reads.
-            openDrawer({
-                type: hostType as AdminDrawerEntityType,
-                id: hostId,
-                source: "global_search",
-                drawerSubjectContext: {
-                    focus_mode: subject.kind === "household" ? "case_default" : "subject_highlight",
-                    lifecycle_visual_stage_key: "",
-                    related_subjects: [],
-                    card_focus: {
-                        card_key: destination.card_key,
-                        item_id: destination.item_id ?? null,
-                        context_key: destination.context_key ?? null,
-                    },
+            // One selection authority — applied by a listener mounted INSIDE
+            // AdminDrawerProvider, because this control renders in the top nav which
+            // is outside it. Calling useAdminDrawer() here throws and takes the whole
+            // nav down; browser certification caught exactly that.
+            dispatchSearchFocusSelection({
+                entity_type: hostType,
+                entity_id: hostId,
+                host_work_unit_key: hostKey || null,
+                subject_highlight: subject.kind !== "household",
+                card_focus: {
+                    card_key: destination.card_key,
+                    item_id: destination.item_id ?? null,
+                    context_key: destination.context_key ?? null,
                 },
             });
         },
-        [dismiss, router, openDrawer]
+        [dismiss, router]
     );
 
     const openSubject = useCallback(
