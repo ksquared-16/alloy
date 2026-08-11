@@ -61,11 +61,22 @@ function headerModel() {
 }
 
 function baseModel(overrides: Partial<WorkUnitSurfaceModel> = {}): WorkUnitSurfaceModel {
+    const emptyWorkView = (id: string, label: string, isActive: boolean, count: number) => ({
+        id,
+        label,
+        isActive,
+        count,
+        attentionCount: null as number | null,
+        href: null as string | null,
+        overdueCount: null as number | null,
+        primaryGrainCount: null as number | null,
+        supportingGrainCount: null as number | null,
+    });
     return {
         header: headerModel(),
         workViews: [
-            { id: "leads", label: "Leads", isActive: false, count: 0, attentionCount: null },
-            { id: "waitlist", label: "Waitlist", isActive: true, count: 2, attentionCount: null },
+            emptyWorkView("leads", "Leads", false, 0),
+            emptyWorkView("waitlist", "Waitlist", true, 2),
         ],
         queue: {
             rows: [],
@@ -74,12 +85,12 @@ function baseModel(overrides: Partial<WorkUnitSurfaceModel> = {}): WorkUnitSurfa
             errorKind: null,
             totalCount: null,
             rowConfig: {
-                subject: { visible: true, fieldKeys: [] },
-                status: { visible: true, fieldKeys: [] },
-                contact: { visible: true, fieldKeys: [] },
-                attention: { visible: true, fieldKeys: [] },
-                work: { visible: true, fieldKeys: [] },
-                groupCount: { visible: true, fieldKeys: [] },
+                subject: { visible: true, label: null, fieldKeys: [] },
+                status: { visible: true, label: null, fieldKeys: [] },
+                contact: { visible: true, label: null, fieldKeys: [] },
+                attention: { visible: true, label: null, fieldKeys: [] },
+                work: { visible: true, label: null, fieldKeys: [] },
+                groupCount: { visible: true, label: null, fieldKeys: [] },
             },
         },
         activeWorkViewId: "waitlist",
