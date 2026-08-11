@@ -1,13 +1,24 @@
 """
-Twilio inbound SMS webhook.
-Receives POST from Twilio, stores message in public.messages, returns TwiML empty response.
-Configure in Twilio Messaging Service.
+Twilio inbound SMS webhook — the one runtime for a received SMS.
 
-Binding route (CARD 6): POST /sms/inbound/{binding_id}
-  deterministic org routing + communication_* dual-write — legacy insert always preserved.
-Legacy: POST /sms/inbound — still inserts legacy messages; canonical persistence resolves org via active SMS binding matching Twilio ``To`` (`inbound_to_e164`), when unambiguous.
+Receives a signed POST from Twilio and answers empty TwiML. Signature validation
+fails closed; the inbound kill switch is COMMUNICATIONS_SMS_INBOUND_ENABLED.
 
-Card 24: X-Twilio-Signature validation + inbound kill switch (COMMUNICATIONS_SMS_INBOUND_ENABLED).
+  POST /sms/inbound/{binding_id}  deterministic org routing
+  POST /sms/inbound               org resolved from the active SMS binding whose
+                                  `inbound_to_e164` matches Twilio `To`, when unambiguous
+
+WHERE A RECEIVED MESSAGE GOES
+  organization resolved   -> canonical `communication_messages` (+ thread, + one
+                             `message_received` Activity event, + keyword handling)
+  organization unresolved -> `communication_inbound_ingress`, retained at provider
+                             authority rather than guessed into a tenant
+
+The legacy `public.messages` inbound dual-write was RETIRED once Block A proved
+the canonical path end to end in a browser. It has no production reader — the one
+legacy SELECT filters `direction = 'outbound'` — and `public.messages` carries no
+`org_id`, so an inbound row there was never scoped to a tenant anyway. Outbound
+legacy usage is untouched, and no historical row was deleted.
 """
 import logging
 from typing import Any, Dict, Optional, Tuple
@@ -15,7 +26,6 @@ from typing import Any, Dict, Optional, Tuple
 import requests
 from fastapi import APIRouter, Request, Response
 
-from ..services.activity_workflow_events import emit_message_lifecycle_event
 from ..services.communication_inbound import (
     IDEMPOTENT_REPLAY_KEY,
     persist_inbound_communication_sms,
@@ -80,69 +90,6 @@ def _fields_from_form(form: Any) -> Tuple[str, str, str, str]:
     body = (form.get("Body") or "").strip()
     message_sid = (form.get("MessageSid") or "").strip()
     return from_num, to_num, body, message_sid
-
-
-def _insert_legacy_messages(
-    *,
-    from_num: str,
-    to_num: str,
-    body: str,
-    message_sid: str,
-    emit_activity: bool = True,
-) -> Optional[Dict[str, Any]]:
-    """
-    Insert into public.messages.
-
-    `emit_activity` exists because Activity ownership moved. Canonical inbound
-    persistence emits `message_received`; this path emitted its own, so a
-    successfully-canonicalized reply produced TWO receive events. The row is still
-    written during the parity period, but it only emits when canonical persistence
-    did not happen — otherwise the canonical event is the single authority.
-    """
-    payload = {
-        "direction": "inbound",
-        "channel": "sms",
-        "to_value": to_num or None,
-        "from_value": from_num or None,
-        "body": body or None,
-        "external_id": message_sid or None,
-    }
-    base_url = _get_base_url()
-    headers = _get_headers()
-    url = f"{base_url}/messages"
-    resp = requests.post(url, headers=headers, json=payload, timeout=10)
-    if not resp.ok:
-        logger.error("sms_inbound: messages insert failed status=%s body=%s", resp.status_code, resp.text[:500])
-        return None
-
-    inserted: Optional[dict] = None
-    try:
-        data = resp.json()
-        if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-            inserted = data[0]
-        elif isinstance(data, dict) and data.get("id"):
-            inserted = data
-    except Exception:
-        inserted = None
-    mid = inserted.get("id") if inserted else None
-    if mid:
-        logger.info(
-            "sms_inbound: stored MessageSid=%s from=%s",
-            message_sid[-8:] if message_sid else "—",
-            from_num[:12] if from_num else "—",
-        )
-        try:
-            if not emit_activity:
-                return inserted
-            emit_message_lifecycle_event(
-                event_purpose="message_received",
-                message_row=inserted if isinstance(inserted, dict) else {},
-                message_id=str(mid),
-                body_text=body or None,
-            )
-        except Exception as emit_err:
-            logger.warning("sms_inbound: activity event emit skipped %s", emit_err)
-    return inserted
 
 
 def _handle_inbound_with_optional_binding(
@@ -310,21 +257,30 @@ def _handle_inbound_with_optional_binding(
             except Exception as e:  # noqa: BLE001
                 logger.exception("sms_inbound: ingress retention failed %s", e)
 
-    try:
-        # Activity ownership: canonical inbound persistence emits the receive
-        # event. The legacy insert emits its own, so letting both run double-fired
-        # `message_received` for every successfully-canonicalized reply. The row is
-        # still written for parity — retirement is the end of convergence — but it
-        # no longer owns the event.
-        _insert_legacy_messages(
-            from_num=from_num,
-            to_num=to_num,
-            body=body,
-            message_sid=message_sid,
-            emit_activity=not canonical_persisted,
+    # The legacy `public.messages` inbound write is retired here. Inbound SMS now
+    # has exactly one runtime.
+    #
+    # It was kept through convergence as a parity net, and Block A removed the last
+    # reason to keep it: canonical persistence, Activity, unread, conversation
+    # history, the operator Inbox, the reply loop, unknown-sender support,
+    # ambiguity and STOP behaviour are all canonical and browser-certified. A final
+    # audit found no production reader of a legacy INBOUND row anywhere —
+    # TypeScript, Python, views or functions. The one legacy SELECT filters
+    # `direction = 'outbound'`; the other two call sites are outbound inserts.
+    #
+    # The row could not have served as a tenant record regardless: `public.messages`
+    # has no `org_id`, so an inbound row there was never scoped to anyone.
+    #
+    # Outbound legacy usage is deliberately untouched, and no historical row is
+    # deleted — received communications are immutable history.
+    if not canonical_persisted:
+        # Not silence: an unattributable message is retained at provider-ingress
+        # authority (see the quarantine branch above), which is the path that
+        # replaced this one.
+        logger.info(
+            "sms_inbound: no canonical row for MessageSid=%s — retained at ingress authority",
+            message_sid[-8:] if message_sid else "—",
         )
-    except Exception as e:
-        logger.exception("sms_inbound: Supabase legacy insert failed %s", e)
 
     return _empty_twiml()
 

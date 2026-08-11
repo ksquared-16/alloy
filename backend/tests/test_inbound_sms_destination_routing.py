@@ -26,15 +26,15 @@ ORG_B = "22222222-2222-4222-8222-222222222222"
 class Recorder:
     def __init__(self):
         self.persist_calls = []
-        self.legacy_calls = []
+        self.http_posts = []
 
     def persist(self, **kwargs):
         self.persist_calls.append(kwargs)
         return {"id": "msg-1", "thread_id": "thread-1", "created_at": "2026-08-10T00:00:00Z"}
 
-    def legacy(self, **kwargs):
-        self.legacy_calls.append(kwargs)
-        return {"id": "legacy-1"}
+    def http_post(self, url, **kwargs):
+        self.http_posts.append(str(url))
+        raise AssertionError(f"inbound must not POST anywhere directly: {url}")
 
 
 def _wire(monkeypatch, rec, bindings):
@@ -42,8 +42,11 @@ def _wire(monkeypatch, rec, bindings):
     monkeypatch.setattr(si, "_get_headers", lambda: {})
     monkeypatch.setattr(si, "find_sms_bindings_by_inbound_to", lambda *a, **k: list(bindings))
     monkeypatch.setattr(si, "persist_inbound_communication_sms", rec.persist)
-    monkeypatch.setattr(si, "_insert_legacy_messages", rec.legacy)
     monkeypatch.setattr(si, "handle_inbound_keyword", lambda **k: None)
+    # The legacy inbound write is retired, so there is no function left to patch.
+    # Spying on the HTTP client instead proves the absence at the wire rather than
+    # trusting that a call site stayed deleted.
+    monkeypatch.setattr(si.requests, "post", rec.http_post)
 
 
 def _deliver(rec):
@@ -120,26 +123,29 @@ def test_cross_org_ambiguity_never_picks_an_org(monkeypatch):
     assert rec.persist_calls == []
 
 
-def test_no_binding_is_not_silently_dropped_from_the_legacy_record(monkeypatch):
-    # Until an org-less canonical home exists, the legacy row is the ONLY record
-    # of an unattributable message. It must still be written.
+def test_a_resolved_delivery_writes_no_legacy_inbound_row(monkeypatch):
+    # The inverse of the parity assertion this replaces. Inbound SMS has ONE
+    # runtime now: a received message becomes a canonical row and nothing else.
+    rec = Recorder()
+    _wire(monkeypatch, rec, [{"id": "bind-1", "org_id": ORG_A}])
+
+    _deliver(rec)
+
+    assert len(rec.persist_calls) == 1
+    assert rec.http_posts == [], "inbound wrote to a second store"
+
+
+def test_an_unattributable_delivery_writes_no_legacy_inbound_row(monkeypatch):
+    # This case previously justified the legacy row as "the ONLY record of an
+    # unattributable message". It is not: `communication_inbound_ingress` is,
+    # which is what `test_no_binding_is_retained_at_ingress` proves.
     rec = Recorder()
     _wire(monkeypatch, rec, [])
 
     _deliver(rec)
 
     assert rec.persist_calls == []
-    assert len(rec.legacy_calls) == 1
-
-
-def test_resolved_delivery_keeps_writing_legacy_during_parity(monkeypatch):
-    # Legacy retirement is the END of convergence, not the first step.
-    rec = Recorder()
-    _wire(monkeypatch, rec, [{"id": "bind-1", "org_id": ORG_A}])
-
-    _deliver(rec)
-
-    assert len(rec.legacy_calls) == 1
+    assert rec.http_posts == [], "an unattributable message wrote to a second store"
 
 
 # --- pre-tenancy ingress: received, but not yet anyone's -----------------------
@@ -154,12 +160,6 @@ class IngressRecorder(Recorder):
     def retain(self, **kwargs):
         self.ingress_calls.append(kwargs)
         return {"id": "ingress-1"}
-
-    def legacy(self, **kwargs):
-        self.legacy_calls.append(kwargs)
-        if kwargs.get("emit_activity", True):
-            self.activity_emitted.append(kwargs.get("message_sid"))
-        return {"id": "legacy-1"}
 
 
 def _wire_ingress(monkeypatch, rec, bindings, canonical=True):
@@ -215,24 +215,30 @@ def test_ambiguous_same_org_never_touches_ingress(monkeypatch):
 # --- Activity ownership: exactly one receive event ----------------------------
 
 
-def test_canonical_success_suppresses_the_legacy_activity_event(monkeypatch):
-    # Both paths emitted `message_received`, so every canonicalized reply fired
-    # TWO receive events. Canonical is now the single authority.
+def test_only_canonical_persistence_can_emit_a_receive_event(monkeypatch):
+    # Both paths used to emit `message_received`, so every canonicalized reply
+    # fired TWO receive events. The second emitter is gone rather than merely
+    # suppressed, so the duplicate is now structurally impossible: canonical
+    # persistence is the only code that can emit one.
     rec = IngressRecorder()
     _wire_ingress(monkeypatch, rec, [{"id": "b1", "org_id": ORG_A}])
 
     _deliver(rec)
 
-    assert len(rec.legacy_calls) == 1, "legacy row still written during parity"
-    assert rec.activity_emitted == [], "legacy must not emit once canonical owns the event"
+    assert len(rec.persist_calls) == 1, "canonical persistence owns the receive event"
+    assert rec.activity_emitted == [], "no emitter remains outside canonical persistence"
+    assert rec.http_posts == []
 
 
-def test_unattributed_message_still_gets_a_durable_receive_event(monkeypatch):
-    # No canonical message exists, so the legacy path remains the only emitter.
-    # An unroutable reply must not become silent.
+def test_an_unroutable_reply_is_still_durable(monkeypatch):
+    # The invariant is unchanged — an unroutable reply must never become silent —
+    # but the mechanism moved. It used to be a legacy row plus its Activity event;
+    # it is now a retained ingress row, which is tenant-safe where the legacy row
+    # (no `org_id` at all) never was.
     rec = IngressRecorder()
     _wire_ingress(monkeypatch, rec, [], canonical=False)
 
     _deliver(rec)
 
-    assert rec.activity_emitted == ["SM_ROUTING_1"]
+    assert len(rec.ingress_calls) == 1, "an unroutable reply must survive somewhere"
+    assert rec.http_posts == []
