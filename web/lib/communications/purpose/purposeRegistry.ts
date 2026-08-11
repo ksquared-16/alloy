@@ -52,7 +52,24 @@ export const PURPOSE_REGISTRY: readonly PurposeDefinition[] = [
         audiences: EXTERNAL,
         categories: ["operational", "transactional", "marketing"],
         channels: EXTERNAL_CHANNELS,
-        recipientKinds: ["person"],
+        // `canonical_thread` is an operator answering a conversation whose sender
+        // Alloy has not identified. It belongs to THIS purpose and no other: the
+        // same human, composing the same kind of message, into a conversation the
+        // organization already received.
+        //
+        // Without it the entire thread-bound reply path was unreachable. Recipient
+        // resolution, the route contract and the eligibility gate all existed, and
+        // every real attempt died here — which is how the path could be described
+        // as implemented while never having sent a single message. Only browser
+        // certification surfaced it.
+        //
+        // This widens reach, not policy. Two controls already stand in front of it,
+        // unchanged: `THREAD_REPLY_CAPABILITIES` in canonicalSend admits only
+        // operator send capabilities, so automation and broadcasts are still
+        // refused; and eligibility treats absent consent as unevaluable, so
+        // `marketing` stays blocked for an unidentified sender while quiet hours and
+        // the unresolved STOP hold continue to apply.
+        recipientKinds: ["person", "canonical_thread"],
         allowsUserAuthored: true,
         allowsExternalOperational: false,
     },

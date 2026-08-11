@@ -207,7 +207,21 @@ EOF
 
 cmd_serve() {
     [ -f "$ENV_FILE" ] || cmd_env
-    if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then green "App already serving at $APP_URL"; return 0; fi
+    # "Already serving" is only reuse if that process was started from the CURRENT
+    # configuration. A server older than the env file is running with stale
+    # variables, and reusing it silently certifies the wrong build — an env-gated
+    # route stayed 404 across three runs because of exactly this.
+    if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then
+        local pid; pid="$(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null | head -1)"
+        if [ -n "$pid" ] && [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
+            info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
+            cmd_app_stop >/dev/null 2>&1
+            for p in $(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null); do kill -9 "$p" 2>/dev/null || true; done
+            sleep 2
+        else
+            green "App already serving at $APP_URL"; return 0
+        fi
+    fi
     mkdir -p "$(dirname "$SERVER_PID_FILE")"
     info "Starting app at $APP_URL against the cert tenant…"
     ( cd "$WEB_DIR" && env $(grep -v '^#' "$ENV_FILE" | xargs) npx next dev -p "$APP_PORT" \
