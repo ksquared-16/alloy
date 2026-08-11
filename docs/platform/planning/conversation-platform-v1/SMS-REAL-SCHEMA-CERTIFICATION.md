@@ -111,3 +111,74 @@ one provider destination may be claimed by several organizations. Invariant to
 establish: **one active provider destination identity → one tenant ownership
 boundary.** The SMS runtime now handles the ambiguity safely instead of guessing,
 so this is not urgent.
+
+## Block A — browser certification (2026-08-11)
+
+Run against the local certification stack (`ALLOY_CERTIFICATION=1`, no provider
+credentials, nothing leaves the machine), holding the browser-certification
+permit and a stack lease. `NEXT_PUBLIC_SUPABASE_URL` verified local before any
+evidence was captured.
+
+A parent's message arrives the way a parent's message arrives: a signed Twilio
+form POST to the backend webhook, verified against a synthetic local-only token
+the spec signs with. Nothing is injected into the database — the properties under
+certification belong to that seam, not to the tables under it.
+
+**11 of 11 passed.**
+
+| Scenario | Result |
+|---|---|
+| A-0 unsigned webhook refused (403) | PASS |
+| A-1 resolved parent → unread, correct Person, body, time, SMS | PASS |
+| A-2 redelivered webhook is one reply, not two | PASS |
+| A-3 unknown sender retained, named honestly, stays replyable | PASS |
+| A-4 same-org ambiguity stays ambiguous, safe language, no ids leaked | PASS |
+| A-5 destination no org owns → quarantined, body withheld from the projection | PASS |
+| A-6 same sender to a different Alloy destination stays separate | PASS |
+| A-7 Path 1 — resolved conversation opens with the person's name and history | PASS |
+| A-8 Path 2 — operator opens and answers an unidentified parent; `thread_id` only | PASS |
+| A-9 STOP hold refuses truthfully; refusal durable as `blocked`, never `queued` | PASS |
+
+### What certification found that tests had not
+
+Four defects survived every unit test and were only visible from the browser.
+
+1. **Wrong surface.** `comms_v2_command_center` defaults ON, so the operator
+   Inbox is `CommandCenterShell`, not `InboxPanel`. `/adminV2/messages` redirects
+   to `/admin/messages` and answers 403. The reply wiring had landed on a screen
+   nobody opens.
+2. **The purpose gate refused every thread reply.** No purpose listed
+   `canonical_thread`, so `validatePurpose` blocked the send before eligibility.
+   Recipient resolution, the route contract and the eligibility gate were all
+   real and all had passing tests — the path had never sent a single message.
+3. **The STOP hold could not match.** `canonicalSend` never passed the provider
+   destination, so `fromAddress` reached eligibility as null. The hold matches on
+   the endpoint PAIR, so with half the identity missing it could not fire on any
+   canonical send. A reply to a number that had just texted STOP was queued.
+4. **Stale household data.** The workspace branch tested only `runtime.vm`, which
+   retains the previous household. Switching to an unidentified conversation
+   rendered another family's name, children, preferences and history under it.
+
+Also closed: a STOP from a sender whose conversation the tenant owns but whose
+Person is unknown had no enforcement anywhere. The ingress hold covers messages
+belonging to no organization; the preference path needs a Person. That middle
+case was harmless only while such conversations could not be answered — this
+slice made them answerable, so the hold is now endpoint-scoped and read from a
+keyword the inbound seam stamps, with a later START releasing it.
+
+### Method notes worth keeping
+
+- **A constant body defeats idempotency-based assertions.** `comms_reply` keys on
+  (thread, content), so a fixed string returns the message an EARLIER run sent —
+  `duplicate`, `ok: true` — which reads exactly like a hold that failed while
+  nothing was dispatched. Certification bodies must be unique per run.
+- **A refused send must be present, not absent.** Per BLOCKED-SEND-VISIBILITY the
+  attempt is recorded as `status='blocked'`; asserting its absence asserts the
+  opposite of the intended behaviour. Assert the status, not the silence.
+- **"App already serving" is not reuse when the server predates the env file.**
+  An env-gated route stayed 404 across three runs against a stale process.
+  `alloy-certify serve` now restarts in that case.
+- **A half-up stack passes every readiness check.** With only the db container up,
+  `supabase start` says "already running", `supabase status` still returns URLs,
+  and psql works — while kong is down and the browser gets "Failed to fetch".
+  `alloy-certify` now refuses to start the webhook on empty API_URL/SERVICE_ROLE_KEY.
