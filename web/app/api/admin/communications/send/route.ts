@@ -9,6 +9,7 @@ import {
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
+import { resolveSendRecipientMode } from "@/lib/communications/send/resolveSendRecipientMode";
 import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
 
 
@@ -108,6 +109,9 @@ export async function POST(request: NextRequest) {
         channel === "email" && typeof body.subject === "string" ? body.subject : undefined;
     const bindingIdOpt = typeof body.binding_id === "string" ? body.binding_id.trim() : "";
     const recipientPersonIdRaw = typeof body.recipient_person_id === "string" ? body.recipient_person_id.trim() : "";
+    // Reply into an existing conversation whose sender is not a known Person.
+    // Carries a thread id only — the destination is derived server-side.
+    const replyThreadIdRaw = typeof body.thread_id === "string" ? body.thread_id.trim() : "";
 
     if (!channel) return NextResponse.json({ error: "channel must be sms, email, or in_app" }, { status: 400 });
     if (!textRaw) return NextResponse.json({ error: "body is required" }, { status: 400 });
@@ -116,6 +120,85 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+
+    // Recipient-mode contract lives in one pure function so it is testable
+    // directly and cannot drift between callers.
+    const recipientMode = resolveSendRecipientMode(body as Record<string, unknown>);
+    if (recipientMode.mode === "invalid" && recipientMode.code === "ambiguous_recipient_mode") {
+        return NextResponse.json({ error: recipientMode.error, code: recipientMode.code }, { status: 400 });
+    }
+
+    // Thread-bound reply into an existing conversation.
+    //
+    // Placed BEFORE the person-oriented entity validation on purpose: an
+    // unidentified conversation anchors to `communications_unknown`, which that
+    // validation rejects — so running it first would refuse precisely the replies
+    // this mode exists to enable. The anchor comes from the thread, never the
+    // client, so the reply cannot be redirected into a different conversation.
+    if (replyThreadIdRaw) {
+        if (recipientMode.mode === "invalid") {
+            return NextResponse.json({ error: recipientMode.error, code: recipientMode.code }, { status: 400 });
+        }
+        const replyCategory = normalizeCategory(body.category);
+        if (!replyCategory) {
+            return NextResponse.json(
+                { error: "category is required (transactional, operational, marketing, or emergency).", code: "missing_category" },
+                { status: 400 }
+            );
+        }
+
+        // Org-scoped load. A foreign-org or nonexistent thread simply is not found,
+        // so isolation comes from the query rather than from a separate check.
+        const { data: threadRow, error: threadErr } = await supabase
+            .from("communication_threads")
+            .select("id, primary_entity_type, primary_entity_id, channel")
+            .eq("id", replyThreadIdRaw)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (threadErr) {
+            return NextResponse.json({ error: "Could not load the conversation.", code: "thread_lookup_failed" }, { status: 500 });
+        }
+        if (!threadRow) {
+            return NextResponse.json(
+                { error: "That conversation was not found in this organization.", code: "thread_not_accessible" },
+                { status: 404 }
+            );
+        }
+
+        const anchor = threadRow as Record<string, unknown>;
+        const replySend = await canonicalSend({
+            supabase,
+            orgId: ctx.orgId,
+            authorizingUserId: ctx.userId ?? null,
+            sourceCapability: "communications.send",
+            recipient: { kind: "canonical_thread", threadId: replyThreadIdRaw },
+            audience: "external",
+            category: replyCategory,
+            purpose: "operator_direct_message",
+            channel,
+            // The conversation's own anchor, so the outbound reply rejoins the
+            // thread the operator was reading instead of deriving a new one.
+            primaryEntityType: String(anchor.primary_entity_type ?? ""),
+            primaryEntityId: String(anchor.primary_entity_id ?? ""),
+            bodyRaw: textRaw,
+            subjectRaw: subjectRawEmail ?? null,
+            userAuthored: true,
+            communicationProviderBindingId: bindingIdOpt || null,
+            idempotencyKey: `comms_reply:${replyThreadIdRaw}:${contentToken(textRaw, subjectRawEmail ?? null)}`,
+            metadata: { source: "communications_thread_reply" },
+        });
+        return NextResponse.json(
+            {
+                ok: replySend.outcome === "sent_to_queue" || replySend.outcome === "duplicate",
+                outcome: replySend.outcome,
+                reason: replySend.reason,
+                message: replySend.message,
+                message_id: replySend.messageId ?? null,
+                thread_id: replySend.threadId ?? replyThreadIdRaw,
+            },
+            { status: replySend.outcome === "invalid" ? 400 : 200 }
+        );
+    }
 
     if (quickMessage) {
         if (!recipientPersonIdRaw || !UUID_RE.test(recipientPersonIdRaw)) {
