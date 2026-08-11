@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { claimActionLink } from "@/lib/actionLinks";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -65,13 +66,13 @@ export async function POST(request: NextRequest) {
 
     const scheduleId = r.entity_id;
 
-    const { error: consumeErr } = await supabase
-        .from("action_links")
-        .update({ consumed_at: new Date().toISOString() })
-        .eq("id", r.id);
-
-    if (consumeErr) {
-        return NextResponse.json({ error: "Failed to mark link used" }, { status: 500 });
+    // `RL-32` — claim before the schedule moves. This route has the most expensive replay in the
+    // family: a lost race used to rewrite `schedules` a second time and emit a second
+    // `action_link_consumed`, which is a second confirmation to the customer for one single-use
+    // link. The claim decides the race in the database, so only the winner reaches the update.
+    const { claimed } = await claimActionLink(supabase, r.id);
+    if (!claimed) {
+        return NextResponse.json({ error: "Already used" }, { status: 410 });
     }
 
     const timezone = body.timezone != null ? String(body.timezone).trim() || undefined : undefined;
