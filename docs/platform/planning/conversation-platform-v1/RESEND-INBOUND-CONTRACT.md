@@ -112,3 +112,60 @@ and whether the inbound `headers` map reliably contains `In-Reply-To` and
 `References` for a real reply. Documented behaviour is the contract; one
 controlled real-domain test is the evidence. Blocks the "production-ready" claim,
 not local implementation.
+
+## Certification — 2026-08-11
+
+**Full regression: 32 of 32** (Block A SMS 11, Block B keywords 9, Email 13, run
+together after the convergence deletions). Migration pending count 0.
+
+Email cases certified: active receiving binding; forwarded mail owned via
+`received_for` not `to`; disabled binding quarantines; unknown destination
+quarantines and is not tenant-visible; In-Reply-To resolves the exact conversation
+with a *changed subject*; References resolves when In-Reply-To is absent; forged,
+unknown and malformed Message-IDs never correlate; known sender resolves a Person;
+shared household address asserts no Person and raises routing attention; duplicate
+provider event yields one email; transient retrieval failure writes nothing and
+the retry completes it; operator opens an unidentified parent's email in Command
+Center and replies with `thread_id` only; quarantine withholds its body.
+
+### What browser certification found that unit tests could not
+
+`communication_messages` carries `subject`, ingestion stored it, and the panel
+rendered it — but the thread messages projection never SELECTED it. Every email
+conversation rendered with no subject: the first thing an operator reads on an
+email, silently absent. Each layer was individually correct, which is exactly why
+only the browser caught it.
+
+### Boundary of this evidence
+
+The harness injects a documented `email.received` payload and a documented
+retrieval response into the real `ingestResendInboundEmail`. It does NOT stand in
+for Svix verification (shared with the outbound delivery events already certified
+on that route) or for the live provider round-trip.
+
+## STILL REQUIRED — live provider proof
+
+Inbound email is **not production-ready** until one controlled real-domain test
+proves the external chain. It cannot be run from certification, which holds no
+provider credentials by design.
+
+Needs, none of which exist today:
+
+1. Resend inbound **enabled on the account** — Resend documents `email.received`,
+   but whether this plan has receiving provisioned is unverified.
+2. A **verified sending domain** and a **receiving domain with MX pointed at
+   Resend**.
+3. A **controlled mailbox** to receive and reply from. No customer address.
+4. Authorization to send real external email — certification sets
+   `ALLOY_CERTIFICATION=1` specifically so nothing leaves the machine.
+
+To capture: the Message-ID Alloy sent; what the destination received; the
+`In-Reply-To`/`References` the reply carried; what `GET /emails/receiving/{id}`
+returned; any provider rewriting; whether correlation succeeded. No secrets in
+evidence.
+
+**If Resend rewrites Message-ID**, the documented RFC path may still work through
+the rewrite — the correlation reader is domain-independent and matches on the
+`alloy.{uuid}` local part alone. Only a rewrite of the LOCAL PART would break it,
+and that would need escalation with the captured headers rather than a second
+threading system.
