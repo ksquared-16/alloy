@@ -10,8 +10,9 @@ import { mergeCompactSlotsInheritDefault } from "@/lib/presentation/runtime/merg
 import type { CompactRowSlots } from "@/lib/presentation/runtime/queueRowSurfaceConfig";
 import { queueRowVariantRuleMatches } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import { resolveQueueRowSubjectFocus } from "@/lib/presentation/runtime/resolveQueueRowSubjectFocus";
-import { resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { lensStageKeys, resolveLensRowGrain } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { QUEUE_ROW_CONTEXT_CONTRACT_VERSION, type QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
@@ -20,6 +21,14 @@ const STAGES: LifecycleBuilderStageRecord[] = [
     { id: "st-lead", key: "lead", label: "Lead", sort_order: 1, is_active: true, grain: "family" },
     { id: "st-waitlist", key: "waitlist", label: "Waitlist", sort_order: 2, is_active: true, grain: "child" },
 ];
+
+function wv(partial: Partial<WorkViewConfigV1Stored> & Pick<WorkViewConfigV1Stored, "id" | "label">): WorkViewConfigV1Stored {
+    return {
+        display_order: 1,
+        visible_in_runtime: true,
+        ...partial,
+    };
+}
 
 function emptySlots(overrides?: Partial<CompactRowSlots>): CompactRowSlots {
     return {
@@ -48,22 +57,20 @@ describe("Work View label authority", () => {
     it("undeclared empty-filter inventory resolves family grain (declaration optional when stage-independent)", () => {
         // Not tied to any operator-facing Work View name. Empty filters_v1 + no row_grain_v1
         // means process inventory at family grain; child inventory must declare row_grain_v1.
-        const r = resolveLensRowGrain(view({ id: "inventory_a", label: "Some Operator Label", filters_v1: [] }), STAGES);
+        const r = resolveLensRowGrain(wv({ id: "inventory_a", label: "Some Operator Label", filters_v1: [] }), STAGES);
         expect(r).toEqual({ ok: true, grain: "family" });
     });
 
     it("stage-filtered Lead views resolve family from included stages — never via catch-all", () => {
-        const r = resolveLensRowGrain(
-            view({
-                id: "new_leads",
-                label: "New Family Leads",
-                filters_v1: stageFilter("lead"),
-                row_grain_v1: "family",
-            }),
-            STAGES,
-        );
+        const leadView = wv({
+            id: "new_leads",
+            label: "New Family Leads",
+            filters_v1: [{ field_key: "opportunity_stage", operator: "equals", value: "lead" }],
+            row_grain_v1: "family",
+        });
+        const r = resolveLensRowGrain(leadView, STAGES);
         expect(r).toEqual({ ok: true, grain: "family" });
-        expect(lensStageKeys(view({ filters_v1: stageFilter("lead") }))).toEqual(["lead"]);
+        expect(lensStageKeys(leadView)).toEqual(["lead"]);
     });
 });
 
