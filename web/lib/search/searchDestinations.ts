@@ -50,23 +50,37 @@ const PROCESS_CONTEXT_HOST_TYPES: Record<string, string> = {
 };
 
 /**
- * The record whose Focus Panel hosts this subject.
+ * The Work Unit whose surface should host this subject's Focus Panel.
  *
- * A child's world is rendered by the case it participates in — the subject stays
- * the child, which is what stops Search from "opening the family" when the
- * operator asked for a child. Falls back to the household shell only when there
- * is no participation at all.
+ * THIS IS NOT THE PROCESS KEY. It used to be, and that was a category error with a
+ * silent failure mode: `/workspace/work-unit/:slug` resolves work-unit keys and
+ * Work View slugs, so navigating to a process (`enrollment`) answered
+ * `work_unit_not_found`, nothing composed, and the operator was left on an empty
+ * page with no error at all — the "Search opens nothing" defect.
+ *
+ * `destination_work_unit_key` is resolved during enrichment from the HOST RECORD's
+ * own `work_unit_id`, so it names a unit whose evaluated page genuinely contains
+ * that record. Null propagates rather than guessing: no work unit means Search does
+ * not navigate, which is the honest outcome when no queue holds the record.
+ *
+ * `preferred` chooses WHICH participation hosts the panel when the operator asked
+ * for a specific process context; the work unit still comes from that context's own
+ * record, never from the process it belongs to.
  */
 function resolveHostWorkUnitKey(contexts: readonly SearchContext[], preferred?: string | null): string | null {
+    const hosted = (context: SearchContext): string | null =>
+        (context.destination_work_unit_key ?? "").trim() || null;
+
     const wanted = (preferred ?? "").trim();
     if (wanted) {
         const exact = contexts.find((c) => c.kind === "process" && c.key === wanted);
-        if (exact) return exact.key;
+        if (exact) return hosted(exact);
     }
-    // Default host = the subject's first configured participation. Configuration
-    // decides which processes exist and in what order; Search does not.
-    const first = contexts.find((c) => c.kind === "process");
-    return first ? first.key : null;
+    // Default host = the subject's first configured participation that is actually
+    // worked somewhere. Configuration decides which processes exist and in what
+    // order; Search does not.
+    const first = contexts.find((c) => c.kind === "process" && hosted(c));
+    return first ? hosted(first) : null;
 }
 
 function resolveHost(

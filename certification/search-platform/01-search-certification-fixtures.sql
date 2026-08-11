@@ -41,9 +41,24 @@ SELECT
         AND l.label ILIKE '%Lakeside%'  LIMIT 1)                      AS site_b,
     (SELECT d.id FROM public.departments d
       WHERE d.org_id = o.id AND d.is_active IS NOT FALSE
-      ORDER BY d.sort_order NULLS LAST, d.key LIMIT 1)                AS dept_id
+      ORDER BY d.sort_order NULLS LAST, d.key LIMIT 1)                AS dept_id,
+    -- The Work Unit that HOSTS these families operationally. A fixture household
+    -- with no `work_unit_id` belongs to no queue, so no Work View's evaluated page
+    -- ever contains it and every `?subject_id=` deep link to it is answered
+    -- `subject_unavailable` — the Focus Panel never composes. Resolved by key so a
+    -- renamed unit fails loudly here rather than silently emptying the surface.
+    (SELECT wu.id FROM public.work_units wu
+      WHERE wu.org_id = o.id AND wu.key = 'enrollment_pipeline' LIMIT 1)  AS host_work_unit
 FROM public.orgs o
 WHERE o.slug = :'ORG_SLUG';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM _ctx WHERE host_work_unit IS NOT NULL) THEN
+        RAISE EXCEPTION
+            'No work unit keyed `enrollment_pipeline` — the certification households would belong to no queue and no Focus Panel could compose for them.';
+    END IF;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- Fixture identifiers (deterministic)
@@ -121,16 +136,40 @@ ON CONFLICT (id) DO UPDATE
 -- Opportunities — the CONTEXT each process instance runs in, and the surface a
 -- child without a person row opens. Riverside vs Lakeside is what the restricted
 -- operator's site scope discriminates on.
+--
+-- These must be OPERATIONALLY REAL, not just present. A Focus Panel composes for a
+-- subject only when that subject is on the active Work View's evaluated page, and
+-- three fields decide that:
+--
+--   work_unit_id — which unit's queues evaluate this record at all
+--   status_key   — queue-lane membership is by `case_status`; the lanes accept
+--                  `new_inquiry` / `open` / `new`, so the previous `active` put
+--                  these households in NO lane
+--   stage_key    — must be an ACTIVE CONFIGURED FAMILY-TRACK stage whose operating
+--                  plan carries a primary work template with a `primary_action`,
+--                  or the answer refuses with `no_truthful_primary_action` rather
+--                  than claiming operational on identity alone
+--
+-- `lead` is the stage used because it is the only family-track stage in this
+-- tenant's published process that offers a reachable primary action: `tour` and
+-- `decision` are `outcome_led` templates with no `primary_action.action_ref`, so a
+-- household parked there composes nothing. That is a property of the published
+-- configuration, not of these fixtures — the verification below asserts it rather
+-- than assuming it, so a configuration change fails here instead of surfacing as
+-- an unexplained empty panel during certification.
 -- -----------------------------------------------------------------------------
-INSERT INTO public.opportunities (id, org_id, customer_id, location_id, name, title, status_key)
-SELECT :'SMITH_OPP'::uuid,    org_id, :'SMITH_HH'::uuid,    site_a, 'Smith Household',            'Smith Household',            'active' FROM _ctx
-UNION ALL SELECT :'RIVERS_OPP'::uuid,   org_id, :'RIVERS_HH'::uuid,   site_a, 'Rivers Household',           'Rivers Household',           'active' FROM _ctx
-UNION ALL SELECT :'LAKESIDE_OPP'::uuid, org_id, :'LAKESIDE_HH'::uuid, site_b, 'Smith Household (Lakeside)', 'Smith Household (Lakeside)', 'active' FROM _ctx
+INSERT INTO public.opportunities (id, org_id, customer_id, location_id, name, title, status_key, stage_key, work_unit_id)
+SELECT :'SMITH_OPP'::uuid,    org_id, :'SMITH_HH'::uuid,    site_a, 'Smith Household',            'Smith Household',            'open', 'lead', host_work_unit FROM _ctx
+UNION ALL SELECT :'RIVERS_OPP'::uuid,   org_id, :'RIVERS_HH'::uuid,   site_a, 'Rivers Household',           'Rivers Household',           'open', 'lead', host_work_unit FROM _ctx
+UNION ALL SELECT :'LAKESIDE_OPP'::uuid, org_id, :'LAKESIDE_HH'::uuid, site_b, 'Smith Household (Lakeside)', 'Smith Household (Lakeside)', 'open', 'lead', host_work_unit FROM _ctx
 ON CONFLICT (id) DO UPDATE
-    SET customer_id = EXCLUDED.customer_id,
-        location_id = EXCLUDED.location_id,
-        name        = EXCLUDED.name,
-        title       = EXCLUDED.title;
+    SET customer_id  = EXCLUDED.customer_id,
+        location_id  = EXCLUDED.location_id,
+        name         = EXCLUDED.name,
+        title        = EXCLUDED.title,
+        status_key   = EXCLUDED.status_key,
+        stage_key    = EXCLUDED.stage_key,
+        work_unit_id = EXCLUDED.work_unit_id;
 
 -- -----------------------------------------------------------------------------
 -- B. Multi-process participation — THREE configured processes for Joe.
@@ -193,6 +232,7 @@ DECLARE
     v_processes int;
     v_schedules int;
     v_dupes int;
+    v_hostable int;
 BEGIN
     SELECT id INTO v_org FROM public.orgs WHERE slug = 'northwind-early-learning';
 
@@ -217,5 +257,43 @@ BEGIN
         RAISE EXCEPTION 'duplicate-name fixture incomplete: % children named Joe Smith, need 3', v_dupes;
     END IF;
 
-    RAISE NOTICE 'Search certification fixtures verified: 3 processes, 2 sibling schedules, % same-named children', v_dupes;
+    -- POSITIVE CONTROL for the Focus Panel destination. Everything above proves the
+    -- records EXIST; none of it proves an operator can be taken to one. A household
+    -- that belongs to no work unit, carries a status no queue lane accepts, or holds
+    -- a stage with no operating plan is invisible to every Work View — Search then
+    -- resolves a destination the surface answers `subject_unavailable`, and the
+    -- scenario fails as an empty panel rather than as a broken fixture.
+    SELECT count(*) INTO v_hostable
+      FROM public.opportunities o
+      JOIN public.work_units wu ON wu.id = o.work_unit_id AND wu.org_id = o.org_id
+      JOIN public.departments d ON d.id = wu.department_id
+     WHERE o.org_id = v_org
+       AND o.id IN ('00000000-0000-4000-8000-000050000030'::uuid,
+                    '00000000-0000-4000-8000-000050000031'::uuid,
+                    '00000000-0000-4000-8000-000050000032'::uuid)
+       AND o.status_key IN ('new_inquiry', 'open', 'new')
+       AND EXISTS (
+           SELECT 1
+             FROM jsonb_array_elements(
+                      coalesce(d.metadata -> 'lifecycle_builder_v1' -> 'processes', '[]'::jsonb)) p,
+                  jsonb_array_elements(coalesce(p -> 'stages', '[]'::jsonb)) s
+            WHERE (p ->> 'is_active')::boolean IS TRUE
+              AND (s ->> 'is_active')::boolean IS TRUE
+              AND s ->> 'key' = o.stage_key
+              -- Not merely "has an operating plan": the answer refuses unless a work
+              -- template on that plan carries `primary_action.action_ref`.
+              AND EXISTS (
+                  SELECT 1
+                    FROM jsonb_array_elements(
+                             coalesce(s -> 'stage_operating_plan_v1' -> 'work_templates', '[]'::jsonb)) t
+                   WHERE nullif(btrim(coalesce(t -> 'primary_action' ->> 'action_ref', '')), '') IS NOT NULL));
+
+    IF v_hostable < 3 THEN
+        RAISE EXCEPTION
+            'certification households are not operationally hostable: % of 3 have a work unit, a queue-eligible status, and a configured stage with an operating plan — no Focus Panel can compose for the rest',
+            v_hostable;
+    END IF;
+
+    RAISE NOTICE 'Search certification fixtures verified: 3 processes, 2 sibling schedules, % same-named children, % hostable households',
+        v_dupes, v_hostable;
 END $$;

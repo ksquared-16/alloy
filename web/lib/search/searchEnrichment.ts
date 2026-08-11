@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalRecordSearchAgeLabel";
+import { chunkIds } from "@/lib/admin/opportunity/opportunityLeadDeletionDb";
 import {
     LOCATION_DISPLAY_LABEL_SELECT,
     locationDisplayLabelFromRow,
@@ -117,6 +118,18 @@ export async function enrichSearchCandidates(args: {
             fetchOrgLocationLabels(supabase, orgId),
         ]);
 
+    // Wave 3 — the Work Unit that HOSTS each process context. Its id set is only
+    // known once the process rows land, so this is the one genuinely sequential hop;
+    // it is skipped entirely when nothing matched a process participation.
+    const hostOpportunityIds = uniq(
+        processRows
+            .filter((r) => (r.context_type ?? "").trim() === "opportunity")
+            .map((r) => r.context_id)
+    );
+    const hostWorkUnitKeys = hostOpportunityIds.length
+        ? await fetchHostWorkUnitKeys(supabase, orgId, hostOpportunityIds)
+        : new Map<string, string>();
+
     const locationIds = uniq([
         ...processRows.map((r) => r.location_id),
         ...scheduleRows.map((r) => r.site_location_id),
@@ -198,6 +211,12 @@ export async function enrichSearchCandidates(args: {
                     // authoritative surface. Enrollment: context_type='opportunity'.
                     destination_entity_type: row.context_type,
                     destination_entity_id: row.context_id,
+                    // Where that context is WORKED. Read from the host record's own
+                    // queue membership — never from the process key, which names a
+                    // different namespace and resolves to no work unit.
+                    destination_work_unit_key: row.context_id
+                        ? hostWorkUnitKeys.get(row.context_id) ?? null
+                        : null,
                 });
             }
         }
@@ -359,6 +378,69 @@ async function fetchProcessInstances(
                 ? String(row.metadata.location_id)
                 : null,
     }));
+}
+
+/**
+ * Host record → the Work Unit whose queues actually evaluate it.
+ *
+ * A Focus Panel composes for a subject only when that subject is on the active
+ * Work View's evaluated page, and page membership is scoped by the record's own
+ * `work_unit_id`. Resolving it here — from the record, not from the process — is
+ * what makes the destination land: `/workspace/work-unit/:slug` resolves work-unit
+ * keys, and the process key that used to be sent (`enrollment`) is not one.
+ *
+ * A record with no `work_unit_id` yields no entry, so the destination carries no
+ * work unit and Search does not navigate. Silence is correct: there is genuinely no
+ * queue holding that record.
+ *
+ * Ids are chunked because PostgREST serializes `.in(…)` into the request URI —
+ * a large single filter is rejected as "URI too long", which reads as an empty
+ * result rather than an error.
+ */
+async function fetchHostWorkUnitKeys(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityIds: string[]
+): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (!opportunityIds.length) return out;
+
+    const workUnitIdByOpportunity = new Map<string, string>();
+    for (const chunk of chunkIds(opportunityIds)) {
+        const { data, error } = await supabase
+            .from("opportunities")
+            .select("id, work_unit_id")
+            .eq("org_id", orgId)
+            .in("id", chunk);
+        if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Array<{ id: string; work_unit_id?: string | null }>) {
+            const wuId = typeof row.work_unit_id === "string" ? row.work_unit_id.trim() : "";
+            if (wuId) workUnitIdByOpportunity.set(String(row.id), wuId);
+        }
+    }
+    if (!workUnitIdByOpportunity.size) return out;
+
+    const keyByWorkUnitId = new Map<string, string>();
+    for (const chunk of chunkIds(uniq([...workUnitIdByOpportunity.values()]))) {
+        const { data, error } = await supabase
+            .from("work_units")
+            .select("id, key, is_active")
+            .eq("org_id", orgId)
+            .in("id", chunk);
+        if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Array<{ id: string; key?: string | null; is_active?: boolean | null }>) {
+            // An inactive unit is not a destination — its route resolves to nothing.
+            if (row.is_active === false) continue;
+            const key = typeof row.key === "string" ? row.key.trim() : "";
+            if (key) keyByWorkUnitId.set(String(row.id), key);
+        }
+    }
+
+    for (const [opportunityId, workUnitId] of workUnitIdByOpportunity) {
+        const key = keyByWorkUnitId.get(workUnitId);
+        if (key) out.set(opportunityId, key);
+    }
+    return out;
 }
 
 type ScheduleRow = {

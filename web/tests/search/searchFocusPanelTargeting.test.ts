@@ -24,6 +24,15 @@ const child: SearchSubject = {
     household_id: CUST,
 };
 
+/**
+ * The process KEY and the work-unit KEY are deliberately DIFFERENT strings.
+ *
+ * They are different namespaces — `/workspace/work-unit/:slug` resolves work-unit
+ * keys and Work View slugs, not process keys — and a fixture that let them coincide
+ * would make the category error these tests exist to catch unobservable.
+ */
+const WORK_UNIT = "enrollment_pipeline";
+
 const enrollment: SearchContext = {
     kind: "process",
     key: "enrollment",
@@ -31,6 +40,7 @@ const enrollment: SearchContext = {
     detail: "Waitlist",
     destination_entity_type: "opportunity",
     destination_entity_id: OPP,
+    destination_work_unit_key: WORK_UNIT,
 };
 
 const schedule: SearchContext = { kind: "schedule", key: "schedule", label: "Schedule", detail: "Mon / Wed / Fri" };
@@ -169,26 +179,40 @@ describe("Search uses the ONE canonical selection authority", () => {
         expect(listener).toContain("card_focus");
     });
 
-    it("navigates to the configured work-unit host BEFORE selecting", async () => {
-        // Selecting first would briefly mount the modal on /workspace — the very
-        // overlay this work removes. Order is the fix, not a detail.
-        const { readFileSync } = await import("node:fs");
-        const { join } = await import("node:path");
-        const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
-        const nav = src.indexOf("operatorWorkUnitHrefFromKey");
-        const select = src.indexOf("dispatchSearchFocusSelection({");
-        expect(nav).toBeGreaterThan(-1);
-        expect(select).toBeGreaterThan(nav);
-    });
-
-    it("a child destination names a configured host work unit", () => {
+    it("a child destination names the host record's WORK UNIT, never its process", () => {
         const primary = resolve(child, [enrollment])[0];
-        expect(primary.host_work_unit_key).toBe("enrollment");
+        expect(primary.host_work_unit_key).toBe(WORK_UNIT);
+        // The regression this pins: emitting the process key produced
+        // `/workspace/work-unit/enrollment`, which answers `work_unit_not_found`,
+        // composes nothing, and leaves the operator on an empty page with no error.
+        expect(primary.host_work_unit_key).not.toBe(enrollment.key);
     });
 
-    it("a process destination hosts on ITS OWN configured work unit", () => {
+    it("a process destination hosts on ITS OWN context's work unit", () => {
         const process = resolve(child, [enrollment]).find((d) => d.key === "process:enrollment");
-        expect(process!.host_work_unit_key).toBe("enrollment");
+        expect(process!.host_work_unit_key).toBe(WORK_UNIT);
+        expect(process!.host_work_unit_key).not.toBe(enrollment.key);
+    });
+
+    it("a context worked by no work unit yields no work unit — it does not guess", () => {
+        // Absence is honest: no queue holds the record, so no Work View's evaluated
+        // page contains it and no Focus Panel can host it. Naming a unit anyway would
+        // be a fabricated route that fails silently at the far end.
+        const unhosted: SearchContext = { ...enrollment, destination_work_unit_key: null };
+        const primary = resolve(child, [unhosted])[0];
+        expect(primary.host_entity_id).toBe(OPP);
+        expect(primary.host_work_unit_key).toBeNull();
+    });
+
+    it("falls through to a participation that IS worked somewhere", () => {
+        const unhosted: SearchContext = {
+            ...enrollment,
+            key: "annual_registration",
+            label: "Annual Registration",
+            destination_work_unit_key: null,
+        };
+        const primary = resolve(child, [unhosted, enrollment])[0];
+        expect(primary.host_work_unit_key).toBe(WORK_UNIT);
     });
 });
 

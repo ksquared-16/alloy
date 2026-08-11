@@ -12,7 +12,6 @@ import {
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
-import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { dispatchSearchFocusSelection } from "@/lib/adminV2/searchFocusSelection";
 import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
@@ -273,28 +272,40 @@ export default function GlobalSearchBox() {
             // destination is not revealed until it is Operational.
             dismiss();
 
-            // Navigate to the configured work-unit host BEFORE selecting. On a
-            // work-unit surface `AdminEntityDrawer` returns null and the INLINE
-            // Focus Panel owns rendering; selecting first would briefly mount the
-            // modal on /workspace, which is the overlay this replaces.
-            const hostKey = (destination.host_work_unit_key ?? "").trim();
-            if (hostKey) router.push(operatorWorkUnitHrefFromKey(hostKey, hostId));
-
-            // One selection authority — applied by a listener mounted INSIDE
-            // AdminDrawerProvider, because this control renders in the top nav which
-            // is outside it. Calling useAdminDrawer() here throws and takes the whole
-            // nav down; browser certification caught exactly that.
-            dispatchSearchFocusSelection({
+            const selection = {
                 entity_type: hostType,
                 entity_id: hostId,
-                host_work_unit_key: hostKey || null,
+                host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
                 subject_highlight: subject.kind !== "household",
                 card_focus: {
                     card_key: destination.card_key,
                     item_id: destination.item_id ?? null,
                     context_key: destination.context_key ?? null,
                 },
-            });
+            };
+
+            // ── A SEARCH CLICK IS AN ATTENTION MOVEMENT, NOT A NAVIGATION ──
+            //
+            // `/workspace/work-unit/:slug` is SEED-ONLY: the route renders nothing and
+            // the Surface Host, mounted above it inside the Runtime Kernel, is the one
+            // renderer of the work-unit surface. A URL may establish attention exactly
+            // once, on cold load. So `router.push` to a work-unit route does not open
+            // it — measured: the URL changed, the server rendered the route in 2.9s,
+            // and the surface was blank forever with no error.
+            //
+            // The intent is therefore stated once, and applied by two listeners that
+            // sit where this control cannot: `SearchAttentionListener` (inside the
+            // kernel) moves attention to the host work unit and pins the host record,
+            // and `SearchFocusSelectionListener` (inside AdminDrawerProvider) applies
+            // the card and item focus. This control renders in the top nav, outside
+            // both — calling either hook here throws and takes the whole nav down, as
+            // browser certification caught.
+            //
+            // `host_work_unit_key` is a real `work_units.key`, resolved server-side from
+            // the host record's own queue membership; when it is absent there is no
+            // operational surface to move to, and the selection simply applies to the
+            // surface the operator is already on.
+            dispatchSearchFocusSelection(selection);
         },
         [dismiss, router]
     );

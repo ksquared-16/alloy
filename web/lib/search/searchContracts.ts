@@ -104,6 +104,21 @@ export type SearchContext = {
      */
     destination_entity_type?: string | null;
     destination_entity_id?: string | null;
+    /**
+     * The Work Unit that actually holds `destination_entity_id` in its queues —
+     * `work_units.key`, read from the host record's own `work_unit_id`.
+     *
+     * This is NOT the process key, and the distinction is load-bearing. A process
+     * (`enrollment`) and a Work Unit (`enrollment_pipeline`) are different objects
+     * in different namespaces: `/workspace/work-unit/:slug` resolves work-unit keys
+     * and Work View slugs, so routing to a process key answers `work_unit_not_found`
+     * and no Focus Panel ever composes.
+     *
+     * Null when the host record belongs to no Work Unit. That is honest — no Work
+     * View's evaluated page contains it, so nothing can host its Focus Panel, and a
+     * destination naming a unit anyway would be a fabricated route.
+     */
+    destination_work_unit_key?: string | null;
 };
 
 /**

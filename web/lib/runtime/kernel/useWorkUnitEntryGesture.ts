@@ -35,6 +35,67 @@ export function attentionTargetFromEntryHref(href: string): { target: string; le
 }
 
 /**
+ * THE movement itself, separated from the click that usually expresses it.
+ *
+ * Some entry points are not clicks on an element that carries the href — Search resolves a
+ * destination server-side and states it as an intent. Those must still enter through THIS adapter:
+ * the warning above is not about pointers, it is about the route being seed-only. Search originally
+ * used `router.push`, and reproduced the documented symptom exactly — the URL changed, the server
+ * rendered the route fine, and the surface was blank forever, because nothing moved attention.
+ *
+ * Returns false when it could not move (no kernel / unparseable href), so a caller can tell the
+ * difference between "moved" and "silently did nothing".
+ */
+export function useWorkUnitEntryMovement() {
+    const kernel = useRuntimeKernelOptional();
+    const { orgId, principalUserId } = useWorkspaceOrg();
+
+    return useCallback(
+        (href: string | null | undefined, destination?: DestinationId | null, subject?: string | null): boolean => {
+            if (!kernel || !href || !orgId) return false;
+            const t = attentionTargetFromEntryHref(href);
+            if (!t) return false;
+
+            const current = kernel.attention.get();
+            if (!current) {
+                // A Workspace that never hydrated. One hydration establishes surface + lens (+ subject).
+                kernel.attention.hydrate({
+                    tenant: orgId,
+                    principal: principalUserId ?? "",
+                    target: t.target,
+                    lens: t.lens,
+                    subject: subject ?? null,
+                    destination: destination ?? null,
+                    source: "direct_url",
+                });
+                return true;
+            }
+
+            kernel.attention.move({
+                scope: ATTENTION_SCOPE.SURFACE,
+                target: t.target,
+                lens: t.lens,
+                destination: destination ?? null,
+                source: "pointer",
+            });
+            if (subject) {
+                // A finer SUBJECT movement pins the exact Record of Attention. Without it the surface
+                // commits its configured DEFAULT subject — which for a Search click means answering a
+                // request for one family with a different one. The intermediate surface terminal is
+                // superseded by this movement, so there is no default-subject flash.
+                kernel.attention.move({
+                    scope: ATTENTION_SCOPE.SUBJECT,
+                    subject,
+                    source: "subject_selection",
+                });
+            }
+            return true;
+        },
+        [kernel, orgId, principalUserId],
+    );
+}
+
+/**
  * Returns an onClick for any element that carries a work-unit entry href.
  *
  * The href STAYS on the element: it is the destination's honest address, so copy-link,
@@ -52,43 +113,23 @@ export function useWorkUnitEntryGesture(
      */
     destination?: DestinationId | null,
 ) {
-    const kernel = useRuntimeKernelOptional();
-    const { orgId, principalUserId } = useWorkspaceOrg();
+    const move = useWorkUnitEntryMovement();
 
     return useCallback(
         (e: ReactMouseEvent<HTMLElement>) => {
             // Modifier/middle click = "give me a new document". Let the browser do exactly that.
             if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-            if (!kernel || !href || !orgId) return;
-            const t = href ? attentionTargetFromEntryHref(href) : null;
-            if (!t) return;
+            if (!href) return;
 
             // The route is seed-only: it renders NOTHING for a work unit. So a navigation here would
-            // blank the surface. Never fall through — establish attention if it somehow does not
-            // exist yet (a Workspace that never hydrated), then move.
+            // blank the surface. Never fall through — the movement establishes attention if it somehow
+            // does not exist yet (a Workspace that never hydrated), then moves.
+            const moved = move(href, destination);
+            if (!moved) return;
             e.preventDefault();
             e.stopPropagation();
-            const current = kernel.attention.get();
-            if (!current) {
-                kernel.attention.hydrate({
-                    tenant: orgId,
-                    principal: principalUserId ?? "",
-                    target: t.target,
-                    lens: t.lens,
-                    destination: destination ?? null,
-                    source: "direct_url",
-                });
-                return;
-            }
-            kernel.attention.move({
-                scope: ATTENTION_SCOPE.SURFACE,
-                target: t.target,
-                lens: t.lens,
-                destination: destination ?? null,
-                source: "pointer",
-            });
         },
-        [kernel, href, destination, orgId, principalUserId],
+        [move, href, destination],
     );
 }
 
