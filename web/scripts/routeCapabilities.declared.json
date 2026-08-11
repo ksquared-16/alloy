@@ -2,7 +2,7 @@
   "reviewed": "2026-08-10 — W-14 initial issuance (assignment asg_0232d36df9694c)",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 725
+    "max_pending": 722
   },
   "routes": {
     "app/api/action-links/consume-accept-job/route.ts": {
@@ -915,7 +915,8 @@
     },
     "app/api/admin/customer-person-role-types/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The handler is an unconditional 405: it takes no parameters, reads no request, touches no client and returns NOT_IMPLEMENTED on every call. There is no action to authorize. This is the state's intended use — 'no gate' as an auditable assertion rather than an absence — and it is reviewable from six lines of source, which is why it is settled here instead of waiting on W-15's product decisions."
       },
       "PATCH": {
         "status": "pending"
@@ -2288,7 +2289,8 @@
     },
     "app/api/admin/person-relationship-type-settings/[id]/route.ts": {
       "DELETE": {
-        "status": "pending"
+        "status": "none",
+        "reason": "An unconditional 405, identical in shape to customer-person-role-types DELETE: no parameters, no request read, no client, NOT_IMPLEMENTED on every call. Deactivation goes through PATCH is_active=false, which stays pending because it does act."
       },
       "PATCH": {
         "status": "pending"
@@ -2307,7 +2309,10 @@
         "status": "pending"
       },
       "GET": {
-        "status": "pending"
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "note": "Recorded, not imposed. This handler already calls the very assertDocumentAccess that documents/[id]/signed-url and vendors/[id]/documents/signed-url both declare as documents.read, and already refuses on decision.outcome !== 'allowed' before the URL is minted. The table was under-reporting: it sat 'pending' while enforcing. Declaring it changes who may call this route by nothing at all, which is what makes it Director-ownable where the rest of W-15 is not. The check runs inside `if (doc)` because that is the only branch that discloses anything — the no-document fall-through returns metadata the person read already carries. POST and DELETE stay pending deliberately: they gate on ctx.role !== 'admin', which is a gate but not a capability gate, and which key replaces a raw role check is W-15's product call."
       },
       "POST": {
         "status": "pending"

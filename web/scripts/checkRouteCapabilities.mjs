@@ -265,6 +265,23 @@ function matchBlock(skel, open) {
  * no gate — which is exactly how a guarded route would be convicted of being unguarded. So the body
  * is the first `{` at paren-depth zero. A `;` at depth zero means the declaration ended without a
  * body at all (`export const GET = handler;`), which is reported rather than searched past.
+ *
+ * **A RETURN TYPE is the second brace that is not a body.** The parameter fix above is not the whole
+ * problem: `async function f(): Promise<{ ok: true } | { ok: false; response: NextResponse }> { … }`
+ * closes its parameter list and then opens two braces at paren depth zero before the body ever
+ * starts. Taking the first of them yields a fragment of a type annotation — no calls, no gate — so a
+ * helper that authenticates in its first statement reads as one that does nothing.
+ *
+ * This is the identical failure to the destructured-parameter case, one syntactic position later,
+ * and it stayed hidden because route handlers are typed `Promise<NextResponse>` and have no braces
+ * to trip on. It surfaced only when the same reader was pointed at LIBRARY helpers, whose inline
+ * union return types are ordinary. `loadConfigLayoutAssistAdminContext` is the case that found it:
+ * it calls `getAdminContextCached` in its first line, and seven config-layout-assist handlers were
+ * being reported as carrying no authorization because of a brace in its signature.
+ *
+ * A type block is told from a body by what FOLLOWS it: a body ends the declaration, while a type
+ * block is continued by `|`, `&`, `>` or `,`, or is immediately followed by the real body's `{`.
+ * Scanning past those is what makes the last brace at depth zero the right one.
  */
 function bodyBlock(skel, from) {
     let paren = 0;
@@ -272,8 +289,16 @@ function bodyBlock(skel, from) {
         const ch = skel[k];
         if (ch === "(") paren += 1;
         else if (ch === ")") paren -= 1;
-        else if (ch === "{" && paren <= 0) return matchBlock(skel, k);
-        else if (ch === ";" && paren <= 0) return null;
+        else if (ch === "{" && paren <= 0) {
+            const block = matchBlock(skel, k);
+            if (!block) return null;
+            const next = /\S/.exec(skel.slice(block.end));
+            if (next && "{|&>,=".includes(next[0])) {
+                k = block.end - 1;
+                continue;
+            }
+            return block;
+        } else if (ch === ";" && paren <= 0) return null;
     }
     return null;
 }
@@ -335,6 +360,171 @@ export function handlerBody(file, method, seen = new Set()) {
     }
 
     return null;
+}
+
+/**
+ * The file a handler's body actually lives in.
+ *
+ * `handlerBody` already follows `export { GET } from "…"` across files, and returns the right SOURCE.
+ * What it cannot return is the file that source came from — and a body must be read against its own
+ * file's imports. The three v2 drawer routes are the whole of their file:
+ *
+ *     export { GET } from "@/app/api/admin/view-models/drawer/child/[id]/route";
+ *
+ * so the body correctly arrived carrying `loadAdminRouteGate(…)`, and was then matched against the
+ * v2 file's import list, which is EMPTY. Every identifier failed to resolve and three gated routes
+ * were reported as carrying no authorization at all.
+ *
+ * This is not a missing inference; it is a body and an import table taken from two different files.
+ * Pairing them is a correction, not a widening.
+ */
+function originFile(file, method, seen = new Set()) {
+    if (seen.has(file)) return file;
+    seen.add(file);
+    const skel = skeleton(read(file));
+    for (const stmt of skel.matchAll(/export\s*\{([^}]*)\}\s*from/g)) {
+        const names = stmt[1].split(",").map((clause) => {
+            const parts = clause.trim().split(/\s+as\s+/);
+            return { local: (parts[0] ?? "").trim(), exported: (parts[1] ?? parts[0] ?? "").trim() };
+        });
+        const hit = names.find((x) => x.exported === method);
+        if (!hit) continue;
+        const spec = /from\s*["']([^"']+)["']/.exec(read(file).slice(stmt.index, stmt.index + stmt[0].length + 200));
+        const target = spec ? resolveImport(spec[1], file) : null;
+        if (target && existsSync(target)) return originFile(target, hit.local, seen);
+    }
+    return file;
+}
+
+/**
+ * The module that DECLARES `name`, following barrel re-exports.
+ *
+ * `lib/pos/processingIdentity/operator` is a directory barrel: the six processing-identity handlers
+ * import `resolveOperatorRoute` from it, and it declares nothing — it re-exports from
+ * `operatorRouteContext.ts`, where the function calls `getAdminContextCached` in its first line.
+ * Asking the barrel whether it authenticates gets "no", and six authenticated handlers were reported
+ * as carrying no gate evidence.
+ *
+ * A barrel is a pass-through rather than a hop: following one does not read a second implementation,
+ * it finds the first. The walk is bounded to `MAX_BARREL` so a re-export cycle cannot spin, and it
+ * follows only NAMED re-exports and `export *` — never an import, which is what would turn this back
+ * into the closure walk the census was retired for.
+ */
+const MAX_BARREL = 3;
+
+function declaringModule(mod, name, depth = 0, seen = new Set()) {
+    if (!mod || !existsSync(mod) || seen.has(mod) || depth > MAX_BARREL) return null;
+    seen.add(mod);
+    const skel = skeleton(read(mod));
+    const declared = new RegExp(
+        `(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|(?:export\\s+)?(?:const|let|var)\\s+${name}\\s*[:=]`
+    ).test(skel);
+    if (declared) return mod;
+
+    const raw = read(mod);
+    for (const stmt of skel.matchAll(/export\s*(\*|\{[^}]*\})\s*from/g)) {
+        const clause = stmt[1];
+        if (clause !== "*") {
+            const names = clause.replace(/[{}]/g, " ").split(",").map((c) => {
+                const parts = c.trim().split(/\s+as\s+/);
+                return (parts[1] ?? parts[0] ?? "").trim();
+            });
+            if (!names.includes(name)) continue;
+        }
+        const spec = /from\s*["']([^"']+)["']/.exec(raw.slice(stmt.index, stmt.index + stmt[0].length + 200));
+        const target = spec ? resolveImport(spec[1], mod) : null;
+        const found = declaringModule(target, name, depth + 1, seen);
+        if (found) return found;
+    }
+    return null;
+}
+
+/**
+ * The source a reviewer would read to answer "what does this handler check?" — the exported
+ * handler's body, plus the bodies of same-file functions it calls.
+ *
+ * A handler is frequently a thin shell over its implementation: `jobs` exports
+ * `GET(request) { if (!adminPerfEnabled()) return getJobsImpl(request); … }`, and `getJobsImpl`
+ * carries both the context load and the scope resolution. Reading only the exported body reports
+ * that handler as carrying no gate evidence at all — a false `none` on one of the most heavily
+ * guarded routes in the tree.
+ *
+ * Session 4 taught `handlerBody` to follow a re-export ACROSS files for exactly this reason. This
+ * is the same defect one hop shorter, and the same answer: a delegation is not an absence.
+ *
+ * **One hop, same file, and advisory only.** The hop is not transitive — one hop is what keeps the
+ * answer checkable by reading a single file — and this feeds `gateInventory` alone. The pass/fail
+ * join in `bindDeclaration` deliberately keeps reading the exported body and nothing else: a
+ * declared route that hides its guard behind a delegation should fail that join and be rewritten or
+ * re-declared. Loosening a lock and sharpening a measurement are opposite moves, and only one of
+ * them is safe to make here.
+ */
+function handlerEvidenceBody(file, method) {
+    const own = handlerBody(file, method);
+    if (own === null) return null;
+
+    const skel = skeleton(read(originFile(file, method)));
+    let evidence = own;
+    for (const m of own.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const name = m[1];
+        if (HTTP_METHODS.includes(name)) continue;
+        const decl = new RegExp(
+            `(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|(?:const|let|var)\\s+${name}\\s*[:=]`
+        ).exec(skel);
+        if (!decl) continue;
+        const block = bodyBlock(skel, decl.index + decl[0].length);
+        if (block) evidence += `\n${skel.slice(block.start, block.end)}`;
+    }
+    return evidence;
+}
+
+/**
+ * The primitives that resolve a caller's identity and access bundle — the seed, and the ONLY
+ * hand-authored names in the gate vocabulary.
+ *
+ * The list they replace was the whole vocabulary, and that is why `loadAdminRouteGate` was invisible
+ * to it. That helper resolves the access bundle and refuses a caller who is not portal-eligible with
+ * a 403; every route entering through it — the newer, preferred entry point this initiative itself
+ * introduced — was being reported as carrying no gate evidence. An enumerated vocabulary makes the
+ * *better* code look worse, which inverts the signal.
+ *
+ * So the roots stay small and auditable and the second layer is DISCOVERED: a helper counts as an
+ * authority entry when the declaration it is imported from CALLS a root. That is the same question
+ * this initiative has had to ask three times now — does the check discover, or does it enumerate?
+ * (W-5's locks, session 3's backing routes, and this.)
+ */
+const AUTHORITY_ROOTS =
+    /\b(?:getAdmin\w*Context\w*|loadAdminAccessBundle\w*|requireAuth\w*|getServerUser\w*|auth\s*\.\s*getUser)\s*\(/;
+
+const authorityHelperCache = new Map();
+
+/**
+ * Does `name`, as declared in `mod`, resolve caller authority?
+ *
+ * The question is asked of the helper's OWN declaration rather than of the module, because a module
+ * that authenticates somewhere is not a module whose every export authenticates. Crediting a route
+ * for calling an unrelated formatter that happens to live beside a gate is the retired census's
+ * error — reachability standing in for enforcement — and it is avoided by reading one declaration.
+ */
+function declarationResolvesAuthority(mod, name) {
+    const key = `${mod}::${name}`;
+    const cached = authorityHelperCache.get(key);
+    if (cached !== undefined) return cached;
+
+    let answer = false;
+    const home = declaringModule(mod, name);
+    if (home) {
+        const skel = skeleton(read(home));
+        const decl = new RegExp(
+            `(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|(?:export\\s+)?(?:const|let|var)\\s+${name}\\s*[:=]`
+        ).exec(skel);
+        if (decl) {
+            const block = bodyBlock(skel, decl.index + decl[0].length);
+            if (block) answer = AUTHORITY_ROOTS.test(skel.slice(block.start, block.end));
+        }
+    }
+    authorityHelperCache.set(key, answer);
+    return answer;
 }
 
 /** The identifier a call's verdict is bound to, if it is bound at all. */
@@ -523,21 +713,30 @@ export function gateInventory(table, catalogKeys = discoverCatalogKeys()) {
         const abs = join(WEB, route);
         if (!existsSync(abs)) continue;
 
-        const skel = skeleton(read(abs));
-        const imported = new Map();
-        for (const stmt of skel.matchAll(/import\s+([\s\S]*?)\s+from\s*["']([^"']*)["']/g)) {
-            const spec = /from\s*["']([^"']+)["']/.exec(read(abs).slice(stmt.index, stmt.index + stmt[0].length + 2));
-            const target = spec ? resolveImport(spec[1], abs) : null;
-            if (!target) continue;
-            for (const name of stmt[1].replace(/[{}]/g, " ").split(/[,\s]+/)) {
-                const id = name.trim().replace(/^type$/, "");
-                if (id && /^[A-Za-z_$][\w$]*$/.test(id)) imported.set(id, target);
+        // The import table is resolved PER METHOD, from the file that method's body actually lives
+        // in. A pure re-export route (`export { GET } from "…"`) has no imports of its own, so
+        // matching a borrowed body against the borrowing file's table resolves nothing at all.
+        const importsOf = (from) => {
+            const skel = skeleton(read(from));
+            const map = new Map();
+            for (const stmt of skel.matchAll(/import\s+([\s\S]*?)\s+from\s*["']([^"']*)["']/g)) {
+                const spec = /from\s*["']([^"']+)["']/.exec(
+                    read(from).slice(stmt.index, stmt.index + stmt[0].length + 2)
+                );
+                const target = spec ? resolveImport(spec[1], from) : null;
+                if (!target) continue;
+                for (const name of stmt[1].replace(/[{}]/g, " ").split(/[,\s]+/)) {
+                    const id = name.trim().replace(/^type$/, "");
+                    if (id && /^[A-Za-z_$][\w$]*$/.test(id)) map.set(id, target);
+                }
             }
-        }
+            return map;
+        };
 
         for (const [method, decl] of Object.entries(methods)) {
             if (decl.status !== "pending") continue;
-            const body = handlerBody(abs, method);
+            const imported = importsOf(originFile(abs, method));
+            const body = handlerEvidenceBody(abs, method);
             if (body === null) {
                 buckets.unreadable.push({ route, method });
                 continue;
@@ -548,6 +747,7 @@ export function gateInventory(table, catalogKeys = discoverCatalogKeys()) {
 
             let capabilityVia = null;
             let gateVia = null;
+            let authorityVia = null;
             for (const id of called) {
                 const mod = imported.get(id);
                 if (!mod || !existsSync(mod)) continue;
@@ -575,15 +775,30 @@ export function gateInventory(table, catalogKeys = discoverCatalogKeys()) {
                         gateVia = { helper: id, module: relative(WEB, mod).split("\\").join("/") };
                     }
                 }
+                // An authority entry the handler never branches on is not a gate. `const ctx =
+                // await getAdminContextCached();` followed by a read of `ctx.orgId` and no test of
+                // `ctx.ok` establishes nothing and must fall through to `none`, where a reviewer
+                // will see it — the same rule `gateVia` already applies, asked of the roots too.
+                if (!authorityVia && (AUTHORITY_ROOTS.test(`${id}(`) || declarationResolvesAuthority(mod, id))) {
+                    const bound = verdictBinding(body, id);
+                    if (!bound || new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+                        authorityVia = { helper: id, module: relative(WEB, mod).split("\\").join("/") };
+                    }
+                }
             }
 
             const roleGate = /\brole\s*[!=]==?|\broleKeys\b|\bpermissionKeys\b/.test(body);
-            const contextLoad = [...called].some((id) => /getAdmin\w*Context|loadAdminAccessBundle|requireAuth|getServerUser/.test(id));
 
             if (capabilityVia) buckets.capability.push({ route, method, ...capabilityVia });
             else if (gateVia) buckets.gateHelper.push({ route, method, ...gateVia });
             else if (roleGate) buckets.role.push({ route, method });
-            else if (contextLoad) buckets.authenticated.push({ route, method });
+            // A DERIVED authority helper lands here rather than in `gateHelper`, even when it
+            // refuses callers: `loadAdminRouteGate` does enforce portal eligibility, but deciding
+            // that from source is inference, and inference is what the retired census did. The
+            // weaker claim — "this handler establishes who is calling" — is the one the source
+            // supports, and under-claiming is the only safe direction for a bucket whose purpose is
+            // to concentrate risk. W-15 still has to rule on every one of these.
+            else if (authorityVia) buckets.authenticated.push({ route, method, ...authorityVia });
             else buckets.none.push({ route, method });
         }
     }

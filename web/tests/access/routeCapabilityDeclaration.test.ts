@@ -24,7 +24,7 @@
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
-import { resolve, join, dirname } from "node:path";
+import { resolve, join, dirname, relative } from "node:path";
 import { tmpdir } from "node:os";
 import {
     runRouteCapabilityCheck,
@@ -354,14 +354,26 @@ describe("W-15 — the burndown worklist is discovered from source", () => {
         capabilityElsewhere: string;
     }[];
 
-    it("finds pending handlers that already call a declared gate", () => {
-        expect(found.length).toBeGreaterThan(0);
+    it("is now DRAINED against the real table", () => {
+        // Session 4 discovered one entry — profile-photo GET, enforced by the very
+        // assertDocumentAccess that documents/[id]/signed-url declares as documents.read — and
+        // session 5 declared it. So the honest assertion about the live table is that this class of
+        // under-reporting is empty, not that it is non-empty.
+        //
+        // An emptiness assertion is worth nothing on its own: a discovery that has quietly stopped
+        // working also returns []. The test below is what keeps this one meaningful.
+        expect(found).toEqual([]);
     });
 
-    it("names profile-photo GET, which is enforced by the very helper signed-url declares", () => {
-        // Not a hypothetical: this sat `pending` while calling the assertDocumentAccess that
-        // documents/[id]/signed-url declares as documents.read.
-        const photo = found.filter((f) => f.route.includes("persons/[id]/profile-photo"));
+    it("still FINDS profile-photo GET when the table under-reports it again", () => {
+        // The same discovery, run against a table with the declaration removed. This is what
+        // separates "the backlog is drained" from "the finder is broken" — the two states the
+        // previous assertion cannot tell apart on its own, and the reason draining a worklist must
+        // never be allowed to retire the tool that built it.
+        const regressed = JSON.parse(JSON.stringify(table)) as typeof table;
+        regressed.routes["app/api/admin/persons/[id]/profile-photo/route.ts"].GET = { status: "pending" };
+        const rediscovered = pendingWithKnownGates(regressed) as { route: string; method: string; helper: string }[];
+        const photo = rediscovered.filter((f) => f.route.includes("persons/[id]/profile-photo"));
         expect(photo.map((f) => f.method).sort()).toEqual(["GET"]);
         for (const f of photo) expect(f.helper).toBe("assertDocumentAccess");
     });
@@ -371,7 +383,17 @@ describe("W-15 — the burndown worklist is discovered from source", () => {
         // gate, and the worklist must not imply a capability nobody has chosen. Which key replaces
         // a raw role check is W-15's product call — precisely the decision this list must not make
         // on its own. Asserted so a future widening of the worklist's heuristic has to face it.
-        const photo = found.filter((f) => f.route.includes("persons/[id]/profile-photo"));
+        //
+        // Read from the REGRESSED table, not the live one. Against the live table `found` is now
+        // empty and this assertion would hold for the wrong reason — a negative that passes because
+        // there is nothing to check is the tautology session 4 caught itself writing in the fixture
+        // matrix, and it is no better here.
+        const regressed = JSON.parse(JSON.stringify(table)) as typeof table;
+        regressed.routes["app/api/admin/persons/[id]/profile-photo/route.ts"].GET = { status: "pending" };
+        const photo = (pendingWithKnownGates(regressed) as { route: string; method: string }[]).filter((f) =>
+            f.route.includes("persons/[id]/profile-photo")
+        );
+        expect(photo.length).toBeGreaterThan(0);
         expect(photo.map((f) => f.method)).not.toContain("POST");
         expect(photo.map((f) => f.method)).not.toContain("DELETE");
     });
@@ -427,6 +449,154 @@ describe("W-15 — gate sizing is conservative where it matters", () => {
             Object.values(m).filter((d) => d.status === "pending")
         ).length;
         expect(Object.values(inv).reduce((n, b) => n + b.length, 0)).toBe(pending);
+    });
+});
+
+/**
+ * The four ways the sizing reader was reporting a GATED handler as carrying no gate at all.
+ *
+ * Session 4 delivered the sizing and its load-bearing output is `none` — "no authorization was
+ * discovered here". That output is only worth an operator's attention if it is mostly TRUE. Reading
+ * the 67 it produced, 37 of them were gated: the reader was losing the evidence, not the routes were
+ * losing the gate. A risk list that is half noise gets triaged like noise, which is the specific way
+ * a conservative check stops being conservative.
+ *
+ * Each defect below is the same shape — *an enumerated answer where a discovered one was needed*, or
+ * *a body read against the wrong file* — and each is proved here against a fixture built to fail
+ * exactly that one. None of them widens what the check PASSES: `bindDeclaration` still reads the
+ * exported body alone, so a declared route that hides its guard behind a delegation still fails its
+ * join. Sharpening a measurement and loosening a lock are opposite moves.
+ */
+describe("W-15 sizing — the reader finds a gate that is really there", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "w15-size-"));
+    const write = (name: string, source: string) => {
+        const p = join(scratch, `${name}.route.ts`);
+        writeFileSync(p, source);
+        return relative(resolve(__dirname, "../.."), p).split("\\").join("/");
+    };
+    const bucketOf = (route: string, method: string) => {
+        const inv = gateInventory({ routes: { [route]: { [method]: { status: "pending" } } } }) as Record<
+            string,
+            { route: string }[]
+        >;
+        return Object.entries(inv).find(([, rows]) => rows.length)?.[0] ?? "empty";
+    };
+
+    afterAll(() => {
+        rmSync(scratch, { recursive: true, force: true });
+    });
+
+    const GATE = `import { loadAdminRouteGate } from "@/lib/admin/adminRouteGate";\n`;
+    const GUARD = `const gate = await loadAdminRouteGate();\n  if (!gate.ok) return Response.json({}, { status: 403 });\n`;
+
+    it("a gate reached through a DELEGATION is not an absence", () => {
+        // `jobs` exports a perf shell over `getJobsImpl`, and the impl carries the context load.
+        // Reading only the exported body reported one of the most heavily guarded routes in the
+        // tree as ungated.
+        const route = write(
+            "delegated",
+            `${GATE}async function impl() {\n  ${GUARD}  return Response.json({ ok: true });\n}\n` +
+                `export async function GET() { return impl(); }\n`
+        );
+        expect(bucketOf(route, "GET")).toBe("authenticated");
+    });
+
+    it("the delegation hop is ONE hop, not a closure walk", () => {
+        // The census was retired for crediting a route because something in its import closure
+        // mentioned a primitive. One hop keeps the answer checkable by reading one file; a second
+        // local hop must NOT be followed, or the stopping rule is not a rule.
+        const route = write(
+            "twohop",
+            `${GATE}async function inner() {\n  ${GUARD}  return null;\n}\n` +
+                `async function outer() { return inner(); }\n` +
+                `export async function GET() { return outer(); }\n`
+        );
+        expect(bucketOf(route, "GET")).toBe("none");
+    });
+
+    it("the authority vocabulary is DERIVED, not enumerated", () => {
+        // `loadAdminRouteGate` matches none of the four hand-written root names, and every route
+        // entering through it — the newer, preferred entry point — read as ungated. The helper is
+        // recognised because its own declaration calls a root, so a gate helper written tomorrow
+        // needs no edit here.
+        const route = write(
+            "derived",
+            `${GATE}export async function GET() {\n  ${GUARD}  return Response.json({ ok: true });\n}\n`
+        );
+        expect(bucketOf(route, "GET")).toBe("authenticated");
+    });
+
+    it("a RETURN TYPE brace is not a function body", () => {
+        // `async function f(): Promise<{ ok: true } | { ok: false }> { … }` opens two braces at
+        // paren depth zero before the body starts. Taking the first yields a type fragment with no
+        // calls in it, so a helper that authenticates in its first line reads as inert. Seven
+        // config-layout-assist handlers were reported ungated because of a brace in a signature.
+        const helper = join(scratch, "unionHelper.ts");
+        writeFileSync(
+            helper,
+            `import { getAdminContextCached } from "@/lib/admin/getAdminContext";\n` +
+                `export async function loadThing(): Promise<{ ok: true; orgId: string } | { ok: false }> {\n` +
+                `  const ctx = await getAdminContextCached();\n  if (!ctx.ok) return { ok: false };\n` +
+                `  return { ok: true, orgId: ctx.orgId };\n}\n`
+        );
+        const route = write(
+            "uniontype",
+            `import { loadThing } from "./unionHelper";\n` +
+                `export async function GET() {\n  const t = await loadThing();\n  if (!t.ok) return Response.json({}, { status: 403 });\n  return Response.json({ ok: true });\n}\n`
+        );
+        expect(bucketOf(route, "GET")).toBe("authenticated");
+    });
+
+    it("a re-exported handler is read against ITS OWN file's imports", () => {
+        // The three v2 drawer routes are one line: `export { GET } from "…"`. The body arrived
+        // carrying `loadAdminRouteGate(…)` and was matched against the v2 file's import table,
+        // which is empty — a body and an import table taken from two different files.
+        const targetAbs = join(scratch, "reexportTarget.ts");
+        writeFileSync(
+            targetAbs,
+            `${GATE}export async function GET() {\n  ${GUARD}  return Response.json({ ok: true });\n}\n`
+        );
+        const route = write("reexport", `export { GET } from "./reexportTarget";\n`);
+        expect(bucketOf(route, "GET")).toBe("authenticated");
+    });
+
+    it("a BARREL re-export is followed to the declaration", () => {
+        // Six processing-identity handlers import `resolveOperatorRoute` from a directory barrel
+        // that declares nothing. Asking the barrel whether it authenticates gets "no".
+        writeFileSync(
+            join(scratch, "barrelImpl.ts"),
+            `import { getAdminContextCached } from "@/lib/admin/getAdminContext";\n` +
+                `export async function resolveIt() {\n  const ctx = await getAdminContextCached();\n  if (!ctx.ok) return null;\n  return ctx;\n}\n`
+        );
+        writeFileSync(join(scratch, "barrelIndex.ts"), `export { resolveIt } from "./barrelImpl";\n`);
+        const route = write(
+            "barrel",
+            `import { resolveIt } from "./barrelIndex";\n` +
+                `export async function GET() {\n  const r = await resolveIt();\n  if (!r) return Response.json({}, { status: 401 });\n  return Response.json({ ok: true });\n}\n`
+        );
+        expect(bucketOf(route, "GET")).toBe("authenticated");
+    });
+
+    it("an authority verdict nobody BRANCHES on is not a gate", () => {
+        // The tightening that runs the other way, and the reason it is here: without it, every
+        // widening above is a one-directional loosening of the risk list. A handler that resolves
+        // the caller and then ignores the answer establishes nothing, and must fall to `none`
+        // where a reviewer will see it.
+        const route = write(
+            "unbranched",
+            `${GATE}export async function GET() {\n  const gate = await loadAdminRouteGate();\n  return Response.json({ org: gate.orgId });\n}\n`
+        );
+        expect(bucketOf(route, "GET")).toBe("none");
+    });
+
+    it("still refuses to call an ungated handler gated", () => {
+        // The whole point of the direction-of-error argument. A false `none` costs a reviewer five
+        // minutes; a false all-clear costs an exposure nobody looks for again.
+        const route = write(
+            "ungated",
+            `export async function DELETE() { return Response.json({ deleted: true }); }\n`
+        );
+        expect(bucketOf(route, "DELETE")).toBe("none");
     });
 });
 
