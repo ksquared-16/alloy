@@ -142,6 +142,28 @@ export function isQueueRowLoadable(c: ConversationSummary | null | undefined): b
     return Boolean(c && c.scope_status === "resolved" && c.customer_id);
 }
 
+/**
+ * Which conversation the workspace should show.
+ *
+ * "Loadable" means the family workspace can build a household view for the row,
+ * and that is a good reason to prefer one when picking a DEFAULT. It is not a
+ * reason to override the operator. Treating it as one meant a click on an
+ * unidentified conversation — never loadable, because it has no household —
+ * silently bounced the operator back to the first resolved row, so a parent Alloy
+ * could not identify could not be opened at all.
+ *
+ * An explicit selection survives for as long as it is still visible; loadable
+ * only decides where to start.
+ */
+export function resolveCommandCenterSelectionPreferringLoadable(
+    selectedId: string | null,
+    visibleIds: string[],
+    loadableIds: string[]
+): string | null {
+    if (selectedId && visibleIds.includes(selectedId)) return selectedId;
+    return resolveCommandCenterSelection(null, loadableIds.length > 0 ? loadableIds : visibleIds);
+}
+
 /** Prefer loadable canonical rows for initial selection. */
 export function flattenLoadableConversationIds(sections: CommandCenterQueueSection[]): string[] {
     return sections.flatMap((s) => s.items.filter(isQueueRowLoadable).map((c) => c.id));

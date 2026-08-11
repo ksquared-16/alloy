@@ -9,7 +9,7 @@ import {
     visibleCommandCenterQueues,
     flattenVisibleConversationIds,
     flattenLoadableConversationIds,
-    resolveCommandCenterSelection,
+    resolveCommandCenterSelectionPreferringLoadable,
     conversationDisplayTitle,
     conversationDisplayTopic,
     conversationDisplayChildren,
@@ -37,6 +37,9 @@ import {
 import { buildCommandCenterRecordLinks, type CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import UnidentifiedConversationPanel, {
+    isUnidentifiedConversation,
+} from "@/app/adminV2/communications/UnidentifiedConversationPanel";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import {
     COMMS_FILTER_INPUT_CLASS,
@@ -418,7 +421,7 @@ export default function CommandCenterShell() {
 
     useEffect(() => {
         if (loading) return;
-        const nextId = resolveCommandCenterSelection(selectedId, loadableIds.length > 0 ? loadableIds : visibleIds);
+        const nextId = resolveCommandCenterSelectionPreferringLoadable(selectedId, visibleIds, loadableIds);
         if (nextId && nextId !== selectedId) {
             void openConversation(nextId);
         } else if (!nextId && selectedId) {
@@ -673,6 +676,16 @@ export default function CommandCenterShell() {
                         </div>
                     ) : workspaceHydrating ? (
                         <CommsWorkspacePanelReserve label="Loading first conversation" />
+                    ) : selected && isUnidentifiedConversation(selected) ? (
+                        // The family workspace loads from a household this conversation
+                        // does not have, so `runtime.vm` never resolved and selection fell
+                        // through to a "Loading conversation" placeholder that stayed
+                        // forever. The parent's message was received, retained and listed
+                        // in the queue — and unanswerable.
+                        <UnidentifiedConversationPanel
+                            conversation={selected}
+                            onReplied={() => refreshOperationalCommunicationsWork(selected.id)}
+                        />
                     ) : selected ? (
                         <CommsWorkspacePanelReserve label="Loading conversation" />
                     ) : !loading && filtered.length === 0 ? (
