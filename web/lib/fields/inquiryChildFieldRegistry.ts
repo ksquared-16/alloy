@@ -3,6 +3,7 @@
  * Operator-facing entity_type: `inquiry_child` (never expose raw table names in UX).
  */
 
+import { EMPLOYMENT_ENTITY_TYPE } from "@/lib/employment/employmentFieldRegistry";
 import { CUSTOMER_MEMBER_ENTITY_TYPE } from "./customerMemberFieldRegistry";
 import { PERSON_CHILD_RELATIONSHIP_ENTITY_TYPE } from "./personChildRelationship/personChildRelationshipFieldRegistry";
 
@@ -22,6 +23,10 @@ export const FIELD_DEFINITION_ENTITY_TYPES = [
     CUSTOMER_MEMBER_ENTITY_TYPE,
     INQUIRY_CHILD_ENTITY_TYPE,
     PERSON_CHILD_RELATIONSHIP_ENTITY_TYPE,
+    // Employment is a relationship subject, like person_child_relationship:
+    // tenant staff facts are scoped to "this person, at this org, during this
+    // employment period" — never to the human in general.
+    EMPLOYMENT_ENTITY_TYPE,
 ] as const;
 
 export type FieldDefinitionEntityType = (typeof FIELD_DEFINITION_ENTITY_TYPES)[number];
