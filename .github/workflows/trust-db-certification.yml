@@ -42,5 +42,19 @@ jobs:
       # The canonical command lives in package.json and the composer in
       # scripts/, so the local run and the gate cannot drift into certifying
       # different things. No npm install: the script is bash + docker only.
+      # D-72 — migration version uniqueness, repo-only.
+      #
+      # First, and deliberately in THIS workflow: it is required on `staging`,
+      # it is unfiltered so it always reports, and it is already the job that
+      # owns "the migrations are sound". A duplicate version cannot reach a
+      # database, so catching it needs no database — which is what lets it run
+      # before the Docker suites and fail in about a second.
+      #
+      # `scripts/migration-preflight.mjs` is the same checker the promotion
+      # runbook (§C1) has always specified; until now nothing invoked it, which
+      # is how the 2026-08-07 collision merged. No `|| true`, no allowlist.
+      - name: Verify migration version uniqueness
+        run: npm run verify:migration-versions
+
       - name: Run Trust DB certification suites
         run: npm run test:trust-db-certification

@@ -15,7 +15,7 @@
         "audit:authority-paths": "node scripts/auditAuthorityPaths.mjs",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:trust-adoption": "vitest run tests/trust tests/metrics/trustMetrics.test.ts tests/ai/openAiCompatibleProviderAdapter.test.ts tests/processing tests/pos/commit",
+        "test:trust-adoption": "vitest run tests/trust tests/metrics/trustMetrics.test.ts tests/ai/openAiCompatibleProviderAdapter.test.ts tests/scripts/migrationPreflight.test.ts tests/processing tests/pos/commit",
         "test:pricing-smoke": "vitest run tests/pricing/jobPricing.smoke.test.ts",
         "test:payments-smoke": "vitest run tests/payments/paymentsTask2.smoke.test.ts",
         "test:playwright-smoke": "playwright test playwright/tests/smoke-field-registry.spec.ts",

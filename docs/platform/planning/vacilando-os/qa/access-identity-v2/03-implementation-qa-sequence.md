@@ -1001,7 +1001,13 @@ to `ensureLifecycleDepartmentWorkspaceAccess` (`:153`), so the path is identical
 *additionally* invisible to a by-table route census. The remedy is still W-8's scope, not Wave 1's.
 
 **W-3 / RL-2 — green** across a tree that grew 312 → **314** migrations. Both new migrations
-(`20260807090000_membership_profile_atomic_create.sql`, `20260807140000_backfill_membership_access_profiles.sql`)
+(`20260807090001_membership_profile_atomic_create.sql`, `20260807140000_backfill_membership_access_profiles.sql`)
+
+> **Renamed 2026-08-10 (D-71).** M2 was authored as `20260807090000`, colliding with
+> `20260807090000_business_process_publish_idempotency.sql`. `schema_migrations` is
+> `PRIMARY KEY (version)`, so the pair could never both be recorded and `supabase db push`
+> would have aborted mid-chain. M2 moved to `…090001`; the BP migration kept `…090000`
+> because the later BP repair names that version as the breakage it fixes. SQL body unchanged.
 are W-5/W-6 artifacts and seed no permission keys, so RL-2's subject is unmoved. C13 → W-11 still owns the
 restore question; nothing for Wave 1 to do.
 
@@ -1674,7 +1680,7 @@ left the principal with **no membership at all** — not a fail-open, a lockout,
 statements are now inside `replace_membership_with_access_profile`. This is recorded rather than absorbed: it
 is a W-5-adjacent find, not something W-5 predicted.
 
-**Migration.** `supabase/migrations/20260807090000_membership_profile_atomic_create.sql` (M2). Two
+**Migration.** `supabase/migrations/20260807090001_membership_profile_atomic_create.sql` (M2). Two
 `SECURITY INVOKER` functions — every caller already holds `service_role`, so `SECURITY DEFINER` would add an
 escalation surface for no benefit. `EXECUTE` is revoked from `PUBLIC` before being granted, because Postgres
 grants `EXECUTE` on new functions to `PUBLIC` by default and revoking from `anon` alone is a no-op. Profiles
@@ -3253,7 +3259,7 @@ Migrations introduced by this plan, against `supabase/migrations/` (289 files to
 | # | Workstream | Migration | Target | Preflight focus |
 |---|---|---|---|---|
 | M1 | W-6 | Backfill access profiles for memberships lacking one — **authored 2026-08-07**, `20260807140000_backfill_membership_access_profiles.sql` (**AUTHORIZED 2026-08-07, NOT YET APPLIED**) | shared | **PREFLIGHT EXECUTED 2026-08-07** on census run 3 → `preflight.ok: true`, evidence [`w6-m1-preflight.json`](w6-m1-preflight.json). Row count re-derived at **2** on the `pairs_without_profile` grain — not the 8 membership rows, not the 6 distinct pairs; **0 orphan profiles**. Operator authorized the apply; **no worker-reachable write channel exists to execute it** (see below). Post-apply rules **pending**; `status` is `authorized_awaiting_apply`, never `applied`, until the NOTICE block and Tier A anti-join are captured |
-| M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090000_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
+| M2 | W-5 | Atomic membership+profile RPC — **authored 2026-08-07**, `20260807090001_membership_profile_atomic_create.sql` (**not applied**) | shared | Function only; no data effect. `EXECUTE` revoked from `PUBLIC` before grant; `SECURITY INVOKER` |
 | ~~M3~~ | ~~W-9~~ | ~~Catalog consolidation — repoint grants to one FK~~ **DISCHARGED OUT-OF-TRACK 2026-07-30** by `20260729120000_access_v2_phase0_catalog_and_role_definition_integrity.sql` (Access & Roles V2 Phase 0), live on the target as version `20260730000602`, vendored `555fa056a`. Its own §0 preflight ran the orphan-grant and unexpected-FK checks this row specifies, **fail-closed before any `DROP`**. W-9 authored no migration — see §7 | — | — |
 | ~~M4~~ | ~~W-9~~ | ~~Drop retired catalog tables (**separate, later**)~~ **STRUCK — there are no retired catalog *tables*.** Phase 0 recreated `permissions`/`permission_keys` as views; retiring those views is **`W-60`/`M20`** (wave 14, product-source copy §47), which audits the base-table grants *before* dropping. A W-9 owner authoring a drop here duplicates `W-60` and pre-empts its audit | — | — |
 | M5 | W-11 | Catalog reconciliation — add enforced keys, delete unenforced. **NOT AUTHORED 2026-08-07**, deliberately: the plan makes operator review of the deletion list a precondition of the migration, and the review has not happened. Subject is now **57 keys, not 35** — **36 deletions, 1 addition**, enumerated in [`w11-catalog-reconciliation.json`](w11-catalog-reconciliation.json) | shared | Enumerated deletion list reviewed by the operator first. **Three preconditions established by W-11 and carried here:** (1) grants must be deleted **before** keys — the surviving FK is `ON DELETE RESTRICT` and `seed_default_rbac` grants `admin` every active key, so all 36 are expected to carry live grants on every org; (2) **the deletion is not durable** — the live `seed_default_rbac()` re-inserts all 57 keys on every call, so one org creation after M5 re-creates everything it deleted; M5 must rewrite that literal or land with M6; (3) live preflight unrun — catalog width, keys present live that no migration seeds, and grant counts per candidate are `database.read_census` subjects |
