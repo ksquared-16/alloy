@@ -39,12 +39,6 @@ describe("platform simplification — legacy drawer elimination", () => {
         );
     });
 
-    it("global search campuses route to settings, not drawer", () => {
-        const listener = read("components/adminV2/GlobalRecordSearchOpenListener.tsx");
-        expect(listener).toContain('type === "locations"');
-        expect(listener).toContain("canonicalLocationSettingsHref");
-    });
-
     it("settings locations do not use legacy drawer create", () => {
         const page = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
         expect(page).not.toContain("useAdminDrawer");

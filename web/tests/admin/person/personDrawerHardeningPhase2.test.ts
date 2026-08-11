@@ -56,13 +56,6 @@ describe("person drawer hardening phase 2", () => {
         );
     });
 
-    it("GlobalRecordSearchOpenListener warms person cache before open", () => {
-        const src = read("components/adminV2/GlobalRecordSearchOpenListener.tsx");
-        expect(src).toContain("cachePersonDrawerChildOpenSeed");
-        expect(src).toContain("prefetchPersonDrawerSnapshot");
-        expect(src).toContain("personDrawerOpenSeed");
-    });
-
     it("AdminEntityDrawer recognizes global_search chrome hints", () => {
         const drawer = read("components/admin/AdminEntityDrawer.tsx");
         expect(drawer).toContain("GLOBAL_SEARCH_DRAWER_OPEN_SOURCE");

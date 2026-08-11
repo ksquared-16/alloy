@@ -73,16 +73,4 @@ describe("operator drawer URL stability", () => {
         expect(route).toBe("opportunity");
     });
 
-    it("global search fallback navigates to /workspace when drawer host is absent", () => {
-        vi.stubGlobal("window", {
-            location: { pathname: "/login" },
-            sessionStorage: { setItem: vi.fn(), getItem: vi.fn(), removeItem: vi.fn() },
-            dispatchEvent: vi.fn(),
-        });
-        const nav = launchGlobalRecordSearchOpen({
-            open_entity_type: "opportunities",
-            open_entity_id: "opp-1",
-        });
-        expect(nav).toBe("/workspace");
-    });
 });

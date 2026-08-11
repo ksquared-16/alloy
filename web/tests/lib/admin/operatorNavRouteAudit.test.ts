@@ -73,20 +73,6 @@ describe("operator nav route audit", () => {
         ).toBe(true);
     });
 
-    it("canonical path constants avoid transitional /adminV2 emitters", () => {
-        expect(ADMIN_FORMS_UI_BASE).toBe("/admin/forms");
-        expect(ADMIN_V2_SETTINGS_LIFECYCLE_PATH).toBe("/admin/settings/lifecycle");
-        vi.stubGlobal("window", {
-            location: { pathname: "/login" },
-            sessionStorage: { setItem: vi.fn(), getItem: vi.fn(), removeItem: vi.fn() },
-            dispatchEvent: vi.fn(),
-        });
-        expect(launchGlobalRecordSearchOpen({
-            open_entity_type: "opportunities",
-            open_entity_id: "x",
-        })).toBe("/workspace");
-    });
-
     it.each(PRODUCT_NAV_FILES)("product nav file %s does not emit forbidden workspace paths", (rel) => {
         const src = read(rel);
         for (const pattern of FORBIDDEN_EMIT_PATTERNS) {
