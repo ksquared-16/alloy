@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: audit
+status: canonical
 last_reviewed: 2026-08-11
 slot: 3
 branch: agent/claude/3-communications-inbound-sms

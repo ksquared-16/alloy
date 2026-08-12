@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: register
+status: canonical
 last_reviewed: 2026-08-11
 ---
 

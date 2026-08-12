@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: decided
+status: canonical
 last_reviewed: 2026-08-12
 ---
 

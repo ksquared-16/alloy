@@ -1,6 +1,6 @@
 ---
 owner: platform — Adaptive Workspace / BOS
-status: RESOLVED
+status: historical
 raised_by: Conversation Platform V1 — Communications Hardening
 last_reviewed: 2026-08-12
 ---

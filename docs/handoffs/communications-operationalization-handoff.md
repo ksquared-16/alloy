@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: handoff
+status: sprint
 last_reviewed: 2026-08-11
 slot: 3
 worktree: wt3-communications-inbound-sms

@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: evidence
+status: canonical
 last_reviewed: 2026-08-11
 source: official Resend documentation
 ---
