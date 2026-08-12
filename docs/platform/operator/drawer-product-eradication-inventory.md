@@ -114,6 +114,36 @@ behavioural diff unreviewable.
 
 ---
 
+## Finding: capabilities whose only mount was the legacy overview body
+
+Deleting the overlay made `OpportunityDrawerOverviewBody` and
+`OpportunityDrawerInquiryWorkflowOverview` unreachable, and with them a set of components that had
+**no other mount**. They are retained, unmounted, rather than deleted — the eradication is of the
+drawer product, not of unrelated capability that happened to be carried by it.
+
+| Capability | Module | State |
+|---|---|---|
+| Per-child **Decision** work item + Close family (PR #355) | `DecisionCurrentWorkCard` + `participantDecisionClient` + `familyCloseClient` | retained, **no mount** |
+| Packet review overview | `OpportunityPacketReviewOverview` | retained, **no mount** |
+| Tour booking lifecycle bar / tour date block | `OpportunityTourBookingLifecycleBar`, `OpportunityInquiryTourDateBlock`, `useOpportunityActiveTourBookings` | retained, **no mount** |
+| Inquiry summary activity | `OpportunityInquirySummaryActivity` | retained, **no mount** |
+
+**This is not a regression introduced here.** That body only rendered when `focusPanelActive` was
+false, and on `/workspace/work-unit/*` the inline Focus Panel renders instead — so these were
+already invisible to an operator on the canonical surface. It is the same class of finding the Focus
+Panel body already records for the Trust enhance-draft control: "produced, persisted and audited
+while being invisible to the operator it was produced for."
+
+`tests/lifecycle/participantDecisionSurfaceAndRetirement.test.ts` asserts the Decision card has no
+mount, so the day one appears the test fails and the next engineer writes the real mount-site
+assertion. Giving these a Focus Panel home is the follow-on work.
+
+Genuinely drawer-infrastructure orphans from the same cascade **were** deleted: the layout-runtime
+shadow diagnostics, the drawer body status, the relationship-panel skeleton, and the drawer record
+action-button classes.
+
+---
+
 ## Execution order
 
 1. **Resolver** — one platform module answering *record → host Work Unit + host record*, extracted

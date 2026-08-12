@@ -120,15 +120,6 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
 
 });
 
-describe("Drawer single-reveal bootstrap body", () => {
-
-    it("does not show loading copy for packet status probe", () => {
-        const src = read("components/admin/opportunity/OpportunityPacketReviewOverview.tsx");
-        expect(src).not.toContain("Loading packet status");
-    });
-
-});
-
 describe("Opportunity drawer first-paint contract", () => {
     it("defines primary contract and first-paint gates in shared module", () => {
         const mod = read("lib/admin/drawer/opportunityDrawerFirstPaintContract.ts");

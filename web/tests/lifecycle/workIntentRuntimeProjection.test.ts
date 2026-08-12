@@ -134,12 +134,6 @@ describe("Work Intent Runtime Phase A integration contracts", () => {
         expect(slice).toContain("projectStageWorkRuntime");
     });
 
-    it("OpportunityDrawerOverviewBody uses layout runtime for current work", () => {
-        const body = read("components/admin/vmDrawer/OpportunityDrawerOverviewBody.tsx");
-        expect(body).not.toContain("WorkIntentRuntimeCard");
-        expect(body).toContain("DrawerLayoutRuntimeOverviewBody");
-    });
-
     it("drawer VM types declare work_intent_runtime on workspace", () => {
         const types = read("lib/adminV2/viewModel/drawer/types.ts");
         expect(types).toContain("work_intent_runtime:");

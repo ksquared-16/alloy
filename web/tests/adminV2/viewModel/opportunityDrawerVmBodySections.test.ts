@@ -28,29 +28,6 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(title).not.toMatch(/Family inquiry/i);
     });
 
-    it("FamilyContactsPanel supports multiple contacts via shell reserved count", () => {
-        const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(overview).toContain("shellReservedAdditionalCount");
-        expect(overview).toContain("_additional_contacts_shell_count");
-    });
-
-    it("OpportunityDrawerInquiryWorkflowOverview renders required production sections", () => {
-        const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(overview).toContain("FamilyContactsPanel");
-        expect(overview).toContain("OpportunityInquiryTourDateBlock");
-        expect(overview).toContain("OpportunityInquirySummaryRightColumn");
-        expect(overview).toContain("OpportunityInquiryChildrenSection");
-        expect(overview).toContain('data-opportunity-lead-summary="true"');
-        expect(overview).toContain('data-opportunity-tour-block="true"');
-        expect(overview).toContain('data-opportunity-inquiry-children-section="true"');
-        expect(overview).toContain("className={oppInqLeadSummaryShellClassName}");
-        expect(overview).toContain("{opportunitySingular} children");
-        expect(overview).toContain("oppInqEyebrow");
-        expect(overview).toContain('data-opportunity-inquiry-right-column="true"');
-        expect(overview).toContain('data-opportunity-inquiry-summary="true"');
-        expect(overview).not.toContain("VmInquiryRightColumn");
-    });
-
     it("OpportunityDrawerVmTabPanes covers full workflow tab strip", () => {
         const panes = read("components/admin/vmDrawer/OpportunityDrawerVmTabPanes.tsx");
         expect(panes).toContain('drawerTab === "notes"');

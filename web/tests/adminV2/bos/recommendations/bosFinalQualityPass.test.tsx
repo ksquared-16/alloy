@@ -77,4 +77,4 @@ describe("BOS final quality pass", () => {
         expect(rightCol).not.toContain('data-review-assist-placeholder="reserved"');
     });
 
-);
+});

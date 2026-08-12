@@ -295,12 +295,6 @@ describe("Work Runtime Convergence integration contracts", () => {
         expect(planView).toContain("LayoutRuntimeFollowUpsWidget");
     });
 
-    it("OpportunityDrawerOverviewBody delegates work to layout runtime widget", () => {
-        const body = read("components/admin/vmDrawer/OpportunityDrawerOverviewBody.tsx");
-        expect(body).not.toContain("WorkIntentRuntimeCard");
-        expect(body).toContain("DrawerLayoutRuntimeOverviewBody");
-    });
-
     it("attention guidance resolves stage-plan reasons", () => {
         const guidance = read("lib/layout/runtime/resolveLayoutRuntimeAttentionGuidance.ts");
         expect(guidance).toContain("resolveStagePlanAttentionSummaryLine");

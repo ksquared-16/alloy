@@ -11,11 +11,6 @@ function read(rel: string): string {
 
 describe("AdminV2 drawer recovery — Track A contracts", () => {
 
-    it("does not render empty additional-contacts copy", () => {
-        const panel = read("components/admin/opportunity/FamilyContactsPanel.tsx");
-        expect(panel).not.toContain("No additional contacts linked yet.");
-    });
-
     it("drawer scroll clears command bar via workspace css", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
         expect(css).toContain('[data-adminv2-record-modal="true"] [data-adminv2-record-modal-scroll]');

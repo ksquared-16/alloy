@@ -79,17 +79,4 @@ describe("Opportunity VM tour first paint", () => {
         expect(compose).toContain("buildOpportunityDrawerHeaderMenuActions");
     });
 
-    it("overview passes shared tour bookings when first_paint tour_bookings is settled", () => {
-        const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(overview).toContain("summaries.active_tour_bookings");
-        expect(overview).toContain("sharedActiveBookings");
-        expect(overview).toContain("tourBookingsFirstPaintReady");
-        expect(overview).toMatch(/!tourBookingsFirstPaintReady/);
-    });
-
-    it("tour lifecycle bar skips client fetch when shared bookings are provided", () => {
-        const bar = read("components/admin/opportunity/tours/OpportunityTourBookingLifecycleBar.tsx");
-        expect(bar).toContain("useSharedBookings");
-        expect(bar).toContain('data-tour-booking-ui-state="loading"');
-    });
 });

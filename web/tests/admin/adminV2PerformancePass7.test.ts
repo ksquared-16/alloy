@@ -155,14 +155,6 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
         expect(pending.skeleton_sections).toContain("what_matters_tour");
     });
 
-    it("action row height reserved before actions resolve", () => {
-        const actions = read("components/admin/opportunity/OpportunityRecordSectionRegistryActions.tsx");
-        expect(actions).toMatch(/min-h-\[2\.25rem\]/);
-        const tourBar = read("components/admin/opportunity/tours/OpportunityTourBookingLifecycleBar.tsx");
-        expect(tourBar).toContain("data-tour-booking-ui-state=\"loading\"");
-        expect(tourBar).toMatch(/min-h-\[2\.25rem\]/);
-    });
-
     it("primary entity resolves display labels on drawer_primary", () => {
         const entity = read("lib/admin/opportunityEntityRecord.ts");
         expect(entity).toContain("resolveOpportunityStatusDisplay");

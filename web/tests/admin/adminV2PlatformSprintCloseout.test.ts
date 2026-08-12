@@ -27,12 +27,17 @@ const SPRINT_NAV_PERFORMANCE_SCOPE = [
     "lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics.ts",
 ];
 
+/**
+ * The record-overlay router this sprint deliberately did not touch — and which a LATER sprint
+ * deleted outright. The scope assertion below is now stronger than it was: the source is not merely
+ * out of this sprint's scope, it does not exist.
+ */
 const DRAWER_LIFECYCLE_SOURCES_OUT_OF_SCOPE = ["components/admin/AdminEntityDrawer.tsx"];
 
 describe("Card 6 — AdminV2 platform navigation/performance sprint closeout", () => {
     it("sprint scope excludes drawer lifecycle sources", () => {
         for (const drawerPath of DRAWER_LIFECYCLE_SOURCES_OUT_OF_SCOPE) {
-            expect(existsSync(join(webRoot, drawerPath))).toBe(true);
+            expect(existsSync(join(webRoot, drawerPath))).toBe(false);
             expect(SPRINT_NAV_PERFORMANCE_SCOPE).not.toContain(drawerPath);
         }
     });
@@ -47,4 +52,4 @@ describe("Card 6 — AdminV2 platform navigation/performance sprint closeout", (
         );
     });
 
-);
+});

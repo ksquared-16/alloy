@@ -52,11 +52,6 @@ describe("AdminV2 performance pass 6 contracts", () => {
         expect(applied._full_hydrate_deferred_pending).toBeUndefined();
     });
 
-    it("record section actions reserve space before intersection fetch", () => {
-        const actions = read("components/admin/opportunity/OpportunityRecordSectionRegistryActions.tsx");
-        expect(actions).toMatch(/min-h-\[2\.25rem\]/);
-    });
-
     it("composed coordinator passes queue preview seed to primary fetch", () => {
         const coordinator = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
         const shell = read("components/admin/OpportunityDrawerOpenCoordinator.tsx");

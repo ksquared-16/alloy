@@ -110,8 +110,6 @@ describe("parent operating surface", () => {
         expect(model.groups[0]?.emergency_contacts[0]?.display_name).toBe("Pat Lee");
     });
 
-);
-
     it("parent IA lock suppresses profile, contact, record info, and duplicate summary fields", () => {
         const filtered = filterPersonDrawerParentOverviewSections([
             { key: "profile", fields: [{ key: "first_name" }, { key: "last_name" }] },

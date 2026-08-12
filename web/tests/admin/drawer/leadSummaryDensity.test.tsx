@@ -18,15 +18,6 @@ describe("Lead Summary density + BOS regression", () => {
         expect(geometry).not.toMatch(/INQUIRY_FAMILY_CONTACTS_SUMMARY_ROOT_CLASS[\s\S]*flex-1/);
     });
 
-    it("Family & contacts summary variant does not reserve large blank min-heights", () => {
-        const family = read("components/admin/opportunity/FamilyContactsPanel.tsx");
-        const geometry = read("lib/admin/drawer/opportunityInquiryRightColumnGeometry.ts");
-        expect(family).not.toContain('variant === "summary" ? "min-h-[2rem]"');
-        expect(family).toContain('variant === "summary" ? "mt-0"');
-        expect(geometry).toContain("space-y-0.5");
-        expect(family).toContain('variant !== "summary" ?');
-    });
-
     it("Review Assist calm state keeps summary content without duplicate BOS CTA", () => {
         const rightCol = read("components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx");
         expect(rightCol).not.toContain("BosDrawerAssistCta");

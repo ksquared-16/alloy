@@ -356,15 +356,6 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Lead summary contacts limit ───────────────────────────────────────────────────────────────
 
-    it("FamilyContactsPanel limits lead summary to primary + one additional contact", () => {
-        const src = readSrc("components/admin/opportunity/FamilyContactsPanel.tsx");
-        expect(src).toContain("SUMMARY_VISIBLE_ADDITIONAL_COUNT = 1");
-        expect(src).toContain("additionalContactsForRender");
-        expect(src).toContain("allSorted.slice(0, SUMMARY_VISIBLE_ADDITIONAL_COUNT)");
-        expect(src).not.toContain("overflowCount");
-        expect(src).not.toMatch(/variant === "summary"[\s\S]{0,120}Additional contacts/);
-    });
-
     it("lead summary contact cap: primary + at most one additional person in final collection", () => {
         const primaryId = "person-primary";
         const record = {

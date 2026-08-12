@@ -122,20 +122,6 @@ describe("vmDrawerRuntimeRoute", () => {
 
 describe("VM drawer runtime wiring", () => {
 
-    it("OpportunityDrawerInquiryWorkflowOverview uses production right column not VmInquiryRightColumn", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const overview = readFileSync(
-            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx"),
-            "utf8"
-        );
-        expect(overview).toContain("OpportunityInquirySummaryRightColumn");
-        expect(overview).not.toContain("VmInquiryRightColumn");
-        expect(overview).toContain("fetchEnabled={false}");
-    });
-
     it("swap phases suppress full loading shell", () => {
         expect(shouldHoldPriorDrawerContent("swap_preparing")).toBe(true);
         expect(

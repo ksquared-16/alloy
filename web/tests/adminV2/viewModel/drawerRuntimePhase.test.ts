@@ -143,4 +143,4 @@ describe("drawer runtime phase wiring (source contracts)", () => {
         expect(ctx).toContain("drawerTransitionId: drawerRuntimePhase.transitionId");
     });
 
-);
+});

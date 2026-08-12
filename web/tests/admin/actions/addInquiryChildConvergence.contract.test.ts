@@ -16,8 +16,4 @@ describe("add child convergence contracts", () => {
         expect(LIFECYCLE_PREFLIGHT_ACTION_KEYS).not.toContain("add_sibling");
     });
 
-    it("registry section actions pass openAddInquiryChild host", () => {
-        const section = read("components/admin/opportunity/OpportunityInquiryChildrenRegistryActions.tsx");
-        expect(section).toContain("openAddInquiryChild");
-    });
 });

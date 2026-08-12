@@ -29,4 +29,4 @@ describe("Person drawer premium primitives", () => {
         expect(meta).toContain("data-record-drawer-back-link");
     });
 
-);
+});
