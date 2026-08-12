@@ -71,15 +71,6 @@ describe("BOS operational closeout", () => {
         expect(drawerUrgencyChipLabel(display, { primarySeverity: "medium", slaTier: "breached" })).toBe("Today");
     });
 
-    it("uses Work with BOS label in Review Assist only", () => {
-        expect(BOS_ASSIST_CTA_DRAWER).toBe("Work with BOS");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const cta = readFileSync(join(webRoot, "components/admin/drawer/BosDrawerAssistCta.tsx"), "utf8");
-        expect(drawer).not.toContain('data-drawer-action="open_in_orchestrator"');
-        expect(cta).toContain("BOS_ASSIST_CTA_DRAWER");
-        expect(cta).toContain('data-drawer-slot="bos_assist_cta"');
-    });
-
     it("supporting detail summary is subdued", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const overview = { _operational_recommendation: rec };

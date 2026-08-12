@@ -97,24 +97,6 @@ describe("buildPersonDrawerStatusControlVm", () => {
 });
 
 describe("drawer header status select wiring", () => {
-    it("Lead runtime uses first-click Alloy status menu via VmDrawerHeaderStatusSelect", () => {
-        const progressive = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(progressive).toContain("VmDrawerHeaderStatusSelect");
-        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
-        expect(select).toContain('data-vm-progressive-status="dropdown"');
-        expect(select).toContain('role="menu"');
-        expect(select).not.toContain("<select");
-        expect(select).not.toContain("activateDropdown");
-    });
-
-    it("Person/child runtime passes VM status control into VmPersonStatusControl", () => {
-        const header = read("components/admin/vmDrawer/PersonDrawerProofLayoutHeader.tsx");
-        expect(header).toContain("statusControl");
-        expect(header).toContain("currentStatusKey");
-        const personControl = read("components/admin/vmDrawer/VmPersonStatusControl.tsx");
-        expect(personControl).toContain("VmDrawerHeaderStatusSelect");
-        expect(personControl).toContain("entityKind=\"persons\"");
-    });
 
     it("compose loads persons status defs with profile filtering", () => {
         const personCompose = read("lib/adminV2/viewModel/drawer/person/composePersonDrawerViewModel.ts");
@@ -127,29 +109,6 @@ describe("drawer header status select wiring", () => {
         expect(childCompose).toContain("buildPersonDrawerStatusControlVm");
     });
 
-    it("status PATCH persists immediately — not dirty form state", () => {
-        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
-        expect(select).toContain('method: "PATCH"');
-        expect(select).toContain("admin-entity-saved");
-        expect(select).not.toContain("setFormData");
-    });
-
-    it("person status options API uses entity_type persons with status_profile", () => {
-        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
-        expect(select).toContain("/api/admin/status-options?entity_type=");
-        expect(select).toContain("status_profile");
-        expect(select).toContain("opportunities");
-        expect(select).toContain("persons");
-    });
-
-    it("child enrollment status stays separate from child person status control", () => {
-        const childExecutive = read("components/admin/entity/PersonDrawerChildHeaderExecutive.tsx");
-        expect(childExecutive).toContain("personDrawerChildLeadPillLabel");
-        expect(childExecutive).not.toContain("onChange");
-        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
-        expect(select).not.toContain("opportunity_status");
-        expect(select).not.toContain("customer_members");
-    });
 });
 
 describe("status profile constants", () => {

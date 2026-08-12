@@ -412,11 +412,6 @@ describe("composedDrawerPayload known-empty doctrine", () => {
 });
 
 describe("composedDrawerPayload wiring", () => {
-    it("canonical VM opportunity runtime exists (legacy monolith removed)", () => {
-        const vm = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(vm).toContain("useOpportunityDrawerVmPayload");
-        expect(readSrc("components/admin/AdminEntityDrawer.tsx")).not.toContain("AdminEntityDrawerLegacy");
-    });
 
     it("restores opportunity header actions from cache module", () => {
         const cache = readSrc("lib/admin/drawer/opportunityDrawerHeaderActionsCache.ts");

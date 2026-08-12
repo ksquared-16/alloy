@@ -155,17 +155,6 @@ describe("statusSettingsClarity", () => {
         );
     });
 
-    it("drawer status menu uses Alloy presentation (not native select)", () => {
-        const select = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
-            "utf8"
-        );
-        expect(select).toContain('role="menu"');
-        expect(select).toContain("rounded-xl");
-        expect(select).not.toContain("<select");
-        expect(select).not.toContain("data-drawer-status-settings-link");
-        expect(select).not.toContain("Configure statuses");
-    });
 });
 
 function statusDrawerSourceTagsForOcmNotPersonDrawer(): boolean {

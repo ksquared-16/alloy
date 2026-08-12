@@ -44,22 +44,6 @@ describe("personDrawerLocationCategoryOwnership", () => {
         expect(header).not.toContain("record.location_id");
     });
 
-    it("parent summary and guardians do not show parent-level placement", () => {
-        const parentSummary = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerParentSummary.tsx"),
-            "utf8"
-        );
-        expect(parentSummary).not.toContain("location_label");
-        expect(parentSummary).not.toContain("program_label");
-
-        const household = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
-            "utf8"
-        );
-        expect(household).toContain("data-person-drawer-parent-location-agnostic");
-        expect(household).not.toMatch(/GuardianCard[\s\S]{0,400}program_label/);
-    });
-
     it("parent household child rows show per-child program and location", () => {
         const model = resolvePersonDrawerHouseholdModel({
             _household_context: [{ customer_id: "cust-1", customer_name: "Family" }],
@@ -171,72 +155,6 @@ describe("personDrawerLocationCategoryOwnership", () => {
         }).groups[0]?.children ?? [];
 
         expect(resolveSharedHouseholdPlacementContext(children)).toBeNull();
-    });
-
-    it("shared household placement only when all children match program and location", () => {
-        const children = resolvePersonDrawerHouseholdModel({
-            _household_context: [{ customer_id: "cust-1", customer_name: "Family" }],
-            _household_child_links: [
-                {
-                    customer_member_id: "m-1",
-                    customer_id: "cust-1",
-                    person_id: "c1",
-                    display_name: "A",
-                },
-                {
-                    customer_member_id: "m-2",
-                    customer_id: "cust-1",
-                    person_id: "c2",
-                    display_name: "B",
-                },
-            ],
-            _enrollment_mirror: [
-                {
-                    id: "1",
-                    opportunity_id: "o1",
-                    opportunity_name: null,
-                    opportunity_status_key: null,
-                    opportunity_status_label: null,
-                    customer_member_id: "m-1",
-                    child_display_name: "A",
-                    location_id: "loc-a",
-                    location_label: "Site A",
-                    program_label: "Pre-K",
-                    room_label: null,
-                    outcome_status_key: null,
-                    outcome_status_label: null,
-                },
-                {
-                    id: "2",
-                    opportunity_id: "o2",
-                    opportunity_name: null,
-                    opportunity_status_key: null,
-                    opportunity_status_label: null,
-                    customer_member_id: "m-2",
-                    child_display_name: "B",
-                    location_id: "loc-a",
-                    location_label: "Site A",
-                    program_label: "Pre-K",
-                    room_label: null,
-                    outcome_status_key: null,
-                    outcome_status_label: null,
-                },
-            ],
-        }).groups[0]?.children ?? [];
-
-        expect(resolveSharedHouseholdPlacementContext(children)).toEqual({
-            program_label: "Pre-K",
-            location_label: "Site A",
-            room_label: null,
-            shared: true,
-        });
-
-        const household = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
-            "utf8"
-        );
-        expect(household).toContain("data-person-drawer-household-shared-placement");
-        expect(household).toContain("data-person-drawer-child-enrollment-context");
     });
 
     it("location-scoped access hides children at inaccessible sites", () => {

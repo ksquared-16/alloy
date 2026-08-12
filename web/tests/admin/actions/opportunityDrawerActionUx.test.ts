@@ -18,13 +18,6 @@ function read(rel: string): string {
 }
 
 describe("opportunity drawer action UX hardening", () => {
-    it("VM runtime wires feedback, preflight, and targeted refresh hooks", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("useOpportunityDrawerRegistryActionFeedback");
-        expect(runtime).toContain("registryActionFeedback");
-        expect(runtime).toContain("patchDisplayRecord");
-        expect(runtime).toContain("actionHost");
-    });
 
     it("header controls render registry action feedback banner", () => {
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");

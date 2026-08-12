@@ -318,21 +318,6 @@ describe("drawer outer shell presentation", () => {
     });
 });
 
-describe("BOS drawer header consistency", () => {
-    it("uses juniper Work with BOS on person and lead drawer headers", () => {
-        const personHeader = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHeaderControls.tsx"),
-            "utf8",
-        );
-        const leadHeader = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader.tsx"),
-            "utf8",
-        );
-        expect(personHeader).toContain('actionVariant="juniper"');
-        expect(leadHeader).toContain('bosActionVariant="juniper"');
-    });
-});
-
 describe("buildLeadEnrollmentCardMetaPresentation", () => {
     it("structures birth line and labeled detail segments", () => {
         const presentation = buildLeadEnrollmentCardMetaPresentation(

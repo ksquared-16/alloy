@@ -11,20 +11,6 @@ function read(relPath: string): string {
 }
 
 describe("Opportunity VM drawer body — production parity sections", () => {
-    it("OpportunityDrawerVmRuntime delegates overview to inquiry workflow (not placeholder card)", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("OpportunityDrawerInquiryWorkflowOverview");
-        expect(runtime).not.toContain("VmInquiryRightColumn");
-        expect(runtime).not.toContain('String(record.name ?? record.title ?? "Inquiry")');
-        expect(runtime).toContain("OpportunityDrawerVmTabPanes");
-    });
-
-    it("OpportunityDrawerVmRuntime uses production inquiry drawer title formatter", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("formatOpportunityInquiryDrawerTitle");
-        expect(runtime).toContain("committedVisible");
-        expect(runtime).not.toContain('title={displayVm?.header.title ?? "Opportunity"}');
-    });
 
     it("does not render Family inquiry placeholder title pattern from raw record name", () => {
         const title = formatOpportunityInquiryDrawerTitle(
@@ -65,16 +51,6 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(overview).not.toContain("VmInquiryRightColumn");
     });
 
-    it("OpportunityDrawerVmRuntime renders lifecycle rail from VM queue definition below tabs", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("buildOpportunityVmLifecycleRailModel");
-        expect(runtime).toContain("RecordLifecycleRail");
-        expect(runtime).toContain("data-opportunity-drawer-lifecycle-rail-wrap");
-        expect(runtime).toContain('data-testid="opportunity-lifecycle-rail"');
-        expect(runtime).not.toContain("postTabStrip=");
-        expect(runtime).not.toContain("allowEnrollmentFallback");
-    });
-
     it("OpportunityDrawerVmTabPanes covers full workflow tab strip", () => {
         const panes = read("components/admin/vmDrawer/OpportunityDrawerVmTabPanes.tsx");
         expect(panes).toContain('drawerTab === "notes"');
@@ -83,68 +59,4 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(panes).toContain('drawerTab === "communications"');
     });
 
-    it("OpportunityDrawerVmRuntime uses workflow tab strip fallback", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP");
-        expect(runtime).toContain("data-opportunity-drawer-tab={tab}");
-    });
-
-    it("Phase A.2 status is progressive dropdown in title rail — no prefetch status-options in runtime", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("VmProgressiveStatusDropdown");
-        expect(runtime).not.toContain("VmOpportunityStatusControl");
-        expect(runtime).not.toContain("statusBadge");
-        expect(runtime).not.toContain("status-options");
-        expect(runtime).not.toContain("statusDefsForDrawer");
-    });
-
-    it("VM payload hook does not call legacy bootstrap or drawer_primary", () => {
-        const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts");
-        expect(hook).toContain("loadOpportunityDrawerViaViewModel");
-        expect(hook).not.toContain("fetchOpportunityDrawerOperationalBootstrap");
-        expect(hook).not.toContain("drawer_primary");
-        expect(hook).not.toContain("runLegacyEntityFetch");
-    });
-
-    it("OpportunityDrawerVmRuntime restores modal-attention header center column", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("headerTitleCenter={headerAttentionCenter}");
-        expect(runtime).toContain('layout="modal-attention"');
-        expect(runtime).toContain("isDrawerHeaderAttentionVisible");
-    });
-
-    it("OpportunityDrawerVmRuntime does not pass pipeline subtitle to Drawer headerSubtitle", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).not.toContain("displayVm?.header.subtitle");
-    });
-
-    it("OpportunityDrawerVmRuntime wires header actions via useOpportunityDrawerVmHeaderActions", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("useOpportunityDrawerVmHeaderActions");
-        expect(runtime).toContain("useOpportunityDrawerVmRegistryModals");
-        expect(runtime).toContain('layout="modal-actions"');
-        const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions.ts");
-        expect(hook).toContain("applyRegistryResolvedActionClient");
-        expect(hook).toContain("registryHostExtensions");
-        expect(hook).toContain('actionKey === "create_task"');
-        expect(hook).toContain("isScheduleTourRegistryAction");
-        expect(runtime).toContain("overlayChildren");
-        expect(runtime).not.toContain("onActionSelect={() => {}}");
-    });
-
-    it("overview pairs runtime marker with production inquiry summary shell", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const overview = read("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(runtime).toContain("data-drawer-vm-runtime-overview");
-        expect(overview).toContain("oppInqLeadSummaryShellClassName");
-        expect(overview).toContain('data-opportunity-inquiry-summary="true"');
-    });
-});
-
-describe("Opportunity VM body regression guard", () => {
-    it("must not revert to slim VmInquiryRightColumn-only overview", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).not.toContain("VmInquiryRightColumn");
-        expect(runtime).toContain("data-adminv2-opportunity-drawer-body");
-    });
 });

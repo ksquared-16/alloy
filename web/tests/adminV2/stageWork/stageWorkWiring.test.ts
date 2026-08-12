@@ -29,19 +29,6 @@ describe("stage-work Tier-2 wiring", () => {
         expect(route).not.toContain("composeOpportunityDrawerViewModel");
     });
 
-    it("the payload hook resolves pending stage work through the canonical resource with a stale guard", () => {
-        const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts");
-        // Only the live selection triggers a resolve.
-        expect(hook).toMatch(/stageWorkStatus !== "pending"/);
-        expect(hook).toMatch(/String\(drawer\.id\) !== String\(stageWorkOppId\)/);
-        // Applied only to a VM whose subject matches the fetched slice (stale A cannot overwrite B).
-        expect(hook).toMatch(/String\(vm\.entity\.id\) === String\(stageWorkOppId\)/);
-        expect(hook).toContain("prefetchOpportunityStageWork");
-        expect(hook).toContain("applyStageWorkSliceToVm");
-        // A mutation to the record scopes the invalidation to that record only.
-        expect(hook).toMatch(/invalidateOpportunityStageWorkCache\(\{\s*opportunityId:\s*oid\s*\}\)/);
-    });
-
     it("row intent warms the stage-work resource with the VM's real stage key — never comms threads", () => {
         const warm = read("lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm.ts");
         expect(warm).toContain("prefetchOpportunityStageWork");

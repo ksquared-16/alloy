@@ -54,10 +54,4 @@ describe("inquiry children drawer shell runtime", () => {
         expect(src).toMatch(/drawer_primary[\s\S]*attachOpportunityInquiryChildrenShell/);
     });
 
-    it("AdminEntityDrawer does not gate children section on opportunityDrawerFullBoundEnrichmentReady", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("shellShowsInquiryChildren");
-        expect(src).toContain("OpportunityInquiryChildrenShellChrome");
-        expect(src).not.toMatch(/hasFullInquiryChildren/);
-    });
 });

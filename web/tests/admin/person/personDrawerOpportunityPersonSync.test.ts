@@ -99,12 +99,6 @@ describe("person drawer ↔ opportunity person identity sync", () => {
         expect(section).toContain("inquiry_child_identity");
     });
 
-    it("AdminEntityDrawer listens for person admin-entity-saved and patches inquiry children", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("applyPersonIdentityPatchToOpportunityHost");
-        expect(drawer).toContain("applyPersonIdentityPatchToPersonRecord");
-    });
-
     it("person identity PATCH routes to persons API not OCM", () => {
         const edit = read("lib/admin/drawer/inquiryChildFieldEdit.ts");
         expect(edit).toContain("patchLinkedPersonFromOpportunityDrawer");

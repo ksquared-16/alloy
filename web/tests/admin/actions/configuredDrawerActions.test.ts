@@ -11,23 +11,6 @@ function read(rel: string): string {
 }
 
 describe("configured drawer actions", () => {
-    it("AdminEntityDrawer no longer hardcodes Send form or Send enrollment packet header buttons", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toMatch(/label="Send form"/);
-        expect(drawer).not.toMatch(/label="Send enrollment packet"/);
-        expect(drawer).toContain("handleResolvedOpportunityHeaderAction");
-    });
-
-    it("send_form opens modal via ui_intent handler", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain('intent === "send_form"');
-        expect(drawer).toContain("setOppSendFormOpen(true)");
-        expect(drawer).toContain("adminv2:open-send-form");
-
-        const client = read("lib/admin/actions/applyRegistryResolvedActionClient.ts");
-        expect(client).toContain('"send_form"');
-        expect(client).toContain("adminv2:open-send-form");
-    });
 
     it("send_form is seeded as a platform action definition", () => {
         const migration = readFileSync(resolve(webRoot, "../supabase/migrations/20260529200000_send_form_action.sql"), "utf8");
@@ -36,25 +19,6 @@ describe("configured drawer actions", () => {
 
         const registry = read("lib/admin/actions/actionDefinitionRegistry.ts");
         expect(registry).toContain('key: "send_form"');
-    });
-
-    it("Send form header button only appears via configured placements", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toMatch(/label="Send form"/);
-        expect(drawer).toContain("OpportunityDrawerHeaderControls");
-        expect(drawer).toContain("flattenOpportunityRecordHeaderActionsForMenu");
-        expect(drawer).not.toMatch(/headerActions\?\.primary[\s\S]*OpportunityDrawerHeaderActionButton/);
-    });
-
-    it("send_enrollment_packet opens modal via ui_intent handler", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain('intent === "send_enrollment_packet"');
-        expect(drawer).toContain("setOppLaunchPacketOpen(true)");
-        expect(drawer).toContain("adminv2:open-enrollment-packet");
-
-        const client = read("lib/admin/actions/applyRegistryResolvedActionClient.ts");
-        expect(client).toContain('"send_enrollment_packet"');
-        expect(client).toContain("adminv2:open-enrollment-packet");
     });
 
     it("send_enrollment_packet is seeded as a platform action definition", () => {

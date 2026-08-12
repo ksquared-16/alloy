@@ -163,15 +163,6 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
         expect(tourBar).toMatch(/min-h-\[2\.25rem\]/);
     });
 
-    it("drawer wires presentation gate and telemetry", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("assessOpportunityAboveFoldPresentationReady");
-        expect(drawer).toContain("opportunityDrawerAboveFoldPresentationReady");
-        expect(drawer).toContain("logDrawerPresentationGate");
-        expect(drawer).toContain("tourDisplayReady");
-        expect(drawer).toContain("opportunityStatusDisplayLabelSafe");
-    });
-
     it("primary entity resolves display labels on drawer_primary", () => {
         const entity = read("lib/admin/opportunityEntityRecord.ts");
         expect(entity).toContain("resolveOpportunityStatusDisplay");

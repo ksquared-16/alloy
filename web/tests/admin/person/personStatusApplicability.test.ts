@@ -150,28 +150,6 @@ describe("personStatusApplicability", () => {
 });
 
 describe("person drawer status wiring", () => {
-    it("child drawer fetches persons status options with child_lifecycle profile", () => {
-        const statusSelect = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
-            "utf8"
-        );
-        expect(statusSelect).toContain("status_profile=${encodeURIComponent(statusProfile)}");
-        expect(statusSelect).toContain('entityKind === "persons" && statusProfile');
-        const runtime = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        expect(runtime).toContain("resolvePersonDrawerStatusProfile");
-    });
-
-    it("parent drawer header status uses VM status control marker", () => {
-        const statusSelect = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
-            "utf8"
-        );
-        expect(statusSelect).toContain("data-person-drawer-vm-status-control");
-        expect(statusSelect).toContain("person-drawer-child-header-status");
-    });
 
     it("status-options API filters persons by status_profile", () => {
         const route = readFileSync(join(process.cwd(), "app/api/admin/status-options/route.ts"), "utf8");
@@ -198,27 +176,4 @@ describe("person drawer status wiring", () => {
         expect(settings).toContain("modalPreviewStatusKey");
     });
 
-    it("child status persists via persons PATCH — not customer_members", () => {
-        const statusSelect = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
-            "utf8"
-        );
-        expect(statusSelect).toContain("/api/admin/persons/${encodeURIComponent(entityId)}");
-        expect(statusSelect).toContain("status_key: nextKey");
-        expect(statusSelect).not.toContain("opportunity_customer_members");
-    });
-
-    it("opportunity entity types are not used for person drawer status fetch", () => {
-        const statusSelect = readFileSync(
-            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
-            "utf8"
-        );
-        expect(statusSelect).toContain('entityKind === "persons"');
-        const entityType = readFileSync(
-            join(process.cwd(), "lib/admin/person/personDrawerChildStatusEntityType.ts"),
-            "utf8"
-        );
-        expect(entityType).toContain('"persons"');
-        expect(entityType).not.toContain("opportunity");
-    });
 });

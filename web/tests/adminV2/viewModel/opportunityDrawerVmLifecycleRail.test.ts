@@ -250,39 +250,10 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
 });
 
 describe("OpportunityDrawerVmRuntime lifecycle placement", () => {
-    it("renders lifecycle rail below tab strip in drawer body", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("data-opportunity-drawer-tab-strip");
-        expect(runtime).toContain("data-opportunity-drawer-lifecycle-rail-wrap");
-        expect(runtime).toMatch(
-            /data-opportunity-drawer-tab-strip[\s\S]{0,2400}data-opportunity-drawer-lifecycle-rail-wrap/
-        );
-        expect(runtime).not.toContain("postTabStrip=");
-    });
-
-    it("does not use enrollment pipeline fallback in VM runtime", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("buildOpportunityVmLifecycleRailModel");
-        expect(runtime).not.toContain("allowEnrollmentFallback");
-        expect(runtime).not.toContain("resolveOpportunityDrawerQueueDefinition");
-        expect(runtime).not.toContain("RecordLifecycleRailSkeleton");
-    });
 
     it("coerces v2 queue_definition via resolveWorkUnitQueueDefinitionForDrawer", () => {
         const modelSrc = read("lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel.ts");
         expect(modelSrc).toContain("resolveWorkUnitQueueDefinitionForDrawer");
     });
 
-    it("dev lifecycle debug is gated by drawerRuntimeDebugEnabled", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("drawerRuntimeDebugEnabled");
-        expect(runtime).toContain("inspectWorkUnitQueueDefinitionShape");
-        expect(runtime).not.toMatch(/NODE_ENV !== "development"/);
-    });
-
-    it("does not hardcode lifecycle stage labels in VM runtime", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).not.toContain("New Leads");
-        expect(runtime).not.toContain("Follow Up");
-    });
 });

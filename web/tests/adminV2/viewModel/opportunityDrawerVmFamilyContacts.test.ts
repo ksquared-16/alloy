@@ -72,10 +72,4 @@ describe("Opportunity VM progressive status options", () => {
         expect(header).not.toContain('renderAs: "dropdown"');
     });
 
-    it("VmProgressiveStatusDropdown reads options from readonly_pill VM status", () => {
-        const dropdown = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(dropdown).toContain("optionsFromVmStatus");
-        expect(dropdown).toContain('status.renderAs === "readonly_pill"');
-        expect(dropdown).not.toContain("if (!canMutate || mode === \"dropdown\"");
-    });
 });

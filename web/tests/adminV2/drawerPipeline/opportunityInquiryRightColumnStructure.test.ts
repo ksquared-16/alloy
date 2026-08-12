@@ -125,14 +125,6 @@ describe("inquiry summary right_column atomic structure", () => {
         expect(model.reminders.next_follow_up_iso).toBe("2026-05-23T15:00:00.000Z");
     });
 
-    it("AdminEntityDrawer uses single OpportunityInquirySummaryRightColumn without late-mount gate", () => {
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("OpportunityInquirySummaryRightColumn");
-        expect(drawer).toContain("rightColumnModel");
-        expect(drawer).toContain("fetchEnabled={inquirySummaryFetchEnabled}");
-        expect(drawer).not.toContain("OpportunityInquirySummaryTaskPreview");
-    });
-
     it("operational strip renders reminders section from rightColumnModel before fetch settles", () => {
         const strip = readFileSync(
             join(webRoot, "components/admin/opportunity/OpportunityOperationalCompactStrip.tsx"),

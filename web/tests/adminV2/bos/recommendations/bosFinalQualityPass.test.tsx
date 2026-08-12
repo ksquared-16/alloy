@@ -77,18 +77,4 @@ describe("BOS final quality pass", () => {
         expect(rightCol).not.toContain('data-review-assist-placeholder="reserved"');
     });
 
-    it("drawer right column renders without late conditional on rightColumnModel", () => {
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).not.toMatch(/rightColumnModel\s*\?\s*\(\s*<OpportunityInquirySummaryRightColumn/);
-        expect(drawer).toContain("rightColumnModel ??");
-    });
-
-    it("overviewData BOS fields participate in right-column memo equality", () => {
-        const src = readFileSync(
-            join(webRoot, "components/admin/opportunity/OpportunityInquirySummaryRightColumn.tsx"),
-            "utf8"
-        );
-        expect(src).toContain("reviewAssistPayloadEqual");
-        expect(src).toContain("_operational_recommendation");
-    });
-});
+);

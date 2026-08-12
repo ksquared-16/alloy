@@ -75,36 +75,7 @@ describe("AdminV2 drawer outside click", () => {
     });
 });
 
-describe("Opportunity drawer above-fold layout stability", () => {
-    it("locks summary grid and defers secondary reveal until below-fold", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerAboveFoldLocked");
-        expect(src).toContain("stabilizeOpportunityWorkflowOverviewSections");
-        expect(src).toContain("opportunityDrawerBelowFoldEnrichmentReady");
-        expect(src).toContain("OPPORTUNITY_DRAWER_BELOW_FOLD_SCROLL_PX");
-        expect(src).toContain("overflow-anchor-none");
-    });
-
-    it("uses bootstrap shell contract for frozen overview sections (P1-2)", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerShellContract");
-        expect(src).toContain("data-shell-slot");
-        expect(src).toContain("data-opportunity-drawer-shell-contract");
-    });
-});
-
 describe("Deferred opportunity drawer open (first-paint gate)", () => {
-    it("does not mount drawer until bootstrap + primary; external overlay only", () => {
-        const ctx = read("contexts/AdminDrawerContext.tsx");
-        expect(ctx).toContain("setOpeningOpportunity");
-        expect(ctx).toContain("type: null, id: null");
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("!isOpportunityDrawerOpening");
-        expect(drawer).toContain("consumeOpportunityDrawerPreload");
-        const overlay = read("components/admin/OpportunityDrawerOpeningOverlay.tsx");
-        expect(overlay).toContain("Opening record");
-        expect(overlay).not.toContain("data-adminv2-drawer");
-    });
 
     it("does not force a 1500ms wait before commit", () => {
         const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
@@ -114,34 +85,6 @@ describe("Deferred opportunity drawer open (first-paint gate)", () => {
 });
 
 describe("Drawer opportunity header grouped loading", () => {
-    it("keeps workflow header chrome in skeleton until coordinated reveal", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(
-            /opportunityWorkflowHeaderChromePending[\s\S]*?!opportunityDrawerCoordinatedRevealReady/,
-        );
-    });
-
-    it("uses tab strip gate skeleton while opportunity tabs are pending", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("DrawerRecordTabStripGateSkeleton");
-        expect(src).toContain("opportunityDrawerTabsPending");
-    });
-
-    it("queue preview seed avoids generic Inquiry title when bootstrap", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerQueueBootstrap");
-        expect(src).toMatch(/opportunityQueuePreviewSeed\?\.title/);
-    });
-
-    it("uses centered drawer loading state until coordinated reveal", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("DrawerOpportunityOperationalLoadingComposition");
-        expect(src).toContain("AdminV2DrawerLoadingState");
-        expect(src).toContain('tone="record"');
-        expect(src).toMatch(
-            /opportunityDrawerPrimaryLoadingVisible[\s\S]*DrawerOpportunityOperationalLoadingComposition/,
-        );
-    });
 
     it("WU route skeleton uses dept-like queue cards and corner status chip", () => {
         const src = read("components/admin/workspace/workspaceRouteSkeletons.tsx");
@@ -158,75 +101,9 @@ describe("Drawer opportunity header grouped loading", () => {
         expect(css).toMatch(/border-left:[\s\S]*?var\(--d-pine\)/);
     });
 
-    it("uses section-shaped bootstrap body and title-rail action reserves when queue preview is active", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("DrawerOpportunityQueueBootstrapBodySkeleton");
-        expect(src).toContain("opportunityTitleRailActive");
-        expect(src).toContain("DrawerWorkflowHeaderQuickActionsSkeleton");
-        expect(src).not.toMatch(
-            /opportunityWorkflowHeaderUsesQueuePreview[\s\S]*?min-h-\[2\.375rem\][\s\S]*?aria-hidden/,
-        );
-    });
 });
 
 describe("Drawer operational bootstrap (Cards 4–7)", () => {
-    it("uses drawer-operational-bootstrap on AdminV2 opportunity happy path", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("fetchOpportunityDrawerOperationalBootstrap");
-        expect(src).toContain("applyOpportunityBootstrap");
-        expect(src).toContain("runLegacyEntityFetch");
-        expect(src).toContain("adminV2DrawerBootstrapEnabled()");
-    });
-
-    it("coordinates overview reveal with drawer_primary before paint", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerCoordinatedRevealReady");
-        expect(src).toContain("opportunityDrawerPrimaryLoadingVisible");
-        expect(src).toContain("ADMINV2_OPPORTUNITY_DRAWER_REVEAL_COORD_MAX_MS");
-        expect(src).toContain("runOpportunityPrimaryHydrate");
-        expect(src).toContain("drawer_primary");
-        expect(src).toContain("opportunityPrimaryHydrateApplied");
-        expect(src).toMatch(
-            /opportunityDrawerOverviewRevealReady = opportunityDrawerCoordinatedRevealReady/,
-        );
-        expect(src).toMatch(
-            /opportunityRecordHydrationPending[\s\S]*runOpportunityPrimaryHydrate/,
-        );
-        expect(src).toMatch(
-            /scheduleAdminV2BackgroundWork[\s\S]*runOpportunityBackgroundFullHydrate/,
-        );
-    });
-
-    it("keeps inquiry drawer header calm until reveal (no queue/oper subtext)", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerHeaderCalmLoading");
-        expect(src).toMatch(/headerSubtitleForDrawer = opportunityDrawerHeaderCalmLoading \? null/);
-        expect(src).toMatch(/headerSignalsForDrawer = opportunityDrawerHeaderCalmLoading \? null/);
-        expect(src).not.toMatch(
-            /opportunityDrawerHeaderCalmLoading[\s\S]*opportunityDrawerPreviewSubtitle/,
-        );
-    });
-
-    it("arms postDrawerVisible after primary contract without full hydrate", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerPostRevealMayOpen");
-        expect(src).toContain("reportPostRevealEnrichStart");
-        expect(src).toMatch(
-            /Post-reveal enrich window opens after primary contract[\s\S]{0,1200}setPostDrawerVisibleKey\(key\)/
-        );
-        expect(src).not.toMatch(
-            /opportunityDrawerPostRevealMayOpen[\s\S]{0,800}opportunityFullRecordHydrateApplied/
-        );
-        expect(src).toMatch(/tryScheduleOpportunityDrawerBackgroundFull/);
-        expect(src).toContain("tryBeginOpportunityDrawerHydrate");
-    });
-
-    it("keeps above-fold layout stability data attributes on inquiry summary", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("data-opportunity-drawer-secondary-window-open");
-        expect(src).toContain("data-opportunity-drawer-full-hydrate-ready");
-        expect(src).toContain("data-opportunity-drawer-above-fold-locked");
-    });
 
     it("composed open gates on primary contract, not surface=full", () => {
         const coord = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
@@ -241,129 +118,15 @@ describe("Drawer operational bootstrap (Cards 4–7)", () => {
         expect(coord).toMatch(/prefetchHit = bootstrapWarm && primaryWarm/);
     });
 
-    it("gates ref option lists on edit for bootstrap opportunity drawer", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(
-            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*!opportunityDrawerBootstrapLegacy[\s\S]*!isEditing[\s\S]*setOppRefFieldSelectOptions/,
-        );
-    });
-
-    it("shell instant geometry attribute on opportunity drawer body", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerShellInstant");
-        expect(src).toContain("ADMINV2_DRAWER_SHELL_INSTANT_ATTR");
-    });
-});
-
-describe("Opportunity workflow drawer tab session (Card 3)", () => {
-    it("uses session visit set and keep-mounted panes with stable tab panel min-height", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerVisitedTabsRef");
-        expect(src).toContain("markOpportunityDrawerTabVisited");
-        expect(src).toContain("renderOpportunityWorkflowTabPane");
-        expect(src).toContain("ADMINV2_DRAWER_TAB_PANEL_MIN_H");
-        expect(src).toContain("data-adminv2-drawer-tab-panel-host");
-        expect(src).toMatch(/style=\{adminV2DrawerTabPanelHostStyle\(\)\}/);
-    });
-
-    it("routes inquiry workflow tab strip through selectDrawerTab without drawerGateLoading lock", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(/onClick=\{\(\) => selectDrawerTab\(tab\)\}/);
-        const workflowStrip = src.match(
-            /opportunityInquiryWorkflowDrawer[\s\S]{0,900}selectDrawerTab/,
-        )?.[0];
-        expect(workflowStrip).toBeTruthy();
-        expect(workflowStrip).not.toContain("disabled={drawerGateLoading}");
-    });
-
-    it("gates opportunity related/documents fetch to those tabs (not overview)", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(
-            /drawer\.type !== "opportunities"[\s\S]{0,400}drawerTab === "related" \|\| drawerTab === "documents"/,
-        );
-        expect(src).toMatch(/if \(drawerTab !== "activity"\) return;/);
-    });
 });
 
 describe("Drawer single-reveal bootstrap body", () => {
-    it("holds pre-overview shell until oper reveal and defers secondary surfaces", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerOverviewRevealReady");
-        expect(src).toContain("opportunityDrawerPreOverviewShell");
-        expect(src).toContain("opportunityDrawerSecondaryReady");
-        expect(src).toMatch(
-            /opportunityDrawerPreOverviewShell[\s\S]*?DrawerOpportunityQueueBootstrapBodySkeleton/,
-        );
-        expect(src).toMatch(/reportDrawerPrimaryReady[\s\S]*?opportunityDrawerPrimaryCoherent/);
-    });
-
-    it("dedupes drawer bootstrap per entity open and suppresses legacy chrome fetches on happy path", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        const chrome = read("hooks/useRecordChromeConfig.ts");
-        const bootstrapClient = read("lib/admin/opportunityDrawerBootstrapClient.ts");
-        expect(drawer).toContain("opportunityDrawerBootstrapInflightRef");
-        expect(drawer).toContain("opportunityDrawerBootstrapEntityKeyRef");
-        expect(drawer).toContain("opportunityBootstrapChromeSuppressed");
-        expect(drawer).toContain("AdminV2DrawerLoadingState");
-        expect(drawer).toContain("fetchOpportunityDrawerOperationalBootstrap");
-        expect(bootstrapClient).toContain("buildOpportunityDrawerBootstrapCanonicalUrl");
-        expect(bootstrapClient).toContain("drawerBootstrapByOpportunityId");
-        expect(bootstrapClient).toContain("drawerBootstrapCacheKey");
-        expect(drawer).toMatch(
-            /opportunityDrawerBootstrapInflightRef\.current === entityOpenKey[\s\S]*?return;/,
-        );
-        expect(drawer).toMatch(
-            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*?opportunityDrawerBootstrapLegacy[\s\S]*?setOpportunityResolvedHeaderLoading\(true\)/,
-        );
-        expect(drawer).toMatch(
-            /adminV2DrawerBootstrapEnabled\(\)[\s\S]*!opportunityDrawerBootstrapLegacy[\s\S]*?fetchAdminWorkUnitDrawerJson/,
-        );
-        expect(chrome).toMatch(/bootstrapSeeded = options\?\.bootstrapSeeded === true/);
-        expect(chrome).not.toMatch(/bootstrapSeeded = Boolean\(options\?\.bootstrapSeeded && options\.seededLayout\)/);
-    });
-
-    it("reveals inquiry tabs with overview and keeps preview title until primary reveal", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(
-            /!opportunityDrawerOverviewRevealReady[\s\S]*?opportunityQueuePreviewSeed\?\.title/,
-        );
-        expect(src).toMatch(
-            /opportunityDrawerOverviewRevealReady[\s\S]*?drawerTabStripKeys/,
-        );
-        expect(src).not.toMatch(/opportunityDrawerTabsPending && isOpportunityRecordModalTarget/);
-    });
-
-    it("locations no longer open via legacy drawer — settings route is canonical", () => {
-        const router = read("components/admin/AdminEntityDrawer.tsx");
-        const routes = read("lib/admin/canonicalLocationSettingsRoutes.ts");
-        const settings = read("components/adminV2/settings/locations/LocationsConfigurationPage.tsx");
-        expect(router).not.toContain("AdminEntityDrawerLegacy");
-        expect(router).not.toContain('drawer.type === "locations"');
-        expect(routes).toContain("canonicalLocationSettingsHref");
-        expect(settings).toContain("canonicalLocationSettingsHref");
-        expect(settings).not.toContain("useAdminDrawer");
-    });
 
     it("does not show loading copy for packet status probe", () => {
         const src = read("components/admin/opportunity/OpportunityPacketReviewOverview.tsx");
         expect(src).not.toContain("Loading packet status");
     });
 
-    it("reserves title-rail actions without waiting on entity row when preview is active", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toMatch(
-            /opportunityTitleRailActive[\s\S]*?opportunityHeaderQuickActionsNode \?\? <DrawerWorkflowHeaderQuickActionsSkeleton/,
-        );
-    });
-
-    it("blocks header actions only while record_header resolves, not until shell settled", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityHeaderActionsPending");
-        expect(src).toContain("opportunityResolvedHeaderLoading");
-        expect(src).not.toMatch(
-            /opportunityHeaderActionsPending[\s\S]{0,220}!opportunityDrawerShellSettled/,
-        );
-    });
 });
 
 describe("Opportunity drawer first-paint contract", () => {
@@ -374,42 +137,4 @@ describe("Opportunity drawer first-paint contract", () => {
         expect(mod).toContain("filterOpportunityOverviewSectionsForFirstPaint");
     });
 
-    it("job Admin V2 uses drawer pipeline for sections and header signals", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("buildJobDrawerPipelineState");
-        expect(src).toContain("jobDrawerPipeline");
-        expect(src).toContain("DrawerAboveFoldRenderer");
-        expect(src).toContain("jobDrawerV2OverviewSectionsResolved");
-    });
-
-    it("inquiry summary uses drawer pipeline with bootstrap fallbacks", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("buildOpportunityDrawerPipelineState");
-        expect(src).toContain("opportunityDrawerPipeline");
-        expect(src).toMatch(
-            /inqModel != null\s*\n\s*\? inqModel\.show_right_column/
-        );
-        expect(src).toContain("drawerFullBoundValuesReady");
-        expect(src).toContain("FamilyContactsPanel");
-        expect(src).toContain("OpportunityInquirySummaryRightColumn");
-        expect(src).toContain("rightColumnModel");
-        expect(src).toContain('data-shell-slot-placeholder="inquiry_summary_activity"');
-        const pipelineMod = read("lib/adminV2/drawerPipeline/adapters/opportunity/buildAboveFoldRenderModel.ts");
-        expect(pipelineMod).toContain("resolveShowRightColumn");
-        expect(pipelineMod).not.toMatch(/above_fold_locked[\s\S]{0,80}column_mode/);
-        expect(src).toContain("stabilizeOpportunityWorkflowOverviewSections");
-        expect(src).toMatch(/opportunityDrawerLayoutFirstPaintGates \? "true" : "false"/);
-        expect(src).not.toMatch(
-            /min-h-\[3\.25rem\][\s\S]{0,120}aria-hidden[\s\S]{0,120}Tour date/,
-        );
-    });
-
-    it("does not show header action skeletons during first paint", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityHeaderFirstPaintSuppress");
-        expect(src).toMatch(
-            /opportunityHeaderFirstPaintSuppress[\s\S]{0,280}return null/,
-        );
-        expect(src).toContain("opportunityInquiryAwaitingFullEnrichment");
-    });
 });

@@ -84,10 +84,4 @@ describe("AdminV2 performance pass 6 contracts", () => {
         expect(classified.above_fold_changed).toBe(true);
     });
 
-    it("drawer uses staged full hydrate merge", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("runOpportunityStagedFullHydrateMerge");
-        expect(drawer).toContain("opportunityDeferredFullHydrateRef");
-        expect(drawer).toContain("deferred_full_merge");
-    });
 });

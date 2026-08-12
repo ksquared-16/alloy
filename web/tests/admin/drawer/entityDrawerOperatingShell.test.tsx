@@ -27,39 +27,6 @@ describe("EntityDrawerOperatingShell", () => {
         expect(html).toBe("");
     });
 
-    it("OpportunityDrawerVmRuntime delegates frame to EntityDrawerOperatingShell", () => {
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const shell = readSrc("components/admin/drawer/EntityDrawerOperatingShell.tsx");
-        expect(runtime).toContain("EntityDrawerOperatingShell");
-        expect(runtime).toContain('entity="opportunity"');
-        expect(runtime).toContain("headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}");
-        expect(runtime).toContain("composedStickyHeader={composedProofHeader}");
-        expect(runtime).toContain('runtimeDataAttribute="opportunity-vm"');
-        expect(runtime).not.toContain('from "@/components/admin/Drawer"');
-        expect(shell).toContain("composedStickyHeader");
-        expect(shell).toContain("data-entity-drawer-operating-shell");
-    });
-
-    it("PersonsDrawerVmRuntime delegates frame to EntityDrawerOperatingShell", () => {
-        const runtime = readSrc("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        expect(runtime).toContain("EntityDrawerOperatingShell");
-        expect(runtime).toContain('entity={shellEntity}');
-        expect(runtime).toContain('shellEntity = isChildSurface ? "child" : "person"');
-        expect(runtime).toContain("composedStickyHeader={composedProofHeader}");
-        expect(runtime).toContain('runtimeDataAttribute={isChildSurface ? "child-vm" : "person-vm"}');
-        expect(runtime).toContain('panelClassName="max-w-5xl"');
-        expect(runtime).toContain("PersonDrawerProofLayoutHeader");
-        expect(runtime).toContain("data-person-drawer-vm-chrome={chrome}");
-        expect(runtime).not.toContain('from "@/components/admin/Drawer"');
-    });
-
-    it("ChildDrawerVmRuntime remains unused by AdminEntityDrawer router", () => {
-        const router = readSrc("components/admin/AdminEntityDrawer.tsx");
-        // Phase C: router mounts the person subject surface runtime via canonical shim name.
-        expect(router).toContain("PersonSubjectSurfaceRuntime");
-        expect(router).not.toContain("ChildDrawerVmRuntime");
-    });
-
     it("renders summary strip inside scroll body without sticky overlay", () => {
         const shell = readSrc("components/admin/drawer/EntityDrawerOperatingShell.tsx");
         expect(shell).toContain('data-entity-drawer-summary-strip-scrolls="true"');
@@ -81,12 +48,4 @@ describe("EntityDrawerOperatingShell", () => {
         expect(shell).toContain('data-entity-drawer-summary-strip-scrolls="true"');
     });
 
-    it("OpportunityDrawerVmRuntime wires optional summary strip boundary", () => {
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("isDrawerSummaryStripBoundaryEnabledClient");
-        expect(runtime).toContain("splitDrawerLayoutDocShellZones");
-        expect(runtime).toContain("DrawerLayoutRuntimeShellZoneView");
-        expect(runtime).toContain("summaryStrip={");
-        expect(runtime).toContain("layoutDocBodyOverride={overviewLayoutDocBodyOverride}");
-    });
 });

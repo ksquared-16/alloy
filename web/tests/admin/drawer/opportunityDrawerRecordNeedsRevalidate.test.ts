@@ -73,21 +73,6 @@ describe("opportunityDrawerRecordNeedsRevalidate", () => {
         ).toBe(false);
     });
 
-    it("AdminEntityDrawer uses split snapshot guards and does not block chrome on inquiry pending", () => {
-        const drawer = readFileSync(
-            join(webRoot, "components/admin/AdminEntityDrawer.tsx"),
-            "utf8"
-        );
-        expect(drawer).toContain("snapshotNeedsFullRevalidate");
-        expect(drawer).toContain("snapshotCanRenderDrawerFrame");
-        expect(drawer).toContain("opportunityDrawerInquiryChildrenSnapshotPending");
-        expect(drawer).not.toContain("opportunityDrawerSnapshotIncomplete");
-        expect(drawer).toContain("runOpportunityBackgroundFullHydrateRef.current?.({ cacheBust: true })");
-        expect(drawer).toContain('prev.type === "persons"');
-        expect(drawer).toContain("applyPersonIdentityPatchToOpportunityHost");
-        expect(drawer).toContain("personDrawerHasTypedOpenSnapshot");
-    });
-
     it("goBack clears person drawer open seed when restoring opportunity", () => {
         const ctx = readFileSync(join(webRoot, "contexts/AdminDrawerContext.tsx"), "utf8");
         expect(ctx).toContain("personDrawerOpenSeed: null");

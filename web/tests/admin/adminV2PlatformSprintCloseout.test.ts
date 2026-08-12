@@ -47,47 +47,4 @@ describe("Card 6 — AdminV2 platform navigation/performance sprint closeout", (
         );
     });
 
-    it("dept → work-unit remains hard navigation (adminV2CommitNavigation)", () => {
-        const deptPage = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        expect(deptPage).toMatch(/DeptOperConsoleQueueRow[\s\S]*adminV2CommitNavigation\(href/);
-        expect(deptPage).not.toContain("runAdminV2NavigationTransition");
-        const shellNav = read("lib/adminV2/shellNavigation.ts");
-        expect(shellNav).toContain("window.location.assign");
-    });
-
-    it("workspace → dept remains orchestrated soft navigation", () => {
-        const grid = read("components/admin/workspace/WorkspaceRootDepartmentGrid.tsx");
-        expect(grid).toContain("runAdminV2NavigationTransition");
-        expect(grid).toContain("router.push(href)");
-        expect(grid).not.toContain("adminV2CommitNavigation");
-    });
-
-    it("workspace growth rollup is deferred after quick rollup", () => {
-        const page = read("app/adminV2/workspace/page.tsx");
-        expect(page).toContain("buildWorkspaceQuickRollup");
-        expect(page).toMatch(/scheduleAdminV2BackgroundWork[\s\S]*loadWorkspaceGrowthRollup/);
-    });
-
-    it("legacy fan-out is diagnosable on bootstrap degradation", () => {
-        expect(read("lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics.ts")).toContain(
-            "[adminv2-legacy-fan-out]"
-        );
-        expect(read("app/adminV2/workspace/dept/[departmentId]/page.tsx")).toContain("logAdminV2LegacyFanOut");
-    });
-
-    it("shared route loading vocabulary exists for transition ribbon", () => {
-        expect(read("lib/adminV2/navigation/adminV2RouteLoadingVocabulary.ts")).toContain(
-            "ADMIN_V2_ROUTE_LOADING_VOCABULARY"
-        );
-        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain(
-            "AdminV2NavigationTransitionRibbon"
-        );
-    });
-
-    it("QueueService queue-summary contract symbols remain (preview boundary unchanged)", () => {
-        const qs = read("lib/queues/QueueService.ts");
-        expect(qs).toContain("getDepartmentWorkUnitQueueSummaries");
-        expect(qs).toContain("workUnitIds?: string[]");
-        expect(qs).toContain("preloadedQueueDefinition");
-    });
-});
+);

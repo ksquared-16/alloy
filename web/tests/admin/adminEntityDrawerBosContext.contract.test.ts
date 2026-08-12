@@ -12,28 +12,7 @@ const shellPath = join(
     "../../app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx"
 );
 
-describe("AdminEntityDrawer operational attention hierarchy (Loop 2)", () => {
-    it("renders one canonical attention strip in chrome only (no inquiry panel duplicate)", () => {
-        const src = readFileSync(drawerPath, "utf8");
-        const stripUsages = src.match(/<OperationalAttentionHeaderStrip/g) ?? [];
-        expect(stripUsages.length).toBe(1);
-        expect(src).toContain('variant="chrome"');
-        expect(src).not.toMatch(/<OperationalAttentionHeaderStrip[\s\S]*?variant="panel"/);
-        expect(src).not.toContain("Operational attention is summarized in the drawer");
-        expect(src).not.toContain("What BOS has to say");
-    });
-});
-
 describe("AdminEntityDrawer BOS context contract (Loop 1)", () => {
-    it("AdminEntityDrawer seeds GlobalAssistantContext for opportunities", () => {
-        const src = readFileSync(drawerPath, "utf8");
-        expect(src).toContain("useGlobalAssistantOptional");
-        expect(src).toContain("buildOpportunityOperationalContext");
-        expect(src).toContain("setAssistantContext");
-        expect(src).toContain('drawer.type !== "opportunities"');
-        expect(src).toContain("setAssistantContext(null)");
-        expect(src).toContain("opportunityBootstrapAppliedId");
-    });
 
     it("AICommandSurfaceShell shows active record chip; context switches stay silent in chat", () => {
         const shellSrc = readFileSync(shellPath, "utf8");

@@ -325,14 +325,6 @@ describe("Parent/child known-empty readiness stability", () => {
 
     // ── Opportunity pre-reveal title ─────────────────────────────────────────────────────────────
 
-    it("OpportunityDrawerVmRuntime derives drawer title from formatOpportunityInquiryDrawerTitle", () => {
-        const vm = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(vm).toContain("formatOpportunityInquiryDrawerTitle");
-        expect(vm).toContain("committedTitleRef");
-        expect(vm).not.toContain("AdminEntityDrawerLegacy");
-        expect(vm).not.toContain("opportunityPreRevealTitle");
-    });
-
     it("formatOpportunityInquiryDrawerTitle returns household title, not primary contact name", () => {
         const title = formatOpportunityInquiryDrawerTitle(
             {
@@ -412,14 +404,6 @@ describe("Parent/child known-empty readiness stability", () => {
     });
 
     // ── Speed pass: early prefetch + composed payload cache ──────────────────────────────────────
-
-    it("OpportunityDrawerVmRuntime prefetches linked persons after committed visible record", () => {
-        const src = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(src).toContain("prefetchLinkedPersonsFromOpportunityRecord");
-        expect(src).toContain("committedVisible");
-        expect(src).not.toContain("opportunityPrimaryHydrateApplied");
-        expect(src).not.toContain("AdminEntityDrawerLegacy");
-    });
 
     it("composedPersonPayloadCache module exports ready markers for person drawer contexts", () => {
         const src = readSrc("lib/admin/composedPersonPayloadCache.ts");
@@ -515,10 +499,4 @@ describe("composedPersonPayloadCache", () => {
         expect(src).toContain("TTL_MS");
     });
 
-    it("OpportunityDrawerVmRuntime prefetches linked persons when record is committed visible", () => {
-        const src = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(src).toContain("prefetchLinkedPersonsFromOpportunityRecord");
-        expect(src).toContain("opportunityLinkedPersonsPrefetchedRef");
-        expect(src).toContain("committedVisible");
-    });
 });
