@@ -74,6 +74,7 @@ import {
     childrenEmergencyContactsSectionFromConfig,
     childrenEvidenceSectionsFromNestedConfig,
     childrenFocusRowsFromNestedConfig,
+    effectiveChildrenNestedConfig,
     readChildrenNestedConfigFromDoc,
     type ChildrenEvidenceSectionView,
     type ChildrenFocusFieldRow,
@@ -257,7 +258,16 @@ export default function ChildrenCard({
 
     const composingChildrenSurface = composer?.isComposingSurface(CHILDREN_SURFACE_ID) ?? false;
     const childrenSurfaceConfig = useMemo(
-        () => (composingChildrenSurface ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null : readChildrenNestedConfigFromDoc(publishedDoc)),
+        () =>
+            composingChildrenSurface
+                ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null
+                : // EFFECTIVE, not merely published. A tenant that has never opened the Surface
+                  // Builder still gets the platform default, so the card's drill-in works out of the
+                  // box; configuration overrides the default rather than being a precondition for the
+                  // card working at all. While COMPOSING, the composer's own config stays
+                  // authoritative — including its null, which is what "nothing selected yet" means in
+                  // the editor and must not be silently replaced by a default.
+                  effectiveChildrenNestedConfig(publishedDoc),
         [composer, composingChildrenSurface, publishedDoc],
     );
     // Focus read layout is authored on canonical `children_surface`.
@@ -943,7 +953,15 @@ export default function ChildrenCard({
     } else if (focused && focusedIdentityRecord && (disclosure.depth === "evidence" || disclosure.depth === "details")) {
         lifecycle = disclosure.depth === "evidence" ? "expanded" : "focus";
         body = (
-            <>
+            // The CANONICAL child this card is currently showing. A caller outside the card (Search,
+            // a deep link, a notification) addresses a child by its durable identity and cannot know
+            // the internal roster row id, so without this there is no way — in the product or in
+            // certification — to observe that the child who was asked for is the child on screen.
+            <div
+                data-children-focused-member={
+                    focused.customerMemberId ?? canonicalChildIdOf(focused.id) ?? undefined
+                }
+            >
                 <IdentityDisclosureSurface
                     record={focusedIdentityRecord}
                     depth={disclosure.depth}
@@ -980,7 +998,7 @@ export default function ChildrenCard({
                         composing={composingChildrenSurface}
                     />
                 ) : null}
-            </>
+            </div>
         );
     } else if (disclosure.depth === "context") {
         lifecycle = "focus";
