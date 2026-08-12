@@ -249,7 +249,9 @@ export async function buildStaffSupply(
             roomLocationId: row.room_location_id,
             roomName: row.room_location_id ? (roomLabelById.get(row.room_location_id) ?? null) : null,
             weekdays: pattern?.weekdays ?? [],
-            timeLabel: pattern?.hours ? formatCompactScheduleHours(pattern.hours) : null,
+            timeLabel: pattern?.hours
+                ? formatCompactScheduleHours(pattern.hours.arrive, pattern.hours.depart)
+                : null,
             effectiveFrom: row.start_date,
             effectiveTo: row.end_date,
             isPrimary: row.is_primary === true,

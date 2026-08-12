@@ -13,6 +13,8 @@ import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
+import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import {
     SCHEDULING_SECTION_MODE,
     type SchedulingMode,
@@ -603,6 +605,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     );
 
     const siteName = useMemo(() => sites?.find((s) => s.id === siteId)?.name ?? "All sites", [sites, siteId]);
+    const drawer = useAdminDrawerOptional();
     const summary = useMemo(() => deriveRosterSummary(roster), [roster]);
 
     const unplaced = overview?.unplaced ?? [];
@@ -930,6 +933,21 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     />
                 ) : null}
 
+                {mode === "work" && workView === "daily_roster" ? (
+                    <DailyRoster
+                        siteLocationId={siteId}
+                        siteName={siteName}
+                        todayYmd={new Date().toISOString().slice(0, 10)}
+                        onOpenChild={(child) => {
+                            // Canonical record only — a child opens as its person
+                            // identity. Roster is a selection surface, not a record one.
+                            if (child.personId) drawer?.openDrawer({ type: "persons", id: child.personId });
+                        }}
+                        onOpenStaff={(staff) => {
+                            drawer?.openDrawer({ type: "persons", id: staff.personId });
+                        }}
+                    />
+                ) : null}
                 {mode === "work" && workView === "attendance" ? <AttendanceScreen siteName={siteName} /> : null}
 
                 {mode === "studio" ? (

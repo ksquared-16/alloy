@@ -17,6 +17,34 @@
 
 export type StaffingSufficiency = "sufficient" | "short" | "unknown";
 
+/**
+ * Interpret the ratio engine's answer as a DEMAND, or null when it could not
+ * resolve one.
+ *
+ * `requiredStaffForChildren` returns `{ requiredStaff: 0, exceedsDefinedTiers: true }`
+ * when a room has children but NO ratio tier applies. Taken at face value that is
+ * a demand of zero — and zero demand is satisfied by any supply, so an entirely
+ * unconfigured room would render as fully staffed. That is the exact fake-green
+ * failure the sufficiency contract exists to prevent.
+ *
+ * The three cases the engine actually expresses:
+ *   childCount === 0                          → demand really is 0
+ *   0 children-covering tiers, children > 0   → demand UNRESOLVABLE → null
+ *   over the highest tier                     → demand known (top tier) and breached
+ */
+export function resolveRequiredStaffDemand(input: {
+    requiredStaff: number | null | undefined;
+    exceedsDefinedTiers: boolean;
+    childCount: number;
+}): number | null {
+    const { requiredStaff, exceedsDefinedTiers, childCount } = input;
+    if (requiredStaff == null) return null;
+    if (childCount <= 0) return requiredStaff;
+    // Children present, zero required, and no tier covered them: not configured.
+    if (requiredStaff === 0 && exceedsDefinedTiers) return null;
+    return requiredStaff;
+}
+
 export type ResolveStaffingSufficiencyInput = {
     /** Demand from the ratio model. Null when it could not be resolved. */
     requiredStaff: number | null;

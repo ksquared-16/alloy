@@ -38,6 +38,16 @@ export type CreateOperationalAssignmentInput = {
     subject: OperationalAssignmentSubject;
     schedulePatternId: string;
     startDate: string;
+    /**
+     * Optional close date for a bounded commitment (a summer placement, a cover
+     * shift). Null/omitted = open-ended.
+     *
+     * This used to be absent from the input entirely while the insert hardcoded
+     * `end_date: null`, so any caller-supplied end date was silently discarded
+     * and the row read as open-ended forever. Roster accuracy depends on this
+     * being real effective-date truth.
+     */
+    endDate?: string | null;
     roomLocationId?: string | null;
     programCategoryId?: string | null;
     assignmentTypeId?: string | null;
@@ -164,6 +174,17 @@ export async function createOperationalAssignment(
     const startDate = assertNonBlank(trimOrNull(input.startDate), "startDate");
     const schedulePatternId = assertNonBlank(trimOrNull(input.schedulePatternId), "schedulePatternId");
     assertValidIsoDate(startDate, "startDate");
+    const endDate = trimOrNull(input.endDate);
+    if (endDate) {
+        assertValidIsoDate(endDate, "endDate");
+        if (endDate < startDate) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_input",
+                "endDate must be on or after startDate",
+                { start_date: startDate, end_date: endDate }
+            );
+        }
+    }
 
     const requestedKind: "proposed" | "committed" =
         input.commitmentKind ??
@@ -258,7 +279,7 @@ export async function createOperationalAssignment(
         commitment_kind: subject.commitmentKind,
         schedule_pattern_id: schedulePatternId,
         start_date: startDate,
-        end_date: null,
+        end_date: endDate,
         // Proposed rows stay in planned status for operator clarity even when start ≤ today.
         status:
             subject.commitmentKind === "proposed"

@@ -21,6 +21,8 @@ export type EmploymentMock = {
     store: EmploymentMockStore;
     /** Every table name that received an insert or update, in order. */
     writes: { table: string; op: "insert" | "update"; row: Row }[];
+    /** Every table name that was read, in order — lets a test assert on N+1. */
+    reads: string[];
     rpcCalls: { fn: string; args: Row }[];
 };
 
@@ -53,6 +55,7 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
     for (const [k, v] of Object.entries(seed ?? {})) if (!store[k]) store[k] = clone(v);
 
     const writes: EmploymentMock["writes"] = [];
+    const reads: string[] = [];
     const rpcCalls: EmploymentMock["rpcCalls"] = [];
     let idCounter = 0;
 
@@ -71,7 +74,10 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
         const applyFilters = (list: Row[]) => list.filter((r) => filters.every((f) => f(r)));
 
         const runPending = (): Row[] => {
-            if (!pending) return applyFilters(rows());
+            if (!pending) {
+                reads.push(name);
+                return applyFilters(rows());
+            }
             if (pending.op === "insert") {
                 idCounter += 1;
                 const row: Row = {
@@ -167,7 +173,7 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
         },
     } as unknown as SupabaseClient;
 
-    return { supabase, store, writes, rpcCalls };
+    return { supabase, store, writes, reads, rpcCalls };
 }
 
 /** Tables that must never be written by employment. Employment is not access. */

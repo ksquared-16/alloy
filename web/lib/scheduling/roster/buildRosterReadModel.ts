@@ -25,6 +25,7 @@ import {
     type ScheduledStaffMember,
 } from "@/lib/scheduling/supply/buildStaffSupply";
 import {
+    resolveRequiredStaffDemand,
     resolveStaffingSufficiency,
     rollUpStaffingSufficiency,
     type StaffingSufficiency,
@@ -265,7 +266,13 @@ export async function buildRosterReadModel(
             const capacity = resolveCapacityBinding(room.id, day.date);
             if (capacity != null) capacities.push(capacity);
             const supplyCell = supplyByKey.get(staffSupplyCellKey(room.id, day.date)) ?? null;
-            const requiredStaff = staff?.requiredStaff ?? null;
+            const requiredStaff = staff
+                ? resolveRequiredStaffDemand({
+                      requiredStaff: staff.requiredStaff,
+                      exceedsDefinedTiers: staff.exceedsDefinedTiers,
+                      childCount: occupancy,
+                  })
+                : null;
             const scheduledStaff = supplyCell?.scheduledStaff ?? [];
             const staffingSufficiency = resolveStaffingSufficiency({
                 requiredStaff,
