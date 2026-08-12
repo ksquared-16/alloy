@@ -385,6 +385,22 @@ def _find_canonical_sms_thread(
         params["location_id"] = f"eq.{location_id}"
     else:
         params["location_id"] = "is.null"
+
+    # SMS carries no RFC threading header, so provenance is
+    #   sender + receiving destination -> most recent compatible conversation.
+    # The open question was how far back "most recent" may reach: an old outbound
+    # thread could theoretically capture an unrelated new inbound years later.
+    #
+    # NO TIME CONSTANT IS INVENTED HERE. `archived_at` is a canonical lifecycle
+    # fact the platform already records, and an archived conversation is one an
+    # operator has explicitly closed — it is not a candidate to absorb new
+    # correspondence. That, plus the location scoping above, is the truthful bound.
+    #
+    # Residual, recorded rather than papered over: an OPEN, never-archived
+    # conversation still has unbounded reach. Bounding that further needs a
+    # conversation-lifecycle authority (a durable "concluded" state) that does not
+    # exist yet — see SMS-PROVENANCE-BOUNDARY.md.
+    params["archived_at"] = "is.null"
     try:
         r = requests.get(url, headers=headers, params=params, timeout=15)
         if not r.ok:

@@ -477,11 +477,61 @@ export async function enqueueCanonicalOutboundMessage(params: {
     });
 
     if (!renderResult.ok) {
-        console.warn("[communications] send blocked by renderer", {
-            org_id: orgIdTrim,
-            channel: mc,
-            code: renderResult.block.code,
-        });
+        // ---- RENDER REFUSAL — DURABLE, and deliberately NOT a message row -----
+        //
+        // The gap this closes (carried as D-13): an eligibility refusal and a
+        // provider failure are both durable and explainable, while a RENDER
+        // refusal produced only a console line. Support could see that a family
+        // was never written to, and had nothing to say why.
+        //
+        // It is emitted as a `workflow_events` row rather than a
+        // `communication_messages` row, and that distinction is the point. A
+        // render-blocked message HAS NO VALIDATED BODY — the render is precisely
+        // what failed. Persisting it in the message shape would put unresolved
+        // tokens in a table whose rows are, by definition, things that were or
+        // will be sent, and the dispatch poller selects from that table. Nothing
+        // unrenderable may ever sit somewhere a poller could reach it.
+        //
+        // `workflow_events` is the existing canonical audit substrate — the same
+        // one this module already uses for `message_queued` and `message_blocked`
+        // — so this is one narrow outcome on an existing authority, not a second
+        // failure ledger and not a schema expansion.
+        //
+        // The payload carries the CODE and the operator sentence, never the
+        // unrendered body and never the template internals: an operator learns
+        // that rendering failed and why, without being shown raw `{{tokens}}`.
+        try {
+            await emitEvent({
+                org_id: orgIdTrim,
+                event_type: "message_render_blocked",
+                entity_type: params.primaryEntityType,
+                entity_id: params.primaryEntityId,
+                action_type: null,
+                occurred_at: new Date().toISOString(),
+                payload: {
+                    thread_id: threadId,
+                    channel: mc,
+                    direction: "outbound" as const,
+                    workflow_run_id: workflowRunUuid,
+                    outcome: "blocked",
+                    stage: "render",
+                    reason: renderResult.block.code,
+                    operator_message: renderResult.block.message,
+                    template_id: params.template?.id ?? null,
+                    // Deliberately absent: the body, the subject, the render
+                    // context, and anything else that could carry an unresolved
+                    // token or a family's words into an audit row.
+                },
+            });
+        } catch (e) {
+            // Audit failure must not become a second failure mode for the caller;
+            // the send is refused either way.
+            console.warn(
+                "[communications] message_render_blocked emit failed",
+                e instanceof Error ? e.message : e,
+            );
+        }
+
         return {
             communicationMessageId: null,
             threadId,

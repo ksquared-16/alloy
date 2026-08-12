@@ -36,7 +36,9 @@ describe("organization-wide Communications admin", () => {
     });
 
     it("may answer the organization conversation", () => {
-        expect(decideCommunicationsSendScope({ ...orgAdmin, conversationLocationId: null }).allowed).toBe(true);
+        const d = decideCommunicationsSendScope({ ...orgAdmin, conversationLocationId: null });
+        expect(d.allowed).toBe(true);
+        expect(d.allowed === true && d.reason).toBe("organization_wide");
     });
 });
 
@@ -62,13 +64,61 @@ describe("a site-restricted operator", () => {
         );
     });
 
-    it("may answer the ORGANIZATION conversation — no location boundary is crossed", () => {
-        // A judgment call, recorded in the module: an organization conversation has
-        // no location, so there is nothing to be excluded from. Denying would make
-        // the general inbox — where unknown senders land — admin-only.
+    it("may NOT answer the organization conversation — unscoped is not public", () => {
+        // Director ruling: "no location" does not mean every location-scoped
+        // operator may access it. The general inbox is where unknown senders and
+        // quarantine releases land.
         const d = decideCommunicationsSendScope({ ...riversideOperator, conversationLocationId: null });
+        expect(d.allowed).toBe(false);
+        expect(d.allowed === false && d.reason).toBe("organization_access_required");
+    });
+
+    it("MAY answer an organization conversation explicitly ASSIGNED to them", () => {
+        // The canonical assignment model is what keeps the strict rule workable:
+        // a specific conversation can be handed over by name without handing over
+        // the whole general inbox.
+        const d = decideCommunicationsSendScope({
+            ...riversideOperator,
+            conversationLocationId: null,
+            assignedUserId: "user-1",
+            actorUserId: "user-1",
+        });
         expect(d.allowed).toBe(true);
-        expect(d.allowed === true && d.reason).toBe("organization_conversation");
+        expect(d.allowed === true && d.reason).toBe("assigned_to_actor");
+    });
+
+    it("assignment to SOMEONE ELSE grants nothing", () => {
+        const d = decideCommunicationsSendScope({
+            ...riversideOperator,
+            conversationLocationId: null,
+            assignedUserId: "user-2",
+            actorUserId: "user-1",
+        });
+        expect(d.allowed).toBe(false);
+    });
+
+    it("assignment does not bypass the send permission itself", () => {
+        const d = decideCommunicationsSendScope({
+            hasCommunicationsSend: false,
+            siteScope: "restricted",
+            allowedSiteLocationIds: [RIVERSIDE],
+            conversationLocationId: null,
+            assignedUserId: "user-1",
+            actorUserId: "user-1",
+        });
+        expect(d.allowed).toBe(false);
+        expect(d.allowed === false && d.reason).toBe("no_send_permission");
+    });
+
+    it("assignment lets them answer ANOTHER location's conversation, deliberately", () => {
+        const d = decideCommunicationsSendScope({
+            ...riversideOperator,
+            conversationLocationId: LAKESIDE,
+            assignedUserId: "user-1",
+            actorUserId: "user-1",
+        });
+        expect(d.allowed).toBe(true);
+        expect(d.allowed === true && d.reason).toBe("assigned_to_actor");
     });
 });
 

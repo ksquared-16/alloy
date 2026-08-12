@@ -1,11 +1,14 @@
 ---
 owner: platform — Adaptive Workspace / BOS
-status: blocker
+status: RESOLVED
 raised_by: Conversation Platform V1 — Communications Hardening
 last_reviewed: 2026-08-12
 ---
 
-# BLOCKER — the floating BOS assistant makes scrolled content unclickable
+# RESOLVED — the floating BOS assistant made scrolled content unclickable
+
+**Closed 2026-08-12**, authorized by the Director. Fix and evidence at the end;
+the diagnosis below is kept because it is why the fix is shaped as it is.
 
 **Invariant violated:** *platform chrome must not make underlying primary actions
 unreachable.*
@@ -59,30 +62,13 @@ Reproduced on `communications-configure-sms` at **both** viewports.
 That one is covered *without any scrolling at all*. Any admin surface with
 content in the right ~400px, or with anything below the fold, is affected.
 
-## Why this sprint did not fix it
+## Why it was initially deferred (superseded — see RESOLUTION)
 
-The correct fix is for the workspace to reserve the panel's area when floating (or
-for the panel to stop taking pointer events when it is not the operator's focus).
-Both are changes to shared chrome that alter layout on **every** admin surface.
-This sprint can neither certify that breadth nor safely own the regression risk,
-and the milestone explicitly excludes general organization UX work.
-
-Deliberately **not** done:
-- narrowing the Communications content column so it never reaches the panel —
-  cosmetic, wrong on wide screens, and leaves `/organization/access` broken;
-- changing the global default presentation away from `floating` — a
-  platform-wide UX decision, not a Communications one.
-
-## What Communications does instead, and its exact limit
-
-Both Communications certification specs dismiss the assistant explicitly
-(`data-bos-presentation="closed"`) with the reason stated in the code. That keeps
-the specs measuring Communications rather than the assistant's geometry.
-
-**It does not make the product correct.** A real operator on a default profile can
-scroll a Configure control under the panel and find that clicking does nothing,
-with no error and no explanation. This remains **open** in production-readiness
-status until the owner fixes it.
+The fix alters layout on **every** admin surface, which the hardening milestone
+could not authorize on its own. The Director subsequently authorized it, and it
+was taken. Two shortcuts were rejected then and remain rejected: narrowing the
+Communications column (cosmetic, and leaves `/organization/access` broken) and
+changing the global default away from `floating` (a platform UX decision).
 
 ## Reproduction
 
@@ -93,3 +79,51 @@ status until the owner fixes it.
 The spec prints `[BOS]` lines with the measured rects and per-page coverage, and
 fails on any covered control. It is intended to stay red until this is fixed —
 it is the acceptance test for the fix.
+
+
+---
+
+# RESOLUTION
+
+**The fix, in the platform's own idiom.** `pinned` already reserves a column
+(`--ws-rail`); `floating` deliberately reserved nothing — the CSS said so:
+*"Floating BOS is a body-portaled window — assistant column does not reserve or
+float."* That is fine until you remember content SCROLLS under a fixed window.
+
+Floating now reserves too, when it is parked against an edge:
+
+- `bosFloatingEdge()` / `bosFloatingReservePx()` in `web/lib/bos/bosFloatingGeometry.ts`
+  decide the edge and the reserve, as pure geometry.
+- `BosPresentationControllerContext` publishes `data-bos-floating-edge` and
+  `--bos-float-reserve` on the document.
+- `adminV2.css` insets `[data-adminv2-workspace-ambient-root]` by that reserve.
+
+**Deliberate limits, so the fix is honest:**
+
+- Reserve applies only while the assistant is parked against an edge — which is
+  where `defaultBosFloatingGeometry` puts it, so the DEFAULT experience is safe.
+  Dragged into the middle it reserves nothing: a window the operator has
+  deliberately placed over their work is theirs to move, and an arbitrary position
+  is not expressible as a layout reserve.
+- Reserve is skipped when it would squeeze the content column below 720px. A cure
+  that crushes the page is worse than the disease.
+
+**None of the forbidden shortcuts were used:** BOS is not hidden on
+Communications, no Communications offsets are hardcoded, no page-specific z-index
+hack, nothing was shrunk, and the certification dismissals have been **removed**
+from both Communications specs.
+
+## Certified 15/15
+
+`certification/playwright/bos-overlay-reachability.cert.spec.ts`, at 1440×900 and
+1280×720, with the assistant at its real default:
+
+| Surface | Before | After |
+|---|---|---|
+| `/organization/communications` | 0 covered, but Configure unclickable once scrolled | **0 covered, click lands** |
+| `/organization/access` | **1 covered** ("Open Access Scopes") | **0 covered** |
+| `/organization/programs-locations` | not measured | **0 covered** |
+| Communications, scrolled to bottom | click swallowed | **0 covered** |
+| Assistant closed | — | **0 covered** |
+
+The spec is retained as the regression test for this invariant.

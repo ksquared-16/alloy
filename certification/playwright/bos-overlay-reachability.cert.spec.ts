@@ -18,6 +18,7 @@ import { expect, test } from "@playwright/test";
 
 const COMMUNICATIONS = "/organization/communications";
 const ACCESS = "/organization/access";
+const PROGRAMS = "/organization/programs-locations";
 
 type Page = import("@playwright/test").Page;
 
@@ -114,6 +115,39 @@ for (const viewport of [
                 coverage.covered,
                 `platform chrome covers ${coverage.covered} action(s): ${coverage.coveredLabels.join(", ")}`,
             ).toBe(0);
+        });
+
+        test("no primary action on a third Organization page is unreachable", async ({ page }) => {
+            await page.goto(PROGRAMS);
+            await page.waitForLoadState("domcontentloaded");
+            const coverage = await actionCoverage(page);
+            console.log(`[BOS] programs ${viewport.name} coverage=`, JSON.stringify(coverage));
+            expect(coverage.covered, `covers: ${coverage.coveredLabels.join(", ")}`).toBe(0);
+        });
+
+        test("actions stay reachable after SCROLLING — the actual failure mode", async ({ page }) => {
+            await page.goto(COMMUNICATIONS);
+            await expect(page.getByTestId("organization-communications-page")).toBeVisible();
+            // Scroll every scrollable region to the bottom, which is what put
+            // controls under the fixed panel before the reserve existed.
+            await page.evaluate(() => {
+                document.querySelectorAll("*").forEach((el) => {
+                    const e = el as HTMLElement;
+                    if (e.scrollHeight > e.clientHeight + 40) e.scrollTop = e.scrollHeight;
+                });
+                window.scrollTo(0, document.body.scrollHeight);
+            });
+            const coverage = await actionCoverage(page);
+            console.log(`[BOS] scrolled ${viewport.name} coverage=`, JSON.stringify(coverage));
+            expect(coverage.covered, `covers: ${coverage.coveredLabels.join(", ")}`).toBe(0);
+        });
+
+        test("with the assistant CLOSED nothing is covered either", async ({ page }) => {
+            await page.goto(COMMUNICATIONS);
+            await expect(page.getByTestId("organization-communications-page")).toBeVisible();
+            await page.evaluate(() => document.documentElement.setAttribute("data-bos-presentation", "closed"));
+            const coverage = await actionCoverage(page);
+            expect(coverage.covered).toBe(0);
         });
 
         test("the channel Configure controls actually receive a click", async ({ page }) => {

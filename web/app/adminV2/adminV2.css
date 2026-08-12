@@ -2968,3 +2968,34 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 .adminv2-sidebar-config-list .adminv2-sidebar-config-link--active {
   font-weight: 600;
 }
+
+/*
+ * Floating BOS reserve — shared-shell fix.
+ *
+ * The floating assistant is `position: fixed`, and page content scrolls beneath
+ * it. Any primary action below the fold became unreachable the moment it scrolled
+ * into the assistant's band: the click landed on the assistant, silently, with no
+ * error. Reproduced on /organization/access with no Communications code, so this
+ * is shell-owned rather than page-owned.
+ *
+ * The invariant restored: platform chrome must never make primary page actions
+ * unreachable.
+ *
+ * The mechanism is the one `pinned` already uses — reserve a column — applied to
+ * the presentation that skipped it. `--bos-float-reserve` is published by
+ * BosPresentationControllerContext and is non-zero ONLY while the assistant is
+ * parked against an edge (its default) and the remaining content column stays
+ * usable. Dragged into the middle it reserves nothing, because a window the
+ * operator deliberately placed over their work is theirs to move.
+ */
+html[data-bos-presentation="floating"][data-bos-floating-edge="right"]
+  [data-adminv2-workspace-ambient-root] {
+  padding-right: var(--bos-float-reserve, 0px);
+  transition: padding-right 120ms ease-out;
+}
+
+html[data-bos-presentation="floating"][data-bos-floating-edge="left"]
+  [data-adminv2-workspace-ambient-root] {
+  padding-left: var(--bos-float-reserve, 0px);
+  transition: padding-left 120ms ease-out;
+}

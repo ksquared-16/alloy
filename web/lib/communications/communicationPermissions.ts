@@ -105,7 +105,7 @@ export async function assertCommunicationsSendAllowedForThread(params: {
 
     const { data: thread, error } = await params.supabase
         .from("communication_threads")
-        .select("id, location_id")
+        .select("id, location_id, assigned_user_id")
         .eq("id", params.threadId)
         .eq("org_id", params.orgId)
         .maybeSingle();
@@ -119,6 +119,10 @@ export async function assertCommunicationsSendAllowedForThread(params: {
         siteScope: bundle.siteScope,
         allowedSiteLocationIds: bundle.allowedSiteLocationIds,
         conversationLocationId: (thread as { location_id?: string | null }).location_id ?? null,
+        // The canonical assignment model — an explicitly assigned conversation is
+        // a deliberate grant of THIS conversation, and outranks blanket scope.
+        assignedUserId: (thread as { assigned_user_id?: string | null }).assigned_user_id ?? null,
+        actorUserId: bundle.userId,
     });
 
     return decision.allowed ? { ok: true } : { ok: false, message: decision.message };

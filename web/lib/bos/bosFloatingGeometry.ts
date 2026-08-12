@@ -158,3 +158,60 @@ export function writeBosStartersExpanded(expanded: boolean): void {
         /* ignore */
     }
 }
+
+/**
+ * Which edge, if any, a floating assistant is parked against — and therefore how
+ * much room page content must leave for it.
+ *
+ * WHY THIS EXISTS. The floating assistant is `position: fixed` and the CSS said
+ * so explicitly: "Floating BOS is a body-portaled window — assistant column does
+ * not reserve or float." Reserving nothing is fine until you remember that page
+ * content SCROLLS underneath a stationary window. Any control below the fold
+ * becomes unreachable the moment it scrolls into the panel's band — the click
+ * lands on the assistant, silently. Reproduced on `/organization/access` with no
+ * Communications code involved, so it is a shared-shell defect.
+ *
+ * THE RULE. When the assistant is parked against an edge — which is where it
+ * starts, since `defaultBosFloatingGeometry` docks it bottom-right — the
+ * workspace insets by its width, exactly as `pinned` already reserves `--ws-rail`.
+ * The mechanism is not new; it is the existing reserve applied to the one
+ * presentation that skipped it.
+ *
+ * WHEN THE OPERATOR DRAGS IT INTO THE MIDDLE, nothing is reserved. That is
+ * deliberate. Insetting for an arbitrary position is not expressible as a layout
+ * reserve, and a window the operator has deliberately placed over their work is
+ * ordinary windowing behaviour they can undo by moving it. What must never happen
+ * is the DEFAULT state hiding actions, and that is what this fixes.
+ */
+export type BosFloatingEdge = "left" | "right" | "free";
+
+/** How close to an edge counts as parked against it. */
+export const BOS_FLOAT_EDGE_TOLERANCE_PX = 48;
+
+export function bosFloatingEdge(
+    geo: BosFloatingGeometry,
+    canvas: BosCanvasBounds,
+): BosFloatingEdge {
+    if (!Number.isFinite(canvas.width) || canvas.width <= 0) return "free";
+    const rightGap = canvas.width - (geo.x + geo.width);
+    if (rightGap <= BOS_FLOAT_EDGE_TOLERANCE_PX && rightGap >= -BOS_FLOAT_EDGE_TOLERANCE_PX) return "right";
+    if (geo.x <= BOS_FLOAT_EDGE_TOLERANCE_PX) return "left";
+    return "free";
+}
+
+/**
+ * Width the workspace must leave clear. Zero when the assistant is not parked
+ * against an edge, or when reserving would leave too little room for the page —
+ * a cure that squeezes the content to nothing is worse than the disease.
+ */
+export function bosFloatingReservePx(
+    geo: BosFloatingGeometry,
+    canvas: BosCanvasBounds,
+    minPrimaryPx = 720,
+): number {
+    const edge = bosFloatingEdge(geo, canvas);
+    if (edge === "free") return 0;
+    const reserve = Math.round(geo.width + BOS_FLOAT_MARGIN_PX);
+    if (canvas.width - reserve < minPrimaryPx) return 0;
+    return Math.max(0, reserve);
+}

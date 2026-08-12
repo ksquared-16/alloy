@@ -33,18 +33,38 @@
  * of the two is exactly the required condition.
  *
  * ---------------------------------------------------------------------------
- * The judgment call, stated because it is one
+ * Organization-level conversations — Director ruling, 2026-08-12
  * ---------------------------------------------------------------------------
  *
- * A site-restricted operator and an ORGANIZATION-level conversation: allowed.
+ * An earlier revision let ANY operator with `communications.send` answer an
+ * organization-level conversation, reasoning that "no location" meant "no
+ * boundary to cross". That was overturned, and the ruling is the right one:
  *
- * An organization-level conversation has no location, so there is no location the
- * operator is excluded from — the rule "may not act in a location they cannot
- * access" simply does not apply. The alternative reading (deny unless
- * organization-wide) would make the general inbox, which is exactly where unknown
- * senders and quarantine releases land, answerable only by administrators. That
- * is an operational failure mode rather than a safety one, and the safety gain is
- * nil because no location boundary is being crossed.
+ *     No location on a conversation does NOT mean every location-scoped
+ *     operator may access it.
+ *
+ * The general inbox is where unknown senders, quarantine releases and
+ * organization-wide correspondence land. A Riverside-only operator having free
+ * rein there is precisely the leak this layer exists to prevent — "unscoped" is
+ * not "public".
+ *
+ * So an organization-level conversation now requires ORGANIZATION-WIDE access:
+ * `siteScope === "all"`, which is Access V2's existing representation of exactly
+ * that. Nothing new was defined.
+ *
+ * ---------------------------------------------------------------------------
+ * The escape hatch is an EXISTING canonical authority, not an exception
+ * ---------------------------------------------------------------------------
+ *
+ * A thread explicitly ASSIGNED to a user grants that user access to it —
+ * `communication_threads.assigned_user_id` / `assignment_state`, the platform's
+ * own assignment model. That is what makes the strict rule workable rather than
+ * paralysing: a site-restricted operator can be handed a specific organization
+ * conversation deliberately, by name, and answer it — without being handed the
+ * whole general inbox.
+ *
+ * Assignment is checked BEFORE scope for exactly that reason: a deliberate,
+ * auditable grant should not be overridden by a blanket scope rule.
  *
  * Pure. Values in, decision out.
  */
@@ -54,17 +74,28 @@ export type SiteScopeMode = "all" | "restricted";
 export type SendScopeInput = {
     /** From `hasCommunicationsSendPermission` — org RBAC, already resolved. */
     hasCommunicationsSend: boolean;
-    /** From the admin access bundle. */
+    /** From the admin access bundle. `"all"` IS Access V2's org-wide representation. */
     siteScope: SiteScopeMode;
-    /** From the admin access bundle. `null` means "not restricted". */
+    /** From the admin access bundle. `null` means "no locations listed". */
     allowedSiteLocationIds: string[] | null;
     /** The conversation's location. `null` = organization-level conversation. */
     conversationLocationId: string | null | undefined;
+    /** `communication_threads.assigned_user_id` — the canonical assignment model. */
+    assignedUserId?: string | null;
+    /** The acting operator, for the assignment check. */
+    actorUserId?: string | null;
 };
 
 export type SendScopeDecision =
-    | { allowed: true; reason: "organization_conversation" | "site_unrestricted" | "site_permitted" }
-    | { allowed: false; reason: "no_send_permission" | "location_not_permitted"; message: string };
+    | {
+          allowed: true;
+          reason: "assigned_to_actor" | "organization_wide" | "site_unrestricted" | "site_permitted";
+      }
+    | {
+          allowed: false;
+          reason: "no_send_permission" | "location_not_permitted" | "organization_access_required";
+          message: string;
+      };
 
 function normalize(value: string | null | undefined): string | null {
     const v = (value ?? "").trim();
@@ -84,8 +115,24 @@ export function decideCommunicationsSendScope(input: SendScopeInput): SendScopeD
 
     const conversationLocation = normalize(input.conversationLocationId);
 
-    // No location on the conversation means no location boundary to enforce.
-    if (conversationLocation === null) return { allowed: true, reason: "organization_conversation" };
+    // A deliberate, auditable grant of THIS conversation. Checked first so a
+    // blanket scope rule cannot override an explicit assignment.
+    const assigned = normalize(input.assignedUserId);
+    const actor = normalize(input.actorUserId);
+    if (assigned !== null && actor !== null && assigned === actor) {
+        return { allowed: true, reason: "assigned_to_actor" };
+    }
+
+    if (conversationLocation === null) {
+        // Organization-level: requires organization-wide access. "Unscoped" is not
+        // "public" — see the Director ruling in the header.
+        if (input.siteScope === "all") return { allowed: true, reason: "organization_wide" };
+        return {
+            allowed: false,
+            reason: "organization_access_required",
+            message: "This conversation belongs to the whole organization, and you have access to specific locations only.",
+        };
+    }
 
     if (input.siteScope === "all") return { allowed: true, reason: "site_unrestricted" };
 

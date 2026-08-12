@@ -43,27 +43,6 @@ type BindingPayload = {
     readiness: { send: { state: string; detail: string }; receive: { state: string; detail: string } };
 };
 
-/**
- * Dismiss the floating BOS assistant before interacting with the page.
- *
- * NOT a convenience, and worth reading. The assistant is a DRAGGABLE, fixed-position
- * panel of shared admin chrome. In the certification viewport it sits at roughly
- * (24,80)–(344,500), and when the channel cards stack into one column the second
- * card's Configure button lands underneath it — the click is silently swallowed by
- * the overlay, which is the "the button does nothing" failure mode this platform
- * has hit before.
- *
- * That overlap is a REAL operator hazard and is reported as a finding rather than
- * hidden by this helper. It is dismissed here because it is platform chrome the
- * operator can move or close, and because leaving it in place would mean this spec
- * certifies the assistant's geometry instead of the Communications surface.
- */
-async function dismissFloatingAssistant(page: import("@playwright/test").Page) {
-    await page.evaluate(() => {
-        document.documentElement.setAttribute("data-bos-presentation", "closed");
-    });
-}
-
 async function loadBindings(page: import("@playwright/test").Page) {
     const res = await page.request.get(BINDINGS);
     expect(res.ok(), `GET ${BINDINGS} → ${res.status()}`).toBe(true);
@@ -156,7 +135,6 @@ test.describe("Organization Communications — secrets never surface", () => {
     test("no provider secret appears in the DOM, and no key can be typed", async ({ page }) => {
         await page.goto(PAGE);
         await expect(page.getByTestId("organization-communications-page")).toBeVisible();
-        await dismissFloatingAssistant(page);
 
         const html = await page.content();
         for (const term of ["secret_ref", "RESEND_API_KEY", "TWILIO_AUTH_TOKEN", "env:", "legacy_global_twilio"]) {
@@ -181,7 +159,6 @@ test.describe("Organization Communications — configure", () => {
         const bindingId = bindings.find((b) => b.inbound_address === ACTIVE_EMAIL)!.id;
 
         await page.goto(PAGE);
-        await dismissFloatingAssistant(page);
         await page.getByTestId("communications-configure-email").click();
         await expect(page.getByTestId("communications-channel-dialog")).toBeVisible();
 
@@ -210,7 +187,6 @@ test.describe("Organization Communications — configure", () => {
         const smsId = bindings.find((b) => (b.inbound_to_e164 ?? null) === CERT_NUMBER)!.id;
 
         await page.goto(PAGE);
-        await dismissFloatingAssistant(page);
         try {
             await page.getByTestId("communications-configure-sms").click();
             await page.getByTestId("communications-dialog-enabled").uncheck();
@@ -236,7 +212,6 @@ test.describe("Organization Communications — configure", () => {
 
     test("a duplicate receiving identity is refused safely, in the operator's words", async ({ page }) => {
         await page.goto(PAGE);
-        await dismissFloatingAssistant(page);
         const { bindings } = await loadBindings(page);
         const disabled = bindings.find((b) => b.inbound_address === DISABLED_EMAIL);
         expect(disabled).toBeTruthy();

@@ -21,6 +21,8 @@ import {
     type BosPresentationState,
 } from "@/lib/bos/bosPresentationPreference";
 import {
+    bosFloatingEdge,
+    bosFloatingReservePx,
     clampBosFloatingGeometry,
     defaultBosFloatingGeometry,
     geometriesEqual,
@@ -166,11 +168,25 @@ export function BosPresentationControllerProvider({
             BOS_RAIL_WIDTH_CSS_VAR,
             derivation.reservedWidthPx > 0 ? `${derivation.reservedWidthPx}px` : "0px",
         );
+
+        // Floating reserve — the fix for actions scrolling underneath the
+        // assistant. When it is parked against an edge (where it starts), the
+        // workspace insets by its width, exactly as `pinned` already reserves
+        // `--ws-rail`. Dragged into the middle, nothing is reserved: that is a
+        // deliberate operator placement, not a default that hides their work.
+        const edge = derivation.effective === "floating" ? bosFloatingEdge(floatingGeometry, viewportBounds()) : "free";
+        const floatReserve =
+            derivation.effective === "floating" ? bosFloatingReservePx(floatingGeometry, viewportBounds()) : 0;
+        document.documentElement.setAttribute("data-bos-floating-edge", edge);
+        document.documentElement.style.setProperty("--bos-float-reserve", `${floatReserve}px`);
+
         return () => {
             document.documentElement.removeAttribute(BOS_PRESENTATION_ATTR);
             document.documentElement.removeAttribute(BOS_PRESENTATION_PREFERRED_ATTR);
+            document.documentElement.removeAttribute("data-bos-floating-edge");
+            document.documentElement.style.removeProperty("--bos-float-reserve");
         };
-    }, [ambientEl, derivation]);
+    }, [ambientEl, derivation, floatingGeometry]);
 
     const setPreferred = useCallback((state: BosPresentationState) => {
         writeBosPresentationPreference(state);

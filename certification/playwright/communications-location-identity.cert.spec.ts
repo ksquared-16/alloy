@@ -40,13 +40,6 @@ function uid(tag: string): string {
     return `${tag}${crypto.randomBytes(8).toString("hex")}`;
 }
 
-/** Platform chrome that floats over page content — see the configuration spec. */
-async function dismissFloatingAssistant(page: Page) {
-    await page.evaluate(() => {
-        document.documentElement.setAttribute("data-bos-presentation", "closed");
-    });
-}
-
 /** Drive the REAL inbound email ingestion path, addressed to a chosen receiving identity. */
 async function deliverEmail(page: Page, params: { to: string; subject: string; text: string }) {
     const emailId = uid("cert-loc-");
@@ -301,7 +294,6 @@ test.describe("Location identity — the identity model is kept in step", () => 
 
     test("configuration edits never expose a provider secret", async ({ page }) => {
         await page.goto(PAGE);
-        await dismissFloatingAssistant(page);
         await page.getByTestId("communications-configure-email").click();
         await expect(page.getByTestId("communications-channel-dialog")).toBeVisible();
         await expect(page.locator('input[type="password"]')).toHaveCount(0);
