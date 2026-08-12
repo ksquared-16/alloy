@@ -57,6 +57,15 @@ type Props = {
     onConfirmOutcome: () => void;
     onClose: () => void;
     actionPanel: React.ReactNode;
+    /**
+     * Per-child paths for a template configuring `participant_decisions`.
+     *
+     * Rendered as persistent context for the open work rather than inside outcome mode, because
+     * `completeStageWorkWithOutcome` refuses the outcome while any child is undecided — the operator
+     * needs to meet the paths BEFORE being told no, and `outcomeCompletionBlockReason` (rendered in
+     * outcome mode) is the message that would otherwise have no corresponding control.
+     */
+    participantDecisions?: React.ReactNode;
 };
 
 export default function CurrentWorkFocusedSurface({
@@ -77,6 +86,7 @@ export default function CurrentWorkFocusedSurface({
     onConfirmOutcome,
     onClose,
     actionPanel,
+    participantDecisions,
 }: Props) {
     // Record-outcome is a dedicated decision MODE, not a section shown next to the commands.
     // Opening via "Record outcome" from the summary (select_result) enters outcome mode directly.
@@ -157,6 +167,10 @@ export default function CurrentWorkFocusedSurface({
                     </button>
                 </div>
             }
+
+            {/* Not while a capability panel owns the surface — that panel is the primary content and
+                fills the remaining height. */}
+            {participantDecisions && !hasPanel ? participantDecisions : null}
 
             {hasPanel ?
                 // Active capability (composer / tour) is the primary content: it fills the remaining

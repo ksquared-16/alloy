@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import CurrentWorkActionPanel from "@/components/admin/focusPanel/cards/CurrentWorkActionPanel";
+import CurrentWorkParticipantDecisionsPanel from "@/components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel";
+import { resolveParticipantDecisionScope } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveParticipantDecisionScope";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import CurrentWorkActivityPreview, {
     CurrentWorkActivityKindIcon,
     type CurrentWorkActivityPreviewItem,
@@ -78,6 +81,27 @@ export default function CurrentWorkCard({
     const vm = evidence.viewModel;
     const surface = vm.surface;
     const opportunityId = context.subject.id;
+
+    // ── PER-CHILD PATHS ──
+    //
+    // Configured on the stage work TEMPLATE, and the completion gate refuses the outcome while any
+    // child is undecided — in this very surface. Every field of the scope comes from the runtime
+    // projection this card already holds; nothing is inferred.
+    const participantDecisionScope = useMemo(
+        () => resolveParticipantDecisionScope({ opportunityId, surface }),
+        [opportunityId, surface],
+    );
+    const handleParticipantDecisionChanged = useCallback(
+        (affected: { opportunityId: string; customerMemberId?: string }) => {
+            // A decision moves a child's participation, which changes the work's own completion
+            // eligibility and shows up on the record's activity.
+            dispatchOpportunityDrawerScopedUpdate(affected.opportunityId, "participant_decision", [
+                "header_actions",
+                "activity",
+            ]);
+        },
+        [],
+    );
     // Phase A — count how many times the card re-composes with a distinct evidence identity per
     // subject (seed context → enriched context = two composes for one navigation).
     const cardPerspective = context.stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : "content";
@@ -488,6 +512,19 @@ export default function CurrentWorkCard({
                         mutation={mutation}
                         onClose={closeActionPanel}
                         onComplete={handleActionPanelComplete}
+                    />
+                :   null
+            }
+            participantDecisions={
+                // Self-suppressing: the panel asks the configured surface and renders nothing when
+                // this template declares no participant decisions, so an unconfigured tenant sees
+                // exactly what it sees today. A null scope means the runtime has not projected a
+                // department/stage/template yet — never a reason to query someone else's decisions.
+                participantDecisionScope ?
+                    <CurrentWorkParticipantDecisionsPanel
+                        scope={participantDecisionScope}
+                        canMutate={context.capabilities.canMutate}
+                        onChanged={handleParticipantDecisionChanged}
                     />
                 :   null
             }

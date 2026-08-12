@@ -6598,6 +6598,23 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   flex: 0 1 auto;
   min-height: 0;
 }
+/* ── Per-child paths, inside the open work ────────────────────────────────
+   Not a card: the workspace already names the work. This is the set of decisions the
+   completion gate turns on, so it sits with the work and scrolls with it. */
+.alloy-os-currentwork__participant-decisions {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-bottom: 0.25rem;
+}
+.alloy-os-currentwork__participant-decisions-progress {
+  font-size: 11px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--alloy-midnight, #10233b) 55%, transparent);
+}
 .alloy-os-currentwork__focused-topbar {
   display: flex;
   align-items: flex-start;

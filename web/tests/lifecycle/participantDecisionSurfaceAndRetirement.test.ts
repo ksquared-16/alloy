@@ -223,34 +223,29 @@ describe("legacy Decision Split is retired — one implementation only", () => {
      * remains true: one implementation, and the split panels stay deleted.
      */
     it("there is still exactly ONE Decision implementation, and no sibling panels", () => {
-        expect(existsSync(path.join(WEB, "components/admin/opportunity/DecisionCurrentWorkCard.tsx"))).toBe(true);
+        expect(existsSync(path.join(WEB, "components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx"))).toBe(true);
         expect(existsSync(path.join(WEB, "components/admin/opportunity/ParticipantDecisionsPanel.tsx"))).toBe(false);
         expect(existsSync(path.join(WEB, "components/admin/opportunity/FamilyClosePanel.tsx"))).toBe(false);
         expect(existsSync(path.join(WEB, "components/admin/opportunity/OpportunityDecisionSplitPanel.tsx"))).toBe(false);
     });
 
-    it("the Decision card has no mount — the capability awaits a Focus Panel home", () => {
-        // Stated as an assertion so it cannot be forgotten: the day a card mounts it, this fails and
-        // the next engineer writes the real mount-site test.
-        const mounts = ["app", "components", "lib"].flatMap((dir) => {
-            const walk = (d: string): string[] => {
-                let out: string[] = [];
-                for (const e of readdirSync(path.join(WEB, d))) {
-                    const rel = path.join(d, e);
-                    if (statSync(path.join(WEB, rel)).isDirectory()) out = out.concat(walk(rel));
-                    else if (/\.tsx?$/.test(e) && !rel.endsWith("DecisionCurrentWorkCard.tsx")) {
-                        if (readFileSync(path.join(WEB, rel), "utf8").includes("<DecisionCurrentWorkCard")) out.push(rel);
-                    }
-                }
-                return out;
-            };
-            return walk(dir);
-        });
-        expect(mounts, "a mount appeared — replace this with a real mount-site assertion").toEqual([]);
+    it("the Decision surface is mounted in Current Work", () => {
+        // This replaces the eradication sprint's placeholder ("the Decision card has no mount — the
+        // capability awaits a Focus Panel home"), which was written to fail the day a mount
+        // appeared. It has one: Current Work, where `completeStageWorkWithOutcome` refuses the
+        // outcome while any child is undecided and tells the operator to choose a path per child.
+        expect(
+            existsSync(path.join(WEB, "components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx")),
+        ).toBe(true);
+        expect(existsSync(path.join(WEB, "components/admin/opportunity/DecisionCurrentWorkCard.tsx"))).toBe(false);
+
+        const card = readCode("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
+        expect(card).toContain("<CurrentWorkParticipantDecisionsPanel");
+        expect(card).toContain("resolveParticipantDecisionScope");
     });
 
     it("keeps closing the lead INSIDE the work card, beneath the child paths", () => {
-        const card = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
+        const card = readCode("components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx");
         const childRows = card.indexOf("data-decision-child-row");
         const closeSection = card.indexOf("data-decision-close-section");
         expect(childRows).toBeGreaterThan(-1);
@@ -258,7 +253,7 @@ describe("legacy Decision Split is retired — one implementation only", () => {
     });
 
     it("speaks operator language and never the platform's own vocabulary", () => {
-        const card = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
+        const card = readCode("components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx");
         /**
          * Only JSX TEXT NODES are operator copy.
          *
@@ -283,7 +278,7 @@ describe("legacy Decision Split is retired — one implementation only", () => {
 
     it("keeps the replacement free of OCM lifecycle writes and stage-key branching", () => {
         const seam = readCode("lib/lifecycle/executeParticipantDecisionForChild.ts");
-        const panel = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
+        const panel = readCode("components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx");
         const route = readCode("app/api/admin/lifecycle-builder/participant-decisions/route.ts");
 
         for (const [name, source] of [
@@ -307,7 +302,7 @@ describe("legacy Decision Split is retired — one implementation only", () => {
     });
 
     it("keeps the panel free of raw identifiers in operator-visible text", () => {
-        const panel = readCode("components/admin/opportunity/DecisionCurrentWorkCard.tsx");
+        const panel = readCode("components/admin/focusPanel/cards/CurrentWorkParticipantDecisionsPanel.tsx");
         // Identity is carried — as React keys, data attributes and request fields — but never
         // INTERPOLATED INTO COPY. That distinction is what this asserts: a `{row.x}` sitting in JSX
         // text position, rather than any mention of the field.
