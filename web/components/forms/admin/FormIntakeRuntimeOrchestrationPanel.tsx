@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import {
     TechnicalDetailDisclosure,
     TechnicalDetailMonospaceValue,
@@ -107,7 +107,7 @@ export function FormIntakeRuntimeOrchestrationPanel({
     recordCreationGate,
     onLifecycleCoverageRefresh,
 }: Props) {
-    const { openDrawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
     const [labelCatalog, setLabelCatalog] = useState<OutcomeRoutingLabelCatalog | null>(null);
     const [latestSubmission, setLatestSubmission] = useState<RuntimeSubmissionSnapshot | null>(null);
     const [loading, setLoading] = useState(true);
@@ -193,8 +193,9 @@ export function FormIntakeRuntimeOrchestrationPanel({
         onSelectedLinkChange(linkId);
     };
 
+    // The created lead is worked in its own queue, not in an overlay on the form runtime.
     const openLead = (opportunityId: string) => {
-        openDrawer({ type: "opportunities", id: opportunityId, opportunityWorkspaceContext: null });
+        void focusRecord({ entity_type: "opportunities", entity_id: opportunityId });
     };
 
     const effectiveIntent = useMemo(

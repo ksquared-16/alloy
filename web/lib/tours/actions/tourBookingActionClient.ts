@@ -26,21 +26,3 @@ export function dispatchOpportunityTourUpdated(opportunityId: string, actionKey:
 
 export const ADMINV2_OPEN_TOUR_SCHEDULE_MODAL = "adminv2:open-tour-schedule-modal" as const;
 export const ADMINV2_OPEN_TOUR_OUTCOME_MODAL = "adminv2:open-tour-outcome-modal" as const;
-
-export type OpenTourScheduleDrawer = (opts: { type: "opportunities"; id: string }) => void;
-
-/** Open opportunity drawer (when needed) and surface Schedule Tour form modal on top. */
-export function openTourScheduleModalForOpportunity(
-    opportunityId: string,
-    openDrawer: OpenTourScheduleDrawer,
-    actionKey: "schedule_tour" | "reschedule_tour" = "schedule_tour"
-): void {
-    const id = opportunityId.trim();
-    if (!id || typeof window === "undefined") return;
-    openDrawer({ type: "opportunities", id });
-    window.dispatchEvent(
-        new CustomEvent(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, {
-            detail: { opportunity_id: id, action_key: actionKey },
-        })
-    );
-}

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 
 import type { GlobalAssistantSourceSurface } from "@/contexts/GlobalAssistantContext";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
@@ -167,7 +169,14 @@ export default function TaskAssistOpportunityWorkspace({
     entity_display_label = null,
 }: TaskAssistOpportunityWorkspaceProps) {
     const v11 = isTaskAssistV1UiEnabled();
+    // Selection is still read from the ONE selection authority — it says who the operator is
+    // attending, which decides whether a movement is needed at all. Only the OPEN verb changed.
     const adminDrawer = useAdminDrawerOptional();
+    const attendedEntityId =
+        adminDrawer?.drawer.type === "opportunities" && adminDrawer.drawer.id != null
+            ? String(adminDrawer.drawer.id)
+            : null;
+    const focusRecord = useOperatorRecordFocus();
 
     const [channel, setChannel] = useState<"sms" | "email">("sms");
     const [instruction, setInstruction] = useState("");
@@ -635,25 +644,29 @@ export default function TaskAssistOpportunityWorkspace({
         window.dispatchEvent(
             new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: entityId } })
         );
-        const needsOpen =
-            !adminDrawer || adminDrawer.drawer.type !== "opportunities" || adminDrawer.drawer.id !== entityId;
-        if (needsOpen && adminDrawer) {
-            adminDrawer.openDrawer({ type: "opportunities", id: entityId, opportunityWorkspaceContext: null });
-            window.setTimeout(() => {
-                window.dispatchEvent(
-                    new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
-                        detail: { opportunity_id: entityId, task_id: lastCreatedOperationalTask.id },
-                    })
-                );
-            }, 120);
-        } else {
+        // The record may not be the one the operator is attending. Move attention to it first,
+        // landing on Current Work — where a task is worked — and only then ask that card to focus
+        // the new task. The focus event is fire-and-forget, so it must follow the movement rather
+        // than race a surface that has not composed yet.
+        const focusTask = () =>
             window.dispatchEvent(
                 new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
                     detail: { opportunity_id: entityId, task_id: lastCreatedOperationalTask.id },
                 })
             );
+        if (attendedEntityId === entityId) {
+            focusTask();
+            return;
         }
-    }, [adminDrawer, entityId, lastCreatedOperationalTask]);
+        void focusRecord({
+            entity_type: "opportunities",
+            entity_id: entityId,
+            card_focus: { card_key: OPERATOR_FOCUS_CARDS.currentWork },
+        }).then((moved) => {
+            if (moved) window.setTimeout(focusTask, 120);
+            else focusTask();
+        });
+    }, [attendedEntityId, focusRecord, entityId, lastCreatedOperationalTask]);
 
     return (
         <div
