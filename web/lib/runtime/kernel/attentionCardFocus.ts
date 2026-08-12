@@ -38,8 +38,22 @@ export type AttentionCardFocus = {
 const FIELD_SEPARATOR = "|";
 const PAIR_SEPARATOR = ":";
 
+/**
+ * What a caller may hand to {@link formatCardFocusAspect}.
+ *
+ * Deliberately looser than {@link AttentionCardFocus}: the selection shapes that produce a card focus
+ * (`DrawerCardFocus`, a Search destination) declare `item_id`/`context_key` as OPTIONAL, and the
+ * formatter only reads them. The parsed result stays strict, so consumers still get an explicit
+ * `null` rather than an absent key.
+ */
+export type CardFocusInput = {
+    card_key: string;
+    item_id?: string | null;
+    context_key?: string | null;
+};
+
 /** `card:children|item:cm-joe` — absent parts are omitted rather than encoded as empty. */
-export function formatCardFocusAspect(focus: AttentionCardFocus | null | undefined): string | null {
+export function formatCardFocusAspect(focus: CardFocusInput | null | undefined): string | null {
     const card = (focus?.card_key ?? "").trim();
     if (!card) return null;
 

@@ -7,7 +7,6 @@ import {
     coerceAdminV2VmDrawerRoute,
     resolveVmDrawerRuntimeRoute,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
-import { launchGlobalRecordSearchOpen } from "@/lib/adminV2/globalRecordSearchOpen";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 

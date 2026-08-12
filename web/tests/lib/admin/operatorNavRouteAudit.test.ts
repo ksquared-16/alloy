@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
-import { launchGlobalRecordSearchOpen } from "@/lib/adminV2/globalRecordSearchOpen";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
