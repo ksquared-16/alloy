@@ -80,7 +80,7 @@ describe("enrollment status transition routing", () => {
         const openEnrollmentStatus = vi.fn();
         const out = await applyRegistryResolvedActionClient(enrollmentStatusAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openEnrollmentStatus,
             entityId: "opp-1",
             context: { surface: "record_header" },
@@ -96,7 +96,7 @@ describe("enrollment status transition routing", () => {
     it("dispatches modal event when host callback missing", async () => {
         const out = await applyRegistryResolvedActionClient(enrollmentStatusAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             entityId: "opp-2",
             enrollmentStatusScope: {
                 grain: "child",

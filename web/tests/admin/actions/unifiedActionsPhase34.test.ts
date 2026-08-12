@@ -53,7 +53,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         const openRelationshipAction = vi.fn();
         const out = await applyRegistryResolvedActionClient(relationshipAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             entityId: "opp-1",
             context: { surface: "record_header" },
@@ -69,7 +69,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
     it("dispatches modal event when host callback is missing", async () => {
         const out = await applyRegistryResolvedActionClient(relationshipAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             entityId: "opp-2",
             context: { surface: "work_unit" },
         });
@@ -94,7 +94,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         });
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             openAddInquiryChild,
             entityId: "opp-1",
@@ -112,7 +112,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
     it("requires entity id for relationship actions", async () => {
         const out = await applyRegistryResolvedActionClient(relationshipAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             context: { surface: "work_unit" },
         });
         expect(out.ok).toBe(false);
@@ -141,7 +141,7 @@ describe("applyRegistryResolvedActionClient relationship actions", () => {
         };
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             entityId: "opp-1",
             context: { surface: "record_header" },
         });

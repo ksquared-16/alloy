@@ -24,7 +24,7 @@ vi.mock("@/lib/admin/actions/contextualActionInvocation", async (importOriginal)
 function host() {
     return {
         router: { push: vi.fn(), refresh: vi.fn() },
-        openDrawer: vi.fn(),
+        focusRecord: vi.fn(),
         entityId: "opp-1",
         context: { surface: "record_header" },
     };
