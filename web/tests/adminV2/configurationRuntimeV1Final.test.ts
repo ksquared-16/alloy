@@ -20,7 +20,7 @@ const V1_CONFIGURATION_PAGES = [
     "components/adminV2/settings/fields/FieldsConfigurationPage.tsx",
     "components/adminV2/settings/statuses/StatusesConfigurationPage.tsx",
     "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
-    "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
+    "components/adminV2/settings/organization/OrganizationCommunicationsPage.tsx",
     "components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell.tsx",
 ] as const;
 

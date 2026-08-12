@@ -41,7 +41,7 @@ People, locations, access, and communication.
 | Locations & hierarchy | `/admin/settings/locations` |
 | Departments | `/admin/settings/departments` |
 | Users & access | `/admin/settings/users-roles` |
-| Communications | `/admin/settings/communications` |
+| Communications | `/organization/communications` |
 
 ### Data Model
 

@@ -107,7 +107,7 @@ export function evaluateBindingReadiness(
     const provider = String(binding.provider ?? "").trim().toLowerCase();
 
     if (status === "disabled") {
-        const detail = "This channel is switched off. Set its status to active to use it.";
+        const detail = "This channel is switched off. Switch it on to start using it again.";
         return { send: { state: "disabled", detail }, receive: { state: "disabled", detail } };
     }
 
@@ -157,11 +157,19 @@ function evaluateSend(params: {
 
     // The composer is the authority on whether an outbound channel is usable.
     // Deriving from it — rather than restating its rules — is what keeps this
-    // page from advertising a channel the composer will refuse.
+    // page from advertising a channel the runtime will refuse.
+    //
+    // UNREACHABLE BY CONSTRUCTION, and deliberately kept. By this point the status
+    // is active, the provider matches, and a credential is bound — which is
+    // exactly what `bindingEligibleForOutboundComposer` requires, so it cannot
+    // return false here today. It is a guard against the two definitions drifting
+    // apart later, not a live branch. Stated plainly because a positive-control
+    // run proved no test can reach this sentence, and an untested branch that
+    // looks tested is worse than one that admits it.
     if (!bindingEligibleForOutboundComposer(binding)) {
         return {
             state: "setup_required",
-            detail: "The outbound runtime will not accept this binding yet. Check the provider and credential.",
+            detail: "Alloy cannot send on this channel yet. Check the provider and the connected credential.",
         };
     }
 

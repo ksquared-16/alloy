@@ -172,7 +172,7 @@ export const ORGANIZATION_SURFACE_CLASSIFICATION: readonly ConfigurationSurfaceC
         id: "communications",
         label: "Communications",
         kind: "singleton",
-        primaryPath: "/settings/communications",
+        primaryPath: "/organization/communications",
         objectRuntimeEligible: false,
         notes: "Provider/setup bindings — singleton setup, not selected-object Detail Runtime yet.",
     },

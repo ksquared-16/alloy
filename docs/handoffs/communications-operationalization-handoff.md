@@ -9,6 +9,22 @@ branch: agent/claude/3-communications-inbound-sms
 
 # Communications Operationalization — start here
 
+## Where the configuration surface lives
+
+**`/organization/communications` — and nowhere else.**
+
+`/settings/communications` and `/adminV2/settings/communications` are compatibility
+redirects to it. The old implementation is **deleted**, not deprecated; the
+Communications Studio "Channels" tab links here rather than embedding a second
+copy. One implementation, one destination.
+
+The page is channel-shaped, not table-shaped, and answers five questions:
+what is connected · what identity Alloy sends and receives as · is sending ready ·
+is receiving ready · what still needs setup. `secret_ref`, `scope`, constraint
+names and the word "composer" are absent by test, not by care —
+`organizationCommunicationsModel.test.ts` asserts it over every reachable
+readiness sentence.
+
 ## Where the product actually is
 
 **Two-way SMS: complete and certified.** **Two-way Email: locally certified 32/32.**
@@ -156,6 +172,28 @@ success path is covered by unit test and needs a deployment with a real credenti
 `composerChannels.ts` change: inbound email **13/13**, Block A **10/10**, Block B
 **8/8** — 31 product assertions, all green.
 
+### The Conversation Platform V1 scoreboard — Director baseline, do not substitute
+
+These are the **established** WS1–WS13 meanings and completion figures. A prior
+report substituted a different planning document's workstream list; that was wrong.
+**Do not change these meanings without explicit re-baselining.**
+
+| WS | Workstream | % |
+|---|---|---|
+| WS1 | Interactive Conversations | ~45 |
+| WS2 | Conversation Identity | ~90 |
+| WS3 | Inbox Ingestion | ~99 |
+| WS4 | Composer Convergence | ~93 |
+| WS5 | Delivery Telemetry | ~57 |
+| WS6 | Hierarchy & Inheritance | 0 |
+| WS7 | Internal Conversations | 0 |
+| WS8 | Preferences | ~78 |
+| WS9 | AI Assistant | 0 |
+| WS10 | Automation | 0 |
+| WS11 | Attachments | ~10 |
+| WS12 | Template Platform | ~25 |
+| WS13 | Analytics | 0 |
+
 ### Explicitly out of scope
 
 DNS hosting, automatic MX management, registrar integrations. Show what external
@@ -184,12 +222,29 @@ Gotchas that cost real time in this sprint:
 
 ## Recorded as future requirements, deliberately not invented now
 
-**Location-scoped channels.** Bindings carry `scope` and `location_id`, so the
-grain is structurally possible — but the certified runtime resolves ownership
-org-wide and the email inbound unique index has no location dimension. The create
-route therefore pins `scope='org'` and `location_id=null`. Exposing a per-location
-selector would offer a grain the runtime does not honour. Doing it properly means
-changing inbound resolution first, then the index, then the surface — in that order.
+**Location-scoped channels — audited, and deliberately NOT shipped.** Full evidence
+in [`LOCATION-IDENTITY-AUDIT.md`](../platform/planning/conversation-platform-v1/LOCATION-IDENTITY-AUDIT.md).
+The short version:
+
+- A canonical, channel-agnostic resolver **already exists**
+  (`identity/resolveSenderIdentity.ts`) and already implements a **superset** of
+  the requested location → organization → unavailable precedence. Do not write a
+  second one.
+- It is **dormant** — its only non-test caller is a diagnostic route. The live send
+  path persists `communication_provider_binding_id` and the Python dispatcher reads
+  that binding.
+- The blocker is not the resolver but the **conversation**: `canonicalOutboundEnqueue`
+  matches threads on `location_id IS NULL`, and thread identity has no location
+  dimension. Sending could be made location-aware today; **receiving could not**.
+  Shipping half would send as a location and file every reply under the
+  organization.
+- Most promising path: derive location from the **receiving identity** at ingestion
+  — it is available, meaningful, and already carried by the owning binding.
+
+**⚠ Ordering hazard to remember:** a binding created through the connect flow gets
+**no** `communication_identities` row — the backfill was a one-time `DO $$` block
+with no sync trigger. Harmless today because the live path never reads those
+tables; a correctness problem the moment the dormant resolver is switched on.
 
 **Credentials outside the catalogue.** A binding whose `secret_ref` predates the
 catalogue (or came from a runbook) reports `credential_configured: true` with

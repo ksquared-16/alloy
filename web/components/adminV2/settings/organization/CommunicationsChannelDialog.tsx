@@ -1,0 +1,384 @@
+"use client";
+
+/**
+ * Connect or configure one Communications channel.
+ *
+ * Everything an administrator can change about a channel lives here, in the
+ * organization's own words: the identity Alloy sends as, the address or number
+ * replies come back to, whether the channel is on, and which one is the default
+ * when several exist.
+ *
+ * The credential is the one thing they choose but never type. The picker offers
+ * what the deployment has provisioned and nothing else — see
+ * `providerCredentialCatalog.ts`. There is no key field, and adding one would be
+ * refused by the route regardless.
+ *
+ * Errors are shown exactly as the server phrased them. That matters most for the
+ * duplicate-address case: the receiving-address index is global across tenants, so
+ * the server deliberately says only that the address is taken. Re-wording it here
+ * risks inventing detail about another organization.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
+import {
+    ConfigurationPrimaryButton,
+    ConfigurationSecondaryButton,
+} from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
+import type { BindingView, ChannelCard } from "@/lib/communications/organizationCommunicationsModel";
+import type { CredentialOption } from "./OrganizationCommunicationsPage";
+
+const BINDINGS = "/api/admin/communications/bindings";
+
+type Props = {
+    card: ChannelCard;
+    mode: "connect" | "configure";
+    bindings: BindingView[];
+    credentialOptions: CredentialOption[];
+    onClose: () => void;
+    onSaved: () => void | Promise<void>;
+};
+
+function fieldLabel(channel: string, key: "identity" | "receiving"): string {
+    if (channel === "email") return key === "identity" ? "Send as" : "Replies come back to";
+    return key === "identity" ? "Send from" : "Number families text";
+}
+
+export default function CommunicationsChannelDialog({
+    card,
+    mode,
+    bindings,
+    credentialOptions,
+    onClose,
+    onSaved,
+}: Props) {
+    const isEmail = card.channel === "email";
+    const connecting = mode === "connect" || bindings.length === 0;
+
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Connect form
+    const [credentialKey, setCredentialKey] = useState("");
+    const [label, setLabel] = useState("");
+    const [fromEmail, setFromEmail] = useState("");
+    const [inboundAddress, setInboundAddress] = useState("");
+    const [inboundNumber, setInboundNumber] = useState("");
+
+    // Configure form — one binding at a time, defaulting to the channel's face.
+    const [editingId, setEditingId] = useState<string | null>(card.primaryBindingId);
+    const editing = useMemo(
+        () => bindings.find((b) => b.id === editingId) ?? bindings[0] ?? null,
+        [bindings, editingId],
+    );
+
+    const [editFrom, setEditFrom] = useState("");
+    const [editInbound, setEditInbound] = useState("");
+    const [editNumber, setEditNumber] = useState("");
+    const [editLabel, setEditLabel] = useState("");
+    const [editEnabled, setEditEnabled] = useState(true);
+    const [editPrimary, setEditPrimary] = useState(false);
+
+    useEffect(() => {
+        const first = credentialOptions.find((c) => c.available) ?? credentialOptions[0];
+        setCredentialKey(first?.key ?? "");
+    }, [credentialOptions]);
+
+    useEffect(() => {
+        if (!editing) return;
+        setEditFrom(editing.from_email ?? "");
+        setEditInbound(editing.inbound_address ?? "");
+        setEditNumber(editing.inbound_to_e164 ?? "");
+        setEditLabel(editing.display_label ?? "");
+        setEditEnabled(String(editing.status ?? "").toLowerCase() !== "disabled");
+        setEditPrimary(Boolean(editing.is_primary));
+    }, [editing]);
+
+    const chosenCredential = credentialOptions.find((c) => c.key === credentialKey) ?? null;
+
+    async function submit(url: string, method: "POST" | "PATCH", payload: Record<string, unknown>) {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(url, {
+                method,
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(json.error ?? `Could not save (${res.status})`);
+            await onSaved();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not save");
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const doConnect = () =>
+        submit(BINDINGS, "POST", {
+            channel: card.channel,
+            credential_key: credentialKey,
+            display_label: label.trim() || null,
+            status: "pending_verification",
+            ...(isEmail
+                ? { from_email: fromEmail.trim() || null, inbound_address: inboundAddress.trim() || null }
+                : { inbound_to_e164: inboundNumber.trim() || null }),
+        });
+
+    const doSave = () => {
+        if (!editing) return;
+        submit(`${BINDINGS}/${encodeURIComponent(editing.id)}`, "PATCH", {
+            display_label: editLabel.trim() || null,
+            status: editEnabled ? "active" : "disabled",
+            is_primary: editPrimary,
+            ...(isEmail
+                ? { from_email: editFrom.trim() || null, inbound_address: editInbound.trim() || null }
+                : { inbound_to_e164: editNumber.trim() || null }),
+        });
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-alloy-midnight/35 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${connecting ? "Connect" : "Configure"} ${card.channelLabel}`}
+            data-testid="communications-channel-dialog"
+        >
+            <div className="max-h-[88vh] w-full max-w-lg overflow-auto rounded-xl border border-alloy-stone/30 bg-white shadow-xl">
+                <header className="flex items-baseline justify-between gap-2 border-b border-alloy-stone/25 px-4 py-3">
+                    <div>
+                        <h2 className="config-typo-workspace-title">
+                            {connecting ? `Connect ${card.channelLabel}` : `Configure ${card.channelLabel}`}
+                        </h2>
+                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
+                            Alloy never asks for an API key — choose a credential this deployment already provides.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="Close"
+                        className="rounded p-1 text-alloy-midnight/50 hover:bg-alloy-stone/10"
+                        data-testid="communications-dialog-close"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </header>
+
+                <div className="space-y-3 px-4 py-3 text-[12px]">
+                    {connecting ? (
+                        <>
+                            <Field label="Credential">
+                                <select
+                                    value={credentialKey}
+                                    onChange={(e) => setCredentialKey(e.target.value)}
+                                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                    data-testid="communications-dialog-credential"
+                                >
+                                    {credentialOptions.length === 0 ? <option value="">None available</option> : null}
+                                    {credentialOptions.map((c) => (
+                                        <option key={c.key} value={c.key} disabled={!c.available}>
+                                            {c.label}
+                                            {c.available ? "" : " — not available yet"}
+                                        </option>
+                                    ))}
+                                </select>
+                                {chosenCredential ? (
+                                    <Hint>
+                                        {chosenCredential.description}
+                                        {chosenCredential.available ? null : (
+                                            <strong className="text-alloy-ember">
+                                                {" "}
+                                                Ask your administrator to add this to the deployment first.
+                                            </strong>
+                                        )}
+                                    </Hint>
+                                ) : null}
+                            </Field>
+
+                            <Field label="Name (optional)">
+                                <input
+                                    value={label}
+                                    onChange={(e) => setLabel(e.target.value)}
+                                    placeholder="Front desk"
+                                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                    data-testid="communications-dialog-label"
+                                />
+                            </Field>
+
+                            {isEmail ? (
+                                <>
+                                    <Field label={fieldLabel("email", "identity")}>
+                                        <input
+                                            type="email"
+                                            value={fromEmail}
+                                            onChange={(e) => setFromEmail(e.target.value)}
+                                            placeholder="hello@yourschool.org"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-from"
+                                        />
+                                        <Hint>Leave blank to use the default sending address.</Hint>
+                                    </Field>
+                                    <Field label={fieldLabel("email", "receiving")}>
+                                        <input
+                                            type="email"
+                                            value={inboundAddress}
+                                            onChange={(e) => setInboundAddress(e.target.value)}
+                                            placeholder="families@yourschool.org"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-inbound"
+                                        />
+                                        <Hint>This address needs its mail routed to Alloy&apos;s provider.</Hint>
+                                    </Field>
+                                </>
+                            ) : (
+                                <Field label={fieldLabel("sms", "receiving")}>
+                                    <input
+                                        type="tel"
+                                        value={inboundNumber}
+                                        onChange={(e) => setInboundNumber(e.target.value)}
+                                        placeholder="+15551234567"
+                                        className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                        data-testid="communications-dialog-number"
+                                    />
+                                </Field>
+                            )}
+
+                            <p className="text-[11px] text-alloy-midnight/55">
+                                The channel is connected as <strong>not yet verified</strong> — nothing is sent or received until the
+                                provider side is confirmed. This page reports when sending and receiving each start working.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            {bindings.length > 1 ? (
+                                <Field label="Which one">
+                                    <select
+                                        value={editing?.id ?? ""}
+                                        onChange={(e) => setEditingId(e.target.value)}
+                                        className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                        data-testid="communications-dialog-which"
+                                    >
+                                        {bindings.map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                                {b.display_label ||
+                                                    b.from_email ||
+                                                    b.inbound_address ||
+                                                    b.inbound_to_e164 ||
+                                                    card.channelLabel}
+                                                {b.is_primary ? " (default)" : ""}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </Field>
+                            ) : null}
+
+                            <Field label="Name">
+                                <input
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
+                                    data-testid="communications-dialog-edit-label"
+                                />
+                            </Field>
+
+                            {isEmail ? (
+                                <>
+                                    <Field label={fieldLabel("email", "identity")}>
+                                        <input
+                                            type="email"
+                                            value={editFrom}
+                                            onChange={(e) => setEditFrom(e.target.value)}
+                                            placeholder="Using the default sending address"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-edit-from"
+                                        />
+                                    </Field>
+                                    <Field label={fieldLabel("email", "receiving")}>
+                                        <input
+                                            type="email"
+                                            value={editInbound}
+                                            onChange={(e) => setEditInbound(e.target.value)}
+                                            placeholder="families@yourschool.org"
+                                            className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                            data-testid="communications-dialog-edit-inbound"
+                                        />
+                                    </Field>
+                                </>
+                            ) : (
+                                <Field label={fieldLabel("sms", "receiving")}>
+                                    <input
+                                        type="tel"
+                                        value={editNumber}
+                                        onChange={(e) => setEditNumber(e.target.value)}
+                                        className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                                        data-testid="communications-dialog-edit-number"
+                                    />
+                                </Field>
+                            )}
+
+                            <label className="flex items-center gap-2" data-testid="communications-dialog-enabled-row">
+                                <input
+                                    type="checkbox"
+                                    checked={editEnabled}
+                                    onChange={(e) => setEditEnabled(e.target.checked)}
+                                    data-testid="communications-dialog-enabled"
+                                />
+                                <span className="text-[12px] text-alloy-midnight/75">Channel is switched on</span>
+                            </label>
+
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={editPrimary}
+                                    onChange={(e) => setEditPrimary(e.target.checked)}
+                                    data-testid="communications-dialog-primary"
+                                />
+                                <span className="text-[12px] text-alloy-midnight/75">
+                                    Use this as the default {card.channelLabel} identity
+                                </span>
+                            </label>
+                        </>
+                    )}
+
+                    {error ? (
+                        <p className="rounded border border-alloy-ember/30 bg-alloy-ember/[0.06] px-2.5 py-2 text-[12px] text-alloy-ember"
+                           role="alert"
+                           data-testid="communications-dialog-error">
+                            {error}
+                        </p>
+                    ) : null}
+                </div>
+
+                <footer className="flex justify-end gap-2 border-t border-alloy-stone/25 px-4 py-3">
+                    <ConfigurationSecondaryButton onClick={onClose} disabled={busy}>
+                        Cancel
+                    </ConfigurationSecondaryButton>
+                    <ConfigurationPrimaryButton
+                        onClick={() => void (connecting ? doConnect() : doSave())}
+                        disabled={busy || (connecting && !(chosenCredential?.available ?? false))}
+                        data-testid="communications-dialog-submit"
+                    >
+                        {busy ? "Saving…" : connecting ? `Connect ${card.channelLabel}` : "Save changes"}
+                    </ConfigurationPrimaryButton>
+                </footer>
+            </div>
+        </div>
+    );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <label className="block">
+            <span className="mb-0.5 block text-[11px] font-medium text-alloy-midnight/55">{label}</span>
+            {children}
+        </label>
+    );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+    return <span className="mt-0.5 block text-[11px] leading-snug text-alloy-midnight/52">{children}</span>;
+}

@@ -165,7 +165,13 @@ export function translateBindingConstraintError(error: DatabaseErrorLike): Const
     if (haystack.includes("communication_bindings_inbound_address_uq")) {
         return { status: 409, message: RECEIVING_ADDRESS_TAKEN_MESSAGE };
     }
-    if (haystack.includes("communication_bindings_org_inbound_to_uq")) {
+    // Both the per-org index and the global one produce the SAME sentence. The
+    // global one frequently means another TENANT holds the number, so the message
+    // must not hint at which — exactly as for email.
+    if (
+        haystack.includes("communication_bindings_org_inbound_to_uq") ||
+        haystack.includes("communication_bindings_inbound_to_e164_uq")
+    ) {
         return { status: 409, message: RECEIVING_NUMBER_TAKEN_MESSAGE };
     }
     // A unique violation this surface does not recognise. Still a conflict, but

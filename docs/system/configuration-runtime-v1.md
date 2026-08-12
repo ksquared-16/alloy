@@ -25,7 +25,7 @@ Locations is feature-frozen after this closeout. Further Locations work is limit
 | Statuses | `/settings/statuses` |
 | Fields | `/settings/fields` |
 | Access | `/settings/users-roles` |
-| Communications | `/settings/communications` |
+| Communications | `/organization/communications` |
 | Locations | `/settings/locations` |
 
 Future surfaces (Surfaces, Operational Intelligence, Automation) inherit the same shell — no page-specific layout hacks.

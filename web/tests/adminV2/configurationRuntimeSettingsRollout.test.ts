@@ -15,7 +15,6 @@ const ROLLOUT_PAGES = [
     "app/adminV2/settings/fields/page.tsx",
     "app/adminV2/settings/actions/page.tsx",
     "app/adminV2/settings/users-roles/page.tsx",
-    "app/adminV2/settings/communications/page.tsx",
     "app/adminV2/settings/entities/page.tsx",
 ] as const;
 
@@ -28,7 +27,9 @@ describe("Configuration Runtime settings rollout", () => {
         expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
-        expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
+        expect(read("app/adminV2/settings/organization/communications/page.tsx")).toContain(
+            "OrganizationCommunicationsPage",
+        );
         expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
         // Data Model's primary experience is the Entity workspace, not a legacy category embed.
         expect(read("components/adminV2/settings/dataModel/DataModelWorkspaceSurface.tsx")).toContain(
@@ -42,8 +43,11 @@ describe("Configuration Runtime settings rollout", () => {
             "AccessWorkspaceSurface",
         );
         expect(read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx")).toContain("ConfigurationShell");
-        expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
-            "SettingsConfigurationSurfaceShell",
+        // Communications converged onto the canonical Organization chrome
+        // (`/organization/communications`), so it uses ConfigurationShell directly
+        // rather than the settings-surface wrapper the retired page used.
+        expect(read("components/adminV2/settings/organization/OrganizationCommunicationsPage.tsx")).toContain(
+            "ConfigurationShell",
         );
         expect(read("components/adminV2/settings/entities/EntitiesConfigurationPage.tsx")).toContain(
             "SettingsConfigurationSurfaceShell",
@@ -63,8 +67,10 @@ describe("Configuration Runtime settings rollout", () => {
         expect(read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx")).toContain(
             "AccessUsersConfigurationPage",
         );
-        expect(read("components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx")).toContain(
-            "CommunicationsSetupClient",
+        // The provider-binding table was replaced by channel cards plus a configure
+        // dialog; there is no separate embedded setup client any more.
+        expect(read("components/adminV2/settings/organization/OrganizationCommunicationsPage.tsx")).toContain(
+            "CommunicationsChannelDialog",
         );
     });
 
@@ -77,7 +83,7 @@ describe("Configuration Runtime settings rollout", () => {
             "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx",
             "components/adminV2/settings/access/AccessScopesPage.tsx",
             "components/adminV2/settings/access/AccessSecurityPage.tsx",
-            "components/adminV2/settings/communications/CommunicationsConfigurationPage.tsx",
+            "components/adminV2/settings/organization/OrganizationCommunicationsPage.tsx",
             "components/adminV2/settings/entities/EntitiesConfigurationPage.tsx",
         ]) {
             const src = read(component);
