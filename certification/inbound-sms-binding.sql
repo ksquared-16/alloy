@@ -9,10 +9,12 @@
 -- itself down without breaking the next run. Same reasoning as
 -- environment-buckets.sql, and it lives beside it for the same reason.
 --
--- `legacy_global_twilio` tells the backend to verify signatures with the process
--- TWILIO_AUTH_TOKEN, which under ALLOY_CERTIFICATION is a synthetic local-only
--- value. Signature verification is therefore genuinely exercised — the spec signs
--- with the same token — while no real Twilio credential exists anywhere.
+-- The certification credential refs (`certification_synthetic_*`) are offered ONLY
+-- when ALLOY_CERTIFICATION=1 and resolve to no secret at all, so this tenant is a
+-- properly CONNECTED organization for readiness purposes while remaining unable to
+-- authenticate to any provider. Webhook signature verification still uses the
+-- process TWILIO_AUTH_TOKEN, which under certification is a synthetic local value —
+-- the spec signs with the same one, so verification is genuinely exercised.
 
 insert into public.communication_provider_bindings
     (org_id, channel, provider, scope, inbound_to_e164, display_label, status, is_primary, secret_ref, config)
@@ -25,7 +27,7 @@ select
     'Certification main line',
     'active',
     true,
-    'legacy_global_twilio',
+    'certification_synthetic_sms',
     '{}'::jsonb
 from public.orgs o
 where o.slug = 'northwind-early-learning'
@@ -33,7 +35,7 @@ on conflict (org_id, inbound_to_e164) where inbound_to_e164 is not null
 do update set
     status = 'active',
     is_primary = true,
-    secret_ref = 'legacy_global_twilio',
+    secret_ref = 'certification_synthetic_sms',
     provider = 'twilio',
     channel = 'sms',
     updated_at = now();
@@ -81,7 +83,7 @@ select
     o.id, 'email', 'resend', 'org',
     'hello@northwind-cert.invalid',
     'Certification inbound email',
-    'active', true, 'env:RESEND_API_KEY', '{"from_email": "hello@northwind-cert.invalid"}'::jsonb
+    'active', true, 'certification_synthetic_email', '{"from_email": "hello@northwind-cert.invalid"}'::jsonb
 from public.orgs o
 where o.slug = 'northwind-early-learning'
 on conflict (provider, channel, lower(inbound_address)) where inbound_address is not null
@@ -96,7 +98,7 @@ select
     o.id, 'email', 'resend', 'org',
     'disabled@northwind-cert.invalid',
     'Certification disabled inbound email',
-    'disabled', false, 'env:RESEND_API_KEY', '{}'::jsonb
+    'disabled', false, 'certification_synthetic_email', '{}'::jsonb
 from public.orgs o
 where o.slug = 'northwind-early-learning'
 on conflict (provider, channel, lower(inbound_address)) where inbound_address is not null
@@ -131,7 +133,7 @@ select
     o.id, 'email', 'resend', 'location', l.id,
     'riverside@northwind-cert.invalid',
     'Riverside campus email',
-    'active', false, 'env:RESEND_API_KEY',
+    'active', false, 'certification_synthetic_email',
     '{"from_email": "riverside@northwind-cert.invalid"}'::jsonb
 from public.orgs o
 join public.locations l on l.label like '%Riverside%'
@@ -146,7 +148,7 @@ select
     o.id, 'sms', 'twilio', 'location', l.id,
     '+15550002222',
     'Riverside campus line',
-    'active', false, 'legacy_global_twilio', '{}'::jsonb
+    'active', false, 'certification_synthetic_sms', '{}'::jsonb
 from public.orgs o
 join public.locations l on l.label like '%Riverside%'
 where o.slug = 'northwind-early-learning'

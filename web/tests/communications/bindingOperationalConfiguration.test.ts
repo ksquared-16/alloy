@@ -15,7 +15,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-    CERTIFICATION_SECRET_REF,
+    CERTIFICATION_SECRET_REF_EMAIL,
+    CERTIFICATION_SECRET_REF_SMS,
     credentialKeyForSecretRef,
     detectSecretBoundaryViolation,
     findCredentialOption,
@@ -492,21 +493,27 @@ describe("the certification credential is unreachable outside certification", ()
     it("IS selectable in a certification run — which is the point", () => {
         const attempt = selectCredential({ channel: "email", credentialKey: "certification_email", env: CERT_ENV });
         expect(attempt.ok).toBe(true);
-        expect(attempt.ok === true && attempt.option.secretRef).toBe(CERTIFICATION_SECRET_REF);
+        expect(attempt.ok === true && attempt.option.secretRef).toBe(CERTIFICATION_SECRET_REF_EMAIL);
     });
 
     it("its secret_ref is NOT an env reference and NOT a known sentinel", () => {
         // Both resolvers treat an unknown convention as "no secret", so this
         // cannot authenticate to a provider even if real keys are present.
-        expect(CERTIFICATION_SECRET_REF.startsWith("env:")).toBe(false);
-        expect(CERTIFICATION_SECRET_REF).not.toBe("legacy_global_twilio");
-        expect(CERTIFICATION_SECRET_REF).not.toBe("unconfigured");
+        for (const ref of [CERTIFICATION_SECRET_REF_EMAIL, CERTIFICATION_SECRET_REF_SMS]) {
+            expect(ref.startsWith("env:")).toBe(false);
+            expect(ref).not.toBe("legacy_global_twilio");
+            expect(ref).not.toBe("unconfigured");
+        }
+        // Per-channel, so the reverse lookup cannot resolve an SMS binding to the
+        // email entry.
+        expect(CERTIFICATION_SECRET_REF_EMAIL).not.toBe(CERTIFICATION_SECRET_REF_SMS);
     });
 
     it("still emits no credential material when certification is on", () => {
         const serialized = JSON.stringify(listCredentialOptions(CERT_ENV));
         expect(serialized).not.toContain("secretRef");
-        expect(serialized).not.toContain(CERTIFICATION_SECRET_REF);
+        expect(serialized).not.toContain(CERTIFICATION_SECRET_REF_EMAIL);
+        expect(serialized).not.toContain(CERTIFICATION_SECRET_REF_SMS);
         expect(serialized).not.toContain("env:");
     });
 
@@ -514,5 +521,51 @@ describe("the certification credential is unreachable outside certification", ()
         const both = listCredentialOptions({ ...PROVISIONED, ALLOY_CERTIFICATION: "1" });
         expect(both.find((o) => o.key === "resend_deployment_key")?.available).toBe(true);
         expect(both.find((o) => o.key === "certification_email")?.available).toBe(true);
+    });
+});
+
+
+/**
+ * Provider connectivity is reported from what Alloy can OBSERVE, and nothing more.
+ *
+ * The gap this closes: a binding can reference `env:RESEND_API_KEY` while the
+ * deployment holds no such variable. The surface said "Ready", and every send
+ * failed at dispatch — configuration claiming a readiness the runtime could not
+ * honour, which is the one thing this model exists to prevent.
+ */
+describe("provider connection is observed, never assumed", () => {
+    it("a referenced credential the deployment HOLDS reads as configured", () => {
+        const r = evaluateBindingReadiness(row(), { credentialAvailable: true });
+        expect(r.providerConnection).toBe("configured");
+        expect(r.send.state).toBe("ready");
+    });
+
+    it("a referenced credential the deployment LACKS is not ready in either direction", () => {
+        const r = evaluateBindingReadiness(row(), { credentialAvailable: false });
+        expect(r.providerConnection).toBe("unavailable");
+        expect(r.send.state).toBe("setup_required");
+        expect(r.receive.state).toBe("setup_required");
+        expect(r.send.detail).toMatch(/not available in this deployment/i);
+    });
+
+    it("no credential at all reads as not connected", () => {
+        const r = evaluateBindingReadiness(row({ secret_ref: "unconfigured" }));
+        expect(r.providerConnection).toBe("not_connected");
+    });
+
+    it("omitting the check preserves today's behaviour", () => {
+        // Callers that cannot observe availability must not be made to report
+        // everything broken.
+        expect(evaluateBindingReadiness(row()).providerConnection).toBe("configured");
+    });
+
+    it("never claims domain or MX verification Alloy cannot see", () => {
+        // The only provider fact reported is whether the key is held. Anything
+        // requiring the provider to answer stays "verification required".
+        const pending = evaluateBindingReadiness(row({ status: "pending_verification" }), {
+            credentialAvailable: true,
+        });
+        expect(pending.send.state).toBe("verification_required");
+        expect(pending.providerConnection).toBe("configured");
     });
 });

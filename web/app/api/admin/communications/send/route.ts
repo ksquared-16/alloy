@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     COMMUNICATIONS_SEND_PERMISSION_KEY,
     assertCommunicationsSendAllowed,
+    assertCommunicationsSendAllowedForThread,
 } from "@/lib/communications/communicationPermissions";
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 import { resolveSendRecipientMode } from "@/lib/communications/send/resolveSendRecipientMode";
@@ -120,6 +121,28 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+
+    // LOCATION half of send authorization. `assertCommunicationsSendAllowed`
+    // above answered "may this user send at all"; this answers "may they send in
+    // THIS conversation" — so a Riverside-only operator cannot answer a Lakeside
+    // family even though they hold `communications.send`.
+    //
+    // Only for replies into an existing conversation, which is where a location
+    // exists to enforce. A brand-new send has no conversation yet, and its
+    // recipient authorization is covered by the checks that follow.
+    if (replyThreadIdRaw) {
+        const scopeAuth = await assertCommunicationsSendAllowedForThread({
+            supabase,
+            orgId: ctx.orgId,
+            threadId: replyThreadIdRaw,
+        });
+        if (!scopeAuth.ok) {
+            return NextResponse.json(
+                { error: scopeAuth.message, code: "communications_send_forbidden" },
+                { status: 403 }
+            );
+        }
+    }
 
     // Recipient-mode contract lives in one pure function so it is testable
     // directly and cannot drift between callers.

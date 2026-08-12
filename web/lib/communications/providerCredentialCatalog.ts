@@ -128,6 +128,10 @@ export const UNCONFIGURED_SECRET_REF = "unconfigured";
  * resolvable — which is exactly the gap, and no more than that.
  */
 export const CERTIFICATION_SECRET_REF = "certification_synthetic";
+/** Per-channel refs. One shared ref would make `credentialKeyForSecretRef`
+ *  ambiguous — it would resolve an SMS binding to the email entry. */
+export const CERTIFICATION_SECRET_REF_EMAIL = "certification_synthetic_email";
+export const CERTIFICATION_SECRET_REF_SMS = "certification_synthetic_sms";
 
 /** True only in a certification run. */
 function certificationEnabled(env: CredentialEnv): boolean {
@@ -142,7 +146,7 @@ const CERTIFICATION_CATALOG: readonly ProviderCredentialOption[] = [
         label: "Certification — synthetic email credential",
         description:
             "Certification only. Creates a connectable channel that structurally cannot authenticate to a provider.",
-        secretRef: CERTIFICATION_SECRET_REF,
+        secretRef: CERTIFICATION_SECRET_REF_EMAIL,
         envVar: null,
     },
     {
@@ -152,7 +156,7 @@ const CERTIFICATION_CATALOG: readonly ProviderCredentialOption[] = [
         label: "Certification — synthetic SMS credential",
         description:
             "Certification only. Creates a connectable channel that structurally cannot authenticate to a provider.",
-        secretRef: CERTIFICATION_SECRET_REF,
+        secretRef: CERTIFICATION_SECRET_REF_SMS,
         envVar: null,
     },
 ];

@@ -46,12 +46,32 @@ type BindingRow = BindingSummary & { inbound_address?: string | null };
 const BINDING_COLUMNS =
     "id, org_id, channel, scope, location_id, display_label, provider, status, is_primary, secret_ref, inbound_to_e164, inbound_address, config";
 
-function sanitizeBindings(raw: BindingRow[]): unknown[] {
+/**
+ * Is the credential this binding names actually present in this deployment?
+ *
+ * Observable locally and cheaply — the catalogue already knows which environment
+ * variable each credential uses, and `listCredentialOptions` reports presence.
+ * Without this the surface reported "Ready" for a binding pointing at a key the
+ * deployment does not hold, and every send failed at dispatch.
+ *
+ * A `secret_ref` written outside the catalogue (a runbook) cannot be checked this
+ * way, so it is treated as available: reporting an unverifiable credential as
+ * broken would be its own lie.
+ */
+function credentialAvailabilityFor(b: BindingRow, available: Set<string>): boolean {
+    const key = credentialKeyForSecretRef(b.secret_ref);
+    if (!key) return true;
+    return available.has(key);
+}
+
+function sanitizeBindings(raw: BindingRow[], availableCredentialKeys: Set<string>): unknown[] {
     return raw.map((b) => {
         const cfg = b.config != null && typeof b.config === "object" ? b.config : null;
         const fromEmail =
             cfg && typeof cfg.from_email === "string" ? String(cfg.from_email).slice(0, 120) : null;
-        const readiness = evaluateBindingReadiness(b);
+        const readiness = evaluateBindingReadiness(b, {
+            credentialAvailable: credentialAvailabilityFor(b, availableCredentialKeys),
+        });
         return {
             id: b.id,
             channel: b.channel,
@@ -77,6 +97,9 @@ function sanitizeBindings(raw: BindingRow[]): unknown[] {
              * honest state the UI reports rather than flattening to “unconfigured”.
              */
             credential_key: credentialKeyForSecretRef(b.secret_ref),
+            /** What Alloy can OBSERVE about the provider connection. Never invents
+             *  domain or MX verification it has not been told. */
+            provider_connection: readiness.providerConnection,
             credential_configured:
                 String(b.secret_ref ?? "").trim().toLowerCase() !== "" &&
                 String(b.secret_ref ?? "").trim().toLowerCase() !== "unconfigured",
@@ -116,21 +139,24 @@ export async function GET() {
         .eq("is_active", true)
         .order("label", { ascending: true });
 
+    const credentialOptions = listCredentialOptions(process.env);
+    const availableCredentialKeys = new Set(credentialOptions.filter((o) => o.available).map((o) => o.key));
+
     const channels_available = availableComposerChannels(list);
 
     return NextResponse.json({
-        bindings: sanitizeBindings(list),
+        bindings: sanitizeBindings(list, availableCredentialKeys),
         channels_available,
         selectable_by_channel: {
-            sms: sanitizeBindings(activeOutboundBindings(list, "sms")),
-            email: sanitizeBindings(activeOutboundBindings(list, "email")),
+            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys),
+            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys),
         },
         locations: (locationRows ?? []).map((l) => ({
             id: String((l as { id: string }).id),
             label: String((l as { label?: string }).label ?? "Location"),
         })),
         /** What an operator may connect a channel to. Presence only, no values. */
-        credential_options: listCredentialOptions(process.env),
+        credential_options: credentialOptions,
         permission_stub: {
             gate: "admin_or_ops",
             finer_key: "communications.send",
@@ -272,7 +298,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
         {
             ok: true,
-            binding: sanitizeBindings([data as BindingRow])[0],
+            binding: sanitizeBindings(
+                [data as BindingRow],
+                new Set(listCredentialOptions(process.env).filter((o) => o.available).map((o) => o.key)),
+            )[0],
             ...(projection.ok ? {} : { projection_warning: projection.reason }),
         },
         { status: 201 },

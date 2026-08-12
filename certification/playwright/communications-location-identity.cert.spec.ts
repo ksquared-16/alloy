@@ -238,8 +238,12 @@ test.describe("Location identity — assignment and inheritance are editable", (
         } finally {
             // Restore unconditionally — this spec mutates shared fixture state, and
             // a mid-test failure would poison the next run's assertions.
+            // Restoring an override re-activates it. Removal DEACTIVATES in place
+            // and keeps `location_id` — that is what stops a campus identity
+            // silently becoming an organization candidate — so re-assignment must
+            // switch it back on, not merely re-point it.
             const restore = await page.request.patch(`${BINDINGS}/${riversideBinding.id}`, {
-                data: { location_id: riverside.id },
+                data: { location_id: riverside.id, status: "active" },
                 failOnStatusCode: false,
             });
             expect(restore.ok(), "fixture restore must succeed").toBe(true);
@@ -368,5 +372,58 @@ test.describe("Connect succeeds end to end — the gap the synthetic credential 
         await expect(
             page.getByTestId(`communications-email-location-${lakeside.id}-identity`),
         ).toHaveText("Uses organization identity");
+    });
+});
+
+test.describe("Removing an override — assignment removed, identity preserved", () => {
+    test("the retired identity does NOT become an organization candidate", async ({ page }) => {
+        const payload = await loadPayload(page);
+        const locations = (payload.locations ?? []) as Array<{ id: string; label: string }>;
+        const riverside = locations.find((l) => /riverside/i.test(l.label))!;
+        const bindings = (payload.bindings ?? []) as Array<{ id: string; inbound_address: string | null }>;
+        const riversideBinding = bindings.find((b) => b.inbound_address === RIVERSIDE_EMAIL)!;
+
+        try {
+            const removed = await page.request.patch(`${BINDINGS}/${riversideBinding.id}`, {
+                data: { location_id: null },
+                failOnStatusCode: false,
+            });
+            expect(removed.ok()).toBe(true);
+
+            const after = await loadPayload(page);
+            const rows = (after.bindings ?? []) as Array<{
+                id: string;
+                location_id: string | null;
+                inbound_address: string | null;
+                status: string;
+            }>;
+            const retired = rows.find((b) => b.id === riversideBinding.id)!;
+
+            // The three properties that make removal safe:
+            // 1. it is no longer in force
+            expect(retired.status).not.toBe("active");
+            // 2. it still BELONGS to Riverside, which is what keeps it out of the
+            //    organization pool — the resolver's org fallback admits only
+            //    tenant-scoped identities
+            expect(retired.location_id).toBe(riverside.id);
+            // 3. the globally-unique receiving address is still claimed by this
+            //    tenant, so no other organization can take it and no message that
+            //    named it is orphaned
+            expect(retired.inbound_address).toBe(RIVERSIDE_EMAIL);
+
+            // And the organization identity is unchanged — the retired campus
+            // address has NOT become what the organization sends as.
+            await page.goto(PAGE);
+            await expect(page.getByTestId("communications-email-identity-from")).toHaveText(ORG_EMAIL);
+            await expect(
+                page.getByTestId(`communications-email-location-${riverside.id}-identity`),
+            ).toHaveText("Uses organization identity");
+        } finally {
+            const restore = await page.request.patch(`${BINDINGS}/${riversideBinding.id}`, {
+                data: { location_id: riverside.id, status: "active" },
+                failOnStatusCode: false,
+            });
+            expect(restore.ok(), "fixture restore must succeed").toBe(true);
+        }
     });
 });

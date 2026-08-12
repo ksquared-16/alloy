@@ -214,6 +214,8 @@ export function buildChannelCards(bindings: BindingView[], locations: OrgLocatio
         // The card speaks for the ORGANIZATION default, so a location override
         // must never become the face of the channel — otherwise an admin with one
         // location override would see it presented as the organization's identity.
+        // A retired override is excluded from BOTH sides: it is not the location's
+        // identity any more, and it must never be mistaken for the organization's.
         const orgRows = rows.filter((b) => !(b.location_id ?? "").trim());
         const ranked = [...(orgRows.length ? orgRows : rows)].sort((a, b) => score(b) - score(a));
         const face = ranked[0] ?? null;
@@ -221,7 +223,15 @@ export function buildChannelCards(bindings: BindingView[], locations: OrgLocatio
 
         const orgIdentity = identityValueFor(channel, face);
         const locationRows: LocationIdentityRow[] = locations.map((loc) => {
-            const own = rows.find((b) => (b.location_id ?? "").trim() === loc.id);
+            // Only an ACTIVE binding is an override. A RETIRED one keeps its
+            // location so the identity can never broaden to the organization (see
+            // `locationOverrideRemoval.ts`), but the location inherits — so it must
+            // read as inheritance here, not as a location identity that is broken.
+            const own = rows.find(
+                (b) =>
+                    (b.location_id ?? "").trim() === loc.id &&
+                    String(b.status ?? "").trim().toLowerCase() === "active",
+            );
             if (!own) {
                 return {
                     locationId: loc.id,

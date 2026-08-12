@@ -16,6 +16,11 @@
  */
 
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    decideCommunicationsSendScope,
+    type SendScopeDecision,
+} from "@/lib/communications/communicationsSendScope";
 
 export type CommunicationsActor = { userId: string };
 
@@ -66,4 +71,55 @@ export async function assertCommunicationsSendAllowed(params: {
         ok: false,
         message: "You do not have permission to send communications for this organization.",
     };
+}
+
+
+/**
+ * Enforce the LOCATION half of send authorization for an existing conversation.
+ *
+ * `assertCommunicationsSendAllowed` answers "may this user send at all". This
+ * answers "may they send in THIS conversation", which is the question a
+ * multi-location organization actually needs: a Riverside-only operator holding
+ * `communications.send` must not be able to answer a Lakeside family.
+ *
+ * It composes two authorities that already exist — the org RBAC permission and
+ * `user_site_access` via the access bundle's `siteScope` /
+ * `allowedSiteLocationIds`. No Communications ACL, no new table.
+ *
+ * Note what it does NOT do: it never selects or influences the identity. The
+ * conversation's location already decided that. This only decides whether this
+ * operator may act in that conversation, so an authorized reply still goes out
+ * from the location's own address rather than anything tied to the user.
+ *
+ * A thread that cannot be read is refused rather than allowed — an unreadable
+ * conversation is not an unrestricted one.
+ */
+export async function assertCommunicationsSendAllowedForThread(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    threadId: string;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+    const bundle = await loadAdminAccessBundleCached();
+    if (!bundle.ok) return { ok: false, message: "Forbidden" };
+    if (bundle.orgId !== params.orgId) return { ok: false, message: "Forbidden" };
+
+    const { data: thread, error } = await params.supabase
+        .from("communication_threads")
+        .select("id, location_id")
+        .eq("id", params.threadId)
+        .eq("org_id", params.orgId)
+        .maybeSingle();
+
+    if (error || !thread) {
+        return { ok: false, message: "That conversation is not available." };
+    }
+
+    const decision: SendScopeDecision = decideCommunicationsSendScope({
+        hasCommunicationsSend: hasCommunicationsSendPermission(bundle.roleKeys, bundle.permissionKeys),
+        siteScope: bundle.siteScope,
+        allowedSiteLocationIds: bundle.allowedSiteLocationIds,
+        conversationLocationId: (thread as { location_id?: string | null }).location_id ?? null,
+    });
+
+    return decision.allowed ? { ok: true } : { ok: false, message: decision.message };
 }

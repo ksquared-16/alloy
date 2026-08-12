@@ -162,18 +162,47 @@ export async function applyBindingIdentityProjection(
 export async function projectOrganizationBindings(
     supabase: SupabaseClient,
     orgId: string,
-): Promise<{ projected: number; failed: number }> {
+): Promise<{ projected: number; skipped: number; failed: number }> {
     const { data } = await supabase
         .from("communication_provider_bindings")
         .select(PROJECTABLE_BINDING_COLUMNS)
         .eq("org_id", orgId);
 
+    const bindings = (data ?? []) as ProjectableBinding[];
+    if (bindings.length === 0) return { projected: 0, skipped: 0, failed: 0 };
+
+    // REPAIR ONLY THE UNPROJECTED, and do it from ONE query.
+    //
+    // The first implementation re-projected every binding on every read of the
+    // configuration surface — roughly five round-trips per binding, serially, on
+    // a page an administrator opens routinely. That is a waterfall paid forever
+    // to fix something that is true once.
+    //
+    // Writes stay synchronous (create and edit project in their own request), so
+    // in the steady state every binding already has its identity and this costs
+    // exactly one extra query and no writes.
+    const { data: existing } = await supabase
+        .from("communication_provider_accounts")
+        .select("legacy_binding_id")
+        .eq("org_id", orgId);
+
+    const alreadyProjected = new Set(
+        ((existing ?? []) as Array<{ legacy_binding_id: string | null }>)
+            .map((r) => r.legacy_binding_id)
+            .filter((id): id is string => Boolean(id)),
+    );
+
     let projected = 0;
+    let skipped = 0;
     let failed = 0;
-    for (const row of (data ?? []) as ProjectableBinding[]) {
+    for (const row of bindings) {
+        if (alreadyProjected.has(row.id)) {
+            skipped += 1;
+            continue;
+        }
         const result = await applyBindingIdentityProjection(supabase, row);
         if (result.ok) projected += 1;
         else failed += 1;
     }
-    return { projected, failed };
+    return { projected, skipped, failed };
 }

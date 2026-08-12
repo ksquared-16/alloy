@@ -11,6 +11,7 @@ import {
     validateStatus,
 } from "@/lib/communications/bindingConfigInput";
 import { detectSecretBoundaryViolation, selectCredential } from "@/lib/communications/providerCredentialCatalog";
+import { planLocationOverrideRemoval } from "@/lib/communications/locationOverrideRemoval";
 import {
     applyBindingIdentityProjection,
     PROJECTABLE_BINDING_COLUMNS,
@@ -63,7 +64,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // existing config must be merged rather than replaced.
     const { data: row, error: loadErr } = await supabase
         .from("communication_provider_bindings")
-        .select("id, org_id, channel, config")
+        .select("id, org_id, channel, config, location_id, status")
         .eq("id", bindingId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -147,10 +148,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         touched = true;
         const raw = body.location_id;
         if (raw === null || raw === undefined || (typeof raw === "string" && !raw.trim())) {
-            // Removing the override returns this channel to the organization
-            // default. `scope` follows so the two can never disagree.
-            patch.location_id = null;
-            patch.scope = "org";
+            // REMOVING AN OVERRIDE — assignment removed, identity preserved.
+            //
+            // This deliberately does NOT clear `location_id`. Clearing it would
+            // broaden a campus identity to organization scope, where it becomes a
+            // candidate for the organization default and its receiving address
+            // starts filing organization-wide conversations — silently, at the
+            // moment an administrator thought they were removing something.
+            // See `locationOverrideRemoval.ts` for the full audit.
+            const removal = planLocationOverrideRemoval({
+                location_id: (row as { location_id?: string | null }).location_id ?? null,
+                status: (row as { status?: string | null }).status ?? null,
+            });
+            if (!removal.ok) {
+                return NextResponse.json({ error: removal.message, field: "location_id" }, { status: 400 });
+            }
+            Object.assign(patch, removal.patch);
         } else if (typeof raw === "string" && UUID_RE.test(raw.trim())) {
             const { data: loc } = await supabase.from("locations").select("id").eq("id", raw.trim()).maybeSingle();
             if (!loc) {

@@ -40,9 +40,26 @@ export type DirectionReadiness = {
     detail: string;
 };
 
+/**
+ * Whether the credential this channel names is actually present in the
+ * deployment.
+ *
+ *   `configured`   — a credential is referenced AND the deployment holds it.
+ *   `unavailable`  — a credential is referenced but the deployment does NOT hold
+ *                    it, so every send will fail at dispatch.
+ *   `not_connected`— no credential referenced yet.
+ *
+ * This is deliberately the ONLY provider fact reported. Alloy can observe whether
+ * it holds a key; it cannot observe, without asking the provider, whether a
+ * sending domain is verified or MX records point anywhere. Those are reported as
+ * "verification required" — an honest unknown — rather than invented.
+ */
+export type ProviderConnectionState = "configured" | "unavailable" | "not_connected";
+
 export type BindingReadiness = {
     send: DirectionReadiness;
     receive: DirectionReadiness;
+    providerConnection: ProviderConnectionState;
 };
 
 /** Providers with a real execution path, per channel. Everything else is
@@ -101,6 +118,20 @@ export function sendingDomain(fromEmail: string | null | undefined): string | nu
  */
 export function evaluateBindingReadiness(
     binding: BindingSummary & { inbound_address?: string | null },
+    options?: {
+        /**
+         * Whether the deployment actually holds the credential this binding
+         * names. `undefined` means "not checked" and is treated as available, so
+         * callers that cannot observe it keep today's behaviour.
+         *
+         * Supplying it closes a real gap: a binding can reference
+         * `env:RESEND_API_KEY` while the deployment has no such variable. Before
+         * this, the surface reported "Ready" and every send failed at dispatch —
+         * configuration claiming a readiness the runtime could not honour, which
+         * is the one thing this model exists to prevent.
+         */
+        credentialAvailable?: boolean;
+    },
 ): BindingReadiness {
     const channel = channelOf(binding);
     const status = statusOf(binding);
@@ -108,7 +139,11 @@ export function evaluateBindingReadiness(
 
     if (status === "disabled") {
         const detail = "This channel is switched off. Switch it on to start using it again.";
-        return { send: { state: "disabled", detail }, receive: { state: "disabled", detail } };
+        return {
+            providerConnection: hasBoundCredential(binding) ? "configured" : "not_connected",
+            send: { state: "disabled", detail },
+            receive: { state: "disabled", detail },
+        };
     }
 
     const expectedProvider = RUNTIME_PROVIDERS[channel];
@@ -117,18 +152,39 @@ export function evaluateBindingReadiness(
             ? `Alloy has no ${channel} runtime for “${provider || "unknown"}”. Only ${expectedProvider} is supported today.`
             : `Alloy has no runtime for the “${channel || "unknown"}” channel.`;
         return {
+            providerConnection: "not_connected",
             send: { state: "provider_unavailable", detail },
             receive: { state: "provider_unavailable", detail },
         };
     }
 
-    const credentialed = hasBoundCredential(binding);
+    const referenced = hasBoundCredential(binding);
+    const available = options?.credentialAvailable !== false;
+    // A referenced-but-absent credential is NOT credentialed for readiness
+    // purposes: dispatch would fail, so reporting otherwise would be a lie.
+    const credentialed = referenced && available;
     const pending = status === "pending_verification";
 
-    return {
-        send: evaluateSend({ binding, channel, credentialed, pending }),
-        receive: evaluateReceive({ binding, channel, credentialed, pending }),
-    };
+    const providerConnection: ProviderConnectionState = !referenced
+        ? "not_connected"
+        : available
+          ? "configured"
+          : "unavailable";
+
+    const send = evaluateSend({ binding, channel, credentialed, pending });
+    const receive = evaluateReceive({ binding, channel, credentialed, pending });
+
+    if (providerConnection === "unavailable") {
+        const detail =
+            "The credential this channel uses is not available in this deployment, so nothing can be sent or received. Ask your administrator to restore it.";
+        return {
+            providerConnection,
+            send: { state: "setup_required", detail },
+            receive: { state: "setup_required", detail },
+        };
+    }
+
+    return { providerConnection, send, receive };
 }
 
 function evaluateSend(params: {
