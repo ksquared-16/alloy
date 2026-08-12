@@ -75,3 +75,40 @@ describe("the review modal is mounted on the canonical action-modal registry", (
         expect(client).toContain("dispatchOpenEnrollmentPacketReview");
     });
 });
+
+describe("the newly mounted capabilities are ASPECT-addressable", () => {
+    it("every card an operator gesture can name is a real Focus Panel card", async () => {
+        const { OPERATOR_FOCUS_CARDS } = await import("@/lib/runtime/focus/operatorFocusCards");
+        const { FOCUS_PANEL_CARD_KEYS } = await import(
+            "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel"
+        );
+        for (const key of Object.values(OPERATOR_FOCUS_CARDS)) {
+            expect(FOCUS_PANEL_CARD_KEYS as readonly string[]).toContain(key);
+        }
+        // The capabilities this sprint mounted are addressable by name.
+        expect(OPERATOR_FOCUS_CARDS.currentWork).toBe("current_work"); // Decision + Close family
+        expect(OPERATOR_FOCUS_CARDS.tour).toBe("tour_summary");
+        expect(OPERATOR_FOCUS_CARDS.documents).toBe("documents");
+    });
+
+    it("Search and the client focus adapter share ONE card vocabulary", async () => {
+        // Two lists that must stay identical are one rename away from disagreeing, and the failure
+        // is silent: the grid ignores an unknown key, so the panel composes and does not elevate.
+        const search = await import("@/lib/search/searchDestinations");
+        const { OPERATOR_FOCUS_CARDS } = await import("@/lib/runtime/focus/operatorFocusCards");
+        expect(search.SEARCH_CARD_KEYS).toBe(OPERATOR_FOCUS_CARDS);
+    });
+
+    it("a card focus round-trips through the aspect encoding", async () => {
+        const { formatCardFocusAspect, parseCardFocusAspect } = await import(
+            "@/lib/runtime/kernel/attentionCardFocus"
+        );
+        const aspect = formatCardFocusAspect({ card_key: "current_work", item_id: "work-9" });
+        expect(aspect).toBe("card:current_work|item:work-9");
+        expect(parseCardFocusAspect(aspect)).toEqual({
+            card_key: "current_work",
+            item_id: "work-9",
+            context_key: null,
+        });
+    });
+});
