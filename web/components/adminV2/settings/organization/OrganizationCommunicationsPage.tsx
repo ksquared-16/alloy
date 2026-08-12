@@ -192,6 +192,9 @@ export default function OrganizationCommunicationsPage() {
                                     card={card}
                                     onConnect={() => openDialog(card.channel, "connect")}
                                     onConfigure={() => openDialog(card.channel, "configure")}
+                                    onConfigureLocation={(locationId, hasOwn) =>
+                                        openDialog(card.channel, hasOwn ? "configure" : "connect", locationId)
+                                    }
                                 />
                             ))}
                         </div>

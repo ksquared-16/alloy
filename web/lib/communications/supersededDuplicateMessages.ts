@@ -20,6 +20,9 @@ export const SUPERSEDED_DUPLICATE_KEY = "superseded_duplicate_provider_message_i
 /** True when this row records a provider delivery already represented by another row. */
 export function isSupersededDuplicateMessage(message: {
     metadata?: unknown;
+    /** Callers pass whole message rows; this reads only `metadata`. Accepting the
+     *  rest avoids an excess-property error on a shape that is only ever read. */
+    [key: string]: unknown;
 }): boolean {
     const metadata = message?.metadata;
     if (!metadata || typeof metadata !== "object") return false;

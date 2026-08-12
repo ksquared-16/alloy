@@ -105,7 +105,7 @@ describe("eligibility for a thread-bound reply", () => {
         // remains fully evaluable.
         const d = evaluateEligibility(
             input({
-                quietHours: { timezone: "America/Los_Angeles", start: "21:00", end: "08:00" },
+                quietHours: { timezone: "America/Los_Angeles", start: "21:00", end: "08:00", basis: "organization" as const },
                 nowIso: "2026-08-10T06:00:00.000Z",
             })
         );

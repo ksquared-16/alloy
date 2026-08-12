@@ -158,7 +158,9 @@ describe("before removal — the override is in force", () => {
 });
 
 describe("removing the override restores inheritance", () => {
-    const removed = { ...RIVERSIDE_OVERRIDE, ...planLocationOverrideRemoval(RIVERSIDE_OVERRIDE).patch };
+    const removal = planLocationOverrideRemoval(RIVERSIDE_OVERRIDE);
+    if (!removal.ok) throw new Error("removing a location override must be permitted");
+    const removed = { ...RIVERSIDE_OVERRIDE, ...removal.patch };
 
     it("Riverside now uses the organization identity", () => {
         const r = resolve([ORG_DEFAULT, removed], RIVERSIDE);
@@ -205,17 +207,21 @@ describe("removing the override restores inheritance", () => {
 
 describe("removal is reversible and idempotent", () => {
     it("re-assigning restores the override", () => {
-        const removed = { ...RIVERSIDE_OVERRIDE, ...planLocationOverrideRemoval(RIVERSIDE_OVERRIDE).patch };
+        const plan = planLocationOverrideRemoval(RIVERSIDE_OVERRIDE);
+        if (!plan.ok) throw new Error("removal must be permitted");
+        const removed = { ...RIVERSIDE_OVERRIDE, ...plan.patch };
         const reassigned = { ...removed, status: "active" };
         const r = resolve([ORG_DEFAULT, reassigned], RIVERSIDE);
         expect(r.ok === true && r.safeSenderMetadata.fromAddress).toBe("riverside@firefly.example");
     });
 
     it("removing twice is the same as removing once", () => {
-        const once = planLocationOverrideRemoval(RIVERSIDE_OVERRIDE).patch;
-        const removed = { ...RIVERSIDE_OVERRIDE, ...once };
-        const twice = planLocationOverrideRemoval(removed).patch;
-        expect({ ...removed, ...twice }).toEqual(removed);
+        const first = planLocationOverrideRemoval(RIVERSIDE_OVERRIDE);
+        if (!first.ok) throw new Error("removal must be permitted");
+        const removed = { ...RIVERSIDE_OVERRIDE, ...first.patch };
+        const second = planLocationOverrideRemoval(removed);
+        if (!second.ok) throw new Error("removal must remain permitted");
+        expect({ ...removed, ...second.patch }).toEqual(removed);
     });
 
     it("removal on an organization binding is refused — there is nothing to remove", () => {

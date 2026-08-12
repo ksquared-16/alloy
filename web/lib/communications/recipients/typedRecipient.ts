@@ -15,12 +15,18 @@
 
 import type { MessageAudience, MessageCategory, MessageChannel } from "@/lib/communications/eligibility/types";
 
-export type RecipientKind = "person" | "internal_user" | "external_operational_recipient";
+export type RecipientKind =
+    | "person"
+    | "internal_user"
+    | "external_operational_recipient"
+    /** Reply into a tenant-owned conversation whose sender is not a known Person. */
+    | "canonical_thread";
 
 export const RECIPIENT_KINDS: readonly RecipientKind[] = [
     "person",
     "internal_user",
     "external_operational_recipient",
+    "canonical_thread",
 ] as const;
 
 /**
@@ -147,7 +153,11 @@ export type RecipientValidationError = {
         | "marketing_prohibited"
         | "category_not_allowed"
         | "purpose_not_allowlisted"
-        | "audience_mismatch";
+        | "audience_mismatch"
+        /** A canonical_thread recipient carries a thread id and nothing else. */
+        | "missing_thread_id"
+        /** The client tried to name an address on a thread reply. */
+        | "thread_recipient_address_not_permitted";
     message: string;
 };
 
