@@ -25,7 +25,7 @@ import {
     WS_SURFACE_CONTENT_PAD,
 } from "@/components/workspace/workspaceTokens";
 
-type StaffingSufficiency = "sufficient" | "short" | "unknown";
+type StaffingSufficiency = "sufficient" | "short" | "unknown" | "idle";
 
 type RosterChild = {
     subjectType: "child";
@@ -102,6 +102,9 @@ function shiftYmd(ymd: string, days: number): string {
 
 /** Operator sentence for the room's staffing state — meaning before numbers. */
 function staffingSentence(cell: RosterCell): string {
+    if (cell.staffingSufficiency === "idle") {
+        return "No one expected in this room today";
+    }
     if (cell.staffingSufficiency === "unknown") {
         return "Staffing requirement not configured for this room";
     }
@@ -290,7 +293,9 @@ export default function DailyRoster({
                                             ? "Staffed"
                                             : cell.staffingSufficiency === "short"
                                               ? "Short"
-                                              : "Unknown"}
+                                              : cell.staffingSufficiency === "idle"
+                                                ? "No one expected"
+                                                : "Unknown"}
                                     </span>
                                 </div>
 

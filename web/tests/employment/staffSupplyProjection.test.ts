@@ -240,8 +240,22 @@ describe("staffing sufficiency", () => {
         expect(resolveStaffingSufficiency({ requiredStaff: 2, scheduledStaffCount: 3 })).toBe("sufficient");
     });
 
-    it("treats zero demand as satisfied by zero supply", () => {
-        expect(resolveStaffingSufficiency({ requiredStaff: 0, scheduledStaffCount: 0 })).toBe("sufficient");
+    it("reports no demand and no supply as IDLE, never as sufficient", () => {
+        // A closed or empty room is mathematically satisfied, but rendering it
+        // green makes an idle campus look uniformly healthy and buries the rooms
+        // that actually need the director.
+        expect(resolveStaffingSufficiency({ requiredStaff: 0, scheduledStaffCount: 0 })).toBe("idle");
+    });
+
+    it("is sufficient — not idle — when staff are present with no demand", () => {
+        expect(resolveStaffingSufficiency({ requiredStaff: 0, scheduledStaffCount: 1 })).toBe("sufficient");
+    });
+
+    it("never rolls an all-idle site up to sufficient", () => {
+        expect(rollUpStaffingSufficiency(["idle", "idle"])).toBe("idle");
+        expect(rollUpStaffingSufficiency(["idle", "sufficient"])).toBe("sufficient");
+        expect(rollUpStaffingSufficiency(["idle", "short"])).toBe("short");
+        expect(rollUpStaffingSufficiency(["idle", "unknown"])).toBe("unknown");
     });
 
     it("returns unknown — never sufficient — when demand cannot be resolved", () => {

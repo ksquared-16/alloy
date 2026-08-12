@@ -3,6 +3,7 @@
  *
  *   sufficient  scheduled supply meets or exceeds required demand
  *   short       demand is known and supply does not meet it
+ *   idle        no demand and no supply — the room is not operating
  *   unknown     the platform cannot truthfully answer
  *
  * `unknown` is a first-class answer, not a failure mode. Required staff is null
@@ -15,7 +16,7 @@
  * `requiredStaff`. Nothing here invents a qualification rule.
  */
 
-export type StaffingSufficiency = "sufficient" | "short" | "unknown";
+export type StaffingSufficiency = "sufficient" | "short" | "unknown" | "idle";
 
 /**
  * Interpret the ratio engine's answer as a DEMAND, or null when it could not
@@ -56,7 +57,11 @@ export function resolveStaffingSufficiency(input: ResolveStaffingSufficiencyInpu
     const { requiredStaff, scheduledStaffCount } = input;
     if (requiredStaff == null) return "unknown";
     if (scheduledStaffCount == null) return "unknown";
-    // Zero demand is satisfied by zero supply — a closed or empty room is not short.
+    // No demand AND no supply: the room is not operating. Mathematically this is
+    // "satisfied", but rendering an idle or unconfigured room green makes a
+    // closed campus look uniformly healthy and hides the rooms that matter.
+    // Idle is a distinct, visually neutral state — not a flavour of sufficient.
+    if (requiredStaff === 0 && scheduledStaffCount === 0) return "idle";
     return scheduledStaffCount >= requiredStaff ? "sufficient" : "short";
 }
 
@@ -74,5 +79,7 @@ export function rollUpStaffingSufficiency(
     if (verdicts.length === 0) return "unknown";
     if (verdicts.includes("short")) return "short";
     if (verdicts.includes("unknown")) return "unknown";
+    // A site where every room is idle is idle, not staffed.
+    if (verdicts.every((v) => v === "idle")) return "idle";
     return "sufficient";
 }

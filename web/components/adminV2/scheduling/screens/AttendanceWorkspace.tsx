@@ -27,7 +27,7 @@ import {
     WS_SURFACE_CONTENT_PAD,
 } from "@/components/workspace/workspaceTokens";
 
-type Sufficiency = "sufficient" | "short" | "unknown";
+type Sufficiency = "sufficient" | "short" | "unknown" | "idle";
 type ActualState = "present" | "checked_out" | "absent" | "no_record";
 
 type SubjectActual = {
@@ -142,11 +142,15 @@ function stateChip(state: ActualState): string {
 function sufficiencyChrome(state: Sufficiency): string {
     if (state === "sufficient") return "bg-[#00A283]/10 text-[#00715C] ring-1 ring-[#00A283]/25";
     if (state === "short") return "bg-alloy-ember/15 text-alloy-midnight ring-1 ring-alloy-ember/45";
+    // idle and unknown are both neutral — neither is a success state.
     return "bg-alloy-stone/15 text-alloy-midnight/55 ring-1 ring-alloy-stone/25";
 }
 
 function sufficiencyLabel(state: Sufficiency): string {
-    return state === "sufficient" ? "Sufficient" : state === "short" ? "Short" : "Unknown";
+    if (state === "sufficient") return "Sufficient";
+    if (state === "short") return "Short";
+    if (state === "idle") return "No one expected";
+    return "Unknown";
 }
 
 /** Touch-sized action — attendance is used standing up, on a tablet. */

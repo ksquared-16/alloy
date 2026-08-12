@@ -616,16 +616,21 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const createCandidates = useMemo((): WorkspaceCreateChildCandidate[] => {
         const byId = new Map<string, WorkspaceCreateChildCandidate>();
         for (const s of assignmentRoster ?? []) {
+            // Child-creation candidates only. Staff subjects carry a null
+            // customer member by constraint and would key the map on null and
+            // sort on an undefined name.
+            if (s.subjectType === "staff" || !s.customerMemberId) continue;
             byId.set(s.customerMemberId, {
                 customerMemberId: s.customerMemberId,
-                agreementId: s.agreementId,
+                agreementId: s.enrollmentAgreementId ?? "",
                 personId: null,
-                name: s.childName,
+                name: s.subjectName,
                 startDate: null,
             });
         }
         for (const u of unplaced) {
-            if (!byId.has(u.customerMemberId ?? u.agreementId)) {
+            if (!u.customerMemberId) continue;
+            if (!byId.has(u.customerMemberId)) {
                 byId.set(u.customerMemberId, {
                     customerMemberId: u.customerMemberId,
                     agreementId: u.agreementId,
@@ -635,7 +640,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 });
             }
         }
-        return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+        return [...byId.values()].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     }, [assignmentRoster, unplaced]);
 
     const openCreateAssignment = useCallback(
@@ -880,16 +885,23 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                             },
                             onBulkMakePrimary: async (rows) => {
                                 for (const row of rows) {
+                                    // Primary is a child concept; a staff subject has no
+                                    // enrollment agreement and must not reach this command.
+                                    const subject = (assignmentRoster ?? []).find(
+                                        (s) => s.subjectKey === row.subjectKey
+                                    );
+                                    const agreementId = subject?.enrollmentAgreementId;
+                                    if (!agreementId || subject?.subjectType === "staff") continue;
                                     await fetch("/api/admin/actions/execute", {
                                         method: "POST",
                                         headers: { "content-type": "application/json" },
                                         body: JSON.stringify({
                                             action_key: "assignment.set_primary",
                                             entity_type: "child",
-                                            entity_id: row.agreementId,
+                                            entity_id: agreementId,
                                             payload: {
                                                 subject_type: "child",
-                                                enrollment_agreement_id: row.agreementId,
+                                                enrollment_agreement_id: agreementId,
                                                 effective_date: row.effectiveFrom,
                                                 promote_assignment_id: row.assignmentId,
                                             },
