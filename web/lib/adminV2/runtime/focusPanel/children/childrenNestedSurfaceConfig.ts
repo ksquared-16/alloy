@@ -7,6 +7,7 @@
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
     CHILDREN_SURFACE_ID,
+    defaultNestedSurfaceConfig,
     enabledEvidenceSections,
     fieldLayoutWidthForNestedGroup,
     fieldPresentationLabel,
@@ -44,9 +45,45 @@ export type ChildrenEvidenceSectionView = {
     fieldKeys: string[];
 };
 
-/** Read + reconcile the published Children Surface config from a Focus Panel summary doc. */
+/**
+ * Read + reconcile the PUBLISHED Children Surface config from a Focus Panel summary doc.
+ *
+ * Returns null when the tenant has authored nothing. Authoring surfaces need that distinction —
+ * "nothing published" is a real state the Surface Builder must be able to see. Card RUNTIMES should
+ * read {@link effectiveChildrenNestedConfig} instead.
+ */
 export function readChildrenNestedConfigFromDoc(doc: LayoutDoc | null): NestedSurfaceConfig | null {
     return resolvePublishedIdentitySurfaceConfigFromDoc(CHILDREN_SURFACE_ID, doc);
+}
+
+/**
+ * THE EFFECTIVE Children Surface config: published configuration, else the platform default.
+ *
+ * ── WHY THIS EXISTS ──
+ *
+ * The Children card is VISIBLE in the code-owned default composition
+ * (`FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION`), so every tenant gets it whether or not they have ever
+ * opened the Surface Builder. But `FOCUS_PANEL_SUMMARY_DEFAULT_DOC` carries no `metadata`
+ * `nestedSurfaces`, nothing in the seed or any migration authors one, and
+ * `reconcileIdentityNestedConfigFromDocMetadata` returns null when nothing is authored. The card
+ * then gated its focused-child body on a config that could not exist:
+ *
+ *     focusedIdentityRecord = (focused && childrenSurfaceConfig) ? … : null
+ *
+ * The result on any tenant that had not authored a surface — which is every newly seeded org — was a
+ * Children card that composes, elevates, and SELECTS the child (disclosure reaches `details`, the
+ * footer offers "← All children"), and then silently re-renders the roster instead of the child.
+ * Clicking a child did nothing observable, from Search or by hand.
+ *
+ * Default composition without default drill-in is not a coherent baseline: the platform must not ship
+ * a card whose normal interaction is impossible until an operator configures something. Configuration
+ * OVERRIDES the default here; it is not a precondition for the card working at all — the same
+ * contract `nestedSurfaceConfigReader` already documents ("caller treats empty as no override").
+ *
+ * The published/absent distinction is preserved above for the authoring surfaces that need it.
+ */
+export function effectiveChildrenNestedConfig(doc: LayoutDoc | null): NestedSurfaceConfig {
+    return readChildrenNestedConfigFromDoc(doc) ?? defaultNestedSurfaceConfig(CHILDREN_SURFACE_ID);
 }
 
 function catalogLabelForGroupField(

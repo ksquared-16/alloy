@@ -25,13 +25,8 @@ import {
     personRowIsChildRelationship,
 } from "@/lib/admin/globalSearch/globalRecordSearchPersonPresentation";
 import {
-    adminV2PathHasDrawerHost,
-    clearGlobalRecordSearchOpenIntent,
-    GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY,
     GLOBAL_SEARCH_DROPDOWN_Z_INDEX,
     GLOBAL_SEARCH_DRAWER_OPEN_SOURCE,
-    launchGlobalRecordSearchOpen,
-    readGlobalRecordSearchOpenIntent,
 } from "@/lib/adminV2/globalRecordSearchOpen";
 import { ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS } from "@/lib/adminV2/drawerOutsideClick";
 import { ADMINV2_SHELL_CHROME_Z } from "@/components/admin/Drawer";
@@ -396,24 +391,19 @@ describe("global search implementation guards", () => {
         expect(src).not.toContain("fixed inset-0");
     });
 
-    it("GlobalSearchBox never opens drawer via legacy entity_type", () => {
+    it("GlobalSearchBox never opens any drawer — it targets Focus Panel cards", () => {
         const boxPath = resolve(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx");
         const src = readFileSync(boxPath, "utf8");
-        // Search V2 resolves destinations server-side, so the control validates the
-        // already-resolved entity type against the AdminV2 allow-list instead of
-        // re-resolving a hit. The invariant is unchanged: legacy member/contact
-        // drawers are never an open target.
-        expect(src).toContain("isGlobalSearchAdminV2DrawerEntityType");
+        // The invariant got STRONGER. It used to be "never a legacy member/contact
+        // drawer"; Search now opens no drawer of any kind, because the drawer
+        // product is not an Alloy operator destination. It emits Focus Panel
+        // targets — subject + card + item.
+        expect(src).toContain("dispatchSearchFocusSelection");
+        expect(src).not.toContain("launchGlobalRecordSearchOpen");
+        expect(src).not.toContain("open_drawer");
         for (const legacy of GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES) {
             expect(src).not.toContain(`entity_type: "${legacy}"`);
         }
-    });
-
-    it("GlobalRecordSearchOpenListener blocks legacy drawer types", () => {
-        const listenerPath = resolve(process.cwd(), "components/adminV2/GlobalRecordSearchOpenListener.tsx");
-        const src = readFileSync(listenerPath, "utf8");
-        expect(src).toContain("isGlobalSearchLegacyDrawerEntityType");
-        expect(src).toContain("open_entity_type");
     });
 
     it("drawer outside-click ignore list includes global search box", () => {
@@ -464,53 +454,6 @@ describe("global search implementation guards", () => {
         expect(src).toContain("GLOBAL_SEARCH_DRAWER_OPEN_SOURCE");
         expect(src).toMatch(/swapInPlace[\s\S]*global search replaces the open record/i);
         expect(GLOBAL_SEARCH_DRAWER_OPEN_SOURCE).toBe("global_search");
-    });
-});
-
-describe("drawer open targets", () => {
-    beforeEach(() => {
-        const store = new Map<string, string>();
-        vi.stubGlobal("sessionStorage", {
-            getItem: (k: string) => store.get(k) ?? null,
-            setItem: (k: string, v: string) => store.set(k, v),
-            removeItem: (k: string) => store.delete(k),
-        });
-        vi.stubGlobal("window", {
-            sessionStorage: globalThis.sessionStorage,
-            location: { pathname: "/adminV2/workspace" },
-            dispatchEvent: vi.fn(),
-        });
-    });
-
-    afterEach(() => {
-        vi.unstubAllGlobals();
-    });
-
-    it("launchGlobalRecordSearchOpen dispatches AdminV2 open detail while on drawer host", () => {
-        launchGlobalRecordSearchOpen({
-            open_entity_type: "persons",
-            open_entity_id: PARENT_PERSON,
-        });
-        expect(window.dispatchEvent).toHaveBeenCalled();
-        const event = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as CustomEvent;
-        expect(event.detail.open_entity_type).toBe("persons");
-        expect(event.detail.open_entity_id).toBe(PARENT_PERSON);
-    });
-
-    it("stores persons drawer intent for non-host routes", () => {
-        vi.stubGlobal("window", {
-            sessionStorage: globalThis.sessionStorage,
-            location: { pathname: "/adminV2/workflows" },
-            dispatchEvent: vi.fn(),
-        });
-        sessionStorage.removeItem(GLOBAL_RECORD_SEARCH_OPEN_INTENT_KEY);
-        const nav = launchGlobalRecordSearchOpen({
-            open_entity_type: "persons",
-            open_entity_id: PARENT_PERSON,
-        });
-        expect(nav).toBe("/workspace");
-        expect(readGlobalRecordSearchOpenIntent()?.open_entity_type).toBe("persons");
-        clearGlobalRecordSearchOpenIntent();
     });
 });
 
@@ -697,11 +640,6 @@ describe("presentation helpers", () => {
                 customer_persons: [{ role_type: "guardian" }],
             })
         ).toBe("Guardian");
-    });
-
-    it("adminV2PathHasDrawerHost matches workspace routes", () => {
-        expect(adminV2PathHasDrawerHost("/adminV2/workspace/dept/x")).toBe(true);
-        expect(adminV2PathHasDrawerHost("/adminV2/workflows")).toBe(false);
     });
 
 });

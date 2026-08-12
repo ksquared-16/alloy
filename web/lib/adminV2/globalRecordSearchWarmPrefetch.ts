@@ -1,5 +1,3 @@
-import { resolveGlobalSearchOpenFromHit } from "@/lib/admin/globalSearch/globalRecordSearchOpenResolution";
-import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDrawerIntentPrefetch";
 import { prefetchPersonDrawerSnapshot } from "@/lib/admin/prefetchPersonDrawerSnapshot";
 import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
@@ -8,58 +6,33 @@ import { childDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/ch
 import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { personDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/person/personDrawerHardCutoverGate";
 import { GLOBAL_SEARCH_DRAWER_OPEN_SOURCE } from "@/lib/adminV2/globalRecordSearchOpen";
+import type { SearchDestination } from "@/lib/search/searchContracts";
 
 /**
- * Hover/focus warm for global search hits — drawer VM or legacy snapshot before click.
- */
-export function warmGlobalSearchHitDrawerIntent(hit: GlobalRecordSearchHit): void {
-    if (typeof window === "undefined") return;
-    const resolution = resolveGlobalSearchOpenFromHit(hit);
-    if (!resolution.supported || !resolution.detail) return;
-    warmDrawerIntent(
-        resolution.detail.open_entity_type,
-        resolution.detail.open_entity_id,
-        resolution.detail.personDrawerOpenSeed?.presentation_emphasis ?? null
-    );
-}
-
-/**
- * Search Platform V2 — warm the drawer behind an already-resolved destination.
+ * Warm the record behind a Search result before the operator clicks it.
  *
- * V2 destinations are resolved server-side, so there is no hit to re-resolve:
- * the entity type and id are authoritative. A child subject opens as its person
- * identity, so the child presentation emphasis is passed through to keep
- * first-paint chrome identical to a click from any other surface.
+ * This is how Search feels instant WITHOUT violating K3. The kernel commits a
+ * destination atomically on `preparation.terminal` and never reveals a surface
+ * before it is Operational, so the only honest way to shorten the wait is to make
+ * the terminal arrive sooner. Hover and keyboard highlight warm the payload; the
+ * click then commits against a cache that is already hot.
+ *
+ * A NOTE ON THE `drawer` NAMES BELOW. These modules compose and cache the record
+ * VIEW MODEL — the payload a Focus Panel card renders. That infrastructure is
+ * still required and is deliberately untouched here; only the drawer *product*
+ * (the overlay an operator could navigate to) was removed. Renaming this layer is
+ * a separate, larger change and would add risk to no benefit right now.
  */
-export function warmSearchDestinationDrawerIntent(destination: {
-    target: string;
-    entity_type?: string | null;
-    entity_id?: string | null;
-    subject_kind?: string | null;
-}): void {
-    if (typeof window === "undefined") return;
-    if (destination.target !== "open_drawer") return;
-    warmDrawerIntent(
-        (destination.entity_type ?? "").trim(),
-        (destination.entity_id ?? "").trim(),
-        destination.subject_kind === "child" ? PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS : null
-    );
-}
+function warmRecordViewModel(entityType: string, entityId: string, emphasis: string | null): void {
+    const id = entityId.trim();
+    if (!id) return;
 
-function warmDrawerIntent(
-    open_entity_type: string,
-    open_entity_id: string,
-    emphasis: string | null
-): void {
-    const entityId = open_entity_id.trim();
-    if (!entityId) return;
-
-    if (open_entity_type === "opportunities") {
-        prefetchOpportunityDrawerOnRowIntent(entityId);
+    if (entityType === "opportunities") {
+        prefetchOpportunityDrawerOnRowIntent(id);
         return;
     }
 
-    if (open_entity_type === "persons") {
+    if (entityType === "persons") {
         const isChild = emphasis === PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS;
         if (
             (isChild && childDrawerHardCutoverEnabled()) ||
@@ -67,14 +40,37 @@ function warmDrawerIntent(
         ) {
             void prepareDrawerViewModelDeduped({
                 entityType: "persons",
-                entityId,
+                entityId: id,
                 openSource: GLOBAL_SEARCH_DRAWER_OPEN_SOURCE,
                 presentationEmphasis: emphasis,
             }).catch(() => {
-                /* non-fatal */
+                /* non-fatal: this is a warm, not a load */
             });
             return;
         }
-        prefetchPersonDrawerSnapshot(entityId);
+        prefetchPersonDrawerSnapshot(id);
     }
+}
+
+/**
+ * Warm the host record behind a Focus Panel destination.
+ *
+ * Safe to call on every hover and every keyboard highlight — the underlying
+ * prefetchers are deduped and TTL-cached, and a warm that is never used costs
+ * nothing but a request that would have happened anyway.
+ */
+export function warmSearchFocusTarget(destination: SearchDestination): void {
+    if (typeof window === "undefined") return;
+    if (destination.target !== "focus_panel") return;
+
+    const hostType = (destination.host_entity_type ?? "").trim();
+    const hostId = (destination.host_entity_id ?? "").trim();
+    if (!hostType || !hostId) return;
+
+    // A child's card renders inside the case that hosts it; the emphasis keeps
+    // first paint identical to opening that child from anywhere else.
+    const emphasis =
+        destination.card_key === "children" ? PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS : null;
+
+    warmRecordViewModel(hostType, hostId, emphasis);
 }

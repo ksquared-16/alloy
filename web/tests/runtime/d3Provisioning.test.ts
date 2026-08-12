@@ -79,8 +79,35 @@ describe("D3 — K2 Provisioning Runtime", () => {
         const k2 = runtimeWith(entry);
         const o = owner();
         const [a, b] = await Promise.all([k2.prepare(refAt(o)), k2.prepare(refAt(o))]);
+        // ONE D1 invocation is the whole claim, and this is what proves it.
         expect(entry).toHaveBeenCalledTimes(1);
-        expect(a).toBe(b); // the same in-flight work, consumed twice
+        // Equal value, not identical object: a shared terminal is restamped with the CONSUMING
+        // attention's version, exactly as a reused one already was. Asserting object identity here
+        // forbade that restamp — and without it a finer movement that shares an in-flight preparation
+        // carries the STARTING movement's version, which K3 then rejects as stale, so the surface
+        // never commits at all.
+        expect(a).toEqual(b);
+    });
+
+    it("3b. a SHARED preparation answers for the attention that CONSUMED it", async () => {
+        // A Search click moves SURFACE → SUBJECT → ASPECT in one tick. Aspect is deliberately not
+        // part of the provisioning key, so the finer movement shares the coarser one's work — and it
+        // must receive a terminal stamped for ITSELF, or K3 discards the only answer that could
+        // commit the surface and the operator watches a blank canvas forever. Measured exactly that.
+        const entry = vi.fn(resolves("operational", 20));
+        const k2 = runtimeWith(entry);
+        const o = owner();
+
+        const first = refAt(o);
+        const started = k2.prepare(first);
+        o.move({ scope: ATTENTION_SCOPE.ASPECT, aspect: "card:children|item:cm-joe", source: "search" });
+        const finer = o.get()!;
+        const shared = await k2.prepare(finer);
+
+        expect(entry).toHaveBeenCalledTimes(1);
+        expect(finer.version).toBeGreaterThan(first.version);
+        expect(shared!.attentionVersion).toBe(finer.version);
+        await started;
     });
 
     it("4. different keys do not share", async () => {

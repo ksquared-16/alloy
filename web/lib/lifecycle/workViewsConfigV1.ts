@@ -157,6 +157,14 @@ function parseSort(raw: unknown): WorkViewSortV1 | null {
 /**
  * Keys this parser owns. Anything else in a stored work view belongs to a newer writer and must
  * survive the round trip untouched (Law 1/Law 7).
+ *
+ * A key this parser READS but does not declare here is worse than a missing feature: the residue
+ * carrier is an enumerable SYMBOL, and a symbol property makes the object unserializable across the
+ * React Server Component boundary. `row_grain_v1` was missing, so every work view with a declared
+ * row grain carried one — and every CLIENT navigation to `/workspace/work-unit/:slug` rendered a
+ * blank surface while a cold full-page load of the same URL rendered fine, because only the client
+ * transition re-serializes the props. `workViewsConfigV1OwnedKeys.test.ts` now derives this list
+ * from what the parser actually stores, so the omission cannot recur.
  */
 const WORK_VIEW_OWNED_KEYS = [
     "id",
@@ -168,10 +176,14 @@ const WORK_VIEW_OWNED_KEYS = [
     "sorts_v1",
     "visible_in_runtime",
     "display_order",
+    "row_grain_v1",
     "queue_layout_id",
     "focus_panel_layout_id",
     "compat_queue_key",
 ] as const;
+
+/** Exported for the owned-key completeness test — not part of the runtime contract. */
+export const WORK_VIEW_OWNED_KEYS_FOR_TEST: readonly string[] = WORK_VIEW_OWNED_KEYS;
 
 export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (!isRecord(raw)) return null;
@@ -180,7 +192,20 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (!id || !label) return null;
 
     const stored: WorkViewConfigV1Stored = { id, label };
-    withUnknownFields(stored, captureUnknownFields(raw, WORK_VIEW_OWNED_KEYS));
+    // `row_grain_v1` is owned ONLY WHEN THIS PARSER UNDERSTOOD IT.
+    //
+    // Both halves matter, and they pull in opposite directions:
+    //   - a grain this parser stores must be OWNED, or the value is duplicated into the residue and
+    //     the residue's enumerable symbol makes the record unserializable across the RSC boundary;
+    //   - a grain authored in a shape this parser does not recognise must stay UNOWNED, or an older
+    //     writer silently destroys a newer writer's field on the next read-modify-write (Law 1) —
+    //     which is how `row_grain_v1` was wiped four times before.
+    // Deciding per value satisfies both. `parseStageGrain` is the same acceptance test used below.
+    const declaredGrain = parseStageGrain(raw.row_grain_v1);
+    const ownedKeys = declaredGrain
+        ? WORK_VIEW_OWNED_KEYS
+        : WORK_VIEW_OWNED_KEYS.filter((key) => key !== "row_grain_v1");
+    withUnknownFields(stored, captureUnknownFields(raw, ownedKeys));
     if (typeof raw.mission === "string" && raw.mission.trim()) stored.mission = raw.mission.trim();
     // `match` combinator (V3). Only persist when explicitly `any`; absent/`all` keeps the default AND
     // so legacy saved views are never silently reinterpreted.
@@ -203,9 +228,9 @@ export function parseWorkViewRow(raw: unknown): WorkViewConfigV1Stored | null {
     if (typeof raw.display_order === "number" && Number.isFinite(raw.display_order)) {
         stored.display_order = Math.max(1, Math.floor(raw.display_order));
     }
-    // Declared Row Grain — only a VALID grain persists. An unrecognized value is dropped rather than
-    // carried forward as a grain nothing can resolve.
-    const declaredGrain = parseStageGrain(raw.row_grain_v1);
+    // Declared Row Grain — only a VALID grain persists as a typed field. An unrecognized value is not
+    // surfaced as a grain nothing can resolve; it rides in the residue instead (see the owned-key
+    // decision above), so a newer writer's shape survives the round trip untouched.
     if (declaredGrain) stored.row_grain_v1 = declaredGrain;
     if (typeof raw.queue_layout_id === "string" && raw.queue_layout_id.trim()) {
         stored.queue_layout_id = raw.queue_layout_id.trim();

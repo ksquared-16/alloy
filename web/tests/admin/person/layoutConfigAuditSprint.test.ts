@@ -9,9 +9,6 @@ import {
 } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import { parentSummaryDraftFromRecord } from "@/lib/admin/person/personDrawerSummaryDraft";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
-import {
-    launchGlobalRecordSearchOpen,
-} from "@/lib/adminV2/globalRecordSearchOpen";
 
 const root = process.cwd();
 
@@ -100,20 +97,6 @@ describe("layout config audit sprint", () => {
             vi.unstubAllGlobals();
         });
 
-        it("launchGlobalRecordSearchOpen forwards personDrawerOpenSeed", () => {
-            launchGlobalRecordSearchOpen({
-                open_entity_type: "persons",
-                open_entity_id: "p1",
-                personDrawerOpenSeed: {
-                    personId: "p1",
-                    presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
-                },
-            });
-            const event = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as CustomEvent;
-            expect(event.detail.personDrawerOpenSeed?.presentation_emphasis).toBe(
-                PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS
-            );
-        });
     });
 
     describe("phone formatting", () => {

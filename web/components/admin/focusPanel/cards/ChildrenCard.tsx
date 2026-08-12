@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import {
     BadgeCheck,
@@ -74,6 +74,7 @@ import {
     childrenEmergencyContactsSectionFromConfig,
     childrenEvidenceSectionsFromNestedConfig,
     childrenFocusRowsFromNestedConfig,
+    effectiveChildrenNestedConfig,
     readChildrenNestedConfigFromDoc,
     type ChildrenEvidenceSectionView,
     type ChildrenFocusFieldRow,
@@ -135,6 +136,22 @@ type Props = {
 
 const CAPS = cardCapabilities("children");
 const RELATED_VIEWS = cardRelatedViews("children");
+
+/**
+ * The canonical child inside a roster identity id.
+ *
+ * A roster row's id is the evidence builder's, and it is frequently a PREFIXED composite — an
+ * unlinked child appears as `unlinked:<customer_members.id>`. Callers outside this card address a
+ * child by its durable identity and cannot know the prefix, so the composite must not hide it: both
+ * the focus request and the attribute this card reports resolve through here.
+ */
+function canonicalChildIdOf(identityId: string | null | undefined): string | null {
+    const id = (identityId ?? "").trim();
+    if (!id) return null;
+    const at = id.indexOf(":");
+    if (at < 0) return id;
+    return id.slice(at + 1).trim() || null;
+}
 
 function childRosterAvatarComposer(args: {
     child: ChildrenEvidenceChild;
@@ -241,7 +258,16 @@ export default function ChildrenCard({
 
     const composingChildrenSurface = composer?.isComposingSurface(CHILDREN_SURFACE_ID) ?? false;
     const childrenSurfaceConfig = useMemo(
-        () => (composingChildrenSurface ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null : readChildrenNestedConfigFromDoc(publishedDoc)),
+        () =>
+            composingChildrenSurface
+                ? composer?.configFor(CHILDREN_SURFACE_ID) ?? null
+                : // EFFECTIVE, not merely published. A tenant that has never opened the Surface
+                  // Builder still gets the platform default, so the card's drill-in works out of the
+                  // box; configuration overrides the default rather than being a precondition for the
+                  // card working at all. While COMPOSING, the composer's own config stays
+                  // authoritative — including its null, which is what "nothing selected yet" means in
+                  // the editor and must not be silently replaced by a default.
+                  effectiveChildrenNestedConfig(publishedDoc),
         [composer, composingChildrenSurface, publishedDoc],
     );
     // Focus read layout is authored on canonical `children_surface`.
@@ -467,15 +493,71 @@ export default function ChildrenCard({
 
     const request = coordination?.request;
     const requestNonce = request?.card === "children" ? request.nonce : null;
+
+    /**
+     * Accept a child addressed by its CANONICAL identity, not only by this card's internal row id.
+     *
+     * A roster row's `id` is whatever the drawer VM's row carried — usually the household-membership
+     * link row. A caller outside this card (Search, a notification, a deep link) can only know the
+     * durable child: `customer_members.id`, or the person. Matching on the internal id alone meant a
+     * canonical request silently selected nobody — the card opened on the roster and left the
+     * operator to find the child themselves, which is exactly the gap this closes.
+     *
+     * Unmatched ids pass through unchanged so nothing that already worked changes behaviour.
+     */
+    const resolveRequestedIdentityId = useCallback(
+        (requested: string): string => {
+            const wanted = requested.trim();
+            if (!wanted) return requested;
+            const match = evidence.children.find(
+                (c) =>
+                    c.id === wanted ||
+                    c.customerMemberId === wanted ||
+                    c.personId === wanted ||
+                    // A roster row's id is often a PREFIXED composite (`unlinked:<memberId>`), and the
+                    // canonical id is the part after the prefix. A caller outside the card knows only
+                    // the canonical child, so the composite must not hide it.
+                    canonicalChildIdOf(c.id) === wanted,
+            );
+            return match?.id ?? requested;
+        },
+        [evidence.children],
+    );
+
+    const requestedChildId =
+        request?.card === "children" && request.focus
+            ? resolveRequestedIdentityId(String(request.focus))
+            : null;
+
+    // Applied once per (nonce, RESOLVED id).
+    //
+    // The resolved id is part of the key on purpose. A request routinely arrives before the roster
+    // does — the panel commits its subject, then the children rows settle — and until they do, a
+    // canonical child id resolves to nothing this card holds. Keying on the nonce alone applied the
+    // request exactly once, against an empty roster, and the child was never selected: the card
+    // opened on "all children" and the operator had to find them anyway. Keying on the resolution
+    // means the request re-applies the moment the id becomes resolvable, and then stops — so it never
+    // fights an operator who has since navigated within the card.
+    const appliedRequestRef = useRef<string | null>(null);
     useEffect(() => {
         if (request?.card !== "children") return;
         if (composingChildrenSurface && composer?.composeCanvasMode !== "preview") return;
+        const applied = `${requestNonce}:${requestedChildId ?? ""}`;
+        if (appliedRequestRef.current === applied) return;
+        appliedRequestRef.current = applied;
         enterContext();
-        if (request.focus) selectIdentity(String(request.focus), "roster");
+        if (requestedChildId) selectIdentity(requestedChildId, "roster");
         setEditing(false);
         setRelatedViewId(null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
-    }, [requestNonce, enterContext, selectIdentity, composingChildrenSurface, composer?.composeCanvasMode]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- (nonce, resolved id) gates re-apply
+    }, [
+        requestNonce,
+        requestedChildId,
+        enterContext,
+        selectIdentity,
+        composingChildrenSurface,
+        composer?.composeCanvasMode,
+    ]);
 
     useEffect(() => {
         if (!composerPreview) return;
@@ -871,7 +953,15 @@ export default function ChildrenCard({
     } else if (focused && focusedIdentityRecord && (disclosure.depth === "evidence" || disclosure.depth === "details")) {
         lifecycle = disclosure.depth === "evidence" ? "expanded" : "focus";
         body = (
-            <>
+            // The CANONICAL child this card is currently showing. A caller outside the card (Search,
+            // a deep link, a notification) addresses a child by its durable identity and cannot know
+            // the internal roster row id, so without this there is no way — in the product or in
+            // certification — to observe that the child who was asked for is the child on screen.
+            <div
+                data-children-focused-member={
+                    focused.customerMemberId ?? canonicalChildIdOf(focused.id) ?? undefined
+                }
+            >
                 <IdentityDisclosureSurface
                     record={focusedIdentityRecord}
                     depth={disclosure.depth}
@@ -908,7 +998,7 @@ export default function ChildrenCard({
                         composing={composingChildrenSurface}
                     />
                 ) : null}
-            </>
+            </div>
         );
     } else if (disclosure.depth === "context") {
         lifecycle = "focus";
@@ -1523,6 +1613,11 @@ function FocusedChild({
         <div
             className="alloy-os-household__focused"
             data-children-focused-child={child.id}
+            // The CANONICAL child, alongside this card's internal row id. A caller outside the card
+            // (Search, a deep link, a notification) addresses a child by its durable identity and has
+            // no way to know the row id, so without this there is no way to observe — in the product
+            // or in certification — that the child who was asked for is the child who is showing.
+            data-children-focused-member={child.customerMemberId ?? canonicalChildIdOf(child.id) ?? undefined}
             data-children-edit={editing ? "true" : undefined}
         >
             {composingChildrenSurface ? (

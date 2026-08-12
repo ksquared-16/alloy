@@ -101,6 +101,10 @@ export async function runSearch(args: RunSearchArgs): Promise<Omit<SearchRespons
             person_id: candidate.person_id ?? null,
             // Enrichment resolves a person's household from the relationship edge.
             household_id: candidate.household_id ?? enriched.household_id,
+            // …and that household's own case, which is the only Work Unit a parent or a household
+            // can be worked in — neither holds a process participation of its own.
+            household_case_entity_id: enriched.household_case_entity_id,
+            household_case_work_unit_key: enriched.household_case_work_unit_key,
         };
 
         const contexts = orderContextsByIntent(enriched.contexts, intent.promoted_keys);

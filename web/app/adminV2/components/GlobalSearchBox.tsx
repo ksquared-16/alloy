@@ -11,12 +11,9 @@ import {
     type SearchResult,
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
-import {
-    GLOBAL_SEARCH_DROPDOWN_Z_INDEX,
-    launchGlobalRecordSearchOpen,
-} from "@/lib/adminV2/globalRecordSearchOpen";
-import { isGlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSearch/globalRecordSearchDrawerTarget";
-import { warmSearchDestinationDrawerIntent } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
+import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
+import { dispatchSearchFocusSelection } from "@/lib/adminV2/searchFocusSelection";
+import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
 /**
@@ -251,27 +248,64 @@ export default function GlobalSearchBox() {
     }, []);
 
     /**
-     * Navigate to a destination. Drawer targets go through the canonical AdminV2
-     * open path; route targets use the canonical href resolved server-side. This
-     * component never constructs a URL.
+     * Go to a destination.
+     *
+     * Search DISMISSES FIRST, before anything asynchronous: the operator's click
+     * is acknowledged immediately even though the Focus Panel will not reveal the
+     * destination until K3 says it is Operational. Perceived speed comes from that
+     * acknowledgement plus warm prefetch — never from painting an unready card.
+     *
+     * This component never constructs a URL and never opens an overlay.
      */
     const openDestination = useCallback(
-        (destination: SearchDestination) => {
+        (destination: SearchDestination, subject: SearchResult["subject"]) => {
             if (destination.target === "route" && destination.href) {
                 dismiss();
                 router.push(destination.href);
                 return;
             }
-            const entityType = destination.entity_type ?? "";
-            const entityId = destination.entity_id ?? "";
-            if (!entityId || !isGlobalSearchAdminV2DrawerEntityType(entityType)) return;
+            const hostType = (destination.host_entity_type ?? "").trim();
+            const hostId = (destination.host_entity_id ?? "").trim();
+            if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return;
 
-            const navigateTo = launchGlobalRecordSearchOpen({
-                open_entity_type: entityType,
-                open_entity_id: entityId,
-            });
+            // Dismiss FIRST — the click is acknowledged immediately even though the
+            // destination is not revealed until it is Operational.
             dismiss();
-            if (navigateTo) router.push(navigateTo);
+
+            const selection = {
+                entity_type: hostType,
+                entity_id: hostId,
+                host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
+                subject_highlight: subject.kind !== "household",
+                card_focus: {
+                    card_key: destination.card_key,
+                    item_id: destination.item_id ?? null,
+                    context_key: destination.context_key ?? null,
+                },
+            };
+
+            // ── A SEARCH CLICK IS AN ATTENTION MOVEMENT, NOT A NAVIGATION ──
+            //
+            // `/workspace/work-unit/:slug` is SEED-ONLY: the route renders nothing and
+            // the Surface Host, mounted above it inside the Runtime Kernel, is the one
+            // renderer of the work-unit surface. A URL may establish attention exactly
+            // once, on cold load. So `router.push` to a work-unit route does not open
+            // it — measured: the URL changed, the server rendered the route in 2.9s,
+            // and the surface was blank forever with no error.
+            //
+            // The intent is therefore stated once, and applied by two listeners that
+            // sit where this control cannot: `SearchAttentionListener` (inside the
+            // kernel) moves attention to the host work unit and pins the host record,
+            // and `SearchFocusSelectionListener` (inside AdminDrawerProvider) applies
+            // the card and item focus. This control renders in the top nav, outside
+            // both — calling either hook here throws and takes the whole nav down, as
+            // browser certification caught.
+            //
+            // `host_work_unit_key` is a real `work_units.key`, resolved server-side from
+            // the host record's own queue membership; when it is absent there is no
+            // operational surface to move to, and the selection simply applies to the
+            // surface the operator is already on.
+            dispatchSearchFocusSelection(selection);
         },
         [dismiss, router]
     );
@@ -279,7 +313,7 @@ export default function GlobalSearchBox() {
     const openSubject = useCallback(
         (result: SearchResult) => {
             const primary = result.destinations.find((d) => d.primary);
-            if (primary) openDestination(primary);
+            if (primary) openDestination(primary, result.subject);
         },
         [openDestination]
     );
@@ -386,16 +420,13 @@ export default function GlobalSearchBox() {
                                 onHover={() => {
                                     setActiveIndex(index);
                                     // Warm the subject's drawer before the click lands.
+                                    // Warm the target BEFORE the click so K3's
+                                    // preparation.terminal arrives sooner.
                                     const primary = result.destinations.find((d) => d.primary);
-                                    if (primary) {
-                                        warmSearchDestinationDrawerIntent({
-                                            ...primary,
-                                            subject_kind: result.subject.kind,
-                                        });
-                                    }
+                                    if (primary) warmSearchFocusTarget(primary);
                                 }}
                                 onOpenSubject={() => openSubject(result)}
-                                onOpenDestination={openDestination}
+                                onOpenDestination={(d) => openDestination(d, result.subject)}
                             />
                         ))}
                     </ul>
