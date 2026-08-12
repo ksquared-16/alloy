@@ -349,8 +349,11 @@ describe("Doctrine §8.4 — billing signal evidence builder", () => {
 // ─── §8.5 — FocusPanelCardKey grain annotations ──────────────────────────────
 
 describe("Doctrine §8.5 — FocusPanelCardKey grain annotations", () => {
-    it("FOCUS_PANEL_CARD_KEYS contains all 23 keys", () => {
-        expect(FOCUS_PANEL_CARD_KEYS.length).toBe(23);
+    // 24 since `employment` joined the vocabulary: person-owned employment truth displayed at
+    // case grain, because a person has no host Work Unit of its own and the case panel is the
+    // only surface that composes for them.
+    it("FOCUS_PANEL_CARD_KEYS contains all 24 keys", () => {
+        expect(FOCUS_PANEL_CARD_KEYS.length).toBe(24);
     });
 
     it("focusPanelCardModel.ts has @grain case annotations on card keys", () => {

@@ -49,7 +49,11 @@ describe("System 5A Universal Card Archetypes", () => {
         expect(system5ArchetypeForCard("children")).toBe("collection");
         expect(system5ArchetypeForCard("work_launcher")).toBe("launcher");
         expect(system5ArchetypeForCard("timeline")).toBe("timeline");
-        expect(Object.keys(SYSTEM5_CARD_ARCHETYPE)).toHaveLength(21); // billing_preview added
+        // Employment is a `profile` for the same reason Household is: it answers with named
+        // fields about a person, not a collection of rows.
+        expect(system5ArchetypeForCard("employment")).toBe("profile");
+        // Full `Record<FocusPanelCardKey, …>`, so this tracks the card vocabulary exactly.
+        expect(Object.keys(SYSTEM5_CARD_ARCHETYPE)).toHaveLength(24);
     });
 
     it("derives action archetype for Why Now with operational insight", () => {

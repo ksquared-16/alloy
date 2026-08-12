@@ -451,6 +451,96 @@ export function buildChildrenCardModel(record: Record<string, unknown>): FocusPa
     });
 }
 
+/**
+ * Canonical Employment card model.
+ *
+ * MEANING FIRST, and the meaning is PERSON-OWNED: every word of the insight comes from the
+ * `PersonEmploymentComposition` that `lib/employment` built. This function only chooses WHICH
+ * composition to lead with (the case's primary contact, else the first employed contact). It
+ * derives no employment state of its own.
+ *
+ * `visible: false` when no linked contact holds employment. Per the readiness contract that
+ * makes the card `not_applicable`: the configured cell is KEPT and renders its muted treatment,
+ * which is the honest answer for a family with no staff — never an empty "Employment" shell
+ * asserting a relationship that does not exist.
+ */
+export function buildEmploymentCardModel(record: Record<string, unknown>): FocusPanelCardModel {
+    const projection = record._case_employment as
+        | {
+              primary?: { person_id?: unknown } | null;
+              people?: Array<{
+                  person_id?: unknown;
+                  person_label?: unknown;
+                  employment?: {
+                      is_staff?: boolean;
+                      current?: {
+                          state_label?: string | null;
+                          position_label?: string | null;
+                          primary_location_label?: string | null;
+                          employment_type_label?: string | null;
+                      } | null;
+                      periods?: Array<{ position_label?: string | null }>;
+                  } | null;
+              }>;
+          }
+        | null
+        | undefined;
+
+    const people = Array.isArray(projection?.people) ? projection.people : [];
+    if (people.length === 0) {
+        return card({
+            key: "employment",
+            title: "Employment",
+            insight: "No one on this family works here",
+            tier: "reference",
+            span: 2,
+            density: "compact",
+            primaryAction: null,
+            visible: false,
+        });
+    }
+
+    const primaryId = trimOrNull(projection?.primary?.person_id);
+    const lead =
+        (primaryId ? people.find((p) => trimOrNull(p.person_id) === primaryId) : null) ?? people[0]!;
+    const employment = lead.employment ?? null;
+    const current = employment?.current ?? null;
+    const name = trimOrNull(lead.person_label);
+
+    // The one sentence the operator needs: who, in what capacity, where.
+    let insight: string;
+    if (current) {
+        const role = trimOrNull(current.position_label) ?? "Staff";
+        const where = trimOrNull(current.primary_location_label);
+        insight = `${name ? `${name} — ` : ""}${role}${where ? ` at ${where}` : ""}`;
+    } else {
+        const role = trimOrNull(employment?.periods?.[0]?.position_label);
+        insight = `${name ? `${name} ` : ""}worked here${role ? ` as ${role}` : ""}`;
+    }
+
+    const others = people.length - 1;
+    const secondaryInsight =
+        others > 0
+            ? `${others} other contact${others === 1 ? "" : "s"} with employment here`
+            : trimOrNull(current?.employment_type_label);
+
+    return card({
+        key: "employment",
+        title: "Employment",
+        insight,
+        secondaryInsight,
+        tier: "reference",
+        span: 2,
+        density: "compact",
+        statusChip: chip(trimOrNull(current?.state_label)),
+        statusTone: current && employment?.is_staff ? "ready" : "neutral",
+        // Read-only on this surface. Add / Edit / End employment are operator capabilities at
+        // /organization/staff; offering them here would be a second execution path for one
+        // capability — the exact mistake the tour lifecycle bar made.
+        primaryAction: null,
+    });
+}
+
 function schedulingCollectionItems(record: Record<string, unknown>): {
     items: FocusPanelCollectionItem[];
     overflowCount: number;
@@ -642,6 +732,7 @@ function buildCardModels(input: {
 
     map.set("household", buildHouseholdCardModel(record, title));
     map.set("children", buildChildrenCardModel(record));
+    map.set("employment", buildEmploymentCardModel(record));
     map.set("scheduling", buildSchedulingCardModel(record));
     map.set("milestones", buildMilestonesCardModel(record));
 

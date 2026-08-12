@@ -101,6 +101,20 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
         encodedSpan: 1,
         encodedDensity: "compact",
     },
+    {
+        // Employment closes the surface on its own row. Placed VISIBLE rather than Linked because
+        // a Linked card is navigable but never rendered — `linkedCardKeys` feeds `focusTargets`
+        // only — and an operator arriving from a staff gesture must SEE the answer, not merely be
+        // able to hand off to it. For a family with no employed contact the card model reports
+        // `visible: false`, which the readiness contract turns into `not_applicable`: the cell is
+        // kept and renders its muted treatment rather than asserting a relationship.
+        key: "employment",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
     { key: "tour_summary", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
     { key: "communications", tier: "reference", visibility: "linked", encodedSpan: 1, encodedDensity: "standard" },
     { key: "milestones", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
