@@ -1,7 +1,25 @@
 "use client";
 
 /**
- * Person → Employment card.
+ * ⚠ RETAINED, UNMOUNTED — do not delete on an orphan scan alone.
+ *
+ * The PRESENTATION here now lives on the Focus Panel as
+ * `components/admin/focusPanel/cards/EmploymentCard.tsx`, which carries the headline, the state
+ * chip, the current-period fields, the configured facts and the history list across unchanged.
+ * On presentation this file is fully superseded.
+ *
+ * What is NOT superseded is the MUTATION surface: Add staff / Re-hire / Edit employment / End
+ * employment. Those callbacks are the only UI anywhere in the product for the registered
+ * `employment.update` and `employment.end` capabilities — the Staff Directory
+ * (`components/adminV2/settings/staff/StaffDirectoryPage.tsx`) offers Add Staff and nothing else,
+ * and the Focus Panel card is deliberately read-only so one capability keeps one execution path.
+ *
+ * Deleting this file therefore destroys the only implementation of two live capabilities, which is
+ * the exact trap the drawer eradication recorded: an orphan scan proves "no importer", never "safe
+ * to delete". It is kept until Edit/End employment are mounted on an operator surface, and is
+ * tracked as a stranded capability in the same class PR #412 resolved.
+ *
+ * Person → Employment card (legacy drawer-era presentation).
  *
  * Meaning first: the card answers "does this person work here, in what capacity,
  * where, and since when" in one readable line before it shows any field. It is

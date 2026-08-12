@@ -16,6 +16,7 @@ import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
 import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
     SCHEDULING_SECTION_MODE,
     type SchedulingMode,
@@ -629,6 +630,31 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
      * Records workspace, not here.
      */
     const focusRecord = useOperatorRecordFocus();
+
+    /**
+     * State the record intent, then GET OUT OF THE WAY.
+     *
+     * This workspace is a modal mounted in `TopNavBar` — shell chrome, inside the workspace layout
+     * but above the kernel. The adapter therefore moves attention on the surface UNDERNEATH this
+     * modal. Without the close, the movement is real and completely invisible: the panel composes
+     * the record behind an opaque overlay and the operator sees their click do nothing, which is
+     * indistinguishable from the `openDrawer` defect this all replaced.
+     *
+     * Closing only on `true` is the point of the contract. A `false` answer means no active Work
+     * Unit hosts the record — there is nothing behind this modal to reveal, so dismissing it would
+     * throw the operator out of Attendance to look at the surface they were already on. The caller
+     * owning its own dismissal (rather than the listener closing modals for everyone) is the
+     * pattern the migrated callers already share — see `InboxPanel.onOpenRecord`.
+     */
+    const focusRecordAndYield = useCallback(
+        async (request: Parameters<typeof focusRecord>[0]): Promise<boolean> => {
+            const moved = await focusRecord(request);
+            if (moved) onClose?.();
+            return moved;
+        },
+        [focusRecord, onClose]
+    );
+
     const summary = useMemo(() => deriveRosterSummary(roster), [roster]);
 
     const unplaced = overview?.unplaced ?? [];
@@ -980,10 +1006,18 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                             // Canonical record only — a child opens as its person
                             // identity. Roster is a selection surface, not a record one.
                             if (!child.personId) return false;
-                            return focusRecord({ entity_type: "persons", entity_id: child.personId });
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: child.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.children, item_id: child.personId },
+                            });
                         }}
                         onOpenStaff={(staff) => {
-                            return focusRecord({ entity_type: "persons", entity_id: staff.personId });
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: staff.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
+                            });
                         }}
                     />
                 ) : null}
@@ -994,10 +1028,20 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         onOpenChild={(child) => {
                             // Canonical Child record — never an attendance-specific surface.
                             if (!child.personId) return false;
-                            return focusRecord({ entity_type: "persons", entity_id: child.personId });
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: child.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.children, item_id: child.personId },
+                            });
                         }}
                         onOpenStaff={(staff) => {
-                            return focusRecord({ entity_type: "persons", entity_id: staff.personId });
+                            // A staff gesture asks about this person's standing here, not the
+                            // family's enrollment work — so it names the Employment card.
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: staff.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
+                            });
                         }}
                     />
                 ) : null}
