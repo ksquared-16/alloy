@@ -12,12 +12,6 @@ import {
 } from "@/lib/admin/actions/actionSurfaceFeedback";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 
-type OpenDrawerFn = (opts: {
-    type: AdminDrawerEntityType;
-    id: string;
-    defaultOpportunitySurface?: "quote_intake";
-}) => void;
-
 type RouterLike = { push: (href: string) => void; refresh: () => void };
 
 export function OpportunityInquiryChildrenRegistryActions(props: {
@@ -25,13 +19,13 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
     childrenCount: number;
     canMutate: boolean;
     router: RouterLike;
-    openDrawer: OpenDrawerFn;
+    focusRecord: (request: { entity_type: string; entity_id: string }) => void;
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     openAddInquiryChild?: (mode: "child" | "sibling") => void;
     /** Suppress keys already on record_header (e.g. add_child / add_sibling). */
     excludeActionKeys?: Set<string>;
 }) {
-    const { opportunityId, childrenCount, canMutate, router, openDrawer, openForm, openAddInquiryChild, excludeActionKeys } =
+    const { opportunityId, childrenCount, canMutate, router, focusRecord, openForm, openAddInquiryChild, excludeActionKeys } =
         props;
     const [bySlot, setBySlot] = useState<ResolvedActionsBySlot | null>(null);
     const [loading, setLoading] = useState(true);
@@ -106,7 +100,7 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
                     try {
                         const out = await applyRegistryResolvedActionClient(chosen, {
                             router,
-                            openDrawer,
+                            focusRecord,
                             openForm,
                             openAddInquiryChild,
                             entityId: opportunityId,

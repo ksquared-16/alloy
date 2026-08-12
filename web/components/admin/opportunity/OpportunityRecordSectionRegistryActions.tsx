@@ -12,12 +12,6 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { OPPORTUNITY_DRAWER_SECTION_SECONDARY_BUTTON_CLASS } from "@/lib/admin/drawer/opportunityDrawerRecordActionButtonClasses";
 
-type OpenDrawerFn = (opts: {
-    type: AdminDrawerEntityType;
-    id: string;
-    defaultOpportunitySurface?: "quote_intake";
-}) => void;
-
 type RouterLike = { push: (href: string) => void; refresh: () => void };
 
 type Props = {
@@ -29,7 +23,7 @@ type Props = {
     excludeActionKeys?: Set<string>;
     canMutate: boolean;
     router: RouterLike;
-    openDrawer: OpenDrawerFn;
+    focusRecord: (request: { entity_type: string; entity_id: string }) => void;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     openAddInquiryChild?: (mode: "child" | "sibling") => void;
     openAddPerson?: (actionKey: string) => void;
@@ -63,7 +57,7 @@ export default function OpportunityRecordSectionRegistryActions({
     excludeActionKeys,
     canMutate,
     router,
-    openDrawer,
+    focusRecord,
     openForm,
     openAddInquiryChild,
     openAddPerson,
@@ -168,7 +162,7 @@ export default function OpportunityRecordSectionRegistryActions({
             try {
                 const out = await applyRegistryResolvedActionClient(resolved, {
                     router,
-                    openDrawer,
+                    focusRecord,
                     openForm,
                     openAddInquiryChild,
                     openAddPerson,
@@ -199,7 +193,7 @@ export default function OpportunityRecordSectionRegistryActions({
             opportunityId,
             onApplied,
             onExecutionResult,
-            openDrawer,
+            focusRecord,
             openForm,
             openAddInquiryChild,
     openAddPerson,

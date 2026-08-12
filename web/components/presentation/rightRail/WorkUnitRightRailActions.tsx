@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { useCommandRailActionPending } from "@/components/presentation/rightRail/useCommandRailActionPending";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -45,7 +46,8 @@ export function WorkUnitRightRailActions({ actions, departmentId, workUnitId }: 
 
 export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnitId }: Props) {
     const router = useRouter();
-    const { drawer, openDrawer } = useAdminDrawer();
+    const { drawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
 
     const selectedRecordId =
         drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
@@ -59,7 +61,7 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
             runWithPending(action.key, () =>
                 applyRegistryResolvedActionClient(action, {
                     router,
-                    openDrawer,
+                    focusRecord: (r) => void focusRecord(r),
                     departmentId,
                     workUnitId,
                     entityId: selectedRecordId,
@@ -71,7 +73,7 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
                 }),
             );
         },
-        [runWithPending, router, openDrawer, departmentId, workUnitId, selectedRecordId],
+        [runWithPending, router, focusRecord, departmentId, workUnitId, selectedRecordId],
     );
 
     return (
