@@ -27,7 +27,10 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
-import { buildOpportunityFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import {
+    buildOpportunityFocusPanelMutation,
+    resolveFocusPanelMutationOpportunityId,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { CompositionCardInput } from "@/lib/adminV2/runtime/focusPanel/composition/composeFocusPanelSurface";
 import { publishedLayoutReadingOrder } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayout";
 import {
@@ -44,7 +47,7 @@ import {
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
 import { alloySectionDomAttrs } from "@/lib/perf/alloySectionMap";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
-import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { FOCUS_PANEL_CARD_KEYS, type FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { resolveCommunicationsComposerAction } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCommunicationsComposerAction";
@@ -104,6 +107,16 @@ type Props = {
     onSelectTab: (tab: DrawerTabKey) => void;
     onHeaderAction?: (action: ResolvedActionForClient) => void;
     onModeChange?: (mode: FocusPanelMode) => void;
+    /**
+     * A card the SELECTION asked to land on (today: Search).
+     *
+     * Passed in rather than read from the drawer context because this component is
+     * deliberately source-agnostic — it renders a model and must not know where the
+     * selection came from. `subject_key` scopes the request so switching subject
+     * re-applies focus, while unrelated re-renders do not fight an operator who has
+     * since focused something else.
+     */
+    requestedCardFocus?: { card_key: string; item_id?: string | null; subject_key?: string | null } | null;
 };
 
 /** Renders a mode grid from a source-agnostic `FocusPanelWorkModeModel` — never the drawer VM. */
@@ -112,6 +125,7 @@ export default function OpportunityFocusPanelModeGrid({
     onSelectTab,
     onHeaderAction,
     onModeChange,
+    requestedCardFocus,
 }: Props) {
     // Source-agnostic: the model is produced identically from the provisioning answer (commit-critical)
     // or the drawer VM (enriched). The grid never knows which — configuration determines composition,
@@ -127,7 +141,13 @@ export default function OpportunityFocusPanelModeGrid({
         perspective,
         canMutate,
     } = model;
-    const drawerId = model.subject.id;
+    // Attention subject may be the child; mutations + activity entity binding stay on the
+    // family opportunity (Record of Truth) so child-grain saves/photo patches stick.
+    const drawerId = resolveFocusPanelMutationOpportunityId({
+        subjectId: model.subject.id,
+        grain: operationalContext.grain,
+        truth: operationalContext.truth,
+    });
     const record = operationalContext.truth;
     const workflowActive = operationalContext.stageWorkRuntime?.primary?.state === "open";
     const defaultGrid = useMemo(() => resolveFocusPanelModeGrid(mode, workflowActive), [mode, workflowActive]);
@@ -243,6 +263,47 @@ export default function OpportunityFocusPanelModeGrid({
             });
         }
     }, []);
+
+    // ── SELECTION-REQUESTED CARD + ITEM FOCUS ──
+    //
+    // A caller (today: Search) asks for a specific card, and often a specific row inside it, through
+    // the kernel's ASPECT attention — the same movement that carried the subject. Clicking a child
+    // therefore lands on Children with that child selected, rather than on the panel's default
+    // composition, and the caller never touches the DOM or owns a second focus state: this drives the
+    // existing `activeDepth`/`elevatedCellKey` machinery and the existing `focusRequest` the cards
+    // already consume.
+    //
+    // `emitFocus` is what carries the ITEM. Elevating the card alone was the gap: the panel opened
+    // Children and left the operator to find the child themselves.
+    //
+    // Keyed on the REQUEST identity (subject + card + item) so a rapid subject switch re-applies,
+    // while a re-render for any other reason does not fight an operator who has since focused
+    // something else themselves.
+    const requestedFocusKey = requestedCardFocus
+        ? `${requestedCardFocus.subject_key ?? ""}:${requestedCardFocus.card_key}:${requestedCardFocus.item_id ?? ""}`
+        : null;
+    const appliedFocusKeyRef = useRef<string | null>(null);
+    /**
+     * The card whose elevation came from OUTSIDE the panel and which has not yet reported an elevated
+     * level of its own. Null at every other time — this protects exactly one transition, never a
+     * persistent state, so the operator can always collapse the card afterwards.
+     */
+    const requestedElevationCardRef = useRef<FocusPanelCardKey | null>(null);
+    useEffect(() => {
+        if (!requestedCardFocus || !requestedFocusKey) return;
+        if (appliedFocusKeyRef.current === requestedFocusKey) return;
+        const card = requestedCardFocus.card_key;
+        if (!(FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(card)) return;
+        appliedFocusKeyRef.current = requestedFocusKey;
+        // The elevation was asked for from OUTSIDE the panel, so the target card has not taken
+        // ownership of it yet. Until it does, its own mount-time "base" report must not tear the
+        // elevation back down — see `reportPerspective`.
+        requestedElevationCardRef.current = card as FocusPanelCardKey;
+        setActiveDepth({ card: card as FocusPanelCardKey, level: "focused" });
+        const item = (requestedCardFocus.item_id ?? "").trim();
+        if (item) emitFocus(card as FocusPanelCardKey, item);
+    }, [requestedCardFocus, requestedFocusKey, emitFocus]);
+
     const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>(
         (card, focus, source) => {
             if (source) {
@@ -306,6 +367,9 @@ export default function OpportunityFocusPanelModeGrid({
             setActiveDepth((prev) => {
                 const isLinked = summaryInputs?.visibilityByCardKey.get(card) === "linked";
                 if (isElevatedLevel(level)) {
+                    // The card has taken ownership of the elevation; it no longer needs protecting
+                    // from its own base report.
+                    if (requestedElevationCardRef.current === card) requestedElevationCardRef.current = null;
                     // Linked overlays are opened only by requestFocus. Ignore self-reports
                     // that would reopen after dismiss while the card still has local focus.
                     if (isLinked) return prev?.card === card ? { card, level } : prev;
@@ -314,6 +378,15 @@ export default function OpportunityFocusPanelModeGrid({
                 // Linked host: ignore mount-time "base" (focus applies in an effect).
                 // dismiss() clears activeDepth explicitly after the close animation.
                 if (isLinked && prev?.card === card) return prev;
+                // EXTERNALLY REQUESTED elevation: ignore this card's mount-time "base" for the same
+                // reason the linked host does. A selection request (Search, a deep link) elevates a
+                // card the operator has not interacted with; the card then mounts, has nothing
+                // selected of its own, and honestly reports "base" — which cleared the elevation the
+                // request had just set. Measured: a card-focus request carrying an ITEM survived
+                // (selecting the item makes the card report an elevated level), and the identical
+                // request WITHOUT an item was torn down between frames, so "open the Household card"
+                // did nothing while "open Jane" worked.
+                if (requestedElevationCardRef.current === card && prev?.card === card) return prev;
                 // Receding/leaving: only clear if this card owned the active layer.
                 return prev?.card === card ? null : prev;
             });
@@ -331,6 +404,10 @@ export default function OpportunityFocusPanelModeGrid({
     const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dismiss = useCallback<NonNullable<FocusPanelCoordination["dismiss"]>>((card) => {
         if (closeTimerRef.current) return; // already closing — ignore repeat dismiss
+        // The operator is collapsing the card, so the externally-requested elevation is over. Without
+        // this the guard in `reportPerspective` would refuse the card's base report and the card
+        // could not be closed.
+        if (requestedElevationCardRef.current === card) requestedElevationCardRef.current = null;
         setClosing(true);
         closeTimerRef.current = setTimeout(() => {
             closeTimerRef.current = null;

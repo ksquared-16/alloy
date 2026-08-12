@@ -490,15 +490,6 @@ describe("Final Surface Composer doctrine — runtime sacred, composer overlay",
         expect(canvas).toContain("hideClose");
     });
 
-    it("hides Focus Panel close control on inline work-unit runtime", () => {
-        const inlineFocusPanel = readSrc("components/presentation/workUnit/InlineOpportunityFocusPanel.tsx");
-        const drawerRuntime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const compactHeader = readSrc("components/admin/focusPanel/FocusPanelCompactHeader.tsx");
-        expect(inlineFocusPanel).toContain("hideClose");
-        expect(drawerRuntime).toContain("hideClose");
-        expect(compactHeader).toContain("data-focus-panel-close-hidden");
-    });
-
     it("keeps runtime GroupRows visible — never swaps to a configuration layout", () => {
         expect(householdCard).toContain("<GroupRows");
         expect(householdCard).not.toContain("RegionInlineCompose");

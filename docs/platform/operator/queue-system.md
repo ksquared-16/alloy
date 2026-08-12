@@ -187,6 +187,12 @@ Candidate-grain waitlist rows expose placement vocabulary via `queueWaitlistPlac
 
 Pipeline queue rows reject waitlist/sibling refs at publish validation. Code: `queueRecordValidatorAllowList.ts`, `validateQueueRecordLayoutConfig.ts`.
 
+### Waitlist placement adjust (operator)
+
+Candidate Waitlist rows expose an **Adjust** control under the `#n/total` stamp (`WaitlistPlacementAdjustControl`) — plain link, not a primary button. The adjust modal uses Focus Panel card chrome; Apply uses Bend Pine (`#00A283` / `alloy-bend-pine`). Reason is optional (no placeholder). Group headers show **program label only** (age ranges stripped via `programLabelWithoutAgeRange`). Compact time-in-stage remains the single bottom-right stamp owned by `stage_entered_at` (see § Queue age above) — not lead `created_at`.
+
+**Work View labels:** Settings **Save** writes draft only. Live operator pill/row labels require **Apply changes** on the Business Process publication bar (`BusinessProcessPublicationBar`). See `../core/business-process-system.md` § Work View draft vs published labels.
+
 ---
 
 ## Needs Attention

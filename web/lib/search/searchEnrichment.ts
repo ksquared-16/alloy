@@ -23,6 +23,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalRecordSearchAgeLabel";
 import {
+    fetchHostWorkUnitKeys,
+    fetchHouseholdCaseHosts,
+} from "@/lib/workUnits/hostWorkUnitResolver";
+import {
     LOCATION_DISPLAY_LABEL_SELECT,
     locationDisplayLabelFromRow,
     type LocationDisplayLabelRow,
@@ -49,6 +53,12 @@ export type SearchEnrichment = {
      * household destination depends on this value.
      */
     household_id: string | null;
+    /**
+     * The household's operational case + the Work Unit holding it. Only children participate in a
+     * process, so this is the ONLY way a parent or a household resolves a Work Unit to be worked in.
+     */
+    household_case_entity_id: string | null;
+    household_case_work_unit_key: string | null;
 };
 
 export type SearchEnrichmentResult = Map<string, SearchEnrichment>;
@@ -116,6 +126,25 @@ export async function enrichSearchCandidates(args: {
             fetchPersonDobs(supabase, orgId, childPersonIds),
             fetchOrgLocationLabels(supabase, orgId),
         ]);
+
+    // Wave 3 — the Work Unit that HOSTS each process context. Its id set is only
+    // known once the process rows land, so this is the one genuinely sequential hop;
+    // it is skipped entirely when nothing matched a process participation.
+    const hostOpportunityIds = uniq(
+        processRows
+            .filter((r) => (r.context_type ?? "").trim() === "opportunity")
+            .map((r) => r.context_id)
+    );
+    // …and the household's own case, for the subjects that have no process of their own. Runs
+    // alongside, not after: its id set (households) was known in wave 1.
+    const [hostWorkUnitKeys, householdCases] = await Promise.all([
+        hostOpportunityIds.length
+            ? fetchHostWorkUnitKeys(supabase, orgId, hostOpportunityIds)
+            : Promise.resolve(new Map<string, string>()),
+        householdIds.length
+            ? fetchHouseholdCaseHosts(supabase, orgId, householdIds)
+            : Promise.resolve(new Map<string, { opportunityId: string; workUnitKey: string | null }>()),
+    ]);
 
     const locationIds = uniq([
         ...processRows.map((r) => r.location_id),
@@ -198,6 +227,12 @@ export async function enrichSearchCandidates(args: {
                     // authoritative surface. Enrollment: context_type='opportunity'.
                     destination_entity_type: row.context_type,
                     destination_entity_id: row.context_id,
+                    // Where that context is WORKED. Read from the host record's own
+                    // queue membership — never from the process key, which names a
+                    // different namespace and resolves to no work unit.
+                    destination_work_unit_key: row.context_id
+                        ? hostWorkUnitKeys.get(row.context_id) ?? null
+                        : null,
                 });
             }
         }
@@ -270,11 +305,15 @@ export async function enrichSearchCandidates(args: {
             }
         }
 
+        const householdCase = resolvedHouseholdId ? householdCases.get(resolvedHouseholdId) ?? null : null;
+
         out.set(candidateKey(c), {
             recognition,
             contexts,
             location_id: locationId,
             household_id: resolvedHouseholdId,
+            household_case_entity_id: householdCase?.opportunityId ?? null,
+            household_case_work_unit_key: householdCase?.workUnitKey ?? null,
         });
     }
 
@@ -360,6 +399,7 @@ async function fetchProcessInstances(
                 : null,
     }));
 }
+
 
 type ScheduleRow = {
     customer_member_id: string;

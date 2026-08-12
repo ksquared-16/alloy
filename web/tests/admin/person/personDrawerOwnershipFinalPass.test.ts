@@ -68,36 +68,6 @@ describe("person drawer ownership final pass", () => {
         expect(src).toContain("extraHouseholdMemberIds");
     });
 
-    it("unlinked child row is not openable and documents fix path", () => {
-        const record = {
-            id: "parent-1",
-            _household_context: [{ customer_id: "cust-1", customer_name: "Test" }],
-            _household_child_links: [
-                {
-                    customer_member_id: "m-unlinked",
-                    customer_id: "cust-1",
-                    person_id: null,
-                    display_name: "Unnamed child",
-                },
-            ],
-            _household_adult_links: [],
-            _enrollment_mirror: [],
-        };
-        const child = resolvePersonDrawerHouseholdModel(record).groups[0]?.children[0];
-        expect(child?.link_state).toBe("unlinked");
-        expect(child?.person_id).toBeNull();
-
-        const householdSection = read("components/admin/entity/PersonDrawerHouseholdSection.tsx");
-        expect(householdSection).toContain("PERSON_DRAWER_UNLINKED_CHILD_TOOLTIP");
-        expect(read("lib/admin/person/personDrawerHouseholdUnlinkedChild.ts")).toContain(
-            PERSON_DRAWER_UNLINKED_CHILD_TOOLTIP
-        );
-        expect(read("lib/admin/person/personDrawerHouseholdUnlinkedChild.ts")).toContain(
-            "customer_members.person_id"
-        );
-        expect(householdSection).toContain('aria-disabled="true"');
-    });
-
     it("excludes viewing parent from guardians and viewing child from children", () => {
         const record = {
             id: "kevin-1",

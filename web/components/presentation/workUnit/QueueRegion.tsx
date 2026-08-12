@@ -42,6 +42,11 @@ import {
     occurrenceKeyFromQueueRowContext,
     useLocallySeenOccurrenceCount,
 } from "@/lib/queues/queuePersonalSeenSession";
+import {
+    queueGroupCollapseStorageKey,
+    readQueueGroupCollapsed,
+    writeQueueGroupCollapsed,
+} from "@/lib/presentation/runtime/queueGroupCollapseSession";
 
 const QUEUE_SKELETON_ROW_COUNT = 3;
 
@@ -242,6 +247,63 @@ export function QueueRegion({
     // the cold first load and hard errors.
     const showFilterControls = renderState === "rows" || renderState === "empty";
 
+    // Configured group-by collapse (session presentation only). Group value today is Program label
+    // from placement_context — same header any grouped Queue Work View already emits.
+    const [collapsedGroupValues, setCollapsedGroupValues] = useState<ReadonlySet<string>>(
+        () => new Set(),
+    );
+    useEffect(() => {
+        const next = new Set<string>();
+        for (const row of rowsForList) {
+            const groupValue = row.context?.placement_context?.program_label?.trim() || "";
+            if (!groupValue) continue;
+            const key = queueGroupCollapseStorageKey({
+                workUnitId,
+                workViewId,
+                groupKind: "program",
+                groupValue,
+            });
+            if (readQueueGroupCollapsed(key)) next.add(groupValue);
+        }
+        setCollapsedGroupValues(next);
+        // Re-hydrate when the active lens / host changes — not on every row flicker.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workUnitId, workViewId]);
+
+    const groupCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const row of rowsForList) {
+            const groupValue = row.context?.placement_context?.program_label?.trim() || "";
+            if (!groupValue) continue;
+            counts.set(groupValue, (counts.get(groupValue) ?? 0) + 1);
+        }
+        return counts;
+    }, [rowsForList]);
+
+    const toggleQueueGroup = useCallback(
+        (groupValue: string) => {
+            const value = groupValue.trim();
+            if (!value) return;
+            setCollapsedGroupValues((prev) => {
+                const next = new Set(prev);
+                const collapsed = !next.has(value);
+                if (collapsed) next.add(value);
+                else next.delete(value);
+                writeQueueGroupCollapsed(
+                    queueGroupCollapseStorageKey({
+                        workUnitId,
+                        workViewId,
+                        groupKind: "program",
+                        groupValue: value,
+                    }),
+                    collapsed,
+                );
+                return next;
+            });
+        },
+        [workUnitId, workViewId],
+    );
+
     return (
         <section
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.queueRegion)}
@@ -375,8 +437,53 @@ export function QueueRegion({
                             </p>
                         ) : null}
                         <ul role="list" aria-busy={queue.loading || undefined} className="flex flex-col gap-2">
-                        {rowsForList.map((row, index) => (
+                        {rowsForList.map((row, index) => {
+                            const programGroup =
+                                row.context?.placement_context?.program_label?.trim() || "";
+                            const prevProgram =
+                                index > 0
+                                    ? rowsForList[index - 1]?.context?.placement_context?.program_label?.trim()
+                                      || ""
+                                    : null;
+                            const showProgramGroupHeader =
+                                Boolean(programGroup)
+                                && (index === 0 || programGroup !== prevProgram);
+                            const groupCollapsed =
+                                Boolean(programGroup) && collapsedGroupValues.has(programGroup);
+                            if (groupCollapsed && !showProgramGroupHeader) {
+                                return null;
+                            }
+                            const groupCount = programGroup
+                                ? (groupCounts.get(programGroup) ?? 0)
+                                : 0;
+                            return (
                             <li key={`${row.entityType}:${row.entityId}`}>
+                                {showProgramGroupHeader ? (
+                                    <button
+                                        type="button"
+                                        className="flex w-full items-center gap-1.5 px-1 pb-0.5 pt-2 text-left text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50 first:pt-0 hover:text-alloy-pine"
+                                        data-queue-group-header="program"
+                                        data-queue-group-value={programGroup}
+                                        data-queue-group-collapsed={groupCollapsed ? "true" : "false"}
+                                        aria-expanded={!groupCollapsed}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            toggleQueueGroup(programGroup);
+                                        }}
+                                    >
+                                        <span aria-hidden className="inline-block w-3 tabular-nums">
+                                            {groupCollapsed ? "▶" : "▼"}
+                                        </span>
+                                        <span className="min-w-0 flex-1 truncate">{programGroup}</span>
+                                        <span
+                                            data-queue-group-count
+                                            className="shrink-0 tabular-nums text-alloy-midnight/45"
+                                        >
+                                            {groupCount}
+                                        </span>
+                                    </button>
+                                ) : null}
+                                {groupCollapsed ? null : (
                                 <CondensedQueueRow
                                     row={row}
                                     rowConfig={row.rowConfig ?? queue.rowConfig}
@@ -386,8 +493,10 @@ export function QueueRegion({
                                     isFirst={index === 0}
                                     isSelected={rowIsSelected(row, effectiveSelectedId)}
                                 />
+                                )}
                             </li>
-                        ))}
+                            );
+                        })}
                         </ul>
                     </>
                 )}

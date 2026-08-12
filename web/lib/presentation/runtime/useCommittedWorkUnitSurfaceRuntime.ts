@@ -25,6 +25,7 @@
  * lens, the Work Unit, or the Context Frame.
  */
 import { useCallback, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
 import { seedOpportunityStageWork } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
@@ -36,6 +37,10 @@ import {
     isWorkUnitPrimaryRevealActive,
 } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import { resolveSelectWorkViewAction } from "@/lib/presentation/runtime/workUnitPillSwitching";
+import type { WorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
+import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
 
 /**
  * Warm a subject's COMPLETE commit-critical answer for a row selection: the K2 provisioning answer
@@ -75,6 +80,9 @@ export type CommittedWorkUnitSurfaceRuntime = {
 export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRuntime {
     const kernel = useRuntimeKernel();
     const focus = useCommittedFocus();
+    const router = useRouter();
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter?.selectedSiteId ?? null;
 
     // The OPERATIONAL world, as a value — built PURELY from the committed snapshot, consulting no
     // fetch. This is the first visible frame: reserved geometry, no Settlement. Null before the first
@@ -154,15 +162,70 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
 
     const selectWorkView = useCallback(
         (workViewId: string) => {
-            // A LENS-scope movement. K2 prepares the new lens; K3 commits when it terminates.
-            // No router push: the URL is projected FROM the commit, never used to cause it.
+            // Same-host: LENS attention move (Excel-tab swap, no remount).
+            // Cross-host: navigate to the view's canonical host so pill count + queue rows share
+            // one cohort (All Family Leads must not show host-A count over host-B empty rows).
+            const id = workViewId.trim();
+            if (!id) return;
+            // Read Focus at click time — do not trust a stale React closure for settlement/lensSet.
+            const rawSnap = kernel.getFocus().current?.snapshot ?? focus.current?.snapshot ?? null;
+            const snap =
+                rawSnap && (rawSnap.terminal === "operational" || rawSnap.terminal === "empty")
+                    ? rawSnap
+                    : null;
+            const currentWorkUnitId = snap?.workUnit.id ?? null;
+            const currentWorkViewId = snap?.activeWorkView.id ?? kernel.attention.get()?.lens ?? null;
+            const locators = snap?.settlement ?? null;
+            const canonicalLocationByViewId = new Map<string, WorkViewCanonicalLocation>();
+            if (locators?.status === "resolved") {
+                for (const target of locators.workViewCountTargets) {
+                    canonicalLocationByViewId.set(target.workViewId, {
+                        workUnitId: target.hostWorkUnitId,
+                        baseQueueKey: target.baseQueueKey,
+                        routeKey: null,
+                    });
+                }
+            }
+            const views = (snap?.lensSet ?? []).map((lens: { id: string; label: string }) => ({
+                id: lens.id,
+                label: lens.label,
+            }));
+            const targetInputs = {
+                views,
+                canonicalLocationByViewId,
+                selectedSiteId,
+            };
+            const action = resolveSelectWorkViewAction({
+                workViewId: id,
+                currentWorkViewId,
+                currentWorkUnitId,
+                canonicalLocationByViewId,
+                targetInputs,
+            });
+            if (action.kind === "noop") return;
+            if (action.kind === "navigate") {
+                router.push(action.href);
+                return;
+            }
+            // Pathname safety net: even if settlement locators are unavailable/mis-classified as
+            // same-host, a label-derived href that leaves this work-unit path must navigate so
+            // count host + row host stay one cohort.
+            const href = resolveWorkViewTargetHref(id, targetInputs);
+            if (typeof window !== "undefined" && href) {
+                const currentPath = window.location.pathname.replace(/\/$/, "");
+                const hrefPath = href.split("?")[0]!.replace(/\/$/, "");
+                if (hrefPath && hrefPath !== currentPath) {
+                    router.push(href);
+                    return;
+                }
+            }
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.LENS,
-                lens: workViewId,
+                lens: id,
                 source: "work_view_selection",
             });
         },
-        [kernel],
+        [kernel, focus, router, selectedSiteId],
     );
 
     const openRecord = useCallback(
@@ -190,15 +253,62 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         (workViewId: string) => {
             const current = kernel.attention.get();
             if (!current || current.lens === workViewId) return;
-            // Prepare the sibling view's provisioning answer AND its default subject's complete VM —
-            // so a pill switch commits a complete Focus Panel, not just a warm queue (Kelly Blocker 2).
+            const id = workViewId.trim();
+            if (!id) return;
+            const rawSnap = kernel.getFocus().current?.snapshot ?? focus.current?.snapshot ?? null;
+            const snap =
+                rawSnap && (rawSnap.terminal === "operational" || rawSnap.terminal === "empty")
+                    ? rawSnap
+                    : null;
+            const locators = snap?.settlement ?? null;
+            const canonicalLocationByViewId = new Map<string, WorkViewCanonicalLocation>();
+            if (locators?.status === "resolved") {
+                for (const target of locators.workViewCountTargets) {
+                    canonicalLocationByViewId.set(target.workViewId, {
+                        workUnitId: target.hostWorkUnitId,
+                        baseQueueKey: target.baseQueueKey,
+                        routeKey: null,
+                    });
+                }
+            }
+            const views = (snap?.lensSet ?? []).map((lens: { id: string; label: string }) => ({
+                id: lens.id,
+                label: lens.label,
+            }));
+            const targetInputs = {
+                views,
+                canonicalLocationByViewId,
+                selectedSiteId,
+            };
+            const action = resolveSelectWorkViewAction({
+                workViewId: id,
+                currentWorkViewId: current.lens,
+                currentWorkUnitId: snap?.workUnit.id ?? null,
+                canonicalLocationByViewId,
+                targetInputs,
+            });
+            if (action.kind === "navigate") {
+                router.prefetch(action.href);
+                return;
+            }
+            const href = resolveWorkViewTargetHref(id, targetInputs);
+            if (typeof window !== "undefined" && href) {
+                const currentPath = window.location.pathname.replace(/\/$/, "");
+                const hrefPath = href.split("?")[0]!.replace(/\/$/, "");
+                if (hrefPath && hrefPath !== currentPath) {
+                    router.prefetch(href);
+                    return;
+                }
+            }
+            // Same-host: prepare the sibling view's provisioning answer AND its default subject's
+            // complete VM — so a pill switch commits a complete Focus Panel, not just a warm queue.
             void prepareOperationalDestination(kernel, {
                 ...current,
-                lens: workViewId,
+                lens: id,
                 scope: ATTENTION_SCOPE.LENS,
             });
         },
-        [kernel],
+        [kernel, focus, router, selectedSiteId],
     );
 
     // ADJACENT SUBJECT PREPARATION (#6). The K2 provisioning answer is per-lens, so a subject move

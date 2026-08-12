@@ -11,7 +11,7 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { useCommandRailActionPending } from "@/components/presentation/rightRail/useCommandRailActionPending";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -41,7 +41,7 @@ export function WorkspaceRightRailActions({ actions, defaultDepartmentId }: Prop
 
 function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props) {
     const router = useRouter();
-    const { openDrawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
     // Immediate acknowledgement — shared with the Work Unit rail. Presentation only; correctness
     // (what the action does / how it refreshes) is untouched.
     const { pendingKey, runWithPending } = useCommandRailActionPending();
@@ -51,7 +51,7 @@ function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props
             runWithPending(action.key, () =>
                 applyRegistryResolvedActionClient(action, {
                     router,
-                    openDrawer,
+                    focusRecord: (r) => void focusRecord(r),
                     departmentId: defaultDepartmentId,
                     workUnitId: null,
                     entityId: null,
@@ -63,7 +63,7 @@ function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props
                 }),
             );
         },
-        [runWithPending, router, openDrawer, defaultDepartmentId],
+        [runWithPending, router, focusRecord, defaultDepartmentId],
     );
 
     return (

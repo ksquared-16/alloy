@@ -110,22 +110,23 @@ export function InlineOpportunityFocusPanel() {
     // seed carried on the committed Operational Subject (derived from the same committed queue row the
     // subject was selected from — never the drawer store). It gives the pending header the family name +
     // status on cold open; the resolved header replaces it once the VM lands.
-    // ── SETTLEMENT IS OPPORTUNITY-SHAPED, SO A CHILD SUBJECT DOES NOT ENTER IT. ──
-    // `useRecordWorkRuntime` loads the OPPORTUNITY record VM keyed on the committed subject id. A
-    // child's subject id is a `process_instances.id`, so that fetch cannot succeed — measured, it
-    // returned "Could not load the opportunity drawer View Model" over a child whose operational
-    // answer was completely healthy. The two wrong ways out are both substitutions: loading the
-    // FAMILY's VM instead (the wrong subject), or reporting the child as unresolved (a lie about a
-    // resolved answer). So a child panel renders from the commit-critical answer alone, and the
-    // Settlement cards stay honestly reserved until a child Settlement exists.
+    // ── SETTLEMENT TRUTH IS FAMILY-SHAPED; ATTENTION MAY BE THE CHILD. ──
+    // Product model: Record of Truth = family opportunity; Record of Attention = focused child.
+    // `useRecordWorkRuntime` loads the OPPORTUNITY VM — key it on the family opportunity id
+    // (`child.family_opportunity_id` / drawer_open.entity_id), never on the process_instance id.
     const isChildSubject = operational.entityType === "child";
-    // Only the FETCH is suppressed. `drawer` still describes the committed subject, because the panel
-    // host, its chrome and its mode all key off it — nulling it here returned the whole panel as
-    // `null` for every child, which is a worse lie than the failed fetch it was meant to prevent.
-    const settlementSubjectId = isChildSubject ? null : operationalSubjectId;
+    const familyOpportunityIdFromTruth = (() => {
+        const raw = operational.subjectIdentityTruth?.["child.family_opportunity_id"];
+        return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+    })();
+    const settlementSubjectId = isChildSubject
+        ? familyOpportunityIdFromTruth
+        : operationalSubjectId;
     const drawer = {
-        id: operationalSubjectId,
-        type: operationalSubjectId ? ("opportunities" as const) : null,
+        id: settlementSubjectId ?? operationalSubjectId,
+        type: (settlementSubjectId ?? (!isChildSubject && operationalSubjectId))
+            ? ("opportunities" as const)
+            : null,
         opportunityQueuePreviewSeed: operational.identitySeed as OpportunityDrawerQueuePreviewSeed | null,
     };
     const {
@@ -367,6 +368,9 @@ export function InlineOpportunityFocusPanel() {
         isChildSubject && typeof operational.subjectIdentityTruth?.["child.display_name"] === "string"
             ? (operational.subjectIdentityTruth["child.display_name"] as string).trim() || null
             : null;
+    // Attention subject leads. Settlement loads the family opportunity VM for Household/Children/
+    // Billing, but the header must still name the focused child — not "Kurzman Family".
+    const headerTitle = childDisplayName || (visible ? drawerTitle : null);
     const seedTitle =
         childDisplayName || drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
     const seedContextChips = useMemo(
@@ -488,7 +492,7 @@ export function InlineOpportunityFocusPanel() {
                 >
                     {visible ?
                         <OpportunityFocusPanelHeader
-                            title={drawerTitle}
+                            title={headerTitle || drawerTitle}
                             opportunityId={visible.displayVm.entity.id}
                             record={visible.record}
                             displayVm={visible.displayVm}
@@ -566,12 +570,15 @@ export function InlineOpportunityFocusPanel() {
                         // fills reserved cells in place.
                         <OpportunityFocusPanelBody
                             mode={focusPanelMode}
-                            title={visible ? drawerTitle : seedTitle}
+                            title={headerTitle || (visible ? drawerTitle : seedTitle)}
                             statusLabel={statusLabel}
                             canMutate={statusCanMutate}
                             enriched={visible ? { displayVm: visible.displayVm, record: visible.record } : null}
                             commitCritical={
-                                !visible && operationallyResolved
+                                // Always keep commit-critical while operationally resolved — including
+                                // after Settlement — so child Attention can overlay the child's stage
+                                // mission onto the family Settlement VM (never replace with Lead work).
+                                operationallyResolved
                                     ? {
                                           subjectId: operationalSubjectId ?? "",
                                           statusKey: drawer.opportunityQueuePreviewSeed?.statusKey ?? null,

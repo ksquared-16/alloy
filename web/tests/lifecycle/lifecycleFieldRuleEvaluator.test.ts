@@ -160,4 +160,68 @@ describe("lifecycleFieldRuleEvaluator", () => {
         const ok = evaluateLifecycleActionRequirements(okCtx);
         expect(ok.blocking.some((v) => v.label.includes("Email"))).toBe(false);
     });
+
+    it("child location_id OR opportunity location satisfies Site / Location", () => {
+        const withOppLocation: CompletionEvaluationContext = {
+            phase: "action",
+            entity_type: "opportunity",
+            entity_id: "opp-1",
+            action_key: "advance",
+            values: { location_id: "loc-north" },
+            related: {
+                inquiry_children: [
+                    {
+                        id: "cm-lennon",
+                        customer_member_id: "cm-lennon",
+                        first_name: "Lennon",
+                        last_name: "Kurzman",
+                        location_id: null,
+                    },
+                ],
+                department_metadata: buildLifecycleFieldRulesOverridePatch({
+                    stage: "waitlist",
+                    required_rule_ids: ["child:location"],
+                    recommended_rule_ids: [],
+                    existingMetadata: {},
+                }),
+            },
+        };
+        const violations = evaluateFieldRulesForStage(withOppLocation, "waitlist", {
+            required_rule_ids: ["child:location"],
+            recommended_rule_ids: [],
+        });
+        expect(violations.some((v) => /Site|Location/i.test(v.label))).toBe(false);
+    });
+
+    it("reports Site / Location missing when neither child nor opportunity has location", () => {
+        const ctx: CompletionEvaluationContext = {
+            phase: "action",
+            entity_type: "opportunity",
+            entity_id: "opp-1",
+            action_key: "advance",
+            values: {},
+            related: {
+                inquiry_children: [
+                    {
+                        id: "cm-lennon",
+                        customer_member_id: "cm-lennon",
+                        first_name: "Lennon",
+                        last_name: "Kurzman",
+                        location_id: null,
+                    },
+                ],
+                department_metadata: buildLifecycleFieldRulesOverridePatch({
+                    stage: "waitlist",
+                    required_rule_ids: ["child:location"],
+                    recommended_rule_ids: [],
+                    existingMetadata: {},
+                }),
+            },
+        };
+        const violations = evaluateFieldRulesForStage(ctx, "waitlist", {
+            required_rule_ids: ["child:location"],
+            recommended_rule_ids: [],
+        });
+        expect(violations.some((v) => /Site|Location/i.test(v.label))).toBe(true);
+    });
 });

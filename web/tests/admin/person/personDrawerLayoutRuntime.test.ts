@@ -87,14 +87,4 @@ describe("personDrawerLayoutRuntime", () => {
         expect(resolved.variant_key).toBe(PERSON_LAYOUT_VARIANT_CHILD);
     });
 
-    it("AdminEntityDrawer loads person record chrome layout", () => {
-        const src = readFileSync(
-            join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"),
-            "utf8"
-        );
-        expect(src).toContain('useRecordChromeConfig(');
-        expect(src).toContain('"person"');
-        expect(src).toContain("PersonDrawerOperatingSections");
-        expect(src).toContain("personDrawerLayoutRuntimeFromDb");
-    });
 });

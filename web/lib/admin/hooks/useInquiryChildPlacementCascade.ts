@@ -23,6 +23,20 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const HIERARCHY_TTL_MS = 1500;
 
+/**
+ * Warm placement option caches so Program/Room selects open with labels immediately
+ * (Children card / Focus Panel mount). Safe to call repeatedly — TTL dedupe joins inflight.
+ */
+export function prefetchInquiryChildPlacementCascade(): void {
+    if (typeof window === "undefined") return;
+    const init = workspaceDataFetchInit();
+    void dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, init, HIERARCHY_TTL_MS);
+    void fetchOptionSetItemsBySetKey("childcare_program_type", init);
+    void fetchLocationProgramCategories(init, { includeInactive: true }).catch(
+        () => [] as LocationProgramCategoryRow[],
+    );
+}
+
 export function useInquiryChildPlacementCascade(params: {
     locationValue: string;
     /**

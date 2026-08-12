@@ -52,7 +52,8 @@ type WorkViewsConfigurationContextValue = {
     updateSelected: (patch: Partial<WorkViewConfigV1Stored>) => void;
     addWorkView: () => void;
     deleteSelected: () => void;
-    save: () => Promise<void>;
+    /** Returns true when the draft save succeeded. */
+    save: () => Promise<boolean>;
 };
 
 const WorkViewsConfigurationContext = createContext<WorkViewsConfigurationContextValue | null>(null);
@@ -179,8 +180,10 @@ export function WorkViewsConfigurationProvider({
             setCompatibilitySeed(false);
             setSavedFlash(true);
             window.setTimeout(() => setSavedFlash(false), 2500);
+            return true;
         } catch (e) {
             setError(e instanceof Error ? e.message : "Save failed");
+            return false;
         } finally {
             setSaving(false);
         }

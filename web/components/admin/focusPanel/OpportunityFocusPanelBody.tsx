@@ -7,40 +7,28 @@ import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/Operatio
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
+import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
+import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
-import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
-import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
-import type { SubjectIdentityTruth } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
-import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
-import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
+
+declare global {
+    interface Window {
+        __ALLOY_FOCUS_CHILD_MISSION_DIAG__?: Record<string, unknown>;
+    }
+}
+
+export type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
 
 /** Enriched (settled drawer VM) input — present once Settlement has resolved the record VM. */
 export type FocusPanelEnrichedInput = {
     displayVm: OpportunityDrawerViewModel;
     record: Record<string, unknown>;
-};
-
-/** Commit-critical (provisioning answer) input — used until the drawer VM settles. */
-export type FocusPanelCommitCriticalInput = {
-    subjectId: string;
-    statusKey: string | null;
-    stageWorkRuntime: StageWorkRuntimeProjection | null;
-    publishedStageInputs: PublishedStageInputsForCurrentWork | null;
-    situation: { stageKey: string; stageLabel: string; purpose: string | null } | null;
-    primaryAction: { actionRef: string; label: string } | null;
-    /**
-     * Set when the answer resolved that this subject has NO configured action. Distinct from
-     * `primaryAction: null` alone, which cannot tell "nothing is configured" from "not resolved yet".
-     */
-    actionAbsence: { code: string; message: string } | null;
-    subjectIdentityTruth: SubjectIdentityTruth | null;
-    /** R2 — the subject grain resolved by the answer. Forwarded to the builder; never derived here. */
-    subjectGrain: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
 };
 
 type Props = {
@@ -76,9 +64,35 @@ export default function OpportunityFocusPanelBody({
     onModeChange,
 }: Props) {
     const perspective = useActiveRuntimePerspective();
+
+    // ── THE CARD-FOCUS BRIDGE (inline surface) ──
+    //
+    // Card + item focus is ATTENTION — the kernel's ASPECT scope, finer than the Operational Subject
+    // and inheriting it. This body is the one the work-unit surface renders, and it previously passed
+    // no card request at all, which is why a Search click composed the right panel and then never
+    // elevated the card it was asked for.
+    //
+    // It is deliberately NOT read from `AdminDrawerContext`: the inline panel is not a drawer, and
+    // routing focus through `openDrawer` mounts the modal overlay this work removes. The grid stays
+    // source-agnostic — it receives a request and knows nothing about where it came from.
+    const attention = useAttentionCardFocus();
+    const requestedCardFocus = useMemo(
+        () =>
+            attention.focus
+                ? {
+                      card_key: attention.focus.card_key,
+                      item_id: attention.focus.item_id,
+                      // Keyed on the Record of Attention: a rapid subject switch re-applies the card,
+                      // while an unrelated re-render does not fight an operator who has moved on.
+                      subject_key: attention.subject ?? "",
+                  }
+                : null,
+        [attention.focus, attention.subject],
+    );
+
     const model = useMemo(() => {
         if (enriched) {
-            return focusPanelWorkModeModelFromDrawerVm({
+            const settled = focusPanelWorkModeModelFromDrawerVm({
                 mode,
                 displayVm: enriched.displayVm,
                 record: enriched.record,
@@ -87,8 +101,68 @@ export default function OpportunityFocusPanelBody({
                 statusLabel,
                 canMutate,
             });
+            // Child Attention must keep the child's published stage mission after Settlement
+            // loads the family opportunity VM (which carries the family's persisted Lead work).
+            if (commitCritical?.subjectGrain?.grain === "child") {
+                const overlaid = overlayChildMissionOntoSettledFocusModel(settled, commitCritical);
+                if (typeof window !== "undefined") {
+                    const settledCw = settled.cardModels.get("current_work");
+                    const overlaidCw = overlaid.cardModels.get("current_work");
+                    window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                        path: "enriched+overlay",
+                        subjectId: commitCritical.subjectId,
+                        subjectGrain: commitCritical.subjectGrain,
+                        situation: commitCritical.situation,
+                        primaryAction: commitCritical.primaryAction,
+                        actionAbsence: commitCritical.actionAbsence ?? null,
+                        stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                        stageWorkSummary: commitCritical.stageWorkRuntime
+                            ? {
+                                  stage_key: commitCritical.stageWorkRuntime.stage_key,
+                                  stage_label: commitCritical.stageWorkRuntime.stage_label,
+                                  journey_segment: commitCritical.stageWorkRuntime.journey_segment,
+                                  template_keys: commitCritical.stageWorkRuntime.template_keys,
+                                  primary_label: commitCritical.stageWorkRuntime.primary?.label ?? null,
+                                  primary_template_key:
+                                      commitCritical.stageWorkRuntime.primary?.template_key ?? null,
+                                  primary_work_id: commitCritical.stageWorkRuntime.primary?.work_id ?? null,
+                                  primary_attempt_count:
+                                      commitCritical.stageWorkRuntime.primary?.attempt_count ?? null,
+                              }
+                            : null,
+                        subjectIdentityTruth: commitCritical.subjectIdentityTruth,
+                        settledTitle: settled.title,
+                        overlaidTitle: overlaid.title,
+                        settledCurrentWorkTitle:
+                            settledCw && "title" in settledCw ? settledCw.title : null,
+                        overlaidCurrentWorkTitle:
+                            overlaidCw && "title" in overlaidCw ? overlaidCw.title : null,
+                    };
+                }
+                return overlaid;
+            }
+            if (typeof window !== "undefined") {
+                window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                    path: "enriched_no_overlay",
+                    subjectId: commitCritical?.subjectId ?? null,
+                    subjectGrain: commitCritical?.subjectGrain ?? null,
+                    settledTitle: settled.title,
+                    reason: "subjectGrain.grain !== child",
+                };
+            }
+            return settled;
         }
         if (commitCritical) {
+            if (typeof window !== "undefined") {
+                window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                    path: "commitCritical_only",
+                    subjectId: commitCritical.subjectId,
+                    subjectGrain: commitCritical.subjectGrain,
+                    situation: commitCritical.situation,
+                    primaryAction: commitCritical.primaryAction,
+                    stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                };
+            }
             return focusPanelWorkModeModelFromProvisioningAnswer({
                 mode,
                 subjectId: commitCritical.subjectId,
@@ -118,13 +192,15 @@ export default function OpportunityFocusPanelBody({
 
     if (!model) return null;
 
-    // "NO CONFIGURED ACTION" IS RENDERED, NOT OMITTED.
-    //
-    // Firefly's child-grain stages configure no primary action, and a child riding a family-segment
-    // stage has none of its own. Showing nothing there leaves an operator unable to tell an
-    // intentionally empty surface from a broken one — so the surface says which it is, in the
-    // operator's terms, exactly where the action would otherwise be.
-    const absence = !enriched ? commitCritical?.actionAbsence ?? null : null;
+    // "NO CONFIGURED ACTION" IS RENDERED, NOT OMITTED — but only when Settlement has not filled
+    // the family chrome AND the child mission does not already own What's Next from templates.
+    // Child grain overlays keep commitCritical after Settlement; suppress the banner when the
+    // child's stage work is authoritative (avoids "no action" while What's Next shows work).
+    const childMissionOwnsWhatsNext = commitCritical?.subjectGrain?.grain === "child";
+    const absence =
+        childMissionOwnsWhatsNext || enriched
+            ? null
+            : commitCritical?.actionAbsence ?? null;
 
     // TRUST RUNTIME V1, SLICE 1 — the consumer surface.
     //
@@ -165,6 +241,7 @@ export default function OpportunityFocusPanelBody({
         : null}
         <OpportunityFocusPanelModeGrid
             model={model}
+            requestedCardFocus={requestedCardFocus}
             onSelectTab={onSelectTab}
             onHeaderAction={onHeaderAction}
             onModeChange={onModeChange}

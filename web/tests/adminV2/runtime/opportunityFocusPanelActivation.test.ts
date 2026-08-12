@@ -16,53 +16,17 @@ describe("Opportunity Focus Panel activation wiring", () => {
         expect(shell).toContain("AlloyOsRuntimeSplitController");
     });
 
-    it("publishes runtime Perspective via the canonical hook (page delegates, does not own derivation)", () => {
-        const page = readSrc(
-            "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-        );
-        // The page delegates perspective derivation + publication to the canonical runtime hook
-        // instead of owning the deriveRuntimePerspective/setActiveRuntimePerspective effect.
-        expect(page).toContain("useWorkUnitRuntimePerspective(");
-        expect(page).not.toContain("setActiveRuntimePerspective");
-        expect(page).not.toContain("deriveRuntimePerspective");
-        // The canonical hook owns the derivation + store publication.
-        const hook = readSrc("lib/adminV2/runtime/perspective/useWorkUnitRuntimePerspective.ts");
-        expect(hook).toContain("setActiveRuntimePerspective");
-        expect(hook).toContain("deriveRuntimePerspective");
-    });
-
-    it("OpportunityDrawerVmRuntime gates Focus Panel on split active", () => {
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("useAlloyOsRuntimeSplitActive");
-        expect(runtime).toContain("focusPanelActive");
-        expect(runtime).toContain("OpportunityFocusPanelHeader");
-        expect(runtime).toContain("OpportunityFocusPanelModeBody");
-        expect(runtime).toContain("focusPanelMode");
-        expect(runtime).toContain("focusPanelPresentation={focusPanelActive}");
-        expect(runtime).toContain("!focusPanelActive");
-        // Legacy tab strip and lifecycle rail only when Focus Panel is inactive.
-        expect(runtime).toContain("{!layoutCutoverHeader && !focusPanelActive ?");
-        expect(runtime).toContain('data-opportunity-drawer-tab-strip="true"');
-        expect(runtime).toMatch(
-            /\{focusPanelActive\s*\?\s*\n\s*<OpportunityFocusPanelModeBody/,
-        );
-    });
-
-    it("bridges Focus Panel shell to synchronous split intent (atomic commit, no attr-lag flash)", () => {
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        // focusPanelActive must be the union of the async attribute and the synchronous intent so
-        // the Focus Panel shell mounts + the centered opening overlay is suppressed in the SAME
-        // commit the queue compresses — not a MutationObserver round-trip later.
-        expect(runtime).toContain("focusPanelSplitIntent");
-        expect(runtime).toMatch(
-            /const focusPanelActive\s*=\s*useAlloyOsRuntimeSplitActive\(\)\s*\|\|\s*focusPanelSplitIntent/,
-        );
-        // The intent mirrors the controller's exact decision inputs (no divergence).
-        expect(runtime).toContain("alloyOsRuntimeSplitActive({");
-        expect(runtime).toContain("isWorkUnitQueueSurfacePath(pathname)");
-        expect(runtime).toContain("runtimePerspectiveAttrValue(activeRuntimePerspective)");
-        // Centered opening overlay stays quarantined from split (no centered record loader).
-        expect(runtime).toContain("!focusPanelActive");
+    it("the inline Focus Panel region is the one record surface — there is no gate any more", () => {
+        // These two tests certified a BRANCH: `OpportunityDrawerVmRuntime` chose between the Focus
+        // Panel body and the legacy tab/overview body depending on whether the split was active.
+        // Both sides of that branch lived inside the modal shell, and the shell is gone. The inline
+        // region renders unconditionally on a work-unit surface, so there is nothing left to gate.
+        const inline = readSrc("components/presentation/workUnit/InlineOpportunityFocusPanel.tsx");
+        expect(inline).toContain("OpportunityFocusPanelHeader");
+        expect(inline).toContain("OpportunityFocusPanelBody");
+        // No shell chrome: no portal, no backdrop, no modal.
+        expect(inline).not.toContain("EntityDrawerOperatingShell");
+        expect(inline).not.toContain("createPortal");
     });
 
     it("Focus Panel header and mode switch expose regression markers", () => {

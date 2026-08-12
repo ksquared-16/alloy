@@ -229,26 +229,6 @@ function numOrNull(v: unknown): number | null {
     return null;
 }
 
-/** Resolve the child's DOB (customer_members.person_id → persons.date_of_birth). */
-async function resolveChildDob(supabase: SupabaseClient, orgId: string, customerMemberId: string): Promise<string | null> {
-    if (!customerMemberId) return null;
-    const { data: cm } = await supabase
-        .from("customer_members")
-        .select("person_id")
-        .eq("org_id", orgId)
-        .eq("id", customerMemberId)
-        .maybeSingle();
-    const personId = (cm as { person_id?: string | null } | null)?.person_id ?? null;
-    if (!personId) return null;
-    const { data: person } = await supabase
-        .from("persons")
-        .select("date_of_birth")
-        .eq("id", personId)
-        .maybeSingle();
-    const dob = (person as { date_of_birth?: string | null } | null)?.date_of_birth ?? null;
-    return dob ? String(dob).slice(0, 10) : null;
-}
-
 export type GeneratePlacementOptionsInput = {
     orgId: string;
     siteLocationId: string;
@@ -260,6 +240,17 @@ export type GeneratePlacementOptionsInput = {
     patternId: string;
     dateStart: string;
     dateEnd: string;
+};
+
+export type PlacementFitContext = {
+    /** Child DOB used for age gates (YYYY-MM-DD), or null when unknown. */
+    dateOfBirth: string | null;
+    /** Whole months as of `asOf`, or null when DOB unknown. */
+    childAgeMonths: number | null;
+    /** Proposed start / effective date age is evaluated against. */
+    asOf: string;
+    /** Provenance for operators diagnosing surprising ineligibility. */
+    dobSource: "persons.date_of_birth" | "customer_members.dob" | "unknown";
 };
 
 /** Map one calculation entry to an option row; the surface labels rank-0-eligible Recommended. */
@@ -280,7 +271,7 @@ function entryToOption(e: RoomFitEntry, facts: RoomEngineFacts | undefined): Pla
 export async function generatePlacementOptions(
     supabase: SupabaseClient,
     input: GeneratePlacementOptionsInput,
-): Promise<PlacementOption[]> {
+): Promise<{ options: PlacementOption[]; fitContext: PlacementFitContext }> {
     const inputs = await loadOperationalExpectationInputs(supabase, {
         orgId: input.orgId,
         siteLocationId: input.siteLocationId,
@@ -332,7 +323,36 @@ export async function generatePlacementOptions(
     const configByRoom = new Map(candidateRooms.map((r) => [r.id, r]));
 
     // Child age as of the PROPOSED effective (start) date — the correctness gate.
-    const dob = await resolveChildDob(supabase, input.orgId, input.customerMemberId ?? input.childAgreementId);
+    // Source: persons.date_of_birth (preferred), else customer_members.dob.
+    const memberId = input.customerMemberId ?? input.childAgreementId;
+    const { data: cm } = await supabase
+        .from("customer_members")
+        .select("person_id, dob")
+        .eq("org_id", input.orgId)
+        .eq("id", memberId)
+        .maybeSingle();
+    const personId = (cm as { person_id?: string | null } | null)?.person_id ?? null;
+    const cmDob = (cm as { dob?: string | null } | null)?.dob
+        ? String((cm as { dob: string }).dob).slice(0, 10)
+        : null;
+    let dob: string | null = null;
+    let dobSource: PlacementFitContext["dobSource"] = "unknown";
+    if (personId) {
+        const { data: person } = await supabase
+            .from("persons")
+            .select("date_of_birth")
+            .eq("id", personId)
+            .maybeSingle();
+        const personDob = (person as { date_of_birth?: string | null } | null)?.date_of_birth ?? null;
+        if (personDob) {
+            dob = String(personDob).slice(0, 10);
+            dobSource = "persons.date_of_birth";
+        }
+    }
+    if (!dob && cmDob) {
+        dob = cmDob;
+        dobSource = "customer_members.dob";
+    }
     const childAgeMonths = ageInMonthsAsOf(dob, input.dateStart);
 
     const candidates: RoomFitCandidate[] = facts.map((f) => {
@@ -366,5 +386,13 @@ export async function generatePlacementOptions(
         { clock: () => new Date() },
     );
 
-    return result.value.entries.map((e) => entryToOption(e, factsByRoom.get(e.roomId)));
+    return {
+        options: result.value.entries.map((e) => entryToOption(e, factsByRoom.get(e.roomId))),
+        fitContext: {
+            dateOfBirth: dob,
+            childAgeMonths,
+            asOf: input.dateStart,
+            dobSource,
+        },
+    };
 }

@@ -70,6 +70,11 @@ export type QueueRowSubjectPresentation = {
     age_label?: string | null;
     /** Gender label when hydrated on queue row inquiry child payload. */
     gender_label?: string | null;
+    /**
+     * Request-scoped profile image URL (from `resolved_photo_url` / identity photo adapter).
+     * Optional + additive — CondensedQueueRow shows an image when present, else initials.
+     */
+    image_url?: string | null;
 };
 
 export type QueueRowCaseContext = {
@@ -249,6 +254,12 @@ export type QueueRowContext = {
     waitlist_context?: {
         position_label?: string | null;
         wait_since?: string | null;
+        /** Placement priority score when projected (optional display). */
+        priority?: number | null;
+        /** Placement System candidate id — required for manual-position adjustment. */
+        placement_candidate_id?: string | null;
+        /** True when published Waitlist variant exposes placement adjustment and a candidate is attached. */
+        can_adjust_placement?: boolean | null;
     } | null;
 
     /**

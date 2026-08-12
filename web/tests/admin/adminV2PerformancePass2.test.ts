@@ -13,15 +13,6 @@ function read(rel: string): string {
 }
 
 describe("AdminV2 performance pass 2 contracts", () => {
-    it("drawer inquiry summary trusts pipeline model without legacy column fallback", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toMatch(
-            /const showInquirySummaryRightColumn\s*=\s*\n\s*inqModel != null\s*\n\s*\? inqModel\.show_right_column/
-        );
-        expect(drawer).not.toMatch(
-            /inqModel\?\.show_right_column === true[\s\S]{0,120}computeShowInquirySummaryRightColumn/
-        );
-    });
 
     it("closeDrawer clears stack without dispatching queue refresh", () => {
         const ctx = read("contexts/AdminDrawerContext.tsx");
@@ -29,12 +20,6 @@ describe("AdminV2 performance pass 2 contracts", () => {
         expect(closeBlock).toContain("setDrawer({ type: null, id: null })");
         expect(closeBlock).not.toContain("dispatchEvent");
         expect(closeBlock).not.toContain("opportunity-updated");
-    });
-
-    it("work-unit listener logs scoped refresh in development", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("logWorkUnitQueueRefreshDecision");
-        expect(page).toContain("refreshRows");
     });
 
     it("placement and family mutation keys count as lane membership", () => {
@@ -59,10 +44,4 @@ describe("AdminV2 performance pass 2 contracts", () => {
         expect(ctx).toMatch(/if \(preloadReady \|\| snapshotWarm\) \{[\s\S]{0,120}return;/);
     });
 
-    it("person drawer skips loading shell when snapshot is warm", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toMatch(
-            /personDrawerShowLoadingShell[\s\S]*!isPersonDrawerSnapshotWarm/
-        );
-    });
 });

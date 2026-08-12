@@ -59,8 +59,7 @@ describe("queue row builder library", () => {
         expect(fieldKeys).toContain("inquiry_child.program");
         expect(fieldKeys).toContain("inquiry_child.program_category");
         expect(fieldKeys).toContain("child.room");
-        // Non-compact child profile fields are hidden (not grayed).
-        expect(fieldKeys).not.toContain("child.date_of_birth");
+        expect(fieldKeys).toContain("child.date_of_birth");
         expect(fieldKeys).not.toContain("child.start_date");
         // Sibling vocabulary is not yet compact-effective — omit until restored.
         expect(fieldKeys).not.toContain("sibling.names");

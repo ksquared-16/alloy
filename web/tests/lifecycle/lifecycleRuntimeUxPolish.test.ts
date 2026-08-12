@@ -10,7 +10,6 @@ import { buildScheduleTourPickerRowFromEntitySearch } from "@/lib/admin/actions/
 import { formatOpportunityOperatorDisplayLabel } from "@/lib/admin/opportunityDisplayLabel";
 import {
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
-    openTourScheduleModalForOpportunity,
 } from "@/lib/tours/actions/tourBookingActionClient";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 
@@ -91,20 +90,12 @@ describe("lifecycleRuntimeUxPolish", () => {
         expect(src).not.toContain("Family inquiry");
     });
 
-    it("openTourScheduleModalForOpportunity opens drawer and dispatches schedule tour modal event", () => {
-        const openDrawer = vi.fn();
-        const dispatch = vi.fn();
-        vi.stubGlobal("window", {
-            dispatchEvent: dispatch,
-        } as unknown as Window & typeof globalThis);
-
-        openTourScheduleModalForOpportunity("opp-99", openDrawer);
-
-        expect(openDrawer).toHaveBeenCalledWith({ type: "opportunities", id: "opp-99" });
-        expect(dispatch).toHaveBeenCalledTimes(1);
-        const ev = dispatch.mock.calls[0]?.[0] as CustomEvent<{ opportunity_id?: string }>;
-        expect(ev.type).toBe(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL);
-        expect(ev.detail?.opportunity_id).toBe("opp-99");
+    it("the schedule-tour launcher that opened a drawer no longer exists", async () => {
+        // It had no caller left in the product — only this test. Keeping a helper whose only
+        // behaviour is `openDrawer` then an event is keeping a way back to the overlay.
+        const mod = await import("@/lib/tours/actions/tourBookingActionClient");
+        expect("openTourScheduleModalForOpportunity" in mod).toBe(false);
+        expect(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL).toBe("adminv2:open-tour-schedule-modal");
     });
 
     afterEach(() => {

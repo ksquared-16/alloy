@@ -32,6 +32,21 @@ function clauseMatches(allowed: readonly string[] | undefined, value: string | n
 }
 
 /**
+ * Child-grain Waitlist rows and candidate-grain Waitlist rows share placement attention identity.
+ * Published variants may declare either grain; accept both without inventing Waitlist-specific fields.
+ */
+function grainClauseMatches(allowed: readonly string[] | undefined, grain: string | null | undefined): boolean {
+    if (clauseMatches(allowed, grain)) return true;
+    if (!allowed || allowed.length === 0) return true;
+    const g = (grain ?? "").trim().toLowerCase();
+    if (!g) return false;
+    const allowedNorm = allowed.map((a) => a.trim().toLowerCase());
+    if (g === "child" && allowedNorm.includes("candidate")) return true;
+    if (g === "candidate" && allowedNorm.includes("child")) return true;
+    return false;
+}
+
+/**
  * Strip reserved `conditions` from a variant rule so saved config cannot imply unevaluated behavior.
  * Typed clauses (stage_key, grain, …) are preserved.
  */
@@ -57,11 +72,11 @@ export function queueRowVariantRuleMatches(
     return (
         clauseMatches(rule.stage_key, input.stageKey) &&
         clauseMatches(rule.status_key, input.statusKey) &&
-        clauseMatches(rule.grain, input.grain) &&
+        grainClauseMatches(rule.grain, input.grain) &&
         clauseMatches(rule.work_view_id, input.workViewId) &&
         clauseMatches(rule.work_view_key, input.workViewKey) &&
         clauseMatches(rule.process_key, input.processKey) &&
-        clauseMatches(rule.row_type, input.rowType)
+        grainClauseMatches(rule.row_type, input.rowType)
     );
 }
 

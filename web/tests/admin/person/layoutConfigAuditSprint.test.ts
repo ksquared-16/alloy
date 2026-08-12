@@ -9,9 +9,6 @@ import {
 } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import { parentSummaryDraftFromRecord } from "@/lib/admin/person/personDrawerSummaryDraft";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
-import {
-    launchGlobalRecordSearchOpen,
-} from "@/lib/adminV2/globalRecordSearchOpen";
 
 const root = process.cwd();
 
@@ -64,13 +61,6 @@ describe("layout config audit sprint", () => {
             expect(model.groups[0]?.guardians.map((g) => g.person_id)).toEqual(["kelly-1"]);
         });
 
-        it("parent household section renders viewing-person primary contact card", () => {
-            const section = read("components/admin/entity/PersonDrawerHouseholdSection.tsx");
-            expect(section).toContain("ViewingPersonPrimaryContactCard");
-            expect(section).toContain("resolveViewingPersonGuardianForCustomer");
-            expect(section).toContain('data-person-drawer-viewing-person-primary-card="true"');
-        });
-
         it("changing primary from parent drawer updates household relationship optimistically", () => {
             const next = applyHouseholdPrimaryContactToRecord(householdRecord, "cust-1", "kevin-1");
             const kevin = (next._household_adult_links as { person_id: string; is_household_primary_contact: boolean }[]).find(
@@ -87,35 +77,6 @@ describe("layout config audit sprint", () => {
         });
     });
 
-    describe("global search drawer layout consistency", () => {
-        beforeEach(() => {
-            vi.stubGlobal("window", {
-                location: { pathname: "/adminV2/workspace/dept/enrollment" },
-                dispatchEvent: vi.fn(),
-                sessionStorage: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() },
-            });
-        });
-
-        afterEach(() => {
-            vi.unstubAllGlobals();
-        });
-
-        it("launchGlobalRecordSearchOpen forwards personDrawerOpenSeed", () => {
-            launchGlobalRecordSearchOpen({
-                open_entity_type: "persons",
-                open_entity_id: "p1",
-                personDrawerOpenSeed: {
-                    personId: "p1",
-                    presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
-                },
-            });
-            const event = (window.dispatchEvent as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as CustomEvent;
-            expect(event.detail.personDrawerOpenSeed?.presentation_emphasis).toBe(
-                PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS
-            );
-        });
-    });
-
     describe("phone formatting", () => {
         it("formats E.164 for edit fields and display", () => {
             expect(formatPhoneUS("+14444444444")).toBe("(444) 444-4444");
@@ -126,16 +87,6 @@ describe("layout config audit sprint", () => {
         it("parent summary draft normalizes stored phone for edit", () => {
             const draft = parentSummaryDraftFromRecord({ id: "p1", phone: "+15551234567" });
             expect(draft.phone).toBe("(555) 123-4567");
-        });
-    });
-
-    describe("employee status source field", () => {
-        it("hides source on all person drawer employee sections", () => {
-            const drawer = read("components/admin/AdminEntityDrawer.tsx");
-            const operating = read("components/admin/entity/PersonDrawerOperatingSections.tsx");
-            expect(drawer).toContain("PersonDrawerOperatingSections");
-            expect(operating).toContain("PersonDrawerEmployeeStatusSection");
-            expect(operating).toContain("compactOperatingSurface");
         });
     });
 

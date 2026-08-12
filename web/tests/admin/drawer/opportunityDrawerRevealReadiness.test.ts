@@ -86,37 +86,3 @@ describe("opportunityInquiryDrawerShellStructurallyReady", () => {
         ).toBe(true);
     });
 });
-
-describe("AdminEntityDrawer Card 2 contracts", () => {
-    it("gates overview reveal on inquiry structural readiness", () => {
-        const src = readDrawerSrc();
-        expect(src).toContain("opportunityDrawerInquiryStructuralReady");
-        expect(src).toMatch(
-            /opportunityDrawerOverviewRevealReady[\s\S]*opportunityDrawerInquiryStructuralReady/
-        );
-    });
-
-    it("arms postDrawerVisible from primary contract without full hydrate", () => {
-        const src = readDrawerSrc();
-        expect(src).toContain("opportunityDrawerPostRevealMayOpen");
-        expect(src).toMatch(
-            /Post-reveal enrich window opens after primary contract[\s\S]{0,1200}setPostDrawerVisibleKey\(key\)/
-        );
-        expect(src).not.toMatch(
-            /opportunityDrawerPostRevealMayOpen[\s\S]{0,800}opportunityFullRecordHydrateApplied/
-        );
-    });
-
-    it("decouples secondary ready from full hydrate", () => {
-        const src = readDrawerSrc();
-        expect(src).toContain(
-            "setOpportunityDrawerSecondaryReady(opportunityDrawerBelowFoldEnrichmentReady)"
-        );
-    });
-
-    it("gates oper strip and packets on full-bound enrichment", () => {
-        const src = readDrawerSrc();
-        expect(src).toContain("opportunityDrawerFullBoundEnrichmentReady");
-        expect(src).toMatch(/opportunityDrawerFullBoundEnrichmentReady[\s\S]*OpportunityOperationalCompactStrip/);
-    });
-});

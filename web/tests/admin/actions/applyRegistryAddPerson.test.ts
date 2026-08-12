@@ -23,7 +23,7 @@ describe("applyRegistryResolvedActionClient add person", () => {
 
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openAddPerson,
             entityId: "opp-1",
             context: { surface: "record_section", section_key: "family_contacts" },
@@ -50,7 +50,7 @@ describe("applyRegistryResolvedActionClient add person", () => {
 
         await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openAddPerson,
             entityId: "opp-1",
             context: { surface: "record_section", section_key: "family_contacts" },

@@ -16,4 +16,33 @@ describe("fetchQueueActivityTimelineEvents", () => {
         expect(grouped.get("opp-a")?.map((e) => e.id)).toEqual(["e1", "e3"]);
         expect(grouped.get("opp-b")?.map((e) => e.id)).toEqual(["e2"]);
     });
+
+    it("sorts merged streams newest-first and dedupes by id", () => {
+        const grouped = collapseTopEventsPerEntity(
+            [
+                // Older direct event listed first — child lifecycle (newer) must still win the slot.
+                {
+                    id: "direct-old",
+                    entity_id: "opp-a",
+                    occurred_at: "2026-06-01T00:00:00Z",
+                    event_type: "note_added",
+                },
+                {
+                    id: "child-new",
+                    entity_id: "opp-a",
+                    occurred_at: "2026-06-04T00:00:00Z",
+                    event_type: "child_lifecycle_status_changed",
+                },
+                {
+                    id: "child-new",
+                    entity_id: "opp-a",
+                    occurred_at: "2026-06-04T00:00:00Z",
+                    event_type: "child_lifecycle_status_changed",
+                },
+            ],
+            1,
+        );
+
+        expect(grouped.get("opp-a")?.map((e) => e.id)).toEqual(["child-new"]);
+    });
 });

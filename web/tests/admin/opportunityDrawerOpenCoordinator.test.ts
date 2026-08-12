@@ -107,15 +107,6 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(lib).toContain("putDrawerEntitySnapshot");
     });
 
-    it("AdminEntityDrawer applies composed preload and schedules background full", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("preload.fullEntity");
-        expect(drawer).toContain("preload.headerActions");
-        expect(drawer).toContain("opportunityDrawerEnrichmentHeld");
-        expect(drawer).toContain("runOpportunityBackgroundFullHydrate");
-        expect(drawer).toContain("reportPostRevealEnrichStart");
-    });
-
     it("uses short anti-flicker only on cold path", () => {
         expect(OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS).toBeLessThanOrEqual(250);
     });
@@ -140,19 +131,6 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(lib).toMatch(/const vmOpen = await loadOpportunityDrawerViaViewModel/);
         expect(lib).toMatch(/if \(vmOpen\.ok\) \{[\s\S]*?return \{/);
         expect(lib).toContain('openPath?: "legacy" | "view_model"');
-    });
-
-    it("AdminEntityDrawer pins VM pipeline and skips primary hydrate on view_model open", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("isOpportunityDrawerViewModelPreload");
-        expect(drawer).toContain("buildOpportunityDrawerPipelineStateFromViewModel");
-        expect(drawer).toContain("opportunityDrawerViewModelOpenRef");
-        expect(drawer).toContain("opportunityDrawerViewModelPipeline");
-        expect(drawer).toContain("opportunityDrawerHardCutoverEnabled()");
-        expect(drawer).toContain('safeLogDrawerViewModelCutover("drawer_apply"');
-        expect(drawer).toContain('safeLogDrawerViewModelCutover("primary_hydrate_skipped"');
-        expect(drawer).toContain('viewModelOpen) {');
-        expect(drawer).toContain('_record_surface: "full"');
     });
 
     it("logs cutover attempt, commit, and fallback from coordinator", () => {

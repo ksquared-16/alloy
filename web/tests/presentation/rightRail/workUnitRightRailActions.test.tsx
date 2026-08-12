@@ -10,7 +10,13 @@ import type { ReactNode } from "react";
 const openDrawer = vi.fn();
 const applyMock = vi.fn().mockResolvedValue({ ok: true });
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+// `usePathname` too: the rail now runs a record gesture through `useOperatorRecordFocus`, which
+// asks WHERE the caller stands — inside the workspace layout a route push composes nothing, so the
+// branch it takes depends on the path.
+vi.mock("next/navigation", () => ({
+    useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+    usePathname: () => "/workspace/work-unit/enrollment-pipeline",
+}));
 vi.mock("@/contexts/AdminDrawerContext", () => ({
     useAdminDrawer: () => ({ drawer: { type: "opportunities", id: "opp-7" }, openDrawer }),
 }));

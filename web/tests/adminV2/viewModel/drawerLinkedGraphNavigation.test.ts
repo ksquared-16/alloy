@@ -104,13 +104,6 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(restoreModule).toContain("scheduleWarmRelatedDrawerTargetsAfterVmApply");
     });
 
-    it("useOpportunityDrawerVmPayload skips cold fetch when displayVm already matches drawer", () => {
-        const src = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts");
-        expect(src).toContain(
-            "if (displayVm && String(displayVm.entity.id) === String(drawer.id)) return"
-        );
-    });
-
     it("EditablePersonContactCard shows inline Opening pending state", () => {
         const src = read("components/admin/opportunity/EditablePersonContactCard.tsx");
         expect(src).toContain("data-drawer-link-pending");
@@ -124,19 +117,6 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(src).toContain("PERSON_DRAWER_CHILD_OPEN_SOURCE");
         expect(src).toContain("drawerLinkPendingKeyForInquiryChildRow");
         expect(src).toContain("isPending={isPending}");
-    });
-
-    it("VmPersonStatusControl delegates to drawer header status select", () => {
-        const src = read("components/admin/vmDrawer/VmPersonStatusControl.tsx");
-        expect(src).toContain("VmDrawerHeaderStatusSelect");
-        expect(src).toContain("entityKind=\"persons\"");
-    });
-
-    it("PersonsDrawerVmRuntime passes VM header status control", () => {
-        const src = read("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        expect(src).toContain("displayVm?.header.status_label");
-        expect(src).toContain("displayVm?.header.status");
-        expect(src).not.toContain("_status_display");
     });
 
     it("warmRelatedDrawerGraph logs graph warm diagnostics", () => {
@@ -170,36 +150,6 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(src).toContain("warmVisibleQueueRowOpportunityVms");
     });
 
-    it("WorkUnit queue block supports row-level Opening pending", () => {
-        const src = read("app/adminV2/components/workspace/blocks/QueueBlock.tsx");
-        expect(src).toContain("queueRowOpenPendingOpportunityId");
-        expect(src).toContain("Opening…");
-        expect(src).toContain("warmQueueRowOpportunityVm");
-    });
-
-    it("WorkUnit lane pill cache miss keeps rows stable and shows pill pending", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("queuePillPendingKey");
-        expect(page).toContain("lane_payload_cache_hit");
-        expect(page).toContain("lane_payload_cache_miss");
-        expect(page).toContain("setQueuePillPendingKey(nextKey)");
-        expect(page).toContain("row_actions_ready");
-        expect(page).toContain("source: \"lane_cache\"");
-        expect(page).not.toMatch(
-            /lane_payload_cache_hit[\s\S]{0,400}setQueueItems\(cachedLane\)/
-        );
-    });
-
-    it("WorkUnit pill intent warms lane on hover/focus/mousedown", () => {
-        const chips = read("app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips.tsx");
-        expect(chips).toContain("onQueuePillIntent");
-        expect(chips).toContain("onMouseEnter");
-        expect(chips).toContain("data-queue-pill-open-pending");
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("handleQueuePillIntent");
-        expect(page).toContain("prefetchOnly: true");
-    });
-
     it("drawer runtime debug proof is gated behind debug flag only", () => {
         const debug = read("lib/adminV2/drawer/drawerRuntimeDebug.ts");
         expect(debug).toContain("NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG");
@@ -223,17 +173,4 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(ctx).toContain("child_model_swap_commit");
     });
 
-    it("Work Unit lane commits row actions atomically with cached rows", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("commitQueueRowActionsWithLane");
-        expect(page).toContain("markWorkUnitVmPillSwitchActionsReady");
-        expect(page).toContain("queueRowActionsHydratedRef.current");
-    });
-
-    it("Work Unit visible rows warm VM immediately after above-fold ready", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("prefetchVisibleWorkUnitDrawerPrimary");
-        expect(page).not.toContain("idleTimeoutMs: 2500");
-        expect(page).toContain("warmQueueRowOpportunityVm");
-    });
 });

@@ -72,7 +72,7 @@ describe("change_lead_location", () => {
         const openChangeLeadLocation = vi.fn();
         const host = {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openChangeLeadLocation,
             entityId: "opp-1",
             context: { surface: "record_header" },

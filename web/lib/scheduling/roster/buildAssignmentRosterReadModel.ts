@@ -16,6 +16,11 @@ import type { AssignmentTypePresentation } from "@/lib/scheduling/projection/sch
 import { readPatternDefaultHours } from "@/lib/scheduling/editorPatterns";
 import { formatCompactScheduleHours } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import { resolveIdentityPhotoUrlFromMetadata } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
+import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import {
+    profilePhotoDocumentId,
+    resolveProfilePhotosForActor,
+} from "@/lib/documents/profilePhotoPresentation";
 
 export type AssignmentRosterRow = {
     assignmentId: string;
@@ -92,7 +97,8 @@ function memberSubjectKey(customerMemberId: string): string {
 async function resolvePersonNames(
     supabase: SupabaseClient,
     orgId: string,
-    personIds: string[]
+    personIds: string[],
+    documentActor?: DocumentActor | null,
 ): Promise<{ names: Map<string, string>; imageUrls: Map<string, string> }> {
     const names = new Map<string, string>();
     const imageUrls = new Map<string, string>();
@@ -102,6 +108,7 @@ async function resolvePersonNames(
         .select("id, full_name, first_name, last_name, metadata")
         .eq("org_id", orgId)
         .in("id", personIds);
+    const peopleForPhotos: Array<{ personId: string; metadata: Record<string, unknown> | null }> = [];
     for (const p of (data ?? []) as {
         id: string;
         full_name: string | null;
@@ -112,8 +119,27 @@ async function resolvePersonNames(
         const composed = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
         const name = p.full_name?.trim() || composed;
         if (name) names.set(p.id, name);
-        const photo = resolveIdentityPhotoUrlFromMetadata(p.metadata);
-        if (photo) imageUrls.set(p.id, photo);
+        const meta =
+            p.metadata && typeof p.metadata === "object" && !Array.isArray(p.metadata)
+                ? (p.metadata as Record<string, unknown>)
+                : null;
+        // Prefer actor-scoped resolution from profile_photo_document_id; keep stable external URLs.
+        if (documentActor?.ok && profilePhotoDocumentId(meta)) {
+            peopleForPhotos.push({ personId: p.id, metadata: meta });
+        } else {
+            const photo = resolveIdentityPhotoUrlFromMetadata(meta);
+            if (photo) imageUrls.set(p.id, photo);
+        }
+    }
+    if (documentActor?.ok && peopleForPhotos.length > 0) {
+        const resolved = await resolveProfilePhotosForActor({
+            supabase,
+            actor: documentActor,
+            people: peopleForPhotos,
+        });
+        for (const [personId, hit] of resolved) {
+            if (hit.photoUrl) imageUrls.set(personId, hit.photoUrl);
+        }
     }
     return { names, imageUrls };
 }
@@ -225,7 +251,8 @@ async function resolveAssignmentTypes(
 export async function buildAssignmentRosterReadModel(
     supabase: SupabaseClient,
     orgId: string,
-    siteLocationId: string
+    siteLocationId: string,
+    documentActor?: DocumentActor | null,
 ): Promise<AssignmentRosterReadModel> {
     const asOf = new Date().toISOString().slice(0, 10);
 
@@ -272,7 +299,12 @@ export async function buildAssignmentRosterReadModel(
             ...memberPersonIds.values(),
         ]),
     ];
-    const { names: nameByPersonId, imageUrls: imageUrlByPersonId } = await resolvePersonNames(supabase, orgId, personIds);
+    const { names: nameByPersonId, imageUrls: imageUrlByPersonId } = await resolvePersonNames(
+        supabase,
+        orgId,
+        personIds,
+        documentActor,
+    );
 
     const roomIds = rows.map((r) => r.room_location_id).filter((id): id is string => Boolean(id));
     const patternIds = rows.map((r) => r.schedule_pattern_id).filter((id): id is string => Boolean(id));

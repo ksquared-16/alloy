@@ -11,8 +11,7 @@ function baseContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
     return {
         contract_version: "1.1-partial",
         row_subject: { subject_type: "case", subject_id: "opp-1", display_name: "Jordan Lee" },
-        // When no subject stage key is present, row_stage is the process-stage label
-        // (buildPartialQueueRowContext resolves it from the row, not the Work View lane).
+        // row_stage is Effective Process Position / process stage (not the Work View lane name).
         row_stage: "Lead",
         lifecycle_key: "enrollment",
         row_status_key: "open",
@@ -36,32 +35,27 @@ function baseContext(over: Partial<QueueRowContext> = {}): QueueRowContext {
 }
 
 describe("resolveQueueRowFieldLabelsFromContext", () => {
-    it("Stage resolves process stage from row_stage when the subject carries no stage key", () => {
+    it("Stage prefers row_stage (EPP / process position) over raw drawer stage_key", () => {
         expect(resolveQueueRowProcessStageLabel(baseContext())).toBe("Lead");
-        expect(resolveQueueRowProcessStageLabel(baseContext({ row_stage: "Tour" }))).toBe("Tour");
-    });
-
-    it("Stage resolves the SUBJECT's stage over a lane-like row_stage", () => {
-        // A Work View scopes several stages — do not show the lane name as the family's stage.
         expect(
             resolveQueueRowProcessStageLabel(
                 baseContext({
-                    row_stage: "New Leads",
+                    row_stage: "Waitlist",
                     drawer_open: {
                         entity_type: "opportunities",
                         entity_id: "opp-1",
-                        stage_focus_key: "tour",
+                        stage_focus_key: "lead",
                     },
                 }),
             ),
-        ).toBe("Tour");
+        ).toBe("Waitlist");
     });
 
-    it("Stage prefers the tenant's authored label over a humanized key", () => {
+    it("Stage falls back to drawer stage_focus_key when row_stage is absent", () => {
         expect(
             resolveQueueRowProcessStageLabel(
                 baseContext({
-                    row_stage: "New Leads",
+                    row_stage: "",
                     stage_labels_by_key: { tour: "Tours" },
                     drawer_open: {
                         entity_type: "opportunities",
@@ -73,11 +67,11 @@ describe("resolveQueueRowFieldLabelsFromContext", () => {
         ).toBe("Tours");
     });
 
-    it("Stage reads active_subject.stage_key when stage_focus_key is absent", () => {
+    it("Stage falls back to active_subject.stage_key when row_stage and stage_focus_key are absent", () => {
         expect(
             resolveQueueRowProcessStageLabel(
                 baseContext({
-                    row_stage: "New Leads",
+                    row_stage: "   ",
                     drawer_open: {
                         entity_type: "opportunities",
                         entity_id: "opp-1",
@@ -103,12 +97,12 @@ describe("resolveQueueRowFieldLabelsFromContext", () => {
 
     it("Stage and Status stay distinct when both are present", () => {
         const ctx = baseContext({
+            row_stage: "Qualified",
             row_status_label: "Open",
-            stage_labels_by_key: { qualified: "Qualified" },
             drawer_open: {
                 entity_type: "opportunities",
                 entity_id: "opp-1",
-                stage_focus_key: "qualified",
+                stage_focus_key: "lead",
             },
         });
         expect(resolveQueueRowProcessStageLabel(ctx)).toBe("Qualified");

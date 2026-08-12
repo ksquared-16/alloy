@@ -17,18 +17,19 @@ import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/u
 import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
 import {
     queueRowVariantMatchInputFromContext,
-    resolveQueueRowCompactSlots,
+    resolveQueueRowPresentation,
 } from "@/lib/presentation/runtime/queueRowVariantResolve";
 import { runtimeLabelProps, PRESENTATION_RUNTIME_LABELS } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
 import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
-import { CHILD_PRIMARY_ACTION_ABSENCE_COPY } from "@/lib/runtime/provisioning/childGrainSurfaceComposition";
+import { CHILD_PRIMARY_ACTION_ABSENCE_COPY } from "@/lib/runtime/provisioning/childPrimaryActionAbsenceCopy";
 import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
 
 declare global {
     interface Window {
         __ALLOY_QUEUE_ROW_SURFACE_DIAG__?: Record<string, unknown>;
+        __ALLOY_FOCUS_CHILD_MISSION_DIAG__?: Record<string, unknown>;
     }
 }
 
@@ -82,9 +83,11 @@ export function ProvisionedWorkUnitSurface() {
                     if (!input.processKey && processKey) {
                         input.processKey = processKey;
                     }
+                    const presentation = resolveQueueRowPresentation(layout, row.context, input);
                     return {
                         ...row,
-                        rowConfig: resolveQueueRowCompactSlots(layout, input),
+                        rowConfig: presentation.rowConfig,
+                        ...(presentation.focus ? { focus: presentation.focus } : { focus: undefined }),
                     };
                 }),
             },
@@ -128,6 +131,15 @@ export function ProvisionedWorkUnitSurface() {
             firstRow: first
                 ? {
                       id: first.entityId,
+                      entityType: first.entityType,
+                      title:
+                          first.context?.row_subject?.display_name
+                          ?? first.context?.case_context?.display_name
+                          ?? null,
+                      stageKey:
+                          first.context?.row_stage_key
+                          ?? first.context?.drawer_open?.stage_focus_key
+                          ?? null,
                       rowConfigFieldKeys: {
                           subject: first.rowConfig?.subject.fieldKeys ?? [],
                           status: first.rowConfig?.status.fieldKeys ?? [],
@@ -136,6 +148,20 @@ export function ProvisionedWorkUnitSurface() {
                           work: first.rowConfig?.work.fieldKeys ?? [],
                           groupCount: first.rowConfig?.groupCount.fieldKeys ?? [],
                       },
+                      context: first.context
+                          ? {
+                                subject_type: first.context.row_subject?.subject_type ?? null,
+                                subject_id: first.context.row_subject?.subject_id ?? null,
+                                subject_stage_key: first.context.row_subject?.stage_key ?? null,
+                                row_stage_key: first.context.row_stage_key ?? null,
+                                drawer_open_entity_id: first.context.drawer_open?.entity_id ?? null,
+                                drawer_open_active_subject:
+                                    first.context.drawer_open?.active_subject ?? null,
+                                waitlist_context: first.context.waitlist_context ?? null,
+                                placement_context: first.context.placement_context ?? null,
+                                display_name: first.context.row_subject?.display_name ?? null,
+                            }
+                          : null,
                       hasChildrenNames: Boolean(
                           first.rowConfig?.groupCount.fieldKeys?.includes("children.names"),
                       ),

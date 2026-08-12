@@ -25,10 +25,8 @@ describe("demo readiness cleanup", () => {
         expect(children).not.toContain("debounced.schedule");
     });
 
-    it("removes low-value Opportunity drawer copy", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toContain("What matters for this inquiry");
-        expect(drawer).not.toMatch(/saveHint="Edits save to primary person/);
+    it("removes low-value Opportunity record copy", () => {
+        // The drawer half of this assertion is satisfied absolutely: the router it read is deleted.
         const strip = read("components/admin/opportunity/OpportunityChildLifecycleSummaryStrip.tsx");
         expect(strip).not.toContain("display_summary");
     });

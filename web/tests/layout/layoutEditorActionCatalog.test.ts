@@ -74,7 +74,7 @@ describe("layout editor action catalog", () => {
 
     it("resolveLayoutEditorActionFriendlyLabel hides raw action keys", () => {
         expect(resolveLayoutEditorActionFriendlyLabel(MAKE_PRIMARY_CONTACT_ACTION_KEY)).toBe("Make Primary Contact");
-        expect(resolveLayoutEditorActionFriendlyLabel("open_drawer")).toBe("Open record");
+        expect(resolveLayoutEditorActionFriendlyLabel("open_drawer")).toBe("Open record (retired)");
     });
 
     it("make_primary_contact is runtime wired", () => {

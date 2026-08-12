@@ -126,19 +126,6 @@ describe("person layout + completion reconciliation", () => {
             expect(completionBlocksSave(r)).toBe(false);
         });
 
-        it("PersonDrawerOperatingSections passes layout variant to summary BOS panels", () => {
-            const operating = readFileSync(
-                join(process.cwd(), "components/admin/entity/PersonDrawerOperatingSections.tsx"),
-                "utf8"
-            );
-            const parentBos = readFileSync(
-                join(process.cwd(), "components/admin/entity/PersonDrawerParentSummaryBosPanel.tsx"),
-                "utf8"
-            );
-            expect(operating).toContain("layoutVariantKey={variant.variant_key}");
-            expect(parentBos).toContain("data-person-drawer-completion-layout-variant");
-            expect(parentBos).toContain("evaluatePersonDrawerCompletionPreview");
-        });
     });
 
     describe("client/server agreement shape", () => {

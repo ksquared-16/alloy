@@ -78,6 +78,11 @@ import {
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import LeadHouseholdPrimaryContactConfirmModal from "@/components/layout/lead/LeadHouseholdPrimaryContactConfirmModal";
+import HouseholdCopyPrimaryContactConfirmModal from "@/components/admin/focusPanel/cards/HouseholdCopyPrimaryContactConfirmModal";
+import {
+    buildCopyPrimaryContactDetailsPatch,
+    summarizeCopyablePrimaryContactDetailKeys,
+} from "@/lib/adminV2/runtime/focusPanel/household/copyPrimaryContactDetails";
 import { householdShowsPrimaryContactControl } from "@/lib/admin/person/personDrawerHouseholdPrimaryContactDisplay";
 
 type HouseholdComposerPreview = {
@@ -324,11 +329,56 @@ export default function HouseholdCard({
     } | null>(null);
     const [primarySaving, setPrimarySaving] = useState(false);
 
+    const [pendingCopyFromPrimary, setPendingCopyFromPrimary] = useState<{
+        targetPersonId: string;
+        targetDisplayName: string;
+        primaryName: string;
+        fieldsSummary: string;
+        patch: PersonContactPatch;
+    } | null>(null);
+    const [copySaving, setCopySaving] = useState(false);
+
     const onRequestMakePrimary =
         canEdit && mutation && customerId
             ? (personId: string, displayName: string) => {
                   if (!isEditableHouseholdPersonId(personId)) return;
                   setPendingPrimary({ personId, displayName });
+              }
+            : undefined;
+
+    const primaryPersonIdForCopy = evidence.primaryContact?.personId?.trim() ?? "";
+    const onRequestCopyFromPrimary =
+        canEdit && mutation && primaryPersonIdForCopy && isEditableHouseholdPersonId(primaryPersonIdForCopy)
+            ? (personId: string, displayName: string) => {
+                  if (!isEditableHouseholdPersonId(personId)) return;
+                  if (personId.trim() === primaryPersonIdForCopy) return;
+
+                  const primaryEvidence =
+                      findEvidenceContact(primaryPersonIdForCopy) ?? evidence.primaryContact;
+                  const primarySeed = primaryEvidence
+                      ? seedHouseholdContactValuesFromEvidence(context.truth, primaryEvidence)
+                      : seedHouseholdContactValuesForPerson(context.truth, primaryPersonIdForCopy);
+
+                  const targetEvidence = findEvidenceContact(personId);
+                  const targetSeed = targetEvidence
+                      ? seedHouseholdContactValuesFromEvidence(context.truth, targetEvidence)
+                      : seedHouseholdContactValuesForPerson(context.truth, personId);
+
+                  if (!primarySeed || !targetSeed) return;
+
+                  const { patch, copiedKeys } = buildCopyPrimaryContactDetailsPatch(
+                      primarySeed.values,
+                      targetSeed.values,
+                  );
+                  if (copiedKeys.length === 0) return;
+
+                  setPendingCopyFromPrimary({
+                      targetPersonId: personId,
+                      targetDisplayName: displayName,
+                      primaryName: evidence.primaryContact?.name ?? primarySeed.name,
+                      fieldsSummary: summarizeCopyablePrimaryContactDetailKeys(copiedKeys),
+                      patch,
+                  });
               }
             : undefined;
 
@@ -755,8 +805,10 @@ export default function HouseholdCard({
                 composePurpose={composePurpose}
                 nestedConfig={nestedConfig}
                 onRequestMakePrimary={onRequestMakePrimary}
+                onRequestCopyFromPrimary={onRequestCopyFromPrimary}
                 guardianCount={guardianCount}
                 primarySavingPersonId={primarySaving ? pendingPrimary?.personId ?? null : null}
+                copySavingPersonId={copySaving ? pendingCopyFromPrimary?.targetPersonId ?? null : null}
             />
         );
     } else {
@@ -784,8 +836,10 @@ export default function HouseholdCard({
                     canEdit && mutation ? () => mutation.openAddAuthorizedPickup() : undefined
                 }
                 onRequestMakePrimary={onRequestMakePrimary}
+                onRequestCopyFromPrimary={onRequestCopyFromPrimary}
                 guardianCount={guardianCount}
                 primarySavingPersonId={primarySaving ? pendingPrimary?.personId ?? null : null}
+                copySavingPersonId={copySaving ? pendingCopyFromPrimary?.targetPersonId ?? null : null}
             />
         );
     }
@@ -838,6 +892,35 @@ export default function HouseholdCard({
                     }
                 }}
             />
+            <HouseholdCopyPrimaryContactConfirmModal
+                isOpen={Boolean(pendingCopyFromPrimary)}
+                primaryName={pendingCopyFromPrimary?.primaryName ?? ""}
+                targetName={pendingCopyFromPrimary?.targetDisplayName ?? ""}
+                fieldsSummary={pendingCopyFromPrimary?.fieldsSummary ?? "contact details"}
+                isLoading={copySaving}
+                onClose={() => {
+                    if (copySaving) return;
+                    setPendingCopyFromPrimary(null);
+                }}
+                onConfirm={async () => {
+                    if (!pendingCopyFromPrimary || !mutation) return;
+                    setCopySaving(true);
+                    try {
+                        const result = await mutation.savePersonContact(
+                            pendingCopyFromPrimary.targetPersonId,
+                            pendingCopyFromPrimary.patch,
+                        );
+                        if (result.ok) {
+                            setPendingCopyFromPrimary(null);
+                            setJustSaved(true);
+                            if (savedChipTimer.current) clearTimeout(savedChipTimer.current);
+                            savedChipTimer.current = setTimeout(() => setJustSaved(false), 2600);
+                        }
+                    } finally {
+                        setCopySaving(false);
+                    }
+                }}
+            />
         </div>
     );
 }
@@ -866,6 +949,9 @@ function householdHeadline(evidence: ReturnType<typeof buildHouseholdCardEvidenc
     return evidence.answerLine;
 }
 
+const HOUSEHOLD_SECONDARY_ACTION_LINK_CLASS =
+    "bg-transparent p-0 text-left text-[10.5px] font-medium text-alloy-slate hover:text-alloy-bend-pine focus-visible:text-alloy-bend-pine focus-visible:outline-none disabled:opacity-50";
+
 function CollapsedBody({
     evidence,
     masked,
@@ -880,8 +966,10 @@ function CollapsedBody({
     onAddAuthorizedPickup,
     onEditContact,
     onRequestMakePrimary,
+    onRequestCopyFromPrimary,
     guardianCount = 0,
     primarySavingPersonId = null,
+    copySavingPersonId = null,
 }: {
     evidence: ReturnType<typeof buildHouseholdCardEvidence>;
     masked: boolean;
@@ -896,8 +984,10 @@ function CollapsedBody({
     onAddAuthorizedPickup?: () => void;
     onEditContact?: (personId: string) => void;
     onRequestMakePrimary?: (personId: string, displayName: string) => void;
+    onRequestCopyFromPrimary?: (personId: string, displayName: string) => void;
     guardianCount?: number;
     primarySavingPersonId?: string | null;
+    copySavingPersonId?: string | null;
 }) {
     const identityVm = useMemo(
         () =>
@@ -1016,15 +1106,19 @@ function CollapsedBody({
                     dataAttrs={{ "data-household-summary-region": "other_parent_guardian" }}
                 >
                     {secondaryRecords.map((record) => {
-                        const showMakePrimary =
+                        const secondaryActionEligible =
                             !masked
                             && !composing
-                            && onRequestMakePrimary
                             && householdShowsPrimaryContactControl({
                                 guardianCount,
                                 isPrimary: false,
                                 canMutate: Boolean(canEdit),
                             });
+                        const showMakePrimary = secondaryActionEligible && Boolean(onRequestMakePrimary);
+                        const showCopyFromPrimary =
+                            secondaryActionEligible && Boolean(onRequestCopyFromPrimary);
+                        const rowBusy =
+                            primarySavingPersonId === record.id || copySavingPersonId === record.id;
                         return (
                             <div key={record.id} className="min-w-0" data-household-secondary-contact={record.id}>
                                 <IdentityRecordSummary
@@ -1038,20 +1132,41 @@ function CollapsedBody({
                                     onEditContact={!masked && !composing ? onEditContact : undefined}
                                     dataAttr={record.id}
                                 />
-                                {showMakePrimary ? (
-                                    <button
-                                        type="button"
-                                        className="mt-1 bg-transparent p-0 text-left text-[10.5px] font-medium text-alloy-slate hover:text-alloy-bend-pine focus-visible:text-alloy-bend-pine focus-visible:outline-none disabled:opacity-50"
-                                        data-household-make-primary-contact="true"
-                                        data-person-id={record.id}
-                                        disabled={primarySavingPersonId === record.id}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onRequestMakePrimary(record.id, record.title);
-                                        }}
-                                    >
-                                        {primarySavingPersonId === record.id ? "Saving…" : "Make primary"}
-                                    </button>
+                                {showMakePrimary || showCopyFromPrimary ? (
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                        {showMakePrimary && onRequestMakePrimary ? (
+                                            <button
+                                                type="button"
+                                                className={HOUSEHOLD_SECONDARY_ACTION_LINK_CLASS}
+                                                data-household-make-primary-contact="true"
+                                                data-person-id={record.id}
+                                                disabled={rowBusy}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onRequestMakePrimary(record.id, record.title);
+                                                }}
+                                            >
+                                                {primarySavingPersonId === record.id ? "Saving…" : "Make primary"}
+                                            </button>
+                                        ) : null}
+                                        {showCopyFromPrimary && onRequestCopyFromPrimary ? (
+                                            <button
+                                                type="button"
+                                                className={HOUSEHOLD_SECONDARY_ACTION_LINK_CLASS}
+                                                data-household-copy-from-primary-contact="true"
+                                                data-person-id={record.id}
+                                                disabled={rowBusy}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onRequestCopyFromPrimary(record.id, record.title);
+                                                }}
+                                            >
+                                                {copySavingPersonId === record.id
+                                                    ? "Copying…"
+                                                    : "Copy from primary"}
+                                            </button>
+                                        ) : null}
+                                    </div>
                                 ) : null}
                             </div>
                         );
@@ -1146,8 +1261,10 @@ function ExpandedBody({
     nestedConfig,
     composePickerOnly = false,
     onRequestMakePrimary,
+    onRequestCopyFromPrimary,
     guardianCount = 0,
     primarySavingPersonId = null,
+    copySavingPersonId = null,
 }: {
     groups: HouseholdEvidenceGroup[];
     masked: boolean;
@@ -1164,8 +1281,10 @@ function ExpandedBody({
     nestedConfig: NestedSurfaceConfig | null;
     composePickerOnly?: boolean;
     onRequestMakePrimary?: (personId: string, displayName: string) => void;
+    onRequestCopyFromPrimary?: (personId: string, displayName: string) => void;
     guardianCount?: number;
     primarySavingPersonId?: string | null;
+    copySavingPersonId?: string | null;
 }) {
     const groupsRef = useRef<HTMLDivElement>(null);
 
@@ -1224,8 +1343,10 @@ function ExpandedBody({
                         composePurpose={composePurpose}
                         composePickerOnly={composePickerOnly}
                         onRequestMakePrimary={onRequestMakePrimary}
+                        onRequestCopyFromPrimary={onRequestCopyFromPrimary}
                         guardianCount={guardianCount}
                         primarySavingPersonId={primarySavingPersonId}
+                        copySavingPersonId={copySavingPersonId}
                     />
                 </ComposableRegionShell>
             ))}
@@ -1289,8 +1410,10 @@ function GroupRows({
     composePurpose = null,
     composePickerOnly = false,
     onRequestMakePrimary,
+    onRequestCopyFromPrimary,
     guardianCount = 0,
     primarySavingPersonId = null,
+    copySavingPersonId = null,
 }: {
     group: HouseholdEvidenceGroup;
     masked: boolean;
@@ -1307,8 +1430,10 @@ function GroupRows({
     composePurpose?: IdentityConfigurationPurpose | null;
     composePickerOnly?: boolean;
     onRequestMakePrimary?: (personId: string, displayName: string) => void;
+    onRequestCopyFromPrimary?: (personId: string, displayName: string) => void;
     guardianCount?: number;
     primarySavingPersonId?: string | null;
+    copySavingPersonId?: string | null;
 }) {
     if (group.key === "address" && group.addressLine) {
         return <AddressLine address={group.addressLine} />;
@@ -1384,29 +1509,63 @@ function GroupRows({
                         onSaveField={onSaveField && !composing && !masked ? onSaveField : undefined}
                         onSaveFields={onSaveFields && !composing && !masked ? onSaveFields : undefined}
                     />
-                    {group.key === "other_parent_guardian"
-                        && onRequestMakePrimary
-                        && !masked
-                        && !composing
-                        ? visible.map((record) =>
-                              householdShowsPrimaryContactControl({
+                    {group.key === "other_parent_guardian" && !masked && !composing
+                        ? visible.map((record) => {
+                              const canMutateSecondary =
+                                  Boolean(onEditContact) || Boolean(onSaveField);
+                              const secondaryActionEligible = householdShowsPrimaryContactControl({
                                   guardianCount,
                                   isPrimary: /^primary$/i.test(record.badge ?? ""),
-                                  canMutate: Boolean(onEditContact) || Boolean(onSaveField),
-                              }) ? (
-                                  <button
-                                      key={`make-primary-${record.id}`}
-                                      type="button"
-                                      className="mt-1 bg-transparent p-0 text-left text-[10.5px] font-medium text-alloy-slate hover:text-alloy-bend-pine focus-visible:text-alloy-bend-pine focus-visible:outline-none disabled:opacity-50"
-                                      data-household-make-primary-contact="true"
-                                      data-person-id={record.id}
-                                      disabled={primarySavingPersonId === record.id}
-                                      onClick={() => onRequestMakePrimary(record.id, record.title)}
+                                  canMutate: canMutateSecondary,
+                              });
+                              const showMakePrimary =
+                                  secondaryActionEligible && Boolean(onRequestMakePrimary);
+                              const showCopyFromPrimary =
+                                  secondaryActionEligible && Boolean(onRequestCopyFromPrimary);
+                              if (!showMakePrimary && !showCopyFromPrimary) return null;
+                              const rowBusy =
+                                  primarySavingPersonId === record.id
+                                  || copySavingPersonId === record.id;
+                              return (
+                                  <div
+                                      key={`secondary-actions-${record.id}`}
+                                      className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5"
                                   >
-                                      {primarySavingPersonId === record.id ? "Saving…" : "Make primary"}
-                                  </button>
-                              ) : null,
-                          )
+                                      {showMakePrimary && onRequestMakePrimary ? (
+                                          <button
+                                              type="button"
+                                              className={HOUSEHOLD_SECONDARY_ACTION_LINK_CLASS}
+                                              data-household-make-primary-contact="true"
+                                              data-person-id={record.id}
+                                              disabled={rowBusy}
+                                              onClick={() =>
+                                                  onRequestMakePrimary(record.id, record.title)
+                                              }
+                                          >
+                                              {primarySavingPersonId === record.id
+                                                  ? "Saving…"
+                                                  : "Make primary"}
+                                          </button>
+                                      ) : null}
+                                      {showCopyFromPrimary && onRequestCopyFromPrimary ? (
+                                          <button
+                                              type="button"
+                                              className={HOUSEHOLD_SECONDARY_ACTION_LINK_CLASS}
+                                              data-household-copy-from-primary-contact="true"
+                                              data-person-id={record.id}
+                                              disabled={rowBusy}
+                                              onClick={() =>
+                                                  onRequestCopyFromPrimary(record.id, record.title)
+                                              }
+                                          >
+                                              {copySavingPersonId === record.id
+                                                  ? "Copying…"
+                                                  : "Copy from primary"}
+                                          </button>
+                                      ) : null}
+                                  </div>
+                              );
+                          })
                         : null}
                 </>
             ) : (

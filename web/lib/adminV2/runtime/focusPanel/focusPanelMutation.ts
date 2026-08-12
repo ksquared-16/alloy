@@ -39,6 +39,7 @@ import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import { patchHouseholdPrimaryContact } from "@/lib/admin/person/patchHouseholdPrimaryContact";
 import { applyLeadPrimaryContactToOpportunityRecord } from "@/lib/admin/person/applyLeadPrimaryContactToOpportunityRecord";
+import { RESOLVED_PHOTO_URL_KEY } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 import {
     dispatchOpportunityTourUpdated,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
@@ -430,6 +431,35 @@ export type BuildFocusPanelMutationInput = {
 };
 
 /**
+ * Mutations always key the family opportunity (Record of Truth), never the Attention subject.
+ *
+ * Child Attention overlays rewrite `model.subject.id` to the child / process-instance id.
+ * PATCH merges + drawer refresh events must still target `child.family_opportunity_id`
+ * (or settlement `truth.id`) so saves stick and the Work Unit Focus Panel re-merges.
+ */
+export function resolveFocusPanelMutationOpportunityId(args: {
+    subjectId: string;
+    grain?: string | null;
+    truth: Record<string, unknown> | null | undefined;
+}): string {
+    const subjectId = args.subjectId.trim();
+    const familyFromTruth =
+        typeof args.truth?.["child.family_opportunity_id"] === "string"
+            ? String(args.truth["child.family_opportunity_id"]).trim()
+            : "";
+    const truthId =
+        typeof args.truth?.id === "string" ? String(args.truth.id).trim() : "";
+
+    if (args.grain === "child") {
+        if (familyFromTruth) return familyFromTruth;
+        // Settlement truth id is the family opportunity; Attention subject is the child.
+        if (truthId && truthId !== subjectId) return truthId;
+    }
+    if (familyFromTruth) return familyFromTruth;
+    return subjectId;
+}
+
+/**
  * Build the opportunity Focus Panel mutation adapter. Wires:
  *  - Household contact save (existing person PATCH path)
  *  - Tour status actions (existing tour booking API)
@@ -574,12 +604,18 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                     return { ok: false, status: res.status, error: json.error ?? "Could not save photo" };
                 }
 
+                // Session preview for immediate chrome; merge uses resolved_photo_url so
+                // evidence adapters accept the actor-scoped URL (signed photo_url alone is dropped).
                 setChildAvatarSessionPreview(childId, json.photoUrl);
 
                 const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
                     childId,
                     row: { person_id: pid },
-                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: json.photoUrl } },
+                    patch: {
+                        identityPatch: {},
+                        ocmPatch: {},
+                        profilePatch: { [RESOLVED_PHOTO_URL_KEY]: json.photoUrl },
+                    },
                 });
                 dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
                 dispatchDrawerLayoutRuntimeBodyRecordPatch({
@@ -609,7 +645,11 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 const merged = mergeInquiryChildIntoFocusPanelTruth(getTruth?.() ?? truth, {
                     childId,
                     row: { person_id: pid },
-                    patch: { identityPatch: {}, ocmPatch: {}, profilePatch: { photo_url: null } },
+                    patch: {
+                        identityPatch: {},
+                        ocmPatch: {},
+                        profilePatch: { [RESOLVED_PHOTO_URL_KEY]: null, photo_url: null },
+                    },
                 });
                 dispatchOpportunityDrawerRecordPatch(opportunityId, merged);
                 dispatchDrawerLayoutRuntimeBodyRecordPatch({

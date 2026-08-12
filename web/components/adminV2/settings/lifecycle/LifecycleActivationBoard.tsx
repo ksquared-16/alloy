@@ -33,6 +33,7 @@ import BusinessProcessWorkViewsListColumn from "@/components/adminV2/settings/bu
 import BusinessProcessWorkViewsSetupWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsSetupWorkspace";
 import BusinessProcessParticipationCard from "@/components/adminV2/settings/businessProcess/BusinessProcessParticipationCard";
 import { WorkViewsConfigurationProvider } from "@/components/adminV2/settings/businessProcess/WorkViewsConfigurationContext";
+import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import type { BusinessProcessWorkspaceSection } from "@/lib/lifecycle/businessProcessUiLabels";
 import type { LifecycleBaseActionKey } from "@/lib/lifecycle/lifecycleStageBaseActions";
 import { queueMembershipWithSyncedStatusKeys } from "@/lib/lifecycle/queueMembershipEditorModel";
@@ -815,6 +816,11 @@ export default function LifecycleActivationBoard({
     // operator publishes, so the editor needs its own small workflow rather than a "Saved" chip.
     const [publicationBusy, setPublicationBusy] = useState(false);
     const [publicationNotice, setPublicationNotice] = useState<string | null>(null);
+    // Independent of stage bootstrap — Work Views (and other process sections) still need Apply
+    // even when no stage is selected / bootstrap is empty.
+    const [publicationSummary, setPublicationSummary] = useState<
+        LifecycleStageBootstrapPayload["configuration_state"] | null
+    >(null);
 
     const refreshConfigurationState = useCallback(async () => {
         if (!runtimeDepartmentId) return;
@@ -826,11 +832,26 @@ export default function LifecycleActivationBoard({
             const j = (await res.json().catch(() => ({}))) as {
                 summary?: LifecycleStageBootstrapPayload["configuration_state"];
             };
-            if (res.ok && j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            if (res.ok && j.summary) {
+                setPublicationSummary(j.summary);
+                patchStageBootstrap({ configuration_state: j.summary });
+            }
         } catch {
             // A failed refresh must not break the save it followed; the next load corrects it.
         }
     }, [runtimeDepartmentId, patchStageBootstrap]);
+
+    useEffect(() => {
+        if (stageBootstrap?.configuration_state) {
+            setPublicationSummary(stageBootstrap.configuration_state);
+        }
+    }, [stageBootstrap?.configuration_state]);
+
+    useEffect(() => {
+        if (processSection === "work-views" && runtimeDepartmentId) {
+            void refreshConfigurationState();
+        }
+    }, [processSection, runtimeDepartmentId, refreshConfigurationState]);
 
     const validateConfiguration = useCallback(async () => {
         if (!runtimeDepartmentId) return;
@@ -849,7 +870,10 @@ export default function LifecycleActivationBoard({
                 summary?: LifecycleStageBootstrapPayload["configuration_state"];
             };
             if (!res.ok) throw new Error(j.error ?? "Validation failed");
-            if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            if (j.summary) {
+                setPublicationSummary(j.summary);
+                patchStageBootstrap({ configuration_state: j.summary });
+            }
             setPublicationNotice(
                 j.can_publish
                     ? "Validated. This configuration is ready to publish."
@@ -873,8 +897,11 @@ export default function LifecycleActivationBoard({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     department_id: runtimeDepartmentId,
-                    ...(stageBootstrap?.configuration_state
-                        ? { draft_revision: stageBootstrap.configuration_state.draft_revision }
+                    ...((publicationSummary ?? stageBootstrap?.configuration_state)
+                        ? {
+                              draft_revision: (publicationSummary ?? stageBootstrap!.configuration_state!)
+                                  .draft_revision,
+                          }
                         : {}),
                 }),
             });
@@ -884,11 +911,16 @@ export default function LifecycleActivationBoard({
                 summary?: LifecycleStageBootstrapPayload["configuration_state"];
             };
             if (!res.ok) {
-                if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
-                else await refreshConfigurationState();
+                if (j.summary) {
+                    setPublicationSummary(j.summary);
+                    patchStageBootstrap({ configuration_state: j.summary });
+                } else await refreshConfigurationState();
                 throw new Error(j.error ?? "Could not apply your changes.");
             }
-            if (j.summary) patchStageBootstrap({ configuration_state: j.summary });
+            if (j.summary) {
+                setPublicationSummary(j.summary);
+                patchStageBootstrap({ configuration_state: j.summary });
+            }
             // Says what CHANGED for the operator, not which revision number was cut. `already_published`
             // means the request was a no-op because this exact configuration was already live —
             // telling them "applied" would imply something happened.
@@ -905,6 +937,7 @@ export default function LifecycleActivationBoard({
         }
     }, [
         runtimeDepartmentId,
+        publicationSummary,
         stageBootstrap?.configuration_state,
         patchStageBootstrap,
         refreshConfigurationState,
@@ -2023,12 +2056,23 @@ export default function LifecycleActivationBoard({
                     :   null}
 
                     {processSection === "work-views" && processId ?
-                        <BusinessProcessWorkViewsSetupWorkspace
-                            workUnitKey={pipeline?.key ?? null}
-                            stageGrains={builderStages.map((s) => s.grain)}
-                            stageGrainByKey={Object.fromEntries(builderStages.map((s) => [s.key, s.grain]))}
-                            queueLanes={workViewQueueLanes}
-                        />
+                        <div className="space-y-0" data-testid="business-process-work-views-with-publication">
+                            <BusinessProcessPublicationBar
+                                state={publicationSummary ?? stageBootstrap?.configuration_state ?? null}
+                                busy={publicationBusy}
+                                notice={publicationNotice}
+                                onValidate={validateConfiguration}
+                                onPublish={publishConfiguration}
+                                onReload={reloadConfiguration}
+                            />
+                            <BusinessProcessWorkViewsSetupWorkspace
+                                workUnitKey={pipeline?.key ?? null}
+                                stageGrains={builderStages.map((s) => s.grain)}
+                                stageGrainByKey={Object.fromEntries(builderStages.map((s) => [s.key, s.grain]))}
+                                queueLanes={workViewQueueLanes}
+                                onDraftSaved={refreshConfigurationState}
+                            />
+                        </div>
                     :   null}
 
                     {processSection === "actions" ?

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
 import {
     operationalEnrollmentErrorResponse,
     resolveOperationalEnrollmentTodayYmd,
@@ -335,7 +337,21 @@ export async function GET(request: NextRequest) {
             if (!siteLocationId) {
                 return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
             }
-            const model = await buildAssignmentRosterReadModel(supabase, ctx.orgId, siteLocationId);
+            const access = await getAdminAccessContextCached();
+            const documentActor = documentActorFromAdminParts({
+                ok: true,
+                userId: ctx.userId,
+                orgId: ctx.orgId,
+                role: ctx.role,
+                roleKeys: access.ok ? access.roleKeys : [],
+                permissionKeys: access.ok ? access.permissionKeys : [],
+            });
+            const model = await buildAssignmentRosterReadModel(
+                supabase,
+                ctx.orgId,
+                siteLocationId,
+                documentActor,
+            );
             return NextResponse.json({
                 view,
                 siteLocationId,
@@ -433,7 +449,7 @@ export async function GET(request: NextRequest) {
                 return NextResponse.json({ error: "start_date must be YYYY-MM-DD", code: "invalid_input" }, { status: 400 });
             }
             const dateEnd = addDaysYmd(dateStart, 6);
-            const options = await generatePlacementOptions(supabase, {
+            const { options, fitContext } = await generatePlacementOptions(supabase, {
                 orgId: ctx.orgId,
                 siteLocationId,
                 childAgreementId,
@@ -445,7 +461,13 @@ export async function GET(request: NextRequest) {
             // Echo the resolved program category back so clients that pass none can
             // adopt the server-resolved value for subsequent client-side room filtering
             // (e.g. re-filtering after a Category change without a full refetch).
-            return NextResponse.json({ view, options, range: { dateStart, dateEnd }, programCategoryId });
+            return NextResponse.json({
+                view,
+                options,
+                fitContext,
+                range: { dateStart, dateEnd },
+                programCategoryId,
+            });
         }
 
         if (view === "projection") {

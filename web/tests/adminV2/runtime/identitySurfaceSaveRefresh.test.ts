@@ -222,14 +222,15 @@ describe("child save refresh", () => {
         expect(afterChild.program).toBe("Toddler");
     });
 
-    it("rebuilt children evidence shows photo_url after profile photo merge", () => {
+    it("rebuilt children evidence shows photo after resolved_photo_url merge", () => {
         const merged = mergeInquiryChildIntoFocusPanelTruth(CHILD_TRUTH, {
             childId: "child-1",
             row: { person_id: "p-emma" },
             patch: {
                 identityPatch: {},
                 ocmPatch: {},
-                profilePatch: { photo_url: "https://cdn.example/emma.jpg" },
+                // Session merge writes resolved_photo_url (signed photo_url alone is dropped).
+                profilePatch: { resolved_photo_url: "https://cdn.example/emma.jpg" },
             },
             savedPerson: null,
         });
@@ -245,7 +246,7 @@ describe("child save refresh", () => {
             patch: {
                 identityPatch: {},
                 ocmPatch: {},
-                profilePatch: { photo_url: "https://cdn.example/fallback.jpg" },
+                profilePatch: { resolved_photo_url: "https://cdn.example/fallback.jpg" },
             },
             savedPerson: null,
         });

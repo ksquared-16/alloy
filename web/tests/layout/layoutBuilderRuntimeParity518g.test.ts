@@ -85,9 +85,10 @@ describe("layoutBuilderRuntimeParity 5.18G", () => {
                 {
                     key: "subject",
                     label: "Open Nguyen Household",
-                    target: "open_drawer",
-                    entity_type: "opportunities",
-                    entity_id: "opp-123",
+                    target: "focus_panel",
+                    card_key: "household",
+                    host_entity_type: "opportunities",
+                    host_entity_id: "opp-123",
                     primary: true,
                 },
             ],
@@ -109,8 +110,8 @@ describe("layoutBuilderRuntimeParity 5.18G", () => {
             recognition: { type_label: "Child" },
             contexts: [],
             destinations: [
-                { key: "subject", label: "Open Joe", target: "open_drawer", entity_type: "persons", entity_id: "p-1", primary: true },
-                { key: "process:enrollment", label: "Enrollment", target: "open_drawer", entity_type: "opportunities", entity_id: "opp-9" },
+                { key: "subject", label: "Open Joe", target: "focus_panel", card_key: "children", item_id: "cm-1", host_entity_type: "persons", host_entity_id: "p-1", primary: true },
+                { key: "process:enrollment", label: "Enrollment", target: "focus_panel", card_key: "current_work", host_entity_type: "opportunities", host_entity_id: "opp-9" },
             ],
             ranking: { score: 1, reasons: [] },
         };

@@ -19,7 +19,7 @@ function rowPayload(raw: unknown): Record<string, unknown> | null {
     return raw as Record<string, unknown>;
 }
 
-/** @internal Exported for unit tests — groups pre-sorted desc rows by entity. */
+/** @internal Exported for unit tests — newest-first per entity (sorts + dedupes by id). */
 export function collapseTopEventsPerEntity(
     rows: Array<{
         id?: unknown;
@@ -31,12 +31,22 @@ export function collapseTopEventsPerEntity(
     maxPerEntity: number,
 ): Map<string, QueueActivityTimelineEventRow[]> {
     const byEntity = new Map<string, QueueActivityTimelineEventRow[]>();
-    for (const row of rows) {
+    const seenIds = new Set<string>();
+    const sorted = [...rows].sort((a, b) => {
+        const at = Date.parse(String(a.occurred_at ?? "")) || 0;
+        const bt = Date.parse(String(b.occurred_at ?? "")) || 0;
+        return bt - at;
+    });
+    for (const row of sorted) {
         const entityId = row.entity_id != null ? String(row.entity_id).trim() : "";
         if (!entityId) continue;
+        const id = row.id != null ? String(row.id).trim() : "";
+        if (id) {
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
+        }
         const list = byEntity.get(entityId) ?? [];
         if (list.length >= maxPerEntity) continue;
-        const id = row.id != null ? String(row.id).trim() : "";
         list.push({
             id: id || `${entityId}-${list.length}`,
             occurred_at: row.occurred_at != null ? String(row.occurred_at) : null,
@@ -65,20 +75,46 @@ export async function fetchQueueActivityTimelineEventsByOpportunityId(
     for (let i = 0; i < unique.length; i += chunkSize) {
         const chunk = unique.slice(i, i + chunkSize);
         const limit = Math.min(6000, Math.max(200, chunk.length * maxPerEntity * 4));
-        const { data, error } = await supabase
-            .from("workflow_events")
-            .select("id, occurred_at, event_type, entity_id, payload")
-            .eq("org_id", orgId)
-            .eq("entity_type", "opportunities")
-            .in("entity_id", chunk)
-            .order("occurred_at", { ascending: false })
-            .limit(limit);
+        const [directRes, relatedChildRes] = await Promise.all([
+            supabase
+                .from("workflow_events")
+                .select("id, occurred_at, event_type, entity_id, payload")
+                .eq("org_id", orgId)
+                .eq("entity_type", "opportunities")
+                .in("entity_id", chunk)
+                .order("occurred_at", { ascending: false })
+                .limit(limit),
+            // Child stage moves emit on opportunity_customer_members with payload.opportunity_id.
+            supabase
+                .from("workflow_events")
+                .select("id, occurred_at, event_type, entity_id, payload")
+                .eq("org_id", orgId)
+                .eq("event_type", "child_lifecycle_status_changed")
+                .in("payload->>opportunity_id", chunk)
+                .order("occurred_at", { ascending: false })
+                .limit(limit),
+        ]);
 
-        if (error) {
-            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${error.message}`);
+        if (directRes.error) {
+            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${directRes.error.message}`);
+        }
+        if (relatedChildRes.error) {
+            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${relatedChildRes.error.message}`);
         }
 
-        const grouped = collapseTopEventsPerEntity(data ?? [], maxPerEntity);
+        const relatedAsOpportunity = ((relatedChildRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+            const payload = row.payload;
+            const oppId =
+                payload && typeof payload === "object" && !Array.isArray(payload)
+                    ? String((payload as Record<string, unknown>).opportunity_id ?? "").trim()
+                    : "";
+            return { ...row, entity_id: oppId || row.entity_id };
+        });
+
+        const grouped = collapseTopEventsPerEntity(
+            [...(directRes.data ?? []), ...relatedAsOpportunity],
+            maxPerEntity,
+        );
         for (const [entityId, events] of grouped) {
             out.set(entityId, events);
         }

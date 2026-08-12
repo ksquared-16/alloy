@@ -1,23 +1,29 @@
 ---
 owner: platform
-status: proposed
-last_reviewed: 2026-07-27
+status: partial
+last_reviewed: 2026-08-11
 supersedes: []
 ---
 
 # Future sprint — Identity profile photo projection everywhere
 
-**Status:** Forward-looking / **not in scope** for Assignment Platform Phase 2 closeout.  
-**Date:** 2026-07-27  
-**Prerequisite:** Surfaces → Runtime avatar contract (canonical `persons.metadata.profile_photo_document_id` + signed `photo_url`) is already the upload/persist authority.
+**Status:** **Partially landed (2026-08-11)** — opportunity / Focus Panel children + household persons, child-grain queue rows, and Assignment roster now project via `resolveProfilePhotosForActor` + `RESOLVED_PHOTO_URL_KEY`. Remaining surfaces (Room Board chips, person drawer chrome warm refresh, Surfaces authoring polish) stay forward-looking.  
+**Date:** 2026-07-27 (updated 2026-08-11)  
+**Prerequisite:** Surfaces → Runtime avatar contract (canonical `persons.metadata.profile_photo_document_id` + request-scoped signed URL) is already the upload/persist authority.
 
 ---
 
 ## Problem
 
-Operators can upload a child profile photo from Surfaces → context facts, and Work Unit Children summary can **display** that photo. Projection is still incomplete: several operator surfaces that show the same child still fall back to initials or omit the avatar entirely, even when a canonical photo exists.
+Operators can upload a child profile photo from Surfaces → context facts, and Work Unit Children summary can **display** that photo. Projection was incomplete: several operator surfaces that show the same child still fell back to initials or omitted the avatar entirely, even when a canonical photo exists.
 
 This is a **shared identity projection** gap — not an Assignment-only feature.
+
+### Observed (2026-08, EPP / Waitlist runtime) — addressed for core paths
+
+Upload persists the durable pointer `persons.metadata.profile_photo_document_id` and returns a **short-lived signed URL** (≤ ~15 minutes). Signed URLs are intentionally **not** written back to `persons.metadata.photo_url`.
+
+**Landed:** Opportunity / `_inquiry_children` + `_opportunity_persons` / `_customer_persons` hydrate, Focus Panel client save merge (`resolved_photo_url`), child-grain queue `row_subject.image_url` → CondensedQueueRow, and Assignment roster `imageUrl` now call `resolveProfilePhotosForActor` (keyed by **person_id**) and inject `resolved_photo_url`.
 
 ---
 
@@ -27,14 +33,24 @@ One canonical person profile photo resolves consistently everywhere the shared A
 
 ---
 
-## In scope (future)
+## Landed (2026-08-11)
 
-1. **Projection inventory** — list every live operator surface that shows a child/person face or initials and classify: already shared `IdentityAvatar` / `CardAvatar`, custom avatar, or initials-only.
-2. **Read-model convergence** — ensure Assignment Roster, Room Board subject chips, Household / Children Focus Panel depths, queue preview rows (if they show faces), and person drawer chrome all read the same photo URL resolver (`resolveIdentityPhotoUrlFromMetadata` / inquiry-child photo helpers).
-3. **Warm refresh** — after upload/clear, invalidate or patch every open projection that already shows that person (not session-only composer preview).
-4. **Missing `person_id` remediation** — backfill or ensure-person for historical `customer_members` that only carry `display_name` (Almead-class rows), so photo storage can bind.
-5. **Surfaces authoring** — keep upload/remove on Surfaces → context facts; Work Unit summary stays display + zoom only (no inline upload).
-6. **Certification** — browser proof matrix: upload once → photo visible on summary, focused child, Assignments roster, Room Board (where faces appear), person drawer.
+1. **Opportunity hydrate** — `opportunityEntityRecord` drawer_visible / full / relationship overlay project photos via `projectResolvedProfilePhotosOntoRows` (`person_id` key).
+2. **Focus Panel save merge** — `savePersonChildPhoto` writes `resolved_photo_url` (session preview kept; signed URL not durable metadata).
+3. **Queue rows** — child-grain `QueueRowSubjectPresentation.image_url` + CondensedQueueRow AvatarChip img-or-initials; batch resolve in `enrichOpportunityRows` when DocumentActor is present.
+4. **Assignment roster** — `buildAssignmentRosterReadModel` / `resolvePersonNames` uses `resolveProfilePhotosForActor`.
+
+Helper: `web/lib/documents/projectPersonProfilePhotos.ts`.
+
+---
+
+## Still in scope (future)
+
+1. **Projection inventory** — remaining live surfaces (Room Board subject chips, person drawer chrome) not yet on the same path.
+2. **Warm refresh** — after upload/clear, invalidate or patch every open projection that already shows that person (not session-only composer preview).
+3. **Missing `person_id` remediation** — backfill or ensure-person for historical `customer_members` that only carry `display_name` (Almead-class rows), so photo storage can bind.
+4. **Surfaces authoring** — keep upload/remove on Surfaces → context facts; Work Unit summary stays display + zoom only (no inline upload).
+5. **Certification** — browser proof matrix: upload once → photo visible on summary, focused child, Assignments roster, Room Board (where faces appear), person drawer.
 
 ## Out of scope
 
@@ -53,11 +69,13 @@ One canonical person profile photo resolves consistently everywhere the shared A
 | 3 | Assignments Roster row for same child shows the same image |
 | 4 | Opening the person/child identity chrome shows the same image |
 | 5 | Clear photo → initials everywhere within one refresh cycle |
+| 6 | Queue child-grain row shows image when `resolved_photo_url` projected |
 
 ---
 
 ## Suggested entry points (when scheduled)
 
+- `web/lib/documents/projectPersonProfilePhotos.ts` — batch projection helper
 - `web/lib/adminV2/runtime/focusPanel/persistPersonProfilePhoto.ts`
 - `web/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl.ts`
 - `web/lib/scheduling/roster/buildAssignmentRosterReadModel.ts`

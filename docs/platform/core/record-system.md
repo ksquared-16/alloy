@@ -104,6 +104,7 @@ Runtime: `layoutRuntimeScopedRelationshipContacts.ts`, `fetchChildScopedContactL
 - One primary per household scope; old primary remains linked as additional contact
 - Designation via **Make Primary Contact** layout action or PATCH `/api/admin/customers/[id]/household-primary-contact`
 - Event: `household.primary_contact_changed`
+- **Copy from primary** (Household card, secondary / other parent-guardian action): copies Context Detail channels from the primary person onto another household adult — `email`, `phone`, and address fields only (never name). Confirm modal (`HouseholdCopyPrimaryContactConfirmModal`) → `copyPrimaryContactDetails` → `savePersonContact` on the target person. Empty primary values are skipped so secondary blanks are not wiped.
 
 See `../modules/actions-and-workflows.md` § Relationship Action Framework.
 

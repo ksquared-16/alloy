@@ -378,9 +378,9 @@ describe("Case 1 — child search", () => {
 
         const primary = joe.destinations.find((d) => d.primary);
         expect(primary).toBeTruthy();
-        expect(primary!.target).toBe("open_drawer");
-        expect(primary!.entity_type).toBe("persons");
-        expect(primary!.entity_id).toBe(JOE_PERSON);
+        expect(primary!.target).toBe("focus_panel");
+        expect(primary!.card_key).toBe("children");
+        expect(primary!.item_id).toBe(JOE_MEMBER);
 
         expect(joe.destinations.length).toBeGreaterThan(1);
         expect(joe.destinations.some((d) => d.key === "household")).toBe(true);
@@ -400,9 +400,9 @@ describe("Case 1 — child search", () => {
         const subject = results.find((r) => r.subject.id === JOE_MEMBER)!;
         const primary = subject.destinations.find((d) => d.primary)!;
 
-        expect(primary.entity_type).toBe("opportunities");
-        expect(primary.entity_id).toBe(JOE_OPPORTUNITY);
-        expect(primary.entity_type).not.toBe("customers");
+        expect(primary.card_key).toBe("children");
+        expect(primary.host_entity_type).toBe("opportunities");
+        expect(primary.host_entity_id).toBe(JOE_OPPORTUNITY);
     });
 
     it("falls back to the household only when there is no participation record", async () => {
@@ -416,16 +416,18 @@ describe("Case 1 — child search", () => {
         const { results } = await run("Joe Smith", openDim, fixtures);
         const subject = results.find((r) => r.subject.id === JOE_MEMBER)!;
         const primary = subject.destinations.find((d) => d.primary)!;
-        expect(primary.entity_type).toBe("customers");
-        expect(primary.entity_id).toBe(SMITH_HOUSEHOLD);
+        expect(primary.card_key).toBe("children");
+        expect(primary.host_entity_type).toBe("customers");
+        expect(primary.host_entity_id).toBe(SMITH_HOUSEHOLD);
     });
 
     it("never targets a legacy drawer type", async () => {
         const { results } = await run("Joe Smith");
         for (const r of results) {
             for (const d of r.destinations) {
-                expect(d.entity_type).not.toBe("customer_members");
-                expect(d.entity_type).not.toBe("contacts");
+                expect(d.host_entity_type).not.toBe("customer_members");
+                expect(d.host_entity_type).not.toBe("contacts");
+                expect(d.target).not.toBe("open_drawer");
             }
         }
     });
@@ -549,7 +551,7 @@ describe("Case 5 — staff/person search to the limit of the canonical model", (
         const kelly = results.find((r) => r.subject.id === KELLY_PERSON)!;
         expect(kelly).toBeTruthy();
         expect(kelly.subject.kind).toBe("person");
-        expect(kelly.destinations.find((d) => d.primary)?.entity_type).toBe("persons");
+        expect(kelly.destinations.find((d) => d.primary)?.card_key).toBe("household");
     });
 
     it("does NOT fabricate a staff role or campus assignment", async () => {

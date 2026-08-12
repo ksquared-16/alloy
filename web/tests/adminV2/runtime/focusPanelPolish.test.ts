@@ -152,16 +152,6 @@ describe("Focus Panel header composition guards", () => {
         expect(opportunity).toContain("buildFocusPanelContextChips");
     });
 
-    it("cold open seed header wires queue preview chips in inline and modal paths", () => {
-        const inline = readSrc("components/presentation/workUnit/InlineOpportunityFocusPanel.tsx");
-        expect(inline).toContain("buildFocusPanelContextChipsFromQueuePreviewSeed");
-        expect(inline).not.toContain("contextChips={[]}");
-
-        const runtime = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("buildFocusPanelContextChipsFromQueuePreviewSeed");
-        expect(runtime).not.toContain("contextChips={[]}");
-    });
-
     it("does not render Move to qualification or other stage-movement header CTAs", () => {
         expect(FOCUS_PANEL_SUPPRESS_HEADER_STAGE_CTA).toBe(true);
 

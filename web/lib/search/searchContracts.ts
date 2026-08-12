@@ -49,6 +49,21 @@ export type SearchSubject = {
     person_id?: string | null;
     /** Owning household when this subject belongs to one. */
     household_id?: string | null;
+    /**
+     * The household's operational CASE — the opportunity whose Focus Panel the household and its
+     * adults are worked in, plus the Work Unit that holds it.
+     *
+     * A child reaches its case through process participation. A parent or a household has none: only
+     * children participate in Enrollment. Without this a person/household destination resolved a host
+     * RECORD (`customers`) but no host Work Unit, so Search had nowhere to send the operator and
+     * refused to navigate — correct, but useless. Resolving the household's own case makes a parent
+     * land in exactly the panel their children land in, which is where that work actually happens.
+     *
+     * Null when the household has no case; the destination then carries no work unit and Search does
+     * not navigate, which stays honest.
+     */
+    household_case_entity_id?: string | null;
+    household_case_work_unit_key?: string | null;
 };
 
 /**
@@ -104,26 +119,74 @@ export type SearchContext = {
      */
     destination_entity_type?: string | null;
     destination_entity_id?: string | null;
+    /**
+     * The Work Unit that actually holds `destination_entity_id` in its queues —
+     * `work_units.key`, read from the host record's own `work_unit_id`.
+     *
+     * This is NOT the process key, and the distinction is load-bearing. A process
+     * (`enrollment`) and a Work Unit (`enrollment_pipeline`) are different objects
+     * in different namespaces: `/workspace/work-unit/:slug` resolves work-unit keys
+     * and Work View slugs, so routing to a process key answers `work_unit_not_found`
+     * and no Focus Panel ever composes.
+     *
+     * Null when the host record belongs to no Work Unit. That is honest — no Work
+     * View's evaluated page contains it, so nothing can host its Focus Panel, and a
+     * destination naming a unit anyway would be a fabricated route.
+     */
+    destination_work_unit_key?: string | null;
 };
 
 /**
  * Where an operator can go. Destinations point at AUTHORITATIVE Alloy surfaces.
  *
- * `open_drawer` targets the canonical Focus Panel for an entity; `route` targets
- * a canonical Alloy route. A destination NEVER carries mutation intent and never
- * carries a hand-built URL string assembled inside a component.
+ * `focus_panel` — commit a subject and focus a CARD in the existing Focus Panel.
+ * `route`       — a canonical Alloy route (campus settings, a configured Work View).
+ *
+ * `open_drawer` is deliberately gone. It addressed a record but never a card, so
+ * "open Lennon" and "open Lennon's enrollment" resolved to the same address and
+ * one was always dropped as a duplicate — that is why a child often showed only
+ * Household. It also opened the generic drawer overlay on top of the workspace,
+ * which is not an Alloy operator destination.
+ *
+ * A destination NEVER carries mutation intent and never carries a hand-built URL
+ * assembled inside a component.
  */
-export type SearchDestinationTargetKind = "open_drawer" | "route";
+export type SearchDestinationTargetKind = "focus_panel" | "route";
 
 export type SearchDestination = {
-    /** Stable key for tests/telemetry, e.g. "subject", "process:enrollment", "schedule". */
+    /**
+     * Stable OPERATOR-CONTEXT identity, e.g. "subject", "process:enrollment",
+     * "assignment". Deduplication keys on THIS, never on the underlying record —
+     * two different operator intents can legitimately share one payload.
+     */
     key: string;
     /** Operator-facing label. Configured where the destination is configured. */
     label: string;
     target: SearchDestinationTargetKind;
-    /** Drawer entity type when `target === "open_drawer"`. */
-    entity_type?: string | null;
-    entity_id?: string | null;
+    /** Which card to focus when `target === "focus_panel"`. */
+    card_key?: string | null;
+    /** Which row inside a collection card (child id, person id, …). */
+    item_id?: string | null;
+    /** Configured operational context within the card, e.g. a `process_key`. */
+    context_key?: string | null;
+    /**
+     * The record whose Focus Panel hosts this subject. A child's world is
+     * rendered by the case it participates in; the subject remains the child.
+     * Flat record consumers (POS picker, Experience Builder preview) read this
+     * through `searchSelectionFromResult`.
+     */
+    host_entity_type?: string | null;
+    host_entity_id?: string | null;
+    /**
+     * The configured work-unit / Work View that should HOST this subject.
+     *
+     * Search resolves it from the subject's configured process participation, so
+     * a tenant that renames or adds a process needs no code change — there is no
+     * hardcoded route here. Clicking navigates to this host so the INLINE Focus
+     * Panel owns rendering; without it the modal branch mounts on /workspace,
+     * which is the overlay this work exists to remove.
+     */
+    host_work_unit_key?: string | null;
     /** Canonical route when `target === "route"`. */
     href?: string | null;
     /**

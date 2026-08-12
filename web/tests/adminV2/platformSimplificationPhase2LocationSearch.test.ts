@@ -51,17 +51,14 @@ describe("platform simplification phase 2 — search campus navigation", () => {
         ).toBeNull();
     });
 
-    it("GlobalSearchBox routes campuses before drawer resolution", () => {
+    it("GlobalSearchBox sends a campus to a canonical route, never a card or overlay", () => {
+        // Re-pointed when Search moved onto Focus Panel targets. A campus has no
+        // Focus Panel card, so its destination is resolved server-side as a
+        // canonical route and the control simply follows the href it was given —
+        // it builds no URL and opens no overlay.
         const box = read("app/adminV2/components/GlobalSearchBox.tsx");
-        expect(box).toContain("resolveGlobalSearchLocationSettingsHref");
-        expect(box).toMatch(/locationHref[\s\S]*router\.push\(locationHref\)/);
-    });
-
-    it("GlobalRecordSearchOpenListener does not open drawer for locations", () => {
-        const listener = read("components/adminV2/GlobalRecordSearchOpenListener.tsx");
-        expect(listener).toContain('type === "locations"');
-        expect(listener).toContain("canonicalLocationSettingsHref");
-        expect(listener).not.toMatch(/openDrawer\([\s\S]*locations/);
+        expect(box).toMatch(/target === "route"[\s\S]*router\.push\(destination\.href\)/);
+        expect(box).not.toContain("launchGlobalRecordSearchOpen");
     });
 
     it("locations settings page restores selection from locationId query param", () => {

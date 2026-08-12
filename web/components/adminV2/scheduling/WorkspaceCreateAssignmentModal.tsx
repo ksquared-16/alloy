@@ -157,8 +157,9 @@ export default function WorkspaceCreateAssignmentModal({
                             : rooms.map((r) => ({
                                   roomId: r.roomId,
                                   roomName: r.roomName,
+                                  // Pending seed — scored options replace this; never flash Eligible.
                                   classification: "eligible" as const,
-                                  reason: "Operational space",
+                                  reason: "Checking eligibility…",
                                   programCategoryId: r.programCategoryId ?? null,
                               }))
                     );
@@ -191,6 +192,13 @@ export default function WorkspaceCreateAssignmentModal({
         const memberId = child?.customerMemberId || preselectedChildId || candidates[0]?.customerMemberId;
         if (!memberId) return;
         let cancelled = false;
+        setRoomOptions((prev) =>
+            (prev ?? []).map((r) => ({
+                ...r,
+                classification: "eligible" as const,
+                reason: "Checking eligibility…",
+            })),
+        );
         void schedApi(
             `?view=options&site_location_id=${encodeURIComponent(siteId)}&pattern_id=${encodeURIComponent(patternId)}&child_agreement_id=${encodeURIComponent(memberId)}${startDate ? `&start_date=${startDate}` : ""}`,
         )

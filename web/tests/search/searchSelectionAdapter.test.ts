@@ -32,9 +32,9 @@ function childResult(): SearchResult {
         },
         contexts: [],
         destinations: [
-            { key: "subject", label: "Open Joe", target: "open_drawer", entity_type: "persons", entity_id: "p-1", primary: true },
-            { key: "process:enrollment", label: "Enrollment", target: "open_drawer", entity_type: "opportunities", entity_id: "opp-9" },
-            { key: "household", label: "Household", target: "open_drawer", entity_type: "customers", entity_id: "cust-1" },
+            { key: "subject", label: "Open Joe", target: "focus_panel", card_key: "children", item_id: "cm-1", host_entity_type: "persons", host_entity_id: "p-1", primary: true },
+            { key: "process:enrollment", label: "Enrollment", target: "focus_panel", card_key: "current_work", context_key: "enrollment", host_entity_type: "opportunities", host_entity_id: "opp-9" },
+            { key: "household", label: "Household", target: "focus_panel", card_key: "household", host_entity_type: "customers", host_entity_id: "cust-1" },
         ],
         ranking: { score: 500, reasons: [] },
     };
@@ -53,7 +53,7 @@ function locationResult(): SearchResult {
 }
 
 describe("search selection projection", () => {
-    it("flattens a subject to the record its PRIMARY destination names", () => {
+    it("flattens a subject to the HOST record its PRIMARY destination names", () => {
         const selection = searchSelectionFromResult(childResult())!;
         expect(selection.entity_type).toBe("persons");
         expect(selection.entity_id).toBe("p-1");

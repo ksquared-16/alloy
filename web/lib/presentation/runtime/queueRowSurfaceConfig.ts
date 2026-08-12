@@ -106,8 +106,6 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
     status: [
         "opportunity.status_label",
         "queue_row.stage_label",
-        "waitlist.positionLabel",
-        "waitlist.waitSince",
         "queue_row.operational_age",
         "opportunity.days_in_stage",
     ],
@@ -126,8 +124,13 @@ const SLOT_FIELD_KEYS: Record<keyof CompactRowSlots, readonly string[]> = {
         "children.names",
         "children.summary",
         "inquiry_child.program",
+        "child.program",
         "inquiry_child.schedule_type",
         "child.room",
+        "child.date_of_birth",
+        // Waitlist Secondary band — position + wait-since belong with Program, not the status pill.
+        "waitlist.positionLabel",
+        "waitlist.waitSince",
     ],
 } as const;
 
@@ -141,6 +144,7 @@ const SLOT_KEYS = Object.keys(SLOT_FIELD_KEYS) as (keyof CompactRowSlots)[];
 const COMPACT_ROW_FIELD_KEY_ALIASES: Readonly<Record<string, string>> = {
     "inquiry_child.program_category": "inquiry_child.program",
     "inquiry_child.program_category_id": "inquiry_child.program",
+    "child.program": "inquiry_child.program",
 };
 
 /**

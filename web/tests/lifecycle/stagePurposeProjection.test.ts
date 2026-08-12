@@ -150,11 +150,4 @@ describe("OpportunityDrawerViewModel stage_context contract", () => {
         expect(types).toContain("purpose: string");
     });
 
-    it("OpportunityDrawerVmRuntime renders purpose below lifecycle rail", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("data-opportunity-drawer-stage-purpose");
-        expect(runtime).toContain("stagePurposeBlock");
-        expect(runtime).toContain("lifecycleRailForHeader");
-        expect(runtime).toContain("data-opportunity-drawer-lifecycle-rail-wrap");
-    });
 });

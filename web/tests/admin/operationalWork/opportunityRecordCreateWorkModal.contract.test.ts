@@ -42,19 +42,4 @@ describe("create_task registry routing", () => {
         expect(src).not.toMatch(/create_task[\s\S]*adminv2:open-tasks-panel[\s\S]*opportunity_id: eid \|\| null/);
     });
 
-    it("VM opportunity drawer mounts create work modal and listens for open event", () => {
-        const runtime = readFileSync(
-            join(dirname(fileURLToPath(import.meta.url)), "../../../components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
-            "utf8"
-        );
-        const host = readFileSync(vmRegistryModals, "utf8");
-        expect(runtime).toContain("useOpportunityDrawerVmRegistryModals");
-        expect(host).toContain("OpportunityRecordCreateWorkModal");
-        expect(host).toContain("ADMIN_V2_OPEN_CREATE_WORK_MODAL");
-        expect(host).toContain("openCreateWorkDirect");
-        expect(runtime).toContain("VmDrawerActionModalsPortal");
-        expect(runtime).toContain("registryModals");
-        // Phase C: router mounts the enrollment subject surface runtime via canonical shim name.
-        expect(readFileSync(drawerRouter, "utf8")).toContain("EnrollmentSubjectSurfaceRuntime");
-    });
 });

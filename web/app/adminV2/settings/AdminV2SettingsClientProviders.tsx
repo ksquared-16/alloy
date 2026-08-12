@@ -2,7 +2,6 @@
 
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
-import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -100,7 +99,6 @@ function AdminV2SettingsClientProvidersInner({
                             </div>
                         </div>
                     </div>
-                    <AdminEntityDrawer />
                 </ConfigurationContinuityProvider>
             </EntityLabelsProvider>
         </AdminAuthProvider>

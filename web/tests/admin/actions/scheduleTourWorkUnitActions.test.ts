@@ -109,7 +109,7 @@ describe("applyRegistryResolvedActionClient schedule tour", () => {
         const openScheduleTourRecordPicker = vi.fn();
         const out = await applyRegistryResolvedActionClient(scheduleTourAction, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openScheduleTourRecordPicker,
             context: { surface: "right_rail", department_id: "dept-1" },
         });
@@ -122,7 +122,7 @@ describe("applyRegistryResolvedActionClient schedule tour", () => {
 
         const out = await applyRegistryResolvedActionClient(scheduleTourAction, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openScheduleTourRecordPicker,
             context: { surface: "right_rail" },
         });
@@ -136,7 +136,7 @@ describe("applyRegistryResolvedActionClient schedule tour", () => {
         const openAction = { ...scheduleTourAction, action_type: "open_form" as const, payload: { form_key: "schedule_tour" } };
         const out = await applyRegistryResolvedActionClient(openAction, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openForm,
             context: { surface: "right_rail" },
         });
@@ -154,7 +154,7 @@ describe("applyRegistryResolvedActionClient schedule tour", () => {
 
         await applyRegistryResolvedActionClient(scheduleTourAction, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openScheduleTourRecordPicker,
             openForm,
             entityId: "opp-123",

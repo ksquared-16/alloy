@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
@@ -11,7 +12,6 @@ import {
     resolveOpportunityRegistryActionSuccessMessage,
 } from "@/lib/admin/actions/resolveOpportunityRegistryActionFeedbackMessage";
 import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 
 function resolveScheduleTourFormKey(action: ResolvedActionForClient): string {
     const fromPayload =
@@ -46,7 +46,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
     actionHost: OpportunityDrawerVmHeaderActionHost;
 }) {
     const router = useRouter();
-    const { openDrawer } = useAdminDrawer();
+    const focusRecord = useOperatorRecordFocus();
     const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null);
     const { showSuccess, showError, clearPreflight, applyPreflightBlocked } = params.actionHost;
 
@@ -83,7 +83,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
 
                 const result = await applyRegistryResolvedActionClient(action, {
                     router,
-                    openDrawer,
+                    focusRecord: (r) => void focusRecord(r),
                     entityId: id,
                     departmentId: params.departmentId ?? null,
                     workUnitId: params.workUnitId ?? null,
@@ -166,7 +166,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
             params.workUnitId,
             applyPreflightBlocked,
             clearPreflight,
-            openDrawer,
+            focusRecord,
             router,
             showError,
             showSuccess,

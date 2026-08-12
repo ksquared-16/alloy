@@ -67,13 +67,4 @@ describe("AdminEntityDrawer opportunity workflow tab session (Card 3)", () => {
         );
     });
 
-    it("does not disable inquiry workflow tab strip on drawerGateLoading after reveal", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        const workflowStrip = src.match(
-            /opportunityInquiryWorkflowDrawer[\s\S]{0,900}drawerTabStripKeys\.map/,
-        )?.[0];
-        expect(workflowStrip).toBeTruthy();
-        expect(workflowStrip).not.toContain("drawerGateLoading");
-        expect(workflowStrip).not.toContain("disabled={drawerGateLoading}");
-    });
 });

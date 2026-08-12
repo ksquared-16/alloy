@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-07-28
+last_reviewed: 2026-08-11
 supersedes: []
 ---
 
@@ -14,6 +14,10 @@ supersedes: []
 ---
 
 ## 2026 H1 — Platform maturation
+
+### August 2026 — EPP / Waitlist runtime convergence (PR #404)
+
+**Shipped to `staging` (PR #404).** Waitlist child-grain operational surface, published Work View label authority, shell stability across grains, placement Adjust UX, stage-entry time-in-stage, stage-move Activity hydration, Household **Copy from primary**, and Work View Save vs **Apply changes** publication path. Known follow-up: wire `resolveProfilePhotosForActor` into opportunity child evidence so profile photos stick after refresh (see `../../sprints/archive/future/identity_profile_photo_projection_everywhere.md`). Closeout: `../../sprints/archive/08_2026/epp-waitlist-runtime-convergence-closeout.md`.
 
 ### July 2026 — Commands architecture + product-boundary correction
 

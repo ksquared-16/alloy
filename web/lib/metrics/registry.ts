@@ -43,7 +43,8 @@ const DEFINITIONS: Record<OipMetricKey, MetricDefinition> = {
         label: "Active leads",
         description:
             "ACTIVE enrollment participants (children): live, not enrolled/withdrawn/not_enrolling. " +
-            "Counts participants, not households; scoped to the work unit in work-unit context.",
+            "Counts participants across the Enrollment process footprint (department), including Waitlist; " +
+            "not limited to opportunities parked on a single work unit.",
         pack: "enrollment",
         computationKind: "entity_snapshot",
         format: "count",

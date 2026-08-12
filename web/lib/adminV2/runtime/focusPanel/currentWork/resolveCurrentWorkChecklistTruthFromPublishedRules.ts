@@ -194,13 +194,40 @@ function evaluatePublishedFieldRuleViolations(input: {
     );
 
     const recordWithMetadata = { ...record, _department_metadata: departmentMetadata };
+
+    // Child Attention: evaluate child-scoped rules against the focused participant only —
+    // do not fail Waitlist readiness because a sibling is missing a field.
+    let scopedRecord: Record<string, unknown> = recordWithMetadata;
+    if (operationalContext.grain === "child") {
+        const focusMemberId =
+            typeof record["child.customer_member_id"] === "string"
+                ? String(record["child.customer_member_id"]).trim()
+                : operationalContext.subject.id.trim();
+        const children = Array.isArray(record._inquiry_children)
+            ? (record._inquiry_children as Record<string, unknown>[])
+            : [];
+        if (focusMemberId && children.length > 0) {
+            const focused = children.filter((c) => {
+                const cm = typeof c.customer_member_id === "string" ? c.customer_member_id.trim() : "";
+                const id = typeof c.id === "string" ? c.id.trim() : "";
+                return cm === focusMemberId || id === focusMemberId;
+            });
+            if (focused.length > 0) {
+                scopedRecord = { ...recordWithMetadata, _inquiry_children: focused };
+            }
+        }
+    }
+
     const completionCtx = buildCompletionContextFromRecord({
         entity_type: "opportunity",
-        entity_id: operationalContext.subject.id,
+        entity_id:
+            typeof scopedRecord.id === "string" && scopedRecord.id.trim()
+                ? scopedRecord.id.trim()
+                : operationalContext.subject.id,
         phase: "preview",
-        record: recordWithMetadata,
+        record: scopedRecord,
         surface: "current_work_checklist",
-        status_from: typeof record.status_key === "string" ? record.status_key : null,
+        status_from: typeof scopedRecord.status_key === "string" ? scopedRecord.status_key : null,
     });
     completionCtx.related = {
         ...completionCtx.related,
