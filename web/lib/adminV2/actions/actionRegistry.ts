@@ -30,6 +30,10 @@ import {
     employmentEndAction,
     employmentUpdateAction,
 } from "@/lib/adminV2/actions/definitions/employmentEndAction";
+import {
+    staffPresenceCorrectAction,
+    staffPresenceRecordAction,
+} from "@/lib/adminV2/actions/definitions/staffPresenceActions";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -47,6 +51,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     staffAddAction,
     employmentUpdateAction,
     employmentEndAction,
+    staffPresenceRecordAction,
+    staffPresenceCorrectAction,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(

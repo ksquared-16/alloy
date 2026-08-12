@@ -23,7 +23,20 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { summarizeAttendanceByDay } from "@/lib/childcareOperational/attendance/attendanceFold";
+import type { ChildAttendanceEventRow } from "@/lib/childcareOperational/attendance/attendanceTypes";
+import { buildRoomConfigResolvers } from "@/lib/childcareOperational/config/roomConfigResolvers";
+import { requiredStaffForChildren } from "@/lib/childcareOperational/config/ratioRules";
 import { buildScheduleExpectations } from "@/lib/childcareOperational/expectations/buildScheduleExpectations";
+import {
+    countsPresent,
+    NO_RECORD,
+    resolveActualStaffing,
+    staffActualFromDayState,
+    type SubjectActualState,
+} from "@/lib/roster/dailyOperatingState";
+import { summarizeStaffPresenceByDay } from "@/lib/staffPresence/staffPresenceFold";
+import { listStaffPresenceForSiteDate } from "@/lib/staffPresence/staffPresenceService";
 import { loadOperationalExpectationInputs } from "@/lib/childcareOperational/expectations/loadOperationalExpectationInputs";
 import { loadExpectationAgeGroups } from "@/lib/childcareOperational/expectations/resolveExpectationAgeGroups";
 import { resolveRoomsForLocation } from "@/lib/location/canonicalRoomProvider";
@@ -53,10 +66,25 @@ export type RosterChildSubject = {
     timeLabel: string | null;
     scheduleTypeKey: string;
     programCategoryId: string | null;
+    /** Expected vs actual — `no_record` means nothing was authored, not absent. */
+    actual: SubjectActualState;
 };
 
 /** A staff member scheduled in a room on a date. Preview only — never Person detail. */
-export type RosterStaffSubject = ScheduledStaffMember & { subjectType: "staff" };
+export type RosterStaffSubject = ScheduledStaffMember & {
+    subjectType: "staff";
+    /** Expected vs actual. A schedule is never proof of physical presence. */
+    actual: SubjectActualState;
+};
+
+/** Staff physically present who were not on the schedule for this room·date. */
+export type UnscheduledStaffPresence = {
+    subjectType: "staff";
+    personId: string;
+    displayName: string;
+    employmentId: string;
+    actual: SubjectActualState;
+};
 
 export type RosterCell = {
     roomLocationId: string;
@@ -69,20 +97,33 @@ export type RosterCell = {
     scheduledStaffCount: number;
     /** Null when no ratio configuration resolves for this room·day. */
     requiredStaff: number | null;
+    /** PLANNED verdict: required(expected children) vs scheduled staff. */
     staffingSufficiency: StaffingSufficiency;
     /**
      * Why the verdict is what it is. `unknown` always carries a reason so the
      * surface can say "we cannot tell" rather than implying a healthy state.
      */
     staffingReason: "evaluated" | "no_ratio_configuration";
+
+    // ── Actual operating state ────────────────────────────────────────────────
+    actualChildrenPresent: number;
+    actualStaffPresent: number;
+    /** Demand for the children ACTUALLY present — not the expected count. */
+    actualRequiredStaff: number | null;
+    /** ACTUAL verdict. Never interchangeable with `staffingSufficiency`. */
+    actualStaffingSufficiency: StaffingSufficiency;
+    /** Present staff with no scheduled assignment in this room·date. */
+    unscheduledStaffPresent: UnscheduledStaffPresence[];
 };
 
 export type CombinedRosterReadModel = {
     siteLocationId: string;
     date: string;
     cells: RosterCell[];
-    /** Site-wide verdict. Pessimistic: any short, then any unknown. */
+    /** Site-wide PLANNED verdict. Pessimistic: any short, then any unknown. */
     staffingSufficiency: StaffingSufficiency;
+    /** Site-wide ACTUAL verdict from real presence. Never the planned one. */
+    actualStaffingSufficiency: StaffingSufficiency;
     totals: {
         expectedChildren: number;
         scheduledStaff: number;
@@ -90,6 +131,9 @@ export type CombinedRosterReadModel = {
         requiredStaff: number | null;
         roomsShort: number;
         roomsUnknown: number;
+        actualChildrenPresent: number;
+        actualStaffPresent: number;
+        roomsActuallyShort: number;
     };
     /** Scheduled at the site with no room — real supply that must not vanish. */
     unroomedStaff: RosterStaffSubject[];
@@ -132,10 +176,30 @@ export async function buildCombinedRoster(
 
     // Both sides load in parallel. Child expectations are scoped to
     // subject_type='child' inside the loader; staff supply reads the staff slice.
-    const [inputs, staffSupply] = await Promise.all([
+    const [inputs, staffSupply, staffPresenceRows, childAttendanceRes] = await Promise.all([
         loadOperationalExpectationInputs(supabase, { orgId, siteLocationId }),
         buildStaffSupply(supabase, { orgId, siteLocationId, dateStart: date, dateEnd: date }),
+        // ACTUALS. Two typed fact streams, never one table.
+        listStaffPresenceForSiteDate(supabase, orgId, siteLocationId, date),
+        supabase
+            .from("child_attendance_events")
+            .select(
+                "id, org_id, enrollment_agreement_id, customer_member_id, site_location_id, event_kind, entry_type, corrects_event_id, event_at, service_date, room_location_id, from_room_location_id, to_room_location_id, actor_type, source_type, source_key, created_at"
+            )
+            .eq("org_id", orgId)
+            .eq("site_location_id", siteLocationId)
+            .eq("service_date", date),
     ]);
+
+    // Correction/reversal interpretation lives in the folds, never in a consumer.
+    const staffDayByPerson = new Map(
+        summarizeStaffPresenceByDay(staffPresenceRows).map((d) => [d.personId, d])
+    );
+    const childDayByAgreement = new Map(
+        summarizeAttendanceByDay(
+            ((childAttendanceRes.data ?? []) as ChildAttendanceEventRow[]) ?? []
+        ).map((d) => [d.enrollmentAgreementId, d])
+    );
 
     const extraAgeGroups = await loadExpectationAgeGroups(supabase, orgId, {
         programCategoryIds: [],
@@ -264,6 +328,22 @@ export async function buildCombinedRoster(
             timeLabel: patternTimeLabel.get(e.schedulePatternId) ?? null,
             scheduleTypeKey: e.scheduleTypeKey,
             programCategoryId: e.programCategoryId,
+            actual: (() => {
+                const day = childDayByAgreement.get(e.agreementId);
+                if (!day) return NO_RECORD;
+                if (day.absent && !day.present) {
+                    return { state: "absent" as const, arrivedAt: null, departedAt: null, actualRoomLocationId: null };
+                }
+                if (!day.present) return NO_RECORD;
+                return {
+                    state: (day.missingCheckout ? "present" : day.lastCheckOutAt ? "checked_out" : "present") as
+                        | "present"
+                        | "checked_out",
+                    arrivedAt: day.firstCheckInAt,
+                    departedAt: day.lastCheckOutAt,
+                    actualRoomLocationId: day.roomsObserved[day.roomsObserved.length - 1] ?? null,
+                };
+            })(),
         };
         const list = childrenByRoom.get(e.roomLocationId);
         if (list) list.push(subject);
@@ -282,18 +362,74 @@ export async function buildCombinedRoster(
         ]),
     ];
 
+    // Same tier resolver the planned demand used — the ACTUAL demand must come
+    // from the same ratio engine, never a roster-local calculation.
+    const { resolveTiers } = buildRoomConfigResolvers({
+        agreements: withAgeGroups.agreements,
+        placements: withAgeGroups.placements,
+        config: withAgeGroups.config,
+        ageGroupByRoomLocationId: withAgeGroups.ageGroupByRoomLocationId,
+        ageGroupByProgramCategoryId: withAgeGroups.ageGroupByProgramCategoryId,
+    });
+
+    const scheduledPersonIdsByRoom = new Map<string, Set<string>>();
+    for (const c of staffSupply.cells) {
+        if (!c.roomLocationId) continue;
+        scheduledPersonIdsByRoom.set(
+            c.roomLocationId,
+            new Set(c.scheduledStaff.map((s) => s.personId))
+        );
+    }
+
+    const staffNameById = new Map(staffSupply.members.map((m) => [m.personId, m.displayName]));
+
     const cells: RosterCell[] = roomIds.map((roomId) => {
         const children = childrenByRoom.get(roomId) ?? [];
         const supplyCell = staffByRoomKey.get(staffSupplyCellKey(roomId, date)) ?? null;
         const staff: RosterStaffSubject[] = (supplyCell?.scheduledStaff ?? []).map((s) => ({
             ...s,
             subjectType: "staff" as const,
+            actual: staffActualFromDayState(staffDayByPerson.get(s.personId)),
         }));
+
         const requiredStaff = requiredByRoom.get(roomId) ?? null;
         const staffingSufficiency = resolveStaffingSufficiency({
             requiredStaff,
             scheduledStaffCount: staff.length,
         });
+
+        // Staff physically here whose actual room is this room but who hold no
+        // scheduled assignment for it. They are real supply and must be counted —
+        // silently inventing a schedule assignment for them would be worse.
+        const scheduledHere = scheduledPersonIdsByRoom.get(roomId) ?? new Set<string>();
+        const unscheduledStaffPresent: UnscheduledStaffPresence[] = [...staffDayByPerson.values()]
+            .filter(
+                (d) =>
+                    d.present &&
+                    d.currentRoomLocationId === roomId &&
+                    !scheduledHere.has(d.personId)
+            )
+            .map((d) => ({
+                subjectType: "staff" as const,
+                personId: d.personId,
+                displayName: staffNameById.get(d.personId) ?? "Staff member",
+                employmentId: d.employmentId,
+                actual: staffActualFromDayState(d),
+            }));
+
+        const actualChildrenPresent = countsPresent(children.map((c) => c.actual));
+        const actualStaffPresent =
+            countsPresent(staff.map((s) => s.actual)) +
+            countsPresent(unscheduledStaffPresent.map((s) => s.actual));
+
+        const actualDemand = requiredStaffForChildren(resolveTiers(roomId, date), actualChildrenPresent);
+        const { actualRequiredStaff, actualStaffingSufficiency } = resolveActualStaffing({
+            actualChildrenPresent,
+            actualStaffPresent,
+            requiredStaffForActualChildren: actualDemand.requiredStaff,
+            exceedsDefinedTiers: actualDemand.exceedsDefinedTiers,
+        });
+
         return {
             roomLocationId: roomId,
             roomName: roomNameById.get(roomId) ?? "Room",
@@ -306,6 +442,11 @@ export async function buildCombinedRoster(
             requiredStaff,
             staffingSufficiency,
             staffingReason: requiredStaff == null ? "no_ratio_configuration" : "evaluated",
+            actualChildrenPresent,
+            actualStaffPresent,
+            actualRequiredStaff,
+            actualStaffingSufficiency,
+            unscheduledStaffPresent,
         };
     });
 
@@ -320,6 +461,9 @@ export async function buildCombinedRoster(
             : cells.reduce((n, c) => n + (c.requiredStaff ?? 0), 0),
         roomsShort: cells.filter((c) => c.staffingSufficiency === "short").length,
         roomsUnknown: cells.filter((c) => c.staffingSufficiency === "unknown").length,
+        actualChildrenPresent: cells.reduce((n, c) => n + c.actualChildrenPresent, 0),
+        actualStaffPresent: cells.reduce((n, c) => n + c.actualStaffPresent, 0),
+        roomsActuallyShort: cells.filter((c) => c.actualStaffingSufficiency === "short").length,
     };
 
     return {
@@ -327,9 +471,16 @@ export async function buildCombinedRoster(
         date,
         cells,
         staffingSufficiency: rollUpStaffingSufficiency(cells.map((c) => c.staffingSufficiency)),
+        actualStaffingSufficiency: rollUpStaffingSufficiency(
+            cells.map((c) => c.actualStaffingSufficiency)
+        ),
         totals,
         unroomedStaff: staffSupply.members
             .filter((m) => m.roomLocationId == null)
-            .map((m) => ({ ...m, subjectType: "staff" as const })),
+            .map((m) => ({
+                ...m,
+                subjectType: "staff" as const,
+                actual: staffActualFromDayState(staffDayByPerson.get(m.personId)),
+            })),
     };
 }

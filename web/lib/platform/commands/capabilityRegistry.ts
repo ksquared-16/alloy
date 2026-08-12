@@ -34,6 +34,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "staff.add",
     "employment.update",
     "employment.end",
+    "staff_presence.record",
+    "staff_presence.correct",
 ] as const;
 
 function def(
@@ -120,6 +122,38 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         confirmationPolicy: "confirm",
         registeredActionKey: "schedule.create",
         implementationStatus: "partial",
+    }),
+    def({
+        capabilityKey: "staff_presence.record",
+        canonicalCommandKey: "staff_presence.record",
+        operatorLabel: "Record staff presence",
+        family: "record",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "staff_presence.record",
+        implementationStatus: "production",
+        reason:
+            "Staff Presence Phase 4. Appends one immutable operational fact; employment covering the service date is required. Not payroll.",
+    }),
+    def({
+        capabilityKey: "staff_presence.correct",
+        canonicalCommandKey: "staff_presence.correct",
+        operatorLabel: "Correct staff presence",
+        family: "record",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["person"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "staff_presence.correct",
+        implementationStatus: "production",
+        reason:
+            "Staff Presence Phase 4. Correction/reversal by reference — the original fact is never mutated.",
     }),
     def({
         capabilityKey: "staff.add",
