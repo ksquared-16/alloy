@@ -92,7 +92,12 @@ type ExpectedLanding = {
  * the route cannot resolve fails HERE, with the payload in the message, instead of
  * silently as an empty panel.
  */
-async function expectedLandingFor(page: Page, q: string, destinationKey?: string): Promise<ExpectedLanding> {
+async function expectedLandingFor(
+    page: Page,
+    q: string,
+    destinationKey?: string,
+    resultIndex = 0,
+): Promise<ExpectedLanding> {
     const payload = await page.evaluate(async (query) => {
         const res = await fetch(`/api/admin/global-search?q=${encodeURIComponent(query)}`, {
             credentials: "include",
@@ -111,7 +116,7 @@ async function expectedLandingFor(page: Page, q: string, destinationKey?: string
         };
     }, q);
 
-    const destinations = payload.results?.[0]?.destinations ?? [];
+    const destinations = payload.results?.[resultIndex]?.destinations ?? [];
     const destination = destinationKey
         ? destinations.find((d) => d.key === destinationKey)
         : destinations.find((d) => d.primary);
@@ -394,10 +399,9 @@ test("E — a process context is a DISTINCT destination and lands on its own car
     expect(expected.subjectId).toBe(subjectExpected.subjectId);
     expect(expected.cardKey).not.toBe(subjectExpected.cardKey);
 
-    await pills.filter({ has: page.locator(`[data-search-destination="${processKey}"]`) }).first().click()
-        .catch(async () => {
-            await page.locator(`[data-search-destination="${processKey}"]`).first().click();
-        });
+    // Click the pill directly. `pills.filter({ has: … })` searched for a descendant matching the
+    // same selector as the pill itself, so it matched nothing and the fallback click raced the page.
+    await page.locator(`[data-search-destination="${processKey}"]`).first().click();
 
     await assertLandedOnFocusPanel(page, "E", expected);
     await shot(page, "E-process-context");
@@ -451,7 +455,10 @@ test("H — keyboard selection has the same semantics as a click", async ({ page
     await signIn(page);
     const input = await searchFor(page, "Joe Smith");
 
-    const expected = await expectedLandingFor(page, "Joe Smith");
+    // ArrowDown moves the highlight OFF the default first row, so the keyboard lands on the SECOND
+    // result — that is the point of the scenario. Asserting against the first result made this test
+    // wait forever for a URL the operator never asked for, and read as a product failure.
+    const expected = await expectedLandingFor(page, "Joe Smith", undefined, 1);
     await page.locator('[data-search-subject-button="true"]').first().waitFor({ timeout: 60_000 });
     await input.press("ArrowDown");
     await input.press("Enter");
