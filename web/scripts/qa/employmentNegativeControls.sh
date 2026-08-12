@@ -20,15 +20,23 @@ cd "$(dirname "$0")/../.." || exit 1   # web/
 
 GATE="lib/staff/resolveStaffPersonCandidates.ts"
 SERVICE="lib/staff/addStaffService.ts"
+SUFFICIENCY="lib/scheduling/supply/staffingSufficiency.ts"
+ROSTER="lib/scheduling/roster/buildAssignmentRosterReadModel.ts"
 SUITE="tests/employment/addStaffIdentity.test.ts"
+SUPPLY_SUITE="tests/employment/staffSupplyProjection.test.ts"
 
 restore() {
-    git checkout -- "$GATE" "$SERVICE" 2>/dev/null || true
+    git checkout -- "$GATE" "$SERVICE" "$SUFFICIENCY" "$ROSTER" 2>/dev/null || true
 }
 trap restore EXIT
 
 run_suite() {
     npx vitest run "$SUITE" >/tmp/employment-nc.log 2>&1
+    return $?
+}
+
+run_supply_suite() {
+    npx vitest run "$SUPPLY_SUITE" >/tmp/employment-nc.log 2>&1
     return $?
 }
 
@@ -80,8 +88,48 @@ else
 fi
 restore
 
+# ---------------------------------------------------------------------------
+# NC5 — restore hardcoded staffing readiness
+# ---------------------------------------------------------------------------
+echo
+echo "NC5: hardcoding staffing readiness (the old staffReady: true)"
+perl -0pi -e 's/    return scheduledStaffCount >= requiredStaff \? "sufficient" : "short";/    return "sufficient"; \/\/ NEGATIVE CONTROL — the old hardcoded staffReady/' "$SUFFICIENCY"
+if grep -q "NEGATIVE CONTROL" "$SUFFICIENCY"; then
+    if run_supply_suite; then
+        echo "FAIL  NC5 — the suite stayed GREEN with readiness hardcoded."
+        echo "      An understaffed room would render as staffed."
+        exit 1
+    fi
+    echo "PASS  NC5 — suite went RED, so staffing readiness is derived, not asserted"
+    grep -E "short|sufficiency|✕|×" /tmp/employment-nc.log | head -6
+else
+    echo "FAIL  NC5 could not be applied — sufficiency source has drifted; update this script"
+    exit 1
+fi
+restore
+
+# ---------------------------------------------------------------------------
+# NC6 — reinstate the staff-dropping roster bug
+# ---------------------------------------------------------------------------
+echo
+echo "NC6: reinstating the customer_member_id guard that dropped every staff row"
+perl -0pi -e 's/        const subjectType = row\.subject_type === "staff" \? "staff" : "child";/        const subjectType = row.subject_type === "staff" ? "staff" : "child";\n        if (!row.customer_member_id) continue; \/\/ NEGATIVE CONTROL — the Phase 0 bug/' "$ROSTER"
+if grep -q "NEGATIVE CONTROL" "$ROSTER"; then
+    if run_supply_suite; then
+        echo "FAIL  NC6 — the suite stayed GREEN while every staff row was dropped."
+        echo "      The subject-aware projection certification is vacuous."
+        exit 1
+    fi
+    echo "PASS  NC6 — suite went RED, so staff projection is genuinely covered"
+    grep -E "staff|✕|×" /tmp/employment-nc.log | head -6
+else
+    echo "FAIL  NC6 could not be applied — roster source has drifted; update this script"
+    exit 1
+fi
+restore
+
 echo
 echo "======================================================="
-echo " source negative controls: both proven load-bearing"
+echo " source negative controls: all four proven load-bearing"
 echo " (files restored via git checkout)"
 echo "======================================================="
