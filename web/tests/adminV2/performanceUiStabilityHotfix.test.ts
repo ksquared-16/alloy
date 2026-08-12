@@ -22,13 +22,6 @@ describe("performanceUiStabilityHotfix — drawer VM first-paint", () => {
         expect(load).toContain("opportunityDrawerVmPreloadRevealReady");
     });
 
-    it("useOpportunityDrawerVmPayload surfaces missing field names in error copy", () => {
-        const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts");
-        expect(hook).toContain("formatOpportunityDrawerVmLoadError");
-        expect(hook).toContain("missing_fields");
-        expect(hook).toContain("cold_fetch_error");
-    });
-
     it("VM-first reveal accepts settled VM when legacy composed gate misses", () => {
         const load = read("lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel.ts");
         expect(load).toMatch(/!legacyRevealReady && vmRevealReady/);
@@ -55,12 +48,6 @@ describe("performanceUiStabilityHotfix — opportunity drawer loading surface", 
         expect(overlay).not.toContain("BosExecutionLoader");
         expect(overlay).not.toContain("Opening Lead");
         expect(overlay).not.toContain("Preparing inquiry workspace");
-    });
-
-    it("OpportunityDrawerVmRuntime cold shell uses canonical loader", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("AlloyCanonicalLoadingSurface");
-        expect(runtime).toMatch(/showRuntimeOpeningOverlay[\s\S]{0,400}errorMessage=\{error\}/);
     });
 
     it("drawer body swap has max-hold timeout", () => {

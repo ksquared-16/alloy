@@ -75,19 +75,10 @@ describe("Focus Panel architecture cutover vocabulary", () => {
 });
 
 describe("Phase C — Subject Surface presentation shims", () => {
+    // The three RUNTIME shims are gone with the overlay they mounted. What Phase C set out to fix —
+    // presentation code importing `vmDrawer/*` names — is still served by the shell and the VM
+    // vocabulary, which the inline Focus Panel genuinely uses.
     const SHIM_TARGETS: Array<{ file: string; target: string }> = [
-        {
-            file: "components/admin/subjectSurface/EnrollmentSubjectSurfaceRuntime.tsx",
-            target: '@/components/admin/vmDrawer/OpportunityDrawerVmRuntime',
-        },
-        {
-            file: "components/admin/subjectSurface/PersonSubjectSurfaceRuntime.tsx",
-            target: '@/components/admin/vmDrawer/PersonsDrawerVmRuntime',
-        },
-        {
-            file: "components/admin/subjectSurface/SubjectSurfaceRuntime.tsx",
-            target: '@/components/admin/AdminEntityDrawer',
-        },
         {
             file: "components/admin/subjectSurface/FocusPanelShell.tsx",
             target: '@/components/admin/drawer/EntityDrawerOperatingShell',
@@ -102,62 +93,29 @@ describe("Phase C — Subject Surface presentation shims", () => {
         expect(src).not.toContain("useState");
     });
 
-    it("barrel exposes canonical names and deprecated compat aliases to the same modules", () => {
-        const barrel = readSrc("components/admin/subjectSurface/index.ts");
-        expect(barrel).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(barrel).toContain("PersonSubjectSurfaceRuntime");
-        expect(barrel).toContain("SubjectSurfaceRuntime");
-        expect(barrel).toContain("FocusPanelRuntime");
+    it("the barrel keeps the shell and VM vocabulary, and exports no runtime entry", () => {
+        // Comments stripped: the barrel's own docstring names what it no longer exports, and a raw
+        // scan reads that explanation as the violation.
+        const barrel = readSrc("components/admin/subjectSurface/index.ts")
+            .replace(/\/\*[\s\S]*?\*\//g, "")
+            .replace(/^\s*\/\/.*$/gm, "");
         expect(barrel).toContain("FocusPanelShell");
         expect(barrel).toContain("OperationalSubjectViewModel");
         expect(barrel).toContain("SubjectComposition");
 
-        // Deprecated compat names route through the canonical shims (same module).
-        expect(barrel).toContain("@deprecated");
-        expect(barrel).toMatch(
-            /OpportunityDrawerVmRuntime[\s\S]*subjectSurface\/EnrollmentSubjectSurfaceRuntime/,
-        );
-        expect(barrel).toMatch(
-            /PersonsDrawerVmRuntime[\s\S]*subjectSurface\/PersonSubjectSurfaceRuntime/,
-        );
-    });
-
-    it("FocusPanelRuntime and SubjectSurfaceRuntime resolve to the same router module", () => {
-        const barrel = readSrc("components/admin/subjectSurface/index.ts");
-        const subjectRuntime = barrel.match(
-            /as SubjectSurfaceRuntime\s*\}\s*from\s*["']([^"']+)["']/,
-        )?.[1];
-        const focusRuntime = barrel.match(
-            /as FocusPanelRuntime\s*\}\s*from\s*["']([^"']+)["']/,
-        )?.[1];
-        expect(subjectRuntime).toBeDefined();
-        expect(focusRuntime).toBe(subjectRuntime);
-    });
-
-    it("router imports canonical Subject Surface runtime names (no vmDrawer runtime imports)", () => {
-        const router = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(router).toContain(
-            'import EnrollmentSubjectSurfaceRuntime from "@/components/admin/subjectSurface/EnrollmentSubjectSurfaceRuntime"',
-        );
-        expect(router).toContain(
-            'import PersonSubjectSurfaceRuntime from "@/components/admin/subjectSurface/PersonSubjectSurfaceRuntime"',
-        );
-        expect(router).toContain("<EnrollmentSubjectSurfaceRuntime />");
-        expect(router).toContain("<PersonSubjectSurfaceRuntime />");
-        expect(router).not.toContain('from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime"');
-        expect(router).not.toContain('from "@/components/admin/vmDrawer/PersonsDrawerVmRuntime"');
-    });
-
-    it("vmDrawer runtime implementations carry deprecation pointers to canonical names", () => {
-        const opp = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const person = readSrc("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        expect(opp).toContain("@deprecated");
-        expect(opp).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(person).toContain("@deprecated");
-        expect(person).toContain("PersonSubjectSurfaceRuntime");
-        // Implementation is still here — behavior unchanged.
-        expect(opp).toContain("export default function OpportunityDrawerVmRuntime()");
-        expect(person).toContain("export default function PersonsDrawerVmRuntime()");
+        // A runtime alias here is a supported way to mount the record overlay. There is no overlay,
+        // so there must be no alias — the inline Focus Panel region is the one record surface and it
+        // never went through any of these.
+        for (const gone of [
+            "EnrollmentSubjectSurfaceRuntime",
+            "PersonSubjectSurfaceRuntime",
+            "SubjectSurfaceRuntime",
+            "FocusPanelRuntime",
+            "OpportunityDrawerVmRuntime",
+            "PersonsDrawerVmRuntime",
+        ]) {
+            expect(barrel, gone).not.toContain(gone);
+        }
     });
 
     it("OperationalSubjectViewModel aliases the drawer VM type", () => {
@@ -176,9 +134,12 @@ describe("Phase C — Subject Surface presentation shims", () => {
             "utf8",
         );
         expect(doc).toContain("Subject Surface presentation layer (Phase C)");
-        expect(doc).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(doc).toContain("PersonSubjectSurfaceRuntime");
         expect(doc).toContain("FocusPanelShell");
+        expect(doc).toContain("OperationalSubjectViewModel");
+        // The three RUNTIME shims are struck from the map with the overlay they mounted. A doc that
+        // still named them would send a new engineer looking for a record surface that is gone.
+        expect(doc).not.toContain("EnrollmentSubjectSurfaceRuntime");
+        expect(doc).not.toContain("PersonSubjectSurfaceRuntime");
     });
 });
 

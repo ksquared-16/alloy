@@ -54,11 +54,4 @@ describe("child identity creation paths", () => {
         expect(targets.childPersonId).toBe("person-1");
     });
 
-    it("VM Add Child refreshes drawer after mutation", () => {
-        const modals = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals.tsx");
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(modals).toContain("refreshOpportunityDrawerAfterInquiryChildMutation");
-        expect(modals).toContain("reloadOpportunityDisplayVm");
-        expect(runtime).toContain("reloadOpportunityDisplayVm");
-    });
 });

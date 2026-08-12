@@ -22,7 +22,11 @@ import type { LayoutItem } from "@/lib/layout/layoutV2";
 
 describe("layoutBuilderFieldAuthoring", () => {
     it("exposes MVP link behavior options with operator-friendly labels", () => {
-        expect(LAYOUT_LINK_BEHAVIORS_EDITOR).toEqual(["none", "open_record", "open_drawer", "mailto", "tel"]);
+        // `open_drawer` is NOT offered: the record overlay it named is deleted. The value stays in
+        // the storage union so published tenant layouts keep parsing — configuration data is not
+        // ours to rewrite — but authoring it would author a destination that cannot exist.
+        expect(LAYOUT_LINK_BEHAVIORS_EDITOR).toEqual(["none", "open_record", "mailto", "tel"]);
+        expect(LAYOUT_LINK_BEHAVIORS_EDITOR).not.toContain("open_drawer");
         expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_record).toBe("Link to record");
         expect(LAYOUT_LINK_BEHAVIOR_LABELS.mailto).toBe("Email");
         expect(LAYOUT_LINK_BEHAVIOR_LABELS.tel).toBe("Call phone number");
@@ -34,7 +38,7 @@ describe("layoutBuilderFieldAuthoring", () => {
         expect(LAYOUT_TYPOGRAPHY_INTENT_LABELS.caption).toBe("Small");
     });
 
-    it("wires open_drawer link behavior to adornment actions for person fields", () => {
+    it("an already-authored open_drawer link behaviour still resolves its adornment", () => {
         const item: LayoutItem = {
             id: "f1",
             kind: "field",

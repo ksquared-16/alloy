@@ -33,13 +33,6 @@ describe("opportunity header action exposure doctrine", () => {
         expect(migration).not.toMatch(/DELETE FROM public\.action_definitions[\s\S]*send_email/);
     });
 
-    it("drawer uses single Actions menu — no visible header pills", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("OpportunityDrawerHeaderControls");
-        expect(drawer).toContain("flattenOpportunityRecordHeaderActionsForMenu");
-        expect(drawer).not.toMatch(/headerActions\?\.primary[\s\S]*OpportunityDrawerHeaderActionButton/);
-    });
-
     it("Work with BOS and Actions share drawer header controls row", () => {
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
         expect(controls).toContain("BosDrawerAssistCta");

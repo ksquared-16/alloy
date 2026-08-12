@@ -16,18 +16,6 @@ function read(rel: string): string {
 }
 
 describe("opportunity drawer header controls presentation", () => {
-    it("title rail renders Work with BOS and Manage via header controls", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
-        expect(runtime).toContain("OpportunityDrawerHeaderControls");
-        expect(runtime).toContain("actionPreflightBlocked");
-        expect(runtime).toContain("useOpportunityDrawerActionPreflight");
-        expect(controls).toContain("ActionPreflightBlockedPanel");
-        expect(controls).toContain("BosDrawerAssistCta");
-        expect(controls).toContain("RecordDrawerManageMenu");
-        expect(controls).toContain('data-opportunity-header-controls="true"');
-        expect(controls).toContain('data-opportunity-header-controls-row="actions"');
-    });
 
     it("header attention and actions share the composed row", () => {
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
@@ -37,12 +25,6 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).toMatch(
             /data-opportunity-header-controls-row="composed"[\s\S]*flex-1[\s\S]*OpportunityDrawerHeaderManageRow/
         );
-    });
-
-    it("does not render primary/secondary action pills in header", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toMatch(/headerActions\?\.primary[\s\S]*OpportunityDrawerHeaderActionButton/);
-        expect(drawer).not.toMatch(/\.primary\s*\?\?\s*\[\]\)\.map\(\(a\)/);
     });
 
     it("BOS CTA is not duplicated in inquiry summary panels", () => {
@@ -72,43 +54,8 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).not.toContain("OpportunityDrawerHeaderActionsPanel");
     });
 
-    it("registry Manage actions stay in Focus Panel header via VM header menu builder", () => {
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const menuBuilder = read(
-            "lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions.ts"
-        );
-        expect(runtime).toContain("displayVm.actions.header_menu");
-        expect(runtime).not.toContain("DrawerCommandRailActionsRegistrar");
-        expect(menuBuilder).toContain("flattenOpportunityRecordHeaderActionsForMenu");
-        expect(menuBuilder).toContain("buildOpportunityDrawerHeaderMenuActions");
-    });
-
     it("BOS label remains Work with BOS", () => {
         expect(BOS_ASSIST_CTA_DRAWER).toBe("Work with BOS");
-    });
-
-    it("header attention uses modal center column width tokens", () => {
-        const strip = read("components/admin/drawer/DrawerHeaderAttentionBlock.tsx");
-        const tokens = read("lib/admin/drawer/drawerHeaderAttentionPresentation.ts");
-        const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        const shell = read("components/admin/Drawer.tsx");
-        expect(strip).toContain("buildDrawerHeaderMoreGuidance");
-        expect(strip).toContain("buildReadinessDrawerHeaderMoreGuidance");
-        expect(strip).not.toContain("header-attention-view-required-information");
-        expect(strip).not.toContain("Supporting detail available");
-        expect(tokens).toContain("DRAWER_HEADER_ATTENTION_MAX_WIDTH");
-        expect(tokens).toContain("DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS");
-        expect(tokens).toContain("min-w-[min(100%,450px)]");
-        expect(tokens).toContain("max-w-[600px]");
-        expect(controls).toContain('layout="modal-attention"');
-        expect(controls).toContain('data-opportunity-header-controls-layout="modal-attention"');
-        expect(runtime).toContain('layout="modal-actions"');
-        expect(runtime).toContain("headerTitleRight");
-        expect(runtime).toContain('data-opportunity-drawer-header-title-right="true"');
-        expect(shell).toContain("headerTitleCenter");
-        expect(shell).toContain("usesThreeColumnHeader");
-        expect(shell).toContain("three-column");
     });
 
     it("composed sidebar layout keeps attention and actions in one block", () => {
@@ -135,10 +82,6 @@ describe("opportunity drawer header controls presentation", () => {
         expect(band).toContain("bodyOnlyAttention");
     });
 
-    it("drawer body no longer renders standalone Required Information panel", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).not.toContain("OpportunityDrawerRequiredInformationPanel");
-    });
 });
 
 describe("DrawerHeaderAttentionBlock", () => {
@@ -256,23 +199,5 @@ describe("DrawerHeaderAttentionBlock", () => {
         expect(html).toContain("header-attention-readiness-supporting");
         expect(html).toContain("Also missing: Child · Program Interest");
         expect(html).not.toContain("header-attention-view-required-information");
-    });
-});
-
-describe("person drawer header controls presentation", () => {
-    it("person title rail uses PersonDrawerHeaderControls with BOS on actions row", () => {
-        const proofHeader = read("components/admin/vmDrawer/PersonDrawerProofLayoutHeader.tsx");
-        expect(proofHeader).toContain("PersonDrawerHeaderControls");
-        const controls = read("components/admin/entity/PersonDrawerHeaderControls.tsx");
-        expect(controls).toContain("RecordDrawerManageMenu");
-        expect(controls).toContain("BosDrawerAssistCta");
-        expect(controls).toContain('data-person-header-controls-row="actions"');
-    });
-
-    it("person summary assist panels do not duplicate BOS CTA", () => {
-        const parentPanel = read("components/admin/entity/PersonDrawerParentSummaryBosPanel.tsx");
-        const childPanel = read("components/admin/entity/PersonDrawerChildSummaryBosPanel.tsx");
-        expect(parentPanel).not.toContain("BosDrawerAssistCta");
-        expect(childPanel).not.toContain("BosDrawerAssistCta");
     });
 });

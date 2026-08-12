@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { projectParticipantDecisionRows } from "@/lib/lifecycle/projectParticipantDecisionRows";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -210,22 +210,43 @@ describe("legacy Decision Split is retired — one implementation only", () => {
         }
     });
 
-    it("stops gating the per-child surface on a hardcoded stage key", () => {
-        const overview = readCode("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        expect(overview).not.toContain('current_stage_key === "decision"');
-        expect(overview).not.toContain("OpportunityDecisionSplitPanel");
-        expect(overview).toContain("DecisionCurrentWorkCard");
-    });
-
-    it("presents ONE Decision work card, not sibling panels beside it", () => {
-        const overview = readCode("components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx");
-        // The two panels that used to sit outside the work item are gone from the tree entirely.
+    /**
+     * ── THE MOUNT SITE IS GONE, AND THAT IS A FINDING ──
+     *
+     * These two used to read `OpportunityDrawerInquiryWorkflowOverview`, the legacy overview body.
+     * That body only ever rendered inside the modal record overlay, which is deleted — so the
+     * Decision work item HAS NO MOUNT. It was already invisible on work-unit surfaces before the
+     * deletion, because the inline Focus Panel renders there and never went through that body.
+     *
+     * The card, its two clients and their endpoints are deliberately RETAINED, unmounted, so the
+     * capability is not lost with the surface that used to carry it. What is asserted here is what
+     * remains true: one implementation, and the split panels stay deleted.
+     */
+    it("there is still exactly ONE Decision implementation, and no sibling panels", () => {
+        expect(existsSync(path.join(WEB, "components/admin/opportunity/DecisionCurrentWorkCard.tsx"))).toBe(true);
         expect(existsSync(path.join(WEB, "components/admin/opportunity/ParticipantDecisionsPanel.tsx"))).toBe(false);
         expect(existsSync(path.join(WEB, "components/admin/opportunity/FamilyClosePanel.tsx"))).toBe(false);
-        expect(overview).not.toContain("ParticipantDecisionsPanel");
-        expect(overview).not.toContain("FamilyClosePanel");
-        // Exactly one render site.
-        expect(overview.split("<DecisionCurrentWorkCard").length - 1).toBe(1);
+        expect(existsSync(path.join(WEB, "components/admin/opportunity/OpportunityDecisionSplitPanel.tsx"))).toBe(false);
+    });
+
+    it("the Decision card has no mount — the capability awaits a Focus Panel home", () => {
+        // Stated as an assertion so it cannot be forgotten: the day a card mounts it, this fails and
+        // the next engineer writes the real mount-site test.
+        const mounts = ["app", "components", "lib"].flatMap((dir) => {
+            const walk = (d: string): string[] => {
+                let out: string[] = [];
+                for (const e of readdirSync(path.join(WEB, d))) {
+                    const rel = path.join(d, e);
+                    if (statSync(path.join(WEB, rel)).isDirectory()) out = out.concat(walk(rel));
+                    else if (/\.tsx?$/.test(e) && !rel.endsWith("DecisionCurrentWorkCard.tsx")) {
+                        if (readFileSync(path.join(WEB, rel), "utf8").includes("<DecisionCurrentWorkCard")) out.push(rel);
+                    }
+                }
+                return out;
+            };
+            return walk(dir);
+        });
+        expect(mounts, "a mount appeared — replace this with a real mount-site assertion").toEqual([]);
     });
 
     it("keeps closing the lead INSIDE the work card, beneath the child paths", () => {

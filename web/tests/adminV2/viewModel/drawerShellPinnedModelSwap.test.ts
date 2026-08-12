@@ -114,36 +114,4 @@ describe("AdminDrawerContext shell-pinned swap wiring", () => {
         expect(ctx).toContain("commitDrawerModelSwap");
     });
 
-    it("VM drawer payload hooks suppress gate loading during swap transition phases", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const router = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        // Phase C: router mounts the person subject surface runtime via canonical shim name.
-        expect(router).toContain("PersonSubjectSurfaceRuntime");
-        for (const file of [
-            "useOpportunityDrawerVmPayload.ts",
-            "usePersonsDrawerVmPayload.ts",
-        ]) {
-            const hook = readFileSync(
-                join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime", file),
-                "utf8"
-            );
-            expect(hook).toContain("suppressFullDrawerLoading");
-            expect(hook).toContain("shouldHoldPriorDrawerContent");
-            expect(hook).toContain("swap_hold_current");
-        }
-        const warmGraph = readFileSync(
-            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/warmRelatedDrawerGraph.ts"),
-            "utf8"
-        );
-        expect(warmGraph).toContain("warmRelatedDrawerViewModels");
-        expect(warmGraph).toContain("related_graph_warm_start");
-        const personHook = readFileSync(
-            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/usePersonsDrawerVmPayload.ts"),
-            "utf8"
-        );
-        expect(personHook).toContain("completeDrawerRuntimeTransition");
-    });
 });

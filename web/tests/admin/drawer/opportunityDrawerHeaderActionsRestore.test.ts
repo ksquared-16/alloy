@@ -43,26 +43,12 @@ describe("opportunity drawer header actions cache", () => {
 });
 
 describe("opportunity header actions restore wiring", () => {
-    it("legacy drawer monolith is removed — router mounts VM subject surfaces only", () => {
-        const router = readSrc("components/admin/AdminEntityDrawer.tsx");
-        expect(router).not.toContain("AdminEntityDrawerLegacy");
-        expect(router).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(router).toContain("PersonSubjectSurfaceRuntime");
-    });
 
     it("header actions cache module supports restore by opportunity id", () => {
         const cache = readSrc("lib/admin/drawer/opportunityDrawerHeaderActionsCache.ts");
         expect(cache).toContain("putOpportunityDrawerHeaderActionsCache");
         expect(cache).toContain("peekOpportunityDrawerHeaderActionsCache");
         expect(cache).toContain("TTL_MS");
-    });
-
-    it("VM opportunity runtime resolves header menu from displayVm actions", () => {
-        const vm = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(vm).toContain("displayVm?.actions.header_menu");
-        expect(vm).toContain("useOpportunityDrawerVmHeaderActions");
-        expect(vm).toContain("OpportunityDrawerHeaderControls");
-        expect(vm).not.toContain("opportunityRegistryHeaderReady");
     });
 
     it("inquiry workflow header actions are tab-independent in composer policy", () => {

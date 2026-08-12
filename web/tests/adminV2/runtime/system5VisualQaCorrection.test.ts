@@ -39,18 +39,6 @@ describe("System 5 Visual QA correction guards", () => {
         },
     });
 
-    it("WUC KPI zone renders compact metric tiles (not flat chip strip)", () => {
-        const css = readSrc("app/adminV2/components/alloyOsRuntime.css");
-        // V2 tile row is defined in CSS — overrides align and padding for the tile zone
-        expect(css).toContain(".adminv2-os-context__metric-tiles");
-        // V1 kpi-strip CSS retained for completeness (no longer applied in runtime path)
-        expect(css).toContain(".adminv2-os-context__kpi-strip");
-        expect(css).toContain("[data-metric-visual]");
-        const surface = readSrc("components/admin/workspace/layout/WorkUnitCommandSurface.tsx");
-        expect(surface).toContain('data-alloy-os-kpi="true"');
-        expect(surface).toContain("adminv2-os-context__metric-tiles");
-    });
-
     it("summary cards use System 5 storytelling — mission uses action not stage label", () => {
         const { cards } = deriveOpportunityFocusPanelPresentation({
             mode: "summary",
@@ -140,9 +128,4 @@ describe("System 5 Visual QA correction guards", () => {
         expect(renderer).toContain('focusPanelMode !== "activity"');
     });
 
-    it("shell regression markers remain intact", () => {
-        expect(readSrc("app/adminV2/components/workspace/blocks/QueueBlock.tsx")).toContain("CompressedQueueRow");
-        expect(readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx")).toContain("focusPanelActive");
-        expect(readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx")).toContain("!focusPanelActive");
-    });
 });

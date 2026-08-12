@@ -1,7 +1,7 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-08-12
 supersedes: []
 ---
 
@@ -69,7 +69,7 @@ Operator product layer     Focus Panel · Operational Subject · Subject Composi
 Presentation components    web/components/admin/focusPanel/*
 Runtime derivation         web/lib/adminV2/runtime/focusPanel/*
 Subject resolution         web/lib/adminV2/runtime/operationalSubject/*
-Infrastructure (legacy)    AdminDrawerContext · composedDrawerPayload · AdminEntityDrawer · vmDrawer/*
+Infrastructure (legacy)    AdminDrawerContext · composedDrawerPayload · vmDrawer/* payload + cache
 ```
 
 | Layer | Question it answers | Rename policy |
@@ -79,7 +79,7 @@ Infrastructure (legacy)    AdminDrawerContext · composedDrawerPayload · AdminE
 | **Subject Composition** | How are cards arranged for this subject/mode? | Canonical type in `subjectComposition.ts` |
 | **Activity Cockpit** | What is Activity mode? | Canonical — the composed one-viewport workspace in `OpportunityFocusPanelEmbeddedWorkspace` |
 | **Embedded Workspace** | Where do the full Activity surfaces live? | Canonical surface set — `embeddedWorkspaceTabs.ts`; reachable from the Activity Cockpit via *View all* affordances |
-| **Drawer (infra)** | How is payload fetched, cached, revealed? | Keep until migration phase D — changing breaks reveal gates |
+| **Drawer (infra)** | How is payload fetched, cached, revealed? | Keep — the inline panel runs on it; renaming breaks reveal gates |
 
 **Rule:** New feature work speaks Focus Panel. Infrastructure renames require the runtime-sensitive test suite (see `adminv2-runtime-performance.mdc`).
 
@@ -114,9 +114,6 @@ during migration.
 
 | Canonical (use in new code) | Implementation (shimmed) | Notes |
 |------------------------------|--------------------------|-------|
-| `EnrollmentSubjectSurfaceRuntime` | `vmDrawer/OpportunityDrawerVmRuntime` | Enrollment/opportunity Focus Panel runtime |
-| `PersonSubjectSurfaceRuntime` | `vmDrawer/PersonsDrawerVmRuntime` | Person/child Focus Panel runtime |
-| `SubjectSurfaceRuntime` / `FocusPanelRuntime` | `AdminEntityDrawer` | Router resolving operational subject → runtime |
 | `FocusPanelShell` | `drawer/EntityDrawerOperatingShell` | Focus Panel operating chrome |
 | `OperationalSubjectViewModel` | `OpportunityDrawerViewModel` | Composed VM for displayed subject |
 | `SubjectComposition` | `focusPanel/subjectComposition` | Card grid + mode layout (Phase B) |
@@ -125,15 +122,13 @@ Old → new naming map (retire from new code):
 
 | Old | Canonical |
 |-----|-----------|
-| `OpportunityDrawerVmRuntime` | `EnrollmentSubjectSurfaceRuntime` |
-| `PersonsDrawerVmRuntime` | `PersonSubjectSurfaceRuntime` |
 | `OpportunityDrawerViewModel` | `OperationalSubjectViewModel` |
 | `EntityDrawerOperatingShell` | `FocusPanelShell` |
 
-Barrel: `import { EnrollmentSubjectSurfaceRuntime } from "@/components/admin/subjectSurface"`.
+The three RUNTIME shims are gone with the overlay they mounted. The one record surface is
+`components/presentation/workUnit/InlineOpportunityFocusPanel`, and it never went through them.
 
-Deprecated compat exports (`OpportunityDrawerVmRuntime`, `PersonsDrawerVmRuntime`) remain available
-from the barrel and resolve to the identical module.
+Barrel: `import { FocusPanelShell } from "@/components/admin/subjectSurface"`.
 
 ---
 
@@ -143,14 +138,14 @@ from the barrel and resolve to the identical module.
 |-------|--------|--------|
 | **A** | EmbeddedWorkspace renames + compat re-exports | Done (June 2026) |
 | **B** | `useFocusPanelDocked`, `OpportunityFocusPanelViewModel`, `SubjectComposition` | Done (June 2026) |
-| **C** | `subjectSurface/` presentation shims (SubjectSurfaceRuntime, FocusPanelShell, OperationalSubjectViewModel) | Done (June 2026) |
+| **C** | `subjectSurface/` presentation shims (FocusPanelShell, OperationalSubjectViewModel) | Done (June 2026); the runtime shims retired with the overlay (August 2026) |
 | **D0** | Card layer consumes Operational Context; card renderer takes `context` (subject id + truth derived); dead Person Focus Panel surfaces removed | Done (June 2026) |
 | **D1/D2 (contract)** | Renderer contract context-first; stale props removed; drawer/VM compat isolated behind `FocusPanelCardCompat` (off main contract); opportunity naming removed from the card path | Done (June 2026) |
 | **D1 (re-projection)** | Re-project drill cards (timeline/documents/notes/workflow_steps) + embedded workspace as context-native; retire `OpportunityDrawerVmTabPanes` + `compat` | Pending |
 | **D2 (header)** | Header + focus-panel component props adopt `OperationalSubjectViewModel`/`SubjectComposition`; drop `displayVm`/`drawerId`/`DrawerTabKey` from components | Pending |
 | **E** | Person/child Subject Composition (real person card blueprints) | Pending |
-| **F** | `AdminDrawerContext` → operational subject context; `establishOperationalContext` open verb; payload infra rename | Deferred — reveal/payload contract |
-| **G** | Physical deletion of `vmDrawer/*` drawer bodies + legacy shell | Deferred — runtime sprint |
+| **F** | `AdminDrawerContext` → operational subject context; `establishOperationalContext` open verb; payload infra rename | Deferred — reveal/payload contract. It remains the ONE selection authority and the inline panel reads it; only the OPEN verb was retired. |
+| **G** | Physical deletion of the drawer bodies + shell | **Done (August 2026)** — `AdminEntityDrawer`, `OpportunityDrawerVmRuntime`, `PersonsDrawerVmRuntime` and 45 modules only they reached are deleted. See [`drawer-system.md`](./drawer-system.md). |
 
 > Full dependency ledger and gates: [`focus-panel-runtime-cutover-report.md`](./focus-panel-runtime-cutover-report.md).
 
@@ -162,14 +157,20 @@ Do **not** bulk-rename composed payload, cache keys, prefetch, or queue reveal g
 
 1. Alloy is **not** drawer-first. Queues preview; the **Focus Panel** is where work happens.
 2. The same shell composes differently per **operational subject** and **mode**.
-3. **Drawer** in file paths often means *payload infrastructure*, not product language.
+3. **Drawer** in file paths means *payload infrastructure* or action-modal chrome — never a record surface. There is no record overlay to open.
 4. Read `operational-mode-default-state-doctrine.md` and `operational-surface-design-system.md` for behavior freeze.
 
 ---
 
 ## Sunset position
 
-The Focus Panel is the **canonical operator surface**; the drawer is reveal/open-state **infrastructure** only. Drawer/tab overview, LayoutDoc drawer authoring, and the lead summary blueprint are legacy/transitional and frozen to new product investment. Universal Cards absorb drawer sections over time. Sunset status matrix, freeze rule, and the editing gap blocker: [`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
+The Focus Panel is the **only** operator record surface. The modal record product is deleted — router
+and both runtimes — so "drawer" now names payload/cache/reveal infrastructure and action-modal chrome,
+and nothing else. Card and item focus is the kernel's ASPECT, addressed through
+`lib/runtime/focus/useOperatorRecordFocus`, not through an open verb.
+
+Platform rules and current state: [`drawer-system.md`](./drawer-system.md). How it was reached:
+[`drawer-sunset-roadmap.md`](./drawer-sunset-roadmap.md).
 
 ---
 

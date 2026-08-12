@@ -43,7 +43,7 @@ describe("work unit registry modal hosts", () => {
         const action = relationshipAction("add_emergency_contact");
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             entityId: "opp-1",
             context: { surface: "right_rail", department_id: "dept-1", work_unit_id: "wu-1" },
@@ -62,7 +62,7 @@ describe("work unit registry modal hosts", () => {
         const action = relationshipAction("add_parent_guardian");
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             entityId: "opp-2",
             context: { surface: "right_rail" },
@@ -78,7 +78,7 @@ describe("work unit registry modal hosts", () => {
         const action = relationshipAction("add_child");
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             entityId: "opp-3",
             context: { surface: "right_rail" },
@@ -104,7 +104,7 @@ describe("work unit registry modal hosts", () => {
         };
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openEnrollmentStatus,
             entityId: "opp-4",
             enrollmentStatusScope: { grain: "child", opportunityId: "opp-4", opportunityCustomerMemberId: "ocm-1" },
@@ -124,7 +124,7 @@ describe("work unit registry modal hosts", () => {
         const action = relationshipAction("add_emergency_contact");
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openRelationshipAction,
             context: { surface: "right_rail" },
         });
@@ -147,7 +147,7 @@ describe("work unit registry modal hosts", () => {
         };
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             entityId: "opp-1",
             context: { surface: "record_header" },
         });
@@ -170,7 +170,7 @@ describe("work unit registry modal hosts", () => {
         };
         const out = await applyRegistryResolvedActionClient(action, {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openMakePrimaryContact,
             entityId: "opp-1",
             makePrimaryContactTargetPersonId: "person-kevin",

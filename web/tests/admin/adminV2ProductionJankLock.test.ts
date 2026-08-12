@@ -56,12 +56,6 @@ describe("production jank lock wiring", () => {
         expect(defer).toContain("let ran = false");
     });
 
-    it("inquiry summary tasks are on-demand", () => {
-        const drawer = readFileSync(join(root, "../../components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain('tasksLoadMode="on_demand"');
-        expect(drawer).toContain("OpportunityInquiryChildrenMetadataSummary");
-    });
-
     it("drawer open sets pending gate", () => {
         const coord = readFileSync(join(root, "../../lib/admin/opportunityDrawerOpenCoordinator.ts"), "utf8");
         expect(coord).toContain("setAdminV2DrawerOpenPending(true");

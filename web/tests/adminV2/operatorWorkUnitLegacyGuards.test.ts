@@ -68,16 +68,6 @@ describe("Operator Work Unit — legacy quarantine guards", () => {
         }
     });
 
-    it("the legacy drawer runtime is deleted and suppressed on operator Work Unit surfaces", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("isWorkUnitQueueSurfacePath");
-        expect(src).not.toContain("AdminEntityDrawerLegacy");
-        const guardIdx = src.indexOf("isWorkUnitQueueSurfacePath(pathname)");
-        const returnNullIdx = src.indexOf("return null;");
-        expect(guardIdx).toBeGreaterThan(-1);
-        expect(returnNullIdx).toBeGreaterThan(guardIdx);
-    });
-
     it("ProcessSummaryCard uses the model's canonical href, never a hand-built legacy/admin path", () => {
         const card = read("components/presentation/workspace/ProcessSummaryCard.tsx");
         expect(card).toContain("href={drillHref}");

@@ -123,20 +123,24 @@ Layout locked: `../../system/work-unit-layout-doctrine.md` (V3).
 | Concern | Owner | Rule |
 |---------|-------|------|
 | **Canonical deep links** | Route + query param projection | Work View: `?work_view=`; Location: `?locationId=` on `/settings/locations` |
-| **Focus Panel ownership** | VM Runtime + `FocusPanelSurface` | Queue/search opens on work-unit routes append `:recordId` via client URL swap — no route remount |
+| **Focus Panel ownership** | Inline Focus Panel region (`InlineOpportunityFocusPanel`) | The ONE record surface. Selection is an attention movement; the kernel projects `?subject_id=` and `?aspect=` with `replaceState` — no route remount, and no overlay |
 | **Settings ownership** | Configuration Runtime (`/settings/*`) | Locations, surfaces, fields, business processes — not drawer opens |
-| **Search ownership** | `GlobalSearchBox` + navigation helpers | Campus/location → Settings deep link; opportunity/person/child → VM Focus Panel path |
+| **Search ownership** | `GlobalSearchBox` → `dispatchOperatorFocusSelection` | Campus/location → Settings deep link; every other subject → a focus intent applied by `OperatorFocusAttentionListener` inside the kernel. Search is not special: the same seam serves every producer outside the runtime |
 | **Location operating surface** | `LocationsConfigurationPage` | Inline create panel; successful create selects new site; **no drawer** |
-| **Legacy drawer fallback** | **None** | `AdminEntityDrawerLegacy` deleted; unsupported entities fail closed |
+| **Record overlay** | **None — deleted** | `AdminEntityDrawer` and both VM runtimes are gone (August 2026). There is no address that means "open the record overlay" and no fallback to one |
+| **Record → destination** | `lib/workUnits/operatorFocusTarget` + `useOperatorRecordFocus` | ONE resolver: record → host record → the Work Unit whose `work_unit_id` holds it. Never a Business Process key. `null` means "no queue holds this record" and the gesture does nothing |
 
 Authenticated verification: `../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md` (historical: `../../sprints/archive/07_2026/platform-simplification-staging-qa-checklist.md`).
 
 
-## Drawer navigation (summary)
+## Focus Panel navigation (summary)
 
-- Queue row → Focus Panel frame immediate; VM warm on intent
-- Linked navigation (person ↔ opportunity): hold prior body until next VM ready
+- Queue row → Focus Panel frame immediate; payload warm on intent
+- Linked navigation (a person or child inside the family) is a **card + item ASPECT** on the same
+  panel, not a second record surface — Household card for a person, Children card for a child
 - Queue prev/next scoped to active lane
+- Active-runtime movement goes through the Runtime Kernel. `router.push` to a work-unit route is
+  reserved for COLD ENTRY from outside the workspace layout; inside it, a push composes nothing
 
 Full drawer rules: `../operator/drawer-system.md`.
 

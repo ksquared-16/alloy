@@ -29,15 +29,4 @@ describe("opportunity drawer primary shell payloads", () => {
         expect(taskMod).toContain("_inquiry_summary_tasks");
     });
 
-    it("reserves additional contact rows and what-matters slot in drawer UI", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("shellReservedAdditionalCount");
-        expect(drawer).toContain('data-shell-slot="what_matters"');
-        expect(drawer).toContain("data-drawer-last-activity-line");
-        expect(drawer).toContain("_activity_signal");
-        expect(drawer).toContain("reportDrawerAboveFoldStable");
-        expect(drawer).toContain("OpportunityInquirySummaryRightColumn");
-        expect(drawer).toContain("opportunityBackgroundFullHydrateFailed");
-        expect(drawer).toContain("opportunityRelationshipsFullHydrateFailed");
-    });
 });

@@ -1,20 +1,29 @@
 /**
- * C1a compile gate — production opportunity VM drawer module must type-check.
+ * Compile gate — the record surface's modules must type-check.
  *
- * Vitest compiles imported modules; this catches missing imports (e.g. queue
- * navigator) that unit tests on shadow helpers alone would miss.
+ * Vitest compiles imported modules; this catches missing imports (e.g. queue navigator) that unit
+ * tests on shadow helpers alone would miss.
+ *
+ * It used to gate `OpportunityDrawerVmRuntime` and `OpportunityDrawerOverviewBody`, which were the
+ * modal record product and its legacy body. Both are deleted, so the gate now covers the module that
+ * actually renders a record: the INLINE Focus Panel region. The error boundary stays — the layout
+ * runtime overview body still uses it.
  */
 
 import { describe, expect, it } from "vitest";
-import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
+import { InlineOpportunityFocusPanel } from "@/components/presentation/workUnit/InlineOpportunityFocusPanel";
 import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
-import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 
-describe("opportunityDrawerVmRuntime compile gate", () => {
-    it("exports the production VM runtime drawer component", () => {
-        expect(typeof OpportunityDrawerVmRuntime).toBe("function");
-        expect(typeof OpportunityDrawerOverviewBody).toBe("function");
+describe("record surface compile gate", () => {
+    it("exports the one record surface component", () => {
+        expect(typeof InlineOpportunityFocusPanel).toBe("function");
+    });
+
+    it("the layout-runtime body error boundary still compiles", () => {
+        // Asserted in its own test: pulling the inline panel into the same module graph makes this
+        // import resolve late, and a gate that reports `undefined` for a module that is genuinely
+        // fine is a gate that will be deleted rather than trusted.
         expect(typeof OpportunityDrawerLayoutRuntimeBodyErrorBoundary).toBe("function");
     });
 

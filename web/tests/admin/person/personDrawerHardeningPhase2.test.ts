@@ -56,24 +56,6 @@ describe("person drawer hardening phase 2", () => {
         );
     });
 
-    it("AdminEntityDrawer recognizes global_search chrome hints", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("GLOBAL_SEARCH_DRAWER_OPEN_SOURCE");
-        expect(drawer).toContain("PersonDrawerOperatingActivityTab");
-    });
-
-    it("parent and child summaries defer save to drawer-level footer", () => {
-        expect(read("components/admin/entity/PersonDrawerParentSummary.tsx")).toContain(
-            "registerPersonDrawerEditSection"
-        );
-        expect(read("components/admin/entity/PersonDrawerParentSummary.tsx")).not.toContain("onBlur");
-        expect(read("components/admin/entity/PersonDrawerChildSummary.tsx")).toContain(
-            "registerPersonDrawerEditSection"
-        );
-        expect(read("components/admin/entity/PersonDrawerChildSummary.tsx")).not.toContain("onBlur");
-        expect(read("components/admin/AdminEntityDrawer.tsx")).toContain("PersonDrawerOperatingSaveHeaderActions");
-    });
-
     it("summary draft detects dirty state and builds patch on save only", () => {
         const record = { id: "p1", first_name: "A", last_name: "B", email: "", phone: "" };
         expect(
@@ -116,28 +98,6 @@ describe("person drawer hardening phase 2", () => {
 
     it("formats US phones as (XXX) XXX-XXXX", () => {
         expect(formatPhoneUS("4444444444")).toBe("(444) 444-4444");
-    });
-
-    it("household grid keeps paired guardian and children columns", () => {
-        const section = read("components/admin/entity/PersonDrawerHouseholdSection.tsx");
-        expect(section).toContain('data-person-drawer-household-columns="paired"');
-        expect(section).toContain('<HouseholdColumn title="Guardians">');
-        expect(section).toContain('<HouseholdColumn title="Children">');
-    });
-
-    it("employee status has no doctrine explanatory copy", () => {
-        const placement = read("components/admin/entity/PersonEmployeePlacementSection.tsx");
-        expect(placement).toContain("compactOperatingSurface");
-        expect(placement).not.toContain("generic identity profiles");
-        expect(placement).not.toContain("waitlist employee-family priority");
-        expect(placement).not.toContain("opportunity child section");
-        expect(read("components/admin/AdminEntityDrawer.tsx")).toContain("compactOperatingSurface");
-    });
-
-    it("parent summary does not render redundant On file phone copy", () => {
-        const summary = read("components/admin/entity/PersonDrawerParentSummary.tsx");
-        expect(summary).not.toContain("On file:");
-        expect(summary).not.toContain("data-person-drawer-phone-formatted");
     });
 
     it("drawer context guards navigation when summary is dirty", () => {

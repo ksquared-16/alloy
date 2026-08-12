@@ -39,10 +39,6 @@ const minimalAttention = (): OpportunityAttentionResult => ({
 });
 
 describe("inquiry Review Assist placement", () => {
-    it("does not render inquiry_review_assist in AdminEntityDrawer left column", () => {
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).not.toContain('data-drawer-slot="inquiry_review_assist"');
-    });
 
     it("renders review assist in inquiry summary right column", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());

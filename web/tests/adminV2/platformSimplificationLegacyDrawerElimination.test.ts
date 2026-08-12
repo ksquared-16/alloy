@@ -18,15 +18,6 @@ describe("platform simplification — legacy drawer elimination", () => {
         expect(existsSync(legacyPath)).toBe(false);
     });
 
-    it("no production importer references AdminEntityDrawerLegacy", () => {
-        const router = read("components/admin/AdminEntityDrawer.tsx");
-        expect(router).not.toContain("AdminEntityDrawerLegacy");
-        expect(router).not.toContain("dynamic(");
-        expect(router).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(router).toContain("PersonSubjectSurfaceRuntime");
-        expect(router).toMatch(/return null;/);
-    });
-
     it("kill-switch gates are permanently on for VM runtimes", () => {
         expect(read("lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate.ts")).not.toContain(
             "NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH",

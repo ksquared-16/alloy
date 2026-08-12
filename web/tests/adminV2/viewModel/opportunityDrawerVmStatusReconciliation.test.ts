@@ -140,23 +140,3 @@ describe("opportunityDrawerVmStatusReconciliation", () => {
         ).toBe(false);
     });
 });
-
-describe("AdminEntityDrawer opportunity VM status wiring", () => {
-    it("pins VM status, blocks bootstrap seed, and renders VM status control marker", async () => {
-        const { readFileSync } = await import("node:fs");
-        const { join, dirname } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("opportunityDrawerVmStatusPinRef");
-        expect(drawer).toContain("opportunityDrawerVmStatusRenderLatchRef");
-        expect(drawer).toContain("opportunityDrawerVmStatusPin");
-        expect(drawer).toContain("commitOpportunityVmStatusPin");
-        expect(drawer).toContain("blockStatusSkeletonAfterVmSettle");
-        expect(drawer).toContain("opportunityDrawerVmStatusAuthoritative");
-        expect(drawer).toContain("suppressFullDrawerLoading");
-        expect(drawer).toContain("Updating…");
-        expect(drawer).toContain("opportunityInquirySummaryRightColumnResolved");
-        expect(drawer).toContain("logDrawerVmDomRenderTrace");
-    });
-});

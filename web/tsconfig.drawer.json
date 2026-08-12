@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "//": "Scoped typecheck for the drawer-eradication surface. `npm run typecheck` cannot run on this host (SIGTERM under load), and CI is the only whole-graph authority — but a scoped graph does run, and it catches the dangling-import class of error that deletion work produces. Add every file this sprint touches plus its direct dependents.",
+  "include": [
+    "lib/runtime/focus/**/*.ts",
+    "lib/workUnits/**/*.ts",
+    "lib/search/**/*.ts",
+    "lib/admin/actions/applyRegistryResolvedActionClient.ts",
+    "lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions.ts",
+    "components/adminV2/OperatorFocusAttentionListener.tsx",
+    "components/adminV2/ContextualRecordOpenListener.tsx",
+    "components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx",
+    "components/admin/focusPanel/OpportunityFocusPanelModeBody.tsx",
+    "components/admin/focusPanel/OpportunityFocusPanelBody.tsx",
+    "components/presentation/rightRail/WorkUnitRightRailActions.tsx",
+    "components/presentation/rightRail/WorkspaceRightRailActions.tsx",
+    "components/presentation/workUnit/InlineOpportunityFocusPanel.tsx",
+    "app/adminV2/components/GlobalSearchBox.tsx",
+    "app/adminV2/components/MyTasksPanel.tsx",
+    "app/adminV2/messages/InboxPanel.tsx",
+    "app/adminV2/communications/CommandCenterShell.tsx",
+    "app/adminV2/components/AdminV2ShellDrawerScope.tsx",
+    "app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx",
+    "app/api/admin/operator-focus/resolve/route.ts",
+    "next-env.d.ts"
+  ]
+}

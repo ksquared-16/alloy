@@ -12,7 +12,7 @@ import {
 } from "@/lib/search/searchContracts";
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
-import { dispatchSearchFocusSelection } from "@/lib/adminV2/searchFocusSelection";
+import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
 import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
@@ -258,7 +258,7 @@ export default function GlobalSearchBox() {
      * This component never constructs a URL and never opens an overlay.
      */
     const openDestination = useCallback(
-        (destination: SearchDestination, subject: SearchResult["subject"]) => {
+        (destination: SearchDestination) => {
             if (destination.target === "route" && destination.href) {
                 dismiss();
                 router.push(destination.href);
@@ -276,7 +276,6 @@ export default function GlobalSearchBox() {
                 entity_type: hostType,
                 entity_id: hostId,
                 host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
-                subject_highlight: subject.kind !== "household",
                 card_focus: {
                     card_key: destination.card_key,
                     item_id: destination.item_id ?? null,
@@ -293,19 +292,17 @@ export default function GlobalSearchBox() {
             // it — measured: the URL changed, the server rendered the route in 2.9s,
             // and the surface was blank forever with no error.
             //
-            // The intent is therefore stated once, and applied by two listeners that
-            // sit where this control cannot: `SearchAttentionListener` (inside the
-            // kernel) moves attention to the host work unit and pins the host record,
-            // and `SearchFocusSelectionListener` (inside AdminDrawerProvider) applies
-            // the card and item focus. This control renders in the top nav, outside
-            // both — calling either hook here throws and takes the whole nav down, as
-            // browser certification caught.
+            // The intent is therefore stated once and applied by `OperatorFocusAttentionListener`,
+            // which sits inside the kernel — where this control cannot: it renders in the top nav,
+            // outside every workspace provider, and calling the hook here throws and takes the whole
+            // nav down (browser certification caught exactly that). Search is not special; the same
+            // listener serves every producer that states a focus intent from outside the runtime.
             //
-            // `host_work_unit_key` is a real `work_units.key`, resolved server-side from
-            // the host record's own queue membership; when it is absent there is no
-            // operational surface to move to, and the selection simply applies to the
-            // surface the operator is already on.
-            dispatchSearchFocusSelection(selection);
+            // `host_work_unit_key` is a real `work_units.key`, resolved server-side from the host
+            // record's own queue membership. When it is absent there is no operational surface to
+            // move to and the gesture does nothing — it must never fall back to an overlay, which is
+            // the product this replaces.
+            dispatchOperatorFocusSelection(selection);
         },
         [dismiss, router]
     );
@@ -313,7 +310,7 @@ export default function GlobalSearchBox() {
     const openSubject = useCallback(
         (result: SearchResult) => {
             const primary = result.destinations.find((d) => d.primary);
-            if (primary) openDestination(primary, result.subject);
+            if (primary) openDestination(primary);
         },
         [openDestination]
     );
@@ -426,7 +423,7 @@ export default function GlobalSearchBox() {
                                     if (primary) warmSearchFocusTarget(primary);
                                 }}
                                 onOpenSubject={() => openSubject(result)}
-                                onOpenDestination={(d) => openDestination(d, result.subject)}
+                                onOpenDestination={(d) => openDestination(d)}
                             />
                         ))}
                     </ul>

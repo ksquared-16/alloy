@@ -294,31 +294,8 @@ export type DrawerSubjectFocusMode =
     | "subject_highlight"
     | "subject_group_highlight";
 
-/**
- * Which Focus Panel card a selection wants opened, and which row inside it.
- *
- * Selection already says WHO the operator is looking at (`active_subject`); this
- * says WHERE in that subject's panel to land. Search sets it so clicking a child
- * opens the Children card on that child rather than the panel's default card —
- * previously the only address available was the record, so "open Lennon" and
- * "open Lennon's enrollment" were indistinguishable.
- *
- * Optional throughout: every existing caller that omits it keeps the panel's
- * default composition, so this is additive to the selection contract.
- */
-export type DrawerCardFocus = {
-    /** A `FocusPanelCardKey` — e.g. "children", "household", "scheduling", "current_work". */
-    card_key: string;
-    /** Row within a collection card (child id, person id, …). */
-    item_id?: string | null;
-    /** Configured operational context inside the card — e.g. a `process_key`. */
-    context_key?: string | null;
-};
-
 export type DrawerSubjectContext = {
     active_subject?: LifecycleSubjectRef;
-    /** Card/item to land on. Absent means the panel's default composition. */
-    card_focus?: DrawerCardFocus | null;
     /** Multiple children same enrollment stage — shared lifecycle visual. */
     active_subject_group?: LifecycleSubjectRef[];
     focus_mode: DrawerSubjectFocusMode;

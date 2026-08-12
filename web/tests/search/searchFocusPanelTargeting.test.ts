@@ -162,21 +162,29 @@ describe("destination dedupe keys on operator context, not record address", () =
     });
 });
 
-describe("Search uses the ONE canonical selection authority", () => {
-    it("the control selects through AdminDrawerContext, not a Search-owned mechanism", async () => {
+describe("Search uses the ONE canonical focus seam", () => {
+    it("the control states intent on the shared seam, not a Search-owned mechanism", async () => {
         const { readFileSync } = await import("node:fs");
         const { join } = await import("node:path");
         const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
-        // The control states intent; a listener INSIDE AdminDrawerProvider applies
-        // it to the one selection authority. The control cannot use the hook itself
-        // — the top nav renders outside the provider and calling it there throws.
-        expect(src).toContain("dispatchSearchFocusSelection");
+        // The control states intent; a listener INSIDE the Runtime Kernel applies it. The
+        // control cannot use the hook itself — the top nav renders above every workspace
+        // provider and calling it there throws. Search is not special: the same seam serves
+        // every producer that names a record from outside the runtime.
+        expect(src).toContain("dispatchOperatorFocusSelection");
         expect(src).not.toContain("requestFocusPanelTarget");
 
-        const listener = readFileSync(join(process.cwd(), "components/adminV2/SearchFocusSelectionListener.tsx"), "utf8");
-        expect(listener).toContain("useAdminDrawer");
-        expect(listener).toContain("drawerSubjectContext");
-        expect(listener).toContain("card_focus");
+        // Comments stripped: the listener EXPLAINS why `openDrawer` is wrong here, so a raw
+        // substring scan reads its own reasoning as the violation. Assert on code.
+        const listener = readFileSync(
+            join(process.cwd(), "components/adminV2/OperatorFocusAttentionListener.tsx"),
+            "utf8"
+        )
+            .replace(/\/\*[\s\S]*?\*\//g, "")
+            .replace(/^\s*\/\/.*$/gm, "");
+        expect(listener).toContain("useWorkUnitEntryMovement");
+        expect(listener).toContain("formatCardFocusAspect");
+        expect(listener).not.toContain("openDrawer");
     });
 
     it("a child destination names the host record's WORK UNIT, never its process", () => {
@@ -223,7 +231,7 @@ describe("the obsolete drawer product is unreachable from Search", () => {
         const src = readFileSync(join(process.cwd(), "app/adminV2/components/GlobalSearchBox.tsx"), "utf8");
         expect(src).not.toContain("launchGlobalRecordSearchOpen");
         expect(src).not.toContain("open_drawer");
-        expect(src).toContain("dispatchSearchFocusSelection");
+        expect(src).toContain("dispatchOperatorFocusSelection");
     });
 
     it("the drawer open-intent product no longer exists", async () => {

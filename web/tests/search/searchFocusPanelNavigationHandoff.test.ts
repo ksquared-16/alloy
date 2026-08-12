@@ -119,7 +119,7 @@ describe("Search resolves a destination the kernel can actually move to", () => 
     });
 });
 
-describe("Search states intent; the kernel and the drawer apply it", () => {
+describe("a producer states intent; the kernel applies it", () => {
     const read = async (file: string) => {
         const { readFileSync } = await import("node:fs");
         const { join } = await import("node:path");
@@ -144,11 +144,11 @@ describe("Search states intent; the kernel and the drawer apply it", () => {
         // A route push survives only for `target === "route"` destinations (campus
         // settings), which are real routes with real pages.
         expect(focusPanelBranch).not.toContain("router.push");
-        expect(focusPanelBranch).toContain("dispatchSearchFocusSelection(selection)");
+        expect(focusPanelBranch).toContain("dispatchOperatorFocusSelection(selection)");
     });
 
     it("the attention listener moves through the ONE work-unit entry adapter", async () => {
-        const src = await code("components/adminV2/SearchAttentionListener.tsx");
+        const src = await code("components/adminV2/OperatorFocusAttentionListener.tsx");
         // Not a second gesture path — the same adapter the workspace links use. A
         // second path is what produced the blank surface originally.
         expect(src).toContain("useWorkUnitEntryMovement");
@@ -159,7 +159,7 @@ describe("Search states intent; the kernel and the drawer apply it", () => {
     it("the attention listener is mounted INSIDE the runtime kernel", async () => {
         const providers = await code("app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx");
         const kernel = providers.indexOf("<RuntimeKernelProvider");
-        const listener = providers.indexOf("<SearchAttentionListener");
+        const listener = providers.indexOf("<OperatorFocusAttentionListener");
         const kernelClose = providers.indexOf("</RuntimeKernelProvider>");
         // The kernel is mounted above the Surface Host and outside the route subtree;
         // a listener outside it gets `null` from `useRuntimeKernelOptional` and moves
@@ -178,17 +178,25 @@ describe("Search states intent; the kernel and the drawer apply it", () => {
     });
 
     it("card focus rides the attention movement, NOT the drawer", async () => {
-        const listener = await code("components/adminV2/SearchAttentionListener.tsx");
+        const listener = await code("components/adminV2/OperatorFocusAttentionListener.tsx");
         // The card + item are encoded as the kernel's ASPECT and handed to the same
         // movement that carried the subject.
         expect(listener).toContain("formatCardFocusAspect");
 
         // `openDrawer` mounts the modal overlay on a work-unit surface, because
         // `AdminEntityDrawer` suppresses itself by testing `usePathname()` and cannot see
-        // the address the kernel projects with `replaceState`. Measured `modal: 1`.
-        const drawerListener = await code("components/adminV2/SearchFocusSelectionListener.tsx");
-        expect(drawerListener).toContain("host_work_unit_key");
-        expect(drawerListener).not.toContain("router.push");
+        // the address the kernel projects with `replaceState`. Measured `modal: 1`. The
+        // drawer applier that used to catch host-less destinations is DELETED: a
+        // destination with no work unit is nowhere, and the overlay is not a lesser
+        // destination to settle for.
+        expect(listener).not.toContain("openDrawer");
+    });
+
+    it("there is no second applier that could reach the overlay", async () => {
+        const { existsSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        expect(existsSync(join(process.cwd(), "components/adminV2/SearchFocusSelectionListener.tsx"))).toBe(false);
+        expect(existsSync(join(process.cwd(), "lib/adminV2/searchFocusSelection.ts"))).toBe(false);
     });
 
     it("the inline Focus Panel body reads card focus from ATTENTION, not the drawer", async () => {
@@ -217,9 +225,8 @@ describe("the modal drawer product stays unreachable from Search", () => {
         const { join } = await import("node:path");
         for (const file of [
             "app/adminV2/components/GlobalSearchBox.tsx",
-            "components/adminV2/SearchFocusSelectionListener.tsx",
-            "components/adminV2/SearchAttentionListener.tsx",
-            "lib/adminV2/searchFocusSelection.ts",
+            "components/adminV2/OperatorFocusAttentionListener.tsx",
+            "lib/runtime/focus/operatorFocusSelection.ts",
             "lib/search/searchDestinations.ts",
         ]) {
             const src = readFileSync(join(process.cwd(), file), "utf8");

@@ -24,13 +24,6 @@ describe("workUnitCoordinatedRevealRegression", () => {
 });
 
 describe("drawerCoordinatedRevealRegression (source)", () => {
-    it("opportunity VM runtime prefetches linked persons after committed visible record", () => {
-        const vm = readSrc("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(vm).toContain("prefetchLinkedPersonsFromOpportunityRecord");
-        expect(vm).toContain("committedVisible");
-        expect(vm).not.toContain("AdminEntityDrawerLegacy");
-        expect(vm).not.toContain("setOpportunityDrawerBelowFoldRevealed");
-    });
 
     it("child→opportunity restore re-warms graph via VM restore session", () => {
         const restore = readSrc(
@@ -43,11 +36,4 @@ describe("drawerCoordinatedRevealRegression (source)", () => {
         expect(ctx).toContain("buildRestoredOpportunityDrawerState");
     });
 
-    it("person section reserves use final-size variants", () => {
-        const reserve = readSrc("components/admin/entity/PersonDrawerSectionCoordinatedReserve.tsx");
-        const operating = readSrc("components/admin/entity/PersonDrawerOperatingSections.tsx");
-        expect(reserve).toContain("min-h-[11rem]");
-        expect(operating).toContain("data-person-drawer-layout-variant={variant.variant_key}");
-        expect(reserve).not.toContain("skeleton-pulse");
-    });
 });

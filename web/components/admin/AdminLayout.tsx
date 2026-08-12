@@ -34,7 +34,6 @@ import {
 } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
-import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
 import {
     EntityLabelsProvider,
@@ -614,7 +613,6 @@ function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; 
                     <div className="p-8 flex-1">
                         <AdminDrawerProvider>
                             {children}
-                            <AdminEntityDrawer />
                         </AdminDrawerProvider>
                     </div>
                 </main>

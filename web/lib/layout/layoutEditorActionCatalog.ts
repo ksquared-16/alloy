@@ -132,15 +132,17 @@ function layoutOnlyCatalogEntries(): LayoutEditorActionCatalogEntry[] {
         },
         {
             actionKey: "open_drawer",
-            label: "Open record",
-            description: "Open a related person or child drawer from this layout.",
+            label: "Open record (retired)",
+            description:
+                "Retired — the record overlay this opened no longer exists. Existing authored layouts keep this value; do not add new ones.",
             groupKey: "record_actions",
             allowedSurfaces: ALL_DRAWER_SURFACES,
             allowedContexts: ["section_row", "contact_block", "contact_related_list", "contact_repeater_row"],
             defaultStyleIntent: "link",
-            selectableInActionPicker: true,
+            selectableInActionPicker: false,
             runtimeWired: false,
-            runtimeWiredNote: "Preview button only — use field link behavior for live open-drawer today.",
+            runtimeWiredNote:
+                "Retired with the modal record product. Card and item focus is an attention ASPECT (lib/runtime/kernel/attentionCardFocus), not a layout action.",
         },
     ];
 }

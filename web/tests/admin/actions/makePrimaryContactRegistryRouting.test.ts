@@ -148,7 +148,7 @@ describe("make_primary_contact registry routing (Option A)", () => {
         const openMakePrimaryContact = vi.fn();
         const out = await applyRegistryResolvedActionClient(makePrimaryContactAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openMakePrimaryContact,
             entityId: "opp-1",
             context: { surface: "record_header" },
@@ -164,7 +164,7 @@ describe("make_primary_contact registry routing (Option A)", () => {
         const openMakePrimaryContact = vi.fn();
         const out = await applyRegistryResolvedActionClient(makePrimaryContactAction(), {
             router: { push: vi.fn(), refresh: vi.fn() },
-            openDrawer: vi.fn(),
+            focusRecord: vi.fn(),
             openMakePrimaryContact,
             entityId: "opp-1",
             makePrimaryContactTargetPersonId: "person-kevin",

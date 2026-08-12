@@ -230,13 +230,4 @@ describe("readiness display surfaces", () => {
         expect(html).not.toContain('data-action-preflight-gap-level="enforced"');
     });
 
-    it("drawer wiring does not add queue readiness UI or duplicate body Required Information panel", () => {
-        const drawer = readFileSync(
-            resolve(__dirname, "../../components/admin/AdminEntityDrawer.tsx"),
-            "utf8"
-        );
-        expect(drawer).not.toContain("OpportunityDrawerRequiredInformationPanel");
-        expect(drawer).not.toContain("queue-readiness");
-        expect(drawer).not.toContain("readiness chip");
-    });
 });

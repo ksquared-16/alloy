@@ -111,21 +111,3 @@ describe("shell structure stable across hydration (P1-2 doctrine)", () => {
         );
     });
 });
-
-describe("AdminEntityDrawer shell authority wiring", () => {
-    it("freezes shell from bootstrap and uses contract for overview sections", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("freezeOpportunityDrawerShellContract");
-        expect(src).toContain("opportunityDrawerShellContract");
-        expect(src).toContain("compileOpportunityRecordDrawerShellFromEntity");
-        expect(src).toMatch(
-            /drawer\.type === "opportunities" && opportunityDrawerShellContract[\s\S]*?return overviewSections/
-        );
-    });
-
-    it("exposes stable tabs when shell contract is present before reveal", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
-        expect(src).toContain("opportunityDrawerShellContract?.tabs.length");
-        expect(src).toContain("opportunityDrawerOverviewRevealReady || opportunityDrawerShellContract");
-    });
-});

@@ -114,11 +114,6 @@ describe("child drawer chrome — no generic person sections", () => {
         expect(out.map((s) => s.key)).toEqual(["basic_info", "relationships"]);
     });
 
-    it("AdminEntityDrawer uses unified inquiry child open path", () => {
-        const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain("openInquiryChildPersonFromOpportunitySync");
-        expect(src).not.toMatch(/onOpenChild[\s\S]{0,400}customer_members/);
-    });
 });
 
 describe("child header and summary model", () => {
@@ -133,22 +128,6 @@ describe("child header and summary model", () => {
         expect(summary.status_label).toBe("Family Lead");
     });
 
-    it("child summary hero leads with identity fields — DOB/gender/dates, gender select only", () => {
-        const src = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildSummary.tsx"),
-            "utf8"
-        );
-        expect(src).toContain('aria-label="Child first name"');
-        expect(src).toContain('aria-label="Child last name"');
-        expect(src).toContain("PersonDrawerIdentityAvatar");
-        expect(src).toContain('type="date"');
-        expect(src).toContain("patchPersonDrawerFields");
-        expect(src).toContain('data-person-drawer-gender-select="true"');
-        expect(src).toContain("Enrollment date");
-        expect(src).toContain("Start date");
-        expect(src).not.toContain("personDrawerChildAgeLabel");
-    });
-
     it("child title row shows name with Child and age pills inline", () => {
         const src = readFileSync(
             join(process.cwd(), "components/admin/entity/PersonDrawerChildTitleRow.tsx"),
@@ -157,30 +136,6 @@ describe("child header and summary model", () => {
         expect(src).toContain("data-person-drawer-child-title-row");
         expect(src).toContain("Child");
         expect(src).toContain("personDrawerChildAgeLabel");
-    });
-
-    it("program and lead pills live in header executive — not between summary and household", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("PersonDrawerChildHeaderExecutive");
-        expect(drawer).not.toContain("PersonDrawerChildEnrollmentContext");
-        const executive = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerChildHeaderExecutive.tsx"),
-            "utf8"
-        );
-        expect(executive).toContain("data-person-drawer-child-header-executive");
-        expect(executive).toContain("data-person-drawer-child-lead-pill");
-        expect(executive).not.toContain("status_key");
-    });
-
-    it("AdminEntityDrawer uses person status dropdown for child — not opportunity enrollment mirror", () => {
-        const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain("data-person-drawer-child-header-subtitle");
-        expect(src).toContain("personDrawerChildHeaderStatus");
-        expect(src).toContain('data-person-drawer-child-header-status="true"');
-        expect(src).toContain("PersonDrawerChildTitleRow");
-        expect(src).not.toMatch(
-            /personChildLifecycleChrome[\s\S]{0,220}resolvePersonDrawerChildSummaryModel[\s\S]{0,120}status_label/
-        );
     });
 
     it("gender field migration seeds configurable person select", () => {
@@ -199,16 +154,6 @@ describe("family consolidation", () => {
         expect(primaryHouseholdLabel(childRecord)).toBe("Chen Family");
     });
 
-    it("family section component renders shared household hierarchy blocks", () => {
-        const src = readFileSync(
-            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
-            "utf8"
-        );
-        expect(src).toContain("data-person-drawer-household");
-        expect(src).toContain("Guardians");
-        expect(src).toContain("Children");
-        expect(src).toContain("resolvePersonDrawerHouseholdModel");
-    });
 });
 
 describe("child module nav — below tabs, no enrollment pipeline", () => {
@@ -217,34 +162,4 @@ describe("child module nav — below tabs, no enrollment pipeline", () => {
         expect(slots.find((s) => s.key === "history")?.label).toBe("Activity");
     });
 
-    it("child drawer renames Related tab to Activity", () => {
-        const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain('related: "Activity"');
-    });
-
-    it("child drawer uses tabs for modules — no duplicate chip strip under tabs", () => {
-        const drawerSrc = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const stripBlock = drawerSrc.slice(drawerSrc.indexOf("const drawerPostTabStrip"));
-        expect(stripBlock.slice(0, 500)).not.toContain("personDrawerChildLifecycleRail");
-        expect(drawerSrc).toContain('related: "Activity"');
-    });
-
-    it("summary renders from seed before full relationship hydrate", () => {
-        const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain("personDrawerChildBodyHydrated");
-        expect(src).toContain("PersonDrawerChildOverviewSkeleton");
-        expect(src).toContain("personDrawerChildOverviewPending");
-        expect(src).toContain("PersonDrawerOperatingSections");
-        expect(src).toContain("personDrawerTypedBodySnapshot");
-        expect(src).toContain("!personDrawerTypedBodySnapshot");
-    });
-});
-
-describe("enrollment duplication guard", () => {
-    it("AdminEntityDrawer hides enrollment section when child lifecycle chrome active", () => {
-        const src = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(src).toContain("!childLifecycle &&");
-        expect(src).toContain("!personParentGuardianChrome");
-        expect(src).toContain('s.key !== "enrollment_activity"');
-    });
 });

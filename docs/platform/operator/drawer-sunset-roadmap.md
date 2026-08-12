@@ -1,13 +1,22 @@
 ---
 owner: operator
 status: canonical
-last_reviewed: 2026-07-12
+last_reviewed: 2026-08-12
 supersedes: []
 ---
 
 # Drawer Sunset & Focus Panel Convergence Roadmap
 
-**Status:** Canonical doctrine (July 2026 stabilization). Records post-elimination product position.
+**Status:** COMPLETE (August 2026). Kept as the record of how the position was reached.
+
+> **The sunset is finished.** `AdminEntityDrawer` and both runtimes it mounted are deleted; no
+> operator path can produce the record overlay. Steps 9–12 of the sequencing below are done, and the
+> "Search & queue destination intent" table is no longer intent — every row of it is live and
+> browser-certified. The freeze rule outlived its purpose: there is nothing left to freeze.
+>
+> Current state and the platform rules it established: [`drawer-system.md`](./drawer-system.md).
+> Caller-by-caller inventory: [`drawer-product-eradication-inventory.md`](./drawer-product-eradication-inventory.md).
+
 **Source material:** Card System Discovery Audit + Drawer Sunset & Focus Panel Convergence Audit.
 **Companion code plan:** `../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md` (historical: `../../sprints/archive/06_2026/platform_simplification_phase3_drawer_deletion_audit.md`) (legacy monolith deletion — a **separate track** from card convergence).
 
@@ -38,7 +47,7 @@ These positions are consistent with [`focus-panel-architecture-vocabulary.md`](.
 
 | Area | Current role | Future role | Status |
 |---|---|---|---|
-| Drawer shell | Reveal / open-state infrastructure | Permanent infrastructure | **Infrastructure** |
+| Drawer shell (`Drawer.tsx`) | Reveal / open-state infrastructure | Action-modal chrome only — never a record surface | **Infrastructure** |
 | Opportunity Focus Panel | Canonical operator surface | Keep / invest | **Canonical** |
 | Opportunity tab overview | Legacy fallback | Retire after card editing parity | **Transitional** |
 | LayoutDoc drawer sections | Operational edit stack | Migrate behavior into cards | **Transitional** |
@@ -47,6 +56,7 @@ These positions are consistent with [`focus-panel-architecture-vocabulary.md`](.
 | Child Focus Panel | Canonical operator surface | Invest (card editing substrate) | **Canonical** |
 | Location operating surface | Settings Configuration Mode | `/settings/locations` canonical | **Canonical** |
 | AdminEntityDrawerLegacy | Legacy monolith | **Deleted** July 2026 | **Removed** |
+| `AdminEntityDrawer` + both VM runtimes | Modal record product | **Deleted** August 2026 | **Removed** |
 | Focus Panel Universal Cards | Future card runtime | Invest | **Canonical** |
 
 ---
