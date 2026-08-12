@@ -18,7 +18,13 @@ export type LayoutLinkBehavior = (typeof LAYOUT_LINK_BEHAVIORS)[number];
 export const LAYOUT_LINK_BEHAVIOR_LABELS: Record<LayoutLinkBehavior, string> = {
     none: "No action",
     open_record: "Link to record",
-    open_drawer: "Open record drawer",
+    /**
+     * RETIRED. The record overlay it named does not exist: the inline Focus Panel is the one record
+     * surface, and card/item focus is an attention ASPECT, not a link behaviour. The VALUE stays in
+     * the union so published tenant layouts keep parsing — configuration data is not ours to rewrite
+     * — but it is no longer offered for authoring, and no operator surface renders it.
+     */
+    open_drawer: "Open record (retired)",
     open_modal: "Open modal",
     external_url: "Open external URL",
     mailto: "Email",
@@ -29,7 +35,6 @@ export const LAYOUT_LINK_BEHAVIOR_LABELS: Record<LayoutLinkBehavior, string> = {
 export const LAYOUT_LINK_BEHAVIORS_EDITOR: LayoutLinkBehavior[] = [
     "none",
     "open_record",
-    "open_drawer",
     "mailto",
     "tel",
 ];
