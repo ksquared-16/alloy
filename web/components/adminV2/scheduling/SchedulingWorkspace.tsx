@@ -15,7 +15,7 @@ import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/Sc
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
 import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import {
     SCHEDULING_SECTION_MODE,
     type SchedulingMode,
@@ -620,7 +620,15 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     );
 
     const siteName = useMemo(() => sites?.find((s) => s.id === siteId)?.name ?? "All sites", [sites, siteId]);
-    const drawer = useAdminDrawerOptional();
+    /**
+     * THE canonical record gesture. Attendance points at a record; the adapter
+     * decides where — and answers `false` when no active Work Unit hosts it.
+     * That is a platform answer, not a failure: an employed person with no open
+     * case has nowhere to be worked, and Attendance must not invent a
+     * destination for them. Durable record discovery belongs to the future
+     * Records workspace, not here.
+     */
+    const focusRecord = useOperatorRecordFocus();
     const summary = useMemo(() => deriveRosterSummary(roster), [roster]);
 
     const unplaced = overview?.unplaced ?? [];
@@ -971,10 +979,11 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         onOpenChild={(child) => {
                             // Canonical record only — a child opens as its person
                             // identity. Roster is a selection surface, not a record one.
-                            if (child.personId) drawer?.openDrawer({ type: "persons", id: child.personId });
+                            if (!child.personId) return false;
+                            return focusRecord({ entity_type: "persons", entity_id: child.personId });
                         }}
                         onOpenStaff={(staff) => {
-                            drawer?.openDrawer({ type: "persons", id: staff.personId });
+                            return focusRecord({ entity_type: "persons", entity_id: staff.personId });
                         }}
                     />
                 ) : null}
@@ -984,10 +993,11 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         siteName={siteName}
                         onOpenChild={(child) => {
                             // Canonical Child record — never an attendance-specific surface.
-                            if (child.personId) drawer?.openDrawer({ type: "persons", id: child.personId });
+                            if (!child.personId) return false;
+                            return focusRecord({ entity_type: "persons", entity_id: child.personId });
                         }}
                         onOpenStaff={(staff) => {
-                            drawer?.openDrawer({ type: "persons", id: staff.personId });
+                            return focusRecord({ entity_type: "persons", entity_id: staff.personId });
                         }}
                     />
                 ) : null}

@@ -93,8 +93,13 @@ type RosterModel = {
 export type AttendanceWorkspaceProps = {
     siteLocationId: string;
     siteName: string;
-    onOpenChild?: (child: RosterChild) => void;
-    onOpenStaff?: (staff: RosterStaff) => void;
+    /**
+     * Record gestures. Each resolves FALSE when no active Work Unit hosts the
+     * record — a real platform answer, not an error. Attendance stops offering
+     * the gesture rather than inventing somewhere to send the operator.
+     */
+    onOpenChild?: (child: RosterChild) => Promise<boolean> | boolean | void;
+    onOpenStaff?: (staff: RosterStaff) => Promise<boolean> | boolean | void;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -191,6 +196,22 @@ export default function AttendanceWorkspace({
     const [openRoomId, setOpenRoomId] = useState<string | null>(null);
     const [busySubject, setBusySubject] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    /**
+     * Subjects whose record gesture resolved to "nowhere". Their name stops being
+     * a control — an affordance that does nothing is worse than no affordance.
+     */
+    const [unreachable, setUnreachable] = useState<Set<string>>(new Set());
+
+    const attemptFocus = useCallback(
+        async (key: string, run: (() => Promise<boolean> | boolean | void) | undefined) => {
+            if (!run) return;
+            const resolved = await run();
+            if (resolved === false) {
+                setUnreachable((prev) => new Set(prev).add(key));
+            }
+        },
+        []
+    );
 
     const load = useCallback(async () => {
         setError(null);
@@ -362,14 +383,25 @@ export default function AttendanceWorkspace({
                                         data-attendance-staff={s.personId}
                                     >
                                         <div className="min-w-0">
-                                            <button
-                                                type="button"
-                                                className="block truncate text-left text-[13.5px] font-medium text-alloy-midnight hover:underline"
-                                                onClick={() => onOpenStaff?.(s)}
-                                                data-attendance-open-staff={s.personId}
-                                            >
-                                                {s.displayName}
-                                            </button>
+                                            {unreachable.has(`staff:${s.personId}`) ? (
+                                                <span
+                                                    className="block truncate text-[13.5px] font-medium text-alloy-midnight"
+                                                    data-attendance-staff-unreachable={s.personId}
+                                                >
+                                                    {s.displayName}
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="block truncate text-left text-[13.5px] font-medium text-alloy-midnight hover:underline"
+                                                    onClick={() =>
+                                                        void attemptFocus(`staff:${s.personId}`, () => onOpenStaff?.(s))
+                                                    }
+                                                    data-attendance-open-staff={s.personId}
+                                                >
+                                                    {s.displayName}
+                                                </button>
+                                            )}
                                             <p className="truncate text-[11.5px] text-alloy-midnight/55">
                                                 {[s.positionLabel, s.timeLabel ? `Scheduled ${s.timeLabel}` : null]
                                                     .filter(Boolean)
@@ -458,14 +490,27 @@ export default function AttendanceWorkspace({
                                         data-attendance-child={c.customerMemberId}
                                     >
                                         <div className="min-w-0">
-                                            <button
-                                                type="button"
-                                                className="block truncate text-left text-[13.5px] font-medium text-alloy-midnight hover:underline"
-                                                onClick={() => onOpenChild?.(c)}
-                                                data-attendance-open-child={c.customerMemberId}
-                                            >
-                                                {c.displayName}
-                                            </button>
+                                            {unreachable.has(`child:${c.customerMemberId}`) ? (
+                                                <span
+                                                    className="block truncate text-[13.5px] font-medium text-alloy-midnight"
+                                                    data-attendance-child-unreachable={c.customerMemberId}
+                                                >
+                                                    {c.displayName}
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="block truncate text-left text-[13.5px] font-medium text-alloy-midnight hover:underline"
+                                                    onClick={() =>
+                                                        void attemptFocus(`child:${c.customerMemberId}`, () =>
+                                                            onOpenChild?.(c)
+                                                        )
+                                                    }
+                                                    data-attendance-open-child={c.customerMemberId}
+                                                >
+                                                    {c.displayName}
+                                                </button>
+                                            )}
                                             <p className="truncate text-[11.5px] text-alloy-midnight/55">
                                                 {c.timeLabel ? `Expected ${c.timeLabel}` : "Expected today"}
                                             </p>
