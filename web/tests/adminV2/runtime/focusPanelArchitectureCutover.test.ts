@@ -134,9 +134,12 @@ describe("Phase C — Subject Surface presentation shims", () => {
             "utf8",
         );
         expect(doc).toContain("Subject Surface presentation layer (Phase C)");
-        expect(doc).toContain("EnrollmentSubjectSurfaceRuntime");
-        expect(doc).toContain("PersonSubjectSurfaceRuntime");
         expect(doc).toContain("FocusPanelShell");
+        expect(doc).toContain("OperationalSubjectViewModel");
+        // The three RUNTIME shims are struck from the map with the overlay they mounted. A doc that
+        // still named them would send a new engineer looking for a record surface that is gone.
+        expect(doc).not.toContain("EnrollmentSubjectSurfaceRuntime");
+        expect(doc).not.toContain("PersonSubjectSurfaceRuntime");
     });
 });
 

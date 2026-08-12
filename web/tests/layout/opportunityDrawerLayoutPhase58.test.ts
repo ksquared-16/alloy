@@ -133,7 +133,9 @@ describe("inline editing UX", () => {
 
 describe("link behavior labels", () => {
     it("uses human-readable link behavior labels", () => {
-        expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_drawer).toBe("Open record drawer");
+        // Retired, and labelled so: the value stays for published layouts, but an author must not
+        // read it as an offer.
+        expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_drawer).toBe("Open record (retired)");
         expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_record).toBe("Link to record");
     });
 });
