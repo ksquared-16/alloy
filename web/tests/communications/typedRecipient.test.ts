@@ -32,9 +32,18 @@ const external: ExternalOperationalRecipient = {
     reason: "Coordinating an emergency repair at the Bend site.",
 };
 
-describe("exactly three kinds, no untyped fallback", () => {
-    it("admits only the three approved kinds", () => {
-        expect(RECIPIENT_KINDS).toEqual(["person", "internal_user", "external_operational_recipient"]);
+describe("exactly four kinds, no untyped fallback", () => {
+    it("admits only the four approved kinds", () => {
+        // `canonical_thread` is the fourth and last: replying into a tenant-owned
+        // conversation whose sender is not a known Person. It carries a thread id
+        // and nothing else, so it cannot become the free-text path these types
+        // exist to remove. Anything beyond these four needs the same scrutiny.
+        expect(RECIPIENT_KINDS).toEqual([
+            "person",
+            "internal_user",
+            "external_operational_recipient",
+            "canonical_thread",
+        ]);
     });
 
     it("rejects a raw address as a recipient", () => {
@@ -48,7 +57,7 @@ describe("exactly three kinds, no untyped fallback", () => {
         expect(validateTypedRecipientShape(undefined)?.code).toBe("missing_recipient");
     });
 
-    it("gives operator-safe migration guidance that names all three kinds", () => {
+    it("gives operator-safe migration guidance that names every kind", () => {
         for (const kind of RECIPIENT_KINDS) {
             expect(FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE).toContain(kind);
         }

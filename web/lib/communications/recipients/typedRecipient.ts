@@ -297,5 +297,7 @@ export const FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE =
     "{ kind: 'person', personId } for family or customer communication, " +
     "{ kind: 'internal_user', userId } for internal staff, or " +
     "{ kind: 'external_operational_recipient', displayName, channel, address, recipientRole, reason } " +
-    "for a vendor, contractor, inspector, attorney or other external professional contact. " +
+    "for a vendor, contractor, inspector, attorney or other external professional contact, or " +
+    "{ kind: 'canonical_thread', threadId } to reply into an existing tenant-owned " +
+    "conversation whose sender Alloy has not identified. " +
     "A failed person lookup is never downgraded to an external operational recipient.";
