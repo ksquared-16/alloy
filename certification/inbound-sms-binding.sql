@@ -112,3 +112,44 @@ where id in (
     '00000000-0000-4000-8000-900000000001',
     '00000000-0000-4000-8000-900000000002'
 );
+
+-- ---------------------------------------------------------------------------
+-- LOCATION-SCOPED Communications identities.
+--
+-- Location-aware identity cannot be certified against an organization that has
+-- only organization-level channels: every assertion would pass for the wrong
+-- reason. These give the certification tenant a Riverside campus that sends and
+-- receives as itself, while Lakeside deliberately has NO override so inheritance
+-- from the organization default is provable rather than assumed.
+--
+-- Environment, not fixture — same reasoning as the rows above.
+-- ---------------------------------------------------------------------------
+
+insert into public.communication_provider_bindings
+    (org_id, channel, provider, scope, location_id, inbound_address, display_label, status, is_primary, secret_ref, config)
+select
+    o.id, 'email', 'resend', 'location', l.id,
+    'riverside@northwind-cert.invalid',
+    'Riverside campus email',
+    'active', false, 'env:RESEND_API_KEY',
+    '{"from_email": "riverside@northwind-cert.invalid"}'::jsonb
+from public.orgs o
+join public.locations l on l.label like '%Riverside%'
+where o.slug = 'northwind-early-learning'
+limit 1
+on conflict (provider, channel, lower(inbound_address)) where inbound_address is not null
+do update set status = 'active', location_id = excluded.location_id, scope = 'location', updated_at = now();
+
+insert into public.communication_provider_bindings
+    (org_id, channel, provider, scope, location_id, inbound_to_e164, display_label, status, is_primary, secret_ref, config)
+select
+    o.id, 'sms', 'twilio', 'location', l.id,
+    '+15550002222',
+    'Riverside campus line',
+    'active', false, 'legacy_global_twilio', '{}'::jsonb
+from public.orgs o
+join public.locations l on l.label like '%Riverside%'
+where o.slug = 'northwind-early-learning'
+limit 1
+on conflict (provider, channel, btrim(inbound_to_e164)) where inbound_to_e164 is not null and btrim(inbound_to_e164) <> ''
+do update set status = 'active', location_id = excluded.location_id, scope = 'location', updated_at = now();

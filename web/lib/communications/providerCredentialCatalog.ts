@@ -101,6 +101,67 @@ const CATALOG: readonly ProviderCredentialOption[] = [
 /** `secret_ref` for a binding an operator has not yet connected to a credential. */
 export const UNCONFIGURED_SECRET_REF = "unconfigured";
 
+/**
+ * The certification-only credential.
+ *
+ * WHY THIS EXISTS. The certification environment deliberately holds no provider
+ * credentials — that absence is what guarantees no certification run can send
+ * anything — which left the SUCCESSFUL connect path uncertifiable: every option
+ * was correctly unavailable, so only the fail-closed half could be proven.
+ *
+ * WHY IT IS SAFE, structurally rather than by policy:
+ *
+ *  1. It is offered ONLY when `ALLOY_CERTIFICATION=1`. In every other deployment
+ *     it is not in the catalogue at all, so it cannot be selected, and
+ *     `selectCredential` refuses it as an unknown key.
+ *  2. Its `secret_ref` is `certification_synthetic` — deliberately NOT an
+ *     `env:` reference and not a known sentinel. Both resolvers
+ *     (`resolve_secret_plaintext` in Python, `resolveTwilioAuthTokenFromSecretRef`
+ *     in TypeScript) treat an unknown convention as "no secret", so it cannot
+ *     authenticate to Resend or Twilio even if a key were present in the
+ *     environment. It is not a fake key; it is the absence of one, named.
+ *  3. It carries no value of any kind, so there is nothing to leak.
+ *
+ * This is the "certification-only approved synthetic catalogue entry" option, and
+ * it does not weaken the no-credentials posture: certification still cannot send.
+ * It certifies that CONNECT works — a binding is created, projected, and becomes
+ * resolvable — which is exactly the gap, and no more than that.
+ */
+export const CERTIFICATION_SECRET_REF = "certification_synthetic";
+
+/** True only in a certification run. */
+function certificationEnabled(env: CredentialEnv): boolean {
+    return String(env.ALLOY_CERTIFICATION ?? "").trim() === "1";
+}
+
+const CERTIFICATION_CATALOG: readonly ProviderCredentialOption[] = [
+    {
+        key: "certification_email",
+        channel: "email",
+        provider: "resend",
+        label: "Certification — synthetic email credential",
+        description:
+            "Certification only. Creates a connectable channel that structurally cannot authenticate to a provider.",
+        secretRef: CERTIFICATION_SECRET_REF,
+        envVar: null,
+    },
+    {
+        key: "certification_sms",
+        channel: "sms",
+        provider: "twilio",
+        label: "Certification — synthetic SMS credential",
+        description:
+            "Certification only. Creates a connectable channel that structurally cannot authenticate to a provider.",
+        secretRef: CERTIFICATION_SECRET_REF,
+        envVar: null,
+    },
+];
+
+/** The catalogue for this deployment. Certification entries exist nowhere else. */
+function catalogFor(env: CredentialEnv): readonly ProviderCredentialOption[] {
+    return certificationEnabled(env) ? [...CATALOG, ...CERTIFICATION_CATALOG] : CATALOG;
+}
+
 /** Channels the create flow can connect. `in_app` needs no provider and no binding row. */
 export const CONNECTABLE_CHANNELS = ["email", "sms"] as const;
 export type ConnectableChannel = (typeof CONNECTABLE_CHANNELS)[number];
@@ -132,7 +193,7 @@ export function publicCredentialOption(
 /** The whole catalogue, client-safe. Unavailable options are still listed — an
  *  operator learns *what to provision*, rather than facing an empty menu. */
 export function listCredentialOptions(env: CredentialEnv): PublicCredentialOption[] {
-    return CATALOG.map((o) => publicCredentialOption(o, env));
+    return catalogFor(env).map((o) => publicCredentialOption(o, env));
 }
 
 export function credentialOptionsForChannel(
@@ -140,15 +201,15 @@ export function credentialOptionsForChannel(
     env: CredentialEnv,
 ): PublicCredentialOption[] {
     const ch = channel.trim().toLowerCase();
-    return CATALOG.filter((o) => o.channel === ch).map((o) => publicCredentialOption(o, env));
+    return catalogFor(env).filter((o) => o.channel === ch).map((o) => publicCredentialOption(o, env));
 }
 
 /** Server-side lookup by catalogue key. `null` for anything not allow-listed. */
-export function findCredentialOption(key: unknown): ProviderCredentialOption | null {
+export function findCredentialOption(key: unknown, env: CredentialEnv = {}): ProviderCredentialOption | null {
     if (typeof key !== "string") return null;
     const k = key.trim();
     if (!k) return null;
-    return CATALOG.find((o) => o.key === k) ?? null;
+    return catalogFor(env).find((o) => o.key === k) ?? null;
 }
 
 /**
@@ -162,7 +223,7 @@ export function findCredentialOption(key: unknown): ProviderCredentialOption | n
 export function credentialKeyForSecretRef(secretRef: string | null | undefined): string | null {
     const ref = (secretRef ?? "").trim();
     if (!ref || ref === UNCONFIGURED_SECRET_REF) return null;
-    return CATALOG.find((o) => o.secretRef === ref)?.key ?? null;
+    return [...CATALOG, ...CERTIFICATION_CATALOG].find((o) => o.secretRef === ref)?.key ?? null;
 }
 
 export type CredentialSelection =
@@ -182,7 +243,7 @@ export function selectCredential(params: {
     credentialKey: unknown;
     env: CredentialEnv;
 }): CredentialSelection {
-    const option = findCredentialOption(params.credentialKey);
+    const option = findCredentialOption(params.credentialKey, params.env);
     if (!option) {
         return {
             ok: false,

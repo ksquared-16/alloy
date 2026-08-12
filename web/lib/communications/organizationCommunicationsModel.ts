@@ -66,12 +66,35 @@ export type ChannelCard = {
     bindingIds: string[];
     /** More than one row behind this channel — the dialog says so, the card does not. */
     additionalCount: number;
+    /** Every active location, with its identity or its inheritance. */
+    locations: LocationIdentityRow[];
+    /** How many locations send as themselves. */
+    overrideCount: number;
 };
 
 /** The binding shape this model consumes — exactly what the bindings route emits. */
+export type OrgLocation = { id: string; label: string };
+
+/** One location's row under a channel — its own identity, or inheritance. */
+export type LocationIdentityRow = {
+    locationId: string;
+    label: string;
+    /** True when this location has no identity of its own. */
+    inherits: boolean;
+    /** The location's own identity, or the inherited organization one. */
+    identity: string;
+    /** Which of those two the value above is. Drives the "Uses …" wording. */
+    source: "location" | "organization" | "none";
+    sending: DirectionView | null;
+    receiving: DirectionView | null;
+    /** Opaque handle for the configure dialog. Null when inheriting. */
+    bindingId: string | null;
+};
+
 export type BindingView = {
     id: string;
     channel: string;
+    location_id?: string | null;
     provider?: string | null;
     status?: string | null;
     is_primary?: boolean | null;
@@ -132,6 +155,13 @@ function score(b: BindingView): number {
     return primary + send * 10 + receive;
 }
 
+/** The single address or number this row sends and receives as, in plain text. */
+function identityValueFor(channel: ChannelKey, b: BindingView | null): string {
+    if (!b) return "";
+    if (channel === "email") return (b.from_email ?? b.inbound_address ?? "").trim();
+    return (b.inbound_to_e164 ?? "").trim();
+}
+
 function identityLinesFor(channel: ChannelKey, b: BindingView | null): IdentityLine[] {
     if (channel === "email") {
         return [
@@ -178,12 +208,43 @@ function outstandingFor(b: BindingView | null, connected: boolean): string[] {
  * an administrator asking "what channels are connected?" is equally served by
  * learning that SMS is not, and an absent card answers nothing.
  */
-export function buildChannelCards(bindings: BindingView[]): ChannelCard[] {
+export function buildChannelCards(bindings: BindingView[], locations: OrgLocation[] = []): ChannelCard[] {
     return (["email", "sms"] as const).map((channel) => {
         const rows = bindings.filter((b) => String(b.channel ?? "").trim().toLowerCase() === channel);
-        const ranked = [...rows].sort((a, b) => score(b) - score(a));
+        // The card speaks for the ORGANIZATION default, so a location override
+        // must never become the face of the channel — otherwise an admin with one
+        // location override would see it presented as the organization's identity.
+        const orgRows = rows.filter((b) => !(b.location_id ?? "").trim());
+        const ranked = [...(orgRows.length ? orgRows : rows)].sort((a, b) => score(b) - score(a));
         const face = ranked[0] ?? null;
         const connected = rows.length > 0;
+
+        const orgIdentity = identityValueFor(channel, face);
+        const locationRows: LocationIdentityRow[] = locations.map((loc) => {
+            const own = rows.find((b) => (b.location_id ?? "").trim() === loc.id);
+            if (!own) {
+                return {
+                    locationId: loc.id,
+                    label: loc.label,
+                    inherits: true,
+                    identity: orgIdentity,
+                    source: orgIdentity ? "organization" : "none",
+                    sending: null,
+                    receiving: null,
+                    bindingId: null,
+                };
+            }
+            return {
+                locationId: loc.id,
+                label: loc.label,
+                inherits: false,
+                identity: identityValueFor(channel, own),
+                source: "location",
+                sending: view(own.readiness?.send),
+                receiving: view(own.readiness?.receive),
+                bindingId: own.id,
+            };
+        });
 
         return {
             channel,
@@ -197,7 +258,9 @@ export function buildChannelCards(bindings: BindingView[]): ChannelCard[] {
             enabled: String(face?.status ?? "").trim().toLowerCase() !== "disabled",
             primaryBindingId: face?.id ?? null,
             bindingIds: ranked.map((b) => b.id),
-            additionalCount: Math.max(0, rows.length - 1),
+            additionalCount: Math.max(0, orgRows.length - 1),
+            locations: locationRows,
+            overrideCount: locationRows.filter((l) => !l.inherits).length,
         };
     });
 }

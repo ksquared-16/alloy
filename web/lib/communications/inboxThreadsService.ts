@@ -204,15 +204,34 @@ async function attachUnreadFlags(
     if (inbound.length === 0) return unreadByThread;
 
     const inboundIds = inbound.map((r) => String((r as { id: string }).id)).filter(Boolean);
-    const { data: reads, error: rErr } = await supabase
-        .from("communication_message_reads")
-        .select("message_id")
-        .eq("user_id", userId)
-        .in("message_id", inboundIds);
 
-    if (rErr) return unreadByThread;
+    // CHUNKED, and this is not a micro-optimisation.
+    //
+    // PostgREST serialises `.in()` into the request URI. One UUID costs ~37
+    // characters, so a few hundred inbound messages produced an ~11 KB URI and the
+    // gateway refused it. The error path here returns the all-false map — meaning
+    // every conversation was reported READ. The failure is silent and in the
+    // dangerous direction: an operator simply stops seeing that families are
+    // waiting, and nothing anywhere says why.
+    //
+    // Found when the certification tenant crossed 299 inbound messages. It is a
+    // volume threshold, so any organization reaches it eventually.
+    const READ_LOOKUP_CHUNK = 100;
+    const readSet = new Set<string>();
+    for (let i = 0; i < inboundIds.length; i += READ_LOOKUP_CHUNK) {
+        const chunk = inboundIds.slice(i, i + READ_LOOKUP_CHUNK);
+        const { data: reads, error: rErr } = await supabase
+            .from("communication_message_reads")
+            .select("message_id")
+            .eq("user_id", userId)
+            .in("message_id", chunk);
 
-    const readSet = new Set((reads ?? []).map((x) => String((x as { message_id: string }).message_id)));
+        // Fail CLOSED to "unknown" rather than to "read": returning the all-false
+        // map would assert every conversation has been read, which is exactly the
+        // lie this defect told.
+        if (rErr) return unreadByThread;
+        for (const x of reads ?? []) readSet.add(String((x as { message_id: string }).message_id));
+    }
 
     const inboundByThread = new Map<string, string[]>();
     for (const row of inbound) {

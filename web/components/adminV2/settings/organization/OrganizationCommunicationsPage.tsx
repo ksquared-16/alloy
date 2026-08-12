@@ -32,6 +32,7 @@ import {
     type BindingView,
     type ChannelCard,
     type ChannelKey,
+    type OrgLocation,
 } from "@/lib/communications/organizationCommunicationsModel";
 import type { ReadinessState } from "@/lib/communications/bindingReadiness";
 import CommunicationsChannelDialog from "./CommunicationsChannelDialog";
@@ -87,10 +88,13 @@ function ReadinessRow({
 export default function OrganizationCommunicationsPage() {
     const [bindings, setBindings] = useState<BindingView[]>([]);
     const [credentialOptions, setCredentialOptions] = useState<CredentialOption[]>([]);
+    const [locations, setLocations] = useState<OrgLocation[]>([]);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [dialogChannel, setDialogChannel] = useState<ChannelKey | null>(null);
     const [dialogMode, setDialogMode] = useState<"connect" | "configure">("configure");
+    /** Null = the organization default. Otherwise the location being given its own identity. */
+    const [dialogLocationId, setDialogLocationId] = useState<string | null>(null);
 
     const load = useCallback(async (options?: { force?: boolean }) => {
         setLoading(true);
@@ -101,6 +105,8 @@ export default function OrganizationCommunicationsPage() {
             setBindings((Array.isArray(json.bindings) ? json.bindings : []) as BindingView[]);
             const creds = (json as { credential_options?: CredentialOption[] }).credential_options;
             setCredentialOptions(Array.isArray(creds) ? creds : []);
+            const locs = (json as { locations?: OrgLocation[] }).locations;
+            setLocations(Array.isArray(locs) ? locs : []);
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Could not load communications settings");
             setBindings([]);
@@ -113,12 +119,13 @@ export default function OrganizationCommunicationsPage() {
         void load();
     }, [load]);
 
-    const cards = useMemo(() => buildChannelCards(bindings), [bindings]);
+    const cards = useMemo(() => buildChannelCards(bindings, locations), [bindings, locations]);
     const summary = useMemo(() => summarizeChannels(cards), [cards]);
 
-    const openDialog = (channel: ChannelKey, mode: "connect" | "configure") => {
+    const openDialog = (channel: ChannelKey, mode: "connect" | "configure", locationId: string | null = null) => {
         setDialogChannel(channel);
         setDialogMode(mode);
+        setDialogLocationId(locationId);
     };
 
     const onSaved = async () => {
@@ -196,6 +203,8 @@ export default function OrganizationCommunicationsPage() {
                 <CommunicationsChannelDialog
                     card={activeCard}
                     mode={dialogMode}
+                    locationId={dialogLocationId}
+                    locations={locations}
                     bindings={bindings.filter(
                         (b) => String(b.channel ?? "").toLowerCase() === activeCard.channel,
                     )}
@@ -212,10 +221,12 @@ function ChannelPanel({
     card,
     onConnect,
     onConfigure,
+    onConfigureLocation,
 }: {
     card: ChannelCard;
     onConnect: () => void;
     onConfigure: () => void;
+    onConfigureLocation: (locationId: string, hasOwn: boolean) => void;
 }) {
     const Icon = card.channel === "email" ? Mail : MessageSquare;
     return (
@@ -282,6 +293,50 @@ function ChannelPanel({
                             </div>
                         ))}
                     </dl>
+
+                    {card.locations.length ? (
+                        <div className="mt-3 border-t border-alloy-stone/25 pt-2.5" data-testid={`communications-${card.channel}-locations`}>
+                            <div className="flex items-baseline justify-between gap-2">
+                                <p className="text-[11px] font-semibold text-alloy-midnight/62">Locations</p>
+                                <p className="text-[10px] text-alloy-midnight/45">
+                                    {card.overrideCount === 0
+                                        ? "All use the organization identity"
+                                        : `${card.overrideCount} of ${card.locations.length} send as themselves`}
+                                </p>
+                            </div>
+                            <ul className="mt-1 space-y-0.5">
+                                {card.locations.map((loc) => (
+                                    <li
+                                        key={loc.locationId}
+                                        className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5"
+                                        data-testid={`communications-${card.channel}-location-${loc.locationId}`}
+                                    >
+                                        <span className="min-w-0 truncate text-[11px] text-alloy-midnight/75">{loc.label}</span>
+                                        <span className="flex items-baseline gap-2">
+                                            <span
+                                                className={`text-[11px] ${loc.inherits ? "italic text-alloy-midnight/45" : "font-medium text-alloy-midnight/85"}`}
+                                                data-testid={`communications-${card.channel}-location-${loc.locationId}-identity`}
+                                            >
+                                                {loc.inherits
+                                                    ? loc.identity
+                                                        ? "Uses organization identity"
+                                                        : "Nothing to inherit yet"
+                                                    : loc.identity}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => onConfigureLocation(loc.locationId, !loc.inherits)}
+                                                className="shrink-0 text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                                                data-testid={`communications-${card.channel}-location-${loc.locationId}-action`}
+                                            >
+                                                {loc.inherits ? "Give its own" : "Change"}
+                                            </button>
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : null}
 
                     {card.outstanding.length ? (
                         <div

@@ -11,6 +11,11 @@ import {
     validateStatus,
 } from "@/lib/communications/bindingConfigInput";
 import { detectSecretBoundaryViolation, selectCredential } from "@/lib/communications/providerCredentialCatalog";
+import {
+    applyBindingIdentityProjection,
+    PROJECTABLE_BINDING_COLUMNS,
+} from "@/lib/communications/identity/applyBindingIdentityProjection";
+import type { ProjectableBinding } from "@/lib/communications/identity/projectBindingIdentity";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -138,6 +143,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         patch.inbound_to_e164 = number.value;
     }
 
+    if ("location_id" in body) {
+        touched = true;
+        const raw = body.location_id;
+        if (raw === null || raw === undefined || (typeof raw === "string" && !raw.trim())) {
+            // Removing the override returns this channel to the organization
+            // default. `scope` follows so the two can never disagree.
+            patch.location_id = null;
+            patch.scope = "org";
+        } else if (typeof raw === "string" && UUID_RE.test(raw.trim())) {
+            const { data: loc } = await supabase.from("locations").select("id").eq("id", raw.trim()).maybeSingle();
+            if (!loc) {
+                return NextResponse.json({ error: "That location does not exist.", field: "location_id" }, { status: 400 });
+            }
+            patch.location_id = raw.trim();
+            patch.scope = "location";
+        } else {
+            return NextResponse.json({ error: "Invalid location.", field: "location_id" }, { status: 400 });
+        }
+    }
+
     if ("from_email" in body) {
         if (channel !== "email") {
             return NextResponse.json(
@@ -189,5 +214,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ error: updErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    // Re-project so the sender resolver sees this edit immediately. The binding is
+    // the authority; the projection is derived, so a failure here is reported but
+    // never fails the operator's save.
+    const { data: saved } = await supabase
+        .from("communication_provider_bindings")
+        .select(PROJECTABLE_BINDING_COLUMNS)
+        .eq("id", bindingId)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    let projectionWarning: string | null = null;
+    if (saved) {
+        const projection = await applyBindingIdentityProjection(supabase, saved as unknown as ProjectableBinding);
+        if (!projection.ok) projectionWarning = projection.reason;
+    }
+
+    return NextResponse.json({ ok: true, ...(projectionWarning ? { projection_warning: projectionWarning } : {}) });
 }

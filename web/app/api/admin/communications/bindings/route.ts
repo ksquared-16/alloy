@@ -22,6 +22,11 @@ import {
     selectCredential,
 } from "@/lib/communications/providerCredentialCatalog";
 import {
+    applyBindingIdentityProjection,
+    projectOrganizationBindings,
+} from "@/lib/communications/identity/applyBindingIdentityProjection";
+import type { ProjectableBinding } from "@/lib/communications/identity/projectBindingIdentity";
+import {
     translateBindingConstraintError,
     validateDisplayLabel,
     validateFromEmail,
@@ -30,12 +35,16 @@ import {
     validateStatus,
 } from "@/lib/communications/bindingConfigInput";
 
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
 /** The stored row, as this surface reads it. `inbound_address` is email's
  *  receiving identity; `inbound_to_e164` remains SMS's. */
 type BindingRow = BindingSummary & { inbound_address?: string | null };
 
+/** Includes `org_id` because the identity projection needs it. Never emitted —
+ *  `sanitizeBindings` decides what crosses the boundary. */
 const BINDING_COLUMNS =
-    "id, channel, scope, location_id, display_label, provider, status, is_primary, secret_ref, inbound_to_e164, inbound_address, config";
+    "id, org_id, channel, scope, location_id, display_label, provider, status, is_primary, secret_ref, inbound_to_e164, inbound_address, config";
 
 function sanitizeBindings(raw: BindingRow[]): unknown[] {
     return raw.map((b) => {
@@ -91,6 +100,22 @@ export async function GET() {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     const list = (data ?? []) as BindingRow[];
+
+    // Converge bindings that predate synchronous projection — anything created
+    // before this slice, plus everything the one-time backfill skipped. Doing it
+    // on read means an existing tenant repairs itself the first time an
+    // administrator opens the page, with no script and no scheduled job.
+    if (list.length) await projectOrganizationBindings(supabase, ctx.orgId);
+
+    // The location roster travels with the configuration payload so the surface
+    // can show inheritance — "Lakeside uses the organization default" is only
+    // sayable if Lakeside is known to exist. Label and id only; no address data.
+    const { data: locationRows } = await supabase
+        .from("locations")
+        .select("id, label, is_active")
+        .eq("is_active", true)
+        .order("label", { ascending: true });
+
     const channels_available = availableComposerChannels(list);
 
     return NextResponse.json({
@@ -100,6 +125,10 @@ export async function GET() {
             sms: sanitizeBindings(activeOutboundBindings(list, "sms")),
             email: sanitizeBindings(activeOutboundBindings(list, "email")),
         },
+        locations: (locationRows ?? []).map((l) => ({
+            id: String((l as { id: string }).id),
+            label: String((l as { label?: string }).label ?? "Location"),
+        })),
         /** What an operator may connect a channel to. Presence only, no values. */
         credential_options: listCredentialOptions(process.env),
         permission_stub: {
@@ -118,11 +147,11 @@ export async function GET() {
  * `secret_ref`. A body carrying an API key is refused by field name before any
  * value is read, so a secret cannot be stored here even by accident.
  *
- * Org-level only. Bindings carry `scope`/`location_id`, but the certified runtime
- * resolves ownership org-wide and email inbound uniqueness has no location
- * dimension — so this route pins `scope='org'` and `location_id=null` rather than
- * exposing a grain the runtime does not honour. Location inheritance is recorded
- * as a future requirement.
+ * Organization default OR location override. `location_id` is accepted now that
+ * the runtime can honour it end to end: the conversation carries a location, the
+ * sender resolver prefers a location identity over the organization default, and
+ * inbound derives location from the receiving identity. `scope` is derived from
+ * the answer rather than being a second control that could disagree with it.
  */
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -170,12 +199,31 @@ export async function POST(request: NextRequest) {
     const status = "status" in body ? validateStatus(body.status) : ({ ok: true, value: "pending_verification" } as const);
     if (!status.ok) return NextResponse.json({ error: status.error.message, field: status.error.field }, { status: 400 });
 
+    // A location override is now a first-class choice: the runtime can resolve it
+    // (thread location + sender resolver) and the inbound side derives location
+    // from the receiving identity. `scope` follows from the answer rather than
+    // being a separate control the operator has to reason about.
+    const locationId = typeof body.location_id === "string" && body.location_id.trim() ? body.location_id.trim() : null;
+    if (locationId && !UUID_RE.test(locationId)) {
+        return NextResponse.json({ error: "Invalid location.", field: "location_id" }, { status: 400 });
+    }
+    if (locationId) {
+        const { data: loc } = await createAdminClient()
+            .from("locations")
+            .select("id")
+            .eq("id", locationId)
+            .maybeSingle();
+        if (!loc) {
+            return NextResponse.json({ error: "That location does not exist.", field: "location_id" }, { status: 400 });
+        }
+    }
+
     const insert: Record<string, unknown> = {
         org_id: ctx.orgId,
         channel,
         provider: credential.option.provider,
-        scope: "org",
-        location_id: null,
+        scope: locationId ? "location" : "org",
+        location_id: locationId,
         secret_ref: credential.option.secretRef,
         display_label: label.value,
         status: status.value,
@@ -216,5 +264,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Could not connect this channel." }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, binding: sanitizeBindings([data as BindingRow])[0] }, { status: 201 });
+    // Project into the identity model in THIS request. Without it the channel the
+    // operator just connected would be invisible to the sender resolver until some
+    // later backfill — which is exactly the drift this convergence removes.
+    const projection = await applyBindingIdentityProjection(supabase, data as unknown as ProjectableBinding);
+
+    return NextResponse.json(
+        {
+            ok: true,
+            binding: sanitizeBindings([data as BindingRow])[0],
+            ...(projection.ok ? {} : { projection_warning: projection.reason }),
+        },
+        { status: 201 },
+    );
 }

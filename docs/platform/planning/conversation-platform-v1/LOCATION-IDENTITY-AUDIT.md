@@ -142,3 +142,109 @@ onto it — not to reimplement precedence over `communication_provider_bindings`
 
 Until then the surface is **organization-level only**, and says so rather than
 offering a control that would not be honoured.
+
+---
+
+# Addendum — implemented 2026-08-12
+
+The four questions above were answered before this slice. What follows records
+what changed, and the two defects certification found in the process.
+
+## Q1 is now YES — location is canonical conversation truth
+
+`communication_threads_identity_uq` gained `location_id`, declared
+**`NULLS NOT DISTINCT`** (PostgreSQL 15+; this deployment is 17.6). That choice is
+the whole design: PostgreSQL treats NULLs as distinct in unique keys by default,
+so naively adding the column would have stopped every organization-level thread
+colliding with itself and shattered each conversation into one thread per message.
+With `NULLS NOT DISTINCT`, `location_id IS NULL` remains exactly one conversation
+— every existing row's behaviour is preserved unchanged.
+
+One rule now governs every path (`threadLocationResolution.ts`):
+
+    exact location match  →  use it
+    unlocated + adopt     →  stamp it (outbound only)
+    otherwise             →  create at this location
+
+- **Outbound** takes location from the originating operational context
+  (`contextLocationId`, already supplied by callers and previously discarded into
+  metadata).
+- **Inbound** takes it from the **receiving identity's** binding — never the
+  sender, never the household.
+
+## Q4 revised — the resolver was ACTIVE-ready but carried a cross-location defect
+
+`resolveSenderIdentity` is now live: it selects the identity, and the Python
+dispatcher still executes through the binding it names, so no certified send path
+changed.
+
+Activating it surfaced a real defect. A fallback branch matched any
+`scope='location'` identity in the organization **with no predicate on which
+location**, because `communication_identities` has no `location_id` at all —
+location lives only in `communication_identity_location_bindings`. A Lakeside
+conversation resolved to Riverside's address. **Deleted**, not repaired: it
+existed to cover identities backfilled before location rows were written, and
+projection now writes that row in the same request.
+
+## Q2/Q3 resolved by projection — bindings are the write authority
+
+`communication_provider_bindings` remains authoritative: the dispatcher reads its
+`secret_ref` and `from_email`, inbound ownership resolves from its receiving
+identity, and the global cross-tenant uniqueness indexes are defined on it.
+`communication_identities` is a **projection**, written synchronously in the same
+request (`applyBindingIdentityProjection`), plus a converge-on-read repair for
+rows predating it. No reconciliation job, and no backfill dependency.
+
+## Two defects certification found that no unit test could
+
+1. **Correlation bypassed location entirely.** Threading evidence
+   (In-Reply-To / References / endpoint provenance) resolves a thread *before*
+   location is considered, so a message to the organization's general address was
+   filed into a Riverside conversation because the sender matched.
+   `correlationUsableForLocation` now requires the correlated thread's location to
+   equal the message's — threading may not move a message across locations, just
+   as it may not across tenants.
+
+2. **Inbound adoption captured organization conversations.** A family writing to
+   `riverside@` adopted their existing organization-level thread into Riverside,
+   and their next message to the general address followed it there. Inbound now
+   never adopts: the receiving address states where THIS message belongs, not
+   where the whole history did. Outbound still adopts, where nothing competes.
+
+## Block 5 — the permission boundary, audited not invented
+
+**No new ACL is needed, and none was built.**
+
+The existing boundary is `communications.send`, resolved through org RBAC
+(`user_roles` → `role_permission_grants`) with an admin/ops bypass and the legacy
+`ops.messaging.write` alias — see `communicationPermissions.ts`. That is already
+"the smallest existing permission boundary" for *sending for the organization*,
+and `admin_or_ops` guards the configuration routes.
+
+**The location gap, stated exactly.** `role_permission_grants` is
+`(org_id, role_key, permission_key)` and `user_roles` is `(user_id, org_id, role)`
+— **neither carries a location**. So Access V2 cannot today express "may send as
+Riverside but not Lakeside" as a *grant*.
+
+It can, however, express **location membership**: `user_site_access` is
+`(user_id, org_id, location_id)` and is already resolved by
+`resolveAdminAccessCore`. The smallest correct composition when it is wanted is
+therefore:
+
+    holds `communications.send`  AND  has user_site_access for that location
+
+which needs no new table and no new framework — only a check at the send seam.
+
+**Deliberately not built in this slice, and identity resolution does not depend on
+it.** Location identity resolution is a property of the CONVERSATION, not of the
+operator: a Riverside conversation sends from Riverside's identity regardless of
+who is typing. Coupling the two would have made the runtime wait on an Access
+decision, which the instruction explicitly warned against. When the permission is
+wanted, it constrains which conversations an operator may act in — not which
+identity a conversation resolves to.
+
+## Still true, and unchanged
+
+Communications identities belong to the organization/location. Users receive
+permission to use them. No user-owned provider credentials, no Gmail/Outlook
+OAuth, no mailbox ingestion — see `INBOUND-EMAIL-PRIVACY-POSTURE.md`.

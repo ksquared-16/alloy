@@ -25,7 +25,7 @@ import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import type { BindingView, ChannelCard } from "@/lib/communications/organizationCommunicationsModel";
+import type { BindingView, ChannelCard, OrgLocation } from "@/lib/communications/organizationCommunicationsModel";
 import type { CredentialOption } from "./OrganizationCommunicationsPage";
 
 const BINDINGS = "/api/admin/communications/bindings";
@@ -33,6 +33,9 @@ const BINDINGS = "/api/admin/communications/bindings";
 type Props = {
     card: ChannelCard;
     mode: "connect" | "configure";
+    /** Null = the organization default identity. Otherwise the location being configured. */
+    locationId: string | null;
+    locations: OrgLocation[];
     bindings: BindingView[];
     credentialOptions: CredentialOption[];
     onClose: () => void;
@@ -47,13 +50,23 @@ function fieldLabel(channel: string, key: "identity" | "receiving"): string {
 export default function CommunicationsChannelDialog({
     card,
     mode,
+    locationId,
+    locations,
     bindings,
     credentialOptions,
     onClose,
     onSaved,
 }: Props) {
     const isEmail = card.channel === "email";
-    const connecting = mode === "connect" || bindings.length === 0;
+
+    // Scope the dialog to what is being configured: one location's identity, or
+    // the organization default. Without this, editing Riverside would silently
+    // load the organization's binding and overwrite it.
+    const scopedBindings = bindings.filter((b) =>
+        locationId ? (b.location_id ?? null) === locationId : !(b.location_id ?? null),
+    );
+    const connecting = mode === "connect" || scopedBindings.length === 0;
+    const locationLabel = locationId ? (locations.find((l) => l.id === locationId)?.label ?? "this location") : null;
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -66,10 +79,13 @@ export default function CommunicationsChannelDialog({
     const [inboundNumber, setInboundNumber] = useState("");
 
     // Configure form — one binding at a time, defaulting to the channel's face.
-    const [editingId, setEditingId] = useState<string | null>(card.primaryBindingId);
+    const [editingId, setEditingId] = useState<string | null>(
+        locationId ? (scopedBindings[0]?.id ?? null) : card.primaryBindingId,
+    );
     const editing = useMemo(
-        () => bindings.find((b) => b.id === editingId) ?? bindings[0] ?? null,
-        [bindings, editingId],
+        () => scopedBindings.find((b) => b.id === editingId) ?? scopedBindings[0] ?? null,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [bindings, editingId, locationId],
     );
 
     const [editFrom, setEditFrom] = useState("");
@@ -120,6 +136,7 @@ export default function CommunicationsChannelDialog({
         submit(BINDINGS, "POST", {
             channel: card.channel,
             credential_key: credentialKey,
+            location_id: locationId,
             display_label: label.trim() || null,
             status: "pending_verification",
             ...(isEmail
@@ -139,6 +156,20 @@ export default function CommunicationsChannelDialog({
         });
     };
 
+    /**
+     * Return this location to the organization identity.
+     *
+     * Clearing `location_id` rather than deleting the binding is deliberate: the
+     * receiving address stays claimed by this tenant (the global uniqueness index
+     * still protects it) and the conversation history that referenced it stays
+     * intact. Deleting would free the address for another organization to claim
+     * and orphan every message that named it.
+     */
+    const doRemoveOverride = () => {
+        if (!editing) return;
+        submit(`${BINDINGS}/${encodeURIComponent(editing.id)}`, "PATCH", { location_id: null });
+    };
+
     return (
         <div
             className="fixed inset-0 z-[120] flex items-center justify-center bg-alloy-midnight/35 p-4"
@@ -151,7 +182,11 @@ export default function CommunicationsChannelDialog({
                 <header className="flex items-baseline justify-between gap-2 border-b border-alloy-stone/25 px-4 py-3">
                     <div>
                         <h2 className="config-typo-workspace-title">
-                            {connecting ? `Connect ${card.channelLabel}` : `Configure ${card.channelLabel}`}
+                            {locationLabel
+                                ? `${locationLabel} — ${card.channelLabel}`
+                                : connecting
+                                  ? `Connect ${card.channelLabel}`
+                                  : `${card.channelLabel} — organization default`}
                         </h2>
                         <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
                             Alloy never asks for an API key — choose a credential this deployment already provides.
@@ -254,7 +289,7 @@ export default function CommunicationsChannelDialog({
                         </>
                     ) : (
                         <>
-                            {bindings.length > 1 ? (
+                            {scopedBindings.length > 1 ? (
                                 <Field label="Which one">
                                     <select
                                         value={editing?.id ?? ""}
@@ -262,7 +297,7 @@ export default function CommunicationsChannelDialog({
                                         className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 text-[12px]"
                                         data-testid="communications-dialog-which"
                                     >
-                                        {bindings.map((b) => (
+                                        {scopedBindings.map((b) => (
                                             <option key={b.id} value={b.id}>
                                                 {b.display_label ||
                                                     b.from_email ||
@@ -353,7 +388,18 @@ export default function CommunicationsChannelDialog({
                     ) : null}
                 </div>
 
-                <footer className="flex justify-end gap-2 border-t border-alloy-stone/25 px-4 py-3">
+                <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-alloy-stone/25 px-4 py-3">
+                    {locationId && !connecting && editing ? (
+                        <button
+                            type="button"
+                            onClick={() => void doRemoveOverride()}
+                            disabled={busy}
+                            className="mr-auto text-[11px] font-semibold text-alloy-ember hover:underline disabled:opacity-50"
+                            data-testid="communications-dialog-remove-override"
+                        >
+                            Use the organization identity instead
+                        </button>
+                    ) : null}
                     <ConfigurationSecondaryButton onClick={onClose} disabled={busy}>
                         Cancel
                     </ConfigurationSecondaryButton>

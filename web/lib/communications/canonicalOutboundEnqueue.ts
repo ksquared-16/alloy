@@ -26,6 +26,12 @@ import {
 } from "@/lib/communications/eligibility/evaluateEligibility";
 import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
 import { renderOutboundMessage } from "@/lib/communications/render/renderOutboundMessage";
+import { resolveOutboundSender } from "@/lib/communications/identity/resolveOutboundSender";
+import {
+    decideThreadForLocation,
+    resolveOutboundThreadLocation,
+    type ThreadLocationCandidate,
+} from "@/lib/communications/threadLocationResolution";
 import type { RenderContext, RenderSnapshot } from "@/lib/communications/render/renderOutboundMessage";
 import {
     ELIGIBILITY_SNAPSHOT_VERSION,
@@ -36,6 +42,20 @@ import {
     type QuietHoursWindow,
 } from "@/lib/communications/eligibility/types";
 
+/**
+ * Resolve — and when necessary create — the conversation this outbound message
+ * belongs to, at the right location.
+ *
+ * Candidates are fetched WITHOUT a location filter and the choice is made by
+ * `decideThreadForLocation`, so outbound, inbound email and inbound SMS all apply
+ * one rule. The previous implementation filtered `location_id IS NULL`, which is
+ * why every conversation was organization-wide.
+ *
+ * Note the deliberate absence of `.maybeSingle()` on the lookup: several threads
+ * can now legitimately share (org, entity, channel, recipient) while differing by
+ * location, and `maybeSingle()` throws on more than one row. That would have
+ * turned a correctly-located second conversation into a runtime error.
+ */
 async function upsertCommunicationThread(params: {
     supabase: SupabaseClient;
     orgId: string;
@@ -43,57 +63,78 @@ async function upsertCommunicationThread(params: {
     primaryEntityId: string;
     channel: string;
     recipientKey: string;
+    locationId: string | null;
 }): Promise<string | null> {
-    const { supabase, orgId, primaryEntityType, primaryEntityId, channel, recipientKey } = params;
+    const { supabase, orgId, primaryEntityType, primaryEntityId, channel, recipientKey, locationId } = params;
 
-    const q = supabase
-        .from("communication_threads")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("primary_entity_type", primaryEntityType)
-        .eq("primary_entity_id", primaryEntityId)
-        .eq("channel", channel)
-        .eq("recipient_key", recipientKey)
-        .is("location_id", null);
+    const selectCandidates = () =>
+        supabase
+            .from("communication_threads")
+            .select("id, location_id")
+            .eq("org_id", orgId)
+            .eq("primary_entity_type", primaryEntityType)
+            .eq("primary_entity_id", primaryEntityId)
+            .eq("channel", channel)
+            .eq("recipient_key", recipientKey);
 
-    const { data: existing } = await q.maybeSingle();
+    const { data: rows } = await selectCandidates();
+    const decision = decideThreadForLocation({
+        candidates: (rows ?? []) as ThreadLocationCandidate[],
+        locationId,
+    });
 
-    if (!existing?.id) {
-        const insertRow: Record<string, unknown> = {
-            org_id: orgId,
-            primary_entity_type: primaryEntityType,
-            primary_entity_id: primaryEntityId,
-            channel,
-            recipient_key: recipientKey,
-            updated_at: new Date().toISOString(),
-        };
-        const ins = await supabase.from("communication_threads").insert(insertRow).select("id").maybeSingle();
+    if (decision.kind === "use") return decision.threadId;
 
-        let id = ins.data?.id as string | undefined;
-        const errCode = ins.error ? (ins.error as { code?: string }).code : undefined;
-        if (ins.error && errCode !== "23505") {
-            console.warn("[communications] upsertCommunicationThread insert", ins.error.message);
+    if (decision.kind === "adopt") {
+        // The conversation existed before its location was known. Stamp it rather
+        // than starting a second one — the family's history stays in one place.
+        const { error } = await supabase
+            .from("communication_threads")
+            .update({ location_id: decision.locationId, updated_at: new Date().toISOString() })
+            .eq("id", decision.threadId)
+            .is("location_id", null);
+        if (error) {
+            // Another writer adopted it first. Re-read and take whatever the rule
+            // says now rather than assuming this attempt's outcome.
+            const { data: after } = await selectCandidates();
+            const retry = decideThreadForLocation({
+                candidates: (after ?? []) as ThreadLocationCandidate[],
+                locationId,
+            });
+            if (retry.kind !== "create") return retry.threadId;
+        } else {
+            return decision.threadId;
         }
-
-        if (!id && errCode === "23505") {
-            id = undefined;
-        }
-        if (!id) {
-            const r2 = await supabase
-                .from("communication_threads")
-                .select("id")
-                .eq("org_id", orgId)
-                .eq("primary_entity_type", primaryEntityType)
-                .eq("primary_entity_id", primaryEntityId)
-                .eq("channel", channel)
-                .eq("recipient_key", recipientKey)
-                .is("location_id", null)
-                .maybeSingle();
-            id = r2.data?.id as string | undefined;
-        }
-        return id ?? null;
     }
-    return existing.id as string;
+
+    const insertRow: Record<string, unknown> = {
+        org_id: orgId,
+        primary_entity_type: primaryEntityType,
+        primary_entity_id: primaryEntityId,
+        channel,
+        recipient_key: recipientKey,
+        location_id: locationId,
+        updated_at: new Date().toISOString(),
+    };
+    const ins = await supabase.from("communication_threads").insert(insertRow).select("id").maybeSingle();
+
+    let id = ins.data?.id as string | undefined;
+    const errCode = ins.error ? (ins.error as { code?: string }).code : undefined;
+    if (ins.error && errCode !== "23505") {
+        console.warn("[communications] upsertCommunicationThread insert", ins.error.message);
+    }
+
+    if (!id) {
+        // 23505 means a concurrent writer created the same conversation. Re-read
+        // and resolve again through the same rule.
+        const { data: after } = await selectCandidates();
+        const retry = decideThreadForLocation({
+            candidates: (after ?? []) as ThreadLocationCandidate[],
+            locationId,
+        });
+        if (retry.kind !== "create") id = retry.threadId;
+    }
+    return id ?? null;
 }
 
 function metaChannel(ch: string): "sms" | "email" | "in_app" {
@@ -308,6 +349,11 @@ export async function enqueueCanonicalOutboundMessage(params: {
             : normalizeRecipientKeyEmail(params.toRaw);
     const recipientKey = mc === "in_app" && !recipient.trim() ? "_in_app" : recipient || "_empty";
 
+    // One value, used by BOTH the conversation and the sender resolution. If these
+    // could disagree, a message could be filed at Riverside and sent from the
+    // organization default.
+    const threadLocationId = resolveOutboundThreadLocation({ contextLocationId: params.contextLocationId });
+
     const threadId = await upsertCommunicationThread({
         supabase: params.supabase,
         orgId: orgIdTrim,
@@ -315,6 +361,11 @@ export async function enqueueCanonicalOutboundMessage(params: {
         primaryEntityId: params.primaryEntityId,
         channel: mc,
         recipientKey,
+        // The originating operational context IS the outbound location rule.
+        // `contextLocationId` was already supplied by real callers (tour comms
+        // passes the subject's location) and was only ever written to metadata —
+        // advisory data the runtime could not act on. It is now thread truth.
+        locationId: threadLocationId,
     });
 
     if (!threadId) return { communicationMessageId: null, threadId: null, skippedReason: "thread_failed" };
@@ -328,11 +379,79 @@ export async function enqueueCanonicalOutboundMessage(params: {
     const workflowRunUuid = /^[0-9a-f-]{36}$/i.test(wrRaw) ? wrRaw : null;
 
     const bindRaw = params.communicationProviderBindingId != null ? String(params.communicationProviderBindingId).trim() : "";
-    const bindingUuid = /^[0-9a-f-]{36}$/i.test(bindRaw) ? bindRaw : null;
+    let bindingUuid = /^[0-9a-f-]{36}$/i.test(bindRaw) ? bindRaw : null;
     const identRaw = params.communicationIdentityId != null ? String(params.communicationIdentityId).trim() : "";
-    const identityUuid = /^[0-9a-f-]{36}$/i.test(identRaw) ? identRaw : null;
+    let identityUuid = /^[0-9a-f-]{36}$/i.test(identRaw) ? identRaw : null;
     const acctRaw = params.communicationProviderAccountId != null ? String(params.communicationProviderAccountId).trim() : "";
-    const accountUuid = /^[0-9a-f-]{36}$/i.test(acctRaw) ? acctRaw : null;
+    let accountUuid = /^[0-9a-f-]{36}$/i.test(acctRaw) ? acctRaw : null;
+
+    // ---- SENDER IDENTITY RESOLUTION ----------------------------------------
+    //
+    // The canonical resolver decides WHICH identity this conversation sends as;
+    // the Python dispatcher still EXECUTES via the binding it names. That seam is
+    // why location awareness needed no change to a certified send path.
+    //
+    // It runs only when the caller did not name a binding explicitly — a composer
+    // choice is an operator decision and outranks automatic resolution. For every
+    // other send (the overwhelming majority) the operator never picks a provider,
+    // which is the product requirement.
+    //
+    // The resolver is channel-neutral: `channel` is an input, not a branch, so
+    // Email and SMS resolve through one implementation and may land on different
+    // identities for the same location.
+    if (!bindingUuid && (mc === "email" || mc === "sms")) {
+        try {
+            const resolution = await resolveOutboundSender({
+                supabase: params.supabase,
+                orgId: orgIdTrim,
+                channel: mc,
+                // The conversation's location IS the resolution key: location
+                // identity first, organization default second, unavailable last.
+                locationId: threadLocationId,
+                operatorUserId: null,
+                primaryEntityType: params.primaryEntityType,
+                primaryEntityId: params.primaryEntityId,
+                // Compatibility fallback stays ON deliberately. Identities are a
+                // synchronous projection of bindings now, so a healthy binding
+                // always has one and this path should never fire — but projection
+                // failure is non-fatal by design, and a configuration hiccup must
+                // not stop a parent being answered. Reliance is recorded in
+                // metadata rather than being invisible.
+                allowLegacyCompatibilityFallback: true,
+            });
+
+            if (resolution.ok) {
+                bindingUuid = resolution.legacyBindingId ?? null;
+                identityUuid = resolution.communicationIdentity.id;
+                accountUuid = resolution.providerAccount.id;
+                meta.sender_resolution = {
+                    selection_reason: resolution.selectionReason,
+                    fallback_level: resolution.fallbackLevel,
+                    location_id: threadLocationId,
+                    warnings: resolution.warnings,
+                };
+            } else {
+                // Resolution failed. The send is NOT refused here: the dispatcher
+                // has its own binding lookup and refusing would regress channels
+                // that work today. The reason is recorded so a systematically
+                // unresolvable organization is visible rather than silently
+                // falling back forever.
+                meta.sender_resolution = {
+                    selection_reason: "unresolved",
+                    failure_code: resolution.failureCode,
+                    location_id: threadLocationId,
+                    warnings: resolution.warnings,
+                };
+            }
+        } catch (err) {
+            meta.sender_resolution = {
+                selection_reason: "unresolved",
+                failure_code: "resolver_error",
+                location_id: threadLocationId,
+                error: err instanceof Error ? err.message : "unknown",
+            };
+        }
+    }
 
     const emailSubjectResolved =
         mc === "email" ? resolveOutboundEmailSubject(params.primaryEntityType, params.emailSubjectRaw ?? null) : null;

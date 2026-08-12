@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    CERTIFICATION_SECRET_REF,
     credentialKeyForSecretRef,
     detectSecretBoundaryViolation,
     findCredentialOption,
@@ -462,5 +463,56 @@ describe("a receiving-address collision is explained without naming the other te
         expect(translateBindingConstraintError({ code: "23503", message: "foreign key" })).toBeNull();
         expect(translateBindingConstraintError({ code: null, message: "permission denied" })).toBeNull();
         expect(translateBindingConstraintError({})).toBeNull();
+    });
+});
+
+
+/**
+ * The certification-only credential must be exactly that. If it ever became
+ * selectable outside a certification run it would be a way to create a channel
+ * that looks connected and cannot send — so the boundary is asserted, not assumed.
+ */
+describe("the certification credential is unreachable outside certification", () => {
+    const CERT_ENV = { ALLOY_CERTIFICATION: "1" };
+
+    it("does not appear in the catalogue of a normal deployment", () => {
+        const normal = listCredentialOptions(PROVISIONED).map((o) => o.key);
+        expect(normal).not.toContain("certification_email");
+        expect(normal).not.toContain("certification_sms");
+    });
+
+    it("cannot be selected in a normal deployment, even by exact key", () => {
+        for (const key of ["certification_email", "certification_sms"]) {
+            const attempt = selectCredential({ channel: key.endsWith("sms") ? "sms" : "email", credentialKey: key, env: PROVISIONED });
+            expect(attempt.ok, `${key} must be unknown outside certification`).toBe(false);
+            expect(attempt.ok === false && attempt.reason).toBe("unknown_credential");
+        }
+    });
+
+    it("IS selectable in a certification run — which is the point", () => {
+        const attempt = selectCredential({ channel: "email", credentialKey: "certification_email", env: CERT_ENV });
+        expect(attempt.ok).toBe(true);
+        expect(attempt.ok === true && attempt.option.secretRef).toBe(CERTIFICATION_SECRET_REF);
+    });
+
+    it("its secret_ref is NOT an env reference and NOT a known sentinel", () => {
+        // Both resolvers treat an unknown convention as "no secret", so this
+        // cannot authenticate to a provider even if real keys are present.
+        expect(CERTIFICATION_SECRET_REF.startsWith("env:")).toBe(false);
+        expect(CERTIFICATION_SECRET_REF).not.toBe("legacy_global_twilio");
+        expect(CERTIFICATION_SECRET_REF).not.toBe("unconfigured");
+    });
+
+    it("still emits no credential material when certification is on", () => {
+        const serialized = JSON.stringify(listCredentialOptions(CERT_ENV));
+        expect(serialized).not.toContain("secretRef");
+        expect(serialized).not.toContain(CERTIFICATION_SECRET_REF);
+        expect(serialized).not.toContain("env:");
+    });
+
+    it("the real deployment credentials are unaffected by the certification flag", () => {
+        const both = listCredentialOptions({ ...PROVISIONED, ALLOY_CERTIFICATION: "1" });
+        expect(both.find((o) => o.key === "resend_deployment_key")?.available).toBe(true);
+        expect(both.find((o) => o.key === "certification_email")?.available).toBe(true);
     });
 });

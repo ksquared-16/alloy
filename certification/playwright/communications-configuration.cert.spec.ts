@@ -260,7 +260,17 @@ test.describe("Organization Communications — configure", () => {
 test.describe("Organization Communications — connect fails closed", () => {
     test("connect refuses a credential the deployment has not provisioned", async ({ page }) => {
         const { credentialOptions } = await loadBindings(page);
-        expect(credentialOptions.every((o) => !o.available)).toBe(true);
+        // No REAL provider credential is available — the certification environment
+        // deliberately holds none, and that absence is what guarantees no run can
+        // send. The certification-only synthetic credential IS available and is
+        // excluded here deliberately: it exists so the SUCCESSFUL connect path can
+        // be certified (see communications-location-identity.cert.spec.ts) and it
+        // cannot authenticate to any provider.
+        const deploymentCredentials = credentialOptions.filter(
+            (o) => !String(o.key).startsWith("certification_"),
+        );
+        expect(deploymentCredentials.length).toBeGreaterThan(0);
+        expect(deploymentCredentials.every((o) => !o.available)).toBe(true);
 
         const res = await page.request.post(BINDINGS, {
             data: {

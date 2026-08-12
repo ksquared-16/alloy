@@ -42,6 +42,12 @@ import {
 } from "@/lib/communications/email/inboundEmailRouting";
 import { correlationCandidates } from "@/lib/communications/email/emailMessageId";
 import {
+    correlationUsableForLocation,
+    decideThreadForLocation,
+    resolveInboundThreadLocation,
+    type ThreadLocationCandidate,
+} from "@/lib/communications/threadLocationResolution";
+import {
     UNKNOWN_SENDER_ENTITY_TYPE,
     surrogateEmailSenderAnchor,
 } from "@/lib/communications/email/inboundEmailAnchor";
@@ -216,10 +222,24 @@ async function resolvePersonByEmail(
     return { personId: null, ambiguous: ids.length > 1 };
 }
 
+/**
+ * Resolve the inbound conversation, at the location the RECEIVING address belongs
+ * to.
+ *
+ * `locationId` comes from the binding that owns the address the family wrote to —
+ * never from the sender, never from the household. See
+ * `resolveInboundThreadLocation` for why that distinction is load-bearing.
+ *
+ * The `.maybeSingle()` that used to sit on this lookup is gone: a parent can now
+ * legitimately hold one conversation per location on the same address, and
+ * `maybeSingle()` throws on more than one row — it would have turned a correctly
+ * separated Lakeside conversation into an ingestion failure.
+ */
 async function findOrCreateThread(
     deps: InboundEmailIngestionDeps,
     params: {
         orgId: string;
+        locationId: string | null;
         recipientKey: string;
         entityType: string;
         entityId: string;
@@ -228,21 +248,32 @@ async function findOrCreateThread(
         attentionState: string;
     }
 ): Promise<string | null> {
-    const { data: existing } = await deps.supabase
-        .from("communication_threads")
-        .select("id")
-        .eq("org_id", params.orgId)
-        .eq("primary_entity_type", params.entityType)
-        .eq("primary_entity_id", params.entityId)
-        .eq("channel", "email")
-        .eq("recipient_key", params.recipientKey)
-        .maybeSingle();
-    if (existing) return String((existing as { id: string }).id);
+    const selectCandidates = () =>
+        deps.supabase
+            .from("communication_threads")
+            .select("id, location_id")
+            .eq("org_id", params.orgId)
+            .eq("primary_entity_type", params.entityType)
+            .eq("primary_entity_id", params.entityId)
+            .eq("channel", "email")
+            .eq("recipient_key", params.recipientKey);
+
+    const { data: rows } = await selectCandidates();
+    // adopt:false — inbound never re-points an existing organization-level
+    // conversation into a location. See `decideThreadForLocation`.
+    const decision = decideThreadForLocation({
+        candidates: (rows ?? []) as ThreadLocationCandidate[],
+        locationId: params.locationId,
+        adopt: false,
+    });
+
+    if (decision.kind === "use") return decision.threadId;
 
     const { data: created } = await deps.supabase
         .from("communication_threads")
         .insert({
             org_id: params.orgId,
+            location_id: params.locationId,
             channel: "email",
             recipient_key: params.recipientKey,
             primary_entity_type: params.entityType,
@@ -253,7 +284,16 @@ async function findOrCreateThread(
         })
         .select("id")
         .maybeSingle();
-    return created ? String((created as { id: string }).id) : null;
+    if (created) return String((created as { id: string }).id);
+
+    // Concurrent ingestion of the same message created it first.
+    const { data: after } = await selectCandidates();
+    const retry = decideThreadForLocation({
+        candidates: (after ?? []) as ThreadLocationCandidate[],
+        locationId: params.locationId,
+        adopt: false,
+    });
+    return retry.kind === "create" ? null : retry.threadId;
 }
 
 /**
@@ -343,11 +383,36 @@ export async function ingestResendInboundEmail(
     // 5 — identity. Unchanged from SMS: exactly one match, or nobody.
     const person = await resolvePersonByEmail(deps, orgId, senderAddress);
 
+    const inboundLocationId = resolveInboundThreadLocation({
+        receivingBindingLocationId: ownership.binding.location_id ?? null,
+    });
+
     let threadId = resolution.threadId;
+
+    // Correlation answers "which conversation is this a reply to", never "which
+    // location". Left unchecked it overrides the location rule entirely: a message
+    // to the organization's general address was filed into a Riverside
+    // conversation because threading matched the same sender first. A correlated
+    // thread is usable only when it belongs to the same location as this message.
+    if (threadId) {
+        const { data: correlated } = await deps.supabase
+            .from("communication_threads")
+            .select("location_id")
+            .eq("id", threadId)
+            .maybeSingle();
+        const usable = correlationUsableForLocation({
+            correlatedThreadLocationId: (correlated as { location_id?: string | null } | null)?.location_id ?? null,
+            messageLocationId: inboundLocationId,
+        });
+        if (!usable) threadId = null;
+    }
+
     if (!threadId) {
         const identified = person.personId !== null;
         threadId = await findOrCreateThread(deps, {
             orgId,
+            // The receiving address is the location authority for inbound.
+            locationId: inboundLocationId,
             recipientKey: senderAddress,
             entityType: identified ? "persons" : UNKNOWN_SENDER_ENTITY_TYPE,
             entityId: identified
