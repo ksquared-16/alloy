@@ -251,30 +251,6 @@ export default function OpportunityFocusPanelModeGrid({
     // Declared before requestFocus so Linked-card opens can elevate immediately.
     const [activeDepth, setActiveDepth] = useState<FocusPanelActiveDepth | null>(null);
 
-    // Selection-requested card focus.
-    //
-    // A caller (today: Search) can ask for a specific card via the SAME selection
-    // authority that already carries the subject — `drawerSubjectContext.card_focus`.
-    // Clicking a child therefore lands on Children rather than the panel's default
-    // composition, without the caller touching the DOM or owning a second focus
-    // state: this drives the existing `activeDepth`/`elevatedCellKey` machinery.
-    //
-    // Keyed on the REQUEST identity (subject + card + item) so a rapid subject
-    // switch re-applies, while a re-render for any other reason does not fight the
-    // operator if they have since focused something else themselves.
-    const requestedFocusKey = requestedCardFocus
-        ? `${requestedCardFocus.subject_key ?? ""}:${requestedCardFocus.card_key}:${requestedCardFocus.item_id ?? ""}`
-        : null;
-    const appliedFocusKeyRef = useRef<string | null>(null);
-    useEffect(() => {
-        if (!requestedCardFocus || !requestedFocusKey) return;
-        if (appliedFocusKeyRef.current === requestedFocusKey) return;
-        const card = requestedCardFocus.card_key;
-        if (!(FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(card)) return;
-        appliedFocusKeyRef.current = requestedFocusKey;
-        setActiveDepth({ card: card as FocusPanelCardKey, level: "focused" });
-    }, [requestedCardFocus, requestedFocusKey]);
-
     const emitFocus = useCallback((card: FocusPanelCardKey, focus: string | null) => {
         focusNonceRef.current += 1;
         setFocusRequest({ card, focus, nonce: focusNonceRef.current });
@@ -287,6 +263,37 @@ export default function OpportunityFocusPanelModeGrid({
             });
         }
     }, []);
+
+    // ── SELECTION-REQUESTED CARD + ITEM FOCUS ──
+    //
+    // A caller (today: Search) asks for a specific card, and often a specific row inside it, through
+    // the kernel's ASPECT attention — the same movement that carried the subject. Clicking a child
+    // therefore lands on Children with that child selected, rather than on the panel's default
+    // composition, and the caller never touches the DOM or owns a second focus state: this drives the
+    // existing `activeDepth`/`elevatedCellKey` machinery and the existing `focusRequest` the cards
+    // already consume.
+    //
+    // `emitFocus` is what carries the ITEM. Elevating the card alone was the gap: the panel opened
+    // Children and left the operator to find the child themselves.
+    //
+    // Keyed on the REQUEST identity (subject + card + item) so a rapid subject switch re-applies,
+    // while a re-render for any other reason does not fight an operator who has since focused
+    // something else themselves.
+    const requestedFocusKey = requestedCardFocus
+        ? `${requestedCardFocus.subject_key ?? ""}:${requestedCardFocus.card_key}:${requestedCardFocus.item_id ?? ""}`
+        : null;
+    const appliedFocusKeyRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!requestedCardFocus || !requestedFocusKey) return;
+        if (appliedFocusKeyRef.current === requestedFocusKey) return;
+        const card = requestedCardFocus.card_key;
+        if (!(FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(card)) return;
+        appliedFocusKeyRef.current = requestedFocusKey;
+        setActiveDepth({ card: card as FocusPanelCardKey, level: "focused" });
+        const item = (requestedCardFocus.item_id ?? "").trim();
+        if (item) emitFocus(card as FocusPanelCardKey, item);
+    }, [requestedCardFocus, requestedFocusKey, emitFocus]);
+
     const requestFocus = useCallback<FocusPanelCoordination["requestFocus"]>(
         (card, focus, source) => {
             if (source) {

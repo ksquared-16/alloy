@@ -7,6 +7,7 @@ import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/Operatio
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { markFocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitTiming";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
+import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
@@ -63,6 +64,32 @@ export default function OpportunityFocusPanelBody({
     onModeChange,
 }: Props) {
     const perspective = useActiveRuntimePerspective();
+
+    // ── THE CARD-FOCUS BRIDGE (inline surface) ──
+    //
+    // Card + item focus is ATTENTION — the kernel's ASPECT scope, finer than the Operational Subject
+    // and inheriting it. This body is the one the work-unit surface renders, and it previously passed
+    // no card request at all, which is why a Search click composed the right panel and then never
+    // elevated the card it was asked for.
+    //
+    // It is deliberately NOT read from `AdminDrawerContext`: the inline panel is not a drawer, and
+    // routing focus through `openDrawer` mounts the modal overlay this work removes. The grid stays
+    // source-agnostic — it receives a request and knows nothing about where it came from.
+    const attention = useAttentionCardFocus();
+    const requestedCardFocus = useMemo(
+        () =>
+            attention.focus
+                ? {
+                      card_key: attention.focus.card_key,
+                      item_id: attention.focus.item_id,
+                      // Keyed on the Record of Attention: a rapid subject switch re-applies the card,
+                      // while an unrelated re-render does not fight an operator who has moved on.
+                      subject_key: attention.subject ?? "",
+                  }
+                : null,
+        [attention.focus, attention.subject],
+    );
+
     const model = useMemo(() => {
         if (enriched) {
             const settled = focusPanelWorkModeModelFromDrawerVm({
@@ -214,6 +241,7 @@ export default function OpportunityFocusPanelBody({
         : null}
         <OpportunityFocusPanelModeGrid
             model={model}
+            requestedCardFocus={requestedCardFocus}
             onSelectTab={onSelectTab}
             onHeaderAction={onHeaderAction}
             onModeChange={onModeChange}

@@ -51,20 +51,32 @@ export function useWorkUnitEntryMovement() {
     const { orgId, principalUserId } = useWorkspaceOrg();
 
     return useCallback(
-        (href: string | null | undefined, destination?: DestinationId | null, subject?: string | null): boolean => {
+        (
+            href: string | null | undefined,
+            destination?: DestinationId | null,
+            subject?: string | null,
+            /**
+             * Optional ASPECT — today, the card + row inside the subject the operator asked for
+             * (`attentionCardFocus`). Finer than SUBJECT, so it inherits target/lens/subject and can
+             * never cancel their preparation.
+             */
+            aspect?: string | null,
+        ): boolean => {
             if (!kernel || !href || !orgId) return false;
             const t = attentionTargetFromEntryHref(href);
             if (!t) return false;
 
             const current = kernel.attention.get();
             if (!current) {
-                // A Workspace that never hydrated. One hydration establishes surface + lens (+ subject).
+                // A Workspace that never hydrated. One hydration establishes the whole chain at once —
+                // `hydrate` derives its scope from the finest field present.
                 kernel.attention.hydrate({
                     tenant: orgId,
                     principal: principalUserId ?? "",
                     target: t.target,
                     lens: t.lens,
                     subject: subject ?? null,
+                    aspect: aspect ?? null,
                     destination: destination ?? null,
                     source: "direct_url",
                 });
@@ -87,6 +99,16 @@ export function useWorkUnitEntryMovement() {
                     scope: ATTENTION_SCOPE.SUBJECT,
                     subject,
                     source: "subject_selection",
+                });
+            }
+            if (aspect) {
+                // Finest of all. Ordering matters only in that it must follow the subject: an ASPECT
+                // movement inherits the subject, so emitting it first would attach the card request to
+                // whatever record was previously committed.
+                kernel.attention.move({
+                    scope: ATTENTION_SCOPE.ASPECT,
+                    aspect,
+                    source: "search",
                 });
             }
             return true;

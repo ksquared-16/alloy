@@ -188,10 +188,25 @@ export class ProvisioningRuntime {
         }
 
         // ── SHARE / DEDUPLICATE: identical in-flight work is consumed, never duplicated. ──
+        //
+        // The terminal is restamped with the CONSUMING attention's version, exactly as the reuse
+        // branch above does. This is not bookkeeping — K3 rejects a terminal whose version differs
+        // from `desired` when `desired` supersedes it, so an unstamped shared terminal answers for the
+        // movement that STARTED the work rather than the one that consumed it, and can never commit.
+        //
+        // That is not hypothetical. A finer movement issued in the same tick as a coarser one — a
+        // Search click moving SURFACE → SUBJECT → ASPECT — shares this preparation (aspect is not part
+        // of the key, by design). Before this, the surface never committed at all: the work unit
+        // resolved, the answer was operational, and the operator watched a blank canvas forever
+        // because the only terminal that could commit it carried a stale version.
+        //
+        // Supersession is unaffected: `onAttentionMoved` has already disposed every preparation this
+        // movement genuinely supersedes, so anything still in flight here is work the new attention
+        // legitimately wants.
         const existing = this.inflight.get(key);
         if (existing && !existing.disposed) {
             this.instr.onDeduplicated?.(key, ref.version);
-            return existing.promise;
+            return existing.promise.then((t) => (t ? { ...t, attentionVersion: ref.version } : null));
         }
 
         const controller = new AbortController();

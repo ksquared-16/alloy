@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
+import { formatCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import {
     ADMINV2_SEARCH_FOCUS_SELECTION_EVENT,
     type SearchFocusSelectionDetail,
@@ -33,10 +34,13 @@ import {
  * adapter every other work-unit entry point uses. Adding a second gesture path is what created the
  * blank-surface defect in the first place.
  *
- * Card and item focus are NOT applied here: they belong to the selection authority
- * (`AdminDrawerContext`), and `SearchFocusSelectionListener` applies them from the same event. The
- * two are order-independent — the panel keys its focus request on subject + card + item, so it lands
- * whichever arrives first.
+ * ── CARD AND ITEM FOCUS RIDE THE SAME MOVEMENT ──
+ *
+ * They are carried as the ASPECT — the kernel's own scope for "finer than the Operational Subject" —
+ * not as drawer state. `openDrawer` was tried and is wrong here: on a work-unit surface it mounts the
+ * modal overlay this work removes, because `AdminEntityDrawer` suppresses itself by testing
+ * `usePathname()`, which cannot observe the address the kernel projects with `replaceState`.
+ * Measured `modal: 1` over a correctly composed inline panel.
  */
 export default function SearchAttentionListener() {
     const move = useWorkUnitEntryMovement();
@@ -52,8 +56,14 @@ export default function SearchAttentionListener() {
 
             // The href is the destination's honest address; the adapter parses the attention it
             // expresses. The subject rides along so the surface commits the record the operator
-            // asked for rather than the lens's default subject.
-            move(operatorWorkUnitHrefFromKey(hostKey), null, hostId);
+            // asked for rather than the lens's default subject, and the card + item ride along as
+            // the ASPECT — the kernel's own name for "finer than the subject".
+            move(
+                operatorWorkUnitHrefFromKey(hostKey),
+                null,
+                hostId,
+                formatCardFocusAspect(detail.card_focus),
+            );
         };
 
         window.addEventListener(ADMINV2_SEARCH_FOCUS_SELECTION_EVENT, onSelect);

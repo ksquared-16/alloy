@@ -135,6 +135,21 @@ async function expectedLandingFor(page: Page, q: string, destinationKey?: string
     };
 }
 
+/**
+ * Which item a card reports as focused, using the attribute the card genuinely emits.
+ *
+ * These are runtime attributes, not test hooks: `data-children-focused-child` is how the Children
+ * card marks the child it has opened. Certifying against an attribute the product does not emit is
+ * how the previous suite reported 8/8 while nothing worked — it filtered on `data-focused`, which the
+ * Focus Panel has never rendered, so "0 focused cells" and "assertion cannot fail" were the same
+ * observation.
+ */
+const ITEM_FOCUS_ATTRIBUTE: Record<string, string> = {
+    // The CANONICAL child, not the card's internal roster row id — Search addresses a child by its
+    // durable identity, so that is what must be observed as selected.
+    children: "data-children-focused-member",
+};
+
 /** Everything the panel is actually showing. Reported as evidence either way. */
 async function panelState(page: Page, label: string) {
     const state = await page.evaluate(() => {
@@ -146,6 +161,10 @@ async function panelState(page: Page, label: string) {
                 .filter((el) => el.getAttribute("data-fp-elevated") === "true")
                 .map((el) => el.getAttribute("data-focus-panel-grid-cell")),
             depth: document.querySelector("[data-fp-depth]")?.getAttribute("data-fp-depth") ?? null,
+            focusedChild:
+                document
+                    .querySelector("[data-children-focused-member]")
+                    ?.getAttribute("data-children-focused-member") ?? null,
             hasModal: !!document.querySelector('[role="dialog"][aria-modal="true"]'),
             preparing: /Preparing record/i.test(document.body.innerText),
         };
@@ -165,7 +184,7 @@ async function assertLandedOnFocusPanel(
     page: Page,
     label: string,
     expected: ExpectedLanding,
-    opts: { requireElevated?: boolean } = {}
+    opts: { requireElevated?: boolean; requireItem?: boolean } = {}
 ) {
     // 1. The expected work-unit route committed, carrying the expected host record.
     await page.waitForURL(
@@ -192,6 +211,18 @@ async function assertLandedOnFocusPanel(
             await expect(
                 page.locator(`[data-focus-panel-grid-cell="${expected.cardKey}"][data-fp-elevated="true"]`),
                 `card "${expected.cardKey}" composed but was never focused`
+            ).toHaveCount(1, { timeout: SETTLE });
+        }
+    }
+
+    // 4b. The ITEM the operator actually clicked is the one selected inside that card.
+    //     Elevating the card alone would leave them to find the child themselves.
+    if (expected.itemId && opts.requireItem !== false) {
+        const attribute = ITEM_FOCUS_ATTRIBUTE[expected.cardKey];
+        if (attribute) {
+            await expect(
+                page.locator(`[${attribute}="${expected.itemId}"]`),
+                `card "${expected.cardKey}" is focused but item ${expected.itemId} is not the selected one`
             ).toHaveCount(1, { timeout: SETTLE });
         }
     }
@@ -260,10 +291,23 @@ async function clickSubject(page: Page, label: string, expected: ExpectedLanding
         }
     }
 
+    let itemFocused: number | null = null;
+    const itemAttribute = ITEM_FOCUS_ATTRIBUTE[expected.cardKey];
+    if (expected.itemId && itemAttribute) {
+        try {
+            await page
+                .locator(`[${itemAttribute}="${expected.itemId}"]`)
+                .waitFor({ state: "attached", timeout: SETTLE });
+            itemFocused = Date.now() - t0;
+        } catch {
+            itemFocused = null;
+        }
+    }
+
     console.log(
-        `[CERT ${label} TIMING] dismissed=${dismissed}ms route=${routed}ms cards_visible=${composed}ms card_focused=${focused ?? "never"}ms`
+        `[CERT ${label} TIMING] dismissed=${dismissed}ms attention_route=${routed}ms cards_visible=${composed}ms card_focused=${focused ?? "never"}ms item_focused=${itemFocused ?? "never"}ms`
     );
-    return { dismissed, routed, composed, focused };
+    return { dismissed, routed, composed, focused, itemFocused };
 }
 
 test.describe.configure({ mode: "default" });

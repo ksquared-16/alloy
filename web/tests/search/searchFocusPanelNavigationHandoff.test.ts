@@ -177,12 +177,37 @@ describe("Search states intent; the kernel and the drawer apply it", () => {
         expect(src).toContain("ATTENTION_SCOPE.SURFACE");
     });
 
-    it("card focus is applied by the drawer listener, on the one selection authority", async () => {
-        const src = await code("components/adminV2/SearchFocusSelectionListener.tsx");
-        expect(src).toContain("useAdminDrawer");
-        expect(src).toContain("card_focus");
-        // It must not also try to navigate — that is the kernel listener's job.
-        expect(src).not.toContain("router.push");
+    it("card focus rides the attention movement, NOT the drawer", async () => {
+        const listener = await code("components/adminV2/SearchAttentionListener.tsx");
+        // The card + item are encoded as the kernel's ASPECT and handed to the same
+        // movement that carried the subject.
+        expect(listener).toContain("formatCardFocusAspect");
+
+        // `openDrawer` mounts the modal overlay on a work-unit surface, because
+        // `AdminEntityDrawer` suppresses itself by testing `usePathname()` and cannot see
+        // the address the kernel projects with `replaceState`. Measured `modal: 1`.
+        const drawerListener = await code("components/adminV2/SearchFocusSelectionListener.tsx");
+        expect(drawerListener).toContain("host_work_unit_key");
+        expect(drawerListener).not.toContain("router.push");
+    });
+
+    it("the inline Focus Panel body reads card focus from ATTENTION, not the drawer", async () => {
+        const body = await code("components/admin/focusPanel/OpportunityFocusPanelBody.tsx");
+        // This is the body the work-unit surface renders. It previously passed no card
+        // request at all, which is why a Search click composed the right panel and then
+        // never elevated the card it was asked for.
+        expect(body).toContain("useAttentionCardFocus");
+        expect(body).toContain("requestedCardFocus");
+        expect(body).not.toContain("useAdminDrawer");
+    });
+
+    it("the grid applies the ITEM, not only the card", async () => {
+        const grid = await code("components/admin/focusPanel/OpportunityFocusPanelModeGrid.tsx");
+        const effect = grid.slice(grid.indexOf("appliedFocusKeyRef"));
+        // Elevating the card alone was the gap: the panel opened Children and left the
+        // operator to find the child themselves.
+        expect(effect).toContain("setActiveDepth");
+        expect(effect).toContain("emitFocus");
     });
 });
 
