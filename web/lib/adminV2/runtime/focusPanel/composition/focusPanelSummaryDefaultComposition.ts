@@ -111,7 +111,11 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
         key: "employment",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 12, rowStart: 10, rowSpan: 2 },
+        // ⚠ SIX columns in the right-hand reference lane, not a full-width row. A card spanning all
+        // 12 columns cannot be planned into lanes, so `planPublishedLayout` fell back from `lanes`
+        // to `grid` for the WHOLE panel — every other card's placement changed with it. Employment
+        // sits under Billing Preview, beside the other reference cards.
+        area: { colStart: 7, colSpan: 6, rowStart: 10, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },
