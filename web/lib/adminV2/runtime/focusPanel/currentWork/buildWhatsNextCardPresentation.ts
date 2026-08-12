@@ -15,6 +15,7 @@ import type {
     WhatsNextContextFact,
     WhatsNextStillNeededItem,
 } from "./whatsNextCardTypes";
+import { formatTourStartLabel } from "@/lib/adminV2/runtime/focusPanel/tour/tourPresentation";
 
 export type WhatsNextActivityPreviewLike = {
     label: string;
@@ -31,23 +32,6 @@ function primaryContactName(truth: Record<string, unknown> | null | undefined): 
 function formatMoneyCents(cents: number): string {
     const dollars = cents / 100;
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(dollars);
-}
-
-function formatTourStartLabel(iso: string, timeZone?: string | null): string | null {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return null;
-    try {
-        return new Intl.DateTimeFormat("en-US", {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-            ...(timeZone ? { timeZone } : {}),
-        }).format(d);
-    } catch {
-        return null;
-    }
 }
 
 /**
