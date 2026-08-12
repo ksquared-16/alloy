@@ -187,6 +187,14 @@ function deriveRosterSummary(roster: RosterData | null): RosterSummary {
 export default function SchedulingWorkspace({ onClose }: { onClose?: () => void } = {}) {
     const [sites, setSites] = useState<Site[] | null>(null);
     const [siteId, setSiteId] = useState<string>("");
+    /**
+     * True once the operator has chosen a site themselves. The bootstrap below
+     * SEEDS the initial site; it must never overwrite a deliberate choice. Its
+     * retry loop (3 attempts, 400ms apart) can otherwise resolve after the
+     * operator has already switched and silently restore the previous site —
+     * which is exactly why selecting Riverside appeared not to commit.
+     */
+    const siteChosenByOperatorRef = useRef(false);
 
     const [mode, setMode] = useState<SchedulingMode>("work");
     const [workView, setWorkView] = useState<SchedulingWorkView>("overview");
@@ -290,7 +298,13 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 if (list.length > 0) {
                     if (cancelled) return;
                     setSites(list);
-                    setSiteId((r.resolvedSiteId as string) || list[0]?.id || "");
+                    // Seed only. A late-resolving bootstrap must not clobber the
+                    // operator's selection.
+                    if (!siteChosenByOperatorRef.current) {
+                        setSiteId((prev) =>
+                            prev ? prev : ((r.resolvedSiteId as string) || list[0]?.id || "")
+                        );
+                    }
                     return;
                 }
                 await new Promise((res) => setTimeout(res, 400));
@@ -788,7 +802,10 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             onStudioViewChange={setStudioView}
             sites={sites}
             siteId={siteId}
-            onSiteChange={setSiteId}
+            onSiteChange={(next) => {
+                    siteChosenByOperatorRef.current = true;
+                    setSiteId(next);
+                }}
             siteName={siteName}
             metricsColumn={metricsColumn}
             onClose={onClose}
@@ -965,7 +982,6 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     <AttendanceWorkspace
                         siteLocationId={siteId}
                         siteName={siteName}
-                        todayYmd={new Date().toISOString().slice(0, 10)}
                         onOpenChild={(child) => {
                             // Canonical Child record — never an attendance-specific surface.
                             if (child.personId) drawer?.openDrawer({ type: "persons", id: child.personId });

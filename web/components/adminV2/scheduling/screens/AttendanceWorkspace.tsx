@@ -93,7 +93,6 @@ type RosterModel = {
 export type AttendanceWorkspaceProps = {
     siteLocationId: string;
     siteName: string;
-    todayYmd: string;
     onOpenChild?: (child: RosterChild) => void;
     onOpenStaff?: (staff: RosterStaff) => void;
 };
@@ -146,10 +145,23 @@ function sufficiencyChrome(state: Sufficiency): string {
     return "bg-alloy-stone/15 text-alloy-midnight/55 ring-1 ring-alloy-stone/25";
 }
 
-function sufficiencyLabel(state: Sufficiency): string {
+/**
+ * Operator label for a room's ACTUAL state.
+ *
+ * `idle` from the read model means "no demand and no supply right now". On the
+ * actual axis that is true both for a room nobody is rostered to AND for a room
+ * whose people simply have not arrived yet — and calling the second one
+ * "No one expected" is a lie the director would act on. The expected counts
+ * disambiguate: presentation only, no change to the underlying verdict.
+ */
+function sufficiencyLabel(state: Sufficiency, cell?: Pick<Cell, "expectedChildCount" | "scheduledStaffCount">): string {
     if (state === "sufficient") return "Sufficient";
     if (state === "short") return "Short";
-    if (state === "idle") return "No one expected";
+    if (state === "idle") {
+        const someoneExpected =
+            (cell?.expectedChildCount ?? 0) > 0 || (cell?.scheduledStaffCount ?? 0) > 0;
+        return someoneExpected ? "No one here yet" : "No one expected";
+    }
     return "Unknown";
 }
 
@@ -162,11 +174,19 @@ const ACTION_SECONDARY = `${ACTION} border border-alloy-stone/25 bg-white text-a
 export default function AttendanceWorkspace({
     siteLocationId,
     siteName,
-    todayYmd,
     onOpenChild,
     onOpenStaff,
 }: AttendanceWorkspaceProps) {
-    const [date] = useState(todayYmd);
+    /**
+     * The operational day is the ORGANIZATION's local service date, not the
+     * browser's UTC date. `new Date().toISOString()` rolls over at UTC midnight
+     * and would show tomorrow's roster to a US center all evening.
+     *
+     * Null until the server tells us: the roster route resolves the service date
+     * through the canonical `resolveOperationalEnrollmentTodayYmd` (org timezone)
+     * and returns it, so the first request deliberately omits `date`.
+     */
+    const [date, setDate] = useState<string | null>(null);
     const [model, setModel] = useState<RosterModel | null>(null);
     const [openRoomId, setOpenRoomId] = useState<string | null>(null);
     const [busySubject, setBusySubject] = useState<string | null>(null);
@@ -175,12 +195,19 @@ export default function AttendanceWorkspace({
     const load = useCallback(async () => {
         setError(null);
         try {
+            const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
             const res = await fetch(
-                `/api/admin/roster?site_location_id=${encodeURIComponent(siteLocationId)}&date=${encodeURIComponent(date)}`
+                `/api/admin/roster?site_location_id=${encodeURIComponent(siteLocationId)}${dateParam}`
             );
-            const json = (await res.json()) as { roster?: RosterModel; error?: string };
+            const json = (await res.json()) as {
+                roster?: RosterModel;
+                todayYmd?: string;
+                error?: string;
+            };
             if (!res.ok) throw new Error(json.error ?? "Could not load attendance");
             setModel(json.roster ?? null);
+            // Adopt the org-local service date the server resolved.
+            if (!date && json.roster?.date) setDate(json.roster.date);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Could not load attendance");
         }
@@ -310,7 +337,7 @@ export default function AttendanceWorkspace({
                             className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${sufficiencyChrome(openRoom.actualStaffingSufficiency)}`}
                             data-attendance-actual-state={openRoom.actualStaffingSufficiency}
                         >
-                            Actual staffing · {sufficiencyLabel(openRoom.actualStaffingSufficiency)}
+                            Actual staffing · {sufficiencyLabel(openRoom.actualStaffingSufficiency, openRoom)}
                             {openRoom.actualRequiredStaff != null
                                 ? ` (${openRoom.actualStaffPresent}/${openRoom.actualRequiredStaff})`
                                 : ""}
@@ -514,7 +541,7 @@ export default function AttendanceWorkspace({
             <div className={`${WS_OVERVIEW_CONTENT} space-y-4`}>
                 <header>
                     <p className={WS_EYEBROW}>Attendance</p>
-                    <h2 className="text-[18px] font-semibold text-alloy-midnight">{formatLongDate(date)}</h2>
+                    <h2 className="text-[18px] font-semibold text-alloy-midnight">{date ? formatLongDate(date) : "Today"}</h2>
                     <p className="mt-0.5 text-[12px] text-alloy-midnight/60">{siteName}</p>
                 </header>
 
@@ -555,7 +582,7 @@ export default function AttendanceWorkspace({
                                 <span
                                     className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${sufficiencyChrome(cell.actualStaffingSufficiency)}`}
                                 >
-                                    {sufficiencyLabel(cell.actualStaffingSufficiency)}
+                                    {sufficiencyLabel(cell.actualStaffingSufficiency, cell)}
                                 </span>
                             </div>
                             <dl className="mt-2.5 grid grid-cols-2 gap-2">
