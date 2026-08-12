@@ -126,6 +126,17 @@ async function expectedLandingFor(page: Page, q: string, destinationKey?: string
     expect(subjectId, `"${q}" resolved no host record`).not.toBe("");
 
     const workUnitSlug = workUnitKey.replace(/_/g, "-");
+    // What Search actually resolved, recorded either way. A scenario that fails on the surface is
+    // almost always explained by the destination it was given.
+    console.log(
+        `[CERT DEST "${q}"${destinationKey ? ` (${destinationKey})` : ""}] ${JSON.stringify({
+            key: destination!.key,
+            card: destination!.card_key ?? null,
+            item: destination!.item_id ?? null,
+            workUnit: workUnitKey,
+            host: subjectId,
+        })}`,
+    );
     return {
         workUnitSlug,
         subjectId,
