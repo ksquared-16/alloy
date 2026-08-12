@@ -40,6 +40,7 @@ supersedes: []
 | 6 | **External card focus outranks a card's own mount report.** A card handed an elevation must not cancel it with its base-state report. |
 | 7 | **Platform-default cards must work without tenant customization.** Configuration customizes baseline behavior; it must never be the prerequisite for it. |
 | 8 | **The generic modal record overlay is not an operator surface.** There is no destination that means "open the record overlay", and no fallback to one when a record resolves nowhere — "no queue holds this record" is the honest answer. |
+| 9 | **A capability's owner is the runtime that raises the requirement, not the layout that used to show it.** Per-child Decision and Close family live in **Current Work**, because `completeStageWorkWithOutcome` refuses the outcome there. Packet review lives on the **Focus Panel action-modal registry**, because it is an action's transient chrome. Tour lifecycle STATE lives on the **Tour card**; its outcome COMMANDS were already Current Work's, so the old lifecycle bar was retired rather than remounted. See [`post-drawer-capability-convergence.md`](./post-drawer-capability-convergence.md). |
 
 ---
 

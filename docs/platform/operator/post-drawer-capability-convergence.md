@@ -48,6 +48,21 @@ offers, and the step cannot be completed by any route.
 
 ---
 
+## Outcome — every capability is mounted or retired with evidence
+
+| Capability | Resolution | Proof |
+|---|---|---|
+| Per-child **Decision** | **Mounted** in the Current Work focused surface | cert A: `decisionPanel: 1, decisionRows: 2` |
+| **Close family** | **Mounted** on the same surface, same stage configuration | cert B: `blocked: 1` — an enrolled child is a hard block, with its reason |
+| **Packet review** | **Mounted** on the Focus Panel action-modal registry | cert C: the action's event now fires a real packet read; before, nothing listened |
+| **Tour lifecycle** | **Retired**, not remounted — Current Work already owns the outcome commands; the Tour card gained the vocabulary the bar had | `web/tests/focusPanel/tourCardLifecycle.test.ts` |
+| **Inquiry summary activity** | **Deleted** — a wrapper around packet review plus navigation to a drawer tab strip that no longer exists | absent from the tree |
+| `open_drawer` layout value | **Contained**: parser keeps read compatibility, platform defaults normalized, reachability guarded | `web/tests/focusPanel/openDrawerContainment.test.ts`, cert G |
+
+No capability remains in the "retained, unmounted" state the previous sprint recorded.
+
+---
+
 ## Canonical owners
 
 | Capability | Old mount | Canonical owner | Existing action/runtime | Migration |
