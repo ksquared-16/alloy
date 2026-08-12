@@ -83,7 +83,7 @@ Committed slices (`origin/staging..HEAD`) land the child-grain operational surfa
 - **Row variant inherit guards:** Child/candidate grain is placement-compatible; Default family `children.*` slots must not inherit onto child-grain Waitlist rows (avoids duplicate name + “1 child”).
 - **Stage age:** Compact queue age owns `stage_entered_at` (grain-aware via `resolveOperationalStateEnteredAt`); Work Views filter/group only and do not own stage age.
 - **Household copy:** Channel copy is person-contact mutation (`savePersonContact`), not primary designation; name is never copied.
-- **Photo debt (out of scope for merge):** Durable `profile_photo_document_id` persists; display uses short-lived signed URLs. `resolveProfilePhotosForActor` exists but is **not** wired into opportunity / `_inquiry_children` loads — avatars appear then vanish after refresh/expiry. **Not localhost-only.** See Known follow-ups.
+- **Photo projection (follow-up landed after closeout):** Durable `profile_photo_document_id` persists; display uses short-lived signed URLs. Opportunity / `_inquiry_children`, child-grain queue rows, and Assignment roster now wire `resolveProfilePhotosForActor` + `resolved_photo_url`. Remaining surfaces tracked in the future sprint doc.
 
 Doctrine touchpoints updated with this closeout:
 
@@ -146,13 +146,12 @@ Doctrine touchpoints updated with this closeout:
 
 ## Known follow-ups
 
-1. **Child profile photo projection (blocking UX debt, not Waitlist-specific)**  
+1. **Child profile photo projection — core paths landed; residual surfaces remain**  
    - Upload persists durable `persons.metadata.profile_photo_document_id`.  
    - Display URLs are short-lived signed URLs; they must not be treated as durable metadata.  
-   - `resolveProfilePhotosForActor` exists and is unit-tested but is **not** wired into opportunity / `_inquiry_children` loads — faces show after upload then vanish on refresh/expiry.  
-   - **Not localhost-only** (remounts just make it obvious).  
-   - Tracked: [`docs/sprints/archive/future/identity_profile_photo_projection_everywhere.md`](../future/identity_profile_photo_projection_everywhere.md)  
-   - Route comments: `web/app/api/admin/persons/[id]/profile-photo/route.ts`, `web/lib/documents/profilePhotoPresentation.ts`
+   - **Landed:** opportunity / `_inquiry_children` (+ household persons), Focus Panel save merge (`resolved_photo_url`), child-grain queue `image_url` → CondensedQueueRow, Assignment roster.  
+   - **Residual:** Room Board chips, person drawer chrome warm refresh, lane-preview bundle actor threading.  
+   - Tracked: [`docs/sprints/archive/future/identity_profile_photo_projection_everywhere.md`](../future/identity_profile_photo_projection_everywhere.md)
 
 2. **Staging reconcile** — merge `origin/staging` into the feature branch before final PR merge if staging moved (Vacilando / migration PRs).
 

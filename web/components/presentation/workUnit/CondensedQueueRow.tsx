@@ -62,9 +62,21 @@ const CARD_IDLE_CLASS = ` ${QUEUE_ROW_CARD_IDLE_BORDER_CLASS}`;
 
 const CARD_SELECTED_CLASS = ` ${QUEUE_ROW_CARD_SELECTED_BORDER_CLASS}`;
 
-/** 32px circular subject chip — tinted background, subject initial. */
-function AvatarChip({ name }: { name: string }) {
+/** 32px circular subject chip — profile image when URL present, else initials. */
+function AvatarChip({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
     const initial = name.trim().charAt(0).toUpperCase() || "•";
+    const src = typeof imageUrl === "string" ? imageUrl.trim() : "";
+    if (src) {
+        return (
+            <span
+                aria-hidden
+                className="flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-alloy-juniper/10"
+            >
+                {/* eslint-disable-next-line @next/next/no-img-element -- request-scoped signed URL, not a static asset */}
+                <img src={src} alt="" className="h-full w-full object-cover" />
+            </span>
+        );
+    }
     return (
         <span
             aria-hidden
@@ -194,6 +206,12 @@ export function CondensedQueueRow({
         resolveCompactSlotDisplay("subject", context, rowConfig?.subject, focus, { publishedAuthority })
         ?? focus?.primary.display_name?.trim()
         ?? queueRowSubjectDisplayName(context);
+    // Avatar follows the focused primary when Subject Focus is set; otherwise the row subject.
+    // Do not fall back from household primary → child image_url (would mismatch family display name).
+    const subjectImageUrl = focus
+        ? (typeof focus.primary.image_url === "string" ? focus.primary.image_url.trim() : "") || null
+        : (typeof context.row_subject?.image_url === "string" ? context.row_subject.image_url.trim() : "")
+          || null;
     const stageLabel = showStatus
         ? resolveCompactSlotDisplay("status", context, rowConfig?.status, focus, { publishedAuthority })
         : null;
@@ -264,7 +282,7 @@ export function CondensedQueueRow({
             className={cardClass}
         >
             <span className="flex items-start gap-2.5">
-                <AvatarChip name={displayName} />
+                <AvatarChip name={displayName} imageUrl={subjectImageUrl} />
                 <span className="min-w-0 flex-1">
                     <span className="flex items-start justify-between gap-2">
                         <span className="flex min-w-0 items-center gap-1.5">

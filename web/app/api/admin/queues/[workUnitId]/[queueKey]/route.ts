@@ -21,6 +21,7 @@ import {
     resolveActiveWorkViewRuntimeContext,
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import { projectQueuePreviewRowContexts } from "@/lib/queues/queuePreviewRowContextProjection";
+import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 import { buildQueueRowsServerTimingHeader } from "@/lib/perf/queueRowsServerTiming";
 import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
@@ -242,6 +243,7 @@ export async function GET(
             viewerDisplayTimeZone,
             attentionBucketKey,
             rowEnrichment,
+            documentActor: documentActorFromAdminGate(gate),
         });
 
         let responseResult = result;

@@ -51,12 +51,14 @@ export const QUEUE_PREVIEW_CONTEXT_READ_MANIFEST = [
     "row_subject.date_of_birth",
     "row_subject.age_label",
     "row_subject.gender_label",
+    "row_subject.image_url",
     "row_subjects[].display_name",
     "row_subjects[].subject_type",
     "row_subjects[].subject_id",
     "row_subjects[].date_of_birth",
     "row_subjects[].age_label",
     "row_subjects[].gender_label",
+    "row_subjects[].image_url",
     "row_count",
     "row_count_unit",
     "row_stage",
@@ -156,6 +158,7 @@ function projectSubject(subject: QueueRowSubjectPresentation): QueueRowSubjectPr
     if (subject.date_of_birth != null) out.date_of_birth = subject.date_of_birth;
     if (subject.age_label != null) out.age_label = subject.age_label;
     if (subject.gender_label != null) out.gender_label = subject.gender_label;
+    if (subject.image_url != null) out.image_url = subject.image_url;
     return out;
 }
 

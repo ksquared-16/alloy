@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { documentActorFromAdminParts } from "@/lib/documents/projectPersonProfilePhotos";
 import {
     operationalEnrollmentErrorResponse,
     resolveOperationalEnrollmentTodayYmd,
@@ -335,7 +337,21 @@ export async function GET(request: NextRequest) {
             if (!siteLocationId) {
                 return NextResponse.json({ error: "site_location_id is required", code: "invalid_input" }, { status: 400 });
             }
-            const model = await buildAssignmentRosterReadModel(supabase, ctx.orgId, siteLocationId);
+            const access = await getAdminAccessContextCached();
+            const documentActor = documentActorFromAdminParts({
+                ok: true,
+                userId: ctx.userId,
+                orgId: ctx.orgId,
+                role: ctx.role,
+                roleKeys: access.ok ? access.roleKeys : [],
+                permissionKeys: access.ok ? access.permissionKeys : [],
+            });
+            const model = await buildAssignmentRosterReadModel(
+                supabase,
+                ctx.orgId,
+                siteLocationId,
+                documentActor,
+            );
             return NextResponse.json({
                 view,
                 siteLocationId,
