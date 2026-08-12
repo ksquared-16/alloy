@@ -31,7 +31,12 @@ import {
 import type { TourCommsTemplateContext } from "@/lib/tours/comms/tourCommsTemplateContext";
 import { recordTourEvent } from "@/lib/tours/events/recordTourEvent";
 import { aliasTourBookingUrl } from "@/lib/tours/invitation/tourBookingPublicAlias";
-import { mintTourInvitation, type MintedAction } from "@/lib/tours/invitation/mintTourInvitation";
+import {
+    mintTourInvitation,
+    supersedeTourInvitation,
+    type MintedAction,
+    type MintInvitationResult,
+} from "@/lib/tours/invitation/mintTourInvitation";
 import {
     validateTourInvitationContent,
     type TourInvitationContent,
@@ -227,7 +232,7 @@ export async function sendTourInvitation(args: {
     mode?: "prepare" | "send";
 }): Promise<SendTourInvitationResult> {
     const orgId = String(args.orgId ?? "").trim();
-    const opportunityId = String(args.opportunityId ?? "").trim();
+    let opportunityId = String(args.opportunityId ?? "").trim();
 
     // `process_instance_id` is NOT selected: there is no such column on
     // `opportunities`. Selecting it made PostgREST reject the whole query, and
@@ -237,12 +242,37 @@ export async function sendTourInvitation(args: {
     // schema mismatch read as a missing record. It is optional and nullable end
     // to end (mintTourInvitation already defaults it to null), so nothing
     // downstream loses anything.
-    const { data: oppRow, error: oppError } = await args.supabase
+    let { data: oppRow, error: oppError } = await args.supabase
         .from("opportunities")
         .select("id, name, primary_person_id, location_id")
         .eq("org_id", orgId)
         .eq("id", opportunityId)
         .maybeSingle();
+
+    // Child Waitlist Attention may pass the enrollment process_instance id as the
+    // entity id. Resolve to the family opportunity (context_id) rather than 404ing
+    // with "This record is no longer available."
+    if (!oppError && !oppRow && opportunityId) {
+        const { data: participation } = await args.supabase
+            .from("process_instances")
+            .select("id, context_type, context_id")
+            .eq("org_id", orgId)
+            .eq("id", opportunityId)
+            .maybeSingle();
+        const ctxType = String((participation as { context_type?: string } | null)?.context_type ?? "").trim();
+        const ctxId = String((participation as { context_id?: string } | null)?.context_id ?? "").trim();
+        if (ctxType === "opportunity" && ctxId) {
+            opportunityId = ctxId;
+            const retry = await args.supabase
+                .from("opportunities")
+                .select("id, name, primary_person_id, location_id")
+                .eq("org_id", orgId)
+                .eq("id", opportunityId)
+                .maybeSingle();
+            oppRow = retry.data;
+            oppError = retry.error;
+        }
+    }
 
     // A failed lookup is NOT an absent record. Collapsing the two is exactly what
     // hid this for the life of the feature, so they now read differently.
@@ -337,7 +367,7 @@ export async function sendTourInvitation(args: {
         return { ok: false, code: "invalid_content", message: violation.message };
     }
 
-    const minted = await mintTourInvitation({
+    let minted: MintInvitationResult = await mintTourInvitation({
         supabase: args.supabase,
         orgId,
         recipientPersonId: recipient.personId,
@@ -352,6 +382,34 @@ export async function sendTourInvitation(args: {
     });
     if (!minted.ok) {
         return { ok: false, code: "mint_failed", message: minted.message };
+    }
+
+    // Idempotent replay cannot re-derive raw tokens. Prepare (and any send that
+    // still needs URLs) must supersede and remint — otherwise a second prepare
+    // under the same key (Strict Mode, retry, or aged prior offer) produces a
+    // compose draft with no usable booking link, which parents experience as
+    // an expired / dead invitation.
+    if (minted.idempotentReplay && minted.actions.length === 0) {
+        await supersedeTourInvitation({
+            supabase: args.supabase,
+            invitationId: minted.invitationId,
+            orgId,
+        });
+        const reissueKey = `${args.idempotencyKey}:reissue:${Date.now()}`;
+        minted = await mintTourInvitation({
+            supabase: args.supabase,
+            orgId,
+            recipientPersonId: recipient.personId,
+            opportunityId,
+            locationId,
+            processInstanceId: null,
+            content,
+            createdByUserId: args.actorUserId ?? null,
+            idempotencyKey: reissueKey,
+        });
+        if (!minted.ok) {
+            return { ok: false, code: "mint_failed", message: minted.message };
+        }
     }
 
     const selectToken = findToken(minted.actions, "select_tour_slot");

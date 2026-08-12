@@ -62,13 +62,14 @@ function workItem(partial: Partial<StageWorkItemProjection> & Pick<StageWorkItem
 
 function runtime(args: {
     stageKey?: string;
+    stageLabel?: string | null;
     primary: StageWorkItemProjection | null;
     additional?: StageWorkItemProjection[];
 }): StageWorkRuntimeProjection {
     const items = [args.primary, ...(args.additional ?? [])].filter(Boolean) as StageWorkItemProjection[];
     return {
         stage_key: args.stageKey ?? "lead",
-        stage_label: "Stage",
+        stage_label: args.stageLabel === null ? null : (args.stageLabel ?? "Stage"),
         purpose: null,
         journey_segment: "family",
         template_keys: items.map((i) => i.template_key),
@@ -261,7 +262,7 @@ describe("What's Next Card V2 scenario presentations", () => {
             description: primary.description,
             workKey: "contact_family",
             primaryWorkItem: primary,
-            runtime: runtime({ primary }),
+            runtime: runtime({ primary, stageLabel: "New Lead", stageKey: "lead" }),
             primaryAction: action("quick_message", "Contact Family"),
             supportingActions: [
                 action("schedule_tour", "Schedule Tour"),
@@ -295,7 +296,8 @@ describe("What's Next Card V2 scenario presentations", () => {
             },
             activityItems: [{ label: "SMS sent to Kelly Kurzman", occurredAt: "just now", kind: "sms" }],
         });
-        expect(card.title).toBe("Contact Family");
+        expect(card.title).toBe("New Lead");
+        expect(card.currentWorkLabel).toBe("Contact Family");
         expect(card.summaryLine).toMatch(/Reach the family/);
         expect(card.summarySource).toBe("deterministic");
         expect(card.progress?.mode).toBe("repeated");
@@ -334,6 +336,7 @@ describe("What's Next Card V2 scenario presentations", () => {
         });
         const rt = runtime({
             stageKey: "tour",
+            stageLabel: "Tour",
             primary: schedule,
             additional: [confirm, conduct],
         });
@@ -376,6 +379,8 @@ describe("What's Next Card V2 scenario presentations", () => {
             timeZone: "America/Los_Angeles",
         });
         expect(card.progress?.mode).toBe("sequential");
+        expect(card.title).toBe("Tour");
+        expect(card.currentWorkLabel).toBe("Confirm Tour");
         expect(card.progress?.items.map((i) => i.label)).toEqual([
             "Schedule Tour",
             "Confirm Tour",
@@ -632,7 +637,7 @@ describe("What's Next Card V2 scenario presentations", () => {
             label: "Offer & Enrollment",
             state: "planned",
         });
-        const rt = runtime({ primary: added, additional: [confirm, offer] });
+        const rt = runtime({ primary: added, additional: [confirm, offer], stageKey: "waitlist", stageLabel: "Waitlist" });
         rt.primary = { ...added, state: "completed" };
         rt.additional = [
             { ...confirm, state: "open" },
@@ -641,14 +646,22 @@ describe("What's Next Card V2 scenario presentations", () => {
         const surface = surfaceStub({
             title: "Waitlist",
             description: "Hold your spot and confirm when a space opens.",
+            stageKey: "waitlist",
             primaryWorkItem: confirm,
             runtime: rt,
             primaryAction: action("confirm_interest", "Confirm Interest"),
         });
         const card = buildWhatsNextCardPresentation({
             surface,
-            context: { truth: {}, signals: NULL_SIGNALS, stageWorkRuntime: rt },
+            context: {
+                truth: { "child.status": "Waitlisted" },
+                signals: NULL_SIGNALS,
+                stageWorkRuntime: rt,
+            },
         });
+        expect(card.title).toBe("Waitlist");
+        expect(card.statusLabel).toBe("Waitlisted");
+        expect(card.currentWorkLabel).toBe("Confirm Interest");
         expect(card.dueChip).toBeNull();
         expect(card.progress?.items.map((i) => i.label)).toEqual([
             "Added to Waitlist",
@@ -656,6 +669,72 @@ describe("What's Next Card V2 scenario presentations", () => {
             "Offer & Enrollment",
         ]);
         expect(resolveCurrentWorkActionButtons(surface).dominant?.label).toBe("Confirm Interest");
+    });
+
+    it("Scenario 7b — Waitlist optional concurrent work is not a fake mini-lifecycle", () => {
+        const review = workItem({
+            template_key: "review_waitlist_position",
+            label: "Review waitlist position",
+            state: "open",
+            due_at: "2026-08-08T00:00:00.000Z",
+            due_urgency: "overdue",
+        });
+        const offer = workItem({
+            template_key: "offer_spot",
+            label: "Offer spot",
+            state: "planned",
+        });
+        const rt = runtime({
+            primary: review,
+            additional: [offer],
+            stageKey: "waitlist",
+            stageLabel: "Waitlist",
+        });
+        const surface = surfaceStub({
+            title: "Review waitlist position",
+            description: "Manage waitlist candidates and spot offers.",
+            stageKey: "waitlist",
+            primaryWorkItem: review,
+            runtime: rt,
+            statusLabel: "In progress",
+            primaryAction: action("quick_message", "Message"),
+            supportingActions: [
+                action("send_form", "Send form"),
+                action("send_tour_invitation", "Send Tour Invitation"),
+                action("schedule_tour", "Schedule Tour"),
+            ],
+            recordOutcomeAction: action("record_outcome", "Record outcome"),
+            showOutcomeCompletion: true,
+            completionOutcomes: [
+                { outcome_key: "spot_offered", label: "Spot offered", successful: true },
+            ],
+        });
+        const card = buildWhatsNextCardPresentation({
+            surface,
+            context: {
+                truth: {
+                    "child.status": "Waitlisted",
+                    "waitlist.positionLabel": "1 / 1",
+                    "waitlist.waitSince": "Aug 8",
+                    "child.program": "Toddler",
+                    "opportunity.location": "North Campus",
+                },
+                signals: NULL_SIGNALS,
+                stageWorkRuntime: rt,
+            },
+        });
+        expect(card.title).toBe("Waitlist");
+        expect(card.statusLabel).toBe("Waitlisted");
+        expect(card.currentWorkLabel).toBe("Review waitlist position");
+        expect(card.progress).toBeNull();
+        expect(card.contextFacts.map((f) => f.key)).toEqual([
+            "waitlist_position",
+            "waiting_since",
+            "program",
+            "location",
+        ]);
+        expect(resolveCurrentWorkActionButtons(surface).subordinateOutcome?.label).toBe("Record outcome");
+        expect(resolveCurrentWorkActionButtons(surface).dominant?.label).toBe("Message");
     });
 
     it("omits Still Needed when empty; caps recent activity at 2; BOS summary seam", () => {

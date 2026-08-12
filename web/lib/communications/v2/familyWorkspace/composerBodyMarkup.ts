@@ -34,6 +34,41 @@ export function composerMarkupToEmailHtml(raw: string): { ok: true; html: string
     return { ok: true, html };
 }
 
+/**
+ * Convert plain composer text (or markers) to email contentEditable HTML.
+ * Shared so draft seeds and Insert provisions paint the same visible body.
+ */
+export function plainComposerTextToEditableHtml(raw: string): string {
+    const converted = composerMarkupToEmailHtml(raw);
+    if (converted.ok) return converted.html;
+    return raw
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\r\n|\r|\n/g, "<br>");
+}
+
+/**
+ * Append a URL into an existing draft without duplicating it.
+ * Preserves plain-text drafts; HTML drafts get a break + escaped URL.
+ */
+export function appendUrlToComposerDraft(body: string, url: string): string {
+    const link = url.trim();
+    if (!link) return body;
+    const plain = composerMarkupToPlainText(body);
+    if (plain.includes(link)) return body;
+    const trimmed = body.trim();
+    if (!trimmed) return link;
+    if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+        const escaped = link
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        return `${trimmed}<br><br>${escaped}`;
+    }
+    return `${trimmed}\n\n${link}`;
+}
+
 /** Strip composer markers (and any accidental HTML) for SMS. */
 export function composerMarkupToPlainText(raw: string): string {
     const withoutMarkers = raw

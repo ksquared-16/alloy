@@ -71,9 +71,8 @@ function viewportBounds() {
     return { width: window.innerWidth, height: window.innerHeight };
 }
 
-function initialPreferred(): BosPresentationState {
-    return readBosPresentationPreference() ?? recommendBosPresentation("expanded");
-}
+/** SSR-stable preferred — sessionStorage is applied after mount to avoid hydration mismatch. */
+const SSR_PREFERRED: BosPresentationState = "floating";
 
 export function BosPresentationControllerProvider({
     ambientRef,
@@ -85,14 +84,28 @@ export function BosPresentationControllerProvider({
     const [canvas, setCanvas] = useState<AdaptiveWorkspacePresentation>("expanded");
     const [ambientWidthPx, setAmbientWidthPx] = useState(1600);
     const [ambientEl, setAmbientEl] = useState<HTMLElement | null>(null);
-    const [preferred, setPreferredState] = useState<BosPresentationState>(() => initialPreferred());
-    const [pinnedWidthPx, setPinnedWidthState] = useState(() => readBosPinnedWidthPx());
+    const [preferred, setPreferredState] = useState<BosPresentationState>(SSR_PREFERRED);
+    const [pinnedWidthPx, setPinnedWidthState] = useState(() => defaultBosPinnedWidthPx());
     const [preferredFloatingGeometry, setPreferredFloatingGeometry] = useState<BosFloatingGeometry>(
-        () => readBosFloatingGeometry(viewportBounds()),
+        () => defaultBosFloatingGeometry({ width: 1440, height: 900 }),
     );
     const [floatingGeometry, setFloatingGeometryState] = useState<BosFloatingGeometry>(
-        () => clampBosFloatingGeometry(preferredFloatingGeometry, viewportBounds()),
+        () => defaultBosFloatingGeometry({ width: 1440, height: 900 }),
     );
+    const [sessionHydrated, setSessionHydrated] = useState(false);
+
+    // Session preference / geometry — client-only. Reading in useState initializers made SSR HTML
+    // (no launcher) diverge from the first client render (launcher when preferred=closed).
+    useEffect(() => {
+        const storedPreferred = readBosPresentationPreference();
+        if (storedPreferred) setPreferredState(storedPreferred);
+        setPinnedWidthState(readBosPinnedWidthPx());
+        const bounds = viewportBounds();
+        const storedGeo = readBosFloatingGeometry(bounds);
+        setPreferredFloatingGeometry(storedGeo);
+        setFloatingGeometryState(clampBosFloatingGeometry(storedGeo, bounds));
+        setSessionHydrated(true);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -139,9 +152,10 @@ export function BosPresentationControllerProvider({
     }, [ambientEl, preferredFloatingGeometry]);
 
     useEffect(() => {
+        if (!sessionHydrated) return;
         if (readBosPresentationPreference() != null) return;
         setPreferredState(recommendBosPresentation(canvas));
-    }, [canvas]);
+    }, [canvas, sessionHydrated]);
 
     const derivation = useMemo(
         () =>

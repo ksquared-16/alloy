@@ -74,7 +74,7 @@ describe("resolver registry", () => {
         expect(canSurfaceResolveField("queue_row", input).supported).toBe(false);
     });
 
-    it("gender resolves on drawer/forms but not queue rows", () => {
+    it("gender resolves on drawer, forms, and queue rows", () => {
         const input = {
             entity_type: "customer_member",
             field_key: "gender",
@@ -87,7 +87,7 @@ describe("resolver registry", () => {
         };
         expect(canSurfaceResolveField("drawer", input).supported).toBe(true);
         expect(canSurfaceResolveField("forms", input).supported).toBe(true);
-        expect(canSurfaceResolveField("queue_row", input).supported).toBe(false);
+        expect(canSurfaceResolveField("queue_row", input).supported).toBe(true);
     });
 
     it("queue builder fields are resolver-backed (validator or computed alias)", () => {
@@ -102,14 +102,14 @@ describe("resolver registry", () => {
         }
     });
 
-    it("child.gender is not in canonical queue builder fields", () => {
+    it("child.gender is available in canonical queue builder fields", () => {
         const keys = buildCanonicalQueueBuilderFields(false).map((f) => f.key);
-        expect(keys).not.toContain("child.gender");
+        expect(keys).toContain("child.gender");
     });
 });
 
 describe("capability engine — derived availability", () => {
-    it("derives gender queue_row unavailable from resolver layer", () => {
+    it("derives gender queue_row available from resolver layer", () => {
         const cap = deriveFieldCapability("queue_row", {
             entity_type: "customer_member",
             field_key: "gender",
@@ -119,8 +119,8 @@ describe("capability engine — derived availability", () => {
             is_visible_in_form: true,
             is_visible_in_drawer: true,
         });
-        expect(cap.status).toBe("unavailable");
-        expect(cap.layers.find((l) => l.layer === "resolver")?.passed).toBe(false);
+        expect(cap.status).toBe("available");
+        expect(cap.layers.find((l) => l.layer === "resolver")?.passed).toBe(true);
     });
 
     it("platform field availability derives from capability engine", () => {
@@ -145,14 +145,14 @@ describe("capability engine — derived availability", () => {
         expect(derived).toEqual(resolved);
     });
 
-    it("removing resolver support makes availability unavailable", () => {
+    it("removing resolver support is no longer required — gender remains available on queue_row", () => {
         const cap = deriveFieldCapability("queue_row", {
             entity_type: "customer_member",
             field_key: "gender",
             refKey: "child.gender",
             is_system: true,
         });
-        expect(cap.status).toBe("unavailable");
+        expect(cap.status).toBe("available");
     });
 });
 
@@ -229,8 +229,8 @@ describe("representative field runtime hops", () => {
                 is_visible_in_form: true,
                 is_visible_in_drawer: true,
             },
-            expectAvailable: ["drawer", "forms", "focus_panel", "business_process"],
-            expectUnavailable: ["queue_row"],
+            expectAvailable: ["drawer", "forms", "focus_panel", "business_process", "queue_row"],
+            expectUnavailable: [],
         },
         {
             label: "Lead Status",

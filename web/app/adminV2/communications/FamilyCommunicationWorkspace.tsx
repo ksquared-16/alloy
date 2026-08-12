@@ -7,6 +7,10 @@ import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/Famil
 import { CommsActivityEmbedHydratingShell, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 
 export default function FamilyCommunicationWorkspace(props: {
@@ -19,6 +23,8 @@ export default function FamilyCommunicationWorkspace(props: {
     compactActivityLoading?: boolean;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
     entryContext?: "current_work" | null;
+    composeIntent?: FamilyComposeIntent | null;
+    draftSeed?: FamilyComposeDraftSeed | null;
 }) {
     const adminAuth = useAdminAuthOptional();
     const runtime = useFamilyCommunicationRuntime(props);
@@ -49,6 +55,7 @@ export default function FamilyCommunicationWorkspace(props: {
             data-cc-drawer-workspace
             data-cc-surface-variant={props.surfaceVariant ?? "default"}
             data-cc-entry-context={props.entryContext ?? undefined}
+            data-cc-compose-intent={props.composeIntent ?? undefined}
             data-drawer-family-workspace-warm={runtime.servedFromWarmCache ? "true" : undefined}
             className={
                 props.entryContext === "current_work"
@@ -95,6 +102,13 @@ export default function FamilyCommunicationWorkspace(props: {
                 onSendNow={() => void runtime.send(false)}
                 onConfirmSend={() => void runtime.send(true)}
                 onDismissSend={runtime.dismissSendResult}
+                onAcknowledgeSendSuccess={runtime.acknowledgeSendSuccess}
+                tourInvitationAck={runtime.tourInvitationAck}
+                onInsertTourInvitationLink={
+                    props.entity?.entityType === "opportunities"
+                        ? () => runtime.insertTourInvitationLink()
+                        : undefined
+                }
                 viewerUserId={adminAuth?.userId ?? null}
                 sendCompleteToken={runtime.sendCompleteToken}
             />

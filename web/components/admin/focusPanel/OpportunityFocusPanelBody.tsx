@@ -11,6 +11,7 @@ import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocu
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import { focusPanelWorkModeModelFromProvisioningAnswer } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromProvisioningAnswer";
 import { overlayChildMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayChildMissionOntoSettledFocusModel";
+import { overlayContextMissionOntoSettledFocusModel } from "@/lib/adminV2/runtime/focusPanel/overlayContextMissionOntoSettledFocusModel";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -141,13 +142,33 @@ export default function OpportunityFocusPanelBody({
                 }
                 return overlaid;
             }
+            // Case Attention: EPP-derived Mission from the provisioning answer must not be
+            // replaced by Settlement's raw shared-stage (Lead) Current Work.
+            if (commitCritical?.subjectGrain?.grain === "case") {
+                const overlaid = overlayContextMissionOntoSettledFocusModel(settled, commitCritical);
+                if (typeof window !== "undefined") {
+                    window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
+                        path: "enriched+context_mission_overlay",
+                        subjectId: commitCritical.subjectId,
+                        subjectGrain: commitCritical.subjectGrain,
+                        situation: commitCritical.situation,
+                        primaryAction: commitCritical.primaryAction,
+                        stageWorkRuntimePresent: Boolean(commitCritical.stageWorkRuntime),
+                        settledStage:
+                            settled.context.stageWorkRuntime?.stage_key
+                            ?? settled.context.businessProcess.stageKey,
+                        missionStage: commitCritical.situation?.stageKey ?? null,
+                    };
+                }
+                return overlaid;
+            }
             if (typeof window !== "undefined") {
                 window.__ALLOY_FOCUS_CHILD_MISSION_DIAG__ = {
                     path: "enriched_no_overlay",
                     subjectId: commitCritical?.subjectId ?? null,
                     subjectGrain: commitCritical?.subjectGrain ?? null,
                     settledTitle: settled.title,
-                    reason: "subjectGrain.grain !== child",
+                    reason: "subjectGrain.grain not child or case",
                 };
             }
             return settled;

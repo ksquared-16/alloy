@@ -11,11 +11,21 @@ import { resolveCurrentWorkActionSurface } from "./resolveCurrentWorkActionSurfa
 import { resolveOpportunityTourScheduleFromTruth } from "./resolveOpportunityTourScheduleFromTruth";
 import type { CurrentWorkActionVM } from "./currentWorkSurfaceTypes";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { prefetchTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
+import { prefetchTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
 import { prefetchActiveDrawerFamilyWorkspace } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import { prefetchEligibleEnrollmentChildren } from "./eligibleEnrollmentChildrenWarmCache";
 import { prefetchFormDelivery } from "./formDeliveryWarmCache";
 import { commandTimingMark } from "./commandSurfaceTiming";
+
+function resolveWarmOpportunityId(context: OperationalContext): string {
+    return resolveFocusPanelMutationOpportunityId({
+        subjectId: context.subject.id,
+        grain: context.grain ?? null,
+        truth: (context.truth ?? null) as Record<string, unknown> | null,
+    });
+}
 
 /** Best-effort dynamic chunk preload so centered hosts open without a blank pause. */
 function preloadCommandPanelChunk(importer: () => Promise<unknown>): void {
@@ -38,11 +48,17 @@ export function warmCurrentWorkCapabilityOnIntent(
         case "communications_composer": {
             // The communication capability's host — warm the family workspace VM (recipients, thread,
             // channel) so the composer opens with content instead of "Loading conversation…".
-            prefetchActiveDrawerFamilyWorkspace("opportunities", context.subject.id);
+            const opportunityId = resolveWarmOpportunityId(context);
+            // Always preload the composer chunk — Message / Contact Family / Tour share one host.
+            // Without this, Message opened a cold dynamic() import and lost the race to elevation dismiss.
+            preloadCommandPanelChunk(
+                () => import("@/components/admin/communications/CommunicationsDrawerSection"),
+            );
+            prefetchActiveDrawerFamilyWorkspace("opportunities", opportunityId);
             if (actionKey === "send_tour_invitation") {
-                preloadCommandPanelChunk(
-                    () => import("@/components/admin/focusPanel/cards/CurrentWorkTourInvitationPanel"),
-                );
+                commandTimingMark("send_tour_invitation", "intent");
+                // Mint + template render is the slow path — start prepare on hover/focus.
+                prefetchTourInvitationPrepare(opportunityId);
             }
             return;
         }

@@ -5,10 +5,16 @@
  * configured `fieldKeys`, each key resolves to live row data; absent values omit the slot.
  */
 
+import { formatFocusPanelDobAgeLine } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
+import { formatQueueRecordDateDisplay } from "@/lib/adminFormatters";
 import { formatQueueRowNameDisplay } from "@/lib/presentation/formatQueueRowNameDisplay";
 import { formatQueueRowPhoneDisplay } from "@/lib/presentation/runtime/formatQueueRowContactDisplay";
 import { isCollectionFieldKey } from "@/lib/presentation/collectionFieldPresentation";
 import { resolveQueueRowChildrenFieldFromContext } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
+import {
+    isQueueRecordDateFieldKey,
+    isQueueRecordDobFieldKey,
+} from "@/lib/layout/runtime/queueRecordScopedResolve";
 import {
     resolveQueueRowProcessStageLabel,
     resolveQueueRowRecordStatusLabel,
@@ -89,11 +95,25 @@ export function resolveQueueRowFieldValueFromContext(
                 || null
             );
         case "child.date_of_birth": {
-            const dob =
+            const subjectWithDob =
                 context.row_subject?.date_of_birth?.trim()
-                || context.row_subjects?.find((s) => s.date_of_birth)?.date_of_birth?.trim()
-                || null;
-            return dob || null;
+                    ? context.row_subject
+                    : context.row_subjects?.find((s) => s.date_of_birth?.trim()) ?? null;
+            const dob = subjectWithDob?.date_of_birth?.trim() || null;
+            if (!dob) return null;
+            // Doctrine: DOB pairs numeric date + compact age (`3/15/2026 (4m)`), never raw ISO.
+            return (
+                formatFocusPanelDobAgeLine(dob, subjectWithDob?.age_label)
+                || formatQueueRecordDateDisplay(dob)
+                || dob
+            );
+        }
+        case "child.gender": {
+            return (
+                context.row_subject?.gender_label?.trim()
+                || context.row_subjects?.find((s) => s.gender_label?.trim())?.gender_label?.trim()
+                || null
+            );
         }
         case "person.primary_contact_name":
             return context.primary_contact?.display_name?.trim() || null;
@@ -227,6 +247,11 @@ function resolveConfiguredFieldDisplay(
     }
     if (key === "person.phone" || key === "person.primary_phone") {
         return formatQueueRowPhoneDisplay(raw);
+    }
+    // DOB already doctrine-formatted in resolveQueueRowFieldValueFromContext.
+    if (!isQueueRecordDobFieldKey(key) && isQueueRecordDateFieldKey(key)) {
+        const formatted = formatQueueRecordDateDisplay(raw);
+        return formatted.split(" · ")[0]?.trim() || formatted || raw;
     }
     return formatQueueRowNameDisplay(raw, config?.nameDisplayByFieldKey?.[key], key);
 }

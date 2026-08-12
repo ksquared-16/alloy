@@ -72,6 +72,10 @@ import {
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
 import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
+import {
+    effectiveParticipantStageKeysFromRow,
+    resolveContextMissionStages,
+} from "@/lib/process/engine/resolveContextMissionStages";
 import { resolveQueueRowVariant } from "@/lib/presentation/runtime/resolveQueueRowVariant";
 import { applyQueueRowVariantGroupAndSortCriteria } from "@/lib/presentation/runtime/applyQueueRowVariantGroupAndSortCriteria";
 import {
@@ -117,6 +121,7 @@ import {
     resolveOpportunityStageWorkSlice,
     type OpportunityStageWorkSlice,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityStageWorkSlice";
+import { projectStageWorkRuntimeSync } from "@/lib/lifecycle/projectStageWorkRuntime";
 import {
     childQueueRowContext,
     childSubjectIdentityTruthBindings,
@@ -288,8 +293,12 @@ export type ProvisioningAnswer =
           /**
            * U-O5 — capability, not decoration.
            *
-           * NEVER null on a family answer: identity alone is not operational, so the family path
-           * refuses (`no_truthful_primary_action`) rather than claiming `operational` without one.
+           * On a family answer keyed by raw shared stage alone: never null — identity alone is not
+           * operational, so that path refuses (`no_truthful_primary_action`).
+           *
+           * When family Mission is derived from Effective Process Position onto a stage that
+           * publishes work templates without a primary_action (typical child-segment stages),
+           * MAY be null with `primaryActionAbsence` set — What's Next still projects from templates.
            *
            * MAY be null on a CHILD answer, and that is a rendered state rather than a degraded one.
            * Firefly's child-grain stages configure no primary action at all, and a child riding a
@@ -298,7 +307,7 @@ export type ProvisioningAnswer =
            * "nothing is configured" never renders the same as "something failed".
            */
           primaryAction: TruthfulPrimaryAction | null;
-          /** Why {@link primaryAction} is null. Null when an action IS present. Child answers only. */
+          /** Why {@link primaryAction} is null. Null when an action IS present. */
           primaryActionAbsence?: ChildPrimaryActionAbsence | null;
           /**
            * The canonical four-part child identity, carried WHOLE (`docs/runtime/GRAIN-AUTHORITY-MAP.md`).
@@ -1115,6 +1124,10 @@ export async function composeWorkUnitProvisioningAnswer(
     let currentBusinessState: CurrentBusinessState;
     let primaryAction: TruthfulPrimaryAction | null;
     let childComposition: ChildSurfaceComposition | null = null;
+    let familyMissionPrimaryAbsence: ChildPrimaryActionAbsence | null = null;
+    let familyMissionParticipantCount = 0;
+    let familyMissionStageKeys: string[] = [];
+    let familyMissionHomogeneous = true;
 
     if (childSubjectRow) {
         // ── THE CHILD RUNTIME VIEWMODEL — composition only. Every field below is READ from Business
@@ -1136,14 +1149,26 @@ export async function composeWorkUnitProvisioningAnswer(
         currentBusinessState = childComposition.currentBusinessState;
         primaryAction = childComposition.primaryAction;
     } else {
-        // ── FAMILY PATH — UNCHANGED. Identity alone is NOT operational here: a family surface with no
-        //    reachable primary action still refuses, exactly as it did before Phase 4.
-        const subjectStageKey = strOrNull((subjectRow as Record<string, unknown>).stage_key);
-        const found = stages.find((s) => s.key === subjectStageKey) ?? null;
-        if (!found) {
+        // ── FAMILY PATH — Mission from Effective Process Position, not raw stage_key alone. ──
+        // Inventory / catch-all Work Views (empty opportunity_stage lens) must not impose a stale
+        // shared-stage Mission when authorized participants have diverged. Shared context stage
+        // remains authority only when no participant stage signal exists.
+        const subjectRecord = subjectRow as Record<string, unknown>;
+        const contextStageKey = strOrNull(subjectRecord.stage_key);
+        const mission = resolveContextMissionStages({
+            contextStageKey,
+            effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(subjectRecord),
+            workViewLensStageKeys: lensStageKeys(activeView),
+        });
+        familyMissionParticipantCount = mission.contributingParticipantCount;
+        familyMissionStageKeys = [...mission.missionStageKeys];
+        familyMissionHomogeneous = mission.homogeneous;
+        const missionStageKey = mission.primaryMissionStageKey;
+        const found = stages.find((s) => s.key === missionStageKey) ?? null;
+        if (!found || !missionStageKey) {
             return fail(
                 "no_truthful_primary_action",
-                `subject holds stage "${subjectStageKey}" which is not an active configured stage`,
+                `subject holds no resolvable Mission stage (context="${contextStageKey}", epp=[${mission.missionStageKeys.join(",")}])`,
                 workUnit,
                 navFrame,
             );
@@ -1151,7 +1176,19 @@ export async function composeWorkUnitProvisioningAnswer(
         const foundPlan = found.stage_operating_plan_v1 ?? null;
         const template = foundPlan?.work_templates?.find((t) => t.primary) ?? foundPlan?.work_templates?.[0] ?? null;
         const actionRef = template?.primary_action?.action_ref ?? null;
-        if (!foundPlan || !template || !actionRef) {
+        if (!foundPlan || !template) {
+            return fail(
+                "no_truthful_primary_action",
+                `stage "${found.key}" offers no work templates — the answer will not claim operational on identity alone`,
+                workUnit,
+                navFrame,
+            );
+        }
+        // Child-segment stages (Waitlist, Assignment, …) often publish templates without a
+        // primary_action. When Mission is EPP-derived onto such a stage, allow null primary
+        // action with an absence reason — same as the child path — so What's Next can project
+        // from templates instead of falling back to stale Lead Contact Family.
+        if (!actionRef && !mission.derivedFromEffectiveParticipants) {
             return fail(
                 "no_truthful_primary_action",
                 `stage "${found.key}" offers no reachable primary action — the answer will not claim operational on identity alone`,
@@ -1168,11 +1205,14 @@ export async function composeWorkUnitProvisioningAnswer(
             workTemplateLabel: template.label,
             required: template.required,
         };
-        primaryAction = {
-            actionRef,
-            label: template.primary_action?.override_label ?? template.label,
-            workTemplateKey: template.template_key,
-        };
+        primaryAction = actionRef
+            ? {
+                  actionRef,
+                  label: template.primary_action?.override_label ?? template.label,
+                  workTemplateKey: template.template_key,
+              }
+            : null;
+        familyMissionPrimaryAbsence = actionRef ? null : "work_template_has_no_action";
     }
 
     // ── COMMIT-CRITICAL FOCUS PANEL — the answer OWNS the operational Current Work projection. ──
@@ -1288,7 +1328,54 @@ export async function composeWorkUnitProvisioningAnswer(
     }
     // B: the actions projection ran concurrently above — join it here (no serial latency added).
     const actionsProjection = await actionsProjectionPromise;
-    const focusPanelStageWork = await focusPanelStageWorkPromise;
+    let focusPanelStageWork = await focusPanelStageWorkPromise;
+
+    // Mixed context Mission: keep the primary stage-work slice, then append each additional
+    // Mission stage's primary template as secondary items (sync from already-loaded dept metadata —
+    // no extra task fetch waterfall). Labels come from published plans, never hardcoded stage names.
+    if (
+        !childSubjectRow
+        && !familyMissionHomogeneous
+        && familyMissionStageKeys.length > 1
+        && focusPanelStageWork?.stage_work_runtime
+        && wuRow.department_id
+    ) {
+        const primaryRuntime = focusPanelStageWork.stage_work_runtime;
+        const extraItems = [];
+        for (const extraKey of familyMissionStageKeys.slice(1)) {
+            if (extraKey === primaryRuntime.stage_key) continue;
+            const extra = projectStageWorkRuntimeSync({
+                orgId: req.orgId,
+                opportunityId: chosen.entityId,
+                departmentId: String(wuRow.department_id),
+                departmentMetadata: deptRow?.metadata,
+                builderStageKey: extraKey,
+                stageLabel: stages.find((s) => s.key === extraKey)?.label ?? null,
+                openRows: [],
+                completedRows: [],
+            });
+            if (extra?.primary) {
+                extraItems.push({
+                    ...extra.primary,
+                    role: "secondary" as const,
+                    label: `${extra.primary.label}${extra.stage_label ? ` · ${extra.stage_label}` : ""}`,
+                });
+            }
+        }
+        if (extraItems.length) {
+            focusPanelStageWork = {
+                ...focusPanelStageWork,
+                stage_work_runtime: {
+                    ...primaryRuntime,
+                    additional: [...primaryRuntime.additional, ...extraItems],
+                    template_keys: [
+                        ...primaryRuntime.template_keys,
+                        ...extraItems.map((i) => i.template_key),
+                    ],
+                },
+            };
+        }
+    }
 
     // A — COMMIT-CRITICAL SUBJECT IDENTITY TRUTH (DOMAIN-owned key declaration). The opportunity domain
     // composer declares WHICH truth bindings the committed Household + Children cards read
@@ -1360,6 +1447,17 @@ export async function composeWorkUnitProvisioningAnswer(
         ...(primaryContactPhone ? { "person.primary_phone": primaryContactPhone } : {}),
         ...(primaryContactEmail ? { "person.primary_email": primaryContactEmail } : {}),
         ...(inquiryChildren != null ? { _inquiry_children: inquiryChildren } : {}),
+        // Context Mission metadata (family grain) — presentation may aggregate participant count;
+        // never invents stage labels (keys only; labels come from stage records / runtime).
+        ...(!childComposition && familyMissionStageKeys.length
+            ? {
+                  _mission_stage_keys: familyMissionStageKeys,
+                  _mission_homogeneous: familyMissionHomogeneous,
+                  ...(familyMissionParticipantCount > 0
+                      ? { _mission_participant_count: familyMissionParticipantCount }
+                      : {}),
+              }
+            : {}),
     };
     // Child surface: Attention bindings (child.*) + family Truth bindings (person.* / children).
     // Family bindings are Settlement context for the Focus Panel — not a substitution of subject.
@@ -1448,7 +1546,7 @@ export async function composeWorkUnitProvisioningAnswer(
         })(),
         currentBusinessState,
         primaryAction,
-        primaryActionAbsence: childComposition?.primaryActionAbsence ?? null,
+        primaryActionAbsence: childComposition?.primaryActionAbsence ?? familyMissionPrimaryAbsence,
         childIdentity: childComposition?.identity ?? null,
         focusPanelStageWork,
         subjectIdentityTruth,

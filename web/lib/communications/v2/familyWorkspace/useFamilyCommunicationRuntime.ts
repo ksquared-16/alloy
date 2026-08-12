@@ -35,6 +35,16 @@ import {
     buildContactFamilySendSuccessMessage,
     dispatchContactFamilySendComplete,
 } from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
+import {
+    appendUrlToComposerDraft,
+} from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
+import { provisionTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
+import { resolveFamilyComposeIntent } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
+import { invalidateTourInvitationPrepare } from "@/lib/tours/tourInvitationPrepareWarmCache";
 
 export type FamilyRuntimeTimelineMessage = {
     id?: string | null;
@@ -180,17 +190,29 @@ export type FamilyCommunicationRuntimeInput = {
      * (no auto thread open) and completes Contact Family via the server seam.
      */
     entryContext?: "current_work" | null;
+    /**
+     * Command entry semantics. `new_message` skips Activity auto-select of an
+     * existing thread (Send Message / Contact Family / Tour Invitation).
+     * Activity browsing uses default `browse`.
+     */
+    composeIntent?: FamilyComposeIntent | null;
+    /** Prefill for New Message (Tour Invitation subject/body/link, etc.). */
+    draftSeed?: FamilyComposeDraftSeed | null;
 };
 
 export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeInput) {
     const surfaceVariant = input.surfaceVariant ?? "default";
     const isActivityEmbed = surfaceVariant === "activity_embed";
     const isThreadScopedSurface = surfaceVariant === "activity_embed" || surfaceVariant === "workspace_inbox";
+    const composeIntent = resolveFamilyComposeIntent(input.composeIntent);
+    const forceNewMessage = composeIntent === "new_message";
+    const draftSeed = input.draftSeed ?? null;
     const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() =>
-        input.channel === "sms" ? "sms" : "email",
+        draftSeed?.channel === "sms" || input.channel === "sms" ? "sms" : "email",
     );
     const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
-    const initialThreadId = input.initialThreadId ?? null;
+    // Command-driven New Message never inherits a historical thread id.
+    const initialThreadId = forceNewMessage ? null : (input.initialThreadId ?? null);
     const initialPrefetchParams = useMemo(
         () => resolveFamilyRuntimePrefetchParams(input, liveChannel, initialThreadId),
         [input.customerId, input.entity?.entityType, input.entity?.entityId, liveChannel, initialThreadId]
@@ -209,22 +231,54 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     const [servedFromWarmCache, setServedFromWarmCache] = useState(() => Boolean(vm));
     const [error, setError] = useState<string | null>(null);
     const [selectedThreadId, setSelectedThreadId] = useState<string | null>(initialThreadId);
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(() => vm?.selectedRecipients ?? []);
-    const [subjectDraft, setSubjectDraft] = useState("");
-    const [bodyDraft, setBodyDraft] = useState("");
+    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(() => {
+        const seeded = draftSeed?.recipientPersonIds?.map((id) => id.trim()).filter(Boolean) ?? [];
+        return seeded.length ? seeded : (vm?.selectedRecipients ?? []);
+    });
+    const [subjectDraft, setSubjectDraft] = useState(() => String(draftSeed?.subject ?? "").trim());
+    const [bodyDraft, setBodyDraft] = useState(() => {
+        if (draftSeed?.channel === "sms") {
+            return String(draftSeed.smsBody ?? draftSeed.body ?? "").trim();
+        }
+        return String(draftSeed?.body ?? "").trim();
+    });
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
     const [sending, setSending] = useState(false);
     const [sendCompleteToken, setSendCompleteToken] = useState(0);
     const mountedRef = useRef(false);
     const activityEmbedBootstrappedRef = useRef(false);
-    const hasUserThreadSelectionRef = useRef(false);
+    const draftSeedAppliedRef = useRef(false);
+    const hasUserThreadSelectionRef = useRef(forceNewMessage);
+    // Insert may set this without a draftSeed; never wipe Insert-provisioned ids on re-render.
+    const tourInvitationIdRef = useRef<string | null>(draftSeed?.tourInvitationId?.trim() || null);
+    /** Deferred Current Work completion — fired on Done after success ack, not on confirm. */
+    const pendingContactFamilyCompleteRef = useRef<{
+        opportunity_id: string;
+        channel: "email" | "sms";
+        recipient_label: string | null;
+        success_message: string;
+        task_id: string | null;
+        associated: boolean;
+        outcome_key: string | null;
+        tour_invitation: boolean;
+    } | null>(null);
+    const confirmInFlightRef = useRef(false);
+    const [tourInvitationAck, setTourInvitationAck] = useState(Boolean(draftSeed?.tourInvitationId));
     const loadRequestSeqRef = useRef(0);
     const selectedThreadIdRef = useRef<string | null>(selectedThreadId);
     selectedThreadIdRef.current = selectedThreadId;
     const familyScopeKey = useMemo(
-        () => `${input.customerId ?? ""}|${input.entity?.entityType ?? ""}|${input.entity?.entityId ?? ""}|${initialThreadId ?? ""}`,
-        [input.customerId, input.entity?.entityType, input.entity?.entityId, initialThreadId],
+        () =>
+            `${input.customerId ?? ""}|${input.entity?.entityType ?? ""}|${input.entity?.entityId ?? ""}|${initialThreadId ?? ""}|${composeIntent}|${draftSeed?.tourInvitationId ?? ""}`,
+        [
+            input.customerId,
+            input.entity?.entityType,
+            input.entity?.entityId,
+            initialThreadId,
+            composeIntent,
+            draftSeed?.tourInvitationId,
+        ],
     );
 
     const syncThreadContext = useCallback(
@@ -343,20 +397,38 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
 
     useEffect(() => {
         loadRequestSeqRef.current += 1;
-        hasUserThreadSelectionRef.current = Boolean(initialThreadId);
+        hasUserThreadSelectionRef.current = forceNewMessage || Boolean(initialThreadId);
         setSelectedThreadId(initialThreadId);
         selectedThreadIdRef.current = initialThreadId;
-        setSubjectDraft("");
-        setBodyDraft("");
+        draftSeedAppliedRef.current = false;
+        const seed = draftSeed;
+        tourInvitationIdRef.current = seed?.tourInvitationId?.trim() || null;
+        setTourInvitationAck(Boolean(seed?.tourInvitationId?.trim()));
+        pendingContactFamilyCompleteRef.current = null;
+        if (seed) {
+            setSubjectDraft(String(seed.subject ?? "").trim());
+            setBodyDraft(
+                seed.channel === "sms"
+                    ? String(seed.smsBody ?? seed.body ?? "").trim()
+                    : String(seed.body ?? "").trim(),
+            );
+            const recipients = (seed.recipientPersonIds ?? []).map((id) => id.trim()).filter(Boolean);
+            if (recipients.length) setSelectedRecipientIds(recipients);
+            if (seed.channel === "sms" || seed.channel === "email") setWorkspaceMode(seed.channel);
+            draftSeedAppliedRef.current = true;
+        } else {
+            setSubjectDraft("");
+            setBodyDraft("");
+        }
         setSendResult(null);
         setSendError(null);
-        activityEmbedBootstrappedRef.current = false;
+        activityEmbedBootstrappedRef.current = forceNewMessage;
         const params = resolveFamilyRuntimePrefetchParams(input, liveChannel, initialThreadId);
         const warm = params ? getDrawerFamilyWorkspaceWarm(params) : null;
         setServedFromWarmCache(Boolean(warm || input.initialPreviewVm));
         void loadRef.current(initialThreadId, true);
         // Scope reset only — must not re-run when liveChannel/load identity changes (thread switch).
-    }, [familyScopeKey, input.initialPreviewVm]);
+    }, [familyScopeKey, input.initialPreviewVm, forceNewMessage]);
 
     useEffect(() => {
         const params = resolveFamilyRuntimePrefetchParams(input, liveChannel, selectedThreadId);
@@ -396,6 +468,9 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     }, [isThreadScopedSurface, selectedThreadId, syncThreadContext, vm]);
 
     useEffect(() => {
+        // Activity browse may auto-open the first thread with messages.
+        // Explicit New Message commands must not inherit history/Reply.
+        if (forceNewMessage) return;
         if (!isActivityEmbed || !vm || activityEmbedBootstrappedRef.current) return;
         if (initialThreadId || hasUserThreadSelectionRef.current || selectedThreadId) return;
         activityEmbedBootstrappedRef.current = true;
@@ -406,7 +481,7 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         syncThreadContext(firstThread.id, vm);
         const channel = resolveLoadComposerChannel(firstThread.id, vm, liveChannel);
         void load(firstThread.id, false, { channel });
-    }, [initialThreadId, isActivityEmbed, liveChannel, load, selectedThreadId, syncThreadContext, vm]);
+    }, [forceNewMessage, initialThreadId, isActivityEmbed, liveChannel, load, selectedThreadId, syncThreadContext, vm]);
 
     const startNewMessage = useCallback(() => {
         hasUserThreadSelectionRef.current = true;
@@ -434,6 +509,10 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         async (confirm: boolean) => {
             const cust = vm?.scope.customerId;
             if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
+            if (confirm) {
+                if (confirmInFlightRef.current) return;
+                confirmInFlightRef.current = true;
+            }
             setSending(true);
             setSendError(null);
             const opportunityId =
@@ -481,15 +560,46 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                         channel: liveChannel,
                         recipientLabel,
                     });
+                    const tourInvitationId = tourInvitationIdRef.current;
+                    const wasTourInvitation = Boolean(tourInvitationId);
+                    if (wasTourInvitation) setTourInvitationAck(true);
 
                     if (fromCurrentWork) {
-                        // Contact Family entry: stay on Focus Panel — do not open the thread.
+                        // Keep success result for centered acknowledgement; close workspace on Done.
+                        if (tourInvitationId && opportunityId) {
+                            try {
+                                await fetch("/api/admin/actions/execute", {
+                                    method: "POST",
+                                    credentials: "include",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                        action_key: "send_tour_invitation",
+                                        entity_type: "opportunity",
+                                        entity_id: opportunityId,
+                                        context: { surface: "focus_panel", origin: "operator" },
+                                        payload: { mode: "mark_sent", invitation_id: tourInvitationId },
+                                        confirmation: { confirmed: true },
+                                    }),
+                                });
+                            } catch {
+                                // Send already succeeded — invitation mark is best-effort; Activity still records outbound.
+                            }
+                            invalidateTourInvitationPrepare(opportunityId);
+                            tourInvitationIdRef.current = null;
+                        }
                         setBodyDraft("");
                         if (!selectedThreadId) setSubjectDraft("");
-                        setSendResult(null);
-                        setSendError(null);
-                        setSendCompleteToken((n) => n + 1);
                         if (opportunityId) {
+                            pendingContactFamilyCompleteRef.current = {
+                                opportunity_id: opportunityId,
+                                channel: liveChannel,
+                                recipient_label: recipientLabel,
+                                success_message: successMessage,
+                                task_id: data.contact_attempt_association?.task_id ?? null,
+                                associated: data.contact_attempt_association?.associated === true,
+                                outcome_key: data.contact_attempt_association?.outcome_key ?? null,
+                                tour_invitation: wasTourInvitation,
+                            };
                             dispatchOperationalWorkRefresh({
                                 opportunity_id: opportunityId,
                                 task_id: data.contact_attempt_association?.task_id ?? null,
@@ -499,15 +609,6 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                                 "activity",
                                 "operational_tasks",
                             ]);
-                            dispatchContactFamilySendComplete({
-                                opportunity_id: opportunityId,
-                                channel: liveChannel,
-                                recipient_label: recipientLabel,
-                                success_message: successMessage,
-                                task_id: data.contact_attempt_association?.task_id ?? null,
-                                associated: data.contact_attempt_association?.associated === true,
-                                outcome_key: data.contact_attempt_association?.outcome_key ?? null,
-                            });
                         }
                         return;
                     }
@@ -526,9 +627,6 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                     }
                     setBodyDraft("");
                     if (!priorThreadId) setSubjectDraft("");
-                    setSendResult(null);
-                    setSendError(null);
-                    setSendCompleteToken((n) => n + 1);
                     if (opportunityId) {
                         dispatchOperationalWorkRefresh({
                             opportunity_id: opportunityId,
@@ -540,11 +638,14 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                             "operational_tasks",
                         ]);
                     }
+                    // Keep sendResult (mode: sent) for centered success acknowledgement.
+                    // sendCompleteToken bumps on Done so reply collapse happens after ack.
                 }
             } catch {
                 setSendError("Send failed");
             } finally {
                 setSending(false);
+                if (confirm) confirmInFlightRef.current = false;
             }
         },
         [
@@ -585,6 +686,56 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
     const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
     const healthTone = health.engagementScore >= 66 ? "text-alloy-juniper" : health.engagementScore >= 33 ? "text-alloy-amber" : "text-red-600";
     const healthDot = health.engagementScore >= 66 ? "bg-alloy-juniper" : health.engagementScore >= 33 ? "bg-alloy-amber" : "bg-red-500";
+
+    const dismissSendResult = useCallback(() => {
+        setSendResult(null);
+        setSendError(null);
+    }, []);
+
+    /**
+     * Done on success (or dismiss error) — collapses reply / closes Current Work command surface.
+     * Refreshes already fired on confirm; this only completes the acknowledgement lifecycle.
+     */
+    const acknowledgeSendSuccess = useCallback(() => {
+        setSendResult(null);
+        setSendError(null);
+        setSendCompleteToken((n) => n + 1);
+        const pending = pendingContactFamilyCompleteRef.current;
+        pendingContactFamilyCompleteRef.current = null;
+        if (pending) {
+            dispatchContactFamilySendComplete({
+                opportunity_id: pending.opportunity_id,
+                channel: pending.channel,
+                recipient_label: pending.recipient_label,
+                success_message: pending.success_message,
+                task_id: pending.task_id,
+                associated: pending.associated,
+                outcome_key: pending.outcome_key,
+            });
+        }
+        setTourInvitationAck(false);
+    }, []);
+
+    /**
+     * Insert ▾ → Tour Invitation Link — same prepare authority as Send Tour Invitation.
+     * Provisions a fresh URL into the visible draft; does not send.
+     */
+    const insertTourInvitationLink = useCallback(async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+        const opportunityId =
+            input.entity?.entityType === "opportunities" ? input.entity.entityId.trim() : "";
+        if (!opportunityId) {
+            return { ok: false, message: "Tour invitation links require an opportunity context." };
+        }
+        const prepared = await provisionTourInvitationPrepare(opportunityId, { forceFresh: true });
+        const url = String(prepared?.invitationActionUrl ?? "").trim();
+        if (!prepared?.invitationId || !url) {
+            return { ok: false, message: "Could not provision a Tour Invitation Link. Try again." };
+        }
+        tourInvitationIdRef.current = prepared.invitationId;
+        setTourInvitationAck(true);
+        setBodyDraft((prev) => appendUrlToComposerDraft(prev, url));
+        return { ok: true };
+    }, [input.entity?.entityType, input.entity?.entityId]);
 
     const allRecipients = vm?.recipientGroups.flatMap((g) => g.recipients) ?? [];
     const childNames = vm?.children.map((c) => (c.ageLabel ? `${c.name} (${c.ageLabel})` : c.name)) ?? [];
@@ -634,7 +785,10 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
         showAllMessages,
         refreshCurrent,
         send,
-        dismissSendResult: () => { setSendResult(null); setSendError(null); },
+        dismissSendResult,
+        acknowledgeSendSuccess,
+        tourInvitationAck,
+        insertTourInvitationLink,
         toggleRecipient: (id: string) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true)),
     };
 }

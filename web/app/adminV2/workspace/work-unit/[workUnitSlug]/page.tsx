@@ -1,5 +1,6 @@
 import ProvisioningAnswerSeed from "@/components/admin/workspace/ProvisioningAnswerSeed";
 import { composeProvisioningAnswerForRoute } from "@/lib/runtime/provisioning/composeProvisioningAnswerForRoute";
+import { toRscPlainJson } from "@/lib/runtime/toRscPlainJson";
 
 type PageProps = {
     params: Promise<{ workUnitSlug: string }>;
@@ -54,7 +55,7 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
             target={workUnitSlug}
             lens={requestedWorkViewId}
             subject={requestedSubjectId}
-            answer={answer}
+            answer={answer ? toRscPlainJson(answer) : null}
             producer={`page(subject=${requestedSubjectId ?? "null"})`}
         />
     );

@@ -694,10 +694,16 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         dueLabel: context.signals.work.primary?.dueLabel ?? null,
     });
 
-    const title =
+    const stageLabel = runtime?.stage_label?.trim() || null;
+    const workTitle =
         templateConfig?.title?.trim()
         ?? primaryWorkItem?.label?.trim()
-        ?? (runtime && checklist.length > 0 ? runtime.stage_label?.trim() : null)
+        ?? null;
+    // Stage owns process position; work owns operational detail. Prefer stage label so
+    // What's Next does not paint Current Work (e.g. "Review waitlist position") as lifecycle.
+    const title =
+        stageLabel
+        ?? workTitle
         ?? "No current work configured";
 
     const description =

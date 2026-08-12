@@ -221,7 +221,26 @@ describe("What's Next config fidelity + Tour grouping + Send Invitation compose"
         expect(branch).toContain('mode: "prepare"');
         expect(branch).toContain('defaultChannel: "email"');
         expect(branch).toContain("draftBody");
+        expect(branch).toContain("tourInvitationDraftFromDetail");
         expect(branch).not.toMatch(/\bwindow\.confirm\b/);
         expect(branch).not.toMatch(/\bwindow\.alert\b/);
+    });
+
+    it("What's Next Tour invitation uses canonical New Message host with prepare seed", () => {
+        const panel = read("components/admin/focusPanel/cards/CurrentWorkActionPanel.tsx");
+        expect(panel).toContain("useTourInvitationComposeSeed");
+        expect(panel).toContain('composeIntent="new_message"');
+        expect(panel).toContain("CommunicationsDrawerSection");
+        expect(panel).not.toContain("CurrentWorkTourInvitationPanel");
+        expect(panel).not.toContain("ComposerChannelToggle");
+
+        const warm = read("lib/adminV2/runtime/focusPanel/currentWork/warmCurrentWorkCapabilities.ts");
+        expect(warm).toContain("prefetchTourInvitationPrepare");
+        expect(warm).toContain("resolveFocusPanelMutationOpportunityId");
+
+        const grouped = read("components/admin/focusPanel/cards/CurrentWorkTourGroupedActions.tsx");
+        expect(grouped).toContain("w-full min-w-0");
+        expect(grouped).not.toContain("min-w-[12rem]");
+        expect(grouped).not.toContain("inline-flex");
     });
 });

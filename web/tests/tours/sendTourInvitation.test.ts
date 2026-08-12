@@ -26,6 +26,7 @@ const INVITATION = "55555555-0000-4000-8000-00000000000f";
 
 const slotsMock = vi.fn();
 const mintMock = vi.fn();
+const supersedeMock = vi.fn();
 const commsMock = vi.fn();
 const recipientMock = vi.fn();
 const eventMock = vi.fn();
@@ -36,6 +37,7 @@ vi.mock("@/lib/tours/availability/computeAvailableTourSlots", () => ({
 vi.mock("@/lib/tours/invitation/mintTourInvitation", async (orig) => ({
     ...(await orig<Record<string, unknown>>()),
     mintTourInvitation: (...a: unknown[]) => mintMock(...a),
+    supersedeTourInvitation: (...a: unknown[]) => supersedeMock(...a),
 }));
 vi.mock("@/lib/tours/comms/tourCommsOrchestrator", () => ({
     orchestrateTourInvitationComms: (...a: unknown[]) => commsMock(...a),
@@ -121,6 +123,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     slotsMock.mockResolvedValue([slot(), slot({ startAt: "2026-08-11T16:00:00.000Z", ruleId: "rule-2" })]);
     mintMock.mockResolvedValue(mintOk);
+    supersedeMock.mockResolvedValue(undefined);
     recipientMock.mockResolvedValue(recipient);
     commsMock.mockResolvedValue({
         ok: true,
@@ -176,6 +179,41 @@ describe("sendTourInvitation — composition", () => {
         expect(res.ok).toBe(true);
         if (!res.ok) return;
         expect(res.idempotentReplay).toBe(true);
+        expect(supersedeMock).not.toHaveBeenCalled();
+    });
+
+    it("reissues with fresh tokens when a prior invitation replays without credentials", async () => {
+        const reissued: MintInvitationResult = {
+            ...mintOk,
+            invitationId: "66666666-0000-4000-8000-0000000000aa",
+            idempotentReplay: false,
+        };
+        mintMock
+            .mockResolvedValueOnce({
+                ok: true,
+                invitationId: INVITATION,
+                status: "active",
+                idempotentReplay: true,
+                actions: [],
+            })
+            .mockResolvedValueOnce(reissued);
+
+        const res = await sendTourInvitation({
+            supabase: fakeSupabase(),
+            ...baseArgs,
+            mode: "prepare",
+        });
+        expect(res.ok).toBe(true);
+        if (!res.ok) return;
+        expect(supersedeMock).toHaveBeenCalledWith(
+            expect.objectContaining({ invitationId: INVITATION, orgId: ORG }),
+        );
+        expect(mintMock).toHaveBeenCalledTimes(2);
+        const reissueKey = (mintMock.mock.calls[1][0] as { idempotencyKey: string }).idempotencyKey;
+        expect(reissueKey).toContain(":reissue:");
+        expect(res.invitationId).toBe(reissued.invitationId);
+        expect(res.draft?.invitationActionUrl).toContain("TOKEN_VIEW");
+        expect(res.idempotentReplay).toBe(false);
     });
 
     it("gives every option its own secure link and offers a decline link", async () => {
@@ -246,6 +284,85 @@ describe("sendTourInvitation — failures read in operator language", () => {
         expect(res.ok).toBe(false);
         if (res.ok) return;
         expect(res.code).toBe("missing_opportunity");
+    });
+
+    it("resolves a child process_instance entity id to the family opportunity", async () => {
+        const PROCESS = "93722453-33e9-4207-8774-8931ee2c855d";
+        const calls: string[] = [];
+        const supabase = {
+            from(table: string) {
+                calls.push(table);
+                if (table === "process_instances") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({
+                                    maybeSingle: async () => ({
+                                        data: {
+                                            id: PROCESS,
+                                            context_type: "opportunity",
+                                            context_id: OPP,
+                                        },
+                                        error: null,
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "opportunities") {
+                    let idFilter = "";
+                    const chain: Record<string, unknown> = {
+                        select: () => chain,
+                        eq: (k: string, v: unknown) => {
+                            if (k === "id") idFilter = String(v);
+                            return chain;
+                        },
+                        maybeSingle: async () => {
+                            if (idFilter === PROCESS) return { data: null, error: null };
+                            if (idFilter === OPP) {
+                                return {
+                                    data: {
+                                        id: OPP,
+                                        name: "Rowan Reyes",
+                                        primary_person_id: PERSON,
+                                        location_id: LOC,
+                                    },
+                                    error: null,
+                                };
+                            }
+                            return { data: null, error: null };
+                        },
+                    };
+                    return chain;
+                }
+                const row =
+                    table === "locations"
+                        ? { id: LOC, label: "Northwind — Downtown", address1: "1 Main St", city: "Springfield", state: "CA", postal_code: "90001" }
+                        : table === "orgs"
+                          ? { name: "Northwind Early Learning" }
+                          : { metadata: {} };
+                const chain: Record<string, unknown> = {
+                    select: () => chain,
+                    eq: () => chain,
+                    maybeSingle: async () => ({ data: row, error: null }),
+                };
+                return chain;
+            },
+        } as never;
+
+        const res = await sendTourInvitation({
+            supabase,
+            ...baseArgs,
+            opportunityId: PROCESS,
+            mode: "prepare",
+        });
+        expect(res.ok).toBe(true);
+        if (!res.ok) return;
+        expect(calls).toContain("process_instances");
+        expect(mintMock.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ opportunityId: OPP }),
+        );
     });
 
     it("invitation created but nothing could be delivered", async () => {

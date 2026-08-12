@@ -12,15 +12,15 @@ import {
 import { formatCompactRelativeDurationIso } from "@/lib/format/formatCompactRelativeDuration";
 
 describe("waitlist compact rank presentation", () => {
-    it("formats live ranks as #n/total", () => {
-        expect(formatWaitlistRuntimePositionLabel("live", 1, 4)).toBe("#1/4");
-        expect(formatWaitlistRuntimePositionLabel("preview", 2, 5)).toBe("Preview #2/5");
+    it("formats live ranks as n/total without #", () => {
+        expect(formatWaitlistRuntimePositionLabel("live", 1, 4)).toBe("1/4");
+        expect(formatWaitlistRuntimePositionLabel("preview", 2, 5)).toBe("Preview 2/5");
     });
 
     it("compacts legacy Position labels for top-right chrome", () => {
-        expect(compactWaitlistPositionLabel("Position 1/4")).toBe("#1/4");
-        expect(compactWaitlistPositionLabel("#2/3")).toBe("#2/3");
-        expect(compactWaitlistPositionLabel("Preview position 1/2")).toBe("Preview #1/2");
+        expect(compactWaitlistPositionLabel("Position 1/4")).toBe("1/4");
+        expect(compactWaitlistPositionLabel("#2/3")).toBe("2/3");
+        expect(compactWaitlistPositionLabel("Preview position 1/2")).toBe("Preview 1/2");
         expect(compactWaitlistPositionLabel(null)).toBeNull();
     });
 });

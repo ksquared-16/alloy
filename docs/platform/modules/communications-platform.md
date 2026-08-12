@@ -90,6 +90,8 @@ QA: `../../sprints/archive/08_2026/work-items-v3-platform/qa/slice-6/`.
 
 Communications has **one canonical runtime** with multiple presentation surfaces. Activity (`activity_embed`) is the compact presentation; Workspace Inbox (`workspace_inbox`) is the operational presentation. Both consume the same runtime contract for Preview VM hydration, thread selection, composer state, recipient state, send preflight/confirm, stale request protection, post-send refresh, reply collapse, and cache ownership.
 
+**Send confirmation (operator):** Compose → **Send** opens a shared centered confirmation (`FamilySendConfirmationDialog`) that previews the **exact current draft** (subject/body, including any Tour Invitation Link already in the body). **Back to edit** dismisses without sending. **Confirm send** invokes canonical `family-send` once. Success shows a centered acknowledgement (**Message sent** / **Tour invitation sent**); **Done** closes the Current Work command surface and returns to the Focus Panel (no redundant post-send What's Next summary card). Activity/work refreshes fire on confirm; the acknowledgement is presentation-only.
+
 Canonical contract: [`communications-runtime-contract.md`](communications-runtime-contract.md).
 
 Workspace Inbox owns only the operational queue and surrounding context controls. It must not maintain a separate family-workspace load/send/thread lifecycle.

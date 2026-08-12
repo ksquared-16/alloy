@@ -34,21 +34,40 @@ export function formatWaitlistRuntimePositionLabel(
 ): string {
     const n = Math.max(1, Math.floor(position));
     const t = Math.max(n, Math.floor(total));
-    // Compact queue scan: `#1/4`. Preview keeps an explicit prefix so operators know it is not live.
-    return mode === "preview" ? `Preview #${n}/${t}` : `#${n}/${t}`;
+    // Compact queue scan: `1/4`. Preview keeps an explicit prefix so operators know it is not live.
+    return mode === "preview" ? `Preview ${n}/${t}` : `${n}/${t}`;
 }
 
-/** Parse compact / legacy position labels into `{n}/{t}` for row chrome. */
-export function compactWaitlistPositionLabel(label: string | null | undefined): string | null {
+export type WaitlistRankParts = {
+    /** True when the label is a preview (not live) rank. */
+    preview: boolean;
+    numerator: number;
+    denominator: number;
+    /** Plain compact string without `#` — `1/4` or `Preview 1/4`. */
+    compact: string;
+};
+
+/** Parse compact / legacy position labels into numerator + denominator for row chrome. */
+export function parseWaitlistRankParts(label: string | null | undefined): WaitlistRankParts | null {
     const raw = typeof label === "string" ? label.trim() : "";
     if (!raw) return null;
-    if (/^#\d+\/\d+$/.test(raw)) return raw;
     const m = raw.match(/(?:Preview\s+)?(?:position\s+)?#?(\d+)\s*\/\s*(\d+)/i);
     if (!m) return null;
-    const n = Math.max(1, Number(m[1]));
-    const t = Math.max(n, Number(m[2]));
-    if (!Number.isFinite(n) || !Number.isFinite(t)) return null;
-    return raw.toLowerCase().includes("preview") ? `Preview #${n}/${t}` : `#${n}/${t}`;
+    const numerator = Math.max(1, Number(m[1]));
+    const denominator = Math.max(numerator, Number(m[2]));
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator)) return null;
+    const preview = /\bpreview\b/i.test(raw);
+    return {
+        preview,
+        numerator,
+        denominator,
+        compact: preview ? `Preview ${numerator}/${denominator}` : `${numerator}/${denominator}`,
+    };
+}
+
+/** Parse compact / legacy position labels into `{n}/{t}` for row chrome (no `#`). */
+export function compactWaitlistPositionLabel(label: string | null | undefined): string | null {
+    return parseWaitlistRankParts(label)?.compact ?? null;
 }
 
 function readSortTuple(row: Record<string, unknown>): Array<string | number | null> | null {

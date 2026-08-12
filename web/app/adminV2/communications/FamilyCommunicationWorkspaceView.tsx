@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
 import { relTime, messageDeliveryDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
@@ -33,13 +33,15 @@ import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import ComposerScheduleSendModal from "@/components/adminV2/messaging/ComposerScheduleSendModal";
 import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
+import FamilySendConfirmationDialog from "@/components/admin/communications/FamilySendConfirmationDialog";
 import { resolveComposeNewScheduleContext } from "@/lib/adminV2/messaging/messagingComposerScheduleContext";
 import {
     insertTextareaLink,
     prefixTextareaLines,
     wrapTextareaSelection,
 } from "@/app/adminV2/communications/activityEmbedTextFormatting";
-import { formatComposerBodyForDisplay, composerMarkupToPlainText } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
+import { formatComposerBodyForDisplay, composerMarkupToPlainText, plainComposerTextToEditableHtml } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
+import { resolveComposerInsertCapabilities } from "@/lib/communications/v2/familyWorkspace/composerInsertCapabilities";
 import {
     COMMS_ACCENT_BG_SUBTLE_CLASS,
     COMMS_ACCENT_BORDER_CLASS,
@@ -202,6 +204,15 @@ export type FamilyCommunicationWorkspaceViewProps = {
     onSendNow: () => void;
     onConfirmSend: () => void;
     onDismissSend: () => void;
+    /** Done on success acknowledgement — closes Current Work / collapses reply. */
+    onAcknowledgeSendSuccess?: () => void;
+    /** Intent-aware success title when Tour invitation was the draft seed / Insert. */
+    tourInvitationAck?: boolean;
+    /**
+     * Insert ▾ → Tour Invitation Link. Same server prepare authority as Send Tour Invitation.
+     * Returns ok/error; must not send.
+     */
+    onInsertTourInvitationLink?: () => Promise<{ ok: true } | { ok: false; message: string }>;
     /** Current operator user id for outbound "Sent by you" labeling (activity embed). */
     viewerUserId?: string | null;
     /** Increments after a confirmed send — collapses Activity reply composer. */
@@ -220,6 +231,8 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         LIVE_WORKSPACE, selectedThreadId, selectedThread = null, messages, timelineMessages = [],
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
+        onAcknowledgeSendSuccess, tourInvitationAck = false,
+        onInsertTourInvitationLink,
         viewerUserId = null, sendCompleteToken = 0,
     } = props;
     const isActivityEmbed = surfaceVariant === "activity_embed";
@@ -239,6 +252,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     // Canonical composer footer controls (Send later / BOS) — wired to the shared modals.
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [bosOpen, setBosOpen] = useState(false);
+    const [insertMenuOpen, setInsertMenuOpen] = useState(false);
+    const [insertBusy, setInsertBusy] = useState(false);
+    const [insertError, setInsertError] = useState<string | null>(null);
     const scheduleContext = resolveComposeNewScheduleContext({
         opportunityId: anchorOpportunityId,
         recipientPersonIds: selectedRecipientIds,
@@ -246,7 +262,12 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const bodyEditableRef = useRef<HTMLDivElement | null>(null);
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+    const insertMenuRef = useRef<HTMLDivElement | null>(null);
     const emailComposer = workspaceMode === "email";
+    const insertCapabilities = resolveComposerInsertCapabilities({
+        opportunityId: anchorOpportunityId,
+        tourInvitationEligible: Boolean(onInsertTourInvitationLink && anchorOpportunityId),
+    });
 
     useEffect(() => {
         if (!usesReplyLifecycle) return;
@@ -261,12 +282,54 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         });
     }, [usesReplyLifecycle, sendCompleteToken]);
 
-    useEffect(() => {
+    // Keep contentEditable in sync with bodyDraft (Tour seed / Insert URL / clear).
+    // Only rewrite when the plain-text content differs — avoids fighting the caret while typing.
+    useLayoutEffect(() => {
         if (!emailComposer || !bodyEditableRef.current) return;
-        if (!bodyDraft.trim() && bodyEditableRef.current.innerHTML !== "") {
-            bodyEditableRef.current.innerHTML = "";
+        const el = bodyEditableRef.current;
+        if (!bodyDraft.trim()) {
+            if (el.innerHTML !== "") el.innerHTML = "";
+            return;
         }
+        const currentPlain = composerMarkupToPlainText(el.innerHTML).trim();
+        const targetPlain = composerMarkupToPlainText(bodyDraft).trim();
+        if (currentPlain === targetPlain) return;
+        el.innerHTML = plainComposerTextToEditableHtml(bodyDraft);
     }, [bodyDraft, emailComposer]);
+
+    useEffect(() => {
+        if (!insertMenuOpen) return;
+        const onDoc = (event: MouseEvent) => {
+            if (!insertMenuRef.current?.contains(event.target as Node)) setInsertMenuOpen(false);
+        };
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setInsertMenuOpen(false);
+        };
+        document.addEventListener("mousedown", onDoc);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onDoc);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [insertMenuOpen]);
+
+    const runInsertCapability = useCallback(
+        async (key: string) => {
+            if (key !== "tour_invitation_link" || !onInsertTourInvitationLink) return;
+            setInsertBusy(true);
+            setInsertError(null);
+            try {
+                const result = await onInsertTourInvitationLink();
+                if (!result.ok) setInsertError(result.message);
+            } catch {
+                setInsertError("Could not insert Tour Invitation Link.");
+            } finally {
+                setInsertBusy(false);
+                setInsertMenuOpen(false);
+            }
+        },
+        [onInsertTourInvitationLink],
+    );
 
     const expandReplyComposer = useCallback(() => {
         setReplyComposerExpanded(true);
@@ -864,12 +927,56 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
                         <button type="button" aria-label="Bulleted list" className={toolbarBtn} onClick={() => applyBodyFormat("list")} disabled={workspaceMode === "sms"}><List className="h-3.5 w-3.5" /></button>
                         <button type="button" aria-label="Insert link" className={toolbarBtn} onClick={() => applyBodyFormat("link")} disabled={workspaceMode === "sms"}><Link2 className="h-3.5 w-3.5" /></button>
+                        {insertCapabilities.length > 0 ?
+                            <div className="relative" ref={insertMenuRef} data-cc-insert-menu="true">
+                                <button
+                                    type="button"
+                                    aria-label="Insert"
+                                    aria-expanded={insertMenuOpen}
+                                    aria-haspopup="menu"
+                                    className={`${toolbarBtn} gap-0.5 px-1.5 text-[11px] font-medium`}
+                                    disabled={insertBusy}
+                                    data-cc-insert-trigger="true"
+                                    onClick={() => setInsertMenuOpen((open) => !open)}
+                                >
+                                    Insert
+                                    <ChevronDown className="h-3 w-3 opacity-70" aria-hidden />
+                                </button>
+                                {insertMenuOpen ?
+                                    <ul
+                                        role="menu"
+                                        data-cc-insert-menu-panel="true"
+                                        className="absolute left-0 top-full z-30 mt-1 min-w-[11.5rem] rounded-lg border border-alloy-stone/30 bg-white py-1 shadow-md"
+                                    >
+                                        {insertCapabilities.map((cap) => (
+                                            <li key={cap.key} role="none">
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    className="block w-full px-3 py-1.5 text-left text-[12px] text-alloy-midnight hover:bg-alloy-juniper/10 hover:text-alloy-juniper disabled:opacity-40"
+                                                    data-cc-insert-capability={cap.key}
+                                                    disabled={insertBusy}
+                                                    onClick={() => void runInsertCapability(cap.key)}
+                                                >
+                                                    {insertBusy && cap.key === "tour_invitation_link" ? "Inserting…" : cap.label}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                :   null}
+                            </div>
+                        :   null}
                         <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
                         <span className="ml-auto flex items-center gap-0.5">
                             <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
                             <button type="button" aria-label="Templates" className={toolbarBtn}><FileText className="h-3.5 w-3.5" /></button>
                         </span>
                     </div>
+                    {insertError ?
+                        <p className="border-b border-alloy-ember/20 bg-alloy-ember/5 px-3 py-1 text-[11px] text-alloy-ember" role="status" data-cc-insert-error="true">
+                            {insertError}
+                        </p>
+                    :   null}
                     {emailComposer ? (
                         <div
                             ref={bodyEditableRef}
@@ -915,114 +1022,35 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     )}
                 </div>
 
-                {LIVE_WORKSPACE && (sendResult || sendError) ? (
-                    <div
-                        data-cc-send-review
-                        data-cc-send-confirm={sendResult?.mode === "preflight" ? "true" : undefined}
-                        className={
-                            sendResult?.mode === "preflight"
-                                ? "mt-2 rounded-xl border border-alloy-bend-pine/25 bg-alloy-bend-pine/[0.04] px-3.5 py-3 shadow-sm"
-                                : "mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] shadow-sm"
+                {LIVE_WORKSPACE ? (
+                    <FamilySendConfirmationDialog
+                        open={Boolean(sendResult || sendError)}
+                        sendResult={sendResult}
+                        sendError={sendError}
+                        sending={sending}
+                        channel={workspaceMode === "sms" ? "sms" : "email"}
+                        subjectDraft={subjectDraft}
+                        bodyDraft={bodyDraft}
+                        recipientLabel={
+                            sendResult?.results
+                                .filter((r) => r.status === "ready" || r.status === "sent")
+                                .map((r) => r.display_name)
+                                .join(", ")
+                            || selectionSummary(selectedRecipientIds, allLiveRecipients)
+                            || "selected recipients"
                         }
-                    >
-                        {sendError ? <div className="text-sm text-alloy-ember">{sendError}</div> : null}
-                        {sendResult?.mode === "preflight" ? (
-                            <>
-                                <p className="text-[15px] font-semibold tracking-tight text-alloy-midnight">
-                                    Ready to send
-                                </p>
-                                <p className="mt-1 text-[13px] text-alloy-midnight/55" data-cc-send-confirm-recipient="true">
-                                    {workspaceMode === "sms" ? "SMS" : "Email"}
-                                    {" to "}
-                                    {sendResult.results
-                                        .filter((r) => r.status === "ready")
-                                        .map((r) => r.display_name)
-                                        .join(", ")
-                                        || selectionSummary(selectedRecipientIds, allLiveRecipients)
-                                        || "selected recipients"}
-                                    {sendResult.summary.blocked > 0
-                                        ? ` · ${sendResult.summary.blocked} blocked`
-                                        : ""}
-                                </p>
-                                <div
-                                    className="mt-3 rounded-lg border border-alloy-stone/20 bg-white px-3 py-2.5 text-[13px] leading-relaxed text-alloy-midnight"
-                                    data-cc-send-confirm-preview="true"
-                                >
-                                    {workspaceMode === "email" && subjectDraft.trim() ?
-                                        <p className="mb-1.5 font-medium text-alloy-midnight">{subjectDraft.trim()}</p>
-                                    :   null}
-                                    <p className="whitespace-pre-wrap text-alloy-midnight/90">
-                                        {composerMarkupToPlainText(bodyDraft).trim() || "(Empty message)"}
-                                    </p>
-                                </div>
-                                {sendResult.results.some((r) => r.status === "blocked") ?
-                                    <ul className="mt-2 space-y-0.5 text-[11px] text-alloy-midnight/55">
-                                        {sendResult.results
-                                            .filter((r) => r.status === "blocked")
-                                            .map((r) => (
-                                                <li key={r.person_id}>
-                                                    {r.display_name}
-                                                    {r.reason ? ` — ${r.reason}` : " — blocked"}
-                                                </li>
-                                            ))}
-                                    </ul>
-                                :   null}
-                                <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={onDismissSend}
-                                        className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}
-                                        data-cc-send-back="true"
-                                    >
-                                        Back to edit
-                                    </button>
-                                    {sendResult.summary.ready > 0 ?
-                                        <button
-                                            type="button"
-                                            disabled={sending}
-                                            onClick={onConfirmSend}
-                                            className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}
-                                            data-cc-send-confirm-action="true"
-                                        >
-                                            <Send className="h-3.5 w-3.5" />
-                                            {sending ? "Sending…" : "Confirm send"}
-                                        </button>
-                                    :   null}
-                                </div>
-                            </>
-                        ) : sendResult ? (
-                            <>
-                                <div className="mb-1 font-semibold text-alloy-midnight">
-                                    Send results
-                                    <span className="ml-1 font-normal text-alloy-midnight/55">
-                                        {`${sendResult.summary.sent} sent · ${sendResult.summary.blocked} blocked · ${sendResult.summary.failed} failed`}
-                                    </span>
-                                </div>
-                                <ul className="space-y-0.5 text-[11px]">
-                                    {sendResult.results.map((r) => (
-                                        <li key={r.person_id} className="flex items-center gap-1.5">
-                                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${r.status === "sent" || r.status === "ready" ? "bg-alloy-juniper" : r.status === "blocked" ? "bg-alloy-amber" : "bg-red-500"}`} />
-                                            <span className="font-medium text-alloy-midnight">{r.display_name}</span>
-                                            <span className="text-alloy-midnight/55">· {r.status}{r.reason ? ` — ${r.reason}` : ""}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                <div className="mt-1.5 flex items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        onClick={onDismissSend}
-                                        className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}
-                                    >
-                                        Done
-                                    </button>
-                                </div>
-                            </>
-                        ) : null}
-                    </div>
+                        tourInvitation={tourInvitationAck}
+                        onBackToEdit={onDismissSend}
+                        onConfirmSend={onConfirmSend}
+                        onDone={
+                            sendResult?.mode === "sent"
+                                ? (onAcknowledgeSendSuccess ?? onDismissSend)
+                                : onDismissSend
+                        }
+                    />
                 ) : null}
-                {!(LIVE_WORKSPACE && sendResult?.mode === "preflight") ? (
                 <div className="mt-2.5 flex items-center gap-1.5" data-cc-composer-footer>
-                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
+                    <button type="button" disabled={sending || Boolean(sendResult) || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
                     {/* Send later + BOS are canonical composer controls in EVERY mode (incl. new
                         message), matching Activity mode. Wired to the shared schedule/enhance modals. */}
                     <button type="button" aria-label="Send later" onClick={() => setScheduleOpen(true)} className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
@@ -1034,7 +1062,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
                     ) : null}
                 </div>
-                ) : null}
                 </>
                 ) : null}
             <ComposerScheduleSendModal

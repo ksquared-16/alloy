@@ -74,6 +74,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
@@ -173,7 +174,16 @@ export function InlineOpportunityFocusPanel() {
     // Activity-mode background prewarm (sanctioned idle prefetch — never a reveal gate).
     // Whenever the Focus Panel is open, warm Activity metadata (comms, documents, timeline;
     // notes ship on VM) on idle so Work → Activity switches feel instant.
-    const prewarmSubjectId = drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+    // Waitlist child rows use process-instance Attention ids — resolve to the family
+    // opportunity so drawer-recipients / family-workspace prewarm does not 404.
+    const prewarmSubjectId = useMemo(() => {
+        if (drawer.type !== "opportunities" || drawer.id == null) return null;
+        return resolveFocusPanelMutationOpportunityId({
+            subjectId: String(drawer.id),
+            grain: null,
+            truth: (record as Record<string, unknown> | null) ?? null,
+        });
+    }, [drawer.id, drawer.type, record]);
 
     useEffect(() => {
         if (!prewarmSubjectId) return;

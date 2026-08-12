@@ -140,6 +140,8 @@ function fakeSupabase() {
                 filters[`is:${k}`] = v;
                 return api;
             },
+            order: () => api,
+            limit: () => api,
             maybeSingle: async () => settle(),
             then: (resolve: (v: unknown) => unknown) => Promise.resolve(settle()).then(resolve),
         };
@@ -410,7 +412,7 @@ describe("idempotency", () => {
         expect(r.actions).toEqual([]);
     });
 
-    it("rejects a replay whose recipient changed", async () => {
+    it("supersedes and mints fresh when the recipient changed under the same key", async () => {
         state.prior = {
             id: "invitation-prior",
             status: "active",
@@ -424,13 +426,16 @@ describe("idempotency", () => {
             },
         };
         const r = await mint();
-        expect(r.ok).toBe(false);
-        if (r.ok) return;
-        expect(r.code).toBe("idempotency_payload_changed");
-        expect(state.inserts).toEqual([]);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.idempotentReplay).toBe(false);
+        expect(r.actions.length).toBeGreaterThan(0);
+        expect(state.updates.some((u) => u.table === "tour_invitations" && u.patch.status === "superseded")).toBe(
+            true,
+        );
     });
 
-    it("rejects a replay whose offered times changed", async () => {
+    it("supersedes and mints fresh when the offered times changed under the same key", async () => {
         state.prior = {
             id: "invitation-prior",
             status: "active",
@@ -444,9 +449,37 @@ describe("idempotency", () => {
             },
         };
         const r = await mint();
-        expect(r.ok).toBe(false);
-        if (r.ok) return;
-        expect(r.code).toBe("idempotency_payload_changed");
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.idempotentReplay).toBe(false);
+        expect(r.actions.length).toBeGreaterThan(0);
+        // Prior offer must stop being actionable.
+        expect(state.updates.some((u) => u.table === "tour_invitations" && u.patch.status === "superseded")).toBe(
+            true,
+        );
+        expect(invitationRow()).toBeTruthy();
+    });
+
+    it("mints fresh when the prior invitation under the key is past expires_at", async () => {
+        state.prior = {
+            id: "invitation-elapsed",
+            status: "active",
+            expires_at: "2020-01-01T00:00:00Z",
+            metadata: {
+                idempotency_fingerprint: invitationFingerprint({
+                    recipientPersonId: PERSON,
+                    opportunityId: OPP,
+                    locationId: LOC,
+                    optionIds: ["opt-1", "opt-2"],
+                }),
+            },
+        };
+        const r = await mint();
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.idempotentReplay).toBe(false);
+        expect(r.actions.length).toBeGreaterThan(0);
+        expect(invitationRow()).toBeTruthy();
     });
 
     it("treats option order as irrelevant to the fingerprint", () => {

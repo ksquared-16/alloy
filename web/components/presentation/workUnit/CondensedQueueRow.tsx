@@ -54,6 +54,7 @@ import {
     useLocallySeenOccurrenceCount,
 } from "@/lib/queues/queuePersonalSeenSession";
 import { WaitlistPlacementAdjustControl } from "@/components/presentation/workUnit/WaitlistPlacementAdjustControl";
+import WaitlistRankFraction from "@/components/presentation/workUnit/WaitlistRankFraction";
 
 const CARD_BUTTON_CLASS =
     `${QUEUE_ROW_CARD_SHELL_CLASS} focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-alloy-bend-pine`;
@@ -317,13 +318,11 @@ export function CondensedQueueRow({
                                     data-queue-row-waitlist-rank-cluster
                                 >
                                     {compactRank ? (
-                                        <span
-                                            data-queue-row-waitlist-rank
-                                            className="tabular-nums text-[11px] font-semibold leading-4 text-alloy-midnight/70"
+                                        <WaitlistRankFraction
+                                            label={compactRank}
                                             title={context.waitlist_context?.position_label ?? compactRank}
-                                        >
-                                            {compactRank}
-                                        </span>
+                                            className="text-[11px] font-semibold leading-4 text-alloy-midnight/70"
+                                        />
                                     ) : null}
                                     {showPlacementAdjust && placementCandidateId ? (
                                         <WaitlistPlacementAdjustControl

@@ -34,9 +34,38 @@ function formatMoneyCents(cents: number): string {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(dollars);
 }
 
+function truthScalar(truth: Record<string, unknown> | null | undefined, key: string): string | null {
+    if (!truth) return null;
+    const raw = truth[key];
+    if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+    const value = String(raw ?? "").trim();
+    return value || null;
+}
+
+/**
+ * Durable membership / disposition label already on the subject truth bag.
+ * Prefer this over work-progress chips ("In progress") when communicating where the subject is.
+ */
+export function resolveWhatsNextMembershipStatusLabel(
+    truth: Record<string, unknown> | null | undefined,
+): string | null {
+    const keys = [
+        "child.status",
+        "outcome_status_label",
+        "_outcome_status_label",
+        "opportunity.status_label",
+    ];
+    for (const key of keys) {
+        const value = truthScalar(truth, key);
+        // Skip raw snake_case keys that leaked through without a display label.
+        if (value && !/[_]/.test(value)) return value;
+    }
+    return null;
+}
+
 /**
  * Compact domain-agnostic context facts from signals + truth already on the Focus Panel.
- * Tour / billing / contact contribute only when those facts exist — never invented.
+ * Tour / billing / contact / placement contribute only when those facts exist — never invented.
  */
 export function buildWhatsNextContextFacts(args: {
     surface: CurrentWorkSurfaceVM;
@@ -46,6 +75,44 @@ export function buildWhatsNextContextFacts(args: {
     const facts: WhatsNextContextFact[] = [];
     const truth = args.context?.truth ?? null;
     const signals = args.context?.signals;
+
+    const tracks = missionTracksFact(truth);
+    if (tracks) facts.push(tracks);
+
+    const participants = missionParticipantCountFact(truth);
+    if (participants) facts.push(participants);
+
+    const position =
+        truthScalar(truth, "waitlist.positionLabel")
+        ?? truthScalar(truth, "_placement_position_label");
+    if (position) {
+        facts.push({ key: "waitlist_position", label: "Position", value: position });
+    }
+
+    const waitingSince =
+        truthScalar(truth, "waitlist.waitSince")
+        ?? truthScalar(truth, "_placement_wait_since_label");
+    if (waitingSince) {
+        facts.push({ key: "waiting_since", label: "Waiting since", value: waitingSince });
+    }
+
+    const program =
+        truthScalar(truth, "child.program")
+        ?? truthScalar(truth, "inquiry_child.program")
+        ?? truthScalar(truth, "waitlist.cohortLabel")
+        ?? truthScalar(truth, "_program_label");
+    if (program) {
+        facts.push({ key: "program", label: "Program", value: program });
+    }
+
+    const location =
+        truthScalar(truth, "child.location")
+        ?? truthScalar(truth, "opportunity.location")
+        ?? truthScalar(truth, "_location_label")
+        ?? truthScalar(truth, "_site_label");
+    if (location) {
+        facts.push({ key: "location", label: "Location", value: location });
+    }
 
     const contact = primaryContactName(truth);
     if (contact) {
@@ -90,6 +157,27 @@ export function buildWhatsNextContextFacts(args: {
     return facts.slice(0, 4);
 }
 
+/**
+ * Stage owns process position; work owns operational detail.
+ * Prefer stage label as the card headline when the runtime knows the stage.
+ */
+export function resolveWhatsNextHeadline(args: {
+    surface: CurrentWorkSurfaceVM;
+}): { title: string; currentWorkLabel: string | null } {
+    const stageLabel = args.surface.runtime?.stage_label?.trim() || null;
+    const workLabel =
+        args.surface.primaryWorkItem?.label?.trim()
+        || (args.surface.title.trim() && args.surface.title !== "No current work configured"
+            ? args.surface.title.trim()
+            : null);
+    if (stageLabel) {
+        const currentWorkLabel =
+            workLabel && workLabel.toLowerCase() !== stageLabel.toLowerCase() ? workLabel : null;
+        return { title: stageLabel, currentWorkLabel };
+    }
+    return { title: args.surface.title, currentWorkLabel: null };
+}
+
 function buildStillNeeded(surface: CurrentWorkSurfaceVM): WhatsNextStillNeededItem[] {
     const items = surface.readiness.requirements?.items ?? [];
     return items
@@ -101,6 +189,32 @@ function buildStillNeeded(surface: CurrentWorkSurfaceVM): WhatsNextStillNeededIt
                 : item.label,
         }))
         .slice(0, 4);
+}
+
+function missionParticipantCountFact(
+    truth: Record<string, unknown> | null | undefined,
+): WhatsNextContextFact | null {
+    if (!truth) return null;
+    const count = truth._mission_participant_count;
+    if (typeof count !== "number" || !Number.isFinite(count) || count < 2) return null;
+    const n = Math.floor(count);
+    return {
+        key: "mission_participants",
+        label: null,
+        value: `${n} children`,
+    };
+}
+
+function missionTracksFact(truth: Record<string, unknown> | null | undefined): WhatsNextContextFact | null {
+    if (!truth || truth._mission_homogeneous !== false) return null;
+    const keys = Array.isArray(truth._mission_stage_keys) ? truth._mission_stage_keys : [];
+    const n = keys.filter((k) => typeof k === "string" && k.trim()).length;
+    if (n < 2) return null;
+    return {
+        key: "mission_tracks",
+        label: null,
+        value: `${n} active tracks`,
+    };
 }
 
 function buildDueChip(surface: CurrentWorkSurfaceVM): string | null {
@@ -166,11 +280,15 @@ export function buildWhatsNextCardPresentation(args: {
             kind: item.kind ?? null,
         }));
 
+    const { title, currentWorkLabel } = resolveWhatsNextHeadline({ surface });
+    const membershipStatus = resolveWhatsNextMembershipStatusLabel(args.context?.truth ?? null);
+
     return {
-        title: surface.title,
+        title,
+        currentWorkLabel,
         summaryLine,
         summarySource,
-        statusLabel: surface.statusLabel,
+        statusLabel: membershipStatus || surface.statusLabel,
         dueChip: buildDueChip(surface),
         progress,
         contextFacts: buildWhatsNextContextFacts({

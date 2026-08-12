@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: canonical
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-11
 supersedes: []
 ---
 
@@ -76,6 +76,12 @@ status, stage column, process instance, or Business Process runtime.
    - **Child/candidate grain:** each effective participant in that stage is its own row/count.
 6. **Queues remain projection/selection.** Focus Panel remains the universal operator surface and
    displays rollups for mixed stage/location without inventing a fake family location.
+7. **Context-level Mission (What's Next)** is derived from currently applicable **authorized
+   effective participant/shared tracks**. Persisted shared stage does **not** override explicit
+   participant divergence. Inventory / catch-all Work Views (empty `opportunity_stage` lens) do
+   **not** impose a stage Mission unless their configured predicates explicitly provide one.
+   Homogeneous effective stages → one Mission. Mixed → compact multi-track Mission summary.
+   Canonical resolver: `web/lib/process/engine/resolveContextMissionStages.ts`.
 
 Canonical implementation: `web/lib/process/engine/effectiveProcessPosition.ts` (generic) consumed
 by Work View evaluation, queue enrichment, and Focus Panel header chips. Do not add
@@ -106,6 +112,23 @@ Work completed → Outcome selected (human confirms)
 Work carries operational progress. Anything phrased as an activity — Confirm Tour, Conduct
 Tour, Follow Up, Send Reminder, Collect Paperwork, Extend Offer — is a work template on a
 stage, spawned on stage entry, completed with an outcome. It is never a status.
+
+### What's Next presentation (stage vs work)
+
+Focus Panel **What's Next** is a presentation surface over stage membership + Current Work. It
+must answer: where is the subject now, what matters about that state, what should the operator
+do next — without inventing a second lifecycle inside the stage.
+
+- **Headline** prefers the configured **stage label** (process position) over the open work
+  template label. Open work remains Current Work / work progress when it differs.
+- **Status chip** prefers durable membership/disposition labels already on subject truth when
+  present (for example Waitlisted), not work-progress wording that implies a stage ladder.
+- **Sequential progress** is only for operational flows the operator has entered (at least one
+  completed step) or for repeated-attempt work. Optional concurrent stage-work templates with
+  nothing completed yet must not render as `1 Review… → 2 Offer…` mini-lifecycle.
+
+Canonical presentation: `buildWhatsNextCardPresentation` /
+`buildWhatsNextProgressPresentation` under `web/lib/adminV2/runtime/focusPanel/currentWork/`.
 
 ### Command-result sufficiency (completion)
 

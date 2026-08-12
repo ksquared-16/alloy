@@ -38,6 +38,7 @@ import {
     QUEUE_ROW_ACTIVE_CHILD_FIELD_KEYS,
     QUEUE_ROW_CHILDREN_FIELD_KEYS,
 } from "@/lib/layout/runtime/queueRowChildrenFieldRegistry";
+import { QUEUE_ROW_RESOLVER_BACKED_CHILD_PROFILE_FIELD_KEYS } from "@/lib/layout/runtime/queueRowChildProfileFieldRegistry";
 import {
     QUEUE_ROW_SIBLING_FIELD_KEYS,
     QUEUE_ROW_SIBLING_FIELD_METADATA,
@@ -350,6 +351,7 @@ function collectScalarSeedRefKeys(): string[] {
         ...collectRefKeysFromQueueRecordLayoutV3(defaultLeadQueueLayoutV3()),
         ...collectRefKeysFromQueueRecordLayoutV3(defaultWaitlistQueueLayoutV3()),
         ...QUEUE_ROW_ACTIVE_CHILD_FIELD_KEYS,
+        ...QUEUE_ROW_RESOLVER_BACKED_CHILD_PROFILE_FIELD_KEYS,
         ...QUEUE_ROW_CHILD_SUMMARY_FIELD_KEYS,
     ]);
     for (const row of COMPUTED_FIELD_CATALOG) {

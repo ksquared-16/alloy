@@ -42,11 +42,11 @@ import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/fo
 import { useDismissSignal, useReportPerspective } from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { ADMIN_V2_OPPORTUNITY_FOCUS_CURRENT_WORK } from "@/lib/workItems/workItemsNavigation";
 import {
     ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE,
-    buildContactFamilySendFollowOnNotice,
     type ContactFamilySendCompleteDetail,
 } from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
 import ViewInWorkItemsLink from "@/components/workItems/ViewInWorkItemsLink";
@@ -80,7 +80,15 @@ export default function CurrentWorkCard({
     const evidence = useMemo(() => buildCurrentWorkCardEvidence(context), [context]);
     const vm = evidence.viewModel;
     const surface = vm.surface;
-    const opportunityId = context.subject.id;
+    // Mutations + Tour invitation / Communications prepare must key the family opportunity
+    // (Record of Truth). Child Waitlist Attention rewrites subject.id to the child /
+    // process-instance id — using that as opportunityId made Send Tour Invitation 404
+    // with "This record is no longer available."
+    const opportunityId = resolveFocusPanelMutationOpportunityId({
+        subjectId: context.subject.id,
+        grain: context.grain,
+        truth: context.truth as Record<string, unknown>,
+    });
 
     // ── PER-CHILD PATHS ──
     //
@@ -107,11 +115,11 @@ export default function CurrentWorkCard({
     const cardPerspective = context.stageWorkPending ? "pending" : evidence.isEmpty ? "empty" : "content";
     useEffect(() => {
         logCurrentWorkInit("currentWorkCard.compose", {
-            subjectId: opportunityId,
+            subjectId: context.subject.id,
             note: cardPerspective,
             cache: cardPerspective === "pending" ? "miss" : undefined,
         });
-    }, [opportunityId, cardPerspective]);
+    }, [context.subject.id, cardPerspective]);
 
     // Warm configured capabilities on intent: as soon as What's Next shows its actions, prefetch the
     // data each capability's host will need (keyed on the capability host, never the action name) so
@@ -159,7 +167,10 @@ export default function CurrentWorkCard({
 
     const closeActionPanel = useCallback(() => {
         setActivePanelAction(null);
-    }, []);
+        // Drop one-shot workspace action intent when the operator closes the capability,
+        // so a remount cannot reopen it after dismiss.
+        coordination?.clearCurrentWorkWorkspaceIntent?.();
+    }, [coordination]);
 
     const handleViewFullActivity = useCallback(() => {
         setActivityPreviewOpen(false);
@@ -169,10 +180,6 @@ export default function CurrentWorkCard({
     const handleCloseActivityPreview = useCallback(() => {
         setActivityPreviewOpen(false);
     }, []);
-
-    const handleActionPanelComplete = useCallback(() => {
-        closeActionPanel();
-    }, [closeActionPanel]);
 
     const pendingOutcome =
         vm.completionOutcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
@@ -189,10 +196,12 @@ export default function CurrentWorkCard({
             kind: "drill_in",
         }) => {
             resetCompletion();
-            closeActionPanel();
+            // Clear any open capability panel, but do not clear workspace intent here —
+            // openCurrentWorkWorkspace installs the new intent immediately after.
+            setActivePanelAction(null);
             coordination?.openCurrentWorkWorkspace?.(intent);
         },
-        [closeActionPanel, coordination, resetCompletion],
+        [coordination, resetCompletion],
     );
 
     const closeWorkspace = useCallback(() => {
@@ -203,14 +212,20 @@ export default function CurrentWorkCard({
         queueMicrotask(() => openWorkspaceTriggerRef.current?.focus());
     }, [closeActionPanel, coordination, resetCompletion]);
 
+    const handleActionPanelComplete = useCallback(() => {
+        // Capability complete → restore full Focus Panel (same as Close), not elevated What's Next.
+        closeWorkspace();
+    }, [closeWorkspace]);
+
     // Slice A: report the centered-elevation depth so the host raises this cell (backdrop +
     // centered) — the same path Household/Children use — and collapse on backdrop/ESC dismiss.
     useReportPerspective(coordination, "current_work", isWorkspace ? "focused" : "base");
+
     useDismissSignal(coordination, "current_work", () => {
-        resetCompletion();
-        closeActionPanel();
-        setActivityPreviewOpen(false);
-        coordination?.closeCurrentWorkWorkspace?.();
+        // Outside click / Esc on the depth scrim restores the full Focus Panel —
+        // including while a capability (Message / Send form / Tour) is open.
+        // Do not leave an orphaned "Close" control outside the elevated card.
+        closeWorkspace();
     });
 
     useEffect(() => {
@@ -229,20 +244,15 @@ export default function CurrentWorkCard({
         const onContactFamilySend = (event: Event) => {
             const detail = (event as CustomEvent<ContactFamilySendCompleteDetail>).detail;
             if (!detail || detail.opportunity_id !== opportunityId) return;
-            const sentLine = detail.recipient_label
-                ? `${detail.success_message} · just now`
-                : detail.success_message;
-            const followOn = buildContactFamilySendFollowOnNotice({
-                associated: detail.associated,
-                outcome_key: detail.outcome_key,
-            });
-            setHandoffNotice(followOn ? `${sentLine} ${followOn}` : sentLine);
-            closeActionPanel();
+            // Success ack already shown in the shared centered dialog. Do not reopen
+            // elevated What's Next / handoff notice — return straight to Focus Panel.
+            setHandoffNotice(null);
+            closeWorkspace();
         };
         window.addEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
         return () =>
             window.removeEventListener(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE, onContactFamilySend as EventListener);
-    }, [closeActionPanel, opportunityId]);
+    }, [closeWorkspace, opportunityId]);
 
     // Consume one-shot workspace intents (action panel / record outcome) after mount.
     const workspaceIntent = coordination?.currentWorkWorkspace?.intent ?? null;
@@ -253,7 +263,10 @@ export default function CurrentWorkCard({
         if (!isWorkspace || !workspaceIntentKind) return;
         if (workspaceIntentKind === "record_outcome") {
             setCompletionPhase("select_result");
-        } else if (workspaceIntentKind === "action" && workspaceIntentActionKey) {
+            coordination?.clearCurrentWorkWorkspaceIntent?.();
+            return;
+        }
+        if (workspaceIntentKind === "action" && workspaceIntentActionKey) {
             const allActions = [
                 surface.primaryAction,
                 surface.recordOutcomeAction,
@@ -267,10 +280,15 @@ export default function CurrentWorkCard({
                     || action.actionRef === workspaceIntentActionKey
                     || action.handlerKey === workspaceIntentActionKey,
             );
-            if (match) setActivePanelAction(match);
+            if (!match) {
+                coordination?.clearCurrentWorkWorkspaceIntent?.();
+                return;
+            }
+            // Keep intent until closeActionPanel clears it — cold-fetch remounts were
+            // wiping local activePanelAction after a timed intent clear.
+            setActivePanelAction(match);
         }
-        coordination?.clearCurrentWorkWorkspaceIntent?.();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- consume intent once per open
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-apply intent across remounts
     }, [isWorkspace, workspaceIntentKind, workspaceIntentActionKey]);
 
     const invokeHeaderDelegate = (action: CurrentWorkActionVM) => {
@@ -457,11 +475,23 @@ export default function CurrentWorkCard({
     // chip aligned with the card title), never a bespoke pill nested inside the card's own status
     // slot (that double-pill was the "detached, unfinished" look). Tone is derived generically from
     // the surface status — no per-process/per-stage styling.
-    const statusChip = surface.statusLabel;
+    // Presentation prefers stage position + durable membership over open-work progress labels.
+    const whatsNextPresentation = useMemo(
+        () =>
+            buildWhatsNextCardPresentation({
+                surface,
+                context,
+                activityItems: activityPreviewItems,
+                timeZone: viewerTimeZone,
+            }),
+        [surface, context, activityPreviewItems, viewerTimeZone],
+    );
+    const statusChip = whatsNextPresentation.statusLabel;
     const statusTone: "blocked" | "done" | "neutral" =
         surface.status === "blocked" ? "blocked"
         : surface.status === "completed" ? "done"
         :   "neutral";
+    const cardInsight = whatsNextPresentation.title;
 
     // Activity preview + "View all activity" live under Recent Activity on the summary card.
     const canPreviewActivity =
@@ -509,8 +539,9 @@ export default function CurrentWorkCard({
                     <CurrentWorkActionPanel
                         action={activePanelAction}
                         context={context}
+                        opportunityId={opportunityId}
                         mutation={mutation}
-                        onClose={closeActionPanel}
+                        onClose={closeWorkspace}
                         onComplete={handleActionPanelComplete}
                     />
                 :   null
@@ -590,20 +621,9 @@ export default function CurrentWorkCard({
             data-current-work-surface="true"
             data-focused-work-id={focusedWorkItemId ?? undefined}
         >
-            {capabilityActive ?
-                <button
-                    type="button"
-                    className="alloy-os-currentwork__capability-close"
-                    onClick={closeActionPanel}
-                    aria-label="Close composer"
-                    data-work-action-panel-close="true"
-                >
-                    Close
-                </button>
-            :   null}
             <UniversalCard
                 title={vm.microLabel}
-                insight={surface.title}
+                insight={cardInsight}
                 supportingInsight={null}
                 iconName={model.iconName}
                 tier={model.tier}
@@ -700,6 +720,11 @@ function SummaryBody({
             {card.summaryLine ?
                 <p className="alloy-os-currentwork__summary-line" data-work-summary-line="true">
                     {card.summaryLine}
+                </p>
+            :   null}
+            {card.currentWorkLabel ?
+                <p className="alloy-os-currentwork__current-work-label" data-work-current-label="true">
+                    Current work · {card.currentWorkLabel}
                 </p>
             :   null}
             {outcomeBlockReason ?

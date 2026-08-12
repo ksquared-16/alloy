@@ -405,6 +405,43 @@ describe("resolveCompactSlotDisplay", () => {
         expect(resolveCompactSlotDisplay("groupCount", family, slots, null)).not.toBeNull();
     });
 
+    it("formats child.date_of_birth as numeric DOB + compact age (never raw ISO)", () => {
+        const display = resolveCompactSlotDisplay(
+            "groupCount",
+            familyContext({
+                row_subject: {
+                    subject_type: "child",
+                    subject_id: "child-1",
+                    display_name: "Avery Lee",
+                    date_of_birth: "2026-03-15",
+                    age_label: "5m",
+                },
+            }),
+            { visible: true, label: null, fieldKeys: ["child.date_of_birth"] },
+            null,
+        );
+        expect(display).toMatch(/^3\/15\/2026 \(\d+m\)$/);
+        expect(display).not.toMatch(/^\d{4}-\d{2}-\d{2}/);
+        expect(display).not.toContain("Mar ");
+    });
+
+    it("resolves child.gender from gender_label", () => {
+        const display = resolveCompactSlotDisplay(
+            "groupCount",
+            familyContext({
+                row_subject: {
+                    subject_type: "child",
+                    subject_id: "child-1",
+                    display_name: "Avery Lee",
+                    gender_label: "Female",
+                },
+            }),
+            { visible: true, label: null, fieldKeys: ["child.gender"] },
+            null,
+        );
+        expect(display).toBe("Female");
+    });
+
     it("renders children count and summary on family rows", () => {
         const count = resolveCompactSlotDisplay(
             "groupCount",
