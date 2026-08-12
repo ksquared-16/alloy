@@ -398,7 +398,7 @@ describe("global search implementation guards", () => {
         // drawer"; Search now opens no drawer of any kind, because the drawer
         // product is not an Alloy operator destination. It emits Focus Panel
         // targets — subject + card + item.
-        expect(src).toContain("dispatchSearchFocusSelection");
+        expect(src).toContain("dispatchOperatorFocusSelection");
         expect(src).not.toContain("launchGlobalRecordSearchOpen");
         expect(src).not.toContain("open_drawer");
         for (const legacy of GLOBAL_SEARCH_LEGACY_DRAWER_ENTITY_TYPES) {
