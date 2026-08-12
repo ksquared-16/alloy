@@ -419,3 +419,38 @@ test.describe("Removing an override — assignment removed, identity preserved",
         }
     });
 });
+
+test.describe("The location actions are wired — a gap CI found before an operator did", () => {
+    test("'Give its own' opens the connect dialog scoped to that location", async ({ page }) => {
+        const payload = await loadPayload(page);
+        const locations = (payload.locations ?? []) as Array<{ id: string; label: string }>;
+        const lakeside = locations.find((l) => /lakeside/i.test(l.label))!;
+
+        await page.goto(PAGE);
+        await expect(page.getByTestId("organization-communications-page")).toBeVisible();
+
+        // Lakeside inherits, so its action offers it an identity of its own.
+        // The handler was missing at the call site — the button rendered and did
+        // nothing. Certification never clicked it; the typecheck caught it.
+        await page.getByTestId(`communications-email-location-${lakeside.id}-action`).click();
+        const dialog = page.getByTestId("communications-channel-dialog");
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText(lakeside.label);
+        await page.getByTestId("communications-dialog-close").click();
+        await expect(dialog).toBeHidden();
+    });
+
+    test("'Change' opens the configure dialog for a location that has its own", async ({ page }) => {
+        const payload = await loadPayload(page);
+        const locations = (payload.locations ?? []) as Array<{ id: string; label: string }>;
+        const riverside = locations.find((l) => /riverside/i.test(l.label))!;
+
+        await page.goto(PAGE);
+        await page.getByTestId(`communications-email-location-${riverside.id}-action`).click();
+        const dialog = page.getByTestId("communications-channel-dialog");
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText(riverside.label);
+        // Scoped to Riverside's own identity, not the organization default.
+        await expect(page.getByTestId("communications-dialog-edit-inbound")).toHaveValue(RIVERSIDE_EMAIL);
+    });
+});

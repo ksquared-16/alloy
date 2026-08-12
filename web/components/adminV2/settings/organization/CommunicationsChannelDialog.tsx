@@ -20,7 +20,9 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import {
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
@@ -170,9 +172,23 @@ export default function CommunicationsChannelDialog({
         submit(`${BINDINGS}/${encodeURIComponent(editing.id)}`, "PATCH", { location_id: null });
     };
 
-    return (
+    if (typeof document === "undefined") return null;
+
+    // PORTALED TO BODY, at the platform's nested-overlay z.
+    //
+    // A plain `z-[120]` was not enough and the reason is the classic one: this
+    // dialog renders inside the workspace, so its z-index competes only within
+    // that stacking context. The floating BOS assistant is portaled to `body`, so
+    // it sat above the dialog regardless — certification caught the dialog's own
+    // Close button being unclickable, which is the same "button does nothing"
+    // failure this platform has hit before with nested portals.
+    //
+    // `ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z` is the existing constant for
+    // exactly this, already used by the Processing dialogs.
+    return createPortal(
         <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-alloy-midnight/35 p-4"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
+            className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/35 p-4"
             role="dialog"
             aria-modal="true"
             aria-label={`${connecting ? "Connect" : "Configure"} ${card.channelLabel}`}
@@ -412,7 +428,8 @@ export default function CommunicationsChannelDialog({
                     </ConfigurationPrimaryButton>
                 </footer>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
 
