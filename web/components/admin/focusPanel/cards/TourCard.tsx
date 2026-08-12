@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import {
     buildTourCardEvidence,
 } from "@/lib/adminV2/runtime/focusPanel/tour/buildTourCardEvidence";
@@ -32,7 +33,8 @@ type Props = {
  * fires the ADMINV2_OPEN_TOUR_SCHEDULE_MODAL event to the existing modal.
  */
 export default function TourCard({ model, context, receded = false, mutation }: Props) {
-    const evidence = useMemo(() => buildTourCardEvidence(context), [context]);
+    const viewerTimeZone = useAdminViewerTimezone();
+    const evidence = useMemo(() => buildTourCardEvidence(context, viewerTimeZone), [context, viewerTimeZone]);
 
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,10 @@ export default function TourCard({ model, context, receded = false, mutation }: 
     const statusChip = justActed ? "✓ Done" : evidence.statusChip;
     const statusTone = justActed ? "ready" : evidence.statusTone;
 
-    const footerAction = mutation && !justActed ? (
+    // A completed / no-showed / canceled tour is over. Offering Reschedule and Cancel on it is the
+    // same class of defect as printing a raw status key: the card would be inviting an action the
+    // tour system will refuse. This is what the deleted lifecycle bar knew and the card did not.
+    const footerAction = mutation && !justActed && !evidence.terminal ? (
         evidence.scheduled ? (
             <div className="flex items-center gap-2" data-tour-actions>
                 {isPendingApproval ? (

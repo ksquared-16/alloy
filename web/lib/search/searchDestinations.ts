@@ -29,18 +29,18 @@ import {
 } from "@/lib/search/searchContracts";
 
 /**
- * Canonical Focus Panel card keys this resolver targets. Values must exist in
- * `FOCUS_PANEL_CARD_KEYS`; a test asserts that so a renamed card cannot leave
- * Search pointing at a card that no longer exists.
+ * Canonical Focus Panel card keys this resolver targets.
+ *
+ * ONE vocabulary, shared with every other producer of a focus intent. This used to be a private
+ * copy that happened to agree with `OPERATOR_FOCUS_CARDS`; two lists that must stay identical are
+ * one rename away from disagreeing, and the failure is silent — the grid ignores an unknown key, so
+ * the panel composes correctly and simply does not elevate.
+ *
+ * The shared constant is annotated `FocusPanelCardKey`, so a renamed or removed card fails the
+ * build rather than degrading the destination at runtime.
  */
-export const SEARCH_CARD_KEYS = {
-    children: "children",
-    household: "household",
-    /** "Assignments" in the catalogue — placement/assignment work. */
-    assignment: "scheduling",
-    /** "What's Next" — where process participation is worked. */
-    currentWork: "current_work",
-} as const;
+export { OPERATOR_FOCUS_CARDS as SEARCH_CARD_KEYS } from "@/lib/runtime/focus/operatorFocusCards";
+import { OPERATOR_FOCUS_CARDS as SEARCH_CARD_KEYS } from "@/lib/runtime/focus/operatorFocusCards";
 
 /** `process_instances.context_type` → the record that hosts that subject's panel. */
 const PROCESS_CONTEXT_HOST_TYPES: Record<string, string> = {

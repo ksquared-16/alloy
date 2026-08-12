@@ -128,15 +128,22 @@ drawer product, not of unrelated capability that happened to be carried by it.
 | Tour booking lifecycle bar / tour date block | `OpportunityTourBookingLifecycleBar`, `OpportunityInquiryTourDateBlock`, `useOpportunityActiveTourBookings` | retained, **no mount** |
 | Inquiry summary activity | `OpportunityInquirySummaryActivity` | retained, **no mount** |
 
+> **RESOLVED (August 2026).** Every capability below is now mounted in its canonical owner or
+> retired with evidence — see
+> [`post-drawer-capability-convergence.md`](./post-drawer-capability-convergence.md). Two of them
+> turned out to be LIVE DEFECTS rather than dormant code: the packet-review action reached the
+> operator exactly when it mattered and did nothing, and a work template requiring all participants
+> resolved could not be completed by any route.
+
 **This is not a regression introduced here.** That body only rendered when `focusPanelActive` was
 false, and on `/workspace/work-unit/*` the inline Focus Panel renders instead — so these were
 already invisible to an operator on the canonical surface. It is the same class of finding the Focus
 Panel body already records for the Trust enhance-draft control: "produced, persisted and audited
 while being invisible to the operator it was produced for."
 
-`tests/lifecycle/participantDecisionSurfaceAndRetirement.test.ts` asserts the Decision card has no
-mount, so the day one appears the test fails and the next engineer writes the real mount-site
-assertion. Giving these a Focus Panel home is the follow-on work.
+`tests/lifecycle/participantDecisionSurfaceAndRetirement.test.ts` asserted the Decision card had no
+mount, so the day one appeared the test would fail. It did, and that assertion is now the real
+mount-site test.
 
 Genuinely drawer-infrastructure orphans from the same cascade **were** deleted: the layout-runtime
 shadow diagnostics, the drawer body status, the relationship-panel skeleton, and the drawer record

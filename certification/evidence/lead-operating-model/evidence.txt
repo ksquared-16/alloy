@@ -1,30 +1,4 @@
-L0 draft materialized at revision 3
+L0 draft materialized at revision 2
 L0 draft outcomes: [{"label": "Reached / Qualified", "successful": true, "outcome_key": "reached_family", "completes_work": true}, {"label": "Tour Scheduled", "successful": true, "outcome_key": "tour_scheduled", "comple
 L0 published rules unchanged by authoring: true
-L1 validate can_publish=true errors=0
-L1 publish http=200 revisions 1 -> 2
-L1 runtime now carries the corrected rules
-L2 rules moving through lead_to_tour: tour_scheduled_to_tour, tour_booking_scheduled_to_tour
-L2 interested retained as non-moving — historical evidence preserved
-L3 published Work View predicates: new_leads=[{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}] | tours=[{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}] | follow_up=(absent) | all_work=[]
-L3 new_leads predicate: [{"value": "lead", "operator": "equals", "field_key": "opportunity_stage"}]
-L3 tours predicate: [{"value": "tour", "operator": "equals", "field_key": "opportunity_stage"}]
-L4 subject opp=00000000-0000-4000-8000-400000000003 work=00000000-0000-4000-8000-900000000003
-L4 execute http=200 ok=true | family lead/open/- -> lead/open/- | work=completed
-L5 execute http=200 | family lead/open/- -> lead/open/- | open work 1 -> 2
-L6 execute http=200 | family lead/open/- | open work 2 -> 2
-L7 execute http=200 | family lead/open/- -> lead/open/-
-L7 family remains in Lead and is NOT closed — closure stays an operator decision
-L8 subject opp=00000000-0000-4000-8000-400000000004 work=4775ee6c-7bea-4594-9473-03d66f91c43e state=lead/open/-
-L8 execute http=200 ok=true | family lead/open/- -> tour/open/- | work=completed
-L8 durable opportunity status after the move: open
-L9 opportunities with durable status 'tour_scheduled': 0
-L10 editor state: status=published draft_revision=5 base_revision=present | revisions=2
-L11 overview: Reach the family, understand their needs, determine fit, and establish the next operational step. 1 WORK ITEM · 6 OUTCOMES · 2 WAYS OUT Contact Family Primary Required Due in 1 day Reach the family, understand their needs, determine fit, and establish the next operational step. 4 actions · 6 outcomes · 2 attention rule
-L12 duplicate outcome section removed: true; dead action panel removed: true
-L13 attempt gates — rule-level: 1, target-level (dead): 0
-L14 follow-up: WHAT HAPPENS NEXT Set on each outcome above. Shown here so the chain is visible in one place. Left Message → Follow up tomorrow Awaiting Response → Follow up in 3 days Unable to Reach → Follow up in 2 days, retrying until 3 attempts — then 
-L14 attention: ATTENTION FOR THIS WORK Raised when Contact Family needs someone to look at it. Stage-wide signals stay with the stage. Attention rules for New Lead. Rules + Add Contact Family overdue No contact atte
-L15 collapsed heading: STAGE-LEVEL ATTENTION 2 ›
-L15 expanded: STAGE-LEVEL ATTENTION 2 › Signals about the stage itself — ownership, age, missing information. Attention about a specific piece of work lives with that work item above. Attention rules for New Lead. Rules + Add Lead stage age > 7 days Missing stage-required i
-L16 attention_rules: 4 total = 2 work-scoped + 2 stage-owned, one array
+L1 validate can_publish=false errors=9 first="Close semantics require a configured closed status."

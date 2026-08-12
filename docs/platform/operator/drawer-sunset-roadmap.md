@@ -14,6 +14,9 @@ supersedes: []
 > "Search & queue destination intent" table is no longer intent — every row of it is live and
 > browser-certified. The freeze rule outlived its purpose: there is nothing left to freeze.
 >
+> The capabilities the deletion stranded are mounted or retired with evidence —
+> [`post-drawer-capability-convergence.md`](./post-drawer-capability-convergence.md).
+>
 > Current state and the platform rules it established: [`drawer-system.md`](./drawer-system.md).
 > Caller-by-caller inventory: [`drawer-product-eradication-inventory.md`](./drawer-product-eradication-inventory.md).
 

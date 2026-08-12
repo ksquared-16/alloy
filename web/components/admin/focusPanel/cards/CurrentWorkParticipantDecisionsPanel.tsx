@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The Decision work item — ONE card.
+ * The Decision work item — per-child paths, inside Current Work.
  *
  * Replaces two sibling drawer cards (`ParticipantDecisionsPanel`, `FamilyClosePanel`) that sat
  * outside the work they belonged to. Three cards each said part of the same thing, in three
@@ -16,6 +16,17 @@
  *
  * Nothing about execution changed: the same two endpoints, the same explicit child identity, the
  * same guards. This is a presentation convergence.
+ *
+ * ── WHY IT LIVES IN CURRENT WORK ──
+ *
+ * A participant decision is configured on a stage work TEMPLATE, and `completeStageWorkWithOutcome`
+ * refuses to complete that template while any child is undecided — telling the operator, in Current
+ * Work, to "choose a path for each child first". The place that raises the requirement is the place
+ * that must offer it. Mounted anywhere else, the operator reads an instruction with no control.
+ *
+ * It renders as a PANEL, not a card: the workspace already names the work and shows its progress, so
+ * the standalone shell and "Current work" heading this carried in the deleted overview body are
+ * dropped. `presentation: "card"` keeps the old chrome for any host that is not the workspace.
  *
  * OPERATOR VOCABULARY. "decided", "path", "Close family". Never "resolved", "participant",
  * "process instance" or "disposition" — those are the platform's words for its own machinery and
@@ -49,6 +60,11 @@ import type { StageParticipantDecisionInputV1 } from "@/lib/lifecycle/stageOpera
 
 type Props = {
     scope: ParticipantDecisionScope;
+    /**
+     * `panel` — inside the Current Work workspace, which already owns the heading and progress.
+     * `card`  — standalone shell with its own heading (no host uses this today).
+     */
+    presentation?: "panel" | "card";
     /** Optional override. Absent, the work names itself from its configured label. */
     workLabel?: string;
     workStatusLine?: string | null;
@@ -134,8 +150,9 @@ function InputControl({
     );
 }
 
-export default function DecisionCurrentWorkCard({
+export default function CurrentWorkParticipantDecisionsPanel({
     scope,
+    presentation = "panel",
     workLabel,
     workStatusLine,
     canMutate,
@@ -307,29 +324,49 @@ export default function DecisionCurrentWorkCard({
 
     const allDecided = progress?.all_resolved === true;
 
+    const asPanel = presentation === "panel";
+
     return (
-        <div className={oppInqLeadSummaryShellClassName} data-decision-current-work="true">
+        <div
+            className={asPanel ? "alloy-os-currentwork__participant-decisions" : oppInqLeadSummaryShellClassName}
+            data-decision-current-work="true"
+            data-decision-presentation={presentation}
+        >
             {/* ── the work ───────────────────────────────────────────────── */}
-            <div className="flex flex-wrap items-end justify-between gap-1.5 border-b border-alloy-stone/12 pb-1">
-                <div className="min-w-0">
-                    <span className={oppInqEyebrow}>Current work</span>
-                    <h3 className="text-[14px] font-semibold text-alloy-midnight">
-                        {workLabel?.trim() || workLabelFromConfig || "Current work"}
-                    </h3>
-                </div>
-                {progress?.summary ?
-                    <span
-                        className="text-[11px] font-medium text-alloy-midnight/55"
+            {asPanel ?
+                // The workspace already named the work. What it does NOT say is how far the
+                // per-child paths have got, and that is the fact the completion gate turns on.
+                progress?.summary ?
+                    <p
+                        className="alloy-os-currentwork__participant-decisions-progress"
                         data-decision-progress="true"
                     >
                         {progress.summary}
-                    </span>
-                :   null}
-            </div>
+                    </p>
+                :   null
+            :   <>
+                    <div className="flex flex-wrap items-end justify-between gap-1.5 border-b border-alloy-stone/12 pb-1">
+                        <div className="min-w-0">
+                            <span className={oppInqEyebrow}>Current work</span>
+                            <h3 className="text-[14px] font-semibold text-alloy-midnight">
+                                {workLabel?.trim() || workLabelFromConfig || "Current work"}
+                            </h3>
+                        </div>
+                        {progress?.summary ?
+                            <span
+                                className="text-[11px] font-medium text-alloy-midnight/55"
+                                data-decision-progress="true"
+                            >
+                                {progress.summary}
+                            </span>
+                        :   null}
+                    </div>
 
-            {workStatusLine ?
-                <p className="mt-1 px-0.5 text-[11px] text-alloy-midnight/45">{workStatusLine}</p>
-            :   null}
+                    {workStatusLine ?
+                        <p className="mt-1 px-0.5 text-[11px] text-alloy-midnight/45">{workStatusLine}</p>
+                    :   null}
+                </>
+            }
 
             {/* ── each child ─────────────────────────────────────────────── */}
             {configured && rows.length ?
