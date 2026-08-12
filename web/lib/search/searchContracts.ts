@@ -49,6 +49,21 @@ export type SearchSubject = {
     person_id?: string | null;
     /** Owning household when this subject belongs to one. */
     household_id?: string | null;
+    /**
+     * The household's operational CASE — the opportunity whose Focus Panel the household and its
+     * adults are worked in, plus the Work Unit that holds it.
+     *
+     * A child reaches its case through process participation. A parent or a household has none: only
+     * children participate in Enrollment. Without this a person/household destination resolved a host
+     * RECORD (`customers`) but no host Work Unit, so Search had nowhere to send the operator and
+     * refused to navigate — correct, but useless. Resolving the household's own case makes a parent
+     * land in exactly the panel their children land in, which is where that work actually happens.
+     *
+     * Null when the household has no case; the destination then carries no work unit and Search does
+     * not navigate, which stays honest.
+     */
+    household_case_entity_id?: string | null;
+    household_case_work_unit_key?: string | null;
 };
 
 /**

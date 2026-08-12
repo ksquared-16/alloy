@@ -67,7 +67,11 @@ const PROCESS_CONTEXT_HOST_TYPES: Record<string, string> = {
  * for a specific process context; the work unit still comes from that context's own
  * record, never from the process it belongs to.
  */
-function resolveHostWorkUnitKey(contexts: readonly SearchContext[], preferred?: string | null): string | null {
+function resolveHostWorkUnitKey(
+    subject: SearchSubject,
+    contexts: readonly SearchContext[],
+    preferred?: string | null,
+): string | null {
     const hosted = (context: SearchContext): string | null =>
         (context.destination_work_unit_key ?? "").trim() || null;
 
@@ -80,7 +84,13 @@ function resolveHostWorkUnitKey(contexts: readonly SearchContext[], preferred?: 
     // worked somewhere. Configuration decides which processes exist and in what
     // order; Search does not.
     const first = contexts.find((c) => c.kind === "process" && hosted(c));
-    return first ? hosted(first) : null;
+    if (first) return hosted(first);
+
+    // No participation of its own — a PARENT or a HOUSEHOLD. Only children participate in
+    // Enrollment, so without this a person/household destination named a host record and no Work
+    // Unit, and Search had nowhere to send the operator. The household's own case is where that
+    // household is worked, and it is the same panel their children land on.
+    return (subject.household_case_work_unit_key ?? "").trim() || null;
 }
 
 function resolveHost(
@@ -93,6 +103,12 @@ function resolveHost(
         const id = String(context.destination_entity_id ?? "").trim();
         if (type && id) return { type, id };
     }
+    // The household's own CASE, before the household shell. A parent and a household are worked in
+    // the case — the same opportunity panel their children land on — so an opportunity host is what
+    // makes their destination composable at all. `customers`/`persons` remain as the last resort for
+    // a household with no case, where there is genuinely no operational surface.
+    const caseId = (subject.household_case_entity_id ?? "").trim();
+    if (caseId) return { type: "opportunities", id: caseId };
     const householdId = (subject.household_id ?? "").trim();
     if (householdId) return { type: "customers", id: householdId };
     const personId = (subject.person_id ?? "").trim();
@@ -138,7 +154,7 @@ export function resolveSubjectDestination(
             item_id: subject.id,
             host_entity_type: host.type,
             host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(contexts),
+            host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
             primary: true,
         };
     }
@@ -152,7 +168,7 @@ export function resolveSubjectDestination(
             item_id: subject.person_id ?? subject.id,
             host_entity_type: host.type,
             host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(contexts),
+            host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
             primary: true,
         };
     }
@@ -165,7 +181,7 @@ export function resolveSubjectDestination(
         card_key: SEARCH_CARD_KEYS.household,
         host_entity_type: host.type,
         host_entity_id: host.id,
-        host_work_unit_key: resolveHostWorkUnitKey(contexts),
+        host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
         primary: true,
     };
 }
@@ -185,7 +201,7 @@ function resolveHouseholdDestination(
         card_key: SEARCH_CARD_KEYS.household,
         host_entity_type: host.type,
         host_entity_id: host.id,
-        host_work_unit_key: resolveHostWorkUnitKey(contexts),
+        host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
     };
 }
 
@@ -217,7 +233,7 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             host_entity_type: host.type,
             host_entity_id: host.id,
             // A process destination hosts on ITS OWN configured work unit.
-            host_work_unit_key: resolveHostWorkUnitKey(allContexts, context.key),
+            host_work_unit_key: resolveHostWorkUnitKey(subject, allContexts, context.key),
         };
     },
     /**
@@ -235,7 +251,7 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             item_id: subject.id,
             host_entity_type: host.type,
             host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(allContexts),
+            host_work_unit_key: resolveHostWorkUnitKey(subject, allContexts),
         };
     },
     relationship: () => null,

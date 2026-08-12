@@ -419,8 +419,11 @@ test("G — rapid switching: the NEWER selection wins", async ({ page }) => {
     await page.locator('[data-search-subject-button="true"]').first().click();
     await page.waitForTimeout(400);
 
-    await searchFor(page, "Joe Smith Rivers");
-    const second = await expectedLandingFor(page, "Joe Smith Rivers");
+    // A DIFFERENT record, not merely a different query string. Emma is Joe's sibling in the same
+    // household, so this would not prove supersession — the Rivers household's Joe is a distinct
+    // case, which is what makes "the newer selection wins" observable at all.
+    await searchFor(page, "Rivers");
+    const second = await expectedLandingFor(page, "Rivers");
     // The scenario is only meaningful if the two clicks target different records.
     expect(second.subjectId).not.toBe(first.subjectId);
     await page.locator('[data-search-subject-button="true"]').first().click();
