@@ -3,7 +3,6 @@
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
-import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import AdminV2ClickDebugInstaller from "@/app/adminV2/components/AdminV2ClickDebugInstaller";
 import PlatformSurfacePerfDebugInstaller from "@/app/adminV2/components/PlatformSurfacePerfDebugInstaller";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
@@ -134,7 +133,6 @@ export default function AdminV2WorkspaceClientProviders({
                       </RuntimeKernelProvider>
                     </WorkspaceRouteVmProvider>
                   </div>
-                  <AdminEntityDrawer />
                 </div>
                 </OperationalModeEntryProvider>
               </WorkspaceOrgProvider>
