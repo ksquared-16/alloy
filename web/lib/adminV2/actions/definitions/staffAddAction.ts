@@ -18,6 +18,9 @@ import { resolveStaffPersonCandidates } from "@/lib/staff/resolveStaffPersonCand
 
 export const STAFF_ADD_ACTION_KEY = "staff.add";
 
+/** Sentinel entity_id — Add Staff is capture-first, so no target record exists yet. */
+export const STAFF_ADD_ACTION_ENTITY_ID = "__staff_add__";
+
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
