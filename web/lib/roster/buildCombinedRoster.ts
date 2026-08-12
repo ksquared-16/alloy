@@ -23,7 +23,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { summarizeAttendanceByDay } from "@/lib/childcareOperational/attendance/attendanceFold";
+import {
+    effectiveAttendanceEvents,
+    summarizeAttendanceByDay,
+} from "@/lib/childcareOperational/attendance/attendanceFold";
 import type { ChildAttendanceEventRow } from "@/lib/childcareOperational/attendance/attendanceTypes";
 import { buildRoomConfigResolvers } from "@/lib/childcareOperational/config/roomConfigResolvers";
 import { requiredStaffForChildren } from "@/lib/childcareOperational/config/ratioRules";
@@ -195,11 +198,18 @@ export async function buildCombinedRoster(
     const staffDayByPerson = new Map(
         summarizeStaffPresenceByDay(staffPresenceRows).map((d) => [d.personId, d])
     );
+    const childAttendanceRows = ((childAttendanceRes.data ?? []) as ChildAttendanceEventRow[]) ?? [];
     const childDayByAgreement = new Map(
-        summarizeAttendanceByDay(
-            ((childAttendanceRes.data ?? []) as ChildAttendanceEventRow[]) ?? []
-        ).map((d) => [d.enrollmentAgreementId, d])
+        summarizeAttendanceByDay(childAttendanceRows).map((d) => [d.enrollmentAgreementId, d])
     );
+    // The effective fact a child correction would target — same fold, so the
+    // surface never has to interpret raw history to offer "Correct".
+    const childLatestFactByAgreement = new Map<string, string>();
+    for (const ev of effectiveAttendanceEvents(childAttendanceRows)
+        .slice()
+        .sort((a, b) => a.event_at.localeCompare(b.event_at))) {
+        childLatestFactByAgreement.set(ev.enrollment_agreement_id, ev.id);
+    }
 
     const extraAgeGroups = await loadExpectationAgeGroups(supabase, orgId, {
         programCategoryIds: [],
@@ -332,7 +342,13 @@ export async function buildCombinedRoster(
                 const day = childDayByAgreement.get(e.agreementId);
                 if (!day) return NO_RECORD;
                 if (day.absent && !day.present) {
-                    return { state: "absent" as const, arrivedAt: null, departedAt: null, actualRoomLocationId: null };
+                    return {
+                        state: "absent" as const,
+                        arrivedAt: null,
+                        departedAt: null,
+                        actualRoomLocationId: null,
+                        latestFactId: childLatestFactByAgreement.get(e.agreementId) ?? null,
+                    };
                 }
                 if (!day.present) return NO_RECORD;
                 return {
@@ -342,6 +358,7 @@ export async function buildCombinedRoster(
                     arrivedAt: day.firstCheckInAt,
                     departedAt: day.lastCheckOutAt,
                     actualRoomLocationId: day.roomsObserved[day.roomsObserved.length - 1] ?? null,
+                    latestFactId: childLatestFactByAgreement.get(e.agreementId) ?? null,
                 };
             })(),
         };

@@ -14,6 +14,7 @@ import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspac
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
 import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import {
     SCHEDULING_SECTION_MODE,
@@ -948,7 +949,20 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         }}
                     />
                 ) : null}
-                {mode === "work" && workView === "attendance" ? <AttendanceScreen siteName={siteName} /> : null}
+                {mode === "work" && workView === "attendance" ? (
+                    <AttendanceWorkspace
+                        siteLocationId={siteId}
+                        siteName={siteName}
+                        todayYmd={new Date().toISOString().slice(0, 10)}
+                        onOpenChild={(child) => {
+                            // Canonical Child record — never an attendance-specific surface.
+                            if (child.personId) drawer?.openDrawer({ type: "persons", id: child.personId });
+                        }}
+                        onOpenStaff={(staff) => {
+                            drawer?.openDrawer({ type: "persons", id: staff.personId });
+                        }}
+                    />
+                ) : null}
 
                 {mode === "studio" ? (
                     <SchedulingStudio
@@ -973,20 +987,3 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     );
 }
 
-function AttendanceScreen({ siteName }: { siteName: string }) {
-    return (
-        <div className={`${WS_OVERVIEW_CONTENT} flex flex-col`} data-scheduling-attendance-placeholder="true">
-            <p className={WS_EYEBROW}>Attendance</p>
-            <div className="mt-3 flex flex-col items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white px-6 py-16 text-center">
-                <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-alloy-stone/40 text-alloy-midnight">
-                    <CalendarCheck className="h-5 w-5" strokeWidth={1.8} />
-                </span>
-                <p className="text-[13px] font-semibold text-alloy-midnight">Attendance arrives with the Attendance runtime</p>
-                <p className="mt-1 max-w-md text-[12px] text-alloy-slate">
-                    Expected-vs-actual attendance for {siteName} this week will surface here in Phase 2. Expected occupancy
-                    already drives the Roster today.
-                </p>
-            </div>
-        </div>
-    );
-}

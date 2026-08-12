@@ -45,6 +45,8 @@ export type StaffPresenceDayState = {
     currentRoomLocationId: string | null;
     roomsObserved: string[];
     siteLocationId: string | null;
+    /** Effective fact a correction would target (the latest presence-asserting one). */
+    latestFactId: string | null;
 };
 
 function dayKey(personId: string, serviceDate: string): string {
@@ -99,6 +101,7 @@ export function summarizeStaffPresenceByDay(
             currentRoomLocationId: lastPresence?.room_location_id ?? null,
             roomsObserved: rooms,
             siteLocationId: first.site_location_id,
+            latestFactId: (lastPresence ?? sorted[sorted.length - 1] ?? null)?.id ?? null,
         });
     }
     return out;

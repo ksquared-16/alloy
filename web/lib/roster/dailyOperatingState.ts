@@ -29,6 +29,11 @@ export type SubjectActualState = {
     departedAt: string | null;
     /** Actual room, which may differ from the expected/scheduled room. */
     actualRoomLocationId: string | null;
+    /**
+     * The effective fact this state came from. A correction must reference the
+     * fact it supersedes, so the surface cannot offer "Correct" without it.
+     */
+    latestFactId: string | null;
 };
 
 export const NO_RECORD: SubjectActualState = {
@@ -36,13 +41,20 @@ export const NO_RECORD: SubjectActualState = {
     arrivedAt: null,
     departedAt: null,
     actualRoomLocationId: null,
+    latestFactId: null,
 };
 
 /** Fold one staff day-state into the shared subject vocabulary. */
 export function staffActualFromDayState(day: StaffPresenceDayState | null | undefined): SubjectActualState {
     if (!day) return NO_RECORD;
     if (day.absent) {
-        return { state: "absent", arrivedAt: null, departedAt: null, actualRoomLocationId: null };
+        return {
+            state: "absent",
+            arrivedAt: null,
+            departedAt: null,
+            actualRoomLocationId: null,
+            latestFactId: day.latestFactId,
+        };
     }
     if (!day.present) return NO_RECORD;
     return {
@@ -50,6 +62,7 @@ export function staffActualFromDayState(day: StaffPresenceDayState | null | unde
         arrivedAt: day.firstCheckInAt,
         departedAt: day.lastCheckOutAt,
         actualRoomLocationId: day.currentRoomLocationId,
+        latestFactId: day.latestFactId,
     };
 }
 
