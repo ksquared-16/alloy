@@ -22,7 +22,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalRecordSearchAgeLabel";
-import { chunkIds } from "@/lib/admin/opportunity/opportunityLeadDeletionDb";
+import {
+    fetchHostWorkUnitKeys,
+    fetchHouseholdCaseHosts,
+} from "@/lib/workUnits/hostWorkUnitResolver";
 import {
     LOCATION_DISPLAY_LABEL_SELECT,
     locationDisplayLabelFromRow,
@@ -139,7 +142,7 @@ export async function enrichSearchCandidates(args: {
             ? fetchHostWorkUnitKeys(supabase, orgId, hostOpportunityIds)
             : Promise.resolve(new Map<string, string>()),
         householdIds.length
-            ? fetchHouseholdCases(supabase, orgId, householdIds)
+            ? fetchHouseholdCaseHosts(supabase, orgId, householdIds)
             : Promise.resolve(new Map<string, { opportunityId: string; workUnitKey: string | null }>()),
     ]);
 
@@ -397,137 +400,6 @@ async function fetchProcessInstances(
     }));
 }
 
-/**
- * Host record → the Work Unit whose queues actually evaluate it.
- *
- * A Focus Panel composes for a subject only when that subject is on the active
- * Work View's evaluated page, and page membership is scoped by the record's own
- * `work_unit_id`. Resolving it here — from the record, not from the process — is
- * what makes the destination land: `/workspace/work-unit/:slug` resolves work-unit
- * keys, and the process key that used to be sent (`enrollment`) is not one.
- *
- * A record with no `work_unit_id` yields no entry, so the destination carries no
- * work unit and Search does not navigate. Silence is correct: there is genuinely no
- * queue holding that record.
- *
- * Ids are chunked because PostgREST serializes `.in(…)` into the request URI —
- * a large single filter is rejected as "URI too long", which reads as an empty
- * result rather than an error.
- */
-/**
- * Household → its operational CASE (opportunity id + the Work Unit holding it).
- *
- * Only children participate in Enrollment, so a parent or a household has no process context and
- * therefore no host Work Unit — Search resolved a host RECORD for them and then had nowhere to send
- * the operator. The household's own case is that destination: it is the panel their children are
- * worked in, and the one a parent's Household card lives on.
- *
- * Chunked for the same reason as every other `.in(…)` here: PostgREST serializes the filter into the
- * request URI, and an over-long one is rejected in a way that reads as an empty result.
- */
-async function fetchHouseholdCases(
-    supabase: SupabaseClient,
-    orgId: string,
-    householdIds: string[]
-): Promise<Map<string, { opportunityId: string; workUnitKey: string | null }>> {
-    const out = new Map<string, { opportunityId: string; workUnitKey: string | null }>();
-    if (!householdIds.length) return out;
-
-    const byHousehold = new Map<string, { opportunityId: string; workUnitId: string | null }>();
-    for (const chunk of chunkIds(householdIds)) {
-        const { data, error } = await supabase
-            .from("opportunities")
-            .select("id, customer_id, work_unit_id, updated_at")
-            .eq("org_id", orgId)
-            .in("customer_id", chunk)
-            .order("updated_at", { ascending: false });
-        if (error) throw new Error(error.message);
-        for (const row of (data ?? []) as Array<{
-            id: string;
-            customer_id?: string | null;
-            work_unit_id?: string | null;
-        }>) {
-            const household = typeof row.customer_id === "string" ? row.customer_id.trim() : "";
-            if (!household || byHousehold.has(household)) continue; // newest wins
-            byHousehold.set(household, {
-                opportunityId: String(row.id),
-                workUnitId: typeof row.work_unit_id === "string" ? row.work_unit_id.trim() || null : null,
-            });
-        }
-    }
-    if (!byHousehold.size) return out;
-
-    const workUnitIds = uniq([...byHousehold.values()].map((v) => v.workUnitId).filter(Boolean) as string[]);
-    const keyByWorkUnitId = await fetchActiveWorkUnitKeys(supabase, orgId, workUnitIds);
-
-    for (const [household, v] of byHousehold) {
-        out.set(household, {
-            opportunityId: v.opportunityId,
-            workUnitKey: v.workUnitId ? keyByWorkUnitId.get(v.workUnitId) ?? null : null,
-        });
-    }
-    return out;
-}
-
-/** `work_units.id` → `key`, active units only. An inactive unit is not a destination. */
-async function fetchActiveWorkUnitKeys(
-    supabase: SupabaseClient,
-    orgId: string,
-    workUnitIds: string[]
-): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    if (!workUnitIds.length) return out;
-    for (const chunk of chunkIds(workUnitIds)) {
-        const { data, error } = await supabase
-            .from("work_units")
-            .select("id, key, is_active")
-            .eq("org_id", orgId)
-            .in("id", chunk);
-        if (error) throw new Error(error.message);
-        for (const row of (data ?? []) as Array<{ id: string; key?: string | null; is_active?: boolean | null }>) {
-            if (row.is_active === false) continue;
-            const key = typeof row.key === "string" ? row.key.trim() : "";
-            if (key) out.set(String(row.id), key);
-        }
-    }
-    return out;
-}
-
-async function fetchHostWorkUnitKeys(
-    supabase: SupabaseClient,
-    orgId: string,
-    opportunityIds: string[]
-): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    if (!opportunityIds.length) return out;
-
-    const workUnitIdByOpportunity = new Map<string, string>();
-    for (const chunk of chunkIds(opportunityIds)) {
-        const { data, error } = await supabase
-            .from("opportunities")
-            .select("id, work_unit_id")
-            .eq("org_id", orgId)
-            .in("id", chunk);
-        if (error) throw new Error(error.message);
-        for (const row of (data ?? []) as Array<{ id: string; work_unit_id?: string | null }>) {
-            const wuId = typeof row.work_unit_id === "string" ? row.work_unit_id.trim() : "";
-            if (wuId) workUnitIdByOpportunity.set(String(row.id), wuId);
-        }
-    }
-    if (!workUnitIdByOpportunity.size) return out;
-
-    const keyByWorkUnitId = await fetchActiveWorkUnitKeys(
-        supabase,
-        orgId,
-        uniq([...workUnitIdByOpportunity.values()]),
-    );
-
-    for (const [opportunityId, workUnitId] of workUnitIdByOpportunity) {
-        const key = keyByWorkUnitId.get(workUnitId);
-        if (key) out.set(opportunityId, key);
-    }
-    return out;
-}
 
 type ScheduleRow = {
     customer_member_id: string;

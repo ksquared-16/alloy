@@ -4,7 +4,6 @@ import { useMemo } from "react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import { useActiveRuntimePerspective } from "@/lib/adminV2/runtime/perspective/RuntimePerspectiveContext";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAttentionCardFocus } from "@/lib/runtime/kernel/useAttentionCardFocus";
 import { focusPanelWorkModeModelFromDrawerVm } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModelFromDrawerVm";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -42,7 +41,6 @@ export default function OpportunityFocusPanelModeBody({
     onModeChange,
 }: Props) {
     const perspective = useActiveRuntimePerspective();
-    const { drawer } = useAdminDrawer();
 
     // ── THE CARD-FOCUS BRIDGE ──
     //
@@ -50,33 +48,25 @@ export default function OpportunityFocusPanelModeBody({
     // the Operational Subject. This component already translates runtime state → model, so it is the
     // right seam; the grid stays source-agnostic and never learns where focus came from.
     //
-    // Attention is preferred over the drawer's own `drawerSubjectContext` because the inline Focus
-    // Panel is not a drawer. Routing a Search click through `openDrawer` mounted the modal overlay
-    // this work removes — `AdminEntityDrawer` suppresses itself by testing `usePathname()`, which
-    // cannot see the address the kernel projects with `replaceState`. The drawer path remains as the
-    // fallback for surfaces that genuinely ARE the drawer product (person/child routes), which render
-    // above the kernel and therefore have no attention to read.
+    // There is exactly ONE source. The drawer's own `drawerSubjectContext.card_focus` used to be a
+    // second one, read when the request arrived through `openDrawer` — but routing a focus request
+    // that way mounts the modal overlay this work removes (`AdminEntityDrawer` suppresses itself by
+    // testing `usePathname()`, which cannot see the address the kernel projects with `replaceState`).
+    // With no producer left, keeping the branch would only preserve a way to reintroduce it.
     const attention = useAttentionCardFocus();
-    const drawerCardFocus = drawer.drawerSubjectContext?.card_focus ?? null;
-    const requestedCardFocus = useMemo(() => {
-        if (attention.focus) {
-            return {
-                card_key: attention.focus.card_key,
-                item_id: attention.focus.item_id,
-                // Keyed on the Record of Attention, so a rapid subject switch re-applies the card
-                // while an unrelated re-render does not fight an operator who has moved on.
-                subject_key: attention.subject ?? "",
-            };
-        }
-        if (drawerCardFocus) {
-            return {
-                card_key: drawerCardFocus.card_key,
-                item_id: drawerCardFocus.item_id ?? null,
-                subject_key: `${drawer.type}:${drawer.id}`,
-            };
-        }
-        return null;
-    }, [attention.focus, attention.subject, drawerCardFocus, drawer.type, drawer.id]);
+    const requestedCardFocus = useMemo(
+        () =>
+            attention.focus
+                ? {
+                      card_key: attention.focus.card_key,
+                      item_id: attention.focus.item_id,
+                      // Keyed on the Record of Attention, so a rapid subject switch re-applies the
+                      // card while an unrelated re-render does not fight an operator who has moved on.
+                      subject_key: attention.subject ?? "",
+                  }
+                : null,
+        [attention.focus, attention.subject],
+    );
 
     const model = useMemo(
         () =>

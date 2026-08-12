@@ -10,7 +10,8 @@ import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import WorkspaceQueueRow from "@/components/workspace/WorkspaceQueueRow";
 import FoldersViewsSourcesRail from "@/components/workItems/FoldersViewsSourcesRail";
 import WorkItemDetailPanel from "@/components/workItems/WorkItemDetailPanel";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -168,7 +169,7 @@ export default function MyTasksPanel({
     const { userId } = useAdminAuth();
     const { labels: entityLabels } = useEntityLabelsOptional();
     const siteFilter = useWorkspaceSiteFilter();
-    const adminDrawer = useAdminDrawerOptional();
+    const focusRecord = useOperatorRecordFocus();
     const globalAssistant = useGlobalAssistantOptional();
     const linkedOpportunityId =
         globalAssistant?.currentContext?.entity_type === "opportunities" ?
@@ -441,38 +442,45 @@ export default function MyTasksPanel({
         setEditAssignedToUserId(null);
     }, []);
 
+    // Opening a task's record is an ATTENTION MOVEMENT onto the Work Unit that holds it — not an
+    // overlay on top of the task list. The task carries a record id and nothing else, so the host
+    // Work Unit is resolved by the platform (`useOperatorRecordFocus`); if no active unit holds the
+    // record the gesture does nothing, which is the honest answer and never a modal.
     const onOpenRecord = useCallback(
         (task: MyTasksTaskRow) => {
-            if (task.entity_type !== "opportunities" || !task.entity_id?.trim() || !adminDrawer) return;
-            adminDrawer.openDrawer({
-                type: "opportunities",
-                id: task.entity_id,
-                opportunityWorkspaceContext: null,
+            if (task.entity_type !== "opportunities" || !task.entity_id?.trim()) return;
+            const opportunityId = task.entity_id.trim();
+            void focusRecord({ entity_type: "opportunities", entity_id: opportunityId }).then((moved) => {
+                if (!moved) return;
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                        new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
+                            detail: { opportunity_id: opportunityId, task_id: task.id },
+                        }),
+                    );
+                }
+                onClose?.();
             });
-            if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                    new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
-                        detail: { opportunity_id: task.entity_id, task_id: task.id },
-                    }),
-                );
-            }
-            onClose?.();
         },
-        [adminDrawer, onClose],
+        [focusRecord, onClose],
     );
 
+    // Same movement, plus the ASPECT that names the card: Current Work is where a task is worked.
     const onOpenCurrentWork = useCallback(
         (task: MyTasksTaskRow) => {
-            if (task.entity_type !== "opportunities" || !task.entity_id?.trim() || !adminDrawer) return;
-            adminDrawer.openDrawer({
-                type: "opportunities",
-                id: task.entity_id,
-                opportunityWorkspaceContext: null,
+            if (task.entity_type !== "opportunities" || !task.entity_id?.trim()) return;
+            const opportunityId = task.entity_id.trim();
+            void focusRecord({
+                entity_type: "opportunities",
+                entity_id: opportunityId,
+                card_focus: { card_key: OPERATOR_FOCUS_CARDS.currentWork },
+            }).then((moved) => {
+                if (!moved) return;
+                dispatchFocusCurrentWork({ opportunity_id: opportunityId, task_id: task.id });
+                onClose?.();
             });
-            dispatchFocusCurrentWork({ opportunity_id: task.entity_id, task_id: task.id });
-            onClose?.();
         },
-        [adminDrawer, onClose],
+        [focusRecord, onClose],
     );
 
     const onOpenProcessing = useCallback((task: MyTasksTaskRow) => {
@@ -692,7 +700,7 @@ export default function MyTasksPanel({
                 task={t}
                 mode={mode}
                 busy={actionId === t.id}
-                canOpenRecord={t.entity_type === "opportunities" && Boolean(t.entity_id?.trim()) && adminDrawer != null}
+                canOpenRecord={t.entity_type === "opportunities" && Boolean(t.entity_id?.trim()) }
                 presentation={presentation}
                 entityLabels={entityLabels}
                 editTitle={editTitle}

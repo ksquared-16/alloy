@@ -16,7 +16,7 @@ import { WorkspaceRouteVmProvider } from "@/lib/adminV2/runtime/surface/workspac
 import { EMPTY_WORKSPACE_ROUTE_VM, type WorkspaceRouteVm } from "@/lib/adminV2/runtime/surface/workspaceRouteVm";
 import { SurfaceHostProvider } from "@/lib/experience/surfaceHost/SurfaceHostContext";
 import { RuntimeKernelProvider } from "@/lib/runtime/kernel/RuntimeKernelContext";
-import SearchAttentionListener from "@/components/adminV2/SearchAttentionListener";
+import OperatorFocusAttentionListener from "@/components/adminV2/OperatorFocusAttentionListener";
 import type { CSSProperties, ReactNode } from "react";
 
 interface AdminV2WorkspaceClientProvidersProps {
@@ -129,7 +129,7 @@ export default function AdminV2WorkspaceClientProviders({
                             the one work-unit entry adapter: a Search click is an attention movement,
                             never a route push — the route is seed-only, and a push blanks the
                             surface. */}
-                        <SearchAttentionListener />
+                        <OperatorFocusAttentionListener />
                         <SurfaceHostProvider>{children}</SurfaceHostProvider>
                       </RuntimeKernelProvider>
                     </WorkspaceRouteVmProvider>

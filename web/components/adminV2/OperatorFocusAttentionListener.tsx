@@ -5,14 +5,19 @@ import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes
 import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import { formatCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 import {
-    ADMINV2_SEARCH_FOCUS_SELECTION_EVENT,
-    type SearchFocusSelectionDetail,
-} from "@/lib/adminV2/searchFocusSelection";
+    ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT,
+    type OperatorFocusSelectionDetail,
+} from "@/lib/runtime/focus/operatorFocusSelection";
 
 /**
- * Takes a Search selection into the Runtime Kernel as an ATTENTION MOVEMENT.
+ * Takes an operator focus intent into the Runtime Kernel as an ATTENTION MOVEMENT.
  *
- * ── WHY THIS EXISTS AT ALL ──
+ * This is the one applier for every producer that cannot reach the kernel itself — Search in the top
+ * nav, contextual record opens in shell chrome, quick-message record chips. It was written for Search
+ * (`SearchAttentionListener`) and is unchanged in behaviour; only its name and its event stopped
+ * pretending Search is special.
+ *
+ * ── WHY A MOVEMENT AND NOT A NAVIGATION ──
  *
  * `/workspace/work-unit/:slug` is SEED-ONLY: `WorkUnitSlugRouteHost` renders `null` and the Surface
  * Host — mounted above the route, inside `RuntimeKernelProvider` — is the one renderer of the
@@ -25,15 +30,6 @@ import {
  * `useWorkUnitEntryGesture` — "an entry point that is not wired to K1 is not merely un-migrated; it
  * is broken."
  *
- * ── WHY A LISTENER RATHER THAN A HOOK IN THE SEARCH CONTROL ──
- *
- * `GlobalSearchBox` renders in the top nav, which is mounted ABOVE `RuntimeKernelProvider` — the
- * kernel is deliberately above the Surface Host and outside the route subtree so one kernel survives
- * every Workspace ⇄ Work Unit movement. The control therefore cannot hold the kernel; it states
- * intent, and this listener — mounted inside the kernel — performs the movement through the SAME
- * adapter every other work-unit entry point uses. Adding a second gesture path is what created the
- * blank-surface defect in the first place.
- *
  * ── CARD AND ITEM FOCUS RIDE THE SAME MOVEMENT ──
  *
  * They are carried as the ASPECT — the kernel's own scope for "finer than the Operational Subject" —
@@ -42,12 +38,12 @@ import {
  * `usePathname()`, which cannot observe the address the kernel projects with `replaceState`.
  * Measured `modal: 1` over a correctly composed inline panel.
  */
-export default function SearchAttentionListener() {
+export default function OperatorFocusAttentionListener() {
     const move = useWorkUnitEntryMovement();
 
     useEffect(() => {
         const onSelect = (ev: Event) => {
-            const detail = (ev as CustomEvent<SearchFocusSelectionDetail>).detail;
+            const detail = (ev as CustomEvent<OperatorFocusSelectionDetail>).detail;
             const hostKey = (detail?.host_work_unit_key ?? "").trim();
             const hostId = (detail?.entity_id ?? "").trim();
             // No work unit holds this record: there is no operational surface to move to, and
@@ -62,12 +58,12 @@ export default function SearchAttentionListener() {
                 operatorWorkUnitHrefFromKey(hostKey),
                 null,
                 hostId,
-                formatCardFocusAspect(detail.card_focus),
+                formatCardFocusAspect(detail.card_focus ?? null),
             );
         };
 
-        window.addEventListener(ADMINV2_SEARCH_FOCUS_SELECTION_EVENT, onSelect);
-        return () => window.removeEventListener(ADMINV2_SEARCH_FOCUS_SELECTION_EVENT, onSelect);
+        window.addEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);
+        return () => window.removeEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);
     }, [move]);
 
     return null;

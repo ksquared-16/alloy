@@ -42,7 +42,7 @@ const PAIR_SEPARATOR = ":";
  * What a caller may hand to {@link formatCardFocusAspect}.
  *
  * Deliberately looser than {@link AttentionCardFocus}: the selection shapes that produce a card focus
- * (`DrawerCardFocus`, a Search destination) declare `item_id`/`context_key` as OPTIONAL, and the
+ * (an operator focus intent, a Search destination) declare `item_id`/`context_key` as OPTIONAL, and the
  * formatter only reads them. The parsed result stays strict, so consumers still get an explicit
  * `null` rather than an absent key.
  */

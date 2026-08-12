@@ -46,7 +46,8 @@ import {
     CommsWorkspacePanelReserve,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { useAdminAuthOptional } from "@/contexts/AdminAuthContext";
 import { useFamilyCommunicationRuntime } from "@/lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime";
 import { conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
@@ -121,7 +122,7 @@ const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
 const ASSIGNMENT_ENABLED = isCommsV2FlagEnabled("comms_v2_assignment");
 
 export default function CommandCenterShell() {
-    const adminDrawer = useAdminDrawerOptional();
+    const focusRecord = useOperatorRecordFocus();
     const adminAuth = useAdminAuthOptional();
     const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
@@ -241,12 +242,27 @@ export default function CommandCenterShell() {
         );
     }, [selected, runtime.vm]);
 
+    // A conversation's record chips are CONTEXTS of the same family, so each one is a card in that
+    // family's Focus Panel rather than a separate record overlay. `customer_members` is the child
+    // grain — the same id the Children card rows carry, and the same one Search focuses.
     const openRecordLink = useCallback(
         (link: CommandCenterRecordLink) => {
-            if (!adminDrawer) return;
-            adminDrawer.openDrawer({ type: link.type, id: link.id });
+            const cardFocus =
+                link.type === "customer_members"
+                    ? { card_key: OPERATOR_FOCUS_CARDS.children, item_id: link.id }
+                    : link.type === "persons"
+                      ? { card_key: OPERATOR_FOCUS_CARDS.household, item_id: link.id }
+                      : link.type === "customers"
+                        ? { card_key: OPERATOR_FOCUS_CARDS.household }
+                        : null;
+            // A child is addressed through the household that holds it: `customer_members` is not a
+            // record with its own operational host, and the household's case is where it is worked.
+            const entityType = link.type === "customer_members" ? "customers" : link.type;
+            const entityId = link.type === "customer_members" ? (selected?.customer_id ?? "") : link.id;
+            if (!entityId) return;
+            void focusRecord({ entity_type: entityType, entity_id: entityId, card_focus: cardFocus });
         },
-        [adminDrawer]
+        [focusRecord, selected?.customer_id]
     );
 
     const primaryPersonId = useMemo(() => {
@@ -603,7 +619,7 @@ export default function CommandCenterShell() {
                             healthDot={healthDisplay.dot}
                             healthLabel={healthDisplay.label}
                             recordLinks={recordLinks}
-                            onOpenRecordLink={adminDrawer ? openRecordLink : undefined}
+                            onOpenRecordLink={openRecordLink}
                             showClaim={ASSIGNMENT_ENABLED}
                             workspaceMode={runtime.workspaceMode}
                             onWorkspaceModeChange={runtime.setWorkspaceMode}
