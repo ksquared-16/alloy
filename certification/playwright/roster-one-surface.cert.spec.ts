@@ -11,16 +11,19 @@ import path from "node:path";
  * last, below the fold, behind two rooms nobody is in.
  *
  * What this proves:
- *   1. the tab list is Overview · Assignments · Roster · Attendance
- *   2. Roster opens on Day and the range control switches to Week and back
- *   3. rooms are ordered by attention, not by name
- *   4. the site attention line renders counts both read models always computed
- *   5. a `daily_roster` deep link still lands on Roster, at the Day range
+ *   1. Roster opens on Day and the range control switches to Week and back
+ *   2. rooms are ordered by attention, not by name
+ *   3. the site attention line renders counts both read models always computed
+ *   4. the range switch keeps the operator at the same moment in time
+ *   5. a legacy `daily_roster` deep link still lands on Roster, at the Day range
+ *
+ * The workspace itself — its sections, and Assignments no longer owning any of
+ * this — is certified in `roster-workspace-move.cert.spec.ts`.
  */
 
 const SHOTS = path.join(__dirname, "..", "evidence", "roster-product-audit");
 const SETTLE = 120_000;
-const SCHEDULING = "[data-adminv2-scheduling-workspace]";
+const SCHEDULING = "[data-adminv2-roster-workspace]";
 const TODDLER_A = "00000000-0000-4000-8000-000000000013";
 
 test.beforeAll(() => fs.mkdirSync(SHOTS, { recursive: true }));
@@ -30,41 +33,19 @@ async function openRoster(page: Page, deepLinkView: string) {
     await page.waitForLoadState("domcontentloaded");
     await page.evaluate((view) => {
         sessionStorage.setItem(
-            "alloy.assignments.workspace.deeplink",
-            JSON.stringify({ mode: "work", workView: view }),
+            "alloy.roster.workspace.deeplink",
+            JSON.stringify({ section: view }),
         );
     }, deepLinkView);
-    await page.locator('[data-adminv2-sidebar-modal-nav="scheduling"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();
 }
 
-test("Roster is one surface with a Day/Week range, and there is no second Roster tab", async ({
-    page,
-}) => {
+test("Roster is one surface with a Day/Week range", async ({ page }) => {
     await openRoster(page, "roster");
     await expect(page.locator("[data-roster-range]")).toBeVisible({ timeout: SETTLE });
-
-    const tabs = await page.evaluate(() => {
-        const scope = document.querySelector("[data-adminv2-scheduling-workspace]");
-        return [...(scope?.querySelectorAll("[data-scheduling-section-tab]") ?? [])].map((el) =>
-            (el.textContent ?? "").trim(),
-        );
-    });
-    console.log(`[CERT roster tabs] ${JSON.stringify(tabs)}`);
-    if (tabs.length > 0) {
-        expect(tabs).toEqual(["Overview", "Assignments", "Roster", "Attendance"]);
-    } else {
-        // Tab chrome carries no dedicated hook in this shell; assert on the text
-        // instead rather than silently proving nothing.
-        const chrome = await page
-            .locator(SCHEDULING)
-            .innerText()
-            .then((t) => t.replace(/\s+/g, " "));
-        expect(chrome).toContain("Assignments");
-        expect(chrome).not.toContain("Daily Roster");
-    }
 
     // Opens on Day.
     await expect(page.locator("[data-roster-range]")).toHaveAttribute("data-roster-range", "day");

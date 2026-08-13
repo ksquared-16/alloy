@@ -19,12 +19,16 @@
 
 export type SchedulingMode = "work" | "studio";
 
-export type SchedulingWorkView = "overview" | "assignments" | "roster" | "attendance";
+export type SchedulingWorkView = "overview" | "assignments";
 /** Templates retained for deep-link compatibility; not shown in Studio tabs until usable. */
 export type SchedulingStudioView = "types" | "patterns" | "templates" | "validation";
 export type SchedulingSection = SchedulingWorkView | SchedulingStudioView;
 
-/** The range Roster is showing. Day is the operating surface; Week is the plan. */
+/**
+ * The range Roster is showing. Day is the operating surface; Week is the plan.
+ * Declared here because Roster's read models and section vocabulary grew up in
+ * this module; the surface itself now lives in the Roster workspace.
+ */
 export type RosterRange = "day" | "week";
 
 export const SCHEDULING_MODES = [
@@ -35,8 +39,6 @@ export const SCHEDULING_MODES = [
 export const SCHEDULING_WORK_TABS: { key: SchedulingWorkView; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "assignments", label: "Assignments" },
-    { key: "roster", label: "Roster" },
-    { key: "attendance", label: "Attendance" },
 ];
 
 export const SCHEDULING_STUDIO_TABS: { key: SchedulingStudioView; label: string }[] = [
@@ -46,22 +48,16 @@ export const SCHEDULING_STUDIO_TABS: { key: SchedulingStudioView; label: string 
 ];
 
 /**
- * Resolve a work view from a deep link, including ones written before Roster was
- * one surface. `daily_roster` was the day grain of this same tab, so it lands on
- * Roster rather than silently falling back to Overview.
+ * Resolve a work view from a deep link.
+ *
+ * `roster` / `daily_roster` / `attendance` are deliberately NOT handled here.
+ * They are forwarded to the Roster workspace before this workspace ever opens
+ * (see `dispatchAdminV2OpenSchedulingModal`). Mapping them onto an Assignments
+ * tab is exactly the two-owners ambiguity the move removed.
  */
 export function resolveWorkView(raw: string | null | undefined): SchedulingWorkView | null {
     if (!raw) return null;
-    if (raw === "daily_roster") return "roster";
-    if (raw === "overview" || raw === "assignments" || raw === "roster" || raw === "attendance") {
-        return raw;
-    }
-    return null;
-}
-
-/** The range a deep link implies. `daily_roster` meant the day grain, explicitly. */
-export function resolveRosterRange(raw: string | null | undefined): RosterRange | null {
-    if (raw === "daily_roster") return "day";
+    if (raw === "overview" || raw === "assignments") return raw;
     return null;
 }
 
@@ -69,8 +65,6 @@ export function resolveRosterRange(raw: string | null | undefined): RosterRange 
 export const SCHEDULING_SECTION_MODE: Record<SchedulingSection, SchedulingMode> = {
     overview: "work",
     assignments: "work",
-    roster: "work",
-    attendance: "work",
     types: "studio",
     patterns: "studio",
     templates: "studio",

@@ -100,6 +100,12 @@ export type AttendanceWorkspaceProps = {
      */
     initialRoomId?: string | null;
     /**
+     * Return to the expectation layer, carrying the room. The reciprocal of
+     * Roster's `Open Attendance`, so the operator is never left to rebuild their
+     * own context by re-picking a site and a room.
+     */
+    onBackToRoster?: (roomLocationId: string | null) => void;
+    /**
      * Record gestures. Each resolves FALSE when no active Work Unit hosts the
      * record — a real platform answer, not an error. Attendance stops offering
      * the gesture rather than inventing somewhere to send the operator.
@@ -186,6 +192,7 @@ export default function AttendanceWorkspace({
     siteLocationId,
     siteName,
     initialRoomId,
+    onBackToRoster,
     onOpenChild,
     onOpenStaff,
 }: AttendanceWorkspaceProps) {
@@ -358,14 +365,31 @@ export default function AttendanceWorkspace({
         return (
             <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-attendance-room={openRoom.roomLocationId}>
                 <div className={`${WS_OVERVIEW_CONTENT} space-y-4`}>
-                    <button
-                        type="button"
-                        className="inline-flex min-h-[40px] items-center gap-1 text-[12.5px] font-medium text-alloy-midnight/65 hover:text-alloy-midnight"
-                        onClick={() => setOpenRoomId(null)}
-                        data-attendance-back="true"
-                    >
-                        <ChevronLeft className="h-4 w-4" aria-hidden /> All rooms
-                    </button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                            type="button"
+                            className="inline-flex min-h-[40px] items-center gap-1 text-[12.5px] font-medium text-alloy-midnight/65 hover:text-alloy-midnight"
+                            onClick={() => setOpenRoomId(null)}
+                            data-attendance-back="true"
+                        >
+                            <ChevronLeft className="h-4 w-4" aria-hidden /> All rooms
+                        </button>
+                        {/* Back to EXPECTATION, carrying this room. An operator who
+                            arrived here from Roster lands on the room detail, not the
+                            overview — putting the return only on the overview would
+                            make the reciprocal move unreachable from where the
+                            handoff actually lands. */}
+                        {onBackToRoster ? (
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-stone/25 px-2.5 py-1 text-[11.5px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                onClick={() => onBackToRoster(openRoom.roomLocationId)}
+                                data-attendance-back-to-roster="true"
+                            >
+                                ← Roster
+                            </button>
+                        ) : null}
+                    </div>
 
                     <header className="flex flex-wrap items-end justify-between gap-3">
                         <div>
@@ -606,10 +630,23 @@ export default function AttendanceWorkspace({
     return (
         <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-attendance-overview="true">
             <div className={`${WS_OVERVIEW_CONTENT} space-y-4`}>
-                <header>
-                    <p className={WS_EYEBROW}>Attendance</p>
-                    <h2 className="text-[18px] font-semibold text-alloy-midnight">{date ? formatLongDate(date) : "Today"}</h2>
-                    <p className="mt-0.5 text-[12px] text-alloy-midnight/60">{siteName}</p>
+                <header className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <p className={WS_EYEBROW}>Attendance</p>
+                        <h2 className="text-[18px] font-semibold text-alloy-midnight">{date ? formatLongDate(date) : "Today"}</h2>
+                        <p className="mt-0.5 text-[12px] text-alloy-midnight/60">{siteName}</p>
+                    </div>
+                    {/* Back to what was EXPECTED, carrying the room. */}
+                    {onBackToRoster ? (
+                        <button
+                            type="button"
+                            className="rounded border border-alloy-stone/25 px-2.5 py-1 text-[11.5px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                            onClick={() => onBackToRoster(openRoomId)}
+                            data-attendance-back-to-roster="true"
+                        >
+                            ← Roster
+                        </button>
+                    ) : null}
                 </header>
 
                 {error ? (

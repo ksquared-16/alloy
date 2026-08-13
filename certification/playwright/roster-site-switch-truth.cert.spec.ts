@@ -21,7 +21,7 @@ import path from "node:path";
 
 const SHOTS = path.join(__dirname, "..", "evidence", "roster-product-audit");
 const SETTLE = 120_000;
-const SCHEDULING = "[data-adminv2-scheduling-workspace]";
+const SCHEDULING = "[data-adminv2-roster-workspace]";
 
 const RIVERSIDE_SITE_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -88,11 +88,11 @@ test("day roster never renders one site's rooms under another site's name", asyn
     await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => {
         sessionStorage.setItem(
-            "alloy.assignments.workspace.deeplink",
-            JSON.stringify({ mode: "work", workView: "daily_roster" }),
+            "alloy.roster.workspace.deeplink",
+            JSON.stringify({ section: "roster", range: "day" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="scheduling"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator("[data-daily-roster]").waitFor({ timeout: SETTLE });
 
@@ -131,11 +131,11 @@ test("a second site switch mid-flight wins — the first response cannot overwri
     await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => {
         sessionStorage.setItem(
-            "alloy.assignments.workspace.deeplink",
-            JSON.stringify({ mode: "work", workView: "daily_roster" }),
+            "alloy.roster.workspace.deeplink",
+            JSON.stringify({ section: "roster", range: "day" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="scheduling"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator("[data-daily-roster]").waitFor({ timeout: SETTLE });
 
@@ -192,11 +192,11 @@ test("day roster resolves today from the org, and offers a way back to it", asyn
     await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => {
         sessionStorage.setItem(
-            "alloy.assignments.workspace.deeplink",
-            JSON.stringify({ mode: "work", workView: "daily_roster" }),
+            "alloy.roster.workspace.deeplink",
+            JSON.stringify({ section: "roster", range: "day" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="scheduling"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();

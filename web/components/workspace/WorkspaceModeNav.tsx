@@ -41,6 +41,14 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
     navDataAttr?: string;
     sectionsDataAttr?: string;
 }) {
+    /**
+     * A module with one mode has no mode CHOICE, and a lone pill reads as a broken
+     * switch. Roster only runs; Assignments needs Work | Studio because it both
+     * runs and configures. Purely additive — every other caller passes two modes
+     * and renders exactly as before.
+     */
+    const showModes = modes.length > 1;
+
     if (metricsColumn) {
         return (
             <nav
@@ -53,9 +61,11 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
                     data-workspace-mode-split-nav="true"
                 >
                     <div className="flex min-w-0 flex-col gap-2" data-workspace-mode-nav-stack="true">
-                        <div data-workspace-mode-rail="true">
-                            <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
-                        </div>
+                        {showModes ? (
+                            <div data-workspace-mode-rail="true">
+                                <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
+                            </div>
+                        ) : null}
                         <div data-workspace-mode-sections={sectionsDataAttr ?? "true"}>
                             <WorkspaceSubTabs
                                 tabs={sectionTabs}
@@ -83,9 +93,11 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
             aria-label={modeAriaLabel}
         >
             <div className="flex flex-col gap-2">
-                <div data-workspace-mode-rail="true">
-                    <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
-                </div>
+                {showModes ? (
+                    <div data-workspace-mode-rail="true">
+                        <WorkspaceModeTabs modes={modes} active={activeMode} onChange={onModeChange} ariaLabel={modeAriaLabel} />
+                    </div>
+                ) : null}
                 <div
                     className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1"
                     data-workspace-mode-sections={sectionsDataAttr ?? "true"}

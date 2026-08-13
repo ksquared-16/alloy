@@ -304,7 +304,7 @@ converts it from a report into an assertion.
 | **3** | **Handoffs** | Per-room `Open Attendance` (today-only, with a stated reason otherwise) and per-subject `Manage assignment →` into the ledger. Preserve site + room. | ✅ `264b59ece` — `roster-handoffs` (3) |
 | **4** | **Staff lens** | Week-grain staff projection; person → room → days. A pivot of the served week data. Not record management. | ✅ `aee51c590` — `roster-staff-lens` (2) |
 | **5** | **Defect sweep** | The six defects in §5. | ✅ `cc6f31bf5` + folded into 1–2 |
-| **6** | **Workspace move** | New `roster` shell workspace key + sidebar entry; Roster and Attendance move; Assignments keeps Overview + assignment index + Studio. Update the provisional-placement note in `docs/platform/modules/attendance-system.md`. | ⛔ **NOT DONE** |
+| **6** | **Workspace move** | New `roster` shell workspace key + sidebar entry; Roster and Attendance move; Assignments keeps Overview + assignment index + Studio. | ✅ `roster-workspace-move` (8) + `roster-v1-acceptance` (2) |
 
 ### What actually shipped, against the acceptance story
 
@@ -323,11 +323,28 @@ Two defects found while verifying, neither in the original list, both fixed:
 - The day surface took "today" from the browser's UTC clock while Attendance
   adopted the org-local service date the same route returns.
 
-**Slice 6 is the one piece of the accepted plan not built.** Nothing blocks it —
-it is bounded work (a `AdminV2WorkspaceModalKey`, a sidebar entry, a shell mount,
-deep-link plumbing, and moving Attendance across) and the sequencing argument for
-doing it last still holds. It was left because the session ran out of room, not
-because it turned out to be wrong.
+**Roster Product V1 is complete.** Ownership now reads:
+
+```text
+Assignments  owns commitments
+Roster       owns expectations — Day/Week · Rooms/Staff
+  └─ Attendance owns actuality
+```
+
+Two defects the move itself surfaced, both fixed and certified:
+
+- **`Manage →` opened the wrong campus.** A cross-workspace handoff that omits the
+  site lands on Assignments' own default, so managing a Riverside staff member
+  opened the Lakeside ledger — where the subject simply is not present. The
+  handoff looked broken and nothing said why.
+- **The return from Attendance was unreachable from where the handoff lands.** The
+  `← Roster` control sat on the Attendance overview, but `Open Attendance` opens a
+  ROOM, so the operator arrived on the detail view with no way back.
+
+Open, unchanged, and explicitly out of scope: per-subject schedule times (there is
+no arrive/depart column on `schedule_assignments`), the future Records workspace,
+Attendance V1.1, and whether a broader "Daily Operations" noun eventually covers
+this workspace.
 
 Out of scope and untouched: attendance facts, staff presence, employment schema, scheduling,
 staffing math, ratio engine, roster persistence, Records workspace, Attendance V1.1.

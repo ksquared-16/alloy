@@ -34,7 +34,7 @@ const SETTLE = 180_000;
 /** The overlay the whole drawer eradication removed — it must never come back. */
 const MODAL = '[role="dialog"][aria-modal="true"], .adminv2-drawer-modal-panel, .adminv2-drawer-sidebar-panel';
 /** The Assignments workspace modal that HOSTS Attendance. */
-const SCHEDULING = "[data-adminv2-scheduling-workspace]";
+const SCHEDULING = "[data-adminv2-roster-workspace]";
 
 /**
  * Seeded by `certification/attendance/01-attendance-fixture.sql`.
@@ -133,11 +133,11 @@ async function openAttendanceRoom(page: Page) {
     // The product's own deep-link contract (the Focus Panel Assignments card uses it), not a test hook.
     await page.evaluate(() => {
         sessionStorage.setItem(
-            "alloy.assignments.workspace.deeplink",
-            JSON.stringify({ mode: "work", workView: "attendance" }),
+            "alloy.roster.workspace.deeplink",
+            JSON.stringify({ section: "attendance" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="scheduling"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
     await expect(page.locator(SCHEDULING)).toBeVisible({ timeout: SETTLE });
 
     // Site selection. Attendance is site-scoped and opens on "All sites", which renders NO rooms —

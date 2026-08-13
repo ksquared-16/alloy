@@ -22,7 +22,7 @@ import path from "node:path";
 
 const SHOTS = path.join(__dirname, "..", "evidence", "roster-product-audit");
 const SETTLE = 120_000;
-const SCHEDULING = "[data-adminv2-scheduling-workspace]";
+const SCHEDULING = "[data-adminv2-roster-workspace]";
 const TODDLER_A = "00000000-0000-4000-8000-000000000013";
 const JANE_PERSON = "00000000-0000-4000-8000-000050000010";
 
@@ -33,11 +33,11 @@ async function openRosterDay(page: Page) {
     await page.waitForLoadState("domcontentloaded");
     await page.evaluate(() => {
         sessionStorage.setItem(
-            "alloy.assignments.workspace.deeplink",
-            JSON.stringify({ mode: "work", workView: "roster" }),
+            "alloy.roster.workspace.deeplink",
+            JSON.stringify({ section: "roster" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="scheduling"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();
