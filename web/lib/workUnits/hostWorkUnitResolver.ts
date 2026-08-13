@@ -28,6 +28,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { chunkIds } from "@/lib/admin/opportunity/opportunityLeadDeletionDb";
+import { primaryQueueKeyForLifecycleStage } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 
 function uniqueIds(values: Array<string | null | undefined>): string[] {
     return [...new Set(values.map((v) => (v == null ? "" : String(v).trim())).filter(Boolean))];
@@ -157,6 +159,157 @@ export async function fetchHouseholdCaseHosts(
             opportunityId: v.opportunityId,
             workUnitKey: v.workUnitId ? keyByWorkUnitId.get(v.workUnitId) ?? null : null,
         });
+    }
+    return out;
+}
+
+/**
+ * SUBJECT'S EFFECTIVE POSITION → the configured Work View that holds it.
+ *
+ * ── THE GRAIN COLLAPSE THIS EXISTS TO PREVENT ──
+ *
+ * `fetchHostWorkUnitKeys` answers "which unit holds this RECORD" by reading the case's own
+ * `work_unit_id`. For a family case that is family-grain truth, and for a family subject it is right.
+ * For a CHILD it is wrong, and wrong in a way that looks convincing: the search result correctly
+ * showed "Enrollment — Waitlist" (read from the child's own `process_instances.stage_key`) and the
+ * destination still committed the FAMILY's lifecycle-stage unit, `lifecycle_wu_lead`. Two grains, and
+ * only the family one reached attention — so a waitlisted child opened the Lead queue, which does not
+ * contain them, and nothing composed.
+ *
+ * Siblings make it unambiguous: two children of one household can sit in different stages, so no
+ * single family-level answer can be correct for both. Participant position must win over household
+ * position for a participant-specific destination.
+ *
+ * ── WHY A WORK VIEW AND NOT THE STAGE'S WORK UNIT ──
+ *
+ * Every configured stage does own a `lifecycle_wu_<stage>` unit, but those are INTERNAL — other
+ * operator-facing resolvers reject them as destinations on purpose. The operator-facing home for a
+ * stage is the configured Work View bound to it, and a view slug is a first-class attention target
+ * (`resolveWorkUnitByRouteSlug` resolves work_unit_key → work_view → queue_lane).
+ *
+ * Binding is by CONFIGURED KEY, never by label: a view holds a stage when its `compat_queue_key`
+ * equals `primaryQueueKeyForLifecycleStage(stage)`. Labels are tenant-configurable and reorderable,
+ * so a renamed or reordered "Waitlist" must keep resolving.
+ *
+ * Null is an answer. A stage with no configured view yields nothing and the caller falls back to the
+ * record's own unit rather than inventing a destination.
+ */
+export async function fetchStageWorkViewTargets(
+    supabase: SupabaseClient,
+    orgId: string,
+    entries: ReadonlyArray<{ opportunityId: string; stageKey: string }>
+): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const wanted = entries
+        .map((e) => ({
+            opportunityId: (e.opportunityId ?? "").trim(),
+            stageKey: (e.stageKey ?? "").trim(),
+        }))
+        .filter((e) => e.opportunityId && e.stageKey);
+    if (!wanted.length) return out;
+
+    // Case → department, via the unit that holds the case. The department carries the published
+    // process configuration, so this is the only hop that can reach the configured Work Views.
+    const departmentByOpportunity = await fetchOpportunityDepartments(
+        supabase,
+        orgId,
+        uniqueIds(wanted.map((e) => e.opportunityId))
+    );
+    if (!departmentByOpportunity.size) return out;
+
+    const viewsByDepartment = await fetchDepartmentStageWorkViews(
+        supabase,
+        orgId,
+        uniqueIds([...departmentByOpportunity.values()])
+    );
+
+    for (const { opportunityId, stageKey } of wanted) {
+        const departmentId = departmentByOpportunity.get(opportunityId);
+        if (!departmentId) continue;
+        const viewId = viewsByDepartment.get(departmentId)?.get(primaryQueueKeyForLifecycleStage(stageKey));
+        if (viewId) out.set(stageWorkViewCacheKey(opportunityId, stageKey), viewId);
+    }
+    return out;
+}
+
+/** The key `fetchStageWorkViewTargets` returns its answers under. */
+export function stageWorkViewCacheKey(opportunityId: string, stageKey: string): string {
+    return `${opportunityId.trim()}:${stageKey.trim()}`;
+}
+
+async function fetchOpportunityDepartments(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityIds: string[]
+): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (!opportunityIds.length) return out;
+
+    const workUnitIdByOpportunity = new Map<string, string>();
+    for (const chunk of chunkIds(opportunityIds)) {
+        const { data, error } = await supabase
+            .from("opportunities")
+            .select("id, work_unit_id")
+            .eq("org_id", orgId)
+            .in("id", chunk);
+        if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Array<{ id: string; work_unit_id?: string | null }>) {
+            const wuId = typeof row.work_unit_id === "string" ? row.work_unit_id.trim() : "";
+            if (wuId) workUnitIdByOpportunity.set(String(row.id), wuId);
+        }
+    }
+    if (!workUnitIdByOpportunity.size) return out;
+
+    const departmentByWorkUnit = new Map<string, string>();
+    for (const chunk of chunkIds(uniqueIds([...workUnitIdByOpportunity.values()]))) {
+        const { data, error } = await supabase
+            .from("work_units")
+            .select("id, department_id")
+            .eq("org_id", orgId)
+            .in("id", chunk);
+        if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Array<{ id: string; department_id?: string | null }>) {
+            const dept = typeof row.department_id === "string" ? row.department_id.trim() : "";
+            if (dept) departmentByWorkUnit.set(String(row.id), dept);
+        }
+    }
+
+    for (const [opportunityId, workUnitId] of workUnitIdByOpportunity) {
+        const dept = departmentByWorkUnit.get(workUnitId);
+        if (dept) out.set(opportunityId, dept);
+    }
+    return out;
+}
+
+/** department id → (lifecycle queue key → configured Work View id). */
+async function fetchDepartmentStageWorkViews(
+    supabase: SupabaseClient,
+    orgId: string,
+    departmentIds: string[]
+): Promise<Map<string, Map<string, string>>> {
+    const out = new Map<string, Map<string, string>>();
+    if (!departmentIds.length) return out;
+
+    for (const chunk of chunkIds(departmentIds)) {
+        const { data, error } = await supabase
+            .from("departments")
+            .select("id, metadata")
+            .eq("org_id", orgId)
+            .in("id", chunk);
+        if (error) throw new Error(error.message);
+        for (const row of (data ?? []) as Array<{ id: string; metadata?: unknown }>) {
+            const byQueueKey = new Map<string, string>();
+            // The SAME resolver the runtime reads, so a view Search targets is a view the surface
+            // will actually offer — orphaned lifecycle views are already dropped here.
+            for (const view of savedWorkViewsFromDepartmentMetadata(row.metadata)) {
+                const compat = view.compat_queue_key?.trim();
+                const id = view.id?.trim();
+                if (!compat || !id) continue;
+                if (view.visible_in_runtime === false) continue;
+                if (!byQueueKey.has(compat)) byQueueKey.set(compat, id);
+            }
+            if (byQueueKey.size) out.set(String(row.id), byQueueKey);
+        }
     }
     return out;
 }
