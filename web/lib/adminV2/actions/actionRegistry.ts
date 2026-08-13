@@ -25,6 +25,15 @@ import { assignmentArchiveAction } from "@/lib/adminV2/actions/definitions/assig
 import { assignmentDeleteProposedAction } from "@/lib/adminV2/actions/definitions/assignmentDeleteProposedAction";
 import { assignmentChangeRoomAction } from "@/lib/adminV2/actions/definitions/assignmentChangeRoomAction";
 import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/sendTourInvitationAction";
+import { staffAddAction } from "@/lib/adminV2/actions/definitions/staffAddAction";
+import {
+    employmentEndAction,
+    employmentUpdateAction,
+} from "@/lib/adminV2/actions/definitions/employmentEndAction";
+import {
+    staffPresenceCorrectAction,
+    staffPresenceRecordAction,
+} from "@/lib/adminV2/actions/definitions/staffPresenceActions";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -39,6 +48,11 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     assignmentArchiveAction,
     assignmentDeleteProposedAction,
     assignmentChangeRoomAction,
+    staffAddAction,
+    employmentUpdateAction,
+    employmentEndAction,
+    staffPresenceRecordAction,
+    staffPresenceCorrectAction,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(

@@ -20,6 +20,7 @@ export const OPERATOR_FOCUS_CARDS: {
     currentWork: FocusPanelCardKey;
     tour: FocusPanelCardKey;
     documents: FocusPanelCardKey;
+    employment: FocusPanelCardKey;
 } = {
     children: "children",
     household: "household",
@@ -34,4 +35,10 @@ export const OPERATOR_FOCUS_CARDS: {
     tour: "tour_summary",
     /** Uploaded documents — the packet a review action acts on. */
     documents: "documents",
+    /**
+     * Whether this person works here, and in what capacity. The card a STAFF gesture names —
+     * a roster or attendance surface pointing at a staff member means "show me this person's
+     * standing here", which is the employment answer, not the family's enrollment work.
+     */
+    employment: "employment",
 };

@@ -466,7 +466,7 @@ function RoomDetailPanel({
         for (const s of assignmentSubjects) {
             for (const a of s.assignments) {
                 if ((a.roomName ?? "").trim() !== room.roomName.trim()) continue;
-                lines.push({ childName: s.childName, imageUrl: s.imageUrl, assignment: a });
+                lines.push({ childName: s.subjectName, imageUrl: s.imageUrl, assignment: a });
             }
         }
         return lines;

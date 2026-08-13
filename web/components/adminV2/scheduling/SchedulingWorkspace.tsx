@@ -13,6 +13,10 @@ import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
+import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
     SCHEDULING_SECTION_MODE,
     type SchedulingMode,
@@ -184,6 +188,14 @@ function deriveRosterSummary(roster: RosterData | null): RosterSummary {
 export default function SchedulingWorkspace({ onClose }: { onClose?: () => void } = {}) {
     const [sites, setSites] = useState<Site[] | null>(null);
     const [siteId, setSiteId] = useState<string>("");
+    /**
+     * True once the operator has chosen a site themselves. The bootstrap below
+     * SEEDS the initial site; it must never overwrite a deliberate choice. Its
+     * retry loop (3 attempts, 400ms apart) can otherwise resolve after the
+     * operator has already switched and silently restore the previous site —
+     * which is exactly why selecting Riverside appeared not to commit.
+     */
+    const siteChosenByOperatorRef = useRef(false);
 
     const [mode, setMode] = useState<SchedulingMode>("work");
     const [workView, setWorkView] = useState<SchedulingWorkView>("overview");
@@ -287,7 +299,13 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 if (list.length > 0) {
                     if (cancelled) return;
                     setSites(list);
-                    setSiteId((r.resolvedSiteId as string) || list[0]?.id || "");
+                    // Seed only. A late-resolving bootstrap must not clobber the
+                    // operator's selection.
+                    if (!siteChosenByOperatorRef.current) {
+                        setSiteId((prev) =>
+                            prev ? prev : ((r.resolvedSiteId as string) || list[0]?.id || "")
+                        );
+                    }
                     return;
                 }
                 await new Promise((res) => setTimeout(res, 400));
@@ -603,6 +621,40 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     );
 
     const siteName = useMemo(() => sites?.find((s) => s.id === siteId)?.name ?? "All sites", [sites, siteId]);
+    /**
+     * THE canonical record gesture. Attendance points at a record; the adapter
+     * decides where — and answers `false` when no active Work Unit hosts it.
+     * That is a platform answer, not a failure: an employed person with no open
+     * case has nowhere to be worked, and Attendance must not invent a
+     * destination for them. Durable record discovery belongs to the future
+     * Records workspace, not here.
+     */
+    const focusRecord = useOperatorRecordFocus();
+
+    /**
+     * State the record intent, then GET OUT OF THE WAY.
+     *
+     * This workspace is a modal mounted in `TopNavBar` — shell chrome, inside the workspace layout
+     * but above the kernel. The adapter therefore moves attention on the surface UNDERNEATH this
+     * modal. Without the close, the movement is real and completely invisible: the panel composes
+     * the record behind an opaque overlay and the operator sees their click do nothing, which is
+     * indistinguishable from the `openDrawer` defect this all replaced.
+     *
+     * Closing only on `true` is the point of the contract. A `false` answer means no active Work
+     * Unit hosts the record — there is nothing behind this modal to reveal, so dismissing it would
+     * throw the operator out of Attendance to look at the surface they were already on. The caller
+     * owning its own dismissal (rather than the listener closing modals for everyone) is the
+     * pattern the migrated callers already share — see `InboxPanel.onOpenRecord`.
+     */
+    const focusRecordAndYield = useCallback(
+        async (request: Parameters<typeof focusRecord>[0]): Promise<boolean> => {
+            const moved = await focusRecord(request);
+            if (moved) onClose?.();
+            return moved;
+        },
+        [focusRecord, onClose]
+    );
+
     const summary = useMemo(() => deriveRosterSummary(roster), [roster]);
 
     const unplaced = overview?.unplaced ?? [];
@@ -612,16 +664,21 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const createCandidates = useMemo((): WorkspaceCreateChildCandidate[] => {
         const byId = new Map<string, WorkspaceCreateChildCandidate>();
         for (const s of assignmentRoster ?? []) {
+            // Child-creation candidates only. Staff subjects carry a null
+            // customer member by constraint and would key the map on null and
+            // sort on an undefined name.
+            if (s.subjectType === "staff" || !s.customerMemberId) continue;
             byId.set(s.customerMemberId, {
                 customerMemberId: s.customerMemberId,
-                agreementId: s.agreementId,
+                agreementId: s.enrollmentAgreementId ?? "",
                 personId: null,
-                name: s.childName,
+                name: s.subjectName,
                 startDate: null,
             });
         }
         for (const u of unplaced) {
-            if (!byId.has(u.customerMemberId ?? u.agreementId)) {
+            if (!u.customerMemberId) continue;
+            if (!byId.has(u.customerMemberId)) {
                 byId.set(u.customerMemberId, {
                     customerMemberId: u.customerMemberId,
                     agreementId: u.agreementId,
@@ -631,7 +688,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 });
             }
         }
-        return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+        return [...byId.values()].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
     }, [assignmentRoster, unplaced]);
 
     const openCreateAssignment = useCallback(
@@ -779,7 +836,10 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             onStudioViewChange={setStudioView}
             sites={sites}
             siteId={siteId}
-            onSiteChange={setSiteId}
+            onSiteChange={(next) => {
+                    siteChosenByOperatorRef.current = true;
+                    setSiteId(next);
+                }}
             siteName={siteName}
             metricsColumn={metricsColumn}
             onClose={onClose}
@@ -876,16 +936,23 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                             },
                             onBulkMakePrimary: async (rows) => {
                                 for (const row of rows) {
+                                    // Primary is a child concept; a staff subject has no
+                                    // enrollment agreement and must not reach this command.
+                                    const subject = (assignmentRoster ?? []).find(
+                                        (s) => s.subjectKey === row.subjectKey
+                                    );
+                                    const agreementId = subject?.enrollmentAgreementId;
+                                    if (!agreementId || subject?.subjectType === "staff") continue;
                                     await fetch("/api/admin/actions/execute", {
                                         method: "POST",
                                         headers: { "content-type": "application/json" },
                                         body: JSON.stringify({
                                             action_key: "assignment.set_primary",
                                             entity_type: "child",
-                                            entity_id: row.agreementId,
+                                            entity_id: agreementId,
                                             payload: {
                                                 subject_type: "child",
-                                                enrollment_agreement_id: row.agreementId,
+                                                enrollment_agreement_id: agreementId,
                                                 effective_date: row.effectiveFrom,
                                                 promote_assignment_id: row.assignmentId,
                                             },
@@ -930,7 +997,54 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     />
                 ) : null}
 
-                {mode === "work" && workView === "attendance" ? <AttendanceScreen siteName={siteName} /> : null}
+                {mode === "work" && workView === "daily_roster" ? (
+                    <DailyRoster
+                        siteLocationId={siteId}
+                        siteName={siteName}
+                        todayYmd={new Date().toISOString().slice(0, 10)}
+                        onOpenChild={(child) => {
+                            // Canonical record only — a child opens as its person
+                            // identity. Roster is a selection surface, not a record one.
+                            if (!child.personId) return false;
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: child.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.children, item_id: child.personId },
+                            });
+                        }}
+                        onOpenStaff={(staff) => {
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: staff.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
+                            });
+                        }}
+                    />
+                ) : null}
+                {mode === "work" && workView === "attendance" ? (
+                    <AttendanceWorkspace
+                        siteLocationId={siteId}
+                        siteName={siteName}
+                        onOpenChild={(child) => {
+                            // Canonical Child record — never an attendance-specific surface.
+                            if (!child.personId) return false;
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: child.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.children, item_id: child.personId },
+                            });
+                        }}
+                        onOpenStaff={(staff) => {
+                            // A staff gesture asks about this person's standing here, not the
+                            // family's enrollment work — so it names the Employment card.
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: staff.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
+                            });
+                        }}
+                    />
+                ) : null}
 
                 {mode === "studio" ? (
                     <SchedulingStudio
@@ -955,20 +1069,3 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     );
 }
 
-function AttendanceScreen({ siteName }: { siteName: string }) {
-    return (
-        <div className={`${WS_OVERVIEW_CONTENT} flex flex-col`} data-scheduling-attendance-placeholder="true">
-            <p className={WS_EYEBROW}>Attendance</p>
-            <div className="mt-3 flex flex-col items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white px-6 py-16 text-center">
-                <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-alloy-stone/40 text-alloy-midnight">
-                    <CalendarCheck className="h-5 w-5" strokeWidth={1.8} />
-                </span>
-                <p className="text-[13px] font-semibold text-alloy-midnight">Attendance arrives with the Attendance runtime</p>
-                <p className="mt-1 max-w-md text-[12px] text-alloy-slate">
-                    Expected-vs-actual attendance for {siteName} this week will surface here in Phase 2. Expected occupancy
-                    already drives the Roster today.
-                </p>
-            </div>
-        </div>
-    );
-}

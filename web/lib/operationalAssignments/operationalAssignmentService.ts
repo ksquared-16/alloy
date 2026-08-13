@@ -15,6 +15,7 @@ import { OperationalEnrollmentServiceError, trimOrNull } from "@/lib/childcareOp
 import { assertValidIsoDate, computePriorRowCloseDate } from "@/lib/childcareOperational/effectiveDating";
 import { getAgreementById } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { validateSchedulePatternForSite } from "@/lib/childcareOperational/validateChildcareLocationRefs";
+import { assertStaffPersonEligibleForAssignment } from "@/lib/operationalAssignments/staffAssignmentEligibility";
 
 export type OperationalAssignmentSubject =
     | {
@@ -37,6 +38,16 @@ export type CreateOperationalAssignmentInput = {
     subject: OperationalAssignmentSubject;
     schedulePatternId: string;
     startDate: string;
+    /**
+     * Optional close date for a bounded commitment (a summer placement, a cover
+     * shift). Null/omitted = open-ended.
+     *
+     * This used to be absent from the input entirely while the insert hardcoded
+     * `end_date: null`, so any caller-supplied end date was silently discarded
+     * and the row read as open-ended forever. Roster accuracy depends on this
+     * being real effective-date truth.
+     */
+    endDate?: string | null;
     roomLocationId?: string | null;
     programCategoryId?: string | null;
     assignmentTypeId?: string | null;
@@ -82,7 +93,9 @@ async function resolveSubjectSite(
     supabase: SupabaseClient,
     orgId: string,
     subject: OperationalAssignmentSubject,
-    commitmentKind: "proposed" | "committed"
+    commitmentKind: "proposed" | "committed",
+    /** Assignment effective date — employment eligibility is answered at that date. */
+    onDate: string
 ): Promise<{
     siteLocationId: string;
     enrollmentAgreementId: string | null;
@@ -138,21 +151,9 @@ async function resolveSubjectSite(
 
     const personId = assertNonBlank(trimOrNull(subject.personId), "personId");
     const siteLocationId = assertNonBlank(trimOrNull(subject.siteLocationId), "siteLocationId");
-    const { data, error } = await supabase
-        .from("persons")
-        .select("id, org_id, is_employee, archived_at")
-        .eq("org_id", orgId)
-        .eq("id", personId)
-        .maybeSingle();
-    if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
-    const person = data as { id: string; is_employee: boolean | null; archived_at: string | null } | null;
-    if (!person || person.is_employee !== true || person.archived_at != null) {
-        throw new OperationalEnrollmentServiceError(
-            "validation_failed",
-            "Staff assignments require an active employee person",
-            { person_id: personId }
-        );
-    }
+    // Eligibility is canonical EMPLOYMENT, never persons.is_employee (a waitlist
+    // household-priority flag). Same authority the database trigger enforces.
+    await assertStaffPersonEligibleForAssignment(supabase, orgId, personId, onDate);
     return {
         siteLocationId,
         enrollmentAgreementId: null,
@@ -173,6 +174,17 @@ export async function createOperationalAssignment(
     const startDate = assertNonBlank(trimOrNull(input.startDate), "startDate");
     const schedulePatternId = assertNonBlank(trimOrNull(input.schedulePatternId), "schedulePatternId");
     assertValidIsoDate(startDate, "startDate");
+    const endDate = trimOrNull(input.endDate);
+    if (endDate) {
+        assertValidIsoDate(endDate, "endDate");
+        if (endDate < startDate) {
+            throw new OperationalEnrollmentServiceError(
+                "invalid_input",
+                "endDate must be on or after startDate",
+                { start_date: startDate, end_date: endDate }
+            );
+        }
+    }
 
     const requestedKind: "proposed" | "committed" =
         input.commitmentKind ??
@@ -180,7 +192,7 @@ export async function createOperationalAssignment(
             ? "proposed"
             : "committed");
 
-    const subject = await resolveSubjectSite(supabase, input.orgId, input.subject, requestedKind);
+    const subject = await resolveSubjectSite(supabase, input.orgId, input.subject, requestedKind, startDate);
     const patternCheck = await validateSchedulePatternForSite(
         supabase,
         input.orgId,
@@ -267,7 +279,7 @@ export async function createOperationalAssignment(
         commitment_kind: subject.commitmentKind,
         schedule_pattern_id: schedulePatternId,
         start_date: startDate,
-        end_date: null,
+        end_date: endDate,
         // Proposed rows stay in planned status for operator clarity even when start ≤ today.
         status:
             subject.commitmentKind === "proposed"

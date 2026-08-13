@@ -118,10 +118,20 @@ describe("operationalAssignmentService", () => {
         expect(committed.enrollment_agreement_id).toBe(agreement.id);
     });
 
-    it("creates a staff commitment only for an employee person", async () => {
+    it("creates a staff commitment for a person with canonical employment", async () => {
         const store = createOperationalEnrollmentMockStore({
             ...seedOperationalEnrollmentFixtures(),
-            persons: [{ id: "staff-1", org_id: ORG_ID, is_employee: true }],
+            persons: [{ id: "staff-1", org_id: ORG_ID, archived_at: null }],
+            employments: [
+                {
+                    id: "emp-1",
+                    org_id: ORG_ID,
+                    person_id: "staff-1",
+                    employment_status: "active",
+                    start_date: "2026-01-01",
+                    end_date: null,
+                },
+            ],
         });
         const supabase = createOperationalEnrollmentMockSupabase(store);
 
@@ -136,6 +146,55 @@ describe("operationalAssignmentService", () => {
         expect(assignment.subject_type).toBe("staff");
         expect(assignment.subject_person_id).toBe("staff-1");
         expect(assignment.is_primary).toBe(false);
+    });
+
+    it("rejects a staff commitment when persons.is_employee is the only signal", async () => {
+        // The placeholder must not admit anyone. This is the app-layer half of
+        // the eligibility repoint; the database trigger enforces the same rule.
+        const store = createOperationalEnrollmentMockStore({
+            ...seedOperationalEnrollmentFixtures(),
+            persons: [{ id: "staff-1", org_id: ORG_ID, is_employee: true, archived_at: null }],
+            employments: [],
+        });
+        const supabase = createOperationalEnrollmentMockSupabase(store);
+
+        await expect(
+            createOperationalAssignment(supabase, {
+                orgId: ORG_ID,
+                subject: { type: "staff", personId: "staff-1", siteLocationId: SITE_ID },
+                schedulePatternId: PATTERN_ID,
+                startDate: TODAY,
+                todayYmd: TODAY,
+            })
+        ).rejects.toMatchObject({ code: "validation_failed" });
+    });
+
+    it("rejects a staff commitment dated after employment ended", async () => {
+        const store = createOperationalEnrollmentMockStore({
+            ...seedOperationalEnrollmentFixtures(),
+            persons: [{ id: "staff-1", org_id: ORG_ID, archived_at: null }],
+            employments: [
+                {
+                    id: "emp-1",
+                    org_id: ORG_ID,
+                    person_id: "staff-1",
+                    employment_status: "ended",
+                    start_date: "2026-01-01",
+                    end_date: "2026-06-30",
+                },
+            ],
+        });
+        const supabase = createOperationalEnrollmentMockSupabase(store);
+
+        await expect(
+            createOperationalAssignment(supabase, {
+                orgId: ORG_ID,
+                subject: { type: "staff", personId: "staff-1", siteLocationId: SITE_ID },
+                schedulePatternId: PATTERN_ID,
+                startDate: "2026-07-01",
+                todayYmd: "2026-07-01",
+            })
+        ).rejects.toMatchObject({ code: "validation_failed" });
     });
 
     describe("deleteProposedOperationalAssignment", () => {

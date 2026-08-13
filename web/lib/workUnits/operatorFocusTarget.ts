@@ -67,6 +67,20 @@ function allowed(allowList: string[] | null, id: string): boolean {
     return allowList.includes(id);
 }
 
+/**
+ * A person's household — from EITHER table that can hold one.
+ *
+ * ⚠ `customer_persons` is the ADULT contact edge. A child is linked through `customer_members`,
+ * and nothing writes them into `customer_persons`. Reading only the first table therefore returned
+ * null for every child — a FALSE null, not the honest "nowhere" this resolver promises: the child's
+ * family case sat in an active queue the whole time. It was invisible because null is a legitimate
+ * answer here, so callers propagated it exactly as designed and simply stopped offering the gesture.
+ *
+ * Certified live: the seeded child `…050000011` has no `customer_persons` row, one
+ * `customer_members` row, and that household owns an `enrollment_pipeline` case on an active unit.
+ *
+ * The member lookup runs only when the contact lookup misses, so the adult path costs nothing.
+ */
 async function householdIdForPerson(
     supabase: SupabaseClient,
     orgId: string,
@@ -81,7 +95,18 @@ async function householdIdForPerson(
     if (error) throw new Error(error.message);
     const row = (data ?? [])[0] as { customer_id?: string | null } | undefined;
     const id = typeof row?.customer_id === "string" ? row.customer_id.trim() : "";
-    return id || null;
+    if (id) return id;
+
+    const { data: memberData, error: memberError } = await supabase
+        .from("customer_members")
+        .select("customer_id")
+        .eq("org_id", orgId)
+        .eq("person_id", personId)
+        .limit(1);
+    if (memberError) throw new Error(memberError.message);
+    const memberRow = (memberData ?? [])[0] as { customer_id?: string | null } | undefined;
+    const memberId = typeof memberRow?.customer_id === "string" ? memberRow.customer_id.trim() : "";
+    return memberId || null;
 }
 
 async function opportunityIsVisible(

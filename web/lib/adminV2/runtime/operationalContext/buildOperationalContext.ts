@@ -21,14 +21,17 @@ import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { RuntimePerspective } from "@/lib/adminV2/runtime/perspective/deriveRuntimePerspective";
-import type {
-    OperationalBillingSignal,
-    OperationalCommunicationsSignal,
-    OperationalContext,
-    OperationalContextSignals,
-    OperationalContextStatus,
-    OperationalWorkItem,
-    OperationalWorkUrgency,
+import {
+    NULL_EMPLOYMENT_SIGNAL,
+    type OperationalBillingSignal,
+    type OperationalCommunicationsSignal,
+    type OperationalContext,
+    type OperationalContextSignals,
+    type OperationalContextStatus,
+    type OperationalEmploymentPerson,
+    type OperationalEmploymentSignal,
+    type OperationalWorkItem,
+    type OperationalWorkUrgency,
 } from "@/lib/adminV2/runtime/operationalContext/types";
 
 export type BuildOperationalContextInput = {
@@ -126,7 +129,49 @@ function buildBillingSignal(truth: Record<string, unknown>): OperationalBillingS
 }
 
 /**
- * Project work / attention / tour / billing signals from the composed subject VM.
+ * Project the employment of the case's linked contacts from the composed truth record.
+ *
+ * Reads `_case_employment`, written by the opportunity payload's enrichment pass. This is a
+ * TRANSPORT step only — every field it forwards was decided by `lib/employment`, and an absent
+ * or malformed projection answers "no employment", never a guess. The composition is passed
+ * through by reference rather than reshaped, so there is no second place where an employment
+ * fact could drift from the person-owned one.
+ */
+function buildEmploymentSignal(truth: Record<string, unknown>): OperationalEmploymentSignal | null {
+    // Key absent → enrichment has not run for this record yet. That is NOT "nobody is staff";
+    // returning null keeps the card reserved instead of asserting an answer it does not have.
+    if (!("_case_employment" in truth)) return null;
+
+    const raw = truth["_case_employment"];
+    if (!raw || typeof raw !== "object") return NULL_EMPLOYMENT_SIGNAL;
+
+    const rawPeople = (raw as { people?: unknown }).people;
+    if (!Array.isArray(rawPeople) || rawPeople.length === 0) return NULL_EMPLOYMENT_SIGNAL;
+
+    const people: OperationalEmploymentPerson[] = [];
+    for (const entry of rawPeople) {
+        if (!entry || typeof entry !== "object") continue;
+        const row = entry as { person_id?: unknown; person_label?: unknown; employment?: unknown };
+        const personId = trimOrNull(row.person_id);
+        if (!personId || !row.employment || typeof row.employment !== "object") continue;
+        people.push({
+            personId,
+            personLabel: trimOrNull(row.person_label),
+            employment: row.employment as OperationalEmploymentPerson["employment"],
+        });
+    }
+    if (people.length === 0) return NULL_EMPLOYMENT_SIGNAL;
+
+    const primaryId = trimOrNull((raw as { primary?: { person_id?: unknown } | null }).primary?.person_id);
+    return {
+        primary: primaryId ? (people.find((p) => p.personId === primaryId) ?? null) : null,
+        people,
+        hasEmployment: true,
+    };
+}
+
+/**
+ * Project work / attention / tour / billing / employment signals from the composed subject VM.
  * The bridge — cards never read these VM shapes directly; they observe
  * `context.signals`. Read-once; no I/O.
  */
@@ -247,6 +292,7 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         // sanctioned place that reads the drawer VM), so those cards read the context, not the VM.
         lifecycleRail: buildOpportunityVmLifecycleRailModel({ displayVm: subjectVm, drawerId: input.subjectId }),
         communicationsPreview: subjectVm.activity.communicationsPreviewVm ?? null,
+        employment: buildEmploymentSignal(truth),
         capabilities: {
             canMutate,
             maskedChannels: input.maskedChannels ?? false,

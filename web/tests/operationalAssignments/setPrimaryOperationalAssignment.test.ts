@@ -305,7 +305,19 @@ describe("setPrimaryOperationalAssignment", () => {
     it("isolates child and staff primary namespaces", async () => {
         const store = createOperationalEnrollmentMockStore({
             ...seedOperationalEnrollmentFixtures(),
-            persons: [{ id: "staff-1", org_id: ORG_ID, is_employee: true, archived_at: null }],
+            persons: [{ id: "staff-1", org_id: ORG_ID, archived_at: null }],
+            // Canonical employment — not persons.is_employee — is what admits
+            // the staff subject.
+            employments: [
+                {
+                    id: "emp-1",
+                    org_id: ORG_ID,
+                    person_id: "staff-1",
+                    employment_status: "active",
+                    start_date: "2026-01-01",
+                    end_date: null,
+                },
+            ],
         });
         const supabase = createOperationalEnrollmentMockSupabase(store);
         const agreement = await childAgreement(supabase);
