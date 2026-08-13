@@ -191,6 +191,27 @@ async function assertLandedOn(page: Page, host: { workUnitKey: string; hostId: s
         "attention moved but the Assignments modal stayed on top — the operator sees nothing",
     ).toHaveCount(0, { timeout: SETTLE });
 
+    // ── PRECONDITION, stated by the product itself ──
+    //
+    // Landing on a Focus Panel needs the subject to be on the committed Work View's evaluated page,
+    // which means a tenant whose enrollment configuration has been PUBLISHED. Straight after
+    // `alloy-certify reset` the tenant is deliberately pre-publication, the queues evaluate nothing,
+    // and the surface answers "That record isn't in this Work View" — which is scenario A4's
+    // assertion, not a defect here. These scenarios belong to the harness's INHERITED-tenant class,
+    // exactly like `schedule-tour` T0; `alloy-certify journey` resets only before files that demand
+    // pristineness and lets these inherit.
+    //
+    // Failing fast with that reason beats a two-minute timeout on an empty panel, which is how this
+    // cost a promotion run to diagnose.
+    const refused = page.getByText(/isn.t in this Work View/i);
+    if (await refused.count()) {
+        throw new Error(
+            "Work View refused the subject: this tenant is PRE-PUBLICATION, so no queue pages this " +
+                "record in. Run through `alloy-certify journey` (inherited tenant) rather than " +
+                "straight after a reset. The refusal itself is certified by scenario A4.",
+        );
+    }
+
     const cells = page.locator("[data-focus-panel-grid-cell]");
     await expect(cells.first()).toBeVisible({ timeout: SETTLE });
     expect((await panelState(page, label)).cellCount, "the Focus Panel composed no cells").toBeGreaterThan(0);

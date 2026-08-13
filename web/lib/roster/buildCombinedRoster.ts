@@ -29,7 +29,12 @@ import {
 } from "@/lib/childcareOperational/attendance/attendanceFold";
 import type { ChildAttendanceEventRow } from "@/lib/childcareOperational/attendance/attendanceTypes";
 import { buildRoomConfigResolvers } from "@/lib/childcareOperational/config/roomConfigResolvers";
-import { requiredStaffForChildren } from "@/lib/childcareOperational/config/ratioRules";
+// The CANONICAL ratio surface, not the raw tier primitive. `resolveRequiredStaffForChildren` is a
+// thin wrapper over the same function, so this is a seam change with no behavioural difference —
+// but the doctrine is that a consumer never re-derives a fact, and the offender ledger in
+// `tests/childcareOperational/calculations/staffingSeamOffenderLedger.test.ts` may shrink and never
+// grow. Actual demand resolves exactly the way planned demand does.
+import { resolveRequiredStaffForChildren } from "@/lib/childcareOperational/capacity/resolveRatio";
 import { buildScheduleExpectations } from "@/lib/childcareOperational/expectations/buildScheduleExpectations";
 import {
     countsPresent,
@@ -439,7 +444,7 @@ export async function buildCombinedRoster(
             countsPresent(staff.map((s) => s.actual)) +
             countsPresent(unscheduledStaffPresent.map((s) => s.actual));
 
-        const actualDemand = requiredStaffForChildren(resolveTiers(roomId, date), actualChildrenPresent);
+        const actualDemand = resolveRequiredStaffForChildren(resolveTiers(roomId, date), actualChildrenPresent);
         const { actualRequiredStaff, actualStaffingSufficiency } = resolveActualStaffing({
             actualChildrenPresent,
             actualStaffPresent,
