@@ -357,10 +357,15 @@ test.describe("Connect succeeds end to end — the gap the synthetic credential 
         } finally {
             if (createdId) {
                 // Return the tenant to its fixture topology: Lakeside inherits.
-                // Return Lakeside to inheritance: deactivate, keeping its location
-                // (the corrected removal semantics). Re-running reuses this row.
+                // Return Lakeside to inheritance AND free the receiving address.
+                //
+                // Deactivating alone is the correct PRODUCT semantics, but it keeps
+                // the address claimed — and the address is globally unique, so the
+                // next run's POST would collide with this run's leftover instead of
+                // creating. Clearing the address makes the spec idempotent without
+                // weakening the semantics it certifies elsewhere.
                 const cleanup = await page.request.patch(`${BINDINGS}/${createdId}`, {
-                    data: { status: "disabled" },
+                    data: { status: "disabled", inbound_address: null, from_email: null },
                     failOnStatusCode: false,
                 });
                 expect(cleanup.ok(), "fixture cleanup must succeed").toBe(true);

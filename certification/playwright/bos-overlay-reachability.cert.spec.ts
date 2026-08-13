@@ -47,8 +47,16 @@ async function actionCoverage(page: Page) {
     return page.evaluate(() => {
         const panel = document.querySelector('[data-adminv2-bos-rail-overlay="true"]');
         const pr = panel?.getBoundingClientRect() ?? null;
+        // PAGE actions only. The assistant's own controls — its resize handle, its
+        // launcher — sit inside its chrome and are trivially "covered" by it,
+        // which is meaningless: the invariant is about the page's actions, not
+        // BOS's. A probe confirmed the sole remaining hit was `aria-label="Resize
+        // BOS"` inside the panel itself.
+        const BOS_CHROME =
+            "[data-adminv2-bos-rail-overlay],[data-adminv2-command-surface-layer],[data-adminv2-persistent-command-rail]";
         const buttons = Array.from(document.querySelectorAll("button, a[href]"))
             .filter((el) => {
+                if (el.closest(BOS_CHROME)) return false;
                 const r = el.getBoundingClientRect();
                 const cs = getComputedStyle(el);
                 return r.width > 0 && r.height > 0 && cs.visibility !== "hidden" && cs.display !== "none";
@@ -99,11 +107,14 @@ for (const viewport of [
             await expect(page.getByTestId("organization-communications-page")).toBeVisible();
             const coverage = await actionCoverage(page);
             console.log(`[BOS] communications ${viewport.name} coverage=`, JSON.stringify(coverage));
-            // RECORDED, not asserted to zero. A floating assistant is an overlay
-            // the operator can move or close, and demanding it never overlap
-            // anything is the assumption that produced the pinned-like regression.
-            // What must hold is that the overlap has a remedy — asserted below.
-            expect(coverage.total).toBeGreaterThan(0);
+            // ASSERTED, not merely recorded. Collision-aware parking means the
+            // assistant does not settle on top of actionable content, so "the
+            // operator can move it" is no longer the answer. Layout is untouched —
+            // this is placement, not a reserve.
+            expect(
+                coverage.covered,
+                `assistant parked over ${coverage.covered} control(s): ${coverage.coveredLabels.join(", ")}`,
+            ).toBe(0);
         });
 
         test("no primary action on another Organization page is unreachable", async ({ page }) => {
@@ -112,11 +123,17 @@ for (const viewport of [
             await page.waitForLoadState("domcontentloaded");
             const coverage = await actionCoverage(page);
             console.log(`[BOS] access ${viewport.name} coverage=`, JSON.stringify(coverage));
-            // RECORDED, not asserted to zero. A floating assistant is an overlay
-            // the operator can move or close, and demanding it never overlap
-            // anything is the assumption that produced the pinned-like regression.
-            // What must hold is that the overlap has a remedy — asserted below.
-            expect(coverage.total).toBeGreaterThan(0);
+            // KNOWN RESIDUAL, named rather than tolerated in the abstract.
+            //
+            // The Organization LANDING surfaces are dense tile grids. At 400x620 the
+            // assistant has no placement that clears every control, so parking picks
+            // the least-obstructive spot and one tile link stays under it. Closing
+            // that needs BOS to change SIZE or collapse to its launcher on dense
+            // pages — product redesign, explicitly out of scope here.
+            //
+            // Asserting the exact label keeps this a guard rather than a shrug: any
+            // additional control, or a different one, fails.
+            expect(coverage.coveredLabels).toEqual(coverage.covered === 0 ? [] : ["Open Access Scopes"]);
         });
 
         test("no primary action on a third Organization page is unreachable", async ({ page }) => {
@@ -124,7 +141,8 @@ for (const viewport of [
             await page.waitForLoadState("domcontentloaded");
             const coverage = await actionCoverage(page);
             console.log(`[BOS] programs ${viewport.name} coverage=`, JSON.stringify(coverage));
-            expect(coverage.total).toBeGreaterThan(0);
+            // Same known residual as Access — see the note there.
+            expect(coverage.coveredLabels).toEqual(coverage.covered === 0 ? [] : ["Open Locations"]);
         });
 
         test("actions stay reachable after SCROLLING — the actual failure mode", async ({ page }) => {
@@ -141,7 +159,7 @@ for (const viewport of [
             });
             const coverage = await actionCoverage(page);
             console.log(`[BOS] scrolled ${viewport.name} coverage=`, JSON.stringify(coverage));
-            expect(coverage.total).toBeGreaterThan(0);
+            expect(coverage.covered, `covers: ${coverage.coveredLabels.join(", ")}`).toBe(0);
         });
 
         test("FLOATING does not reserve layout — it is an overlay, not a side panel", async ({ page }) => {
@@ -214,7 +232,7 @@ for (const viewport of [
             expect(after.covered, `still covered with the assistant closed: ${after.coveredLabels.join(", ")}`).toBe(0);
         });
 
-        test("a control the assistant overlaps is reachable by the operator's own remedy", async ({ page }) => {
+        test("the Configure control receives a click with the assistant PRESENT", async ({ page }) => {
             // HONEST SCOPE. The SMS card sits in the right-hand column, which is
             // where a bottom-right floating assistant lives, so at these viewports
             // it can genuinely overlap Configure. That is a property of an overlay
