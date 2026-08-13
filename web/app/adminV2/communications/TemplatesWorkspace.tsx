@@ -48,6 +48,20 @@ import {
     subscribeCommunicationsWorkspaceWarm,
 } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
+import TourTemplateDeliveryAutomationCard from "@/app/adminV2/communications/TourTemplateDeliveryAutomationCard";
+import {
+    extractTourCommsMetadataRoot,
+    mergeTourCommsConfig,
+    parseTourCommsConfigFragment,
+} from "@/lib/tours/comms/tourCommsConfig";
+import {
+    buildTourCommsStudioDraftFromConfig,
+    isTourSystemTemplateSystemKey,
+    serializeTourCommsStudioDraftToFragment,
+    tourSystemTemplateEventKey,
+    type TourCommsStudioDraft,
+    validateTourCommsStudioDraft,
+} from "@/lib/tours/comms/tourCommsStudioPolicy";
 
 /**
  * Templates Workspace (Phase 1 / B3) — three-column template authoring.
@@ -61,6 +75,7 @@ import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communicati
  */
 
 const TEMPLATES_API = "/api/admin/communications/templates";
+const ORG_SETTINGS_API = "/api/admin/org-settings";
 
 type VersionSummary = {
     id: string;
@@ -79,6 +94,7 @@ type TemplateRow = {
     status: TemplateStatus;
     current_version_id: string | null;
     current_version?: VersionSummary | null;
+    system_key: string | null;
     updated_at: string | null;
 };
 
@@ -196,6 +212,11 @@ export default function TemplatesWorkspace() {
     const [versionInfo, setVersionInfo] = useState<{ current: number | null; count: number }>(
         () => getInitialTemplateOccupancy().versionInfo
     );
+    const [selectedSystemKey, setSelectedSystemKey] = useState<string | null>(null);
+    const [tourCommsDraft, setTourCommsDraft] = useState<TourCommsStudioDraft | null>(null);
+    const [tourCommsBaselineJson, setTourCommsBaselineJson] = useState<string | null>(null);
+    const [tourCommsLoading, setTourCommsLoading] = useState(false);
+    const [tourCommsLoaded, setTourCommsLoaded] = useState(false);
 
     const didInitialOccupancyRef = useRef(false);
 
@@ -243,6 +264,48 @@ export default function TemplatesWorkspace() {
         }
     }, [categoryFilter, channelFilter, statusFilter, filtersDefault]);
 
+    const loadTourCommsPolicy = useCallback(async () => {
+        setTourCommsLoading(true);
+        try {
+            const res = await fetch(ORG_SETTINGS_API, { credentials: "include" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to load org settings");
+            const fragment = parseTourCommsConfigFragment(extractTourCommsMetadataRoot(json.metadata));
+            const merged = mergeTourCommsConfig(fragment, {});
+            const nextDraft = buildTourCommsStudioDraftFromConfig(merged);
+            setTourCommsDraft(nextDraft);
+            setTourCommsBaselineJson(JSON.stringify(nextDraft));
+            setTourCommsLoaded(true);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to load Tour delivery policy");
+        } finally {
+            setTourCommsLoading(false);
+        }
+    }, []);
+
+    const persistTourCommsPolicy = useCallback(async (draft: TourCommsStudioDraft) => {
+        const res = await fetch(ORG_SETTINGS_API, { credentials: "include" });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to load org settings");
+
+        const currentMeta = (json.metadata as Record<string, unknown> | null | undefined) ?? {};
+        const existingFragment = parseTourCommsConfigFragment(extractTourCommsMetadataRoot(currentMeta));
+        const tourCommsPatch = serializeTourCommsStudioDraftToFragment(draft, existingFragment);
+        const mergedTourComms = { ...existingFragment, ...tourCommsPatch };
+
+        const patchRes = await fetch(ORG_SETTINGS_API, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ metadata: { tour_comms: mergedTourComms } }),
+        });
+        const patchJson = await patchRes.json().catch(() => ({}));
+        if (!patchRes.ok) {
+            throw new Error(typeof patchJson.error === "string" ? patchJson.error : "Failed to save Tour delivery policy");
+        }
+        setTourCommsBaselineJson(JSON.stringify(draft));
+    }, []);
+
     useEffect(() => {
         return subscribeCommunicationsWorkspaceWarm(() => {
             if (!filtersDefault) return;
@@ -279,6 +342,7 @@ export default function TemplatesWorkspace() {
         const preview = templates.find((t) => t.id === id);
         if (preview) {
             setDraft(draftFromTemplateRow(preview));
+            setSelectedSystemKey(preview.system_key ?? null);
         }
         try {
             const res = await fetch(`${TEMPLATES_API}/${id}`, { credentials: "include" });
@@ -287,6 +351,7 @@ export default function TemplatesWorkspace() {
             const t = json.template as TemplateRow;
             const cv = (json.current_version as VersionSummary | null) ?? null;
             const versions = Array.isArray(json.versions) ? (json.versions as VersionSummary[]) : [];
+            setSelectedSystemKey(typeof t.system_key === "string" ? t.system_key : null);
             setDraft({
                 name: t.name ?? "",
                 description: t.description ?? "",
@@ -334,9 +399,16 @@ export default function TemplatesWorkspace() {
         }
     }, [listResolved, filtersDefault, templates, selectedId, creating, draft.body, selectTemplate]);
 
+    useEffect(() => {
+        if (!isTourSystemTemplateSystemKey(selectedSystemKey)) return;
+        if (tourCommsLoaded || tourCommsLoading) return;
+        void loadTourCommsPolicy();
+    }, [selectedSystemKey, tourCommsLoaded, tourCommsLoading, loadTourCommsPolicy]);
+
     const startCreate = useCallback(() => {
         setCreating(true);
         setSelectedId(null);
+        setSelectedSystemKey(null);
         setDraft(EMPTY_DRAFT);
         setVersionInfo({ current: null, count: 0 });
     }, []);
@@ -344,6 +416,24 @@ export default function TemplatesWorkspace() {
     const save = useCallback(async () => {
         setSaving(true);
         setError(null);
+
+        const tourEventKey = tourSystemTemplateEventKey(selectedSystemKey);
+        const showTourDelivery = isTourSystemTemplateSystemKey(selectedSystemKey);
+        const tourCommsDirty =
+            showTourDelivery && tourCommsDraft != null && tourCommsBaselineJson !== JSON.stringify(tourCommsDraft);
+
+        if (tourCommsDirty && tourCommsDraft) {
+            const validation = validateTourCommsStudioDraft(tourCommsDraft, {
+                eventKey: tourEventKey,
+                editingReminderControls: tourCommsDraft.reminderEnabled,
+            });
+            if (!validation.ok) {
+                setError(validation.error);
+                setSaving(false);
+                return;
+            }
+        }
+
         // For non-email channels, subject is not editable and must be omitted/empty.
         const payload = {
             name: draft.name,
@@ -355,6 +445,10 @@ export default function TemplatesWorkspace() {
             body: draft.body,
         };
         try {
+            if (tourCommsDirty && tourCommsDraft) {
+                await persistTourCommsPolicy(tourCommsDraft);
+            }
+
             let res: Response;
             if (creating || !selectedId) {
                 res = await fetch(TEMPLATES_API, {
@@ -381,7 +475,17 @@ export default function TemplatesWorkspace() {
         } finally {
             setSaving(false);
         }
-    }, [creating, selectedId, draft, loadList, selectTemplate]);
+    }, [
+        creating,
+        selectedId,
+        draft,
+        loadList,
+        selectTemplate,
+        selectedSystemKey,
+        tourCommsDraft,
+        tourCommsBaselineJson,
+        persistTourCommsPolicy,
+    ]);
 
     const archive = useCallback(async () => {
         if (!selectedId) return;
@@ -508,6 +612,8 @@ export default function TemplatesWorkspace() {
     const hasSelection = creating || selectedId != null;
     const isArchived = draft.status === "archived";
     const advancedFilterCount = [categoryFilter, channelFilter, statusFilter].filter(Boolean).length;
+    const showTourDeliverySection = isTourSystemTemplateSystemKey(selectedSystemKey);
+    const tourDeliveryEventKey = tourSystemTemplateEventKey(selectedSystemKey);
 
     return (
         <div
@@ -755,6 +861,24 @@ export default function TemplatesWorkspace() {
                                 />
                             </label>
                         </CommsSectionCard>
+
+                        {showTourDeliverySection && tourDeliveryEventKey && tourCommsDraft ? (
+                            <TourTemplateDeliveryAutomationCard
+                                eventKey={tourDeliveryEventKey}
+                                draft={tourCommsDraft}
+                                disabled={saving || tourCommsLoading}
+                                onChange={setTourCommsDraft}
+                            />
+                        ) : showTourDeliverySection && tourCommsLoading ? (
+                            <CommsSectionCard
+                                title="Delivery & automation"
+                                dense
+                                className="shrink-0 !p-2.5"
+                                data-tour-delivery-automation-loading="true"
+                            >
+                                <span className="text-[11px] text-alloy-midnight/50">Loading Tour delivery policy…</span>
+                            </CommsSectionCard>
+                        ) : null}
 
                         <CommsSectionCard
                             title="Message content"

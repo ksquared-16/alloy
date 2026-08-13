@@ -72,6 +72,7 @@ import {
 } from "./operationalPresentation";
 import { resolveQueueRowLayoutServer } from "@/lib/layout/runtime/queueRowLayoutServer";
 import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
+import { attachActiveTourFactsToOpportunityRows } from "@/lib/tours/queue/attachActiveTourFactsToOpportunityRows";
 import {
     effectiveParticipantStageKeysFromRow,
     resolveContextMissionStages,
@@ -902,8 +903,16 @@ export async function composeWorkUnitProvisioningAnswer(
             rows: (baseRows ?? []) as Array<Record<string, unknown>>,
             logLabel: "provisioning",
         });
+        // Active Tour facts before Work View predicates — family-grain Tours lenses filter on
+        // operational booking truth (`has_active_tour`), not stage_key alone.
+        const baseWithTourFacts = await attachActiveTourFactsToOpportunityRows({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            rows: baseWithEpp,
+            logLabel: "provisioning",
+        });
         const projection = computeOperationalProjection({
-            baseRows: baseWithEpp as OperationalProjectionRow[],
+            baseRows: baseWithTourFacts as OperationalProjectionRow[],
             workViews: [activeView], // only the active lens — no count fan-out, no second evaluation
         });
         const admitted = projection.byViewId[activeView.id]?.rows ?? [];

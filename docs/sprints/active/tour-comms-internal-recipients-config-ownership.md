@@ -33,8 +33,22 @@ Internal Tour notifications use **configured internal recipients**, not a Tour H
 
 - Supports **0 / 1 / many** canonical auth user ids.
 - On confirm / reschedule / cancel, orchestrator sends internal ICS email artifacts to those users.
-- Parent-facing templates are not blindly CC’d.
+- Parent-facing templates are not blindly CC'd.
 - No `host_user_id` assignment UI; no host-based calendar ownership.
+
+### Operator UI (Communications → Studio → Templates)
+
+For system Tour templates (`system_key` prefix `tour_*`), **Delivery & automation** appears under Template details (dense card; message content stays primary).
+
+| Template | Controls surfaced |
+| --- | --- |
+| Tour Reminder | Reminder enabled, hours-before timing (`reminder_offsets[0]`), Email/SMS channels, parent recipient policy (Primary contact), ask-parent-confirm toggle, shared internal recipients |
+| Tour Confirmation / Reschedule / Cancel | Shared internal recipients only (same org list) |
+| Tour Invitation / No-show follow-up | Inheritance note — edit Reminder or lifecycle templates for policy |
+
+- Internal recipients and reminder timing persist to **`org_settings.metadata.tour_comms`** (read-modify-write on save). Template rows hold **content only**.
+- UI copy: *Inherited from Tour communications policy* — one org-wide list, not per-template overrides in V1.
+- Staff picker uses canonical org users (`/api/admin/users`); no UUID paste.
 
 ## Parent confirmation
 

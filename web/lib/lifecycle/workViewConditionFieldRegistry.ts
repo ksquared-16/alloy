@@ -122,6 +122,20 @@ export const WORK_VIEW_CONDITION_FIELD_DEFS: readonly WorkViewConditionFieldDef[
         runtimeSupported: true,
     },
     {
+        // Operational Tour fact from active `tour_bookings` (not lifecycle stage). Enables
+        // family-grain Tours Work Views to overlap Waitlist without stage movement.
+        key: "has_active_tour",
+        label: "Has active Tour",
+        group: "operational",
+        subject: "opportunity",
+        valueKind: "boolean",
+        optionSource: { kind: "boolean" },
+        operators: BOOLEAN_OPERATORS,
+        runtimeField: "has_active_tour",
+        runtimeSupported: true,
+        source: "operational",
+    },
+    {
         // Child/OCM enrollment disposition. Options are the FULL configured enrollment status set
         // (`status_definitions` for opportunity_customer_members, org defs unioned with industry
         // defaults) — never a hardcoded subset.
