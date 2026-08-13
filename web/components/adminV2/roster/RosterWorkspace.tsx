@@ -306,7 +306,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
             onClose={onClose}
             metricsColumn={
                 section === "roster" ? (
-                    <RosterKpiStrip counts={healthCounts} loading={loadingWeek && !healthCounts} />
+                    <RosterKpiStrip counts={healthCounts} range={range} loading={loadingWeek && !healthCounts} />
                 ) : undefined
             }
         >

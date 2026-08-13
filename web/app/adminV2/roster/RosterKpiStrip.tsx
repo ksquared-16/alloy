@@ -32,9 +32,12 @@ export type RosterHealthCounts = {
 
 export default function RosterKpiStrip({
     counts,
+    range,
     loading,
 }: {
     counts: RosterHealthCounts | null;
+    /** Names what the counts are ABOUT — a day's operation, or a week's plan. */
+    range: "day" | "week";
     loading?: boolean;
 }) {
     const value = (n: number | undefined) => (counts == null ? "—" : String(n ?? 0));
@@ -67,5 +70,11 @@ export default function RosterKpiStrip({
         },
     ];
 
-    return <WorkspaceOperationalHealth items={items} loading={loading} />;
+    return (
+        <WorkspaceOperationalHealth
+            eyebrow={range === "week" ? "Planned week" : "Today's operation"}
+            items={items}
+            loading={loading}
+        />
+    );
 }
