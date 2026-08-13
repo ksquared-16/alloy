@@ -218,7 +218,10 @@ export default function AssignmentRosterPanel({
                             <button
                                 type="button"
                                 className="text-[11px] font-semibold text-alloy-bend-pine"
-                                onClick={() => bulk.onCreateForChild?.(selectedSubjects[0]!.customerMemberId)}
+                                onClick={() => {
+                                    const memberId = selectedSubjects[0]?.customerMemberId;
+                                    if (memberId) bulk.onCreateForChild?.(memberId);
+                                }}
                                 data-roster-add-assignment="true"
                             >
                                 Add Assignment
@@ -645,7 +648,10 @@ export default function AssignmentRosterPanel({
                         <button
                             type="button"
                             className="mt-3 text-[11.5px] font-semibold text-alloy-bend-pine hover:underline"
-                            onClick={() => bulk.onCreateForChild?.(detailAssignment.subject.customerMemberId)}
+                            onClick={() => {
+                                const memberId = detailAssignment.subject.customerMemberId;
+                                if (memberId) bulk.onCreateForChild?.(memberId);
+                            }}
                         >
                             + Add Assignment for this child
                         </button>

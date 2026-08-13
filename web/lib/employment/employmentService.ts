@@ -55,6 +55,14 @@ function rethrowDbError(message: string): never {
 // ---------------------------------------------------------------------------
 
 /** Every employment period for a person in one org, newest window first. */
+/*
+ * ⚠ Row casts below go through `unknown` on purpose.
+ *
+ * The columns are selected via a runtime string constant, so the typed Supabase client cannot
+ * resolve the shape and widens the result to `GenericStringError`. That is a limitation of the
+ * client's inference, not a claim about the data — the select constant and the row type are kept
+ * in step by hand, and the DB certification asserts the real columns.
+ */
 export async function listEmploymentsForPerson(
     supabase: SupabaseClient,
     orgId: string,
@@ -68,7 +76,7 @@ export async function listEmploymentsForPerson(
         .order("start_date", { ascending: false })
         .order("created_at", { ascending: false });
     if (error) rethrowDbError(error.message);
-    return (data ?? []) as EmploymentRow[];
+    return (data ?? []) as unknown as EmploymentRow[];
 }
 
 /**
@@ -98,7 +106,7 @@ export async function getEmploymentById(
         .maybeSingle();
     if (error) rethrowDbError(error.message);
     if (!data) throw new EmploymentServiceError("not_found", "Employment not found");
-    return data as EmploymentRow;
+    return data as unknown as EmploymentRow;
 }
 
 /**
@@ -270,7 +278,7 @@ export async function createEmployment(
         .select(EMPLOYMENT_SELECT_COLUMNS)
         .single();
     if (error) rethrowDbError(error.message);
-    return data as EmploymentRow;
+    return data as unknown as EmploymentRow;
 }
 
 export type UpdateEmploymentInput = {
@@ -340,7 +348,7 @@ export async function updateEmployment(
         .select(EMPLOYMENT_SELECT_COLUMNS)
         .single();
     if (error) rethrowDbError(error.message);
-    return data as EmploymentRow;
+    return data as unknown as EmploymentRow;
 }
 
 export type EndEmploymentInput = {
@@ -391,5 +399,5 @@ export async function endEmployment(
         .select(EMPLOYMENT_SELECT_COLUMNS)
         .single();
     if (error) rethrowDbError(error.message);
-    return data as EmploymentRow;
+    return data as unknown as EmploymentRow;
 }

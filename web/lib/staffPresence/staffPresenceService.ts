@@ -79,6 +79,14 @@ export type RecordStaffPresenceInput = {
  * Presence outside employment is not a fact about staff — it is a data error, and
  * the caller learns that here rather than from a constraint violation.
  */
+/*
+ * ⚠ Row casts below go through `unknown` on purpose.
+ *
+ * The columns are selected via a runtime string constant, so the typed Supabase client cannot
+ * resolve the shape and widens the result to `GenericStringError`. That is a limitation of the
+ * client's inference, not a claim about the data — the select constant and the row type are kept
+ * in step by hand, and the DB certification asserts the real columns.
+ */
 export async function resolveCoveringEmployment(
     supabase: SupabaseClient,
     orgId: string,
@@ -181,7 +189,7 @@ export async function recordStaffPresence(
         .single();
     if (error) rethrow(error.message);
 
-    const row = data as StaffPresenceEventRow;
+    const row = data as unknown as StaffPresenceEventRow;
     await emitStaffPresenceEvent({
         orgId,
         presenceEventId: row.id,
@@ -216,5 +224,5 @@ export async function listStaffPresenceForSiteDate(
         .eq("service_date", serviceDate)
         .order("event_at", { ascending: true });
     if (error) rethrow(error.message);
-    return (data ?? []) as StaffPresenceEventRow[];
+    return (data ?? []) as unknown as StaffPresenceEventRow[];
 }

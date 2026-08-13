@@ -133,7 +133,7 @@ export const employmentUpdateAction: RegisteredAction = {
     supportedProcessKeys: [],
     requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
     audit: { eventType: "action_executed", category: "record", mutates: true },
-    confirmationPolicy: "optional",
+    confirmationPolicy: "none",
     bosProposalSupport: false,
 
     validatePayload(payload) {
