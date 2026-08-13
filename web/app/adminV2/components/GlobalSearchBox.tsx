@@ -276,6 +276,10 @@ export default function GlobalSearchBox() {
                 entity_type: hostType,
                 entity_id: hostId,
                 host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
+                // The participant's own Work View, when their stage has one. The listener prefers
+                // it over the case unit above — a waitlisted child must not be sent to the family's
+                // Lead queue, which does not contain them.
+                host_work_view_id: (destination.host_work_view_id ?? "").trim() || null,
                 card_focus: {
                     card_key: destination.card_key,
                     item_id: destination.item_id ?? null,

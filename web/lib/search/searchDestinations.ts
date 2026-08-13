@@ -93,6 +93,34 @@ function resolveHostWorkUnitKey(
     return (subject.household_case_work_unit_key ?? "").trim() || null;
 }
 
+/**
+ * The configured Work View that holds THIS PARTICIPANT — the participant-specific answer that
+ * OUTRANKS the family/case unit above.
+ *
+ * `resolveHostWorkUnitKey` answers at case grain, which is correct for a family subject and wrong for
+ * a child: siblings in one case routinely sit in different stages, so one family answer cannot serve
+ * both. A waitlisted child sent to the family's Lead unit lands in a queue that does not contain
+ * them, and the surface composes nothing — the reported "New selected, no records, no subject".
+ *
+ * Null when this participation's stage has no stage-bound view, and the caller then falls back to the
+ * case unit. The family answer is a fallback, never an override.
+ */
+function resolveHostWorkViewId(
+    contexts: readonly SearchContext[],
+    preferred?: string | null,
+): string | null {
+    const viewOf = (context: SearchContext): string | null =>
+        (context.destination_work_view_id ?? "").trim() || null;
+
+    const wanted = (preferred ?? "").trim();
+    if (wanted) {
+        const exact = contexts.find((c) => c.kind === "process" && c.key === wanted);
+        if (exact) return viewOf(exact);
+    }
+    const first = contexts.find((c) => c.kind === "process" && viewOf(c));
+    return first ? viewOf(first) : null;
+}
+
 function resolveHost(
     subject: SearchSubject,
     contexts: readonly SearchContext[]
@@ -155,6 +183,7 @@ export function resolveSubjectDestination(
             host_entity_type: host.type,
             host_entity_id: host.id,
             host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
+            host_work_view_id: resolveHostWorkViewId(contexts),
             primary: true,
         };
     }
@@ -169,6 +198,7 @@ export function resolveSubjectDestination(
             host_entity_type: host.type,
             host_entity_id: host.id,
             host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
+            host_work_view_id: resolveHostWorkViewId(contexts),
             primary: true,
         };
     }
@@ -182,6 +212,7 @@ export function resolveSubjectDestination(
         host_entity_type: host.type,
         host_entity_id: host.id,
         host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
+            host_work_view_id: resolveHostWorkViewId(contexts),
         primary: true,
     };
 }
@@ -202,6 +233,7 @@ function resolveHouseholdDestination(
         host_entity_type: host.type,
         host_entity_id: host.id,
         host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
+            host_work_view_id: resolveHostWorkViewId(contexts),
     };
 }
 
@@ -234,6 +266,7 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             host_entity_id: host.id,
             // A process destination hosts on ITS OWN configured work unit.
             host_work_unit_key: resolveHostWorkUnitKey(subject, allContexts, context.key),
+            host_work_view_id: resolveHostWorkViewId(allContexts, context.key),
         };
     },
     /**
@@ -252,6 +285,7 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             host_entity_type: host.type,
             host_entity_id: host.id,
             host_work_unit_key: resolveHostWorkUnitKey(subject, allContexts),
+            host_work_view_id: resolveHostWorkViewId(allContexts),
         };
     },
     relationship: () => null,

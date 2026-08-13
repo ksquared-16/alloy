@@ -44,18 +44,23 @@ export default function OperatorFocusAttentionListener() {
     useEffect(() => {
         const onSelect = (ev: Event) => {
             const detail = (ev as CustomEvent<OperatorFocusSelectionDetail>).detail;
-            const hostKey = (detail?.host_work_unit_key ?? "").trim();
+            // PARTICIPANT POSITION FIRST. The Work View holding this participant's own stage wins
+            // over the case's unit, which answers at family grain: siblings in one case sit in
+            // different stages, so the family answer cannot be right for both. Falls back to the
+            // case unit when the stage has no configured view — a fallback, never an override.
+            const hostSlug =
+                (detail?.host_work_view_id ?? "").trim() || (detail?.host_work_unit_key ?? "").trim();
             const hostId = (detail?.entity_id ?? "").trim();
-            // No work unit holds this record: there is no operational surface to move to, and
-            // inventing one would commit the operator to a queue the record is not in.
-            if (!hostKey || !hostId) return;
+            // Nothing holds this record: there is no operational surface to move to, and inventing
+            // one would commit the operator to a queue the record is not in.
+            if (!hostSlug || !hostId) return;
 
             // The href is the destination's honest address; the adapter parses the attention it
             // expresses. The subject rides along so the surface commits the record the operator
             // asked for rather than the lens's default subject, and the card + item ride along as
             // the ASPECT — the kernel's own name for "finer than the subject".
             move(
-                operatorWorkUnitHrefFromKey(hostKey),
+                operatorWorkUnitHrefFromKey(hostSlug),
                 null,
                 hostId,
                 formatCardFocusAspect(detail.card_focus ?? null),
