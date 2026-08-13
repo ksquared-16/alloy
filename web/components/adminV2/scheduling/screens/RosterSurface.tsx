@@ -22,6 +22,9 @@ import { useCallback, useState } from "react";
 
 import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/WeekPicker";
 import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import RosterStaffLens, {
+    type RosterStaffLensSubject,
+} from "@/components/adminV2/scheduling/screens/RosterStaffLens";
 import SchedulingRoster, {
     type RosterData,
     type RosterFilterContext,
@@ -29,9 +32,18 @@ import SchedulingRoster, {
 import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import type { RosterRange } from "@/app/adminV2/scheduling/schedulingSections";
 
+/**
+ * Rooms is the operating view. Staff answers "where is Jane this week" — a pivot
+ * of the same week data, offered only at the week range because a single day's
+ * staff list is already on the Rooms cards.
+ */
+export type RosterLens = "rooms" | "staff";
+
 export type RosterSurfaceProps = {
     range: RosterRange;
     onRangeChange: (range: RosterRange) => void;
+    lens: RosterLens;
+    onLensChange: (lens: RosterLens) => void;
 
     siteLocationId: string;
     siteName: string;
@@ -57,7 +69,43 @@ export type RosterSurfaceProps = {
     onOpenAttendance?: Parameters<typeof DailyRoster>[0]["onOpenAttendance"];
     /** Route a subject to the authoritative assignment surface. */
     onManageAssignment?: Parameters<typeof DailyRoster>[0]["onManageAssignment"];
+    /** Record attention from the Staff lens — same gesture as everywhere else. */
+    onOpenStaffSubject?: (subject: RosterStaffLensSubject) => void;
 };
+
+function LensControl({
+    lens,
+    onLensChange,
+}: {
+    lens: RosterLens;
+    onLensChange: (lens: RosterLens) => void;
+}) {
+    return (
+        <div
+            className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25"
+            data-roster-lens={lens}
+        >
+            {(["rooms", "staff"] as const).map((key, i) => (
+                <button
+                    key={key}
+                    type="button"
+                    className={[
+                        "px-3 py-1.5 text-[11.5px] font-semibold capitalize",
+                        i > 0 ? "border-l border-alloy-stone/25" : "",
+                        lens === key
+                            ? "bg-alloy-bend-pine/10 text-alloy-bend-pine"
+                            : "text-alloy-slate hover:bg-alloy-stone/[0.06]",
+                    ].join(" ")}
+                    onClick={() => onLensChange(key)}
+                    data-roster-lens-option={key}
+                    aria-pressed={lens === key}
+                >
+                    {key}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 function RangeControl({
     range,
@@ -96,6 +144,8 @@ function RangeControl({
 export default function RosterSurface({
     range,
     onRangeChange,
+    lens,
+    onLensChange,
     siteLocationId,
     siteName,
     weekData,
@@ -114,6 +164,7 @@ export default function RosterSurface({
     onOpenStaff,
     onOpenAttendance,
     onManageAssignment,
+    onOpenStaffSubject,
 }: RosterSurfaceProps) {
     /**
      * The day lives HERE, not inside the day view, so a Day → Week → Day trip comes
@@ -156,6 +207,21 @@ export default function RosterSurface({
         [range, changeRange],
     );
 
+    const lensControl = <LensControl lens={lens} onLensChange={onLensChange} />;
+
+    if (range === "week" && lens === "staff") {
+        return (
+            <RosterStaffLens
+                data={weekData}
+                loading={loadingWeek}
+                siteName={siteName}
+                rangeControl={control()}
+                lensControl={lensControl}
+                onOpenStaff={onOpenStaffSubject}
+            />
+        );
+    }
+
     if (range === "week") {
         return (
             <SchedulingRoster
@@ -172,7 +238,12 @@ export default function RosterSurface({
                 onSelectWeek={onSelectWeek}
                 weekChangePending={weekChangePending}
                 lastWeekLoadMs={lastWeekLoadMs}
-                rangeControl={control()}
+                rangeControl={
+                    <>
+                        {control()}
+                        {lensControl}
+                    </>
+                }
             />
         );
     }

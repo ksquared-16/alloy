@@ -41,6 +41,16 @@ export type RosterCell = {
     /** Staffing SUPPLY — people scheduled here on this date. Never the same field as demand. */
     scheduledStaffCount?: number | null;
     /**
+     * The scheduled people themselves. Served since the read model shipped and
+     * read by the Staff lens, which is a PIVOT of this array — not a second fetch.
+     */
+    scheduledStaff?: {
+        personId: string;
+        displayName: string;
+        positionLabel: string | null;
+        timeLabel: string | null;
+    }[];
+    /**
      * The verdict comparing the two. The board rendered `requiredStaff` alone for a
      * while, which reads as supply — a room short every day of the week showed
      * "1 staff" and a green chip. Demand is never shown without its verdict.

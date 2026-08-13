@@ -13,7 +13,7 @@ import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
-import RosterSurface from "@/components/adminV2/scheduling/screens/RosterSurface";
+import RosterSurface, { type RosterLens } from "@/components/adminV2/scheduling/screens/RosterSurface";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
@@ -207,6 +207,8 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const [studioView, setStudioView] = useState<SchedulingStudioView>("types");
     /** Day is where an operator starts: "what does today look like". */
     const [rosterRange, setRosterRange] = useState<RosterRange>("day");
+    /** Rooms is the operating view; Staff answers "where is Jane this week". */
+    const [rosterLens, setRosterLens] = useState<RosterLens>("rooms");
     /** Context carried by a Roster → Attendance handoff. */
     const [attendanceRoomId, setAttendanceRoomId] = useState<string | null>(null);
     /** Context carried by a Roster → Assignments handoff, matched on identity. */
@@ -1012,6 +1014,8 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     <RosterSurface
                         range={rosterRange}
                         onRangeChange={setRosterRange}
+                        lens={rosterLens}
+                        onLensChange={setRosterLens}
                         siteLocationId={siteId}
                         siteName={siteName}
                         weekData={displayRoster}
@@ -1058,6 +1062,16 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                             });
                         }}
                         onOpenStaff={(staff) => {
+                            return focusRecordAndYield({
+                                entity_type: "persons",
+                                entity_id: staff.personId,
+                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
+                            });
+                        }}
+                        onOpenStaffSubject={(staff) => {
+                            // The Staff lens is an operational projection, not a
+                            // record product. A name still opens the canonical
+                            // record through the one adapter.
                             return focusRecordAndYield({
                                 entity_type: "persons",
                                 entity_id: staff.personId,

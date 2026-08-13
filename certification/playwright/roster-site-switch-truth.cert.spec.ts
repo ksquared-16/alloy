@@ -51,11 +51,24 @@ async function switchSiteAndRead(page: Page, site: (typeof SITES)[keyof typeof S
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: site.match }).first().click();
 
-    // Wait for one of THIS site's rooms — never a fixed sleep, which is exactly
-    // how a half-switched surface gets snapshotted and asserted about.
-    await expect(page.locator(`[data-roster-room="${site.rooms[0]}"]`)).toBeVisible({
-        timeout: SETTLE,
-    });
+    // Wait until every rendered room belongs to THIS site — never a fixed sleep,
+    // and never "room[0] is visible": rooms are ordered by attention now, so which
+    // room comes first is data-dependent and pinning one encodes the old
+    // alphabetical order into the test.
+    await expect
+        .poll(
+            async () =>
+                page.evaluate((expected) => {
+                    const ids = [...document.querySelectorAll("[data-roster-room]")].map((el) =>
+                        el.getAttribute("data-roster-room"),
+                    );
+                    return (
+                        ids.length > 0 && ids.every((id) => id != null && expected.includes(id))
+                    );
+                }, site.rooms as readonly string[] as string[]),
+            { timeout: SETTLE },
+        )
+        .toBe(true);
 
     return page.evaluate(() => {
         const surface = document.querySelector("[data-daily-roster]");
