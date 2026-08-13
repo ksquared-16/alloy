@@ -108,6 +108,17 @@ export type DailyRosterProps = {
     onOpenAttendance?: (roomLocationId: string) => void;
     /** Take this subject to the authoritative assignment surface. Roster never writes. */
     onManageAssignment?: (subject: RosterChild | RosterStaff) => void;
+    /**
+     * Report this day's health counts to the host, which renders them in the
+     * workspace CONTROL BAND. Operational health belongs there, not in the body —
+     * the body is the roster itself.
+     */
+    onHealth?: (counts: {
+        roomsShort: number;
+        roomsUnknown: number;
+        expectedChildren: number;
+        scheduledStaff: number;
+    } | null) => void;
     onOpenChild?: (subject: RosterChild) => void;
     onOpenStaff?: (subject: RosterStaff) => void;
 };
@@ -218,6 +229,7 @@ export default function DailyRoster({
     rangeControl,
     onOpenAttendance,
     onManageAssignment,
+    onHealth,
     onOpenChild,
     onOpenStaff,
 }: DailyRosterProps) {
@@ -294,6 +306,25 @@ export default function DailyRoster({
             ).length,
         });
     }, [model]);
+
+    // The same counts the attention line uses, reported up for the control band.
+    useEffect(() => {
+        if (!onHealth) return;
+        if (!model) {
+            onHealth(null);
+            return;
+        }
+        onHealth({
+            roomsShort: model.cells.filter((c) => c.staffingSufficiency === "short").length,
+            roomsUnknown: model.cells.filter(
+                (c) => c.staffingSufficiency === "unknown" && isOperating(c)
+            ).length,
+            expectedChildren: model.totals.expectedChildren,
+            scheduledStaff: model.totals.scheduledStaff,
+        });
+        // `isOperating` is a pure local helper; `model` is the only real input.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [model, onHealth]);
 
     /**
      * Attention first, then name. Alphabetical put the only room with children in

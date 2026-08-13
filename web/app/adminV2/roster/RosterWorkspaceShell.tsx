@@ -29,6 +29,7 @@ export default function RosterWorkspaceShell({
     onSiteChange,
     siteName,
     onClose,
+    metricsColumn,
     children,
 }: {
     section: RosterSection;
@@ -38,6 +39,8 @@ export default function RosterWorkspaceShell({
     onSiteChange: (id: string) => void;
     siteName: string;
     onClose?: () => void;
+    /** Section-scoped operational health band (control band, right column). */
+    metricsColumn?: ReactNode;
     children: ReactNode;
 }) {
     return (
@@ -67,16 +70,19 @@ export default function RosterWorkspaceShell({
                         </label>
                     ) : null,
             }}
-            /* One mode. The shell renders no mode rail below two, so Roster gets
-               section tabs and nothing else — see WorkspaceModeNav. */
+            /* One mode, and the rail is opted OUT rather than inferred from the
+               mode count — Work Items also declares a single mode, and inferring
+               would change its chrome too. */
             modes={ROSTER_MODES}
             activeMode="work"
             onModeChange={() => {}}
             modeAriaLabel="Roster mode"
+            showModeRail={false}
             sectionTabs={ROSTER_SECTION_TABS}
             activeSection={section}
             onSectionChange={(key) => onSectionChange(key as RosterSection)}
             sectionAriaLabel="Roster sections"
+            metricsColumn={metricsColumn}
             navDataAttr="roster"
             sectionsDataAttr="roster"
         >

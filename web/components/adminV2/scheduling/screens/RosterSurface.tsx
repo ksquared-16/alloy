@@ -71,6 +71,8 @@ export type RosterSurfaceProps = {
     onManageAssignment?: Parameters<typeof DailyRoster>[0]["onManageAssignment"];
     /** Record attention from the Staff lens — same gesture as everywhere else. */
     onOpenStaffSubject?: (subject: RosterStaffLensSubject) => void;
+    /** Day-range health counts, for the workspace control band. */
+    onDayHealth?: Parameters<typeof DailyRoster>[0]["onHealth"];
 };
 
 function LensControl({
@@ -165,6 +167,7 @@ export default function RosterSurface({
     onOpenAttendance,
     onManageAssignment,
     onOpenStaffSubject,
+    onDayHealth,
 }: RosterSurfaceProps) {
     /**
      * The day lives HERE, not inside the day view, so a Day → Week → Day trip comes
@@ -259,6 +262,7 @@ export default function RosterSurface({
             rangeControl={control()}
             onOpenAttendance={onOpenAttendance}
             onManageAssignment={onManageAssignment}
+            onHealth={onDayHealth}
             onOpenChild={onOpenChild}
             onOpenStaff={onOpenStaff}
         />

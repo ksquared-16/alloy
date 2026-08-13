@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import RosterWorkspaceShell, { type RosterSite } from "@/app/adminV2/roster/RosterWorkspaceShell";
+import RosterKpiStrip, { type RosterHealthCounts } from "@/app/adminV2/roster/RosterKpiStrip";
 import {
     resolveRosterSection,
     type RosterSection,
@@ -76,6 +77,8 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     const [rosterFilter, setRosterFilter] = useState<RosterFilterKind | null>(null);
     /** Room to open when Roster hands off to Attendance. */
     const [attendanceRoomId, setAttendanceRoomId] = useState<string | null>(null);
+    /** Day-range health, reported up by the day surface for the control band. */
+    const [dayHealth, setDayHealth] = useState<RosterHealthCounts | null>(null);
 
     /** Stale-response guard for every site-scoped load. */
     const loadSeq = useRef(0);
@@ -234,6 +237,32 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         [sites, siteId],
     );
 
+    /**
+     * Operational health for the control band — the day's counts when showing a
+     * day, the week's when showing a week. A room the platform could not evaluate
+     * is counted as unknown, never folded into a healthy number.
+     */
+    const healthCounts: RosterHealthCounts | null = useMemo(() => {
+        if (range === "day") return dayHealth;
+        if (!week) return null;
+        const operating = (r: RosterData["rooms"][number]) =>
+            r.cells.some((c) => (c.occupancy ?? 0) > 0 || (c.scheduledStaffCount ?? 0) > 0);
+        return {
+            roomsShort: week.rooms.filter((r) => r.staffing?.verdict === "short").length,
+            roomsUnknown: week.rooms.filter(
+                (r) => r.staffing?.verdict === "unknown" && operating(r),
+            ).length,
+            expectedChildren: week.rooms.reduce(
+                (n, r) => n + r.cells.reduce((m, c) => m + (c.occupancy ?? 0), 0),
+                0,
+            ),
+            scheduledStaff: week.rooms.reduce(
+                (n, r) => n + r.cells.reduce((m, c) => m + (c.scheduledStaffCount ?? 0), 0),
+                0,
+            ),
+        };
+    }, [range, dayHealth, week]);
+
     const filterContext: RosterFilterContext | null = useMemo(() => {
         if (!rosterFilter || !week) return null;
         if (rosterFilter === "ratio_risk") {
@@ -275,6 +304,11 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
             }}
             siteName={siteName}
             onClose={onClose}
+            metricsColumn={
+                section === "roster" ? (
+                    <RosterKpiStrip counts={healthCounts} loading={loadingWeek && !healthCounts} />
+                ) : undefined
+            }
         >
             <WorkspaceSurface tone={section === "roster" ? "canvas" : "stone"} scroll padded>
                 {section === "roster" ? (
@@ -296,6 +330,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         onWeekChange={onWeekChange}
                         onSelectWeek={onSelectWeek}
                         weekChangePending={weekChangePending}
+                        onDayHealth={setDayHealth}
                         onOpenAttendance={(roomLocationId) => {
                             // Expectation → actuality, inside one workspace. Site is
                             // already shared; the room travels; the date does not need

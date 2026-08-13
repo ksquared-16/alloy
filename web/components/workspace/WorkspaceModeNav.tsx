@@ -26,6 +26,7 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
     metricsColumn,
     navDataAttr,
     sectionsDataAttr,
+    showModeRail = true,
 }: {
     modes: ReadonlyArray<WorkspaceMode<M>>;
     activeMode: M;
@@ -40,14 +41,23 @@ export default function WorkspaceModeNav<M extends string, S extends string>({
     metricsColumn?: ReactNode;
     navDataAttr?: string;
     sectionsDataAttr?: string;
+    /**
+     * Render the Work | Studio rail. Default true — every existing caller keeps
+     * exactly the chrome it had. Modules with a single mode may opt out.
+     */
+    showModeRail?: boolean;
 }) {
     /**
      * A module with one mode has no mode CHOICE, and a lone pill reads as a broken
      * switch. Roster only runs; Assignments needs Work | Studio because it both
-     * runs and configures. Purely additive — every other caller passes two modes
-     * and renders exactly as before.
+     * runs and configures.
+     *
+     * OPT-IN, not inferred from `modes.length`. Work Items also declares exactly
+     * one mode, so inferring would have silently changed a module this sprint has
+     * no business changing — its own doctrine drift (the shell doc says Work Items
+     * "omits the Work/Studio switch") is a real question, but a separate one.
      */
-    const showModes = modes.length > 1;
+    const showModes = showModeRail;
 
     if (metricsColumn) {
         return (

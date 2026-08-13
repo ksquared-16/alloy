@@ -154,6 +154,59 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
         expect(tokens).toContain("PROCESSING_QUEUE_ROW_TITLE");
     });
 
+    /**
+     * Roster is the fifth operational workspace. It must be indistinguishable in
+     * chrome from Communications / Processing / Work Items / Assignments — the
+     * operator learns the grammar once. This asserts the structural contract, not
+     * the appearance: same modal shell, same `WorkspaceShell`, same canonical
+     * header inputs, same data-attribute markers, same sidebar nav primitive.
+     */
+    it("Roster mirrors the operational workspace grammar", () => {
+        const shell = read("app/adminV2/roster/RosterWorkspaceShell.tsx");
+        expect(shell).toContain('from "@/components/workspace/WorkspaceShell"');
+        // Canonical header inputs, and the site picker uses the shared control.
+        expect(shell).toContain("titleId");
+        expect(shell).toContain('title: "Roster"');
+        expect(shell).toContain("AlloySelect");
+        expect(shell).toContain('aria-label="Site"');
+        // Section tabs + the control-band health column, like every peer.
+        expect(shell).toContain("sectionTabs={ROSTER_SECTION_TABS}");
+        expect(shell).toContain("metricsColumn={metricsColumn}");
+        expect(shell).toContain('navDataAttr="roster"');
+        expect(shell).toContain('sectionsDataAttr="roster"');
+        expect(shell).toContain('dataTestId="roster-workspace-shell"');
+
+        // Mounted as a center-workspace modal in the shared BOS modal shell.
+        const modal = read("app/adminV2/components/RosterModal.tsx");
+        expect(modal).toContain("AdminV2WorkspaceBosModalShell");
+        expect(modal).toContain('ariaLabelledBy="roster-workspace-title"');
+
+        // Health lives in the control band and uses the shared band component —
+        // never a Roster-local metric layout, and never in the body.
+        const kpi = read("app/adminV2/roster/RosterKpiStrip.tsx");
+        expect(kpi).toContain("WorkspaceOperationalHealth");
+
+        // Sidebar entry uses the same nav primitive as the other four.
+        const nav = read("app/adminV2/components/SidebarModalNavItems.tsx");
+        expect(nav).toContain("SidebarRosterNavItem");
+        expect(nav).toContain('dataAttr="roster"');
+    });
+
+    /**
+     * Suppressing the mode rail is OPT-IN. Inferring it from `modes.length` would
+     * silently change Work Items, which also declares exactly one mode.
+     */
+    it("the mode rail is opt-out, never inferred from the mode count", () => {
+        const nav = read("components/workspace/WorkspaceModeNav.tsx");
+        expect(nav).toContain("showModeRail = true");
+        expect(nav).not.toMatch(/modes\.length\s*>\s*1/);
+        const workItems = read("app/adminV2/tasks/workItemsSections.ts");
+        expect(workItems).toContain("WORK_ITEMS_MODES");
+        // Work Items keeps its rail: it never opts out.
+        const workItemsShell = read("app/adminV2/tasks/WorkItemsShell.tsx");
+        expect(workItemsShell).not.toContain("showModeRail");
+    });
+
     it("WorkspaceModeNav is canonical; OperationalWorkspaceModeNav re-exports", () => {
         const legacy = read("app/adminV2/components/OperationalWorkspaceModeNav.tsx");
         expect(legacy).toContain('from "@/components/workspace/WorkspaceModeNav"');
