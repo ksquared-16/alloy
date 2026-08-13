@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { ingestResendInboundEmail } from "@/lib/communications/email/inboundEmailIngestion";
 import { normalizeResendReceivedEvent } from "@/lib/communications/email/inboundEmailNormalization";
@@ -21,6 +22,15 @@ import { normalizeResendReceivedEvent } from "@/lib/communications/email/inbound
  *
  * Gated on ALLOY_CERTIFICATION, which is set only by `alloy-certify` against the
  * local stack. In every other environment this route does not exist.
+ *
+ * Env-gated AND admin-authenticated, matching the sibling `/api/admin/debug`
+ * routes. The env gate alone was not enough: this route holds a service-role
+ * client, so it bypasses RLS, and `check:service-client-principal` counts any such
+ * route that resolves no principal — a bound that is enforced in the production
+ * build and does not care that the handler 404s elsewhere. Resolving the principal
+ * is the honest fix; exempting the route would have raised a security ratchet to
+ * buy silence. Certification already drives this through an authenticated operator
+ * session, so nothing in the harness has to change.
  */
 
 function certificationOnly(): boolean {
@@ -31,6 +41,9 @@ export async function POST(request: Request) {
     if (!certificationOnly()) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     let body: Record<string, unknown>;
     try {
