@@ -131,10 +131,10 @@ describe("staff presence fold", () => {
     it("counts only present subjects toward actual supply", () => {
         expect(
             countsPresent([
-                { state: "present", arrivedAt: null, departedAt: null, actualRoomLocationId: null },
-                { state: "checked_out", arrivedAt: null, departedAt: null, actualRoomLocationId: null },
-                { state: "absent", arrivedAt: null, departedAt: null, actualRoomLocationId: null },
-                { state: "no_record", arrivedAt: null, departedAt: null, actualRoomLocationId: null },
+                { state: "present", arrivedAt: null, departedAt: null, actualRoomLocationId: null, latestFactId: null },
+                { state: "checked_out", arrivedAt: null, departedAt: null, actualRoomLocationId: null, latestFactId: null },
+                { state: "absent", arrivedAt: null, departedAt: null, actualRoomLocationId: null, latestFactId: null },
+                { state: "no_record", arrivedAt: null, departedAt: null, actualRoomLocationId: null, latestFactId: null },
             ])
         ).toBe(1);
     });
