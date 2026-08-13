@@ -266,23 +266,39 @@ window.renderMissionRail = function renderMissionRail(missions) {
       !m.subtitle && m.slot != null ? `slot ${m.slot}` : null,
       !m.subtitle && m.provider ? m.provider : null,
     ].filter(Boolean).join(" · ");
-    // Diagnostic worker controls stay available but secondary — confirm before use.
-    const actions = Array.isArray(m.actions) && m.actions.length && m.occupied
-      ? `<details class="mission-rail-diag"><summary>Worker controls</summary><div class="mission-rail-actions">${m.actions.slice(0, 4).map((a) =>
+    // Server stop/start stays one click away when capacity is the issue;
+    // Pause/Finish stay under diagnostic disclosure.
+    const serverAction = Array.isArray(m.actions)
+      ? m.actions.find((a) =>
+        a.command === "server.stop" || a.command === "server.start"
+        || a.command === "mission.local_server"
+        || a.key === "server.stop" || a.key === "server.start"
+        || a.key === "mission.server.stop" || a.key === "mission.server.start")
+      : null;
+    const otherActions = Array.isArray(m.actions)
+      ? m.actions.filter((a) => a !== serverAction)
+      : [];
+    const isStop = serverAction && (
+      serverAction.command === "server.stop"
+      || serverAction.key === "server.stop"
+      || serverAction.key === "mission.server.stop"
+      || serverAction.input?.action === "stop"
+    );
+    const serverBtn = serverAction
+      ? `<button type="button" class="mission-rail-act ${isStop ? "is-warn" : ""}" data-cmd="${escRail(serverAction.command || serverAction.key)}" data-slot="${escRail(String(m.slot ?? ""))}" data-mission="${escRail(serverAction.missionId || (String(id).startsWith("slot_") ? "" : id) || "")}" data-server-action="${escRail(serverAction.input?.action || (isStop ? "stop" : "start"))}" data-label="${escRail(serverAction.label || serverAction.key)}" title="${escRail(serverAction.label || serverAction.key)}">${escRail(isStop ? "Stop" : "Start")}</button>`
+      : "";
+    const actions = m.occupied || serverBtn
+      ? `${serverBtn}${otherActions.length ? `<details class="mission-rail-diag"><summary>More</summary><div class="mission-rail-actions">${otherActions.slice(0, 4).map((a) =>
           `<button type="button" class="mission-rail-act" data-cmd="${escRail(a.command || a.key)}" data-slot="${escRail(String(m.slot ?? ""))}" data-label="${escRail(a.label || a.key)}" title="${escRail(a.label || a.key)}">${escRail((a.label || a.key || "?").slice(0, 8))}</button>`
-        ).join("")}</div></details>`
-      : (Array.isArray(m.actions) && m.actions.length && m.free
-        ? `<div class="mission-rail-actions">${m.actions.slice(0, 1).map((a) =>
-            `<button type="button" class="mission-rail-act" data-cmd="${escRail(a.command || a.key)}" data-slot="${escRail(String(m.slot ?? ""))}" data-label="${escRail(a.label || a.key)}" title="${escRail(a.label || a.key)}">${escRail((a.label || a.key || "?").slice(0, 8))}</button>`
-          ).join("")}</div>`
-        : "");
+        ).join("")}</div></details>` : ""}`
+      : "";
     const route = String(id).startsWith("slot_")
       ? `workers?slot=${escRail(String(m.slot))}`
       : `workspaces/${escRail(id)}`;
     return `<div class="mission-rail-block">
       <a class="mission-rail-item${m.free ? " is-free" : ""}" data-route="${route}" title="${escRail(m.title || id)}">
         <span class="mission-rail-title">${escRail(m.title || id)}${meta ? `<span class="mission-rail-meta">${escRail(meta)}</span>` : ""}</span>${badge}
-      </a>${actions}
+      </a><div class="mission-rail-actions">${actions}</div>
     </div>`;
   }).join("");
   setActiveNav(parseRoute().name);
@@ -292,11 +308,23 @@ window.renderMissionRail = function renderMissionRail(missions) {
       ev.stopPropagation();
       const cmd = btn.dataset.cmd;
       const slot = Number(btn.dataset.slot);
-      if (!cmd || !slot) return;
-      if (!window.confirm(`${btn.dataset.label || cmd} on slot ${slot}?`)) return;
+      const missionId = btn.dataset.mission || "";
+      const serverAction = btn.dataset.serverAction || "";
+      if (!cmd) return;
+      if (!window.confirm(`${btn.dataset.label || cmd}${slot ? ` on slot ${slot}` : ""}?`)) return;
       try {
-        // Prefer the board's governed execute() when available.
-        if (typeof window.execute === "function") {
+        if (cmd === "mission.local_server" && missionId && serverAction) {
+          const r = await fetch("/api/v2/missions/local-server", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ mission_id: missionId, action: serverAction }),
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || j?.ok === false) alert(j?.detail || j?.error || `Server ${serverAction} failed`);
+        } else if (!slot) {
+          alert("No slot for this command");
+          return;
+        } else if (typeof window.execute === "function") {
           await window.execute(cmd, { slot }, true);
         } else if (typeof execute === "function") {
           await execute(cmd, { slot }, true);
@@ -571,8 +599,12 @@ function workerCard(sp) {
       ${sp.status === "paused" ? `<button class="btn sm warn" data-cmd="worker.resume" data-slot="${sp.slot}">Resume</button>` : `<button class="btn sm" data-cmd="worker.pause" data-slot="${sp.slot}">Pause</button>`}
       <button class="btn sm" data-cmd="worker.doctor" data-slot="${sp.slot}">Diagnose</button>
       ${sp.server === "running" && sp.port
-        ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app on :${sp.port}" onclick="event.stopPropagation()">Open App</a>`
-        : `<button class="btn sm" data-startserver="${sp.slot}" title="App is stopped — start its dev server">App: stopped</button>`}
+        ? `<a class="btn sm" href="http://127.0.0.1:${sp.port}" target="_blank" title="Open the worker's local app on :${sp.port}" onclick="event.stopPropagation()">Open App</a>
+           <button class="btn sm warn" data-cmd="server.stop" data-slot="${sp.slot}" title="Stop the dev server on :${sp.port} — frees capacity for another slot">Stop server</button>`
+        : (sp.server === "stale"
+          ? `<button class="btn sm warn" data-cmd="server.stop" data-slot="${sp.slot}" title="Clear stale server claim">Clear server</button>
+             <button class="btn sm" data-startserver="${sp.slot}" title="Start this slot's dev server">Start server</button>`
+          : `<button class="btn sm" data-startserver="${sp.slot}" title="App is stopped — start its dev server">Start server</button>`)}
       <button class="btn sm" data-end="${sp.slot}">End</button>
     </div></div>`;
 }
@@ -2163,8 +2195,10 @@ if (isWorkspaceRoute()) {
   poll();
   fetchResources();
 }
-setInterval(poll, 4000);
-setInterval(fetchResources, 9000);
+// Human-visible Director cadence. Sub-4s polls previously stacked on SSE and
+// forced overlapping alloy-ro / du work on the control plane.
+setInterval(poll, 15000);
+setInterval(fetchResources, 60000);
 
 // ---- Operator notifications: Needs You + legacy Director conversations.
 // Fires a native desktop notification when something newly needs the operator
