@@ -86,13 +86,15 @@ describe("Configuration Mode doctrine cleanup", () => {
         expect(shell).toContain("ConfigurationShell");
         expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
-        expect(read("app/adminV2/settings/communications/page.tsx")).toContain("CommunicationsConfigurationPage");
+        expect(read("app/adminV2/settings/organization/communications/page.tsx")).toContain(
+            "OrganizationCommunicationsPage",
+        );
         expect(read("app/adminV2/settings/entities/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         for (const path of [
             "app/adminV2/settings/fields/page.tsx",
             "app/adminV2/settings/users-roles/page.tsx",
-            "app/adminV2/settings/communications/page.tsx",
+            "app/adminV2/settings/organization/communications/page.tsx",
             "app/adminV2/settings/entities/page.tsx",
             "app/adminV2/settings/actions/page.tsx",
         ]) {

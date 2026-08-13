@@ -87,5 +87,16 @@ COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL = os.getenv(
     "COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL", ""
 ).strip()
 
+# Public origin Twilio can reach for the per-message statusCallback (scheme+host,
+# no path). Unset means no statusCallback is attached and delivery receipts fall
+# back to the Messaging Service console configuration — which is why the sender
+# treats it as optional rather than refusing to send.
+#
+# Referenced by services/communication_message_sender.py but never defined here.
+# app/server.py imports that module at load, so the ImportError took the whole
+# backend down — payments and message dispatch as much as inbound SMS — for
+# anyone starting it from source.
+PUBLIC_TWILIO_STATUS_CALLBACK_BASE = os.getenv("PUBLIC_TWILIO_STATUS_CALLBACK_BASE", "").strip()
+
 # Internal cron token for POST /internal/messages/process
 INTERNAL_CRON_TOKEN = os.getenv("INTERNAL_CRON_TOKEN")

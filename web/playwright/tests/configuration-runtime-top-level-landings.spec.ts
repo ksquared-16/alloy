@@ -13,7 +13,7 @@ const VIEWPORTS = [
 const CONFIGURATION_DIRECT_LINKS = [
     "/settings/commercial",
     "/settings/users-roles",
-    "/settings/communications",
+    "/organization/communications",
     "/settings/entities",
     "/settings/processes",
     "/settings/surfaces",

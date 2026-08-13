@@ -68,7 +68,7 @@ export const CONFIGURATION_MODE_NAV_GROUPS: readonly ConfigurationModeNavGroup[]
                 testId: "config-mode-nav-access",
             },
             {
-                href: settings("communications"),
+                href: "/organization/communications",
                 label: "Communications",
                 description: "Channels, templates, send rules, and messaging.",
                 icon: "communications",

@@ -9,7 +9,7 @@ import {
     visibleCommandCenterQueues,
     flattenVisibleConversationIds,
     flattenLoadableConversationIds,
-    resolveCommandCenterSelection,
+    resolveCommandCenterSelectionPreferringLoadable,
     conversationDisplayTitle,
     conversationDisplayTopic,
     conversationDisplayChildren,
@@ -37,6 +37,9 @@ import {
 import { buildCommandCenterRecordLinks, type CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import UnidentifiedConversationPanel, {
+    isUnidentifiedConversation,
+} from "@/app/adminV2/communications/UnidentifiedConversationPanel";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import {
     COMMS_FILTER_INPUT_CLASS,
@@ -434,7 +437,7 @@ export default function CommandCenterShell() {
 
     useEffect(() => {
         if (loading) return;
-        const nextId = resolveCommandCenterSelection(selectedId, loadableIds.length > 0 ? loadableIds : visibleIds);
+        const nextId = resolveCommandCenterSelectionPreferringLoadable(selectedId, visibleIds, loadableIds);
         if (nextId && nextId !== selectedId) {
             void openConversation(nextId);
         } else if (!nextId && selectedId) {
@@ -608,7 +611,18 @@ export default function CommandCenterShell() {
                             />
                         </div>
                     :   null}
-                    {selected && runtime.vm ? (
+                    {/*
+                      * `selectedLoadable` is load-bearing, not belt-and-braces. The
+                      * runtime keeps the last household's view model when the new
+                      * selection has no customer, so switching from a family
+                      * conversation to an unidentified one left this branch matching
+                      * on STALE `runtime.vm` — the previous family's name, children,
+                      * preferences and history rendered under a different
+                      * conversation. Requiring the selection to be the one the view
+                      * model actually describes is what makes the two mutually
+                      * exclusive.
+                      */}
+                    {selected && selectedLoadable && runtime.vm ? (
                         <FamilyCommunicationWorkspaceView
                             surfaceVariant="workspace_inbox"
                             selected={selected}
@@ -670,6 +684,18 @@ export default function CommandCenterShell() {
                             onDismissSend={runtime.dismissSendResult}
                             viewerUserId={adminAuth?.userId ?? null}
                             sendCompleteToken={runtime.sendCompleteToken}
+                        />
+                    ) : selected && isUnidentifiedConversation(selected) ? (
+                        // Ordered BEFORE the workspace-error branch deliberately.
+                        // `resolveCommandCenterWorkspaceError` answers "Not linked to a
+                        // family yet — review the connection before replying" for every
+                        // unresolved or ambiguous conversation, which is true and is a
+                        // dead end: a real parent's message, received and retained, with
+                        // no way to answer it. Not being linked to a household is a fact
+                        // about routing, not a reason to leave someone unanswered.
+                        <UnidentifiedConversationPanel
+                            conversation={selected}
+                            onReplied={() => refreshOperationalCommunicationsWork(selected.id)}
                         />
                     ) : workspaceLoading ? (
                         <CommsWorkspacePanelReserve label="Loading conversation" />

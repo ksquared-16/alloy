@@ -57,7 +57,8 @@ export type EligibilityBlockCode =
     | "IDENTITY_UNUSABLE"
     | "SUPPRESSED"
     | "EMERGENCY_NOT_PERMITTED"
-    | "INTERNAL_TO_PROVIDER";
+    | "INTERNAL_TO_PROVIDER"
+    | "UNRESOLVED_INBOUND_STOP_HOLD";
 
 export type EligibilityDecision = {
     allowed: boolean;
@@ -86,11 +87,36 @@ export type EligibilityInput = {
     /** Resolved recipient. Absent means unresolved — external sends fail closed. */
     recipientPersonId?: string | null;
 
+    /**
+     * A verified endpoint owned by a canonical tenant conversation, standing in
+     * for recipient resolution when no Person is known.
+     *
+     * Set only by a thread-bound reply, where the destination came from an
+     * inbound message Alloy actually received on a thread this org owns. It
+     * satisfies "we know where this is going and it is really ours" WITHOUT
+     * asserting whose address it is.
+     *
+     * It does NOT stand in for consent: preference state is per Person and stays
+     * unevaluable here, which the decision reports rather than guesses.
+     */
+    verifiedThreadEndpoint?: boolean;
+
     /** Current preference state for the (category, channel) pair. */
     preferenceState?: "opted_in" | "opted_out" | "unset";
 
     /** Hard bounce / spam complaint suppression. */
     suppressed?: boolean;
+
+    /**
+     * A valid STOP arrived from this exact endpoint pair (their address ← our
+     * provider destination) while Alloy could not determine which organization
+     * owned it, so no Person preference could be written.
+     *
+     * This is NOT a Person opt-out and must never be reported as one: nobody
+     * knows whose opt-out it is yet. It exists so a STOP still changes future
+     * behaviour while ownership is unresolved.
+     */
+    unresolvedInboundStopHold?: boolean;
 
     /** Channel usable at all (address present, identity active and outbound-enabled). */
     channelUsable?: boolean;

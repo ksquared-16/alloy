@@ -155,6 +155,20 @@ const nextConfig: NextConfig = {
       { source: "/settings/actions/:path*", destination: "/adminV2/settings/actions", permanent: false },
       { source: "/configuration/commands", destination: "/organization/commands", permanent: false },
       { source: "/configuration/commands/:path*", destination: "/organization/commands", permanent: false },
+      /**
+       * Communications converged onto `/organization/communications`. These are
+       * compatibility redirects for links and bookmarks that predate the move;
+       * there is no second implementation behind them. Retire once no traffic
+       * arrives here.
+       */
+      { source: "/settings/communications", destination: "/organization/communications", permanent: false },
+      { source: "/settings/communications/:path*", destination: "/organization/communications", permanent: false },
+      { source: "/adminV2/settings/communications", destination: "/organization/communications", permanent: false },
+      {
+        source: "/adminV2/settings/communications/:path*",
+        destination: "/organization/communications",
+        permanent: false,
+      },
       { source: "/settings/financials", destination: "/organization/financials", permanent: false },
       { source: "/settings/financials/:path*", destination: "/organization/financials", permanent: false },
       { source: "/settings/locations", destination: "/organization/locations", permanent: false },
@@ -245,6 +259,11 @@ const nextConfig: NextConfig = {
        */
       { source: "/organization/surfaces", destination: "/adminV2/settings/organization/surfaces" },
       { source: "/organization/surfaces/:path*", destination: "/adminV2/settings/organization/surfaces/:path*" },
+      { source: "/organization/communications", destination: "/adminV2/settings/organization/communications" },
+      {
+        source: "/organization/communications/:path*",
+        destination: "/adminV2/settings/organization/communications/:path*",
+      },
       /**
        * Organization Staff — employment, deliberately a sibling of Access rather
        * than a section inside it. Must precede the exact `/organization` rewrite.

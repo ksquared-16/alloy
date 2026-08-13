@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bell, Globe, Mail, MessageCircle, Phone, Smartphone } from "lucide-react";
 
-import CommunicationsSetupClient from "@/app/adminV2/settings/communications/CommunicationsSetupClient";
+import Link from "next/link";
+
 import CommunicationsStudioListRow from "@/app/adminV2/communications/CommunicationsStudioListRow";
 import { COMMS_PANEL_SHELL_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
@@ -75,7 +76,28 @@ export default function ChannelsWorkspace() {
                     <h2 className="mt-1 text-[14px] font-semibold text-alloy-midnight">{selectedDef?.label} configuration</h2>
                 </header>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                    <CommunicationsSetupClient />
+                    {/*
+                     * Configuration has ONE home: /organization/communications. This tab used to
+                     * embed a second copy of the setup client, which meant two surfaces could
+                     * drift apart and an operator could not tell which one was authoritative.
+                     * It points at the canonical surface instead of re-mounting it.
+                     */}
+                    <div className={`${COMMS_PANEL_SHELL_CLASS} mx-auto max-w-2xl px-4 py-4`}>
+                        <p className="text-[13px] font-semibold text-alloy-midnight">
+                            {selectedDef?.label} is configured in Organization
+                        </p>
+                        <p className="mt-1 text-[12px] leading-snug text-alloy-midnight/55">
+                            Sending and receiving identities, readiness, and provider connection all live on one page so they
+                            cannot disagree.
+                        </p>
+                        <Link
+                            href="/organization/communications"
+                            className="mt-3 inline-flex text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                            data-testid="channels-open-organization-communications"
+                        >
+                            Open Organization → Communications
+                        </Link>
+                    </div>
                 </div>
             </div>
         );

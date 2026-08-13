@@ -1,0 +1,296 @@
+/**
+ * The Organization Communications surface, as a product answers it.
+ *
+ * The old settings page showed storage: a list of provider-binding rows with
+ * `scope`, a secret-ref indicator, and "composer outbound readiness". That is the
+ * database's shape, and it makes an administrator learn Alloy's internals to
+ * answer questions that are actually about their school.
+ *
+ * This model answers five questions instead, and nothing else:
+ *
+ *   1. What channels are connected?
+ *   2. What identity will Alloy send and receive as?
+ *   3. Is sending ready?
+ *   4. Is receiving ready?
+ *   5. What still needs setup?
+ *
+ * The unit is therefore the CHANNEL, not the binding row. An organization has
+ * Email and SMS; that several binding rows may sit behind one channel is storage
+ * detail. Where a channel has more than one, the one that speaks for it is the
+ * one the runtime would actually pick — primary first, then best readiness — so
+ * the card never advertises a spare while the working one is broken, nor the
+ * reverse.
+ *
+ * Deliberately absent from every output of this file: `secret_ref`, `scope`,
+ * `location_id`, binding ids as operator-facing text, database constraint names,
+ * and the phrase "composer". Pure — values in, view model out.
+ */
+
+import { readinessLabel, type ReadinessState } from "./bindingReadiness";
+
+export type ChannelKey = "email" | "sms";
+
+export type DirectionView = {
+    state: ReadinessState;
+    /** "Ready", "Verification required", … — never a raw status string. */
+    label: string;
+    /** One operator sentence. Safe to render verbatim. */
+    detail: string;
+};
+
+/** A named piece of the channel's identity — "From", "Replies", "Number". */
+export type IdentityLine = {
+    label: string;
+    value: string;
+    /** Shown when the value is absent but the concept still matters. */
+    placeholder?: string;
+};
+
+export type ChannelCard = {
+    channel: ChannelKey;
+    /** "Email" / "SMS". */
+    channelLabel: string;
+    /** "Resend" / "Twilio" — the provider as a person would name it, or null. */
+    providerLabel: string | null;
+    connected: boolean;
+    sending: DirectionView;
+    receiving: DirectionView;
+    identity: IdentityLine[];
+    /** Question 5. Empty when the channel is fully working. */
+    outstanding: string[];
+    /** Whether this channel is switched on. */
+    enabled: boolean;
+    /** Opaque id for the configure dialog. Never rendered as text. */
+    primaryBindingId: string | null;
+    /** Every binding behind this channel, for the configure dialog. */
+    bindingIds: string[];
+    /** More than one row behind this channel — the dialog says so, the card does not. */
+    additionalCount: number;
+    /** Every active location, with its identity or its inheritance. */
+    locations: LocationIdentityRow[];
+    /** How many locations send as themselves. */
+    overrideCount: number;
+};
+
+/** The binding shape this model consumes — exactly what the bindings route emits. */
+export type OrgLocation = { id: string; label: string };
+
+/** One location's row under a channel — its own identity, or inheritance. */
+export type LocationIdentityRow = {
+    locationId: string;
+    label: string;
+    /** True when this location has no identity of its own. */
+    inherits: boolean;
+    /** The location's own identity, or the inherited organization one. */
+    identity: string;
+    /** Which of those two the value above is. Drives the "Uses …" wording. */
+    source: "location" | "organization" | "none";
+    sending: DirectionView | null;
+    receiving: DirectionView | null;
+    /** Opaque handle for the configure dialog. Null when inheriting. */
+    bindingId: string | null;
+};
+
+export type BindingView = {
+    id: string;
+    channel: string;
+    location_id?: string | null;
+    provider?: string | null;
+    status?: string | null;
+    is_primary?: boolean | null;
+    display_label?: string | null;
+    inbound_address?: string | null;
+    inbound_to_e164?: string | null;
+    from_email?: string | null;
+    receiving_domain?: string | null;
+    sending_domain?: string | null;
+    credential_key?: string | null;
+    credential_configured?: boolean;
+    readiness?: {
+        send: { state: ReadinessState; detail: string };
+        receive: { state: ReadinessState; detail: string };
+    };
+};
+
+const CHANNEL_LABELS: Record<ChannelKey, string> = { email: "Email", sms: "SMS" };
+
+/** Providers named the way their own product names itself. */
+const PROVIDER_LABELS: Record<string, string> = { resend: "Resend", twilio: "Twilio" };
+
+/** Which readiness is "better" when choosing the row that speaks for a channel. */
+const READINESS_RANK: Record<ReadinessState, number> = {
+    ready: 5,
+    verification_required: 4,
+    setup_required: 3,
+    provider_unavailable: 2,
+    disabled: 1,
+};
+
+function providerLabelFor(provider: string | null | undefined): string | null {
+    const p = String(provider ?? "").trim().toLowerCase();
+    if (!p) return null;
+    return PROVIDER_LABELS[p] ?? p.charAt(0).toUpperCase() + p.slice(1);
+}
+
+function view(direction: { state: ReadinessState; detail: string } | undefined): DirectionView {
+    const state = direction?.state ?? "setup_required";
+    return {
+        state,
+        label: readinessLabel(state),
+        detail: direction?.detail ?? "Not set up yet.",
+    };
+}
+
+/**
+ * Score a binding for "who speaks for this channel".
+ *
+ * Primary wins first because that is the row the runtime prefers, so the card
+ * describes what would actually happen. Readiness breaks ties — between two
+ * non-primary rows, the working one is the more truthful face of the channel.
+ */
+function score(b: BindingView): number {
+    const primary = b.is_primary ? 1000 : 0;
+    const send = READINESS_RANK[b.readiness?.send.state ?? "setup_required"] ?? 0;
+    const receive = READINESS_RANK[b.readiness?.receive.state ?? "setup_required"] ?? 0;
+    return primary + send * 10 + receive;
+}
+
+/** The single address or number this row sends and receives as, in plain text. */
+function identityValueFor(channel: ChannelKey, b: BindingView | null): string {
+    if (!b) return "";
+    if (channel === "email") return (b.from_email ?? b.inbound_address ?? "").trim();
+    return (b.inbound_to_e164 ?? "").trim();
+}
+
+function identityLinesFor(channel: ChannelKey, b: BindingView | null): IdentityLine[] {
+    if (channel === "email") {
+        return [
+            {
+                label: "From",
+                value: b?.from_email?.trim() || "",
+                placeholder: "Using the default sending address",
+            },
+            {
+                label: "Replies",
+                value: b?.inbound_address?.trim() || "",
+                placeholder: "No reply address set",
+            },
+        ];
+    }
+    return [
+        {
+            label: "Number",
+            value: b?.inbound_to_e164?.trim() || "",
+            placeholder: "No number set",
+        },
+    ];
+}
+
+/**
+ * Question 5 — what still needs setup.
+ *
+ * Only non-ready directions contribute, and each contributes the sentence the
+ * readiness model already wrote. Nothing is composed here: a second phrasing of
+ * the same condition is a second chance to say something untrue.
+ */
+function outstandingFor(b: BindingView | null, connected: boolean): string[] {
+    if (!connected) return ["Not connected yet."];
+    const out: string[] = [];
+    if (b?.readiness && b.readiness.send.state !== "ready") out.push(`Sending — ${b.readiness.send.detail}`);
+    if (b?.readiness && b.readiness.receive.state !== "ready") out.push(`Receiving — ${b.readiness.receive.detail}`);
+    return out;
+}
+
+/**
+ * Build one card per channel — always both, always in a stable order.
+ *
+ * A channel with no binding is rendered as "Not connected" rather than omitted:
+ * an administrator asking "what channels are connected?" is equally served by
+ * learning that SMS is not, and an absent card answers nothing.
+ */
+export function buildChannelCards(bindings: BindingView[], locations: OrgLocation[] = []): ChannelCard[] {
+    return (["email", "sms"] as const).map((channel) => {
+        const rows = bindings.filter((b) => String(b.channel ?? "").trim().toLowerCase() === channel);
+        // The card speaks for the ORGANIZATION default, so a location override
+        // must never become the face of the channel — otherwise an admin with one
+        // location override would see it presented as the organization's identity.
+        // A retired override is excluded from BOTH sides: it is not the location's
+        // identity any more, and it must never be mistaken for the organization's.
+        const orgRows = rows.filter((b) => !(b.location_id ?? "").trim());
+        const ranked = [...(orgRows.length ? orgRows : rows)].sort((a, b) => score(b) - score(a));
+        const face = ranked[0] ?? null;
+        const connected = rows.length > 0;
+
+        const orgIdentity = identityValueFor(channel, face);
+        const locationRows: LocationIdentityRow[] = locations.map((loc) => {
+            // Only an ACTIVE binding is an override. A RETIRED one keeps its
+            // location so the identity can never broaden to the organization (see
+            // `locationOverrideRemoval.ts`), but the location inherits — so it must
+            // read as inheritance here, not as a location identity that is broken.
+            const own = rows.find(
+                (b) =>
+                    (b.location_id ?? "").trim() === loc.id &&
+                    String(b.status ?? "").trim().toLowerCase() === "active",
+            );
+            if (!own) {
+                return {
+                    locationId: loc.id,
+                    label: loc.label,
+                    inherits: true,
+                    identity: orgIdentity,
+                    source: orgIdentity ? "organization" : "none",
+                    sending: null,
+                    receiving: null,
+                    bindingId: null,
+                };
+            }
+            return {
+                locationId: loc.id,
+                label: loc.label,
+                inherits: false,
+                identity: identityValueFor(channel, own),
+                source: "location",
+                sending: view(own.readiness?.send),
+                receiving: view(own.readiness?.receive),
+                bindingId: own.id,
+            };
+        });
+
+        return {
+            channel,
+            channelLabel: CHANNEL_LABELS[channel],
+            providerLabel: providerLabelFor(face?.provider),
+            connected,
+            sending: view(face?.readiness?.send),
+            receiving: view(face?.readiness?.receive),
+            identity: identityLinesFor(channel, face),
+            outstanding: outstandingFor(face, connected),
+            enabled: String(face?.status ?? "").trim().toLowerCase() !== "disabled",
+            primaryBindingId: face?.id ?? null,
+            bindingIds: ranked.map((b) => b.id),
+            additionalCount: Math.max(0, orgRows.length - 1),
+            locations: locationRows,
+            overrideCount: locationRows.filter((l) => !l.inherits).length,
+        };
+    });
+}
+
+/**
+ * The one-line answer to "how are communications?", for the page header.
+ *
+ * Deliberately conservative: anything less than both directions ready on every
+ * connected channel is reported as needing attention. A summary that rounds up
+ * is how a broken receive path stays invisible.
+ */
+export function summarizeChannels(cards: ChannelCard[]): { label: string; needsAttention: boolean } {
+    const connected = cards.filter((c) => c.connected);
+    if (connected.length === 0) return { label: "No channels connected", needsAttention: true };
+    const allReady = connected.every((c) => c.sending.state === "ready" && c.receiving.state === "ready");
+    if (allReady) {
+        return {
+            label: connected.length === cards.length ? "Email and SMS ready" : `${connected[0]!.channelLabel} ready`,
+            needsAttention: false,
+        };
+    }
+    return { label: "Setup incomplete", needsAttention: true };
+}

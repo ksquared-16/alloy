@@ -6,6 +6,25 @@ import {
     type ProviderDeliveryApplyResult,
 } from "@/lib/communications/providerDeliveryPersistence";
 import { resendTypeToCanonical } from "@/lib/communications/v2/deliveryReceiptMapping";
+import { normalizeResendReceivedEvent } from "@/lib/communications/email/inboundEmailNormalization";
+import { ingestResendInboundEmail } from "@/lib/communications/email/inboundEmailIngestion";
+import { fetchReceivedEmail } from "@/lib/communications/email/resendReceivingClient";
+
+/** Provider timestamp when supplied, otherwise now. */
+function occurredAtOf(data: Record<string, unknown>): string {
+    const raw = data.created_at;
+    return typeof raw === "string" && raw.trim() ? raw : new Date().toISOString();
+}
+
+/**
+ * The credential used to RETRIEVE received email content.
+ *
+ * Deliberately the same environment key the send path falls back to, so receiving
+ * cannot silently run on a different credential than sending.
+ */
+function resendApiKey(): string {
+    return (process.env.RESEND_API_KEY ?? "").trim();
+}
 
 function providerMessageIdTail(id: string): string {
     const t = id.trim();
@@ -89,6 +108,43 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+
+    // ------------------------------------------------------------- INBOUND
+    //
+    // A received email, not a delivery receipt for one Alloy sent. It shares this
+    // route because it shares the thing that makes the route trustworthy: Svix
+    // verification against RESEND_WEBHOOK_SECRET, already done above. A second
+    // route would mean a second copy of that, and provider authenticity should
+    // have exactly one implementation.
+    //
+    // Provider parsing stays here at the edge; everything downstream is the
+    // channel-neutral canonical runtime.
+    if (type === "email.received") {
+        const event = normalizeResendReceivedEvent(data, { receivedAtFallback: occurredAtOf(data) });
+        if (!event) {
+            // Unusable shape. Acknowledged rather than refused: redelivering it
+            // would produce the same unusable shape forever.
+            return NextResponse.json({ ok: true, ignored: true, reason: "unusable_received_payload" });
+        }
+
+        const outcome = await ingestResendInboundEmail(event, {
+            supabase,
+            retrieve: (id) => fetchReceivedEmail({ emailId: id, apiKey: resendApiKey() }),
+        });
+
+        // The ONLY case that refuses the webhook. Resend retries, and the retry
+        // finds the receipt already claimed and continues from there rather than
+        // starting again — which is why a 5xx here is safe.
+        if (outcome.status === "retrieval_pending") {
+            return NextResponse.json(
+                { ok: false, status: outcome.status, reason: outcome.reason },
+                { status: 503 }
+            );
+        }
+
+        return NextResponse.json({ ok: true, status: outcome.status });
+    }
+
     const canonical = resendTypeToCanonical(type);
     const occurredAt = typeof data.created_at === "string" && data.created_at.trim() ? data.created_at : new Date().toISOString();
     const providerEventId = typeof evt.id === "string" && evt.id.trim() ? evt.id.trim() : undefined;

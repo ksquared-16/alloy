@@ -65,7 +65,7 @@ describe("settings legacy closeout", () => {
     it("priority hybrid pages use Platform Configuration shell, not rollout placeholders", () => {
         for (const [path, component] of [
             ["app/adminV2/settings/users-roles/page.tsx", "UsersRolesConfigurationPage"],
-            ["app/adminV2/settings/communications/page.tsx", "CommunicationsConfigurationPage"],
+            ["app/adminV2/settings/organization/communications/page.tsx", "OrganizationCommunicationsPage"],
             ["app/adminV2/settings/entities/page.tsx", "dataModelSectionHref"],
             ["app/adminV2/settings/actions/page.tsx", "SettingsConfigurationSurfaceShell"],
         ] as const) {

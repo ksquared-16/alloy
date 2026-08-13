@@ -22,11 +22,21 @@ import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalO
 import type { MessageAudience, MessageCategory, MessageChannel } from "@/lib/communications/eligibility/types";
 import { validatePurpose } from "@/lib/communications/purpose/purposeRegistry";
 import { resolveRecipient } from "@/lib/communications/recipients/resolveRecipient";
+
 import {
     validateClassificationForRecipient,
     validateTypedRecipientShape,
     type TypedRecipient,
 } from "@/lib/communications/recipients/typedRecipient";
+
+/**
+ * Source capabilities permitted to reply into a conversation with no identified
+ * Person. Human operator reply surfaces only.
+ */
+const THREAD_REPLY_CAPABILITIES: ReadonlySet<string> = new Set([
+    "communications.send",
+    "communications.family_send",
+]);
 
 export type CanonicalSendOutcome =
     | "sent_to_queue"
@@ -137,6 +147,24 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
     if (!req.category) return fail("invalid", "missing_category", "category is required.");
     if (!req.purpose) return fail("invalid", "missing_purpose", "purpose is required.");
 
+    // A thread-bound reply exists so a HUMAN operator can answer a conversation
+    // whose sender is unidentified. It must not become the seam through which
+    // automation, broadcasts, announcements or scheduled sends reach an address
+    // nobody has identified — that would be free-text outbound wearing a thread id.
+    // Allowlisted by source capability rather than denylisted, so a new automation
+    // capability is refused by default instead of inheriting the permission.
+    if (
+        (req.recipient as { kind?: string } | null)?.kind === "canonical_thread" &&
+        !THREAD_REPLY_CAPABILITIES.has(req.sourceCapability)
+    ) {
+        return {
+            outcome: "blocked",
+            reason: "thread_reply_not_permitted_for_source",
+            message:
+                "Replying to an unidentified sender is available to an operator answering the conversation, not to automated sends.",
+        };
+    }
+
     const shape = validateTypedRecipientShape(req.recipient);
     if (shape) return fail("invalid", shape.code, shape.message);
 
@@ -228,6 +256,13 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
             primaryEntityId: req.primaryEntityId,
             channelRaw: facts.channel,
             toRaw: facts.toAddress,
+            // The provider destination is the other half of the endpoint-scoped
+            // STOP hold, which matches on the PAIR. It was never passed, so
+            // `fromAddress` reached eligibility as null and the hold could not match
+            // on any send routed through here — the STOP was recorded and evaluated
+            // and then had nothing to bind to. Browser certification queued a reply
+            // to a number that had just texted STOP because of exactly this.
+            fromAddress: facts.ourEndpointAddress,
             bodyRaw: req.bodyRaw,
             bodyIsHtml: req.bodyIsHtml === true && facts.channel === "email",
             emailSubjectRaw: req.subjectRaw ?? null,
@@ -236,6 +271,10 @@ export async function canonicalSend(req: CanonicalSendRequest): Promise<Canonica
             category: req.category,
             purpose: req.purpose,
             recipientPersonId: facts.personId,
+            // Derived from the RESOLVED recipient, never from the request. A caller
+            // cannot claim a verified endpoint it did not earn by naming a thread
+            // this organization actually owns.
+            verifiedThreadEndpoint: facts.kind === "canonical_thread",
             emergencyPermitted: req.emergencyPermitted ?? false,
             authorizedByUserId: req.authorizingUserId,
             metadata: {

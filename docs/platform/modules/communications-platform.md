@@ -53,7 +53,7 @@ Canonical Communications V1 — threads, messages, provider bindings, scheduled 
 |---------|-------|---------|
 | **Communications modal** | `/workspace` → top nav **Inbox** | Primary operator hub when `comms_v2_command_center` is enabled |
 | **Drawer Communications** | Entity drawer tab | Record-specific conversations only |
-| **Configuration → Communications** | `/settings/communications` | Provider bindings / channel setup (also embedded in modal Channels tab) |
+| **Configuration → Communications** | `/organization/communications` | Provider bindings / channel setup (also embedded in modal Channels tab) |
 | **`/adminV2/communications`** | Direct URL | Deprecated notice — not in nav |
 | **`/admin/communications`** | Legacy path | Deprecated / non-primary |
 

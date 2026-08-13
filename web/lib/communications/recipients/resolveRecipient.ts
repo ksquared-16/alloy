@@ -37,6 +37,15 @@ export type ResolvedRecipientFacts = {
     channel: MessageChannel;
     /** The address the send will actually use. Server-selected, never caller-supplied. */
     toAddress: string;
+    /**
+     * OUR provider endpoint — the address the recipient would reply TO.
+     *
+     * The other half of the endpoint-scoped STOP hold, which matches on the pair.
+     * Read from the inbound message actually received, so it is as verified as the
+     * destination itself. Null where no inbound established it, and the hold
+     * simply cannot match without it.
+     */
+    ourEndpointAddress: string | null;
     displayName: string | null;
     /** Audit only — present for external operational recipients. */
     recipientRole: string | null;
@@ -85,6 +94,95 @@ export async function resolveRecipient(params: {
     requestedChannel?: MessageChannel | null;
 }): Promise<RecipientResolution> {
     const { supabase, orgId, recipient, requestedChannel } = params;
+
+    // ------------------------------------------------------- canonical thread
+    //
+    // Reply into an existing tenant conversation whose sender is not a known
+    // Person. The destination comes from canonical inbound truth on that thread
+    // and never from the caller — that is what keeps this from becoming the
+    // free-text recipient path typed recipients removed.
+    if (recipient.kind === "canonical_thread") {
+        const { data: thread, error: tErr } = await supabase
+            .from("communication_threads")
+            .select("id, org_id, channel, primary_entity_type, primary_entity_id")
+            .eq("id", recipient.threadId)
+            // Org isolation is enforced HERE, server-side, on the same query that
+            // fetches the thread — not as a separate check a later edit could drop.
+            .eq("org_id", orgId)
+            .maybeSingle();
+
+        if (tErr) {
+            return blocked("thread_lookup_failed", "Could not verify the conversation. The reply was not sent.");
+        }
+        if (!thread) {
+            return blocked(
+                "thread_not_accessible",
+                "That conversation was not found in this organization. Nothing was sent."
+            );
+        }
+
+        const threadRow = thread as Record<string, unknown>;
+        const channel = String(threadRow.channel ?? "").trim() as MessageChannel;
+        if (channel !== "sms" && channel !== "email") {
+            return blocked("thread_channel_unsupported", "This conversation has no external channel to reply on.");
+        }
+        if (requestedChannel && requestedChannel !== channel) {
+            return blocked(
+                "thread_channel_mismatch",
+                "A reply must use the channel the conversation is on."
+            );
+        }
+
+        // The endpoint is whoever actually wrote to us on this thread. Using the
+        // most recent INBOUND message means the reply goes to the address that
+        // last contacted the organization, which is the only defensible reading
+        // when no Person is known.
+        const { data: inbound, error: mErr } = await supabase
+            .from("communication_messages")
+            .select("from_address, to_address, created_at")
+            .eq("thread_id", recipient.threadId)
+            .eq("org_id", orgId)
+            .eq("direction", "inbound")
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+        if (mErr) {
+            return blocked("thread_endpoint_lookup_failed", "Could not read the conversation. The reply was not sent.");
+        }
+        const latest = Array.isArray(inbound) && inbound.length > 0 ? (inbound[0] as Record<string, unknown>) : null;
+        const rawFrom = typeof latest?.from_address === "string" ? latest.from_address : "";
+        const toAddress = rawFrom ? normalizeAddress(channel, rawFrom) : null;
+        if (!toAddress) {
+            // No inbound message means there is no verified endpoint to answer.
+            // A thread Alloy only ever spoke into is not a reply-by-thread case.
+            return blocked(
+                "thread_has_no_inbound_endpoint",
+                "This conversation has no received message to reply to."
+            );
+        }
+
+        return {
+            status: "resolved",
+            facts: {
+                kind: "canonical_thread",
+                // Our own destination on this conversation, from the same verified
+                // inbound row the reply address came from.
+                ourEndpointAddress:
+                    typeof latest?.to_address === "string"
+                        ? normalizeAddress(channel, latest.to_address)
+                        : null,
+                // Deliberately null. No Person is asserted, and downstream policy
+                // must see the absence rather than a fabricated identity.
+                personId: null,
+                userId: null,
+                channel,
+                toAddress,
+                displayName: null,
+                recipientRole: null,
+                reason: "reply_to_canonical_thread",
+            },
+        };
+    }
 
     // ---------------------------------------------------------------- person
     if (recipient.kind === "person") {
@@ -155,6 +253,7 @@ export async function resolveRecipient(params: {
             facts: {
                 kind: "person",
                 personId: recipient.personId,
+                ourEndpointAddress: null,
                 userId: null,
                 channel,
                 toAddress,
@@ -189,6 +288,7 @@ export async function resolveRecipient(params: {
             status: "resolved",
             facts: {
                 kind: "internal_user",
+                ourEndpointAddress: null,
                 personId: recipient.personId ?? null,
                 userId: recipient.userId,
                 channel: "in_app",
@@ -217,6 +317,7 @@ export async function resolveRecipient(params: {
         status: "resolved",
         facts: {
             kind: "external_operational_recipient",
+            ourEndpointAddress: null,
             personId: null,
             userId: null,
             channel: recipient.channel,

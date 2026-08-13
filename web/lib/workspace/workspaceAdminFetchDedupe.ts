@@ -43,6 +43,25 @@ export function bustLifecycleSiblingFetchDedupe(): void {
     }
 }
 
+/**
+ * Bust the coalesced / TTL cache for communications provider bindings after a
+ * configuration save.
+ *
+ * Without this, `invalidateCommunicationsBindingsCache()` cleared only the module
+ * cache in `communicationsBindingsCache.ts`, while the forced refetch it triggered
+ * was still served from THIS layer's 90s TTL entry — so an administrator saved a
+ * From address and the page went on showing the old one for up to a minute. Two
+ * caches, one invalidation, and the second one silently won.
+ */
+export function bustCommunicationsBindingsFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (key.includes("/api/admin/communications/bindings")) shortCache.delete(key);
+    }
+    for (const key of inflight.keys()) {
+        if (key.includes("/api/admin/communications/bindings")) inflight.delete(key);
+    }
+}
+
 /** Test-only — clears in-flight and TTL caches between vitest cases. */
 export function resetWorkspaceAdminFetchDedupeForTests(): void {
     inflight.clear();

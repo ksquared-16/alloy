@@ -28,7 +28,7 @@ test.describe("configuration-runtime-v1-final", () => {
             { path: "/settings/fields", file: "03-fields.png", testId: "fields-configuration-page" },
             { path: "/settings/statuses", file: "04-statuses.png", testId: "statuses-configuration-page" },
             { path: "/settings/users-roles", file: "05-access.png", testId: "users-roles-configuration-context" },
-            { path: "/settings/communications", file: "06-communications.png", testId: "communications-configuration-page" },
+            { path: "/organization/communications", file: "06-communications.png", testId: "organization-communications-page" },
             { path: "/settings/locations", file: "07-locations.png", testId: "locations-configuration-page" },
         ];
 

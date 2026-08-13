@@ -21,7 +21,10 @@ import {
     type BosPresentationState,
 } from "@/lib/bos/bosPresentationPreference";
 import {
+    chooseBosParkingGeometry,
     clampBosFloatingGeometry,
+    hasStoredBosFloatingGeometry,
+    type ObstacleRect,
     defaultBosFloatingGeometry,
     geometriesEqual,
     readBosFloatingGeometry,
@@ -166,11 +169,100 @@ export function BosPresentationControllerProvider({
             BOS_RAIL_WIDTH_CSS_VAR,
             derivation.reservedWidthPx > 0 ? `${derivation.reservedWidthPx}px` : "0px",
         );
+
+        // NOTE: floating publishes NO layout reserve. Insetting the workspace by
+        // the panel width made floating behave like pinned — the page narrowed and
+        // the assistant read as a docked side panel, collapsing the distinction
+        // the two modes exist to express. Reachability belongs to overlay z-order
+        // (ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z), not to layout.
         return () => {
             document.documentElement.removeAttribute(BOS_PRESENTATION_ATTR);
             document.documentElement.removeAttribute(BOS_PRESENTATION_PREFERRED_ATTR);
         };
     }, [ambientEl, derivation]);
+
+    /**
+     * COLLISION-AWARE PARKING — the narrow fix for "the assistant settles on top
+     * of the buttons".
+     *
+     * Layout is untouched: this only chooses WHERE the overlay rests, so floating
+     * stays floating and the page keeps its full width. It runs solely for
+     * AUTOMATIC placement — if the operator has positioned the window themselves,
+     * `hasStoredBosFloatingGeometry()` is true and their choice is never
+     * overridden.
+     *
+     * Obstacles are measured from the live DOM here rather than declared by any
+     * page, so no surface contributes an offset and nothing is
+     * Communications-specific.
+     */
+    useEffect(() => {
+        if (derivation.effective !== "floating") return;
+        if (hasStoredBosFloatingGeometry()) return;
+        if (typeof document === "undefined") return;
+
+        let frame = 0;
+        const park = () => {
+            const canvas = viewportBounds();
+            const panel = document.querySelector('[data-adminv2-bos-rail-overlay="true"]');
+
+            const obstacles: ObstacleRect[] = [];
+            for (const el of Array.from(
+                document.querySelectorAll<HTMLElement>("button, a[href], select, input, [role='button']"),
+            )) {
+                // The assistant's own controls — resize handle, launcher, command
+                // rail — are not page actions and must not steer its parking.
+                if (panel?.contains(el)) continue;
+                if (
+                    el.closest(
+                        "[data-adminv2-bos-rail-overlay],[data-adminv2-command-surface-layer],[data-adminv2-persistent-command-rail]",
+                    )
+                ) {
+                    continue;
+                }
+                const r = el.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0) continue;
+                if (r.bottom < 0 || r.top > canvas.height) continue;
+                const cs = getComputedStyle(el);
+                if (cs.visibility === "hidden" || cs.display === "none") continue;
+                obstacles.push({ x: r.x, y: r.y, width: r.width, height: r.height });
+            }
+
+            const { geometry } = chooseBosParkingGeometry({
+                size: { width: floatingGeometry.width, height: floatingGeometry.height },
+                canvas,
+                obstacles,
+            });
+
+            setFloatingGeometryState((prev) =>
+                prev.x === geometry.x && prev.y === geometry.y ? prev : { ...prev, x: geometry.x, y: geometry.y },
+            );
+        };
+
+        // After paint, so measurements see the rendered page.
+        frame = window.requestAnimationFrame(() => window.requestAnimationFrame(park));
+        window.addEventListener("resize", park);
+
+        // Organization pages load their content asynchronously, so the first
+        // measurement can happen before the page's buttons exist — parking then
+        // "sees" an empty page and stays put. Re-park, debounced, as content
+        // arrives. Debouncing matters: an un-debounced observer re-parks on its
+        // own style writes and thrashes.
+        let debounce = 0;
+        const observer = new MutationObserver(() => {
+            window.clearTimeout(debounce);
+            debounce = window.setTimeout(park, 150);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        return () => {
+            window.cancelAnimationFrame(frame);
+            window.clearTimeout(debounce);
+            observer.disconnect();
+            window.removeEventListener("resize", park);
+        };
+        // Width/height only: re-parking on every x/y change would fight itself.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [derivation.effective, floatingGeometry.width, floatingGeometry.height]);
 
     const setPreferred = useCallback((state: BosPresentationState) => {
         writeBosPresentationPreference(state);

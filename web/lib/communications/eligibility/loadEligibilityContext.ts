@@ -38,6 +38,8 @@ export type EligibilityContext = {
     preferenceState: "opted_in" | "opted_out" | "unset";
     /** True when a hard bounce or spam complaint has been recorded for this address. */
     suppressed: boolean;
+    /** STOP from this endpoint pair while tenant ownership was unresolved. */
+    unresolvedInboundStopHold: boolean;
     /** Set when a lookup failed. The caller must fail closed rather than assume. */
     lookupFailed: boolean;
     /** The preference row consulted, recorded in the snapshot for auditability. */
@@ -47,6 +49,7 @@ export type EligibilityContext = {
 const UNKNOWN: EligibilityContext = {
     preferenceState: "unset",
     suppressed: false,
+    unresolvedInboundStopHold: false,
     lookupFailed: true,
     consultedPreferenceCategory: null,
 };
@@ -59,13 +62,22 @@ export async function loadEligibilityContext(params: {
     category: MessageCategory;
     channel: MessageChannel;
     toAddress?: string | null;
+    /** Our provider destination — the number the recipient would reply TO. */
+    fromAddress?: string | null;
 }): Promise<EligibilityContext> {
     const prefCategory = preferenceCategoryFor(params.category, params.channel);
+
+    // Evaluated BEFORE the no-person early return, because the hold belongs to an
+    // endpoint pair rather than to a Person. That is the whole point of it: the
+    // STOP arrived when nobody knew whose it was, so gating it behind a resolved
+    // person would make it unenforceable exactly when it is needed.
+    const unresolvedInboundStopHold = await hasUnresolvedInboundStopHold(params);
 
     if (!params.personId || !prefCategory) {
         return {
             preferenceState: "unset",
             suppressed: false,
+            unresolvedInboundStopHold,
             lookupFailed: false,
             consultedPreferenceCategory: prefCategory,
         };
@@ -81,7 +93,7 @@ export async function loadEligibilityContext(params: {
 
     if (error) {
         console.error("[eligibility] preference lookup failed", { code: error.code });
-        return { ...UNKNOWN, consultedPreferenceCategory: prefCategory };
+        return { ...UNKNOWN, unresolvedInboundStopHold, consultedPreferenceCategory: prefCategory };
     }
 
     const rawState = (data as { state?: string } | null)?.state ?? "unset";
@@ -93,9 +105,110 @@ export async function loadEligibilityContext(params: {
     return {
         preferenceState,
         suppressed: suppressed.suppressed,
+        unresolvedInboundStopHold,
         lookupFailed: suppressed.lookupFailed,
         consultedPreferenceCategory: prefCategory,
     };
+}
+
+/**
+ * Did this exact endpoint pair reply STOP while Alloy could not attribute it?
+ *
+ * Matched on the pair and nothing else: their address is the ingress SENDER, our
+ * provider destination is the ingress RECIPIENT — the directions invert because
+ * the hold was created by an inbound message and is consulted on an outbound one.
+ *
+ * Scoped deliberately narrowly. It is not a Person opt-out, not an org-wide
+ * suppression, and not a block on that number everywhere: only this pair, and only
+ * while the ingress row is still unresolved. Once an operator establishes
+ * ownership the row resolves and the hold stops matching, at which point the
+ * canonical WS8 preference authority owns the consent.
+ *
+ * Fails OPEN on lookup error, matching `isAddressSuppressed`. A hold is a safety
+ * net over an already-unusual path; hard-failing every send in the org because one
+ * query errored would be a worse outage than the risk it guards.
+ */
+async function hasUnresolvedInboundStopHold(params: {
+    supabase: SupabaseClient;
+    channel: MessageChannel;
+    toAddress?: string | null;
+    fromAddress?: string | null;
+}): Promise<boolean> {
+    const theirAddress = params.toAddress?.trim();
+    const ourDestination = params.fromAddress?.trim();
+    if (!theirAddress || !ourDestination) return false;
+    if (params.channel !== "sms" && params.channel !== "email") return false;
+
+    const { data, error } = await params.supabase
+        .from("communication_inbound_ingress")
+        .select("id")
+        .eq("channel", params.channel)
+        .eq("from_address", theirAddress)
+        .eq("to_address", ourDestination)
+        .eq("compliance_hold_active", true)
+        .is("resolved_at", null)
+        .limit(1);
+
+    if (error) {
+        console.error("[eligibility] inbound stop hold lookup failed", { code: error.code });
+        return false;
+    }
+    if (Array.isArray(data) && data.length > 0) return true;
+
+    return hasUnattributedCanonicalStop(params);
+}
+
+/**
+ * Did an unidentified sender text STOP on a conversation this organization owns?
+ *
+ * The ingress hold above covers messages Alloy could not attribute to ANY
+ * organization. It does not cover the middle case: the destination resolved to a
+ * tenant, so the message became canonical conversation truth, but the sender
+ * matched no Person — so the keyword handler could write no preference, because
+ * preferences are owned per person and inventing one would opt out whoever
+ * happens to share the number.
+ *
+ * That was harmless while such conversations could not be answered. They can be
+ * now, so the STOP has to bind somewhere. It binds to the endpoint pair, read
+ * from the keyword the inbound seam stamped onto the message rather than by
+ * re-parsing bodies here — the keyword vocabulary keeps exactly one owner.
+ *
+ * The most recent keyword on the pair wins, so a later START releases the hold
+ * and a second STOP re-applies it: the release path is the parent's own word,
+ * not an operator override. Still not a Person opt-out and still not an org-wide
+ * suppression — this pair, this channel.
+ *
+ * Fails OPEN on lookup error, matching the ingress hold and `isAddressSuppressed`.
+ */
+async function hasUnattributedCanonicalStop(params: {
+    supabase: SupabaseClient;
+    channel: MessageChannel;
+    toAddress?: string | null;
+    fromAddress?: string | null;
+}): Promise<boolean> {
+    const theirAddress = params.toAddress?.trim();
+    const ourDestination = params.fromAddress?.trim();
+    if (!theirAddress || !ourDestination) return false;
+
+    const { data, error } = await params.supabase
+        .from("communication_messages")
+        .select("metadata, created_at")
+        .eq("direction", "inbound")
+        .eq("channel", params.channel)
+        .eq("from_address", theirAddress)
+        .eq("to_address", ourDestination)
+        .not("metadata->>compliance_keyword", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+    if (error) {
+        console.error("[eligibility] unattributed canonical stop lookup failed", { code: error.code });
+        return false;
+    }
+    if (!Array.isArray(data) || data.length === 0) return false;
+
+    const metadata = (data[0] as { metadata?: Record<string, unknown> | null }).metadata;
+    return String(metadata?.compliance_keyword ?? "").trim().toLowerCase() === "stop";
 }
 
 /**

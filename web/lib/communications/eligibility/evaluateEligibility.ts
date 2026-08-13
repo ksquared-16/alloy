@@ -131,7 +131,7 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
     // 4. External sends require a resolved recipient. The previous gate skipped
     //    itself when recipient_person_id was absent, which made a free-text `to`
     //    a complete bypass. Fail closed instead.
-    if (!input.recipientPersonId) {
+    if (!input.recipientPersonId && input.verifiedThreadEndpoint !== true) {
         return block(
             "RECIPIENT_UNRESOLVED",
             "External send has no resolved recipient identity; eligibility cannot be established."
@@ -143,6 +143,31 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
         return block("SUPPRESSED", "Recipient address is suppressed after a bounce or complaint.");
     }
 
+    // 5b. A STOP arrived from this exact endpoint pair while Alloy could not tell
+    //     which organization owned it, so no Person preference could be written.
+    //     The consent is real even though its owner is unknown, and continuing to
+    //     send over the same pair would ignore it.
+    //
+    //     Every non-emergency category is blocked, transactional included. The
+    //     usual per-category nuance depends on knowing who the recipient is, and
+    //     that is precisely what is missing here, so the narrow reading is the
+    //     only safe one.
+    //
+    //     Deliberately NOT reported as OPTED_OUT: nobody knows whose opt-out this
+    //     is, and recording it as a Person's consent decision would put a claim in
+    //     the audit trail that Alloy cannot support.
+    if (input.unresolvedInboundStopHold === true && input.category !== "emergency") {
+        return block(
+            "UNRESOLVED_INBOUND_STOP_HOLD",
+            // Two shapes reach here now: a STOP Alloy could not attribute to any
+            // organization, and a STOP on a conversation this organization owns
+            // whose sender matched no Person. In both, someone asked to stop and
+            // there is no Person to record the decision against — so the wording
+            // is about the request, not about which lookup came up empty.
+            "This number asked to stop receiving messages. Alloy cannot tell which record the request belongs to, so sending is held until the sender is identified or they text START."
+        );
+    }
+
     // 6. Channel usability applies to EVERY category, including transactional
     //    and emergency: an unusable channel cannot deliver regardless of class.
     if (input.channelUsable === false) {
@@ -150,12 +175,36 @@ export function evaluateEligibility(input: EligibilityInput): EligibilityDecisio
     }
 
     // 7. Consent.
-    const state = input.preferenceState ?? "unset";
-    if (state === "opted_out" && !isOptOutExempt(input.category)) {
-        return block("OPTED_OUT", `Recipient opted out of ${input.category} messages.`);
-    }
-    if (input.category === "marketing" && state !== "opted_in") {
-        return block("MARKETING_REQUIRES_OPT_IN", "Marketing sends require explicit opt-in.");
+    //
+    // Preference is per Person. On a thread-bound reply there is no Person, so
+    // consent is genuinely unevaluable — and an unevaluable policy must not be
+    // reported as a policy that passed. The send is still permitted here because
+    // everything that COULD be checked was: the endpoint is one this org verifiably
+    // received a message from, suppression and channel usability were enforced
+    // above, and an unresolved STOP hold would already have blocked it.
+    //
+    // Marketing is the exception. It requires affirmative opt-in, and "we could
+    // not check" is the opposite of affirmative, so it stays blocked.
+    const consentUnevaluable = !input.recipientPersonId && input.verifiedThreadEndpoint === true;
+    if (consentUnevaluable) {
+        if (input.category === "marketing") {
+            return block(
+                "MARKETING_REQUIRES_OPT_IN",
+                "Marketing requires explicit opt-in, which cannot be established for an unidentified sender."
+            );
+        }
+        // Falls through to quiet hours DELIBERATELY. Quiet hours derive from the
+        // location/organization window, not from the recipient, so they remain
+        // fully evaluable here — an early return would have skipped a policy that
+        // still applies.
+    } else {
+        const state = input.preferenceState ?? "unset";
+        if (state === "opted_out" && !isOptOutExempt(input.category)) {
+            return block("OPTED_OUT", `Recipient opted out of ${input.category} messages.`);
+        }
+        if (input.category === "marketing" && state !== "opted_in") {
+            return block("MARKETING_REQUIRES_OPT_IN", "Marketing sends require explicit opt-in.");
+        }
     }
 
     // 8. Quiet hours — time-dependent, so this is the check most likely to flip

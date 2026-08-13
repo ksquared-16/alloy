@@ -254,7 +254,7 @@ const CONFIGURATION_DOMAINS: readonly OrganizationConfigurationDomain[] = [
         key: "communications",
         label: "Communications",
         description: "Shared channels, templates, sender identity, and delivery rules.",
-        href: "/settings/communications",
+        href: "/organization/communications",
         icon: "communications",
         publisherLabel: "Organization",
         configurationOwner: "Communications",

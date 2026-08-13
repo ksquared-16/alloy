@@ -75,7 +75,32 @@ def keyword_target_state(keyword: str) -> Optional[str]:
 
 
 def keyword_response(keyword: str) -> Optional[str]:
-    """Informational reply for a keyword, or None when no reply is required."""
+    """
+    The acknowledgement copy for a keyword — for RECORD and OPERATOR DISPLAY only.
+
+    ALLOY MUST NOT SEND THIS. Read that before wiring anything to it.
+
+    Outbound SMS goes through a Twilio **Messaging Service**
+    (`communication_message_sender.py` reads `messaging_service_sid`). Twilio
+    answers STOP / START / HELP itself at the provider layer — for US A2P traffic
+    that behaviour is carrier-mandated and cannot be declined, and Advanced
+    Opt-Out is where the copy is configured if it needs changing.
+
+    So the acknowledgement has exactly one owner: **the provider**. If Alloy also
+    sent one, a parent who just texted STOP would receive TWO messages — one of
+    them from a system they just told to stop. That is a poor experience and a
+    compliance risk, and it is the single most likely way this loose end gets
+    "finished" incorrectly.
+
+    This function therefore exists so that:
+      - the operator surface can show what the family was told, and
+      - the copy lives in the shared contract next to the keyword vocabulary
+        rather than being duplicated in a provider console note.
+
+    `backend/tests/test_keyword_response_not_sent.py` fails the build if any send
+    path starts consuming it. See
+    `docs/platform/planning/conversation-platform-v1/KEYWORD-ACKNOWLEDGEMENT-OWNERSHIP.md`.
+    """
     if keyword == "help":
         return HELP_RESPONSE
     if keyword == "stop":

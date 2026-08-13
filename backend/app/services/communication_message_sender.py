@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from ..integrations.resend_client import default_from_email, send_resend_email
+from .communications.email_message_id import mint_outbound_message_id
+from .communications.email_thread_headers import fetch_thread_email_headers, outbound_email_headers
 from ..integrations.twilio_client import send_sms, send_sms_with_credentials
 from ..supabase_client import _get_base_url, _get_headers
 from .communication_workflow_events import emit_for_communication_message
@@ -384,6 +386,24 @@ def process_communication_messages(
                 subject = _resolve_outbound_email_subject(row, cfg, entity_type)
                 from_email_cfg = str(cfg.get("from_email") or "").strip()
                 from_email = from_email_cfg or default_from_email()
+                # Correlation evidence Alloy authors itself, derived from this
+                # message's own id — so a reply's `In-Reply-To` resolves to the exact
+                # outbound message, and through it to the thread, by primary key.
+                # None when the id or sending domain cannot support one, in which
+                # case the send proceeds without a header rather than with a
+                # meaningless one.
+                outbound_message_id = mint_outbound_message_id(
+                    communication_message_id=str(msg_id),
+                    from_email=from_email,
+                )
+                # Threading derived from canonical conversation history, org-scoped.
+                # A first outbound legitimately carries no In-Reply-To.
+                thread_headers = fetch_thread_email_headers(
+                    base_url,
+                    headers,
+                    org_id=str(row.get("org_id") or ""),
+                    thread_id=str(row.get("thread_id") or ""),
+                )
                 res = send_resend_email(
                     to_email=to_addr,
                     subject=subject,
@@ -391,6 +411,12 @@ def process_communication_messages(
                     text_body=body,
                     from_email=from_email,
                     api_key=api_key_plain,
+                    message_id=outbound_message_id,
+                    extra_headers=outbound_email_headers(
+                        message_id=None,
+                        in_reply_to=thread_headers.get("in_reply_to"),
+                        references=thread_headers.get("references"),
+                    ),
                 )
                 rid = res.get("id", "")
                 _patch_comm_message(
@@ -405,6 +431,12 @@ def process_communication_messages(
                         "error": None,
                         "communication_provider_binding_id": bound_id,
                         "from_address": from_email.strip() or None,
+                        # Recorded because the NEXT reply builds its References
+                        # from canonical history — an unrecorded header would
+                        # silently break the chain one turn later.
+                        "email_message_id": outbound_message_id,
+                        "email_in_reply_to": thread_headers.get("in_reply_to"),
+                        "email_references": thread_headers.get("references"),
                     },
                 )
                 logger.info(

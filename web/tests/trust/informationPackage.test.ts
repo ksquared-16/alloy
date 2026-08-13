@@ -32,9 +32,13 @@ const EMAIL = "jane.doe+tour@example.com";
 const PHONE = "(555) 234-5678";
 
 /**
- * A realistic canonical Communications source, shaped after
- * `InboundMessageDraft` (`lib/communications/v2/inboundNormalization.ts`) and the
+ * A realistic canonical Communications source, shaped after the
  * `communication_messages` columns.
+ *
+ * (Previously described as following `InboundMessageDraft` in
+ * `lib/communications/v2/inboundNormalization.ts`. That module was never wired to
+ * production — the canonical inbound seam is the Python webhook — and was deleted
+ * during Block B convergence. The columns are the shape that matters here.)
  *
  * It deliberately carries hazardous fields NO spec below declares —
  * `from_address`, `to_address`, `provider_message_id`, `error`, `metadata`,

@@ -15,12 +15,18 @@
 
 import type { MessageAudience, MessageCategory, MessageChannel } from "@/lib/communications/eligibility/types";
 
-export type RecipientKind = "person" | "internal_user" | "external_operational_recipient";
+export type RecipientKind =
+    | "person"
+    | "internal_user"
+    | "external_operational_recipient"
+    /** Reply into a tenant-owned conversation whose sender is not a known Person. */
+    | "canonical_thread";
 
 export const RECIPIENT_KINDS: readonly RecipientKind[] = [
     "person",
     "internal_user",
     "external_operational_recipient",
+    "canonical_thread",
 ] as const;
 
 /**
@@ -82,7 +88,34 @@ export type ExternalOperationalRecipient = {
     reason: string;
 };
 
-export type TypedRecipient = PersonRecipient | InternalUserRecipient | ExternalOperationalRecipient;
+/**
+ * Reply into a canonical tenant conversation whose sender is not a known Person.
+ *
+ * A parent can text an Alloy number before Alloy knows who they are. The
+ * conversation is real, tenant-owned and verified, but it anchors to
+ * `communications_unknown` with no `person_id` — so a PersonRecipient cannot
+ * express it, and the operator was simply unable to reply to the messages most in
+ * need of a reply.
+ *
+ * It carries a thread id and NOTHING else. That is the entire safety property:
+ * the client cannot name an address, so this cannot become the free-text
+ * recipient path that typed recipients were introduced to remove. The server
+ * derives the endpoint from canonical inbound truth on that thread.
+ *
+ * Structurally unable to reach platform quarantine: org-less and cross-org
+ * ingress have no `communication_threads` row at all, so there is no thread id to
+ * pass. That is a property of the data model, not a check that can be forgotten.
+ */
+export type CanonicalThreadRecipient = {
+    kind: "canonical_thread";
+    threadId: string;
+};
+
+export type TypedRecipient =
+    | PersonRecipient
+    | InternalUserRecipient
+    | ExternalOperationalRecipient
+    | CanonicalThreadRecipient;
 
 /**
  * Purposes an external-operational send may carry. Server-owned and
@@ -120,7 +153,11 @@ export type RecipientValidationError = {
         | "marketing_prohibited"
         | "category_not_allowed"
         | "purpose_not_allowlisted"
-        | "audience_mismatch";
+        | "audience_mismatch"
+        /** A canonical_thread recipient carries a thread id and nothing else. */
+        | "missing_thread_id"
+        /** The client tried to name an address on a thread reply. */
+        | "thread_recipient_address_not_permitted";
     message: string;
 };
 
@@ -147,6 +184,24 @@ export function validateTypedRecipientShape(recipient: unknown): RecipientValida
     if (kind === "person") {
         if (typeof r.personId !== "string" || !UUID_RE.test(r.personId)) {
             return err("missing_person_id", "A person recipient requires a person_id (UUID).");
+        }
+        return null;
+    }
+
+    if (kind === "canonical_thread") {
+        if (typeof r.threadId !== "string" || !UUID_RE.test(r.threadId)) {
+            return err("missing_thread_id", "A canonical_thread recipient requires a thread_id (UUID).");
+        }
+        // Any address-bearing field is a caller trying to choose the destination.
+        // Refuse rather than ignore: silently dropping it would let a caller
+        // believe they had redirected the message.
+        for (const field of ["address", "to", "to_address", "phone", "email"]) {
+            if (r[field] != null && String(r[field]).trim() !== "") {
+                return err(
+                    "thread_recipient_address_not_permitted",
+                    "A canonical_thread reply derives its destination from the conversation. Remove the address."
+                );
+            }
         }
         return null;
     }
@@ -242,5 +297,7 @@ export const FREE_TEXT_RECIPIENT_MIGRATION_MESSAGE =
     "{ kind: 'person', personId } for family or customer communication, " +
     "{ kind: 'internal_user', userId } for internal staff, or " +
     "{ kind: 'external_operational_recipient', displayName, channel, address, recipientRole, reason } " +
-    "for a vendor, contractor, inspector, attorney or other external professional contact. " +
+    "for a vendor, contractor, inspector, attorney or other external professional contact, or " +
+    "{ kind: 'canonical_thread', threadId } to reply into an existing tenant-owned " +
+    "conversation whose sender Alloy has not identified. " +
     "A failed person lookup is never downgraded to an external operational recipient.";

@@ -30,6 +30,22 @@ SERVER_PID_FILE="$CERT_DIR/.run/server.pid"
 APP_PORT="${CERT_APP_PORT:-3011}"
 APP_URL="http://localhost:${APP_PORT}"
 
+# Inbound SMS certification. Every value here is synthetic and local-only; the
+# token is a signing key for the certification's own requests, not a credential
+# for anything that exists.
+INBOUND_PORT="${CERT_INBOUND_PORT:-8013}"
+INBOUND_URL="http://127.0.0.1:${INBOUND_PORT}"
+INBOUND_PID_FILE="$CERT_DIR/.run/inbound.pid"
+CERT_TWILIO_AUTH_TOKEN="${CERT_TWILIO_AUTH_TOKEN:-alloy-certification-synthetic-twilio-token}"
+CERT_INBOUND_TO_E164="${CERT_INBOUND_TO_E164:-+15550001111}"
+
+# The backend refuses to boot without Stripe configuration, and certification
+# never reaches a payment path. These are placeholders, assembled from parts
+# rather than written out so nothing key-shaped is ever committed — the repo's
+# secret guard should keep failing closed on anything that looks like a key.
+CERT_STRIPE_PLACEHOLDER_KEY="sk_$(printf 'test')_alloy_certification_placeholder"
+CERT_STRIPE_PLACEHOLDER_WEBHOOK="whsec_alloy_certification_placeholder"
+
 OPERATOR_EMAIL="qa.operator@northwind.invalid"
 OPERATOR_PASSWORD="alloy-local-cert"        # synthetic, local-only, non-secret (seeded)
 ORG_SLUG="northwind-early-learning"
@@ -87,6 +103,70 @@ cmd_seed() {
     psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/environment-buckets.sql" >/dev/null \
         || die "storage bucket provisioning failed"
     green "Storage buckets provisioned (org_documents)"
+
+    # Inbound routing asks which organization owns the number Twilio delivered to,
+    # and refuses to guess when nothing answers. The canonical seed declares no
+    # provider binding, so without this every certification inbound quarantines as
+    # org-less — proving the quarantine works and nothing else.
+    psql "$db" -v ON_ERROR_STOP=1 -q -f "$CERT_DIR/inbound-sms-binding.sql" >/dev/null \
+        || die "inbound SMS binding provisioning failed"
+    green "Inbound SMS destination provisioned (${CERT_INBOUND_TO_E164})"
+}
+
+# ----------------------------------------------------------- inbound webhook
+#
+# The Twilio inbound webhook is a backend (FastAPI) route, not a Next one, so the
+# operator loop cannot be certified end-to-end from a browser alone: the parent's
+# message has to arrive the way a parent's message actually arrives.
+#
+# TWILIO_AUTH_TOKEN here is synthetic and local-only. That is not a weakening —
+# signature verification runs for real against it, and the certification spec
+# signs with the same value, so an unsigned or wrongly-signed request is refused
+# exactly as it would be in production. No real Twilio credential exists on this
+# machine, and nothing leaves it.
+cmd_inbound_up() {
+    if curl -s -o /dev/null "$INBOUND_URL/docs" 2>/dev/null || curl -s -o /dev/null "$INBOUND_URL" 2>/dev/null; then
+        green "Inbound webhook already serving at $INBOUND_URL"
+        return 0
+    fi
+    [ -f "$ENV_FILE" ] || cmd_env
+    local status; status="$(sb status -o env 2>/dev/null)" || die "cert stack not running"
+    local api service
+    api="$(echo "$status" | sed -n 's/^API_URL="\(.*\)"$/\1/p')"
+    service="$(echo "$status" | sed -n 's/^SERVICE_ROLE_KEY="\(.*\)"$/\1/p')"
+    # A half-up stack — the database container running while kong/auth are not —
+    # still answers `supabase status`, but with these fields EMPTY. Starting the
+    # webhook anyway produces a process that accepts every request and answers 500
+    # from `_get_headers()`, which reads as a product defect and is not one.
+    [ -n "$api" ] && [ -n "$service" ] \
+        || die "cert stack is only half up (empty API_URL/SERVICE_ROLE_KEY) — check: curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54421/auth/v1/health"
+    mkdir -p "$CERT_DIR/.run"
+    info "Starting inbound webhook at $INBOUND_URL against the cert tenant…"
+    (
+        cd "$REPO_ROOT/backend" &&
+        SUPABASE_URL="$api" \
+        SUPABASE_SERVICE_ROLE_KEY="$service" \
+        TWILIO_AUTH_TOKEN="$CERT_TWILIO_AUTH_TOKEN" \
+        COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL="$INBOUND_URL" \
+        ALLOY_CERTIFICATION=1 \
+        STRIPE_SECRET_KEY="$CERT_STRIPE_PLACEHOLDER_KEY" \
+        STRIPE_WEBHOOK_SECRET="$CERT_STRIPE_PLACEHOLDER_WEBHOOK" \
+        python3 -m uvicorn main:app --host 127.0.0.1 --port "$INBOUND_PORT" \
+            >"$CERT_DIR/.run/inbound.log" 2>&1 &
+        echo $! > "$INBOUND_PID_FILE"
+    )
+    for _ in $(seq 1 45); do
+        curl -s -o /dev/null "$INBOUND_URL/openapi.json" && { green "Inbound webhook ready ($INBOUND_URL)"; return 0; }
+        sleep 2
+    done
+    die "inbound webhook did not become ready — see $CERT_DIR/.run/inbound.log"
+}
+
+cmd_inbound_stop() {
+    [ -f "$INBOUND_PID_FILE" ] || return 0
+    local pid; pid="$(cat "$INBOUND_PID_FILE" 2>/dev/null || true)"
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+    rm -f "$INBOUND_PID_FILE"
 }
 
 cmd_env() {
@@ -116,13 +196,32 @@ NEXT_PUBLIC_ALLOY_OS_RUNTIME=1
 # objective result (queued/sent) but nothing leaves the machine. Auth emails are
 # caught locally by the stack's mail catcher (inbucket :54424).
 ALLOY_CERTIFICATION=1
+# The ingress quarantine is RLS-locked to service_role, so the only way to prove
+# it retains an unattributable message WITHOUT exposing the parent's words is to
+# read the diagnostic projection. Enabled here so that withholding is certified
+# rather than asserted; it is env-gated and off by default everywhere else.
+COMMUNICATIONS_INGRESS_DIAGNOSTICS=1
 EOF
     green "Configuration written ($ENV_FILE) — url/anon/tenant known, no discovery"
 }
 
 cmd_serve() {
     [ -f "$ENV_FILE" ] || cmd_env
-    if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then green "App already serving at $APP_URL"; return 0; fi
+    # "Already serving" is only reuse if that process was started from the CURRENT
+    # configuration. A server older than the env file is running with stale
+    # variables, and reusing it silently certifies the wrong build — an env-gated
+    # route stayed 404 across three runs because of exactly this.
+    if curl -s -o /dev/null "$APP_URL" 2>/dev/null; then
+        local pid; pid="$(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null | head -1)"
+        if [ -n "$pid" ] && [ -n "$(find "$ENV_FILE" -newermt "$(ps -o lstart= -p "$pid" 2>/dev/null)" 2>/dev/null)" ]; then
+            info "app on ${APP_PORT} predates ${ENV_FILE##*/} — restarting so it reads the current configuration"
+            cmd_app_stop >/dev/null 2>&1
+            for p in $(lsof -ti "tcp:${APP_PORT}" -sTCP:LISTEN 2>/dev/null); do kill -9 "$p" 2>/dev/null || true; done
+            sleep 2
+        else
+            green "App already serving at $APP_URL"; return 0
+        fi
+    fi
     mkdir -p "$(dirname "$SERVER_PID_FILE")"
     info "Starting app at $APP_URL against the cert tenant…"
     ( cd "$WEB_DIR" && env $(grep -v '^#' "$ENV_FILE" | xargs) npx next dev -p "$APP_PORT" \
@@ -133,10 +232,13 @@ cmd_serve() {
 
 cmd_verify() {
     cmd_serve
+    cmd_inbound_up
     green "Communications mocked (no real email/SMS; local-delivery only)"
     info "Authenticating operator + running certification specs…"
     ( cd "$CERT_DIR" && NODE_PATH="$WEB_DIR/node_modules" CERT_APP_URL="$APP_URL" \
         CERT_OPERATOR_EMAIL="$OPERATOR_EMAIL" CERT_OPERATOR_PASSWORD="$OPERATOR_PASSWORD" \
+        CERT_INBOUND_URL="$INBOUND_URL" CERT_TWILIO_AUTH_TOKEN="$CERT_TWILIO_AUTH_TOKEN" \
+        CERT_INBOUND_TO_E164="$CERT_INBOUND_TO_E164" \
         "$WEB_DIR/node_modules/.bin/playwright" test -c "$CERT_DIR/playwright.config.ts" \
             ${CERT_WORKERS:+--workers="$CERT_WORKERS"} ${CERT_GREP:+-g "$CERT_GREP"} )
     green "Authentication established (reusable session captured)"
@@ -345,8 +447,10 @@ case "${1:-all}" in
     verify) cmd_verify ;;
     status) cmd_status ;;
     app-stop) cmd_app_stop ;;
+    inbound-up) cmd_inbound_up ;;
+    inbound-stop) cmd_inbound_stop ;;
     journey) cmd_journey ;;
-    down) cmd_down ;;
+    down) cmd_inbound_stop; cmd_down ;;
     all) cmd_up; cmd_env; cmd_verify; cmd_status ;;
-    *) die "unknown command: $1 (up|env|serve|verify|status|down|all)" ;;
+    *) die "unknown command: $1 (up|env|serve|verify|inbound-up|inbound-stop|status|down|all)" ;;
 esac

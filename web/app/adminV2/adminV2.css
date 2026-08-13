@@ -2968,3 +2968,20 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 .adminv2-sidebar-config-list .adminv2-sidebar-config-link--active {
   font-weight: 600;
 }
+
+/*
+ * Floating BOS does NOT reserve layout. That is the product model, not an
+ * oversight — see `bosFloatingGeometry.ts`.
+ *
+ * A previous revision insetting the workspace by the panel's width made FLOATING
+ * behave like PINNED: the page narrowed and the assistant read as a docked side
+ * panel. It fixed click interception by deleting the distinction the two modes
+ * exist to express.
+ *
+ *     unpinned -> floating overlay, page keeps its full width
+ *     pinned   -> reserved workspace column (--ws-rail, above)
+ *
+ * Reachability is handled where the real defect was — nested overlay z-order, so
+ * dialogs open ABOVE the assistant (see ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z)
+ * — and by the assistant remaining a movable window the operator controls.
+ */

@@ -31,6 +31,13 @@ import {
     personDisplayNameFromRow,
     resolveMessageContactPersonId,
 } from "@/lib/communications/inboxThreadPersonContext";
+import {
+    deriveInboxThreadRoutingState,
+    maskInboxEndpointForDisplay,
+    routingAmbiguityNotice,
+    unidentifiedSenderDisplayName,
+} from "@/lib/communications/inboxThreadRoutingState";
+import { withoutSupersededDuplicates } from "@/lib/communications/supersededDuplicateMessages";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const PREVIEW_FETCH_CAP = 200;
@@ -48,6 +55,7 @@ type RawThreadRow = {
     updated_at: string | null;
     last_message_at: string | null;
     archived_at: string | null;
+    attention_state?: string | null;
     metadata?: Record<string, unknown> | null;
 };
 
@@ -152,7 +160,7 @@ async function attachLastPreviews(
 
     const { data: raw, error } = await supabase
         .from("communication_messages")
-        .select("id, thread_id, direction, channel, status, body, created_at")
+        .select("id, thread_id, direction, channel, status, body, created_at, metadata")
         .eq("org_id", orgId)
         .in("thread_id", ids)
         .order("created_at", { ascending: false })
@@ -160,10 +168,13 @@ async function attachLastPreviews(
 
     if (error || !Array.isArray(raw)) return out;
 
-    for (const row of raw) {
+    // A duplicate provider delivery recorded before inbound uniqueness existed is
+    // still an inbound row. As the newest row on a thread it would become the
+    // preview, showing the parent saying the same thing twice.
+    for (const row of withoutSupersededDuplicates(raw as Record<string, unknown>[])) {
         const tid = row.thread_id != null ? String(row.thread_id) : "";
         if (!tid || out.has(tid)) continue;
-        out.set(tid, previewFromMessageRow(row as Record<string, unknown>));
+        out.set(tid, previewFromMessageRow(row));
     }
     return out;
 }
@@ -178,25 +189,49 @@ async function attachUnreadFlags(
     for (const id of threadIds) unreadByThread.set(id, false);
     if (threadIds.length === 0) return unreadByThread;
 
-    const { data: inbound, error: iErr } = await supabase
+    const { data: inboundRaw, error: iErr } = await supabase
         .from("communication_messages")
-        .select("id, thread_id")
+        .select("id, thread_id, metadata")
         .eq("org_id", orgId)
         .eq("direction", "inbound")
         .in("thread_id", threadIds);
 
-    if (iErr || !Array.isArray(inbound) || inbound.length === 0) return unreadByThread;
+    if (iErr || !Array.isArray(inboundRaw) || inboundRaw.length === 0) return unreadByThread;
+
+    // Same exclusion the org-wide unread count applies: a duplicate copy of a
+    // message already present must not mark a thread unread on its own.
+    const inbound = withoutSupersededDuplicates(inboundRaw as Record<string, unknown>[]);
+    if (inbound.length === 0) return unreadByThread;
 
     const inboundIds = inbound.map((r) => String((r as { id: string }).id)).filter(Boolean);
-    const { data: reads, error: rErr } = await supabase
-        .from("communication_message_reads")
-        .select("message_id")
-        .eq("user_id", userId)
-        .in("message_id", inboundIds);
 
-    if (rErr) return unreadByThread;
+    // CHUNKED, and this is not a micro-optimisation.
+    //
+    // PostgREST serialises `.in()` into the request URI. One UUID costs ~37
+    // characters, so a few hundred inbound messages produced an ~11 KB URI and the
+    // gateway refused it. The error path here returns the all-false map — meaning
+    // every conversation was reported READ. The failure is silent and in the
+    // dangerous direction: an operator simply stops seeing that families are
+    // waiting, and nothing anywhere says why.
+    //
+    // Found when the certification tenant crossed 299 inbound messages. It is a
+    // volume threshold, so any organization reaches it eventually.
+    const READ_LOOKUP_CHUNK = 100;
+    const readSet = new Set<string>();
+    for (let i = 0; i < inboundIds.length; i += READ_LOOKUP_CHUNK) {
+        const chunk = inboundIds.slice(i, i + READ_LOOKUP_CHUNK);
+        const { data: reads, error: rErr } = await supabase
+            .from("communication_message_reads")
+            .select("message_id")
+            .eq("user_id", userId)
+            .in("message_id", chunk);
 
-    const readSet = new Set((reads ?? []).map((x) => String((x as { message_id: string }).message_id)));
+        // Fail CLOSED to "unknown" rather than to "read": returning the all-false
+        // map would assert every conversation has been read, which is exactly the
+        // lie this defect told.
+        if (rErr) return unreadByThread;
+        for (const x of reads ?? []) readSet.add(String((x as { message_id: string }).message_id));
+    }
 
     const inboundByThread = new Map<string, string[]>();
     for (const row of inbound) {
@@ -749,7 +784,7 @@ export async function listInboxThreads(params: {
     let query = params.supabase
         .from("communication_threads")
         .select(
-            "id, org_id, channel, recipient_key, primary_entity_type, primary_entity_id, created_at, updated_at, last_message_at, archived_at, metadata"
+            "id, org_id, channel, recipient_key, primary_entity_type, primary_entity_id, created_at, updated_at, last_message_at, archived_at, attention_state, metadata"
         )
         .eq("org_id", params.orgId);
 
@@ -817,15 +852,29 @@ export async function listInboxThreads(params: {
 
         const locationDisplay = resolveLocationDisplay(t, locationByOpportunity, locationByJob);
         const statusDisplay = resolveStatusDisplay(t, statusByOpportunity);
-        const messageContactPersonId = resolveReplyPersonId(
-            t,
-            primaryPersonByOpportunity,
-            primaryPersonByJob,
-            relatedPersonIdsByOpportunity,
-            relatedPersonIdsByJob,
-            personIdByEmail,
-            personIdByPhone
-        );
+        const routing = deriveInboxThreadRoutingState({
+            primaryEntityType: t.primary_entity_type,
+            attentionState: t.attention_state ?? null,
+            metadata: t.metadata ?? null,
+        });
+        const unidentified = routing.senderIdentityState === "unidentified";
+        // Person resolution scans phone/email across every person loaded for this
+        // page of threads. On a thread the inbound seam already declared
+        // unattributable that would mint an identity out of another row's data —
+        // and a different one depending on what else paginated in. The seam's
+        // decision stands.
+        const messageContactPersonId = unidentified
+            ? null
+            : resolveReplyPersonId(
+                  t,
+                  primaryPersonByOpportunity,
+                  primaryPersonByJob,
+                  relatedPersonIdsByOpportunity,
+                  relatedPersonIdsByJob,
+                  personIdByEmail,
+                  personIdByPhone
+              );
+        const maskedEndpoint = maskInboxEndpointForDisplay(t.recipient_key, t.channel);
         const identityInput = inboxIdentityWithChannelFallback({
             primaryEntityType: t.primary_entity_type,
             primaryEntityId: t.primary_entity_id,
@@ -841,11 +890,19 @@ export async function listInboxThreads(params: {
             channelContact: channelContactDisplay,
             messageContactPersonId,
         });
-        const contactDisplay = resolveInboxPrimaryName(identityInput);
-        const contextDisplay = buildInboxContextLine({
-            locationDisplay,
-            statusDisplay,
-        });
+        // An unattributed conversation is named for what is actually known about
+        // it. The generic resolver would fall back to the formatted phone number
+        // and render it in the name slot, which reads as an identity Alloy does
+        // not have.
+        const contactDisplay = unidentified
+            ? unidentifiedSenderDisplayName(maskedEndpoint)
+            : resolveInboxPrimaryName(identityInput);
+        const routingNotice = routingAmbiguityNotice(routing);
+        const contextDisplay =
+            buildInboxContextLine({
+                locationDisplay,
+                statusDisplay,
+            }) ?? routingNotice;
         const relatedChildrenDisplay =
             t.primary_entity_type === "opportunities"
                 ? joinInboxRelatedNames(relatedChildrenByOpportunity.get(t.primary_entity_id) ?? [])
@@ -860,14 +917,21 @@ export async function listInboxThreads(params: {
         const preview = previews.get(t.id) ?? null;
         const replyPersonId = messageContactPersonId;
         const personHasSms = replyPersonId ? personSmsAvailable.get(replyPersonId) ?? false : false;
-        const { replyEmailAvailable } = resolveReplyChannelAvailability(
+        const { replyEmailAvailable: personEmailReachable } = resolveReplyChannelAvailability(
             t,
             replyPersonId,
             channelContactDisplay,
             personEmailAvailable,
             personSmsAvailable
         );
-        const replySmsAvailable = orgSmsOutboundEnabled && personHasSms;
+        const threadChannel = t.channel.trim().toLowerCase();
+        // Channel availability normally answers "does this person have a number
+        // on file". With no person, the answer is the conversation itself: the one
+        // channel that can be answered is the one the message arrived on.
+        const replyEmailAvailable = unidentified ? threadChannel === "email" : personEmailReachable;
+        const replySmsAvailable = unidentified
+            ? threadChannel === "sms" && orgSmsOutboundEnabled
+            : orgSmsOutboundEnabled && personHasSms;
         const draftItem: InboxThreadListItem = {
             id: t.id,
             org_id: t.org_id,
@@ -894,11 +958,20 @@ export async function listInboxThreads(params: {
             reply_email_available: replyEmailAvailable,
             reply_sms_available: replySmsAvailable,
             can_reply: false,
+            sender_identity_state: routing.senderIdentityState,
+            routing_state: routing.routingState,
+            routing_candidate_count: routing.routingCandidateCount,
+            routing_notice: routingNotice,
+            reply_authority: "none",
+            reply_display_label: null,
             entity_chip: entityChip,
             last_message_preview: preview,
             has_unread: unreadFlags.get(t.id) ?? false,
         };
-        draftItem.can_reply = resolveInboxReplyTarget(draftItem).canReply;
+        const replyTarget = resolveInboxReplyTarget(draftItem);
+        draftItem.can_reply = replyTarget.canReply;
+        draftItem.reply_authority = replyTarget.authority;
+        draftItem.reply_display_label = replyTarget.displayLabel;
         return draftItem;
     });
 

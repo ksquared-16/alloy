@@ -278,18 +278,23 @@ export function resolveSenderIdentity(ctx: IdentityResolutionContext, input: Sen
             const reason: SelectionReason = lb.is_default ? "location_default" : "location_priority";
             return buildSuccess(ctx, ident, reason, lb.is_default ? 10 : 20, lb, false, warnings);
         }
-        // Location-scoped identities on identity.scope=location without binding row
-        const locScoped = pool.filter((i) => {
-            const meta = i.metadata ?? {};
-            const legacyLoc = typeof meta.legacy_scope === "string" && meta.legacy_scope === "location";
-            return i.scope === "location" || legacyLoc;
-        });
-        for (const ident of locScoped) {
-            const grants = grantsForIdentity(ctx, ident.id);
-            if (operatorAuthorized(ident, grants, input.operatorUserId, hasSend, "send")) {
-                return buildSuccess(ctx, ident, "location_priority", 25, null, false, warnings);
-            }
-        }
+        // REMOVED — a fallback that matched any `scope='location'` identity in the
+        // organization, with NO predicate on WHICH location it belonged to.
+        //
+        // It was structurally incapable of being correct: `communication_identities`
+        // has no `location_id` at all — location lives only in
+        // `communication_identity_location_bindings`. So the branch took the first
+        // location-scoped identity it found and returned it for whatever location
+        // was asked about. A Lakeside conversation resolved to Riverside's address.
+        // Harmless only while this resolver was dormant; activating it would have
+        // shipped cross-location identity leakage on day one.
+        //
+        // Deleted rather than repaired. It existed to cover identities backfilled
+        // with `scope='location'` before any location binding row was written.
+        // Projection now writes that row in the same request as the binding, so a
+        // location identity always has one. An identity whose location cannot be
+        // determined must fall through to the organization default — a truthful
+        // answer — instead of guessing a location and sending as the wrong campus.
     }
 
     // 9. Tenant-wide default (deterministic: id sort among defaults)
