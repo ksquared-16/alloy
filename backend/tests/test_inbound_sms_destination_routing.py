@@ -139,12 +139,19 @@ def test_an_unattributable_delivery_writes_no_legacy_inbound_row(monkeypatch):
     # This case previously justified the legacy row as "the ONLY record of an
     # unattributable message". It is not: `communication_inbound_ingress` is,
     # which is what `test_no_binding_is_retained_at_ingress` proves.
-    rec = Recorder()
-    _wire(monkeypatch, rec, [])
+    #
+    # Wired through `_wire_ingress`, not `_wire`, deliberately. The bare recorder
+    # raises on ANY post, which made this assertion fire on the sanctioned ingress
+    # retention this very comment endorses — the guard was catching the successor
+    # store, not a legacy one. Stubbing retention keeps `http_posts` meaning what
+    # it claims: nothing reached a SECOND store behind canonical persistence.
+    rec = IngressRecorder()
+    _wire_ingress(monkeypatch, rec, [])
 
     _deliver(rec)
 
     assert rec.persist_calls == []
+    assert len(rec.ingress_calls) == 1, "the successor store must still receive it"
     assert rec.http_posts == [], "an unattributable message wrote to a second store"
 
 
