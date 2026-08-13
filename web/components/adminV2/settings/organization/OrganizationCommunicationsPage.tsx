@@ -41,9 +41,16 @@ export type CredentialOption = {
     key: string;
     channel: string;
     provider: string;
+    /** Product name of the connection, e.g. "Resend — this deployment's connection". */
     label: string;
     description: string;
+    /** The deployment holds this credential. Presence only — never a value. */
     available: boolean;
+    /**
+     * Whether choosing this connection makes REAL EXTERNAL DELIVERY possible.
+     * The question an administrator needs answered before clicking Connect.
+     */
+    externalSendCapable: boolean;
 };
 
 /** Only `ready` is affirmative. `verification_required` is deliberately not green —
