@@ -7,7 +7,9 @@ supersedes: []
 
 # Attendance system
 
-**Status:** Canonical module doctrine (June 2026). Defines Attendance as the keystone **Operational Fact (L4)** stream in the truth-flow axis. **P2 (June 2026) implements the backend foundation** (immutable fact table + service + expected-vs-actual diff); **P2.1 adds org-local service dates, an absence-reason vocabulary, and pure actual occupancy/staffing/compliance + child-drawer read models**. UI is not yet built. See [Implemented model (P2)](#implemented-model-p2) and [Hardening + actual compliance (P2.1)](#hardening--actual-compliance-p21) below.
+**Status:** Canonical module doctrine. Defines Attendance as the keystone **Operational Fact (L4)** stream in the truth-flow axis. **P2 (June 2026) implements the backend foundation** (immutable fact table + service + expected-vs-actual diff); **P2.1 adds org-local service dates, an absence-reason vocabulary, and pure actual occupancy/staffing/compliance + child-drawer read models**; **Attendance V1 (August 2026) adds the staff side and the operator surface** — see [Attendance V1](#attendance-v1-staff-presence-combined-roster-and-planned-vs-actual) below.
+
+> ⚠ Two statements in the P2/P2.1 sections below are now **superseded** and left in place only as history: "UI is not yet built" and "staff scheduling is not modeled". Attendance V1 builds both. `staffOnHandByRoomDate` is no longer a placeholder.
 
 > **Layer:** Attendance is **L4 Operational Facts** in [`../core/operational-truth-flow-doctrine.md`](../core/operational-truth-flow-doctrine.md). It is compared against **L3 Projections** (expected attendance — the derived layer formerly called "Expectations"; not to be confused with the authored **Operational Expectations** ledger) and feeds **L5 Consequences** (billing). It is recorded from the Operations plane and reviewed from the Records plane (see [`../core/operational-ux-doctrine.md`](../core/operational-ux-doctrine.md)).
 
@@ -120,6 +122,98 @@ P2.1 hardens P2 and adds **read models over actuals** — still no UI, no billin
 
 **Deferred** (unchanged by P2.1): all attendance UI; staff scheduling tables (only placeholder interfaces exist); billing/financial resolution (L5); subsidy intake/reporting; materialized projection or attendance rollups; point-in-time (time-block) occupancy.
 
+---
+
+## Attendance V1 — staff presence, combined roster, and planned vs actual
+
+Closes the two things P2.1 explicitly deferred: **staff scheduling** and **the operator surface**.
+
+### Staff Presence is a SECOND conforming fact stream, not a generalization
+
+`staff_presence_events` is its own stream alongside `child_attendance_events`. It was deliberately
+NOT built by widening the child stream: `child_attendance_events` keeps its NOT NULL enrollment
+agreement and its customer-member subject, which are meaningless for an employee. A staff fact's
+subject is `persons.id` plus the `employment_id` covering the service date.
+
+- **Conformance is shared, not re-defined.** It passes the same `assertFactStreamConforms` and the
+  same schema-scan primitives the child stream does. A staff-specific conformance framework would
+  have created a second definition of "conforming".
+- **Vocabulary is a deliberate SUBSET:** `check_in | check_out | present | absence`. No
+  `room_transfer` (a child governed-movement fact) and no `schedule_override` (a child enrollment
+  concept). Actor types drop parent/guardian/emergency contact.
+- **Correction semantics are identical by design** — replay must not fork between the two streams.
+- **Employment bounds it.** A presence fact is refused outside the employment window on either side.
+
+⚠ **No payroll or timekeeping meaning is introduced.** These facts answer "was this person in this
+room on this day", which is a **ratio-compliance** question. They are not hours worked, not wages,
+and must not become either without an explicit decision.
+
+### The Combined Daily Roster is an expectation model, not a schedule
+
+One day, one site. It composes **certified child expectations** with **certified staff supply**,
+persists nothing, and authors no facts.
+
+- **Child expectation** resolves from `schedule_assignments` joined to `schedule_patterns.weekdays`.
+  A `child_placement` supplies the ROOM; the WEEKDAY comes from the assignment's pattern. A placement
+  alone therefore leaves a room empty on days the pattern does not cover — this is correct, and it is
+  the single most common source of "the fixture looks broken" confusion.
+- **Staff supply** resolves from `subject_type = 'staff'` assignments, filtered per day by
+  **employment coverage** (`person_is_employed_on` / its pure twin `employmentCoverage.ts`).
+- **Required staff** comes from the shared ratio resolver — there is no roster-local staffing math.
+
+### Planned and actual are SEPARATE VERDICTS that never share a field
+
+This is the distinction Attendance V1 exists to make legible, and it was proven live on the same
+room, date and instant:
+
+```
+PLANNED  { scheduledStaff: 1, required: 1 }                      → sufficient
+ACTUAL   { childrenPresent: 1, staffPresent: 0, required: 1 }    → short
+```
+
+Both run through the same ratio engine; they differ only in which population they count. A surface
+that collapses them into one number cannot tell an operator whether they have a staffing problem
+right now or a planning problem next week.
+
+`unknown` and `idle` are real verdicts, not gaps:
+
+- **`unknown`** — no ratio rule resolves for the room, so no verdict is possible. It must never
+  render as compliant.
+- **`idle`** — the register is empty. Nobody is present, so there is nobody to be short *for*.
+  Rendering an empty register as `short` was a defect (fixed on staging in `d9d2ea332`).
+
+### Operator surface
+
+Attendance is an operator surface inside the **Assignments workspace** (Work → Attendance),
+site-scoped, drilling site → room → subjects. Check-in / check-out / absence / correction are all
+registered actions; the surface authors nothing directly and re-reads the roster projection after
+every command.
+
+⚠ **Placement is provisional and is NOT the final navigation decision.** Roster / Attendance living
+inside Assignments is accepted for V1 only. Whether it becomes its own operational workspace (or
+part of a Daily Operations surface) will be revisited after real operator use — do not treat the
+current location as settled doctrine.
+
+### Known V1 boundaries
+
+- A **checked-out child** offers no re-entry and no correction control on this surface: actual demand
+  can be lowered from Attendance but not restored.
+- Staff **room-movement** semantics are not certified.
+- **Edit / End employment** have no operator surface yet (Add Staff does, at `/organization/staff`),
+  which is why the drawer-era `PersonEmploymentSection` is retained-but-unmounted rather than deleted.
+
+### Where the truth lives
+
+| Concern | Owner |
+|---------|-------|
+| Employment relationship + `person_is_employed_on` | [`../core/data/entity-specification.md`](../core/data/entity-specification.md), [`../core/data/relationship-model.md`](../core/data/relationship-model.md) |
+| Staff presence fact stream | `supabase/migrations/20260812090000_staff_presence_facts_v1.sql`, `web/lib/staffPresence/*` |
+| Staff assignment eligibility | `web/lib/operationalAssignments/staffAssignmentEligibility.ts` |
+| Combined roster + sufficiency | `web/lib/roster/buildCombinedRoster.ts`, `web/lib/scheduling/supply/staffingSufficiency.ts` |
+| Certification fixture (cert-only) | `certification/attendance/01-attendance-fixture.sql` |
+
+---
+
 ## Cross-references
 
 | Concern | Doctrine |
@@ -140,3 +234,6 @@ P2.1 hardens P2 and adds **read models over actuals** — still no UI, no billin
 - The projections-vs-facts comparison contract changes.
 - The attendance-child context / refKey namespace changes.
 - Attendance moves from doctrine to implemented schema/runtime (record the model here).
+- The staff presence vocabulary changes, or staff facts acquire any payroll/timekeeping meaning.
+- The planned-vs-actual separation changes, or a new sufficiency verdict is introduced.
+- Roster / Attendance moves out of the Assignments workspace (the placement above is provisional).

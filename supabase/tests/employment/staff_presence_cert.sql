@@ -29,6 +29,16 @@ SELECT
     '00000000-0000-4000-8000-000000000013'::uuid AS room_a,
     '00000000-0000-4000-8000-000050000040'::uuid AS pattern_a;
 
+-- The cross-org ISOLATION org, created here rather than assumed.
+--
+-- ⚠ This used to rely on the org already existing in the shared stack, left behind by an earlier
+-- session. It passed for months and then failed the moment the tenant was reset, because a
+-- certification that depends on ambient stack state is not a certification. It is created inside
+-- this transaction and disappears with the ROLLBACK at the end.
+INSERT INTO public.orgs (id, name, slug)
+SELECT org_b, 'Cert Isolation Org', 'cert-isolation-org' FROM ctx
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TEMP TABLE ids (k text PRIMARY KEY, v uuid);
 
 WITH ins AS (

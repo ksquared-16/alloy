@@ -36,11 +36,19 @@ const MODAL = '[role="dialog"][aria-modal="true"], .adminv2-drawer-modal-panel, 
 /** The Assignments workspace modal that HOSTS Attendance. */
 const SCHEDULING = "[data-adminv2-scheduling-workspace]";
 
-/** Seeded fixture: both children are placed in Toddler Room A on the Riverside campus. */
+/**
+ * Seeded by `certification/attendance/01-attendance-fixture.sql`.
+ *
+ * ⚠ Ada Smith, NOT Joe or Emma. Those two carry the Search fixture's sibling-schedule-grain
+ * scenario (M/W/F and Tue/Thu), so a spec pinned to either passes or fails depending on the day of
+ * the week — which it did, reporting "the seeded child is not on today's roster" the first time a
+ * promotion run landed on a Thursday. Ada is on a Mon–Fri cert pattern in the same room and the
+ * same household, so the scenario is reproducible on any weekday.
+ */
 const SITE = "Northwind — Riverside Campus";
 const ROOM_ID = "00000000-0000-4000-8000-000000000013";
-const CHILD_CM = "00000000-0000-4000-8000-000050000020";
-const CHILD_PERSON = "00000000-0000-4000-8000-000050000011";
+const CHILD_CM = "00000000-0000-4000-8000-00005000006b";
+const CHILD_PERSON = "00000000-0000-4000-8000-00005000006a";
 /**
  * The employed staff member certified here: Jane Smith, the Smith household's primary contact,
  * assigned to that same room.
@@ -291,23 +299,32 @@ test.describe("Attendance → canonical record attention", () => {
     });
 
     test("A4 · a host the Work View does not page in is REFUSED in words, never substituted", async ({ page }) => {
-        await openAttendanceRoom(page);
+        // Driven by COLD ENTRY (`?subject_id=` on the work-unit route), not by a click in Attendance.
+        //
+        // The claim here is about the platform's answer, not about Attendance's gesture: when a
+        // record resolves a host that the Work View's evaluated page does not contain, the surface
+        // must say so rather than quietly composing a different subject. That is the failure mode
+        // that once let a suite report 8/8 while the operator was looking at somebody else's record.
+        //
+        // Cold entry is the one case where a URL may establish attention (Art 2.4), and it removes
+        // this scenario's dependency on the subject also being on today's Attendance roster — a
+        // coupling that broke it the moment the tenant was rebuilt.
+        await page.goto("/workspace");
+        await page.waitForLoadState("domcontentloaded");
 
-        // This person resolves a host correctly — the case simply is not on the work unit's
-        // evaluated page. The platform must say so rather than quietly compose a different
-        // subject, which is the failure mode that made a previous suite report 8/8 while the
-        // operator was looking at somebody else's record.
         const host = await resolveHost(page, "persons", STAFF_NOT_ON_PAGE);
-        expect(host, "expected a resolvable host for the lead-fixture staff member").not.toBeNull();
+        expect(host, "expected a resolvable host for the lead-fixture person").not.toBeNull();
 
-        await page.locator(`[data-attendance-open-staff="${STAFF_NOT_ON_PAGE}"]`).click();
-        await expect(page.locator(SCHEDULING)).toHaveCount(0, { timeout: SETTLE });
+        const href = `/workspace/work-unit/${host!.workUnitKey.replace(/_/g, "-")}?subject_id=${host!.hostId}`;
+        await page.goto(href);
+        await page.waitForLoadState("domcontentloaded");
+
         // Typographic apostrophe in the product copy — match the words, not the glyph.
         await expect(
             page.getByText(/isn.t in this Work View/i),
             "the surface neither presented the record nor explained why",
         ).toBeVisible({ timeout: SETTLE });
-        // Refusing is not the same as substituting: no other record may be showing.
+        // Refusing is not the same as substituting: the removed overlay must not appear either.
         await expect(page.locator(MODAL)).toHaveCount(0);
         await shot(page, "05-work-view-refusal");
     });

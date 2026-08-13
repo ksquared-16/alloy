@@ -29,7 +29,7 @@ const SETTLE = 120_000;
 const SCHEDULING = "[data-adminv2-scheduling-workspace]";
 
 const ROOM_ID = "00000000-0000-4000-8000-000000000013";
-const CHILD_CM = "00000000-0000-4000-8000-000050000020";
+const CHILD_CM = "00000000-0000-4000-8000-00005000006b";
 const STAFF_PERSON = "00000000-0000-4000-8000-000050000010";
 
 test.beforeAll(() => fs.mkdirSync(SHOTS, { recursive: true }));
