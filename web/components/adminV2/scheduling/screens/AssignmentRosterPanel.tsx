@@ -71,12 +71,27 @@ export default function AssignmentRosterPanel({
     loading,
     siteName,
     bulk,
+    focusSubject = null,
     initialBulkMode = null,
 }: {
     subjects: AssignmentRosterSubject[];
     loading: boolean;
     siteName: string;
     bulk?: AssignmentRosterBulkHandlers;
+    /**
+     * Subject to open and scroll to on arrival — set when Roster hands off "manage
+     * this person's assignment". Landing at the top of an unfiltered ledger and
+     * leaving the operator to find the row again is not a handoff.
+     *
+     * Matched on IDENTITY, not on a reconstructed `subjectKey`: this panel keys
+     * children by `agreement:<id>` or `member:<id>` depending on what the ledger
+     * row carries, and a caller that guesses the format silently matches nothing.
+     */
+    focusSubject?: {
+        personId?: string | null;
+        customerMemberId?: string | null;
+        enrollmentAgreementId?: string | null;
+    } | null;
     /** Header Actions → Roster deep-link into a bulk preview. */
     initialBulkMode?: "assignment" | "room" | null;
 }) {
@@ -91,6 +106,29 @@ export default function AssignmentRosterPanel({
     useEffect(() => {
         if (initialBulkMode) setBulkMode(initialBulkMode);
     }, [initialBulkMode]);
+
+    /** Open and reveal the subject a Roster handoff named. */
+    useEffect(() => {
+        if (!focusSubject) return;
+        const match = subjects.find(
+            (s) =>
+                (focusSubject.enrollmentAgreementId != null &&
+                    s.enrollmentAgreementId === focusSubject.enrollmentAgreementId) ||
+                (focusSubject.customerMemberId != null &&
+                    s.customerMemberId === focusSubject.customerMemberId) ||
+                (focusSubject.personId != null &&
+                    s.subjectType === "staff" &&
+                    s.subjectKey === `staff:${focusSubject.personId}`),
+        );
+        if (!match) return;
+        setExpanded((prev) => new Set(prev).add(match.subjectKey));
+        // The row may be far down an unfiltered ledger.
+        requestAnimationFrame(() => {
+            document
+                .querySelector(`[data-assignment-roster-subject="${match.subjectKey}"]`)
+                ?.scrollIntoView({ block: "center", behavior: "smooth" });
+        });
+    }, [focusSubject, subjects]);
 
     const [detailAssignmentId, setDetailAssignmentId] = useState<string | null>(null);
     const detailAssignment = useMemo(() => {

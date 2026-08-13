@@ -94,6 +94,12 @@ export type AttendanceWorkspaceProps = {
     siteLocationId: string;
     siteName: string;
     /**
+     * Room to open on arrival — set when Roster hands off "this room, today".
+     * Attendance is a today-only surface, so the handoff carries the room and the
+     * site; the date is the org's service date either way.
+     */
+    initialRoomId?: string | null;
+    /**
      * Record gestures. Each resolves FALSE when no active Work Unit hosts the
      * record — a real platform answer, not an error. Attendance stops offering
      * the gesture rather than inventing somewhere to send the operator.
@@ -179,6 +185,7 @@ const ACTION_SECONDARY = `${ACTION} border border-alloy-stone/25 bg-white text-a
 export default function AttendanceWorkspace({
     siteLocationId,
     siteName,
+    initialRoomId,
     onOpenChild,
     onOpenStaff,
 }: AttendanceWorkspaceProps) {
@@ -193,7 +200,8 @@ export default function AttendanceWorkspace({
      */
     const [date, setDate] = useState<string | null>(null);
     const [model, setModel] = useState<RosterModel | null>(null);
-    const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+    /** A handoff from Roster names the room; otherwise the operator picks one. */
+    const [openRoomId, setOpenRoomId] = useState<string | null>(initialRoomId ?? null);
     const [busySubject, setBusySubject] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     /**

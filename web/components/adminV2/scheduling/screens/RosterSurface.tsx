@@ -53,6 +53,10 @@ export type RosterSurfaceProps = {
     // ── Day range ────────────────────────────────────────────────────────────
     onOpenChild?: Parameters<typeof DailyRoster>[0]["onOpenChild"];
     onOpenStaff?: Parameters<typeof DailyRoster>[0]["onOpenStaff"];
+    /** Hand a room off to Attendance — expectation into actuality, context intact. */
+    onOpenAttendance?: Parameters<typeof DailyRoster>[0]["onOpenAttendance"];
+    /** Route a subject to the authoritative assignment surface. */
+    onManageAssignment?: Parameters<typeof DailyRoster>[0]["onManageAssignment"];
 };
 
 function RangeControl({
@@ -108,6 +112,8 @@ export default function RosterSurface({
     lastWeekLoadMs,
     onOpenChild,
     onOpenStaff,
+    onOpenAttendance,
+    onManageAssignment,
 }: RosterSurfaceProps) {
     /**
      * The day lives HERE, not inside the day view, so a Day → Week → Day trip comes
@@ -180,6 +186,8 @@ export default function RosterSurface({
             serverToday={serverToday}
             onServerToday={setServerToday}
             rangeControl={control()}
+            onOpenAttendance={onOpenAttendance}
+            onManageAssignment={onManageAssignment}
             onOpenChild={onOpenChild}
             onOpenStaff={onOpenStaff}
         />

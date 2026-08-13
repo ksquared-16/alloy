@@ -207,6 +207,14 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const [studioView, setStudioView] = useState<SchedulingStudioView>("types");
     /** Day is where an operator starts: "what does today look like". */
     const [rosterRange, setRosterRange] = useState<RosterRange>("day");
+    /** Context carried by a Roster → Attendance handoff. */
+    const [attendanceRoomId, setAttendanceRoomId] = useState<string | null>(null);
+    /** Context carried by a Roster → Assignments handoff, matched on identity. */
+    const [assignmentFocus, setAssignmentFocus] = useState<{
+        personId?: string | null;
+        customerMemberId?: string | null;
+        enrollmentAgreementId?: string | null;
+    } | null>(null);
     const [focusRoomId, setFocusRoomId] = useState<string | undefined>(undefined);
     const [rosterFilter, setRosterFilter] = useState<RosterFilterKind | null>(null);
 
@@ -918,6 +926,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         subjects={assignmentRoster ?? []}
                         loading={loadingAssignmentRoster}
                         siteName={siteName}
+                        focusSubject={assignmentFocus}
                         initialBulkMode={rosterBulkIntent}
                         bulk={{
                             onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
@@ -1017,6 +1026,27 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         onSelectWeek={onSelectWeek}
                         weekChangePending={weekChangePending}
                         lastWeekLoadMs={lastWeekLoadMs}
+                        onOpenAttendance={(roomLocationId) => {
+                            // Expectation → actuality, same site, same room. Roster
+                            // only offers this on today because Attendance has no
+                            // date control at all.
+                            setAttendanceRoomId(roomLocationId);
+                            setWorkView("attendance");
+                        }}
+                        onManageAssignment={(subject) => {
+                            // Roster never rewrites a schedule. It routes to the
+                            // assignment ledger and lets the registered commands own
+                            // the change.
+                            setAssignmentFocus(
+                                subject.subjectType === "staff"
+                                    ? { personId: subject.personId }
+                                    : {
+                                          customerMemberId: subject.customerMemberId,
+                                          enrollmentAgreementId: subject.enrollmentAgreementId,
+                                      }
+                            );
+                            setWorkView("assignments");
+                        }}
                         onOpenChild={(child) => {
                             // Canonical record only — a child opens as its person
                             // identity. Roster is a selection surface, not a record one.
@@ -1040,6 +1070,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     <AttendanceWorkspace
                         siteLocationId={siteId}
                         siteName={siteName}
+                        initialRoomId={attendanceRoomId}
                         onOpenChild={(child) => {
                             // Canonical Child record — never an attendance-specific surface.
                             if (!child.personId) return false;

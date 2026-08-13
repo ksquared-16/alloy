@@ -98,6 +98,16 @@ export type DailyRosterProps = {
     onServerToday: (ymd: string) => void;
     /** Roster's Day/Week control, rendered into this surface's toolbar by its host. */
     rangeControl?: React.ReactNode;
+    /**
+     * Hand this room off to Attendance — expectation to actuality, same site, same
+     * room. Attendance is a TODAY-ONLY surface (it has no date control at all), so
+     * the affordance only appears when the roster is on the org's today. Opening
+     * "today" from a roster showing next Tuesday would silently change the day the
+     * operator believes they are looking at.
+     */
+    onOpenAttendance?: (roomLocationId: string) => void;
+    /** Take this subject to the authoritative assignment surface. Roster never writes. */
+    onManageAssignment?: (subject: RosterChild | RosterStaff) => void;
     onOpenChild?: (subject: RosterChild) => void;
     onOpenStaff?: (subject: RosterStaff) => void;
 };
@@ -150,11 +160,14 @@ function SubjectChip({
     label,
     meta,
     onClick,
+    onManage,
     testAttr,
 }: {
     label: string;
     meta: string | null;
     onClick?: () => void;
+    /** Route to the authoritative assignment surface. Roster never rewrites a schedule. */
+    onManage?: () => void;
     testAttr: Record<string, string>;
 }) {
     const inner = (
@@ -163,22 +176,35 @@ function SubjectChip({
             {meta ? <span className="truncate text-[11px] text-alloy-midnight/50">{meta}</span> : null}
         </>
     );
-    if (!onClick) {
-        return (
-            <div className="flex min-w-0 flex-col rounded border border-alloy-stone/20 px-2 py-1.5" {...testAttr}>
-                {inner}
-            </div>
-        );
-    }
-    return (
+    const body = !onClick ? (
+        <div className="flex min-w-0 flex-col px-2 py-1.5">{inner}</div>
+    ) : (
         <button
             type="button"
             onClick={onClick}
-            className="flex min-w-0 flex-col rounded border border-alloy-stone/20 px-2 py-1.5 text-left hover:border-alloy-stone/40 hover:bg-alloy-stone/[0.06]"
-            {...testAttr}
+            className="flex min-w-0 flex-1 flex-col px-2 py-1.5 text-left hover:bg-alloy-stone/[0.06]"
         >
             {inner}
         </button>
+    );
+    return (
+        <div
+            className="group flex min-w-0 items-center gap-1 rounded border border-alloy-stone/20 hover:border-alloy-stone/40"
+            {...testAttr}
+        >
+            {body}
+            {onManage ? (
+                <button
+                    type="button"
+                    onClick={onManage}
+                    className="shrink-0 px-1.5 py-1 text-[10.5px] font-medium text-alloy-midnight/35 hover:text-[#00A283] group-hover:text-alloy-midnight/60"
+                    title="Manage this assignment"
+                    data-roster-manage-assignment="true"
+                >
+                    Manage →
+                </button>
+            ) : null}
+        </div>
     );
 }
 
@@ -190,6 +216,8 @@ export default function DailyRoster({
     serverToday,
     onServerToday,
     rangeControl,
+    onOpenAttendance,
+    onManageAssignment,
     onOpenChild,
     onOpenStaff,
 }: DailyRosterProps) {
@@ -252,6 +280,9 @@ export default function DailyRoster({
 
     /** A room with anyone expected or scheduled in it is operating today. */
     const isOperating = (c: RosterCell) => c.expectedChildCount > 0 || c.scheduledStaffCount > 0;
+
+    /** Attendance can only ever show the org's service date — see `onOpenAttendance`. */
+    const isToday = Boolean(date && serverToday && date === serverToday);
 
     /** Where the problems are — counts the read model computes and nothing rendered. */
     const attention = useMemo(() => {
@@ -439,14 +470,41 @@ export default function DailyRoster({
                                     </div>
                                 </dl>
 
-                                <button
-                                    type="button"
-                                    className="mt-3 text-[11.5px] font-medium text-[#00A283] hover:underline"
-                                    onClick={() => setOpenRoom(isOpen ? null : cell.roomLocationId)}
-                                    data-roster-room-toggle={cell.roomLocationId}
-                                >
-                                    {isOpen ? "Hide who is expected" : "Who is expected"}
-                                </button>
+                                <div className="mt-3 flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        className="text-[11.5px] font-medium text-[#00A283] hover:underline"
+                                        onClick={() => setOpenRoom(isOpen ? null : cell.roomLocationId)}
+                                        data-roster-room-toggle={cell.roomLocationId}
+                                    >
+                                        {isOpen ? "Hide who is expected" : "Who is expected"}
+                                    </button>
+                                    {/* Expectation → actuality. Only on today, because
+                                        Attendance has no date control: it can only ever
+                                        show the org's service date, and opening it from a
+                                        future roster would change the day underneath the
+                                        operator without saying so. */}
+                                    {onOpenAttendance ? (
+                                        isToday ? (
+                                            <button
+                                                type="button"
+                                                className="text-[11.5px] font-medium text-[#00A283] hover:underline"
+                                                onClick={() => onOpenAttendance(cell.roomLocationId)}
+                                                data-roster-open-attendance={cell.roomLocationId}
+                                            >
+                                                Open Attendance →
+                                            </button>
+                                        ) : (
+                                            <span
+                                                className="text-[11.5px] text-alloy-midnight/40"
+                                                title="Attendance records what is happening now, so it only shows today."
+                                                data-roster-attendance-unavailable={cell.roomLocationId}
+                                            >
+                                                Attendance is today only
+                                            </span>
+                                        )
+                                    ) : null}
+                                </div>
 
                                 {isOpen ? (
                                     <div className="mt-3 space-y-3 border-t border-alloy-stone/15 pt-3">
@@ -468,6 +526,11 @@ export default function DailyRoster({
                                                             meta={c.timeLabel}
                                                             onClick={
                                                                 onOpenChild ? () => onOpenChild(c) : undefined
+                                                            }
+                                                            onManage={
+                                                                onManageAssignment
+                                                                    ? () => onManageAssignment(c)
+                                                                    : undefined
                                                             }
                                                             testAttr={{
                                                                 "data-roster-child": c.customerMemberId,
@@ -501,6 +564,11 @@ export default function DailyRoster({
                                                             onClick={
                                                                 onOpenStaff ? () => onOpenStaff(s) : undefined
                                                             }
+                                                            onManage={
+                                                                onManageAssignment
+                                                                    ? () => onManageAssignment(s)
+                                                                    : undefined
+                                                            }
                                                             testAttr={{ "data-roster-staff": s.personId }}
                                                         />
                                                     ))}
@@ -526,6 +594,9 @@ export default function DailyRoster({
                                     label={s.displayName}
                                     meta={s.positionLabel}
                                     onClick={onOpenStaff ? () => onOpenStaff(s) : undefined}
+                                    onManage={
+                                        onManageAssignment ? () => onManageAssignment(s) : undefined
+                                    }
                                     testAttr={{ "data-roster-staff": s.personId }}
                                 />
                             ))}
