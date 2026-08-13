@@ -836,7 +836,9 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 onSaved={refreshAfterMutation}
             />
             <WorkspaceSurface
-                tone={mode === "work" && workView === "roster" ? "canvas" : "stone"}
+                /* The assignment index keeps the canvas tone it had as a sub-view
+                   of the old Roster tab; Overview and Studio stay stone. */
+                tone={mode === "work" && workView === "assignments" ? "canvas" : "stone"}
                 scroll
                 padded
                 data-scheduling-section={mode === "work" ? workView : studioView}
