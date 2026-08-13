@@ -11,7 +11,6 @@ import {
     resolveFocusPanelLocationChip,
     resolveFocusPanelProcessLabel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
-import { FOCUS_PANEL_HEADER_BOS_LABEL } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
 import { buildSubjectManageMenuFromResolvedActions } from "@/lib/admin/recordManage/buildSubjectManageMenuFromResolvedActions";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -114,8 +113,7 @@ export default function OpportunityFocusPanelHeader({
             canMutate={manageCanMutate}
             layout="modal-actions"
             proofLayoutActions
-            bosActionVariant="default"
-            bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}
+            hideBos
             actionPreflightBlocked={actionPreflightBlocked}
             onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
             registryActionFeedback={registryActionFeedback}

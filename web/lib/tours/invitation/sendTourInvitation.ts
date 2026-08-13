@@ -23,7 +23,7 @@ import { formatLocationAddress } from "@/lib/locations/locationWorkspaceModel";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import { orchestrateTourInvitationComms } from "@/lib/tours/comms/tourCommsOrchestrator";
-import { resolveTourCommsConfig } from "@/lib/tours/comms/resolveTourCommsConfig";
+import { resolveTourCommsConfigWithLibrary } from "@/lib/tours/comms/resolveTourCommsConfigWithLibrary";
 import {
     resolveTourCommsParentRecipient,
     type TourCommsParentRecipient,
@@ -425,17 +425,25 @@ export async function sendTourInvitation(args: {
                 orgId,
                 invitationId: minted.invitationId,
                 longUrl,
+                baseUrl: args.baseUrl,
             });
         }
     }
 
-    const invitationLong = viewToken ? actionUrl(args.baseUrl, viewToken) : content.fallbackActionUrl;
+    // Primary CTA must be bookable. `view_tour_slots` only reads availability;
+    // `select_tour_slot` is the commitment credential Confirm Tour posts to /book.
+    // Prefer select so the short /a/ link in the message body can complete booking.
+    const invitationToken = selectToken ?? viewToken;
+    const invitationLong = invitationToken
+        ? actionUrl(args.baseUrl, invitationToken)
+        : content.fallbackActionUrl;
     const declineLong = declineToken ? actionUrl(args.baseUrl, declineToken) : "";
     const invitationActionUrl = await aliasTourBookingUrl({
         supabase: args.supabase,
         orgId,
         invitationId: minted.invitationId,
         longUrl: invitationLong,
+        baseUrl: args.baseUrl,
     });
     const declineUrl = declineLong
         ? await aliasTourBookingUrl({
@@ -443,6 +451,7 @@ export async function sendTourInvitation(args: {
               orgId,
               invitationId: minted.invitationId,
               longUrl: declineLong,
+              baseUrl: args.baseUrl,
           })
         : "";
 
@@ -459,7 +468,11 @@ export async function sendTourInvitation(args: {
         declineUrl,
     };
 
-    const { config } = await resolveTourCommsConfig(args.supabase, { orgId, locationId });
+    const { config } = await resolveTourCommsConfigWithLibrary(args.supabase, {
+        orgId,
+        locationId,
+        actorUserId: args.actorUserId ?? null,
+    });
 
     // Prepare-only: mint + render editable drafts. Do not enqueue or mark invitation sent.
     if (args.mode === "prepare") {
@@ -530,6 +543,9 @@ export async function sendTourInvitation(args: {
             slot_count: options.length,
             channel: sentChannels.join(","),
             idempotent_replay: minted.idempotentReplay,
+            ...(recipient.displayName?.trim()
+                ? { recipient_display_name: recipient.displayName.trim() }
+                : {}),
         },
     });
 

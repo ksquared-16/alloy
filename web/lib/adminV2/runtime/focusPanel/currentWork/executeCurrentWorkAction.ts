@@ -18,6 +18,7 @@ export type CurrentWorkActionExecutionPlan =
     | { kind: "communications_composer" }
     | { kind: "header_delegate"; action: CurrentWorkActionVM }
     | { kind: "process_transition"; action: CurrentWorkActionVM; nextStatusKey: string }
+    | { kind: "cancel_tour"; bookingId: string }
     | { kind: "blocked"; reason: string }
     | { kind: "unsupported"; reason: string; action: CurrentWorkActionVM };
 
@@ -41,6 +42,18 @@ export function planCurrentWorkActionExecution(
 
     if (action.handlerKey === "expand_work") {
         return { kind: "open_workspace" };
+    }
+
+    const key = (action.handlerKey ?? action.key).trim();
+    if (key === "cancel_tour") {
+        const bookingId = (action.actionRef ?? "").trim();
+        if (!bookingId) {
+            return {
+                kind: "blocked",
+                reason: "No active tour booking is available to cancel.",
+            };
+        }
+        return { kind: "cancel_tour", bookingId };
     }
 
     const surface = resolveCurrentWorkActionSurface(action);

@@ -1,0 +1,11 @@
+[
+  {
+    "step": "alias-nav",
+    "status": 200,
+    "finalUrl": "http://127.0.0.1:3015/tour-booking/zQ-AO5-dkQWtaOzPIfQ9DxIzhtBjG_MVXpJ-2JZ2A04"
+  },
+  {
+    "step": "no-confirm-button",
+    "body": "Loading…"
+  }
+]

@@ -379,6 +379,20 @@ export default function CurrentWorkCard({
                 setHandoffNotice(null);
                 invokeHeaderDelegate(plan.action);
                 return;
+            case "cancel_tour": {
+                setHandoffNotice(null);
+                if (!mutation?.tour?.cancelTour) {
+                    setHandoffNotice("Tour cancellation is not available right now.");
+                    return;
+                }
+                void (async () => {
+                    const result = await mutation.tour.cancelTour(plan.bookingId);
+                    if (!result.ok) {
+                        setHandoffNotice(result.error ?? "Tour could not be cancelled.");
+                    }
+                })();
+                return;
+            }
             default:
                 setHandoffNotice("This action is not available from What's Next.");
         }

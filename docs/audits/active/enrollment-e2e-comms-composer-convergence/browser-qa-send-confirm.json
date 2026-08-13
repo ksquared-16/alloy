@@ -1,0 +1,29 @@
+{
+  "slot": 5,
+  "port": 3015,
+  "capturedAt": "2026-08-12T20:20:00Z",
+  "genericMessage": {
+    "result": "PASS",
+    "centeredPreflight": true,
+    "previewMatchedDraft": true,
+    "subject": "Cert confirm subject",
+    "body": "Cert confirm message for Kelly.",
+    "successAck": "Message sent · Email sent to Kelly Kurzman",
+    "doneReturnedToFocusPanel": true,
+    "noHandoffSummaryCard": true,
+    "composerClosed": true,
+    "screenshots": [
+      "confirm-B-centered-preflight.png",
+      "confirm-C-success-ack.png",
+      "confirm-D-back-to-focus.png"
+    ]
+  },
+  "tourInvitation": {
+    "result": "PARTIAL",
+    "note": "Tour menu elevation flaky under queue prep; Path A seed previously PASS; same FamilySendConfirmationDialog seam as Message"
+  },
+  "reply": {
+    "result": "UNIT PASS",
+    "note": "familyWorkspaceWorkspaceInbox.parity covers Reply → Ready to send → Confirm → Done → collapse"
+  }
+}

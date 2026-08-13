@@ -23,6 +23,8 @@ type Props = {
 const TOUR_MENU_LABELS: Record<string, string> = {
     send_tour_invitation: "Send Tour Invitation",
     schedule_tour: "Schedule Tour",
+    reschedule_tour: "Reschedule Tour",
+    cancel_tour: "Cancel Tour",
 };
 
 function tourMenuLabel(action: CurrentWorkActionVM): string {

@@ -1,0 +1,33 @@
+[
+  {
+    "shot": "01-waitlist-focus.png"
+  },
+  {
+    "availableButtons": [
+      "Tours0",
+      "Work",
+      "Activity",
+      "Message",
+      "Send form",
+      "Tour ▾",
+      "View all activity"
+    ]
+  },
+  {
+    "shot": "A-contact-family-new-message.png"
+  },
+  {
+    "label": "A-contact-family",
+    "workSurface": "communications_composer",
+    "workComposeIntent": "new_message",
+    "entryContext": null,
+    "newMessageHeaders": 0,
+    "topicVisible": false,
+    "sendButtons": [],
+    "hasSubjectInput": false,
+    "subjectValue": null,
+    "bodyPreview": "",
+    "hasBookingLink": false,
+    "whatsNextText": ""
+  }
+]

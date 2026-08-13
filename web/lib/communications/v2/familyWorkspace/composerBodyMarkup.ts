@@ -5,6 +5,7 @@
  */
 
 import { containsUnsafeMarkup, toPlainText } from "@/lib/communications/render/renderOutboundMessage";
+import { polishTourCommsEmailHtml } from "@/lib/tours/comms/tourCommsTemplates";
 
 const BOLD = /\*\*([^*]+)\*\*/g;
 const UNDERLINE = /__([^_]+)__/g;
@@ -13,24 +14,28 @@ const ITALIC = /(?<![\w*])_([^_]+)_(?![\w*])/g;
 /** Convert composer markers (or safe HTML) to email HTML. Rejects unsafe markup. */
 export function composerMarkupToEmailHtml(raw: string): { ok: true; html: string } | { ok: false; reason: string } {
     const trimmed = raw.trim();
-    if (/<(strong|em|u|br|p|div|span)\b/i.test(trimmed)) {
+    let html: string;
+    if (/<(strong|em|u|br|p|div|span|a)\b/i.test(trimmed)) {
         if (containsUnsafeMarkup(trimmed)) {
             return { ok: false, reason: "unsafe_markup" };
         }
-        return { ok: true, html: trimmed };
+        html = trimmed;
+    } else {
+        const escaped = raw
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        const withBreaks = escaped.replace(/\r\n|\r|\n/g, "<br>");
+        html = withBreaks
+            .replace(BOLD, "<strong>$1</strong>")
+            .replace(UNDERLINE, "<u>$1</u>")
+            .replace(ITALIC, "<em>$1</em>");
+        if (containsUnsafeMarkup(html)) {
+            return { ok: false, reason: "unsafe_markup" };
+        }
     }
-    const escaped = raw
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-    const withBreaks = escaped.replace(/\r\n|\r|\n/g, "<br>");
-    const html = withBreaks
-        .replace(BOLD, "<strong>$1</strong>")
-        .replace(UNDERLINE, "<u>$1</u>")
-        .replace(ITALIC, "<em>$1</em>");
-    if (containsUnsafeMarkup(html)) {
-        return { ok: false, reason: "unsafe_markup" };
-    }
+    // Parent-facing emails: action URLs become friendly anchors (href stays full/secure).
+    html = polishTourCommsEmailHtml(html);
     return { ok: true, html };
 }
 

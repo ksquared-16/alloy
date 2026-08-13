@@ -85,6 +85,22 @@ describe("every state is intentional and terminal where it should be", () => {
         expect(v.showsOptions).toBe(true);
         expect(v.actions.filter((a) => a.tone === "primary")).toHaveLength(1);
         expect(v.actions.map((a) => a.intent)).toEqual(["book", "decline"]);
+        expect(v.actions[0].label).toBe("Confirm Tour");
+    });
+
+    it("a view-only credential cannot confirm without a sibling select action", () => {
+        const v = buildTourParentView({ ...base, invitationStatus: "active", availableActions: ["view_tour_slots"] });
+        expect(v.showsOptions).toBe(true);
+        expect(v.actions.map((a) => a.intent)).not.toContain("book");
+    });
+
+    it("view plus select surfaces Confirm Tour for commitment", () => {
+        const v = buildTourParentView({
+            ...base,
+            invitationStatus: "active",
+            availableActions: ["view_tour_slots", "select_tour_slot"],
+        });
+        expect(v.actions.some((a) => a.intent === "book" && a.label === "Confirm Tour")).toBe(true);
     });
 
     it("a declined invitation offers nothing further", () => {
@@ -148,7 +164,8 @@ describe("a booked tour shows what the parent needs", () => {
         expect(v.state).toBe("booked_confirmed");
         expect(v.actions.map((a) => a.intent)).not.toContain("confirm");
         expect(v.actions.map((a) => a.intent)).toEqual(["reschedule", "cancel"]);
-        expect(v.notice).toBeNull();
+        expect(v.notice).toBe("We look forward to seeing you.");
+        expect(v.headline).toBe("Tour confirmed");
     });
 
     it("only offers what the held credential actually permits", () => {

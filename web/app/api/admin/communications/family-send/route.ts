@@ -13,6 +13,8 @@ import {
     composerMarkupToEmailHtml,
     composerMarkupToPlainText,
 } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
+import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
+import { deliverQueuedEmailHtml } from "@/lib/communications/deliverQueuedEmailHtml";
 
 /**
  * POST /api/admin/communications/family-send — UI-5G.
@@ -202,6 +204,21 @@ export async function POST(req: Request) {
                     error: e instanceof Error ? e.message : String(e),
                 };
             }
+        }
+
+        // Prefer snapshot HTML delivery when Resend is available in this process.
+        // Falls back to backend queue wake (rendered_snapshot path) otherwise.
+        if (confirm && result.mode === "sent" && result.summary.sent > 0 && channel === "email") {
+            for (const row of result.results) {
+                const mid = row.communication_message_id;
+                if (!mid || row.status !== "sent") continue;
+                const delivered = await deliverQueuedEmailHtml({ supabase, messageId: mid });
+                if (!delivered.ok) {
+                    void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
+                }
+            }
+        } else if (confirm && result.mode === "sent" && result.summary.sent > 0) {
+            void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
         }
 
         return NextResponse.json({

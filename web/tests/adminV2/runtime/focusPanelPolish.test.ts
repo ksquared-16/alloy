@@ -15,7 +15,6 @@ import {
     resolveQueuePreviewSeedIdentitySummaryLine,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import {
-    FOCUS_PANEL_HEADER_BOS_LABEL,
     FOCUS_PANEL_SUPPRESS_HEADER_STAGE_CTA,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
 
@@ -176,18 +175,20 @@ describe("Focus Panel header composition guards", () => {
         expect(opportunity).not.toContain("mission={");
     });
 
-    it("BOS header label is BOS with default variant and Manage remains present", () => {
-        expect(FOCUS_PANEL_HEADER_BOS_LABEL).toBe("BOS");
-
+    it("Focus Panel header omits BOS (floating chat owns it) and keeps Manage", () => {
         const header = readSrc("components/admin/focusPanel/OpportunityFocusPanelHeader.tsx");
-        expect(header).toContain("FOCUS_PANEL_HEADER_BOS_LABEL");
-        expect(header).toContain('bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}');
-        expect(header).toContain('bosActionVariant="default"');
+        expect(header).toContain("hideBos");
+        expect(header).not.toContain("FOCUS_PANEL_HEADER_BOS_LABEL");
+        expect(header).not.toContain("bosAssistLabel=");
         expect(header).toContain("onSubjectManageActionSelect");
         expect(header).toContain("buildSubjectManageMenuFromResolvedActions");
         expect(header).toContain("displayVm.actions.header_menu");
         expect(header).not.toContain("buildRecordManageMenuForEntity");
         expect(header).not.toContain("Duplicate Lead");
+
+        const controls = readSrc("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
+        expect(controls).toContain("hideBos");
+        expect(controls).toContain("BosDrawerAssistCta");
 
         const bos = readSrc("components/admin/drawer/BosDrawerAssistCta.tsx");
         expect(bos).toContain("BosMark");

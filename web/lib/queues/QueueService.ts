@@ -50,7 +50,11 @@ import {
     assertLifecycleStageOpportunityQueryHasStatusFilters,
     LifecycleStageQueueFiltersEmptyError,
 } from "@/lib/lifecycle/lifecycleStageQueueFilters";
-import { resolveWorkUnitRowListUi } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import {
+    resolveWorkUnitRowListUi,
+    isLifecycleStageWorkUnitKey,
+    stageKeyFromLifecycleWorkUnitMetadata,
+} from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import {
     fetchEffectiveStatusDefinitions,
     fetchEffectiveStatusDefinitionsTagged,
@@ -60,6 +64,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
+import { tourLaneOpsFromActiveBookingOpportunityIds } from "@/lib/queues/tourLaneBookingMembership";
 import { formatOpportunityTourQueueDisplays } from "@/lib/tours/queue/opportunityQueueTourPreview";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
@@ -572,6 +577,91 @@ function buildOpportunityPlan(
     }
 
     return { ops, sort, calendar_meta: useCalendarMeta ? resolved.calendar_meta : undefined };
+}
+
+/**
+ * Lifecycle stage work units (and case-grain builder membership) select by persisted
+ * `opportunities.stage_key` after enrollment status collapse. Legacy lane status filters
+ * (`open` / `tour_scheduled`) must not empty the lane when the family is already on the stage.
+ *
+ * Exception — Tour lane: membership is active `tour_bookings` (operational fact), so
+ * Waitlist subjects with a booked Tour overlap Tours without leaving Waitlist.
+ */
+function applyLifecycleStageOpportunityOps(
+    ops: OpportunityQueryPlanOp[],
+    params: {
+        membership: OpportunityQueueLaneRouting["builderMembership"];
+        workUnitMetadata: unknown | null;
+        workUnitKey: string | null;
+    },
+): OpportunityQueryPlanOp[] {
+    let stageKey = "";
+    if (params.membership?.subject_type === "case") {
+        stageKey = String(params.membership.stage_key ?? "").trim();
+    }
+    if (!stageKey) {
+        stageKey = stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata)?.trim() ?? "";
+    }
+    if (!stageKey && isLifecycleStageWorkUnitKey(params.workUnitKey)) {
+        stageKey = String(params.workUnitKey).slice("lifecycle_wu_".length).trim();
+    }
+    const isLifecycleWu =
+        isLifecycleStageWorkUnitKey(params.workUnitKey)
+        || Boolean(stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata));
+    if (!stageKey || !isLifecycleWu) return ops;
+
+    const withoutStatus = ops.filter((op) => !(op.kind === "in" && op.column === "status_key"));
+    if (withoutStatus.some((op) => op.kind === "eq" && op.column === "stage_key")) {
+        return withoutStatus;
+    }
+    return [{ kind: "eq", column: "stage_key", value: stageKey }, ...withoutStatus];
+}
+
+function isTourLifecycleLane(params: {
+    membership: OpportunityQueueLaneRouting["builderMembership"];
+    workUnitMetadata: unknown | null;
+    workUnitKey: string | null;
+}): boolean {
+    const key = String(params.workUnitKey ?? "").trim().toLowerCase();
+    if (
+        key === "lifecycle_tour"
+        || key === "lifecycle_wu_tour"
+        || key === "tours"
+    ) {
+        return true;
+    }
+    if (params.membership?.subject_type === "case" && String(params.membership.stage_key ?? "").trim() === "tour") {
+        return true;
+    }
+    return stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata) === "tour";
+}
+
+/**
+ * Tours Work View membership = opportunities with an active non-terminal tour booking.
+ * Replaces stage_key=tour so Waitlist + Tours can overlap.
+ */
+async function expandTourLaneOpsWithActiveBookings(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    ops: OpportunityQueryPlanOp[];
+}): Promise<OpportunityQueryPlanOp[]> {
+    const { data, error } = await params.supabase
+        .from("tour_bookings")
+        .select("opportunity_id")
+        .eq("org_id", params.orgId)
+        .in("status_key", [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS]);
+    if (error) {
+        console.warn("[QueueService] tour lane booking membership lookup failed", error.message);
+        return params.ops;
+    }
+    const ids = [
+        ...new Set(
+            (data ?? [])
+                .map((r) => String((r as { opportunity_id?: string }).opportunity_id ?? "").trim())
+                .filter(Boolean),
+        ),
+    ];
+    return tourLaneOpsFromActiveBookingOpportunityIds(params.ops, ids) as OpportunityQueryPlanOp[];
 }
 
 function jobFilterToOps(f: QueueFilter, dayBounds: OrgLocalDayUtcBounds): JobQueryPlanOp[] {
@@ -3235,7 +3325,24 @@ export async function getWorkUnitQueueSummaries(params: {
         let calendar_meta: QueueOperationalCalendarMeta | undefined;
         try {
             const plan = buildOpportunityPlan(q, refUtc, operationalDay);
-            ops = plan.ops;
+            ops = applyLifecycleStageOpportunityOps(plan.ops, {
+                membership: laneRouting.builderMembership,
+                workUnitMetadata,
+                workUnitKey,
+            });
+            if (
+                isTourLifecycleLane({
+                    membership: laneRouting.builderMembership,
+                    workUnitMetadata,
+                    workUnitKey,
+                })
+            ) {
+                ops = await expandTourLaneOpsWithActiveBookings({
+                    supabase,
+                    orgId: params.orgId,
+                    ops,
+                });
+            }
             sort = plan.sort;
             calendar_meta = plan.calendar_meta;
             guardLifecycleStageOpportunityQueryFilters({
@@ -4366,7 +4473,25 @@ export async function getWorkUnitQueueItems(params: {
         }
     }
 
-    const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    const { ops: planOps, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    let ops = applyLifecycleStageOpportunityOps(planOps, {
+        membership: laneRouting.builderMembership,
+        workUnitMetadata,
+        workUnitKey,
+    });
+    if (
+        isTourLifecycleLane({
+            membership: laneRouting.builderMembership,
+            workUnitMetadata,
+            workUnitKey,
+        })
+    ) {
+        ops = await expandTourLaneOpsWithActiveBookings({
+            supabase,
+            orgId: params.orgId,
+            ops,
+        });
+    }
     guardLifecycleStageOpportunityQueryFilters({
         workUnitKey,
         opportunityScopeMode: opportunityScopeBundle?.scope.mode,

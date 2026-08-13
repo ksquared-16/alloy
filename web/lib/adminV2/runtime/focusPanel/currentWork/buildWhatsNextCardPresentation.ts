@@ -127,14 +127,20 @@ export function buildWhatsNextContextFacts(args: {
 
     const tour = signals?.tour;
     if (tour?.scheduled && tour.startAt) {
+        // Labeled Tour fact — never unlabeled under Location / Primary contact.
+        // Omit raw booking status (`confirmed`): an active scheduled Tour already conveys that.
         const startLabel = formatTourStartLabel(tour.startAt, args.timeZone) || tour.startAt;
-        facts.push({ key: "scheduled_at", label: null, value: startLabel });
-        if (tour.statusLabel?.trim()) {
-            // Operator-facing booking status only — never raw status keys.
-            const status = tour.statusLabel.trim();
-            if (!/[_]/.test(status)) {
-                facts.push({ key: "booking_status", label: null, value: status });
-            }
+        facts.push({ key: "scheduled_tour", label: "Scheduled Tour", value: startLabel });
+        // Only surface parent confirmation when the parent has affirmed — not "Awaiting response".
+        if (
+            tour.parentConfirmationLabel?.trim()
+            && !/^awaiting response$/i.test(tour.parentConfirmationLabel.trim())
+        ) {
+            facts.push({
+                key: "tour_parent_confirmation",
+                label: "Parent confirmation",
+                value: tour.parentConfirmationLabel.trim(),
+            });
         }
     }
 
@@ -154,7 +160,7 @@ export function buildWhatsNextContextFacts(args: {
         });
     }
 
-    return facts.slice(0, 4);
+    return facts.slice(0, 6);
 }
 
 /**
@@ -271,8 +277,9 @@ export function buildWhatsNextCardPresentation(args: {
         primaryWorkItem: surface.primaryWorkItem,
     });
 
+    // Compact preview: latest 3 operator facts; remainder stays behind View all activity.
     const recentActivity: WhatsNextActivityItem[] = (args.activityItems ?? [])
-        .slice(0, 2)
+        .slice(0, 3)
         .map((item, index) => ({
             key: `${item.label}-${item.occurredAt ?? index}`,
             label: item.label,

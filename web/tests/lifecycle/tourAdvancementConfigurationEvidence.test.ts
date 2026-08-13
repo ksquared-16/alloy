@@ -96,8 +96,8 @@ function recordingSupabase(metadata: Record<string, unknown>) {
     return { supabase, writes, reads };
 }
 
-describe("Phase 3 evidence — tour_booking scheduled is configured on Lead", () => {
-    it("Lead owns domain_tour_booking_scheduled_to_tour; tour_scheduled still owns canceled", () => {
+describe("Phase 3 evidence — tour_booking scheduled remains on Lead (overlap with Tours Work View)", () => {
+    it("Lead owns domain_tour_booking_scheduled_remain; tour_scheduled still owns canceled", () => {
         const found: Array<{ stageKey: string; ruleKey: string; signal: string }> = [];
         for (const { stageKey, plan } of defaultPlans()) {
             for (const rule of plan.outcome_rules ?? []) {
@@ -112,7 +112,7 @@ describe("Phase 3 evidence — tour_booking scheduled is configured on Lead", ()
             expect.arrayContaining([
                 {
                     stageKey: "lead",
-                    ruleKey: "domain_tour_booking_scheduled_to_tour",
+                    ruleKey: "domain_tour_booking_scheduled_remain",
                     signal: "scheduled",
                 },
                 {
@@ -125,12 +125,13 @@ describe("Phase 3 evidence — tour_booking scheduled is configured on Lead", ()
         expect(found.some((entry) => entry.signal === "scheduled")).toBe(true);
     });
 
-    it("Lead plan matches {tour_booking, scheduled} → lead_to_tour", () => {
+    it("Lead plan matches {tour_booking, scheduled} → no_movement (Tours lane is booking-based)", () => {
         const lead = defaultStageOperatingPlanForEnrollmentStage("lead")!;
         const matched = domainSignalRulesForSignal(lead, "tour_booking", "scheduled");
         expect(matched).toHaveLength(1);
-        expect(matched[0]?.rule_key).toBe("domain_tour_booking_scheduled_to_tour");
-        expect(matched[0]?.targets.some((t) => t.kind === "move_to_stage")).toBe(true);
+        expect(matched[0]?.rule_key).toBe("domain_tour_booking_scheduled_remain");
+        expect(matched[0]?.targets.every((t) => t.kind === "no_movement")).toBe(true);
+        expect(matched[0]?.targets.some((t) => t.kind === "move_to_stage")).toBe(false);
     });
 
     it("the SAME machinery still advances on `canceled`", async () => {

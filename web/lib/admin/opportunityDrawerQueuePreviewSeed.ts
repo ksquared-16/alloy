@@ -6,6 +6,11 @@ export type OpportunityDrawerQueuePreviewSeed = {
     title: string;
     subtitle?: string | null;
     statusLabel?: string | null;
+    /**
+     * Family opportunity id for Settlement when Attention is a child/candidate row.
+     * From queue `drawer_open.entity_id` — never the process_instance Attention id.
+     */
+    familyOpportunityId?: string | null;
     /** Authoritative status key echo for chip tone — display-only, from queue row context. */
     statusKey?: string | null;
     stageLabel?: string | null;

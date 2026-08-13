@@ -46,7 +46,7 @@ describe("no destructive credential is ever delivered in a message", () => {
 
     it("offers nothing once the tour is already cancelled", () => {
         const m = buildTourParentActionModel({ actions: postBooking, baseUrl: BASE, bookingStatusKey: "cancelled" });
-        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null });
+        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null });
     });
 });
 

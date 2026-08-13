@@ -18,21 +18,25 @@ import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
  * tour system adds later reads correctly without an edit here.
  */
 
-/** `"Mon, Jun 30, 10:00 AM"` in the viewer's zone — null when the value is not a usable instant. */
+/** `"Mon, Jun 30 · 10:00 AM"` in the viewer's zone — null when the value is not a usable instant. */
 export function formatTourStartLabel(iso: string | null | undefined, timeZone?: string | null): string | null {
     const raw = (iso ?? "").trim();
     if (!raw) return null;
     const at = new Date(raw);
     if (Number.isNaN(at.getTime())) return null;
     try {
-        return new Intl.DateTimeFormat("en-US", {
+        const day = new Intl.DateTimeFormat("en-US", {
             weekday: "short",
             month: "short",
             day: "numeric",
+            ...(timeZone ? { timeZone } : {}),
+        }).format(at);
+        const time = new Intl.DateTimeFormat("en-US", {
             hour: "numeric",
             minute: "2-digit",
             ...(timeZone ? { timeZone } : {}),
         }).format(at);
+        return `${day} · ${time}`;
     } catch {
         // An invalid configured zone must not blank the operator's answer line.
         return null;

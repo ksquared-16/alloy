@@ -1,0 +1,13 @@
+[
+  {
+    "B": {
+      "host": false,
+      "loading": false,
+      "newMsg": false,
+      "text": ""
+    }
+  },
+  {
+    "error": "locator.click: Timeout 12000ms exceeded.\nCall log:\n  - waiting for locator('.alloy-os-currentwork button').filter({ hasText: /Tour/ }).first()\n"
+  }
+]

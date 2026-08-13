@@ -1,0 +1,165 @@
+[
+  {
+    "t": "2026-08-13T14:09:15.459Z",
+    "step": "health",
+    "status": 200,
+    "marker": "CERT_BROWSER_1786630155260"
+  },
+  {
+    "t": "2026-08-13T14:09:34.566Z",
+    "step": "A-templates-route-probe",
+    "route": "http://127.0.0.1:3015/adminV2/communications/templates",
+    "url": "http://127.0.0.1:3015/workspace",
+    "hasInv": false,
+    "hasConf": false,
+    "slice": "⌘K All locations ▾ KK Thinking BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Summarize this queue Get a quick overview of details and history Identify missing information See what's needed to move forward Draft follow-up"
+  },
+  {
+    "t": "2026-08-13T14:09:39.101Z",
+    "step": "A-templates-route-probe",
+    "route": "http://127.0.0.1:3015/workspace/communications/templates",
+    "url": "http://127.0.0.1:3015/workspace/communications/templates",
+    "hasInv": false,
+    "hasConf": false,
+    "slice": "404 This page could not be found."
+  },
+  {
+    "t": "2026-08-13T14:09:43.753Z",
+    "step": "A-templates-route-probe",
+    "route": "http://127.0.0.1:3015/admin/communications/templates",
+    "url": "http://127.0.0.1:3015/workspace",
+    "hasInv": false,
+    "hasConf": false,
+    "slice": "1 ⌘K All locations ▾ KK Thinking BOS Operational Intelligence Reset Pin Close Attention · No urgent issues Here are some ways I can help ▾ Summarize this queue Get a quick overview of details and history Identify missing information See what's needed to move forward Draft follow-"
+  },
+  {
+    "t": "2026-08-13T14:09:47.922Z",
+    "step": "A-templates-route-probe",
+    "route": "http://127.0.0.1:3015/adminV2/settings/communications/templates",
+    "url": "http://127.0.0.1:3015/settings/communications/templates",
+    "hasInv": false,
+    "hasConf": false,
+    "slice": "404 This page could not be found."
+  },
+  {
+    "t": "2026-08-13T14:09:47.950Z",
+    "step": "A-templates-list",
+    "hasInv": false,
+    "hasConf": false,
+    "hasResched": false,
+    "hasCancel": false,
+    "usedRoute": null,
+    "pass": false
+  },
+  {
+    "t": "2026-08-13T14:09:51.352Z",
+    "step": "A-api-inventory",
+    "tourKeys": [
+      "tour_confirmation:email",
+      "tour_invitation:email",
+      "tour_no_show_followup:sms",
+      "tour_no_show_followup:email",
+      "tour_cancel:sms",
+      "tour_cancel:email",
+      "tour_reschedule:sms",
+      "tour_reschedule:email",
+      "tour_reminder:sms",
+      "tour_reminder:email",
+      "tour_confirmation:sms",
+      "tour_invitation:sms"
+    ],
+    "invId": "a803e455-ae61-4f9b-8133-53085a3ffe16",
+    "confId": "d6d91dba-1660-4512-8a94-c98f0be5d960"
+  },
+  {
+    "t": "2026-08-13T14:09:57.080Z",
+    "step": "E-edit-confirmation",
+    "status": 200,
+    "ok": true
+  },
+  {
+    "t": "2026-08-13T14:09:58.812Z",
+    "step": "A-required-placeholder",
+    "status": 400,
+    "blocked": true,
+    "error": "This Tour template requires: Tour Invitation Link ({{invitation_action_url}}). Add the placeholder back before saving."
+  },
+  {
+    "t": "2026-08-13T14:10:10.972Z",
+    "step": "B-prepare",
+    "status": 200,
+    "ok": true,
+    "url": "http://localhost:3015/a/kBGna5ex",
+    "absolute": true,
+    "hasChoose": true
+  },
+  {
+    "t": "W Wrigley Kurzman 1 / 1 Adjust 3/15/2026 (4m) 2d",
+    "step": "B-row"
+  },
+  {
+    "t": "2026-08-13T14:10:32.870Z",
+    "step": "B-tour-menu",
+    "items": [
+      "Send Tour Invitation",
+      "Schedule Tour"
+    ]
+  },
+  {
+    "t": "2026-08-13T14:10:37.020Z",
+    "step": "B-composer",
+    "hasChoose": false,
+    "hasComposer": true,
+    "slice": "1 ⌘K All locations ▾ KK Enrollment Pipeline 0 Needs attention 0 Overdue work 2 Pipeline Children Actions (2) ▶ New 0 Active Pipeline 0 Registration 0 Waitlist 2 Tours 0 All 1 Filters ▼ INFANT 1 W Wrigley Kurzman 1 / 1 Adjust 3/15/2026 (4m) 2d ▼ TODDLER 1 L Lennon Kurzman 1 / 1 Adjust 4/2/2024 (2y4m) 2d Lennon Kurzman Waitlist Work Activity WHAT'S NEXT In progress Waitlist Preparing tour invitation… BILLING PREVIEW CHILDREN HOUSEHOLD BOS Operational Intelligence Reset Pin Close Helping with Busin"
+  },
+  {
+    "t": "2026-08-13T14:10:38.201Z",
+    "step": "C-short",
+    "status": 307,
+    "loc": "/tour-booking/jaxAGhmAPEpXttvP3MavmBkWtHKCuDEQQsdbsMZpUdg"
+  },
+  {
+    "t": "2026-08-13T14:10:44.139Z",
+    "step": "C-resolve-slots",
+    "state": "choose",
+    "slotCount": 35,
+    "hasConfirmAction": true
+  },
+  {
+    "t": "2026-08-13T14:10:57.957Z",
+    "step": "D-confirm-ui",
+    "headline": "Choose a time to visit",
+    "slice": "Alloy Choose a time to visit North Campus 123 Main Street, Bend, OR 97701 We'd love to show you around North Campus. Pick whichever time suits you. August 2026 S M T W T F S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 Friday, August 14 9:00 AM 11:00 AM Friday, August 14 9:00 AM North Campus Confirm Tour Not right now",
+    "confirmed": false
+  },
+  {
+    "t": "2026-08-13T14:11:00.776Z",
+    "step": "D-book-api",
+    "status": 400,
+    "ok": false,
+    "error": "Booking could not be completed. Please try again or contact the site."
+  },
+  {
+    "t": "2026-08-13T14:11:04.541Z",
+    "step": "D-E-messages",
+    "recent": 0,
+    "confirmationish": []
+  },
+  {
+    "t": "2026-08-13T14:11:04.542Z",
+    "step": "RESULT",
+    "pass": {
+      "A_templatesApiPresent": true,
+      "A_requiredBlocked": true,
+      "B_prepareOk": true,
+      "B_absoluteUrl": true,
+      "B_tourMenuHasSend": true,
+      "D_booked": false,
+      "E_templateMarkerInMessage": false,
+      "D_friendlyAnchors": false,
+      "D_noRawUrlLabels": false
+    },
+    "uiConfirmed": false,
+    "marker": "CERT_BROWSER_1786630155260"
+  }
+]

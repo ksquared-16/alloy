@@ -22,7 +22,7 @@ describe("alignTourScheduleActionForBookingState", () => {
         );
         expect(out.key).toBe("reschedule_tour");
         expect(out.handlerKey).toBe("reschedule_tour");
-        expect(out.label).toBe("Reschedule tour");
+        expect(out.label).toBe("Reschedule Tour");
     });
 
     it("leaves schedule_tour alone when no tour is booked", () => {

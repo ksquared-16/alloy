@@ -44,6 +44,7 @@ export const POST_BOOKING_ACTION_KINDS: readonly TourActionKind[] = [
     "view_tour_details",
     "confirm_tour",
     "reschedule_tour",
+    "confirm_attendance",
 ] as const;
 
 /** Bounded reuse budget for the actions that are reusable at all. */
@@ -51,6 +52,7 @@ const MAX_USES: Partial<Record<TourActionKind, number>> = {
     view_tour_slots: 50,
     view_tour_details: 50,
     reschedule_tour: 50,
+    confirm_attendance: 50,
 };
 
 export type MintedAction = {

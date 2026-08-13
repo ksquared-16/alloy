@@ -12,7 +12,7 @@ import {
     type TourCommsEventKey,
 } from "@/lib/tours/comms/tourCommsConfig";
 import { loadTourCommsContext } from "@/lib/tours/comms/loadTourCommsContext";
-import { resolveTourCommsConfig } from "@/lib/tours/comms/resolveTourCommsConfig";
+import { resolveTourCommsConfigWithLibrary } from "@/lib/tours/comms/resolveTourCommsConfigWithLibrary";
 import {
     resolveTourCommsParentRecipient,
     tourCommsRecipientHasChannel,
@@ -31,6 +31,7 @@ import {
     type ScheduleTourSchedulingRemindersResult,
     type TourSchedulingReminderSnapshot,
 } from "@/lib/tours/comms/tourSchedulingScheduledSends";
+import { sendTourInternalCalendarInvite } from "@/lib/tours/comms/tourInternalCalendarInvite";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -65,7 +66,7 @@ export type TourCommsOrchestratorDeps = {
     replaceReminders?: typeof replaceTourSchedulingRemindersForBooking;
     cancelReminders?: typeof cancelPendingTourSchedulingRemindersForBooking;
     loadContext?: typeof loadTourCommsContext;
-    resolveConfig?: typeof resolveTourCommsConfig;
+    resolveConfig?: typeof resolveTourCommsConfigWithLibrary;
     hasExistingImmediateSend?: typeof hasExistingTourCommsImmediateSend;
 };
 
@@ -87,7 +88,7 @@ export type TourCommsOrchestrateInput = {
      * after the booking committed. Only URLs cross this boundary — never an action
      * kind, id, or status.
      */
-    actionModel?: { rescheduleUrl?: string | null; manageUrl?: string | null; confirmUrl?: string | null } | null;
+    actionModel?: { rescheduleUrl?: string | null; manageUrl?: string | null; confirmUrl?: string | null; confirmAttendanceUrl?: string | null } | null;
     deps?: TourCommsOrchestratorDeps;
 };
 
@@ -227,19 +228,23 @@ function renderImmediateBody(
     channel: TourCommsChannel,
     context: TourCommsTemplateContext,
     config: TourCommsConfig
-): { subject: string | null; body: string } {
+): { subject: string | null; body: string; bodyIsHtml: boolean } {
     const rendered = renderTourCommsTemplate({
         eventKey,
         channel,
         context,
         templateOverrides: config.templates,
     });
-    if (!rendered) return { subject: null, body: "" };
+    if (!rendered) return { subject: null, body: "", bodyIsHtml: false };
     if (rendered.channel === "email") {
+        const html = (rendered.bodyHtml ?? "").trim();
+        if (html) {
+            return { subject: rendered.subject, body: html, bodyIsHtml: true };
+        }
         const body = omitEmptyOptionalTourCommsLines(rendered.bodyText);
-        return { subject: rendered.subject, body };
+        return { subject: rendered.subject, body, bodyIsHtml: false };
     }
-    return { subject: null, body: omitEmptyOptionalTourCommsLines(rendered.body) };
+    return { subject: null, body: omitEmptyOptionalTourCommsLines(rendered.body), bodyIsHtml: false };
 }
 
 function renderReminderSnapshots(
@@ -249,7 +254,7 @@ function renderReminderSnapshots(
     const out: Partial<Record<TourCommsChannel, TourSchedulingReminderSnapshot>> = {};
     for (const channel of TOUR_COMMS_CHANNELS) {
         if (!config.channels[channel]) continue;
-        const { subject, body } = renderImmediateBody("tour_reminder", channel, context, config);
+    const { subject, body } = renderImmediateBody("tour_reminder", channel, context, config);
         out[channel] = { subject, body };
     }
     return out;
@@ -292,7 +297,7 @@ async function sendImmediateTourComms(params: {
         };
     }
 
-    const { subject, body } = renderImmediateBody(params.eventKey, params.channel, params.context, params.config);
+    const { subject, body, bodyIsHtml } = renderImmediateBody(params.eventKey, params.channel, params.context, params.config);
     if (!body.trim()) {
         return {
             channel: params.channel,
@@ -328,6 +333,7 @@ async function sendImmediateTourComms(params: {
         channelRaw: params.channel,
         toRaw: params.recipientTo,
         bodyRaw: body,
+        bodyIsHtml: params.channel === "email" ? bodyIsHtml : false,
         emailSubjectRaw: params.channel === "email" ? subject ?? undefined : undefined,
         workflowRunId: null,
         metadata,
@@ -438,7 +444,7 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
         replaceReminders: input.deps?.replaceReminders ?? replaceTourSchedulingRemindersForBooking,
         cancelReminders: input.deps?.cancelReminders ?? cancelPendingTourSchedulingRemindersForBooking,
         loadContext: input.deps?.loadContext ?? loadTourCommsContext,
-        resolveConfig: input.deps?.resolveConfig ?? resolveTourCommsConfig,
+        resolveConfig: input.deps?.resolveConfig ?? resolveTourCommsConfigWithLibrary,
         hasExistingImmediateSend: input.deps?.hasExistingImmediateSend ?? hasExistingTourCommsImmediateSend,
     };
 
@@ -495,8 +501,22 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
               // direct destructive link — cancellation is a bounded flow.
               cancelUrl: input.actionModel.manageUrl ?? baseContext.cancelUrl ?? null,
               ctaUrl: input.actionModel.confirmUrl ?? baseContext.ctaUrl ?? null,
+              confirmAttendanceUrl: config.ask_parent_confirm_attendance
+                  ? (input.actionModel.confirmAttendanceUrl ?? baseContext.confirmAttendanceUrl ?? null)
+                  : null,
+              confirmReplyInstruction: config.ask_parent_confirm_attendance
+                  ? " Reply 1 to confirm you're coming."
+                  : "",
           }
-        : baseContext;
+        : {
+              ...baseContext,
+              confirmAttendanceUrl: config.ask_parent_confirm_attendance
+                  ? (baseContext.confirmAttendanceUrl ?? null)
+                  : null,
+              confirmReplyInstruction: config.ask_parent_confirm_attendance
+                  ? " Reply 1 to confirm you're coming."
+                  : "",
+          };
     const reminderSnapshots = renderReminderSnapshots(templateContext, config);
 
     const reminderAction = input.reminderAction ?? "none";
@@ -564,6 +584,34 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
                     cancelReminders: deps.cancelReminders,
                 },
             });
+        }
+    }
+
+    // Internal calendar invite (ICS) — configured staff recipients, not parent CC.
+    const internalCalendarAction =
+        input.lifecycleAction === "confirm"
+            ? "request"
+            : input.lifecycleAction === "reschedule"
+              ? "update"
+              : input.lifecycleAction === "cancel"
+                ? "cancel"
+                : null;
+    if (internalCalendarAction) {
+        try {
+            await sendTourInternalCalendarInvite({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                booking: input.booking,
+                config,
+                action: internalCalendarAction,
+                actorUserId: input.actorUserId ?? null,
+            });
+        } catch (e) {
+            console.warn(
+                "[tour_comms] internal calendar invite failed",
+                e instanceof Error ? e.message : e,
+            );
+            skippedReasons.push("internal_calendar_failed");
         }
     }
 

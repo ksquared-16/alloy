@@ -212,7 +212,7 @@ describe("sendTourInvitation — composition", () => {
         const reissueKey = (mintMock.mock.calls[1][0] as { idempotencyKey: string }).idempotencyKey;
         expect(reissueKey).toContain(":reissue:");
         expect(res.invitationId).toBe(reissued.invitationId);
-        expect(res.draft?.invitationActionUrl).toContain("TOKEN_VIEW");
+        expect(res.draft?.invitationActionUrl).toContain("TOKEN_SELECT");
         expect(res.idempotentReplay).toBe(false);
     });
 
@@ -221,7 +221,7 @@ describe("sendTourInvitation — composition", () => {
         const ctx = (commsMock.mock.calls[0][0] as Record<string, unknown>).context as Record<string, string>;
         expect(ctx.tourOptionsBlock).toContain("TOKEN_SELECT");
         expect(ctx.tourOptionsBlock).toContain("option=rule-1%3A2026-08-10T16%3A00%3A00.000Z");
-        expect(ctx.invitationActionUrl).toContain("TOKEN_VIEW");
+        expect(ctx.invitationActionUrl).toContain("TOKEN_SELECT");
         expect(ctx.declineUrl).toContain("TOKEN_DECLINE");
         // Two offered times → two lines.
         expect(ctx.tourOptionsBlock.split("\n")).toHaveLength(2);

@@ -1,6 +1,7 @@
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -203,7 +204,7 @@ export type OpportunityDrawerViewModel = {
     summaries: {
         tasks: InquirySummaryTaskPreviewPayload;
         /** Active tour_bookings rows from first-paint compose (tour block + lifecycle bar). */
-        active_tour_bookings: TourBookingRow[];
+            active_tour_bookings: TourBookingRow[];
         reminders: RemindersSummaryVm;
         bos: BosSummaryVm | null;
         attention: AttentionSummaryVm | null;

@@ -73,12 +73,7 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
 
     for (const key of params.dependencies) {
         if (opportunityFirstPaintDependencySatisfiedFromRecord(key, params.record)) {
-            dependencies.push(
-                readyState(key, key === "tour_bookings", "record_metadata")
-            );
-            if (key === "tour_bookings") {
-                data.tour_bookings = [];
-            }
+            dependencies.push(readyState(key, false, "record_metadata"));
             continue;
         }
 
@@ -216,14 +211,9 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
     }
 
     if (planIncludes(params.dependencies, "tour_bookings")) {
-        if (!opportunityTourBookingsFetchRequired(params.record)) {
-            data.tour_bookings = [];
-            finalize("tour_bookings", readyState("tour_bookings", true, "record_metadata"));
-        } else {
-            const bookings = tourBookings ?? [];
-            data.tour_bookings = bookings;
-            finalize("tour_bookings", readyState("tour_bookings", bookings.length === 0, "server_fetch"));
-        }
+        const bookings = tourBookings ?? [];
+        data.tour_bookings = bookings;
+        finalize("tour_bookings", readyState("tour_bookings", bookings.length === 0, "server_fetch"));
     }
 
     if (needsScheduling) {

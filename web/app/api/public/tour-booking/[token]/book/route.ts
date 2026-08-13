@@ -1,10 +1,13 @@
 import { NextRequest } from "next/server";
-import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { createTourBooking } from "@/lib/tours/bookings/tourBookingService";
 import type { CreateTourBookingInput } from "@/lib/tours/bookings/types";
 import { tourPublicErr, tourPublicJson, publicTourBookingView } from "@/lib/tours/public/tourPublicHttp";
 import { guardTourActionRoute } from "@/lib/tours/public/tourActionRouteGuard";
-import { consumeTourAction, invalidateIncompatibleTourActions } from "@/lib/tours/public/authorizeTourAction";
+import {
+    consumeTourAction,
+    findTourSelectLinkForBooking,
+    invalidateIncompatibleTourActions,
+} from "@/lib/tours/public/authorizeTourAction";
 import { computeAvailableTourSlots } from "@/lib/tours/availability/computeAvailableTourSlots";
 import { mintActionsFor, POST_BOOKING_ACTION_KINDS } from "@/lib/tours/invitation/mintTourInvitation";
 import { buildTourParentActionModel } from "@/lib/tours/invitation/tourParentActionModel";
@@ -23,8 +26,14 @@ type Body = {
     timezone?: string;
 };
 
-/** POST /api/public/tour-booking/[token]/book */
-const REQUIRED_ACTIONS = ["select_tour_slot"] as const;
+/**
+ * POST /api/public/tour-booking/[token]/book
+ *
+ * Accepts the select credential (preferred) or a view credential on the same
+ * invitation. View-only short links still confirm through the sibling select
+ * action — one Tour booking authority, not a second public truth model.
+ */
+const REQUIRED_ACTIONS = ["select_tour_slot", "view_tour_slots"] as const;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
     const { token: raw } = await params;
@@ -44,27 +53,54 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const link = auth.link;
     const invitation = auth.invitation;
 
+    // Commitment always consumes the select action — never the reusable view link.
+    let selectLinkId = link.id;
+    let selectBookingId = link.booking_id;
+    let selectConsumedAt = link.consumed_at;
+
+    if (auth.actionKind === "view_tour_slots") {
+        const select = await findTourSelectLinkForBooking({
+            supabase,
+            invitationId: invitation.id,
+            orgId: link.org_id,
+        });
+        if (!select) {
+            return tourPublicErr("This link is no longer valid.", 404, { code: "invalid" });
+        }
+        selectLinkId = select.id;
+        selectBookingId = select.booking_id;
+        selectConsumedAt = select.consumed_at;
+    }
+
     // IDEMPOTENT REPLAY. A parent who double-clicks, or retries after a dropped
     // connection, gets the booking they already have — not a second one, and
     // not an error implying they did something wrong.
-    if (auth.replay || (link.consumed_at && link.booking_id)) {
+    if (auth.replay || (selectConsumedAt && selectBookingId)) {
         const { data: prior } = await supabase
             .from("tour_bookings")
             .select("id, status_key, start_at, end_at, timezone")
-            .eq("id", link.booking_id)
+            .eq("id", selectBookingId)
             .maybeSingle();
         // Projected, not returned raw: the replay branch is the one a double-submit
         // actually hits, so leaking here leaks to every retrying parent.
         if (prior) {
             return tourPublicJson({
                 ok: true,
-                booking: publicTourBookingView(prior as { id: string; status_key: string; start_at?: string | null; end_at?: string | null; timezone?: string | null }),
+                booking: publicTourBookingView(prior as {
+                    id: string;
+                    status_key: string;
+                    start_at?: string | null;
+                    end_at?: string | null;
+                    timezone?: string | null;
+                }),
                 idempotent_replay: true,
             });
         }
         // Spent, but nothing to replay. Refuse rather than fall through and book
         // twice off one credential.
-        if (auth.replay) return tourPublicErr("This link has already been used.", 409, { code: "consumed" });
+        if (auth.replay || selectConsumedAt) {
+            return tourPublicErr("This link has already been used.", 409, { code: "consumed" });
+        }
     }
 
     let body: Body;
@@ -93,12 +129,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data: rule, error: rErr } = await supabase
         .from("tour_availability_rules")
-        .select("id, org_id, location_id, approval_required, is_active")
+        .select("id, org_id, location_id, user_id, approval_required, is_active")
         .eq("id", ruleId)
         .eq("org_id", link.org_id)
         .maybeSingle();
     if (rErr || !rule) return tourPublicErr("Rule not found", 400);
-    const ru = rule as { location_id?: string | null; approval_required?: boolean; is_active?: boolean };
+    const ru = rule as {
+        location_id?: string | null;
+        user_id?: string | null;
+        approval_required?: boolean;
+        is_active?: boolean;
+    };
     if (ru.is_active === false) return tourPublicErr("Rule inactive", 400);
     if (ru.location_id != null && String(ru.location_id).trim() !== "" && String(ru.location_id).trim() !== link.location_id) {
         return tourPublicErr("Slot rule does not match link location", 400);
@@ -145,7 +186,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // credentials exist, and those can only be minted after this commits. We send
         // it ourselves, below, through the same orchestrator.
         deferConfirmationComms: true,
-        metadata: { tour_public_booking_link_id: link.id, rule_id: ruleId },
+        metadata: { tour_public_booking_link_id: selectLinkId, rule_id: ruleId },
     };
 
     try {
@@ -153,7 +194,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Atomic claim. Two concurrent requests race here and exactly one wins,
         // so at most one selection is ever recorded against this action.
-        await consumeTourAction({ supabase, linkId: link.id, bookingId: booking.id });
+        await consumeTourAction({ supabase, linkId: selectLinkId, bookingId: booking.id });
 
         await supabase
             .from("tour_invitations")
@@ -181,7 +222,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await invalidateIncompatibleTourActions({
             supabase,
             invitationId: invitation.id,
-            keepLinkId: link.id,
+            keepLinkId: selectLinkId,
             reason: "booked",
         });
 

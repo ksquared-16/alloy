@@ -577,7 +577,12 @@ export function useFamilyCommunicationRuntime(input: FamilyCommunicationRuntimeI
                                         entity_type: "opportunity",
                                         entity_id: opportunityId,
                                         context: { surface: "focus_panel", origin: "operator" },
-                                        payload: { mode: "mark_sent", invitation_id: tourInvitationId },
+                                        payload: {
+                                            mode: "mark_sent",
+                                            invitation_id: tourInvitationId,
+                                            channel: liveChannel,
+                                            recipient_display_name: recipientLabel,
+                                        },
                                         confirmation: { confirmed: true },
                                     }),
                                 });
