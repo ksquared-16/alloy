@@ -1,7 +1,7 @@
 /**
  * Rows that recorded the same provider delivery twice, kept as history.
  *
- * Migration 20260810120000 introduced inbound provider-identity uniqueness. It
+ * Migration 20260813100000 introduced inbound provider-identity uniqueness. It
  * deliberately did NOT delete pre-existing duplicates — a received communication
  * is immutable history even when it arrived twice — and instead moved the later
  * copies' provider identity into metadata so they fall outside the index.

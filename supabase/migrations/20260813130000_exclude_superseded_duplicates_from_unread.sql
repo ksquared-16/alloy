@@ -1,6 +1,6 @@
 -- Superseded duplicates are history, not unread replies.
 --
--- Migration 20260810120000 deliberately kept pre-index duplicate inbound rows —
+-- Migration 20260813100000 deliberately kept pre-index duplicate inbound rows —
 -- a received communication is immutable history even when it arrived twice — and
 -- only moved their provider identity into metadata so the new uniqueness index
 -- could be created.

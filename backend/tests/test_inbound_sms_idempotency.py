@@ -7,7 +7,7 @@ canonical row, which would have meant a duplicated reply in the operator's
 conversation, a second unread, a second Activity entry, and — worst — a second
 execution of STOP.
 
-The database owns the invariant (migration 20260810120000, a partial unique index
+The database owns the invariant (migration 20260813100000, a partial unique index
 scoped to `direction = 'inbound'` so outbound provider-message behaviour is
 untouched). These tests cover the application half: recognising a replay before
 any work begins, and resolving the race when two deliveries pass that check at

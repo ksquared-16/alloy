@@ -439,7 +439,7 @@ def find_inbound_message_by_provider_identity(
 
     Twilio retries until it gets a 2xx and may redeliver regardless, so the same
     MessageSid legitimately arrives more than once. This is the read side of the
-    uniqueness invariant declared by migration 20260810120000 — the database owns
+    uniqueness invariant declared by migration 20260813100000 — the database owns
     the guarantee; this only lets the application recognise a replay and return the
     message it already has instead of provoking a constraint violation.
 

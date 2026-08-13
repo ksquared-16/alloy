@@ -53,7 +53,7 @@ SET
     metadata = COALESCE(m.metadata, '{}'::jsonb) || jsonb_build_object(
         'superseded_duplicate_provider_message_id', r.provider_message_id,
         'superseded_reason', 'duplicate_inbound_provider_delivery',
-        'superseded_by_migration', '20260810120000'
+        'superseded_by_migration', '20260813100000'
     )
 FROM ranked AS r
 WHERE m.id = r.id
