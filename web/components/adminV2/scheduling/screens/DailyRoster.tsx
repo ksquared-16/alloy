@@ -15,7 +15,7 @@
  * This is expectation, not attendance. Nothing here records who actually arrived.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, UserRound, Users } from "lucide-react";
 
 import {
@@ -82,7 +82,6 @@ type RosterModel = {
 export type DailyRosterProps = {
     siteLocationId: string;
     siteName: string;
-    todayYmd: string;
     onOpenChild?: (subject: RosterChild) => void;
     onOpenStaff?: (subject: RosterStaff) => void;
 };
@@ -160,26 +159,57 @@ function SubjectChip({
 export default function DailyRoster({
     siteLocationId,
     siteName,
-    todayYmd,
     onOpenChild,
     onOpenStaff,
 }: DailyRosterProps) {
-    const [date, setDate] = useState(todayYmd);
+    /**
+     * Null until the server tells us. The operational day is the ORGANIZATION's
+     * local service date, not the browser's: `new Date().toISOString()` rolls over
+     * at UTC midnight, so a US evening put this surface on tomorrow while Attendance
+     * — which already adopts the server's answer — stayed on today. The roster route
+     * resolves the service date and returns it as `todayYmd`, so the first request
+     * deliberately omits `date`.
+     */
+    const [date, setDate] = useState<string | null>(null);
+    /** The org's today, for the Today control. Never the browser's. */
+    const [serverToday, setServerToday] = useState<string | null>(null);
     const [model, setModel] = useState<RosterModel | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [openRoom, setOpenRoom] = useState<string | null>(null);
+    /**
+     * Stale-response guard. Switching site fires a request per site and they can
+     * land out of order — the header renders the newly chosen site's name from the
+     * workspace immediately, so a late response painted the PREVIOUS campus's rooms
+     * under the new campus's name. Observed live: Riverside's name over Lakeside's
+     * rooms. Only the newest request may write state.
+     */
+    const requestSeq = useRef(0);
 
     const load = useCallback(async () => {
+        // The workspace mounts this before a site resolves; fetching on "" is a
+        // guaranteed 400 and it fired twice on every open.
+        if (!siteLocationId) return;
+        const seq = ++requestSeq.current;
         setError(null);
         setModel(null);
         try {
+            const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
             const res = await fetch(
-                `/api/admin/roster?site_location_id=${encodeURIComponent(siteLocationId)}&date=${encodeURIComponent(date)}`
+                `/api/admin/roster?site_location_id=${encodeURIComponent(siteLocationId)}${dateParam}`
             );
-            const json = (await res.json()) as { roster?: RosterModel; error?: string };
+            const json = (await res.json()) as {
+                roster?: RosterModel;
+                todayYmd?: string;
+                error?: string;
+            };
+            if (seq !== requestSeq.current) return;
             if (!res.ok) throw new Error(json.error ?? "Could not load the roster");
             setModel(json.roster ?? null);
+            if (json.todayYmd) setServerToday(json.todayYmd);
+            // Adopt the org-local service date the server resolved.
+            if (!date && json.roster?.date) setDate(json.roster.date);
         } catch (e) {
+            if (seq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : "Could not load the roster");
         }
     }, [siteLocationId, date]);
@@ -205,7 +235,7 @@ export default function DailyRoster({
                     <div>
                         <p className={WS_EYEBROW}>Daily Roster</p>
                         <h2 className="text-[17px] font-semibold text-alloy-midnight">
-                            {formatLongDate(date)}
+                            {date ? formatLongDate(date) : "Today"}
                         </h2>
                         <p className="mt-0.5 text-[12px] text-alloy-midnight/60">
                             {siteName}
@@ -215,9 +245,11 @@ export default function DailyRoster({
                     <div className="flex items-center gap-1.5">
                         <button
                             type="button"
-                            className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                            onClick={() => setDate(shiftYmd(date, -1))}
+                            className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10 disabled:opacity-40"
+                            disabled={!date}
+                            onClick={() => date && setDate(shiftYmd(date, -1))}
                             data-roster-prev-day="true"
+                            aria-label="Previous day"
                         >
                             ‹
                         </button>
@@ -225,8 +257,8 @@ export default function DailyRoster({
                             <CalendarDays className="h-3.5 w-3.5 text-alloy-midnight/45" aria-hidden />
                             <input
                                 type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
+                                value={date ?? ""}
+                                onChange={(e) => setDate(e.target.value || null)}
                                 className="bg-transparent text-[12px] text-alloy-midnight outline-none"
                                 aria-label="Roster date"
                                 data-roster-date="true"
@@ -234,12 +266,26 @@ export default function DailyRoster({
                         </span>
                         <button
                             type="button"
-                            className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                            onClick={() => setDate(shiftYmd(date, 1))}
+                            className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10 disabled:opacity-40"
+                            disabled={!date}
+                            onClick={() => date && setDate(shiftYmd(date, 1))}
                             data-roster-next-day="true"
+                            aria-label="Next day"
                         >
                             ›
                         </button>
+                        {/* Getting back to today took a date-picker round trip. The
+                            org's today, never the browser's. */}
+                        {serverToday && date !== serverToday ? (
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                onClick={() => setDate(serverToday)}
+                                data-roster-today="true"
+                            >
+                                Today
+                            </button>
+                        ) : null}
                     </div>
                 </header>
 

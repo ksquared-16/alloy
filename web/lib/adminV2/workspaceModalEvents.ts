@@ -62,7 +62,12 @@ export function dispatchAdminV2OpenProcessingModal(intent?: ProcessingModalInten
 
 export type OpenSchedulingModalDetail = {
     mode?: "work" | "studio";
-    workView?: "overview" | "roster" | "attendance";
+    /**
+     * Mirrors `SchedulingWorkView`. `daily_roster` was missing, so no caller could
+     * deep-link the day roster type-safely even though the workspace has routed to
+     * it since it shipped.
+     */
+    workView?: "overview" | "roster" | "daily_roster" | "attendance";
     studioView?: "types" | "patterns" | "templates" | "validation";
 };
 

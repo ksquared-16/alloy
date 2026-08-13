@@ -1001,7 +1001,6 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     <DailyRoster
                         siteLocationId={siteId}
                         siteName={siteName}
-                        todayYmd={new Date().toISOString().slice(0, 10)}
                         onOpenChild={(child) => {
                             // Canonical record only — a child opens as its person
                             // identity. Roster is a selection surface, not a record one.
