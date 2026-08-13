@@ -1,4 +1,4 @@
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -41,7 +41,12 @@ test("roster product audit — week board vs the staffing verdict it is served",
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();
-    await page.waitForTimeout(3000);
+    // Wait for Riverside's own rooms, not for a clock. This host runs at load 30+
+    // and every fixed sleep in this file was eventually short enough to snapshot a
+    // half-loaded board and assert about it.
+    await expect(page.locator('[data-assignment-roster-view="rooms"]')).toBeVisible({
+        timeout: SETTLE,
+    });
 
     // What the API serves for the week the staff assignment does not cover.
     const api = await page.evaluate(
@@ -83,14 +88,27 @@ test("roster product audit — week board vs the staffing verdict it is served",
 
     // What the BOARD renders for the same week.
     await page.locator('[data-assignment-roster-view="rooms"]').click();
-    await page.waitForTimeout(2500);
-    for (let i = 0; i < 6; i += 1) {
-        await page.locator("[data-week-picker-prev]").first().click();
-        await page.waitForTimeout(1200);
-        const label = await page.locator("[data-roster-week-label]").first().textContent();
-        if (label && label.includes("Jul 6")) break;
-    }
-    await page.waitForTimeout(2000);
+    await expect(page.locator(`[data-scheduling-roster-room="${TODDLER}"]`)).toBeVisible({
+        timeout: SETTLE,
+    });
+
+    // Jump straight to the week, never by counting clicks: the label lags the fetch,
+    // so a "click prev until it reads July" loop silently settles on the wrong week
+    // and then asserts confidently about it. It settled on Jul 20 once and the
+    // failure looked like a product bug.
+    await page.locator("[data-week-picker-trigger]").first().click();
+    await page.locator(`[data-week-picker-option="${PAST_WEEK}"]`).click();
+    await expect(page.locator("[data-roster-week-label]").first()).toHaveText(/Jul 6/, {
+        timeout: SETTLE,
+    });
+
+    // And wait for the week's DATA, not just its label: the label is set from the
+    // request that was asked for, the cells from the one that came back.
+    const toddlerCells = page.locator(`[data-scheduling-roster-cell^="${TODDLER}:"]`);
+    await expect(toddlerCells).toHaveCount(5, { timeout: SETTLE });
+    await expect(toddlerCells.first()).toHaveAttribute("data-cell-scheduled-staff", "0", {
+        timeout: SETTLE,
+    });
     await shot(page, "40-week-board-july");
 
     const board = await page.evaluate((room) => {
@@ -98,6 +116,8 @@ test("roster product audit — week board vs the staffing verdict it is served",
             (el) => ({
                 key: el.getAttribute("data-scheduling-roster-cell"),
                 state: el.getAttribute("data-cell-state"),
+                staffing: el.getAttribute("data-cell-staffing"),
+                scheduledStaff: el.getAttribute("data-cell-scheduled-staff"),
                 rendered: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
             }),
         );
@@ -106,9 +126,41 @@ test("roster product audit — week board vs the staffing verdict it is served",
             weekLabel: (
                 document.querySelector("[data-roster-week-label]")?.textContent ?? ""
             ).trim(),
+            roomStaffing:
+                header
+                    ?.querySelector("[data-scheduling-roster-room-staffing]")
+                    ?.getAttribute("data-scheduling-roster-room-staffing") ?? null,
             roomHeader: (header?.textContent ?? "").replace(/\s+/g, " ").trim(),
             cells,
         };
     }, TODDLER);
     log("board-rendered-july", board);
+
+    // ── The assertion this spec exists for ────────────────────────────────────
+    //
+    // The read model, the API and the board must agree. They did not: the API
+    // answered `short` for all five days while the board rendered a
+    // capacity-derived "Healthy" chip and the words "1 staff" — the room's
+    // staffing DEMAND, presented where an operator reads supply.
+    expect(board.weekLabel).toContain("Jul 6");
+    expect(api.room?.cells.map((c) => c.staffingSufficiency)).toEqual([
+        "short",
+        "short",
+        "short",
+        "short",
+        "short",
+    ]);
+
+    // Every rendered day carries the served verdict, not just the demand number.
+    expect(board.cells).toHaveLength(5);
+    for (const cell of board.cells) {
+        expect(cell.staffing).toBe("short");
+        expect(cell.scheduledStaff).toBe("0");
+        expect(cell.rendered).toContain("0 of 1 staff");
+    }
+
+    // The room rolls up short, and nothing on the row claims the room is fine.
+    expect(board.roomStaffing).toBe("short");
+    expect(board.roomHeader).toContain("Short");
+    expect(board.roomHeader).not.toContain("Healthy");
 });

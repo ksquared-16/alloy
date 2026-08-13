@@ -21,6 +21,10 @@ import { validateScheduleCreatePayload } from "@/lib/scheduling/commands/schedul
 import { applyChildParticipationEdit } from "@/lib/childcareOperational/applyChildParticipationEdit";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { buildRosterReadModel, type RosterReadModel } from "@/lib/scheduling/roster/buildRosterReadModel";
+import {
+    rollUpStaffingSufficiency,
+    type StaffingSufficiency,
+} from "@/lib/scheduling/supply/staffingSufficiency";
 import { detectStartsInWindow } from "@/lib/scheduling/problems/detectStartsThisWeek";
 import { computeTodayActivity } from "@/lib/scheduling/activity/todayActivity";
 import { computeAssignmentAttention } from "@/lib/scheduling/assignmentAttention";
@@ -73,8 +77,29 @@ function fmtMonthDay(ymd: string): string {
 type RosterTone = "pine" | "gold" | "ember";
 
 /**
+ * Operator wording for a PLANNED staffing verdict. `unknown` and `idle` are real
+ * answers and must read as such — never as a flavour of "fine".
+ */
+function staffingChipLabel(verdict: StaffingSufficiency): string {
+    if (verdict === "sufficient") return "Staffed";
+    if (verdict === "short") return "Short";
+    if (verdict === "idle") return "No one expected";
+    return "Unknown";
+}
+
+/**
  * Map the raw roster read-model to the surface's presentation shape. Tone / health /
  * label decisions are presentation-only and live here, never in the read-model.
+ *
+ * CAPACITY and STAFFING are two different verdicts and are presented as two
+ * different things. `health` answers "is this room over its capacity"; `staffing`
+ * answers "are enough people scheduled to be in it". They were conflated once —
+ * the board showed a capacity-derived "Healthy" chip beside a `requiredStaff`
+ * number, so a room short every day of the week rendered green with the words
+ * "1 staff" next to it, which is demand presented as supply. `health` therefore
+ * no longer emits a healthy label at all: a room with nothing wrong with its
+ * capacity says nothing, and the only green on the board comes from an evaluated
+ * staffing verdict.
  */
 function presentRoster(model: RosterReadModel) {
     const days = model.days.map((d) => ({
@@ -103,14 +128,17 @@ function presentRoster(model: RosterReadModel) {
             const projected = committed + planned;
             // Demand and supply are shown as two numbers, never one. "2 staff
             // required" said nothing about whether anyone is actually scheduled.
+            //
+            // This label is about STAFFING and nothing else. It used to fall back to
+            // a capacity string when demand was unresolvable, so a field the surface
+            // reads as "the staff line" could silently become an occupancy number.
+            // Unresolvable demand says so; capacity has its own fields.
             const ratioLabel =
                 cell.requiredStaff != null
                     ? `${cell.scheduledStaffCount} of ${cell.requiredStaff} staff scheduled`
                     : cell.scheduledStaffCount > 0
-                        ? `${cell.scheduledStaffCount} staff scheduled`
-                        : cell.capacity != null
-                            ? `${projected} / ${cell.capacity} projected`
-                            : "Capacity unavailable";
+                      ? `${cell.scheduledStaffCount} scheduled · requirement not configured`
+                      : "Staffing requirement not configured";
             return {
                 dayKey: String(cell.weekday),
                 dayLabel: DAY_SHORT[cell.weekday],
@@ -131,7 +159,6 @@ function presentRoster(model: RosterReadModel) {
             };
         });
 
-        const anyEvaluated = cells.some((c) => c.evaluated);
         const healthTone: RosterTone = anyBreach ? "ember" : anyTight ? "gold" : "pine";
 
         const metaParts: string[] = [];
@@ -139,21 +166,38 @@ function presentRoster(model: RosterReadModel) {
         if (groupHint) metaParts.push(groupHint);
         if (room.capacity != null) metaParts.push(`holds ${room.capacity}`);
 
+        // The canonical roll-up, not a board-local one: any short → short, then any
+        // unknown → unknown. A week is only "Staffed" when every day was evaluated
+        // and every day was met.
+        const staffingVerdict = rollUpStaffingSufficiency(cells.map((c) => c.staffingSufficiency));
+        const shortDays = cells.filter((c) => c.staffingSufficiency === "short");
+        const staffingDetail =
+            shortDays.length > 0
+                ? `Short ${shortDays.map((c) => c.dayLabel).join(", ")}`
+                : staffingVerdict === "unknown"
+                  ? "Staffing requirement not configured"
+                  : null;
+
         return {
             roomId: room.roomId,
             roomName: room.roomName,
             meta: metaParts.join(" · "),
             health: {
                 tone: healthTone,
-                // Never show Healthy unless capacity/staff was evaluated.
-                // When unevaluated, omit a false "Capacity unavailable" pill — leave quiet.
+                // CAPACITY only, and only when something is wrong with it. A quiet
+                // capacity chip is the correct answer for a room that is not over
+                // and not tight — the room's green, when it has one, is the
+                // staffing verdict below, which is the question this board is for.
                 label: anyBreach
                     ? `Over${breachDay != null ? ` ${DAY_SHORT[breachDay]}` : ""}`
-                    : !anyEvaluated
-                      ? ""
-                      : anyTight
-                        ? "Tight"
-                        : "Healthy",
+                    : anyTight
+                      ? "Tight"
+                      : "",
+            },
+            staffing: {
+                verdict: staffingVerdict,
+                label: staffingChipLabel(staffingVerdict),
+                detail: staffingDetail,
             },
             cells,
         };

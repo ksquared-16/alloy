@@ -24,6 +24,10 @@ import {
     WS_PANEL_SURFACE,
     WS_SURFACE_CONTENT_PAD,
 } from "@/components/workspace/workspaceTokens";
+import {
+    staffingChipChrome,
+    staffingVerdictLabel,
+} from "@/components/adminV2/scheduling/staffingChrome";
 
 type StaffingSufficiency = "sufficient" | "short" | "unknown" | "idle";
 
@@ -112,17 +116,9 @@ function staffingSentence(cell: RosterCell): string {
         const gap = (cell.requiredStaff ?? 0) - cell.scheduledStaffCount;
         return `Short ${gap} staff`;
     }
-    return "Staffed";
-}
-
-/**
- * Bend Pine ONLY for an evaluated healthy state. Unknown is neutral stone — never
- * a success colour for something the platform could not compute.
- */
-function stateChrome(state: StaffingSufficiency): string {
-    if (state === "sufficient") return "bg-[#00A283]/10 text-[#00715C] ring-1 ring-[#00A283]/25";
-    if (state === "short") return "bg-alloy-gold/15 text-alloy-midnight ring-1 ring-alloy-gold/40";
-    return "bg-alloy-stone/15 text-alloy-midnight/55 ring-1 ring-alloy-stone/25";
+    // The badge already says "Staffed"; repeating it here spent the sentence line
+    // on nothing. Say the numbers the verdict was reached from.
+    return `${cell.scheduledStaffCount} of ${cell.requiredStaff ?? cell.scheduledStaffCount} staff scheduled`;
 }
 
 function SubjectChip({
@@ -286,16 +282,10 @@ export default function DailyRoster({
                                         </p>
                                     </div>
                                     <span
-                                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateChrome(cell.staffingSufficiency)}`}
+                                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${staffingChipChrome(cell.staffingSufficiency)}`}
                                         data-roster-room-state={cell.staffingSufficiency}
                                     >
-                                        {cell.staffingSufficiency === "sufficient"
-                                            ? "Staffed"
-                                            : cell.staffingSufficiency === "short"
-                                              ? "Short"
-                                              : cell.staffingSufficiency === "idle"
-                                                ? "No one expected"
-                                                : "Unknown"}
+                                        {staffingVerdictLabel(cell.staffingSufficiency)}
                                     </span>
                                 </div>
 

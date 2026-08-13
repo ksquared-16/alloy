@@ -10,6 +10,11 @@ import { X } from "lucide-react";
 
 import WeekPicker from "@/components/workspace/WeekPicker";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import {
+    staffingChipChrome,
+    staffingTextChrome,
+    staffingVerdictLabel,
+} from "@/components/adminV2/scheduling/staffingChrome";
 import AssignmentRosterPanel, {
     type AssignmentRosterBulkHandlers,
     type AssignmentRosterSubject,
@@ -18,6 +23,9 @@ import AssignmentRosterPanel, {
 export type RosterViewMode = "assignments" | "rooms";
 
 export type RosterTone = "pine" | "gold" | "ember";
+
+/** PLANNED staffing verdict. Never an actual-presence verdict — Attendance owns that. */
+export type RosterStaffingSufficiency = "sufficient" | "short" | "unknown" | "idle";
 
 export type RosterCell = {
     dayKey: string;
@@ -29,7 +37,16 @@ export type RosterCell = {
     /** Committed + planned projected demand (never attendance truth). */
     projected?: number | null;
     capacity: number | null;
+    /** Staffing DEMAND from the ratio model. Null when no ratio configuration resolves. */
     requiredStaff?: number | null;
+    /** Staffing SUPPLY — people scheduled here on this date. Never the same field as demand. */
+    scheduledStaffCount?: number | null;
+    /**
+     * The verdict comparing the two. The board rendered `requiredStaff` alone for a
+     * while, which reads as supply — a room short every day of the week showed
+     * "1 staff" and a green chip. Demand is never shown without its verdict.
+     */
+    staffingSufficiency?: RosterStaffingSufficiency;
     pct: number;
     ratioLabel: string;
     tone: RosterTone;
@@ -43,7 +60,14 @@ export type RosterRoom = {
     roomId: string;
     roomName: string;
     meta: string;
+    /** CAPACITY only, and only when something is wrong with it. Empty label = quiet. */
     health: { tone: RosterTone; label: string };
+    /** PLANNED staffing for the week, rolled up by the canonical roll-up. */
+    staffing?: {
+        verdict: RosterStaffingSufficiency;
+        label: string;
+        detail: string | null;
+    };
     cells: RosterCell[];
 };
 
@@ -358,13 +382,37 @@ function RoomRow({
             >
                 <span className="text-[12px] font-semibold text-alloy-midnight">{room.roomName}</span>
                 <span className="text-[9.5px] text-alloy-slate">{room.meta}</span>
-                {room.health.label ? (
-                    <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>{room.health.label}</span>
+                {/* Staffing first — it is the question the board is open for. Capacity
+                    is a separate chip and only appears when something is wrong with it. */}
+                <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                    {room.staffing ? (
+                        <span
+                            className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${staffingChipChrome(room.staffing.verdict)}`}
+                            data-scheduling-roster-room-staffing={room.staffing.verdict}
+                        >
+                            {room.staffing.label}
+                        </span>
+                    ) : null}
+                    {room.health.label ? (
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>{room.health.label}</span>
+                    ) : null}
+                </span>
+                {room.staffing?.detail ? (
+                    <span className="text-[9.5px] text-alloy-slate">{room.staffing.detail}</span>
                 ) : null}
             </button>
             {room.cells.map((cell) => {
                 const closed = cell.state === "closed";
                 const isSel = selectedCell?.roomId === room.roomId && selectedCell?.dayKey === cell.dayKey;
+                const scheduled = cell.scheduledStaffCount ?? 0;
+                const staffLine =
+                    cell.staffingSufficiency === "idle"
+                        ? null
+                        : cell.requiredStaff != null
+                          ? `${scheduled} of ${cell.requiredStaff} staff`
+                          : scheduled > 0
+                            ? `${scheduled} scheduled`
+                            : null;
                 return (
                     <button
                         key={cell.dayKey}
@@ -375,11 +423,20 @@ function RoomRow({
                             "group relative border-b border-r border-alloy-stone/10 px-2.5 py-2 text-left transition-colors",
                             closed ? "cursor-default bg-[repeating-linear-gradient(45deg,#fff,#fff_6px,rgba(39,63,82,0.03)_6px,rgba(39,63,82,0.03)_12px)]" : "hover:bg-alloy-stone/[0.05]",
                             cell.state === "breach" ? "bg-alloy-ember/[0.06]" : "",
+                            // A short day has to be findable by scanning, not by reading
+                            // every cell's staff line.
+                            cell.state !== "breach" && cell.staffingSufficiency === "short"
+                                ? "bg-alloy-gold/[0.07]"
+                                : "",
                             isSel ? "outline outline-2 -outline-offset-2 outline-alloy-bend-pine/60 bg-alloy-bend-pine/[0.05]" : "",
                             dimmed ? "opacity-40" : "",
                         ].join(" ")}
                         data-scheduling-roster-cell={`${room.roomId}:${cell.dayKey}`}
                         data-cell-state={cell.state ?? "ok"}
+                        {...(cell.staffingSufficiency ? { "data-cell-staffing": cell.staffingSufficiency } : {})}
+                        {...(cell.scheduledStaffCount != null
+                            ? { "data-cell-scheduled-staff": String(cell.scheduledStaffCount) }
+                            : {})}
                     >
                         {closed ? (
                             <>
@@ -408,12 +465,21 @@ function RoomRow({
                                             ? `${cell.projected ?? (cell.occupancy ?? 0) + (cell.planned ?? 0)} / ${cell.capacity} projected`
                                             : `${cell.projected ?? (cell.occupancy ?? 0) + (cell.planned ?? 0)} projected`}
                                     </div>
-                                    {cell.requiredStaff != null ? (
+                                    {/* Supply OF demand, never demand alone. `1 staff` used to
+                                        render here from `requiredStaff` and read as though
+                                        someone were scheduled.
+                                        Silent only where the row header already says it: an
+                                        idle day, or an unresolvable requirement with nobody
+                                        scheduled — the room chip carries "Unknown" and its
+                                        reason, and repeating it five times across the week
+                                        buys nothing and costs the scan. */}
+                                    {staffLine ? (
                                         <div
-                                            className={`text-[9.5px] ${cell.state === "breach" ? "font-semibold text-alloy-ember" : "text-alloy-slate"}`}
-                                            data-scheduling-cell-staff={cell.requiredStaff}
+                                            className={`text-[9.5px] ${staffingTextChrome(cell.staffingSufficiency)}`}
+                                            data-scheduling-cell-staff={cell.requiredStaff ?? "unknown"}
+                                            title={cell.ratioLabel}
                                         >
-                                            {cell.requiredStaff} staff
+                                            {staffLine}
                                         </div>
                                     ) : null}
                                 </div>
@@ -455,7 +521,6 @@ function RoomDetailPanel({
     const anyBreach = open.some((c) => c.state === "breach");
     const focusCell = focusDayKey ? room.cells.find((c) => c.dayKey === focusDayKey) : null;
     const capacitySample = open.find((c) => c.capacity != null)?.capacity ?? null;
-    const staffSample = open.find((c) => c.requiredStaff != null)?.requiredStaff ?? null;
 
     const roomAssignments = useMemo(() => {
         const lines: Array<{
@@ -507,11 +572,24 @@ function RoomDetailPanel({
 
             <div className="border-b border-alloy-stone/10 px-3.5 py-2.5 text-[11px] text-alloy-slate" data-room-capacity-summary="true">
                 <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>
-                        {room.health.label || (anyBreach ? "Attention" : "—")}
-                    </span>
+                    {room.staffing ? (
+                        <span
+                            className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${staffingChipChrome(room.staffing.verdict)}`}
+                            data-room-detail-staffing={room.staffing.verdict}
+                        >
+                            {staffingVerdictLabel(room.staffing.verdict)}
+                        </span>
+                    ) : null}
+                    {room.health.label ? (
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${TONE_HEALTH[room.health.tone]}`}>
+                            {room.health.label}
+                        </span>
+                    ) : null}
                     {anyBreach ? <span className="font-semibold text-alloy-ember">Attention</span> : null}
                 </div>
+                {room.staffing?.detail ? (
+                    <p className="mt-1 text-[10.5px]">{room.staffing.detail}</p>
+                ) : null}
                 {scope === "weekly" ? (
                     <p className="mt-1.5 tabular-nums">
                         {totalCommitted} committed
@@ -521,13 +599,19 @@ function RoomDetailPanel({
                         {" · "}
                         {totalCommitted + totalProposed} projected
                         {capacitySample != null ? ` · cap ${capacitySample}` : ""}
-                        {staffSample != null ? ` · ${staffSample} staff` : ""}
                     </p>
                 ) : focusCell ? (
-                    <p className="mt-1.5 tabular-nums">
-                        {formatOccupancyCompact(focusCell)}
-                        {focusCell.requiredStaff != null ? ` · ${focusCell.requiredStaff} staff` : ""}
-                    </p>
+                    <>
+                        <p className="mt-1.5 tabular-nums">{formatOccupancyCompact(focusCell)}</p>
+                        {/* The served staffing sentence — supply of demand. Showing
+                            `requiredStaff` alone here read as a count of people. */}
+                        <p
+                            className={`mt-0.5 tabular-nums ${staffingTextChrome(focusCell.staffingSufficiency)}`}
+                            data-room-detail-day-staffing={focusCell.staffingSufficiency ?? undefined}
+                        >
+                            {focusCell.ratioLabel}
+                        </p>
+                    </>
                 ) : null}
             </div>
 
