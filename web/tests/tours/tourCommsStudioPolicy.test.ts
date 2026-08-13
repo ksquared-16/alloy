@@ -4,6 +4,7 @@ import {
     DEFAULT_TOUR_COMMS_CONFIG,
     mergeTourCommsConfig,
     parseTourCommsConfigFragment,
+    type TourCommsChannel,
 } from "@/lib/tours/comms/tourCommsConfig";
 import {
     buildTourCommsStudioDraftFromConfig,
@@ -44,8 +45,8 @@ describe("tourCommsStudioPolicy — UI helpers", () => {
         const draft = buildTourCommsStudioDraftFromConfig(DEFAULT_TOUR_COMMS_CONFIG);
         draft.reminderAmount = 48;
         const existing = [
-            { reminder_key: "tour_reminder_24h", offset_minutes: 24 * 60, channels: ["email"] as const },
-            { reminder_key: "tour_reminder_72h", offset_minutes: 72 * 60, channels: ["email"] as const },
+            { reminder_key: "tour_reminder_24h", offset_minutes: 24 * 60, channels: ["email"] as TourCommsChannel[] },
+            { reminder_key: "tour_reminder_72h", offset_minutes: 72 * 60, channels: ["email"] as TourCommsChannel[] },
         ];
         const offsets = serializeTourReminderOffsets(draft, existing);
         expect(offsets[0].offset_minutes).toBe(48 * 60);
@@ -57,8 +58,8 @@ describe("tourCommsStudioPolicy — UI helpers", () => {
         const draft = buildTourCommsStudioDraftFromConfig(DEFAULT_TOUR_COMMS_CONFIG);
         draft.reminderEnabled = false;
         const existing = [
-            { reminder_key: "tour_reminder_24h", offset_minutes: 24 * 60, channels: ["email"] as const },
-            { reminder_key: "tour_reminder_72h", offset_minutes: 72 * 60, channels: ["email"] as const },
+            { reminder_key: "tour_reminder_24h", offset_minutes: 24 * 60, channels: ["email"] as TourCommsChannel[] },
+            { reminder_key: "tour_reminder_72h", offset_minutes: 72 * 60, channels: ["email"] as TourCommsChannel[] },
         ];
         expect(serializeTourReminderOffsets(draft, existing)).toEqual([existing[1]]);
     });
