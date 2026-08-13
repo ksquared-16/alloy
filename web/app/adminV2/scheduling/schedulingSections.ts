@@ -1,20 +1,31 @@
 /**
  * Assignments Workspace product structure — Work | Studio (Operational Workspace Doctrine V3).
  *
- * Work    — Overview (attention), Roster (execution + bulk commands), Daily Roster
- *           (combined child + staff expectation for one day), Attendance.
+ * Work    — Overview (attention), Assignments (the ledger index + bulk commands),
+ *           Roster (the expected operating plan, Day or Week), Attendance (actual).
  * Studio  — Assignment Categories · Patterns · Validation. Templates stay hidden until usable.
  *
- * Commands live in the header Actions dropdown and on Roster selection — not a separate tab.
+ * There were two tabs called "Roster" and "Daily Roster". They read the same
+ * subject matter at two grains through two projections, and they disagreed: one
+ * showed a staffing verdict, the other showed capacity health beside a demand
+ * number. "Which Roster?" is not a question an operator should have to answer.
+ *
+ * Roster is now ONE surface with a Day/Week range, and the assignment index —
+ * which is ledger content, not roster content — is its own tab under its own name.
+ *
+ * Commands live in the header Actions dropdown and on Assignments selection.
  * Scheduling (room × day, ratios, patterns) is a property of assignments — not the workspace noun.
  */
 
 export type SchedulingMode = "work" | "studio";
 
-export type SchedulingWorkView = "overview" | "roster" | "daily_roster" | "attendance";
+export type SchedulingWorkView = "overview" | "assignments" | "roster" | "attendance";
 /** Templates retained for deep-link compatibility; not shown in Studio tabs until usable. */
 export type SchedulingStudioView = "types" | "patterns" | "templates" | "validation";
 export type SchedulingSection = SchedulingWorkView | SchedulingStudioView;
+
+/** The range Roster is showing. Day is the operating surface; Week is the plan. */
+export type RosterRange = "day" | "week";
 
 export const SCHEDULING_MODES = [
     { key: "work" as const, label: "Work" },
@@ -23,8 +34,8 @@ export const SCHEDULING_MODES = [
 
 export const SCHEDULING_WORK_TABS: { key: SchedulingWorkView; label: string }[] = [
     { key: "overview", label: "Overview" },
+    { key: "assignments", label: "Assignments" },
     { key: "roster", label: "Roster" },
-    { key: "daily_roster", label: "Daily Roster" },
     { key: "attendance", label: "Attendance" },
 ];
 
@@ -34,11 +45,31 @@ export const SCHEDULING_STUDIO_TABS: { key: SchedulingStudioView; label: string 
     { key: "validation", label: "Validation" },
 ];
 
+/**
+ * Resolve a work view from a deep link, including ones written before Roster was
+ * one surface. `daily_roster` was the day grain of this same tab, so it lands on
+ * Roster rather than silently falling back to Overview.
+ */
+export function resolveWorkView(raw: string | null | undefined): SchedulingWorkView | null {
+    if (!raw) return null;
+    if (raw === "daily_roster") return "roster";
+    if (raw === "overview" || raw === "assignments" || raw === "roster" || raw === "attendance") {
+        return raw;
+    }
+    return null;
+}
+
+/** The range a deep link implies. `daily_roster` meant the day grain, explicitly. */
+export function resolveRosterRange(raw: string | null | undefined): RosterRange | null {
+    if (raw === "daily_roster") return "day";
+    return null;
+}
+
 /** Which mode a section belongs to — drives mode inference on deep navigation. */
 export const SCHEDULING_SECTION_MODE: Record<SchedulingSection, SchedulingMode> = {
     overview: "work",
+    assignments: "work",
     roster: "work",
-    daily_roster: "work",
     attendance: "work",
     types: "studio",
     patterns: "studio",

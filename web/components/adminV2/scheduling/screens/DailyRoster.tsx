@@ -28,6 +28,10 @@ import {
     staffingChipChrome,
     staffingVerdictLabel,
 } from "@/components/adminV2/scheduling/staffingChrome";
+import {
+    attentionSentence,
+    compareByAttentionThenName,
+} from "@/components/adminV2/scheduling/rosterOrdering";
 
 type StaffingSufficiency = "sufficient" | "short" | "unknown" | "idle";
 
@@ -82,6 +86,18 @@ type RosterModel = {
 export type DailyRosterProps = {
     siteLocationId: string;
     siteName: string;
+    /**
+     * The day being shown, owned by the host so it survives a Day→Week→Day trip.
+     * Null means "not resolved yet" — the org's service date comes from the server,
+     * never from the browser clock, so the first request omits the date entirely.
+     */
+    date: string | null;
+    onDateChange: (date: string | null) => void;
+    /** The org's today, once the server has told us. Enables the Today control. */
+    serverToday: string | null;
+    onServerToday: (ymd: string) => void;
+    /** Roster's Day/Week control, rendered into this surface's toolbar by its host. */
+    rangeControl?: React.ReactNode;
     onOpenChild?: (subject: RosterChild) => void;
     onOpenStaff?: (subject: RosterStaff) => void;
 };
@@ -118,6 +134,16 @@ function staffingSentence(cell: RosterCell): string {
     // The badge already says "Staffed"; repeating it here spent the sentence line
     // on nothing. Say the numbers the verdict was reached from.
     return `${cell.scheduledStaffCount} of ${cell.requiredStaff ?? cell.scheduledStaffCount} staff scheduled`;
+}
+
+/**
+ * The card's left accent, overriding the shared panel token's fixed juniper.
+ * Same doctrine as the chip: pine only for an evaluated, met state.
+ */
+function accentForState(state: StaffingSufficiency): string {
+    if (state === "short") return "!border-l-alloy-gold-dark";
+    if (state === "sufficient") return "!border-l-[#00A283]";
+    return "!border-l-alloy-stone";
 }
 
 function SubjectChip({
@@ -159,20 +185,16 @@ function SubjectChip({
 export default function DailyRoster({
     siteLocationId,
     siteName,
+    date,
+    onDateChange,
+    serverToday,
+    onServerToday,
+    rangeControl,
     onOpenChild,
     onOpenStaff,
 }: DailyRosterProps) {
-    /**
-     * Null until the server tells us. The operational day is the ORGANIZATION's
-     * local service date, not the browser's: `new Date().toISOString()` rolls over
-     * at UTC midnight, so a US evening put this surface on tomorrow while Attendance
-     * — which already adopts the server's answer — stayed on today. The roster route
-     * resolves the service date and returns it as `todayYmd`, so the first request
-     * deliberately omits `date`.
-     */
-    const [date, setDate] = useState<string | null>(null);
-    /** The org's today, for the Today control. Never the browser's. */
-    const [serverToday, setServerToday] = useState<string | null>(null);
+    const setDate = onDateChange;
+    const setServerToday = onServerToday;
     const [model, setModel] = useState<RosterModel | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [openRoom, setOpenRoom] = useState<string | null>(null);
@@ -212,7 +234,7 @@ export default function DailyRoster({
             if (seq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : "Could not load the roster");
         }
-    }, [siteLocationId, date]);
+    }, [siteLocationId, date, setDate, setServerToday]);
 
     useEffect(() => {
         void load();
@@ -228,12 +250,41 @@ export default function DailyRoster({
         return `${totals.expectedChildren} children expected · ${staffPart}`;
     }, [model]);
 
+    /** A room with anyone expected or scheduled in it is operating today. */
+    const isOperating = (c: RosterCell) => c.expectedChildCount > 0 || c.scheduledStaffCount > 0;
+
+    /** Where the problems are — counts the read model computes and nothing rendered. */
+    const attention = useMemo(() => {
+        if (!model) return null;
+        return attentionSentence({
+            short: model.cells.filter((c) => c.staffingSufficiency === "short").length,
+            unknownWhileOperating: model.cells.filter(
+                (c) => c.staffingSufficiency === "unknown" && isOperating(c)
+            ).length,
+        });
+    }, [model]);
+
+    /**
+     * Attention first, then name. Alphabetical put the only room with children in
+     * it last, below the fold, behind two empty rooms.
+     */
+    const orderedCells = useMemo(() => {
+        if (!model) return [];
+        return [...model.cells].sort(
+            compareByAttentionThenName((c) => ({
+                verdict: c.staffingSufficiency,
+                operating: isOperating(c),
+                name: c.roomName,
+            }))
+        );
+    }, [model]);
+
     return (
         <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-daily-roster="true">
             <div className={`${WS_OVERVIEW_CONTENT} space-y-4`}>
                 <header className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <p className={WS_EYEBROW}>Daily Roster</p>
+                        <p className={WS_EYEBROW}>Roster</p>
                         <h2 className="text-[17px] font-semibold text-alloy-midnight">
                             {date ? formatLongDate(date) : "Today"}
                         </h2>
@@ -243,6 +294,7 @@ export default function DailyRoster({
                         </p>
                     </div>
                     <div className="flex items-center gap-1.5">
+                        {rangeControl}
                         <button
                             type="button"
                             className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10 disabled:opacity-40"
@@ -299,6 +351,17 @@ export default function DailyRoster({
                     <p className="text-[12px] text-alloy-midnight/50">Loading roster…</p>
                 ) : null}
 
+                {/* Where the problems are, before the rooms. Absent when there are
+                    none — an invented "0 problems" badge stops being read. */}
+                {attention ? (
+                    <p
+                        className="rounded-lg bg-alloy-gold/[0.10] px-3 py-2 text-[12px] font-medium text-alloy-midnight ring-1 ring-alloy-gold/30"
+                        data-roster-attention="true"
+                    >
+                        {attention}
+                    </p>
+                ) : null}
+
                 {model?.cells.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-alloy-stone/30 px-4 py-10 text-center">
                         <p className="text-[13px] font-medium text-alloy-midnight/75">No rooms at this location</p>
@@ -309,12 +372,17 @@ export default function DailyRoster({
                 ) : null}
 
                 <div className="grid gap-3 lg:grid-cols-2" data-roster-rooms="true">
-                    {(model?.cells ?? []).map((cell) => {
+                    {orderedCells.map((cell) => {
                         const isOpen = openRoom === cell.roomLocationId;
                         return (
                             <section
                                 key={cell.roomLocationId}
-                                className={`${WS_PANEL_SURFACE} p-3`}
+                                /* The shared panel token carries a fixed juniper left
+                                   accent, so every card read "fine" regardless of its
+                                   verdict and the state lived only in a small badge.
+                                   On a surface whose job is state legibility, the
+                                   strongest colour cue has to be the state. */
+                                className={`${WS_PANEL_SURFACE} p-3 ${accentForState(cell.staffingSufficiency)}`}
                                 data-roster-room={cell.roomLocationId}
                                 data-roster-state={cell.staffingSufficiency}
                             >

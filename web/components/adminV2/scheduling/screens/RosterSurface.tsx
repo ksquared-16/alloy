@@ -1,0 +1,187 @@
+"use client";
+
+/**
+ * Roster — one surface, two ranges.
+ *
+ * There used to be two tabs: "Roster" (a room × weekday board) and "Daily Roster"
+ * (rooms for one day). They read the same subject matter through two projections
+ * and told different stories about it, and the operator had to know which tab
+ * answered which question. Day and Week are a RANGE of one surface, not two
+ * products.
+ *
+ * The two ranges still come from two read models — `buildCombinedRoster` for a
+ * day, `buildRosterReadModel` for a week — and that is fine: they are the same
+ * facts indexed differently, and both resolve their verdict through the same
+ * `staffingSufficiency` contract. What must not differ is what the operator is
+ * told, so the chips, the ordering and the attention line are shared code.
+ *
+ * This is the EXPECTATION layer. Nothing here reads or writes attendance.
+ */
+
+import { useCallback, useState } from "react";
+
+import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/WeekPicker";
+import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import SchedulingRoster, {
+    type RosterData,
+    type RosterFilterContext,
+} from "@/components/adminV2/scheduling/screens/SchedulingRoster";
+import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
+import type { RosterRange } from "@/app/adminV2/scheduling/schedulingSections";
+
+export type RosterSurfaceProps = {
+    range: RosterRange;
+    onRangeChange: (range: RosterRange) => void;
+
+    siteLocationId: string;
+    siteName: string;
+
+    // ── Week range ───────────────────────────────────────────────────────────
+    weekData: RosterData | null;
+    assignmentSubjects: AssignmentRosterSubject[];
+    loadingWeek: boolean;
+    focusRoomId?: string;
+    filter?: RosterFilterContext | null;
+    onClearFilter?: () => void;
+    onSelectCell?: (roomId: string, dayKey: string) => void;
+    onSelectRoom?: (roomId: string) => void;
+    onWeekChange?: (dir: -1 | 1 | 0) => void;
+    onSelectWeek?: (weekStart: string) => void;
+    weekChangePending?: boolean;
+    lastWeekLoadMs?: number | null;
+
+    // ── Day range ────────────────────────────────────────────────────────────
+    onOpenChild?: Parameters<typeof DailyRoster>[0]["onOpenChild"];
+    onOpenStaff?: Parameters<typeof DailyRoster>[0]["onOpenStaff"];
+};
+
+function RangeControl({
+    range,
+    onRangeChange,
+}: {
+    range: RosterRange;
+    onRangeChange: (range: RosterRange) => void;
+}) {
+    return (
+        <div
+            className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25"
+            data-roster-range={range}
+        >
+            {(["day", "week"] as const).map((key, i) => (
+                <button
+                    key={key}
+                    type="button"
+                    className={[
+                        "px-3 py-1.5 text-[11.5px] font-semibold capitalize",
+                        i > 0 ? "border-l border-alloy-stone/25" : "",
+                        range === key
+                            ? "bg-alloy-bend-pine/10 text-alloy-bend-pine"
+                            : "text-alloy-slate hover:bg-alloy-stone/[0.06]",
+                    ].join(" ")}
+                    onClick={() => onRangeChange(key)}
+                    data-roster-range-option={key}
+                    aria-pressed={range === key}
+                >
+                    {key}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+export default function RosterSurface({
+    range,
+    onRangeChange,
+    siteLocationId,
+    siteName,
+    weekData,
+    assignmentSubjects,
+    loadingWeek,
+    focusRoomId,
+    filter,
+    onClearFilter,
+    onSelectCell,
+    onSelectRoom,
+    onWeekChange,
+    onSelectWeek,
+    weekChangePending,
+    lastWeekLoadMs,
+    onOpenChild,
+    onOpenStaff,
+}: RosterSurfaceProps) {
+    /**
+     * The day lives HERE, not inside the day view, so a Day → Week → Day trip comes
+     * back to the day the operator was looking at. Owned by the day view, the state
+     * unmounted on every range switch and the surface silently reset to today —
+     * "stable context" is the whole reason Roster is one surface instead of two tabs.
+     */
+    const [day, setDay] = useState<string | null>(null);
+    const [serverToday, setServerToday] = useState<string | null>(null);
+
+    /**
+     * Switching range keeps the operator at the same moment in time, in both
+     * directions: Day → Week shows the week containing that day, and Week → Day
+     * lands inside the displayed week — on today when the week contains it, else on
+     * its Monday. Jumping silently back to today on either switch is the context
+     * loss this surface exists to avoid.
+     */
+    const changeRange = useCallback(
+        (next: RosterRange) => {
+            if (next === range) return;
+            if (next === "week" && day) {
+                onSelectWeek?.(mondayOfWeekContaining(day));
+            }
+            if (next === "day") {
+                const weekStart = weekData?.weekStart ?? null;
+                if (weekStart) {
+                    const weekEnd = addDaysYmdLocal(weekStart, 6);
+                    const withinWeek =
+                        serverToday && serverToday >= weekStart && serverToday <= weekEnd;
+                    setDay(withinWeek ? serverToday : weekStart);
+                }
+            }
+            onRangeChange(next);
+        },
+        [range, day, serverToday, weekData, onRangeChange, onSelectWeek],
+    );
+
+    const control = useCallback(
+        () => <RangeControl range={range} onRangeChange={changeRange} />,
+        [range, changeRange],
+    );
+
+    if (range === "week") {
+        return (
+            <SchedulingRoster
+                data={weekData}
+                assignmentSubjects={assignmentSubjects}
+                loading={loadingWeek}
+                siteName={siteName}
+                focusRoomId={focusRoomId}
+                filter={filter}
+                onClearFilter={onClearFilter}
+                onSelectCell={onSelectCell}
+                onSelectRoom={onSelectRoom}
+                onWeekChange={onWeekChange}
+                onSelectWeek={onSelectWeek}
+                weekChangePending={weekChangePending}
+                lastWeekLoadMs={lastWeekLoadMs}
+                rangeControl={control()}
+            />
+        );
+    }
+
+    return (
+        <DailyRoster
+            siteLocationId={siteLocationId}
+            siteName={siteName}
+            date={day}
+            onDateChange={setDay}
+            serverToday={serverToday}
+            onServerToday={setServerToday}
+            rangeControl={control()}
+            onOpenChild={onOpenChild}
+            onOpenStaff={onOpenStaff}
+        />
+    );
+}

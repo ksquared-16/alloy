@@ -13,12 +13,15 @@ import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
-import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import RosterSurface from "@/components/adminV2/scheduling/screens/RosterSurface";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
     SCHEDULING_SECTION_MODE,
+    resolveRosterRange,
+    resolveWorkView,
+    type RosterRange,
     type SchedulingMode,
     type SchedulingStudioView,
     type SchedulingWorkView,
@@ -30,13 +33,14 @@ import SchedulingOverview, {
     type RosterSummary,
     type TodayActivity,
 } from "@/components/adminV2/scheduling/screens/SchedulingOverview";
-import SchedulingRoster, {
+import {
     type RosterData,
     type RosterFilterKind,
     type RosterFilterContext,
-    type RosterViewMode,
 } from "@/components/adminV2/scheduling/screens/SchedulingRoster";
-import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
+import AssignmentRosterPanel, {
+    type AssignmentRosterSubject,
+} from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import SchedulingStudio, { type StudioCalculation } from "@/components/adminV2/scheduling/screens/SchedulingStudio";
 import type { AssignmentTypeAdminRecord } from "@/lib/operationalAssignments/assignmentTypeService";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
@@ -201,7 +205,8 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const [workView, setWorkView] = useState<SchedulingWorkView>("overview");
     const [rosterBulkIntent, setRosterBulkIntent] = useState<"assignment" | "room" | null>(null);
     const [studioView, setStudioView] = useState<SchedulingStudioView>("types");
-    const [rosterView, setRosterView] = useState<RosterViewMode>("assignments");
+    /** Day is where an operator starts: "what does today look like". */
+    const [rosterRange, setRosterRange] = useState<RosterRange>("day");
     const [focusRoomId, setFocusRoomId] = useState<string | undefined>(undefined);
     const [rosterFilter, setRosterFilter] = useState<RosterFilterKind | null>(null);
 
@@ -219,7 +224,12 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             }
             if (detail.mode === "work" || detail.workView) {
                 setMode("work");
-                if (detail.workView) setWorkView(detail.workView);
+                // `daily_roster` links predate Roster being one surface. They resolve
+                // to Roster at the day range rather than falling through to Overview.
+                const resolved = resolveWorkView(detail.workView);
+                if (resolved) setWorkView(resolved);
+                const range = resolveRosterRange(detail.workView);
+                if (range) setRosterRange(range);
             }
         };
         try {
@@ -713,6 +723,10 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const navigateToRoster = useCallback((roomId?: string, filter?: string) => {
         setMode("work");
         setWorkView("roster");
+        // Overview cards are about a room across the week (near capacity, ratio
+        // risk, upcoming starts), and the filters they carry only exist on the
+        // week board. Landing on Day would drop the operator's intent.
+        setRosterRange("week");
         setFocusRoomId(roomId);
         setRosterFilter((filter as RosterFilterKind) ?? null);
     }, []);
@@ -846,8 +860,9 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             onAddAssignment={() => openCreateAssignment(null)}
             onBulkCommand={(command) => {
                 setMode("work");
-                setWorkView("roster");
-                setRosterView("assignments");
+                // Bulk commands act on the assignment LEDGER, so they land on
+                // Assignments — not on Roster, which is a projection of it.
+                setWorkView("assignments");
                 if (command === "assignment" || command === "room") {
                     setRosterBulkIntent(command);
                 } else {
@@ -898,26 +913,13 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     />
                 ) : null}
 
-                {mode === "work" && workView === "roster" ? (
-                    <SchedulingRoster
-                        data={displayRoster}
-                        assignmentSubjects={assignmentRoster ?? []}
-                        rosterView={rosterView}
-                        onRosterViewChange={setRosterView}
-                        loading={loadingRoster}
-                        loadingAssignments={loadingAssignmentRoster}
+                {mode === "work" && workView === "assignments" ? (
+                    <AssignmentRosterPanel
+                        subjects={assignmentRoster ?? []}
+                        loading={loadingAssignmentRoster}
                         siteName={siteName}
-                        focusRoomId={focusRoomId}
-                        filter={filterContext}
-                        onClearFilter={() => setRosterFilter(null)}
-                        onSelectRoom={(roomId) => setFocusRoomId(roomId)}
-                        onSelectCell={(roomId) => setFocusRoomId(roomId)}
-                        onWeekChange={onWeekChange}
-                        onSelectWeek={onSelectWeek}
-                        weekChangePending={weekChangePending}
-                        lastWeekLoadMs={lastWeekLoadMs}
                         initialBulkMode={rosterBulkIntent}
-                        rosterBulk={{
+                        bulk={{
                             onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
                             onBulkArchive: async (assignmentIds) => {
                                 for (const assignment_id of assignmentIds) {
@@ -997,10 +999,24 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     />
                 ) : null}
 
-                {mode === "work" && workView === "daily_roster" ? (
-                    <DailyRoster
+                {mode === "work" && workView === "roster" ? (
+                    <RosterSurface
+                        range={rosterRange}
+                        onRangeChange={setRosterRange}
                         siteLocationId={siteId}
                         siteName={siteName}
+                        weekData={displayRoster}
+                        assignmentSubjects={assignmentRoster ?? []}
+                        loadingWeek={loadingRoster}
+                        focusRoomId={focusRoomId}
+                        filter={filterContext}
+                        onClearFilter={() => setRosterFilter(null)}
+                        onSelectRoom={(roomId) => setFocusRoomId(roomId)}
+                        onSelectCell={(roomId) => setFocusRoomId(roomId)}
+                        onWeekChange={onWeekChange}
+                        onSelectWeek={onSelectWeek}
+                        weekChangePending={weekChangePending}
+                        lastWeekLoadMs={lastWeekLoadMs}
                         onOpenChild={(child) => {
                             // Canonical record only — a child opens as its person
                             // identity. Roster is a selection surface, not a record one.

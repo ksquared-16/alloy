@@ -15,12 +15,11 @@ import {
     staffingTextChrome,
     staffingVerdictLabel,
 } from "@/components/adminV2/scheduling/staffingChrome";
-import AssignmentRosterPanel, {
-    type AssignmentRosterBulkHandlers,
-    type AssignmentRosterSubject,
-} from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
-
-export type RosterViewMode = "assignments" | "rooms";
+import {
+    attentionSentence,
+    compareByAttentionThenName,
+} from "@/components/adminV2/scheduling/rosterOrdering";
+import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 
 export type RosterTone = "pine" | "gold" | "ember";
 
@@ -114,10 +113,7 @@ const TONE_BAR: Record<RosterTone, string> = { pine: "bg-alloy-bend-pine", gold:
 export default function SchedulingRoster({
     data,
     assignmentSubjects,
-    rosterView,
-    onRosterViewChange,
     loading,
-    loadingAssignments,
     siteName,
     focusRoomId,
     filter,
@@ -126,17 +122,14 @@ export default function SchedulingRoster({
     onSelectRoom,
     onWeekChange,
     onSelectWeek,
-    rosterBulk,
-    initialBulkMode = null,
+    rangeControl,
     weekChangePending = false,
     lastWeekLoadMs = null,
 }: {
     data: RosterData | null;
+    /** Read only by the room detail panel, to list who the room's assignments place there. */
     assignmentSubjects: AssignmentRosterSubject[];
-    rosterView: RosterViewMode;
-    onRosterViewChange: (mode: RosterViewMode) => void;
     loading: boolean;
-    loadingAssignments: boolean;
     siteName: string;
     focusRoomId?: string;
     filter?: RosterFilterContext | null;
@@ -145,8 +138,8 @@ export default function SchedulingRoster({
     onSelectRoom?: (roomId: string) => void;
     onWeekChange?: (dir: -1 | 1 | 0) => void;
     onSelectWeek?: (weekStart: string) => void;
-    rosterBulk?: AssignmentRosterBulkHandlers;
-    initialBulkMode?: "assignment" | "room" | null;
+    /** Roster's Day/Week control, rendered into this surface's toolbar by its host. */
+    rangeControl?: React.ReactNode;
     /** True the instant a week nav click fires, until the new week's data is ready (optimistic feedback). */
     weekChangePending?: boolean;
     /** Dev-only click→ready timing for the most recent week change, for perf inspection. */
@@ -156,8 +149,37 @@ export default function SchedulingRoster({
     const [detail, setDetail] = useState<{ roomId: string; dayKey: string | null } | null>(null);
     const boardRef = useRef<HTMLDivElement | null>(null);
 
-    const rooms = data?.rooms ?? [];
+    /** A room with anyone in it on any day of the week is operating that week. */
+    const isOperating = (room: RosterRoom) =>
+        room.cells.some((c) => (c.occupancy ?? 0) > 0 || (c.scheduledStaffCount ?? 0) > 0);
+
+    // Attention first, then name — the same ordering the day surface uses. A room
+    // that is short on Wednesday should not sit three rows below two empty rooms
+    // because its name starts with T.
+    const rooms = useMemo(
+        () =>
+            [...(data?.rooms ?? [])].sort(
+                compareByAttentionThenName((r) => ({
+                    verdict: r.staffing?.verdict,
+                    operating: isOperating(r),
+                    name: r.roomName,
+                })),
+            ),
+        [data],
+    );
     const days = data?.days ?? [];
+
+    /** Rooms needing attention across the displayed week. */
+    const weekAttention = useMemo(() => {
+        const src = data?.rooms ?? [];
+        if (src.length === 0) return null;
+        return attentionSentence({
+            short: src.filter((r) => r.staffing?.verdict === "short").length,
+            unknownWhileOperating: src.filter(
+                (r) => r.staffing?.verdict === "unknown" && isOperating(r),
+            ).length,
+        });
+    }, [data]);
     const weekLabel = data?.weekLabel ?? "This week";
     const highlight = useMemo(
         () => (filter?.highlightRoomIds ? new Set(filter.highlightRoomIds) : null),
@@ -207,38 +229,9 @@ export default function SchedulingRoster({
             data-roster-week-change-pending={weekChangePending ? "true" : "false"}
             data-roster-last-load-ms={lastWeekLoadMs ?? undefined}
         >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25">
-                    <button
-                        type="button"
-                        className={`px-3 py-1.5 text-[11.5px] font-semibold ${rosterView === "assignments" ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "text-alloy-slate hover:bg-alloy-stone/[0.06]"}`}
-                        onClick={() => onRosterViewChange("assignments")}
-                        data-assignment-roster-view="assignments"
-                    >
-                        Assignments
-                    </button>
-                    <button
-                        type="button"
-                        className={`border-l border-alloy-stone/25 px-3 py-1.5 text-[11.5px] font-semibold ${rosterView === "rooms" ? "bg-alloy-bend-pine/10 text-alloy-bend-pine" : "text-alloy-slate hover:bg-alloy-stone/[0.06]"}`}
-                        onClick={() => onRosterViewChange("rooms")}
-                        data-assignment-roster-view="rooms"
-                    >
-                        Room board
-                    </button>
-                </div>
-            </div>
-
-            {rosterView === "assignments" ?
-                <AssignmentRosterPanel
-                    subjects={assignmentSubjects}
-                    loading={loadingAssignments}
-                    siteName={siteName}
-                    bulk={rosterBulk}
-                    initialBulkMode={initialBulkMode}
-                />
-            :   <>
             {/* Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                {rangeControl}
                 <WeekPicker
                     weekStart={data?.weekStart}
                     weekLabel={weekLabel}
@@ -250,7 +243,7 @@ export default function SchedulingRoster({
                         else onWeekChange?.(0);
                     }}
                 />
-                <p className="text-[11px] text-alloy-slate">
+                <p className="ml-auto text-[11px] text-alloy-slate">
                     {rooms.length > 0 ? `${rooms.length} ${rooms.length === 1 ? "room" : "rooms"} · ${siteName}` : siteName}
                     {totalPlanned > 0 ? (
                         <span className="text-[#00458C]" data-scheduling-roster-total-planned={totalPlanned}>
@@ -265,6 +258,16 @@ export default function SchedulingRoster({
                     ) : null}
                 </p>
             </div>
+
+            {/* Where the problems are, before the board. */}
+            {weekAttention ? (
+                <p
+                    className="rounded-lg bg-alloy-gold/[0.10] px-3 py-2 text-[12px] font-medium text-alloy-midnight ring-1 ring-alloy-gold/30"
+                    data-roster-attention="true"
+                >
+                    {weekAttention}
+                </p>
+            ) : null}
 
             {/* Filter banner */}
             {filter ? (
@@ -350,7 +353,6 @@ export default function SchedulingRoster({
             )}
 
             {loading && rooms.length === 0 ? <p className="px-1 text-[12px] text-alloy-slate">Loading roster…</p> : null}
-            </>}
         </div>
     );
 }

@@ -41,12 +41,10 @@ test("roster product audit — week board vs the staffing verdict it is served",
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();
-    // Wait for Riverside's own rooms, not for a clock. This host runs at load 30+
-    // and every fixed sleep in this file was eventually short enough to snapshot a
+    // Wait for the surface, not for a clock. This host runs at load 30+ and every
+    // fixed sleep in this file was eventually short enough to snapshot a
     // half-loaded board and assert about it.
-    await expect(page.locator('[data-assignment-roster-view="rooms"]')).toBeVisible({
-        timeout: SETTLE,
-    });
+    await expect(page.locator("[data-roster-range]")).toBeVisible({ timeout: SETTLE });
 
     // What the API serves for the week the staff assignment does not cover.
     const api = await page.evaluate(
@@ -87,7 +85,7 @@ test("roster product audit — week board vs the staffing verdict it is served",
     log("api-week-of-2026-07-06", api);
 
     // What the BOARD renders for the same week.
-    await page.locator('[data-assignment-roster-view="rooms"]').click();
+    await page.locator('[data-roster-range-option="week"]').click();
     await expect(page.locator(`[data-scheduling-roster-room="${TODDLER}"]`)).toBeVisible({
         timeout: SETTLE,
     });
