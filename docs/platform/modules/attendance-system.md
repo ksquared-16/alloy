@@ -189,10 +189,22 @@ site-scoped, drilling site → room → subjects. Check-in / check-out / absence
 registered actions; the surface authors nothing directly and re-reads the roster projection after
 every command.
 
+⚠ **Attendance has no date control.** It adopts the org-local service date the roster route
+resolves and renders no way to change it — it is a TODAY-ONLY surface by construction. Anything
+handing off into Attendance must respect that. Roster offers `Open Attendance` only when the
+roster is on today, and states the reason on any other date rather than silently opening today,
+which would move the operator to a different day without saying so.
+
 ⚠ **Placement is provisional and is NOT the final navigation decision.** Roster / Attendance living
 inside Assignments is accepted for V1 only. Whether it becomes its own operational workspace (or
 part of a Daily Operations surface) will be revisited after real operator use — do not treat the
 current location as settled doctrine.
+
+The Roster Product V1 audit ([`../planning/roster-product-v1-stage1.md`](../planning/roster-product-v1-stage1.md))
+recommends the move and sequences it LAST, after Roster is one coherent surface, because
+relocating first would move the confusion intact. The consolidation has landed — Work is now
+`Overview · Assignments · Roster · Attendance`, with Roster a single surface carrying a Day/Week
+range and a Rooms/Staff lens. **The workspace move itself has not been done.**
 
 ### Known V1 boundaries
 

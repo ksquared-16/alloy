@@ -297,14 +297,37 @@ converts it from a report into an assertion.
 
 ## 7. Implementation slices — bounded and ordered
 
-| # | Slice | Scope | Proof |
+| # | Slice | Scope | Status |
 |---|---|---|---|
-| **1** | **Truthful week** | Render `scheduledStaffCount` / `ratioLabel` / `staffingSufficiency` on room-board cells; drive the room chip from the staffing verdict, keeping capacity as a separate signal. No read-model change. | `roster-week-staffing-truth` asserts SHORT × 5 for Jul 6. |
-| **2** | **One Roster surface** | Merge the two Roster tabs into one surface with a Day/Week range control, single date/week state, problem-first ordering, state-bearing card chrome, and the site attention line from existing `totals`. Retire the "Daily Roster" tab. | Browser: acceptance steps 3–7. |
-| **3** | **Handoffs** | Per-room `Open Attendance` (today-only, disabled with a reason otherwise) and per-subject `Manage assignment →` via existing registered commands. Preserve site + date. | Browser: acceptance steps 9, 11–12. |
-| **4** | **Staff lens** | Week-grain staff projection over `buildStaffSupply`; person → room → days. Not record management. | Browser: acceptance step 8. |
-| **5** | **Defect sweep** | The six defects in §5. | Network shows no 400s on mount; date basis is the server's `todayYmd`. |
-| **6** | **Workspace move** | New `roster` shell workspace key + sidebar entry; Roster and Attendance move; Assignments keeps Overview + assignment index + Studio. Update the provisional-placement note in `docs/platform/modules/attendance-system.md`. | Browser: full journey from the sidebar. |
+| **1** | **Truthful week** | Render `scheduledStaffCount` / `ratioLabel` / `staffingSufficiency` on room-board cells; drive the room chip from the staffing verdict, keeping capacity as a separate signal. No read-model change. | ✅ `447c0411c` — `roster-week-staffing-truth` asserts SHORT × 5 for Jul 6 |
+| **2** | **One Roster surface** | Merge the two Roster tabs into one surface with a Day/Week range control, single date state, problem-first ordering, state-bearing card chrome, and the site attention line. Retire the "Daily Roster" tab. | ✅ `4965f1bb1` — `roster-one-surface` (6) |
+| **3** | **Handoffs** | Per-room `Open Attendance` (today-only, with a stated reason otherwise) and per-subject `Manage assignment →` into the ledger. Preserve site + room. | ✅ `264b59ece` — `roster-handoffs` (3) |
+| **4** | **Staff lens** | Week-grain staff projection; person → room → days. A pivot of the served week data. Not record management. | ✅ `aee51c590` — `roster-staff-lens` (2) |
+| **5** | **Defect sweep** | The six defects in §5. | ✅ `cc6f31bf5` + folded into 1–2 |
+| **6** | **Workspace move** | New `roster` shell workspace key + sidebar entry; Roster and Attendance move; Assignments keeps Overview + assignment index + Studio. Update the provisional-placement note in `docs/platform/modules/attendance-system.md`. | ⛔ **NOT DONE** |
+
+### What actually shipped, against the acceptance story
+
+Steps 3–12 of §6 pass in the browser. `roster-week-staffing-truth`,
+`roster-one-surface`, `roster-handoffs`, `roster-staff-lens` and
+`roster-site-switch-truth` are green together with `attendance-smoke` — 16/16,
+twice — and CI is green with both typecheck graphs executed (`steps=8`).
+
+Two defects found while verifying, neither in the original list, both fixed:
+
+- **The day roster rendered one campus's rooms under another campus's name.**
+  No stale-response guard, so a late site response won the cards while the header
+  already showed the new site. Worse than everything in §5: it answers "who is
+  supposed to be here" with a confident, well-formatted lie. Reproduced
+  deterministically and guarded (`cc6f31bf5`).
+- The day surface took "today" from the browser's UTC clock while Attendance
+  adopted the org-local service date the same route returns.
+
+**Slice 6 is the one piece of the accepted plan not built.** Nothing blocks it —
+it is bounded work (a `AdminV2WorkspaceModalKey`, a sidebar entry, a shell mount,
+deep-link plumbing, and moving Attendance across) and the sequencing argument for
+doing it last still holds. It was left because the session ran out of room, not
+because it turned out to be wrong.
 
 Out of scope and untouched: attendance facts, staff presence, employment schema, scheduling,
 staffing math, ratio engine, roster persistence, Records workspace, Attendance V1.1.
