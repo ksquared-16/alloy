@@ -325,6 +325,24 @@ Resource defaults (override in `~/.config/alloy-dev/config`): `ALLOY_MAX_ACTIVE_
 
 **Short Kelly prompt:** see §5 of the canonical doctrine (bootstrap + first-response card only).
 
+### Local parallelism & performance contract
+
+Six permanent slots are supported. **Coding is parallel by default.** Orchestration must not multiply expensive work across N slots.
+
+| Class | Examples | Rule |
+|-------|----------|------|
+| **A — cheap / parallel-safe** | file/code inspection, git, targeted unit tests, static checks, lightweight Node, Vacilando Director status | Free to run in every slot |
+| **B — moderate** | Next dev server, targeted compile, larger test suites | Slot-owned; capacity-guarded (`ALLOY_MAX_RUNNING_SERVERS`, validate broker) |
+| **C — expensive / machine-bounded** | Playwright / Chromium browser certification, video/trace E2E, full-graph typecheck | **Capacity 1** via `alloy-compute` (`browser-certification`, `full-typecheck`). Second caller waits or sees the owner. Override is explicit and loud. |
+
+**Vacilando status** uses one Node workspace snapshot with singleflight + TTL. It must never rediscover every worktree through parallel `alloy-ro` shell fan-out. Recursive worktree-size (`du -sk`) never runs on `/api/state`, `/api/resources`, SSE, or client polls — only the slow ≥15-minute disk path (or explicit `/api/resources/worktree-disk`).
+
+**Dev servers** are slot-owned (`metadata` → `pids/<worktree>.pid` → port). `alloy-dev-start` refuses duplicates; `alloy-dev-stop` / sprint finish stop only the owned PID/tree — never `pkill node` / `pkill next`.
+
+**Entry points for class C:** `alloy-validate … playwright` (and `command -- … playwright …`) acquire `browser-certification` before launch. Capture scripts should use `lib/browser-cert-lease.mjs` (`withBrowserCertLease`). Override: `ALLOY_BROWSER_CERT_OVERRIDE=i-accept-parallel-browser-certification`.
+
+New local-dev tooling must be evaluated for **multiplicative cost across N slots** before it ships on the hot path.
+
 ### Interpreting `alloy-ai-health` (read-only)
 
 `alloy-ai-health` reports sizes and process counts for orientation. It does **not** claim causation and does **not** delete anything.

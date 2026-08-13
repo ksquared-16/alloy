@@ -2,21 +2,18 @@
  * Vacilando Runtime — machine & process resource reads (Slice 8).
  *
  * Authoritative OS reads only. Per-worker CPU/mem/elapsed/port come from the
- * dev-server PID (the one process we can confidently attribute to a slot, via
- * `alloy-ro dev-status`); disk from a bounded `du`; the overall machine picture
- * from node's `os` module. When no matching process can be confidently
- * identified (e.g. a slot with no running server, or the editor app whose PID
- * the toolkit does not track), resources are reported as `null` — never faked.
+ * dev-server PID (via the Node workspace snapshot / batched listen table).
  *
- * Provider token/cost is NOT available (no headless usage source on staging);
- * it is reported as unavailable with the integration that would provide it.
+ * Worktree `du -sk` is NOT on the high-frequency resources/status path. Disk
+ * sizes are filled from a slow cache (15 min TTL) when available; otherwise
+ * `disk_mb` is null with an honest note. Explicit refresh uses collectWorktreeDiskSizes.
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
 
-import { ro } from "./sources.mjs";
+import { collectRaw, DISK_SIZE_TTL_MS, noteDuExecution } from "./sources.mjs";
 
 const WORKTREE_ROOT = join(os.homedir(), "Code", "alloy-worktrees");
 
@@ -43,14 +40,6 @@ async function psStats(pid) {
   };
 }
 
-/**
- * macOS-authoritative memory. os.freemem() only counts truly-free pages and
- * grossly overstates "used" (it ignores inactive/purgeable/speculative memory
- * that is reclaimable without swap). We read vm_stat + sysctl instead:
- *   available = free + inactive + speculative + purgeable   (reclaimable)
- *   used      = active + wired + compressed                 (real footprint)
- * plus swap from vm.swapusage. Pressure matches `memory_pressure` reality.
- */
 async function macMemory(totalBytes) {
   const vm = await run("vm_stat", [], 3000);
   if (!vm.ok) return null;
@@ -67,11 +56,10 @@ async function macMemory(totalBytes) {
     const t = sw.out.match(/total = ([\d.]+)M/), u = sw.out.match(/used = ([\d.]+)M/);
     swap = { total_mb: t ? Math.round(Number(t[1])) : null, used_mb: u ? Math.round(Number(u[1])) : null };
   }
-  // Kernel's authoritative pressure level: 1=normal, 2=warn, 4=critical.
   const pl = await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"], 2000);
   const level = pl.ok ? Number(pl.out.trim()) : null;
   return {
-    pressure_level: level, // 1|2|4|null
+    pressure_level: level,
     pressure: level === 4 ? "high" : level === 2 ? "elevated" : level === 1 ? "ok" : null,
     total_mb: Math.round(totalBytes / 1048576),
     available_mb: Math.round(available / 1048576),
@@ -84,38 +72,108 @@ async function macMemory(totalBytes) {
   };
 }
 
-/** Bounded disk usage (KB→MB) for a worktree; null if it can't be measured fast. */
-async function diskMb(path) {
+const diskCache = { at: 0, byWorktree: new Map(), inflight: null, last_error: null, last_trigger: null, last_paths: [] };
+
+async function diskMbOnce(path) {
   if (!path || !existsSync(path)) return null;
-  const r = await run("du", ["-sk", path], 2500);
+  noteDuExecution();
+  // Bound depth cost: still recursive du, but only on the slow path.
+  const r = await run("du", ["-sk", path], 12000);
   if (!r.ok) return null;
   const kb = Number((r.out.trim().split(/\s+/)[0]) || 0);
   return kb ? Math.round(kb / 1024) : null;
 }
 
+/**
+ * Expensive worktree-size scan — explicit / slow TTL only.
+ * Concurrent callers share one compute; never invoked from collectResources.
+ * Failures degrade to last-good / empty sizes — never throw into status paths.
+ */
+export async function collectWorktreeDiskSizes({ force = false, worktrees = null, trigger = "explicit" } = {}) {
+  const now = Date.now();
+  if (!force && diskCache.byWorktree.size && now - diskCache.at < DISK_SIZE_TTL_MS) {
+    return { at: diskCache.at, sizes: Object.fromEntries(diskCache.byWorktree), cached: true, trigger: diskCache.last_trigger };
+  }
+  if (diskCache.inflight) return diskCache.inflight;
+
+  diskCache.inflight = (async () => {
+    diskCache.last_trigger = trigger;
+    diskCache.last_error = null;
+    diskCache.last_paths = [];
+    try {
+      const raw = await collectRaw();
+      const names = worktrees || (raw.agents.agents || []).map((a) => a.worktree).filter(Boolean);
+      // Sequential — do not fan out one du per worktree in parallel.
+      for (const name of names) {
+        const path = join(WORKTREE_ROOT, name);
+        diskCache.last_paths.push(path);
+        try {
+          const mb = await diskMbOnce(path);
+          if (mb != null) diskCache.byWorktree.set(name, mb);
+        } catch (e) {
+          diskCache.last_error = String(e.message || e);
+        }
+      }
+      diskCache.at = Date.now();
+      return { at: diskCache.at, sizes: Object.fromEntries(diskCache.byWorktree), cached: false, trigger };
+    } catch (e) {
+      diskCache.last_error = String(e.message || e);
+      // Degrade: keep prior sizes if any; never throw into timers / HTTP.
+      return {
+        at: diskCache.at || Date.now(),
+        sizes: Object.fromEntries(diskCache.byWorktree),
+        cached: Boolean(diskCache.byWorktree.size),
+        error: diskCache.last_error,
+        trigger,
+      };
+    } finally {
+      diskCache.inflight = null;
+    }
+  })();
+  return diskCache.inflight;
+}
+
+export function peekWorktreeDiskCache() {
+  return {
+    age_ms: diskCache.at ? Date.now() - diskCache.at : null,
+    ttl_ms: DISK_SIZE_TTL_MS,
+    sizes: Object.fromEntries(diskCache.byWorktree),
+    last_trigger: diskCache.last_trigger,
+    last_error: diskCache.last_error,
+    last_paths: [...diskCache.last_paths],
+    inflight: Boolean(diskCache.inflight),
+  };
+}
+
 export async function collectResources() {
-  // dev-status is fast (no git) and gives worktree/slot/port/server/server_pid.
-  const dev = await ro("dev-status");
-  const servers = dev.ok && Array.isArray(dev.data.servers) ? dev.data.servers : [];
+  // Reuse the board's singleflight workspace snapshot (no alloy-ro, no du).
+  const raw = await collectRaw();
+  const servers = Array.isArray(raw.servers) && raw.servers.length
+    ? raw.servers
+    : (raw.agents.agents || []).map((a) => ({
+      worktree: a.worktree,
+      slot: Number(a.slot) || null,
+      port: a.port || null,
+      server: a.server,
+      server_pid: "",
+    }));
+
+  const diskPeek = peekWorktreeDiskCache();
 
   const workers = await Promise.all(servers.map(async (s) => {
-    const path = join(WORKTREE_ROOT, s.worktree);
     const running = s.server === "running" && s.server_pid;
-    const [proc, disk] = await Promise.all([
-      running ? psStats(s.server_pid) : Promise.resolve(null),
-      diskMb(path),
-    ]);
+    const proc = running ? await psStats(s.server_pid) : null;
+    const disk = diskPeek.sizes[s.worktree];
     return {
       slot: s.slot,
       worktree: s.worktree,
       server: s.server,
       port: s.port || null,
-      // The dev-server process is the only one we can confidently attribute.
-      server_process: proc, // {pid, cpu_pct, mem_pct, elapsed, rss_mb, state} | null
-      // The editor/provider app PID is not tracked by the toolkit → honest null.
+      server_process: proc,
       provider_process: null,
       provider_process_note: "editor app PID is not tracked by the toolkit",
-      disk_mb: disk,
+      disk_mb: disk != null ? disk : null,
+      disk_note: disk != null ? null : "worktree size is measured on a 15-minute cadence (not on status poll)",
     };
   }));
 
@@ -127,12 +185,8 @@ export async function collectResources() {
   };
   const load = os.loadavg();
   const cpuCount = os.cpus().length;
-  const loadPct = Math.round((load[1] / cpuCount) * 100); // 5-min load is steadier than 1-min
+  const loadPct = Math.round((load[1] / cpuCount) * 100);
   const occupied = servers.length;
-  // Pressure comes from the KERNEL's authoritative level (kern.memorystatus_vm_
-  // pressure_level: 1 normal / 2 warn / 4 critical). Fall back to a load/used
-  // heuristic only if the kernel value is unavailable. Reclaimable memory is not
-  // "used", so this reflects real macOS pressure, not os.freemem()'s overstatement.
   const pressure = mem.pressure || (mem.used_pct >= 90 || loadPct >= 200 ? "high" : mem.used_pct >= 80 || loadPct >= 130 ? "elevated" : "ok");
   const recommendedAvailable = pressure === "high" ? 0 : pressure === "elevated" ? Math.min(1, Math.max(0, 6 - occupied)) : Math.max(0, 6 - occupied);
 
@@ -158,5 +212,6 @@ export async function collectResources() {
       warning: pressure === "high" ? "High machine pressure — do not start new workers; consider pausing an idle one." : pressure === "elevated" ? "Elevated pressure — start at most one lightweight worker." : null,
     },
     provider_cost: { available: false, note: "Aggregated per Director round-trip (see /api/usage). Cursor reports tokens; Claude reports cost when authenticated." },
+    disk_policy: { hot_path_du: false, ttl_ms: DISK_SIZE_TTL_MS, cache_age_ms: diskPeek.age_ms },
   };
 }

@@ -16,6 +16,8 @@ source "${SCRIPT_DIR}/lib/validate-caps.sh"
 source "${SCRIPT_DIR}/lib/agent.sh"
 # shellcheck source=lib/sprint-ops.sh
 source "${SCRIPT_DIR}/lib/sprint-ops.sh"
+# shellcheck source=lib/browser-cert-lease.sh
+source "${SCRIPT_DIR}/lib/browser-cert-lease.sh"
 
 usage() {
   cat <<'EOF'
@@ -188,8 +190,22 @@ run_validate() {
   ) &
   hb_pid=$!
 
+  # Machine-bounded browser certification: capacity-1 lease on top of the
+  # host-wide validate lock so two Chromium fleets cannot start even when
+  # callers bypass the broker kind and use `command -- npx playwright …`.
+  local browser_lease=0
+  local browser_holder=""
+  if [[ "$kind" == "playwright" ]] || alloy_command_is_browser_certification "$cmd"; then
+    browser_holder="$(basename "$path")"
+    if alloy_browser_cert_acquire --wait --reason "alloy-validate ${kind} ${name}" --holder "$browser_holder"; then
+      browser_lease=1
+    else
+      alloy_die "browser-certification lease refused — another slot holds the machine-bounded Playwright capacity (alloy-compute status browser-certification)"
+    fi
+  fi
+
   # shellcheck disable=SC2064
-  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; alloy_release_resource_slot "'"$heavy_lock"'"; alloy_validate_release_lock' EXIT INT TERM HUP
+  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; alloy_release_resource_slot "'"$heavy_lock"'"; alloy_validate_release_lock' EXIT INT TERM HUP
 
   local vlog
   vlog="$(alloy_validate_log_path)"
@@ -215,7 +231,7 @@ run_validate() {
   local pgid_file
   pgid_file="$(alloy_validate_pgid_file)"
   # shellcheck disable=SC2064
-  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; alloy_reap_owned_job "'"$pgid_file"'"; alloy_release_resource_slot "'"$heavy_lock"'"; alloy_validate_release_lock' EXIT INT TERM HUP
+  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; alloy_reap_owned_job "'"$pgid_file"'"; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; alloy_release_resource_slot "'"$heavy_lock"'"; alloy_validate_release_lock' EXIT INT TERM HUP
 
   if [[ "$use_argv" -eq 1 ]]; then
     ( cd "$web_dir" && alloy_run_owned "$pgid_file" "$vlog" --argv \
