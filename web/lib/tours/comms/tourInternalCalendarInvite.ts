@@ -179,7 +179,7 @@ export async function sendTourInternalCalendarInvite(params: {
     }
 
     if (messageIds.length > 0) {
-        await triggerBackendMessagesQueue({ reason: "tour_internal_calendar" });
+        await triggerBackendMessagesQueue({ limit: 25 });
     }
 
     if (params.action !== "cancel") {

@@ -104,8 +104,8 @@ export type OperationalTourSignal = {
     statusLabel: string | null;
     /** ID of the active tour_bookings row — present when scheduled=true, null otherwise. */
     bookingId: string | null;
-    /** Operator-facing parent attendance confirmation label. */
-    parentConfirmationLabel: string | null;
+    /** Operator-facing parent attendance confirmation label when composed. */
+    parentConfirmationLabel?: string | null;
 };
 
 export type OperationalCommunicationsSignal = {

@@ -268,7 +268,7 @@ export async function loadTourCommsLibraryOverrides(params: {
         const ver = versionId ? versionById.get(versionId) : null;
         if (!ver?.body?.trim()) continue;
         const channelTpl: TourCommsTemplate = {
-            subject: ver.subject,
+            subject: ver.subject ?? undefined,
             body_text: ver.body,
         };
         const eventBucket = out[parsed.eventKey] ?? {};

@@ -145,7 +145,7 @@ export function InlineOpportunityFocusPanel() {
         reloadDisplayVm,
     } = useRecordWorkRuntime(settlementSubjectId);
     if (typeof window !== "undefined") {
-        window.__ALLOY_FOCUS_SETTLEMENT_DIAG__ = {
+        (window as Window & { __ALLOY_FOCUS_SETTLEMENT_DIAG__?: Record<string, unknown> }).__ALLOY_FOCUS_SETTLEMENT_DIAG__ = {
             isChildSubject,
             entityType: operational.entityType,
             subjectGrain: operational.subjectGrain,
