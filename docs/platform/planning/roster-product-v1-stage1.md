@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-13
+supersedes: []
+---
+
 # Roster Product V1 — Stage 1 product audit and recommendation
 
 **Sprint:** `roster-workspace` (slot 1) · **Base:** `origin/staging` @ `28e459b54`
