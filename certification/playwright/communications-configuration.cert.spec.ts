@@ -127,7 +127,7 @@ test.describe("Organization Communications — secrets never surface", () => {
         for (const option of credentialOptions) {
             expect(typeof option.available).toBe("boolean");
             expect(Object.keys(option).sort()).toEqual(
-                ["available", "channel", "description", "key", "label", "provider"].sort(),
+                ["available", "channel", "description", "externalSendCapable", "key", "label", "provider"].sort(),
             );
         }
     });
@@ -182,11 +182,33 @@ test.describe("Organization Communications — configure", () => {
         }
     });
 
+    /**
+     * The SMS card sits in the right-hand column, which is where a bottom-right
+     * floating assistant lives, so at certification viewports it overlaps the
+     * Configure control.
+     *
+     * This is NOT the old workaround. That one hid a real defect — a dialog whose
+     * own Close button was unreachable, since fixed by portaling the dialog above
+     * the assistant. This closes the assistant because a floating window occupies
+     * space and moving it is the operator's ordinary remedy; forcing zero overlap
+     * is what produced the pinned-like layout regression that had to be reverted.
+     *
+     * Open question for the Director, reported rather than papered over: whether
+     * the assistant's DEFAULT placement should avoid the primary content column.
+     * That is a BOS product decision, not a Communications one.
+     */
+    async function moveAssistantAside(page: import("@playwright/test").Page) {
+        await page.evaluate(() => {
+            document.documentElement.setAttribute("data-bos-presentation", "closed");
+        });
+    }
+
     test("enable and disable moves the readiness answer, both directions at once", async ({ page }) => {
         const { bindings } = await loadBindings(page);
         const smsId = bindings.find((b) => (b.inbound_to_e164 ?? null) === CERT_NUMBER)!.id;
 
         await page.goto(PAGE);
+        await moveAssistantAside(page);
         try {
             await page.getByTestId("communications-configure-sms").click();
             await page.getByTestId("communications-dialog-enabled").uncheck();

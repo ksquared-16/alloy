@@ -316,7 +316,12 @@ test.describe("Connect succeeds end to end — the gap the synthetic credential 
         expect(synthetic, "the certification credential must be offered in a certification run").toBeTruthy();
         expect(synthetic!.available).toBe(true);
 
-        const address = `lakeside-${Date.now()}@northwind-cert.invalid`;
+        // A FIXED address, not a minted one. Removal now deactivates in place and
+        // keeps `location_id` (so a campus identity can never become an
+        // organization candidate), which means a per-run address would leave a new
+        // disabled Lakeside override behind on every run and the tenant would
+        // drift away from its fixture topology.
+        const address = "lakeside-connect-cert@northwind-cert.invalid";
         let createdId: string | null = null;
 
         try {
@@ -352,8 +357,10 @@ test.describe("Connect succeeds end to end — the gap the synthetic credential 
         } finally {
             if (createdId) {
                 // Return the tenant to its fixture topology: Lakeside inherits.
+                // Return Lakeside to inheritance: deactivate, keeping its location
+                // (the corrected removal semantics). Re-running reuses this row.
                 const cleanup = await page.request.patch(`${BINDINGS}/${createdId}`, {
-                    data: { status: "disabled", location_id: null },
+                    data: { status: "disabled" },
                     failOnStatusCode: false,
                 });
                 expect(cleanup.ok(), "fixture cleanup must succeed").toBe(true);

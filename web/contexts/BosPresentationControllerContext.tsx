@@ -21,8 +21,6 @@ import {
     type BosPresentationState,
 } from "@/lib/bos/bosPresentationPreference";
 import {
-    bosFloatingEdge,
-    bosFloatingReservePx,
     clampBosFloatingGeometry,
     defaultBosFloatingGeometry,
     geometriesEqual,
@@ -169,24 +167,16 @@ export function BosPresentationControllerProvider({
             derivation.reservedWidthPx > 0 ? `${derivation.reservedWidthPx}px` : "0px",
         );
 
-        // Floating reserve — the fix for actions scrolling underneath the
-        // assistant. When it is parked against an edge (where it starts), the
-        // workspace insets by its width, exactly as `pinned` already reserves
-        // `--ws-rail`. Dragged into the middle, nothing is reserved: that is a
-        // deliberate operator placement, not a default that hides their work.
-        const edge = derivation.effective === "floating" ? bosFloatingEdge(floatingGeometry, viewportBounds()) : "free";
-        const floatReserve =
-            derivation.effective === "floating" ? bosFloatingReservePx(floatingGeometry, viewportBounds()) : 0;
-        document.documentElement.setAttribute("data-bos-floating-edge", edge);
-        document.documentElement.style.setProperty("--bos-float-reserve", `${floatReserve}px`);
-
+        // NOTE: floating publishes NO layout reserve. Insetting the workspace by
+        // the panel width made floating behave like pinned — the page narrowed and
+        // the assistant read as a docked side panel, collapsing the distinction
+        // the two modes exist to express. Reachability belongs to overlay z-order
+        // (ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z), not to layout.
         return () => {
             document.documentElement.removeAttribute(BOS_PRESENTATION_ATTR);
             document.documentElement.removeAttribute(BOS_PRESENTATION_PREFERRED_ATTR);
-            document.documentElement.removeAttribute("data-bos-floating-edge");
-            document.documentElement.style.removeProperty("--bos-float-reserve");
         };
-    }, [ambientEl, derivation, floatingGeometry]);
+    }, [ambientEl, derivation]);
 
     const setPreferred = useCallback((state: BosPresentationState) => {
         writeBosPresentationPreference(state);

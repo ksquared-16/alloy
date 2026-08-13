@@ -2970,32 +2970,18 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
 }
 
 /*
- * Floating BOS reserve — shared-shell fix.
+ * Floating BOS does NOT reserve layout. That is the product model, not an
+ * oversight — see `bosFloatingGeometry.ts`.
  *
- * The floating assistant is `position: fixed`, and page content scrolls beneath
- * it. Any primary action below the fold became unreachable the moment it scrolled
- * into the assistant's band: the click landed on the assistant, silently, with no
- * error. Reproduced on /organization/access with no Communications code, so this
- * is shell-owned rather than page-owned.
+ * A previous revision insetting the workspace by the panel's width made FLOATING
+ * behave like PINNED: the page narrowed and the assistant read as a docked side
+ * panel. It fixed click interception by deleting the distinction the two modes
+ * exist to express.
  *
- * The invariant restored: platform chrome must never make primary page actions
- * unreachable.
+ *     unpinned -> floating overlay, page keeps its full width
+ *     pinned   -> reserved workspace column (--ws-rail, above)
  *
- * The mechanism is the one `pinned` already uses — reserve a column — applied to
- * the presentation that skipped it. `--bos-float-reserve` is published by
- * BosPresentationControllerContext and is non-zero ONLY while the assistant is
- * parked against an edge (its default) and the remaining content column stays
- * usable. Dragged into the middle it reserves nothing, because a window the
- * operator deliberately placed over their work is theirs to move.
+ * Reachability is handled where the real defect was — nested overlay z-order, so
+ * dialogs open ABOVE the assistant (see ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z)
+ * — and by the assistant remaining a movable window the operator controls.
  */
-html[data-bos-presentation="floating"][data-bos-floating-edge="right"]
-  [data-adminv2-workspace-ambient-root] {
-  padding-right: var(--bos-float-reserve, 0px);
-  transition: padding-right 120ms ease-out;
-}
-
-html[data-bos-presentation="floating"][data-bos-floating-edge="left"]
-  [data-adminv2-workspace-ambient-root] {
-  padding-left: var(--bos-float-reserve, 0px);
-  transition: padding-left 120ms ease-out;
-}

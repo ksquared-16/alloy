@@ -46,6 +46,8 @@ export type ProviderCredentialOption = {
     secretRef: string;
     /** Which env name decides availability. Server-side only; `null` = always present. */
     envVar: string | null;
+    /** Can this connection reach a real provider? See PublicCredentialOption. */
+    externalSendCapable: boolean;
 };
 
 /** The client-facing shape: no `secret_ref`, no environment variable name. */
@@ -53,10 +55,21 @@ export type PublicCredentialOption = {
     key: string;
     channel: "sms" | "email";
     provider: string;
+    /** Product name of the CONNECTION, e.g. "Firefly Resend". Never infra vocabulary. */
     label: string;
     description: string;
     /** True when the deployment has provisioned this credential. Presence only. */
     available: boolean;
+    /**
+     * Whether choosing this connection makes REAL EXTERNAL DELIVERY possible.
+     *
+     * The question an administrator actually needs answered before clicking
+     * Connect: "could this send a message to a real person?" A certification
+     * connection resolves to no secret at all and is structurally unable to
+     * authenticate, so it is `false`. A deployment connection backed by a real
+     * provisioned key is `true`.
+     */
+    externalSendCapable: boolean;
 };
 
 /**
@@ -70,21 +83,23 @@ const CATALOG: readonly ProviderCredentialOption[] = [
         key: "resend_deployment_key",
         channel: "email",
         provider: "resend",
-        label: "Resend — deployment API key",
+        label: "Resend — this deployment's connection",
         description:
-            "The Resend key provisioned for this deployment. Used to send, and to retrieve the body of received mail.",
+            "The Resend account this Alloy deployment is configured with. Sends real email and retrieves real replies.",
         secretRef: "env:RESEND_API_KEY",
         envVar: "RESEND_API_KEY",
+        externalSendCapable: true,
     },
     {
         key: "twilio_deployment_token",
         channel: "sms",
         provider: "twilio",
-        label: "Twilio — deployment auth token",
+        label: "Twilio — this deployment's connection",
         description:
-            "The Twilio auth token provisioned for this deployment. Used to send, and to verify inbound and status webhooks.",
+            "The Twilio account this Alloy deployment is configured with. Sends real texts and receives real replies.",
         secretRef: "env:TWILIO_AUTH_TOKEN",
         envVar: "TWILIO_AUTH_TOKEN",
+        externalSendCapable: true,
     },
     {
         key: "twilio_legacy_global",
@@ -92,9 +107,10 @@ const CATALOG: readonly ProviderCredentialOption[] = [
         provider: "twilio",
         label: "Twilio — shared platform account (legacy)",
         description:
-            "The process-wide Twilio account retained for migrated organizations. Prefer the deployment auth token for anything new.",
+            "The shared Twilio account retained for migrated organizations. Sends real texts. Prefer this deployment's own connection for anything new.",
         secretRef: "legacy_global_twilio",
         envVar: "TWILIO_AUTH_TOKEN",
+        externalSendCapable: true,
     },
 ];
 
@@ -143,21 +159,23 @@ const CERTIFICATION_CATALOG: readonly ProviderCredentialOption[] = [
         key: "certification_email",
         channel: "email",
         provider: "resend",
-        label: "Certification — synthetic email credential",
+        label: "Certification connection (cannot send externally)",
         description:
-            "Certification only. Creates a connectable channel that structurally cannot authenticate to a provider.",
+            "Certification only. Nothing can leave this environment — it resolves to no credential at all.",
         secretRef: CERTIFICATION_SECRET_REF_EMAIL,
         envVar: null,
+        externalSendCapable: false,
     },
     {
         key: "certification_sms",
         channel: "sms",
         provider: "twilio",
-        label: "Certification — synthetic SMS credential",
+        label: "Certification connection (cannot send externally)",
         description:
-            "Certification only. Creates a connectable channel that structurally cannot authenticate to a provider.",
+            "Certification only. Nothing can leave this environment — it resolves to no credential at all.",
         secretRef: CERTIFICATION_SECRET_REF_SMS,
         envVar: null,
+        externalSendCapable: false,
     },
 ];
 
@@ -191,6 +209,7 @@ export function publicCredentialOption(
         label: option.label,
         description: option.description,
         available: credentialAvailable(option, env),
+        externalSendCapable: option.externalSendCapable,
     };
 }
 

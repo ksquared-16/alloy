@@ -175,8 +175,11 @@ describe("credential catalogue — nothing secret crosses the boundary", () => {
         const option = findCredentialOption("twilio_deployment_token")!;
         const pub = publicCredentialOption(option, PROVISIONED) as Record<string, unknown>;
         expect(Object.keys(pub).sort()).toEqual(
-            ["available", "channel", "description", "key", "label", "provider"].sort(),
+            ["available", "channel", "description", "externalSendCapable", "key", "label", "provider"].sort(),
         );
+        // The new field answers "could this send to a real person?" and is a
+        // boolean — it must never become a place a credential detail leaks.
+        expect(typeof pub.externalSendCapable).toBe("boolean");
     });
 });
 

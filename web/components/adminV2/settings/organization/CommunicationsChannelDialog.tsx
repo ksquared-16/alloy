@@ -222,6 +222,62 @@ export default function CommunicationsChannelDialog({
                 <div className="space-y-3 px-4 py-3 text-[12px]">
                     {connecting ? (
                         <>
+                            {/*
+                              * WHAT AM I CONNECTING TO? An administrator must be able
+                              * to answer that before clicking, without reading code or
+                              * asking an engineer. Provider, the named connection, and
+                              * whether choosing it makes real external delivery
+                              * possible — stated plainly, with no credential detail.
+                              */}
+                            <dl
+                                className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-2.5 py-2 text-[11px]"
+                                data-testid="communications-dialog-connection-summary"
+                            >
+                                <div className="flex justify-between gap-2">
+                                    <dt className="text-alloy-midnight/50">Provider</dt>
+                                    <dd className="font-medium text-alloy-midnight/85">
+                                        {card.providerLabel ?? (isEmail ? "Resend" : "Twilio")}
+                                    </dd>
+                                </div>
+                                <div className="mt-0.5 flex justify-between gap-2">
+                                    <dt className="text-alloy-midnight/50">Connection</dt>
+                                    <dd
+                                        className="min-w-0 truncate font-medium text-alloy-midnight/85"
+                                        data-testid="communications-dialog-connection-name"
+                                    >
+                                        {chosenCredential?.label ?? "None available"}
+                                    </dd>
+                                </div>
+                                <div className="mt-0.5 flex justify-between gap-2">
+                                    <dt className="text-alloy-midnight/50">Real messages</dt>
+                                    <dd
+                                        className={
+                                            chosenCredential?.externalSendCapable
+                                                ? "font-semibold text-amber-900"
+                                                : "font-medium text-alloy-midnight/70"
+                                        }
+                                        data-testid="communications-dialog-external-capability"
+                                    >
+                                        {chosenCredential
+                                            ? chosenCredential.externalSendCapable
+                                                ? "Yes — can send to real people"
+                                                : "No — cannot leave this environment"
+                                            : "—"}
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            {credentialOptions.length === 0 || !credentialOptions.some((c) => c.available) ? (
+                                <p
+                                    className="rounded-md border border-alloy-ember/30 bg-alloy-ember/[0.06] px-2.5 py-2 text-[11px] leading-snug text-alloy-ember"
+                                    data-testid="communications-dialog-no-connection"
+                                >
+                                    <strong>No approved connection is available.</strong> This deployment has no{" "}
+                                    {isEmail ? "email" : "SMS"} provider connection configured, so this channel cannot be
+                                    completed here. An administrator must configure one for the deployment first.
+                                </p>
+                            ) : null}
+
                             <Field label="Credential">
                                 <select
                                     value={credentialKey}
