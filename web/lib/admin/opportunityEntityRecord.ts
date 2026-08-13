@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { apiOk, apiError } from "@/lib/api/apiResponse";
 import { CORRELATION_ID_HEADER, resolveCorrelationId } from "@/lib/api/correlationId";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { collectLinkedContactsFromOpportunityRecord } from "@/lib/admin/drawer/collectLinkedPersonIdsFromOpportunityRecord";
+import { buildCaseEmploymentProjection } from "@/lib/employment/buildCaseEmploymentProjection";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import {
@@ -1637,6 +1639,39 @@ export async function buildOpportunityDrawerVisiblePayload(
     primary_child: null,
     inquiry: { title: inquiryTitleEarlyV, lines: [], section_key: "quote" },
   };
+
+  // ── Employment of the case's linked contacts (related-subject projection) ──
+  //
+  // A person has no host Work Unit of its own, so a Person attention gesture resolves through the
+  // household to THIS case — which makes this payload the only envelope that can carry that
+  // person's employment to the Focus Panel. It is a projection, never an authority:
+  // `buildCaseEmploymentProjection` delegates every fact to the person-owned composition and
+  // nothing about employment is decided here.
+  //
+  // ⚠ It belongs on THIS builder, not on the `surface=full` enrichment pass, because the Focus
+  // Panel's record comes from here (`sharedCanonicalDeps` → the drawer VM). Attached to `full`
+  // instead, the card composed its cell, elevated on the gesture's ASPECT, and rendered nothing —
+  // the projection was never on the record the panel actually reads. Certified by the absence of
+  // any `[timing][opportunity-api]` line during a run whose panel had already composed.
+  //
+  // The cost is one indexed query over the case's contacts, and for the overwhelming majority of
+  // families it returns zero rows and no composition runs at all.
+  try {
+    vis._case_employment = await buildCaseEmploymentProjection(supabase, orgId, {
+      // The HOUSEHOLD is the authoritative contact set. A household case can legitimately carry an
+      // empty `_opportunity_persons` and a null `primary_person_id` — the seeded Smith case does
+      // both — so deriving candidates from the payload arrays alone projected nothing for a case
+      // whose primary contact was in fact employed.
+      householdId: householdIdV,
+      primaryPersonId: trimOrNull(opp.primary_person_id ?? null),
+      knownContacts: collectLinkedContactsFromOpportunityRecord(vis),
+    });
+  } catch {
+    // A projection failure must not fail the record. Absent reads as not-composed, which keeps
+    // the card silent rather than asserting "nobody here is staff".
+    delete vis._case_employment;
+  }
+
   return vis;
 }
 
@@ -2687,6 +2722,11 @@ export async function respondOpportunityEntityGet(
 
   markPhase("after_identity_block");
   lapSegment("quote_section_identity_aggregate");
+
+  // Employment is projected ONCE, in `buildOpportunityDrawerVisiblePayload` — the shared builder
+  // both this route and the Focus Panel's drawer VM compose from. Re-projecting here would make
+  // two producers of one fact, and would still miss the panel, which never takes this path.
+
   const enrichTotalMs = Date.now() - enrichStartedAt;
   const timingPayload = {
     opportunity_id: id,

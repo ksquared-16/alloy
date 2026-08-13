@@ -257,13 +257,31 @@ behind the same rule.
 
 ---
 
-## Employee relationship
+## Employment relationship
 
 | Attribute | Value |
 |-----------|-------|
-| **Owner** | `persons` + employment link (future) |
-| **Status** | **Planned** — not fully canonical |
+| **Owner** | `employments` — an org ↔ person edge. Identity stays on `persons`; no name/email/phone is copied. |
+| **Status** | **Canonical** (Staff Foundation, August 2026) |
 | **Direction** | org → staff person |
+| **Source table** | `employments`; job vocabulary on `employment_positions` |
+| **Cardinality** | Zero or one *open* period per person per org; unlimited history. A person may hold employment in more than one org. |
+| **Effective dating** | `start_date` / `end_date`, non-overlap trigger, `supersedes_employment_id` for rehire |
+| **Eligibility authority** | `public.person_is_employed_on(org, person, date)` — what admits a `subject_type = 'staff'` row in `schedule_assignments` |
+| **Mutating actions** | `staff.add`, `employment.update`, `employment.end` (registered actions) |
+| **Editable surfaces** | Person drawer → Employment card |
+| **Configurable facts** | `field_definitions` / `field_values` with `entity_type = 'employment'` |
+
+**Employment is not access.** It answers *"does this person work here, and in what
+operational capacity"* — never *"can this person sign in"*. Creating employment
+creates no principal, no role, no permission and no scope grant. A staff member
+with no Alloy user account is fully valid, and a person who already has an
+account keeps it unchanged.
+
+> `persons.is_employee` / `employee_id` / `employee_source` are **not** this
+> relationship. They are a waitlist household-priority fact ("a parent who works
+> here") with no dates, position, scope or history, and they are not employment
+> authority. See the `persons.is_employee` column comment for the retirement path.
 
 ---
 

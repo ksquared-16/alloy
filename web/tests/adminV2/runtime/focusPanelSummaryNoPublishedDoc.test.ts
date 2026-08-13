@@ -43,7 +43,10 @@ describe("Focus Panel Summary — no published doc resolves the canonical compos
         expect(p.lanes.map((l) => l.widthUnits)).toEqual([6, 6]);
         expect(p.lanes.map((l) => l.cards.map((c) => c.key))).toEqual([
             ["current_work", "scheduling"],
-            ["household", "children", "billing_preview"],
+            // Employment closes the right-hand REFERENCE lane. Six columns, deliberately: a
+            // full-width card cannot be planned into lanes and silently dropped the whole panel
+            // from `lanes` to `grid`.
+            ["household", "children", "billing_preview", "employment"],
         ]);
     });
 
@@ -70,6 +73,9 @@ describe("Focus Panel Summary — no published doc resolves the canonical compos
             "children",
             "scheduling",
             "billing_preview",
+            // Employment reads last on a narrow surface: it answers a question about a person the
+            // case happens to employ, never the enrollment work this panel exists for.
+            "employment",
         ]);
     });
 

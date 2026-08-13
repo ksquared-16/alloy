@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import ArchetypeCardBody from "@/components/admin/focusPanel/ArchetypeCardBody";
 import HouseholdCard from "@/components/admin/focusPanel/cards/HouseholdCard";
 import ChildrenCard from "@/components/admin/focusPanel/cards/ChildrenCard";
+import EmploymentCard from "@/components/admin/focusPanel/cards/EmploymentCard";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import CurrentWorkCard from "@/components/admin/focusPanel/cards/CurrentWorkCard";
 import ReadinessCard from "@/components/admin/focusPanel/cards/ReadinessCard";
@@ -132,6 +133,14 @@ export default function FocusPanelCardRenderer({
                 coordination={coordination}
                 mutation={mutation}
             />
+        );
+    }
+    // Employment reads the person-owned composition projected onto the context. Pure card: it
+    // observes `model` + `context` only, and never mutates — Add/Edit/End live at
+    // /organization/staff, so this surface has exactly one execution path for the capability.
+    if (model.key === "employment") {
+        return (
+            <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
     if (model.key === "scheduling") {

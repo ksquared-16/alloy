@@ -18,11 +18,27 @@ export const OPERATOR_FOCUS_CARDS: {
     household: FocusPanelCardKey;
     assignment: FocusPanelCardKey;
     currentWork: FocusPanelCardKey;
+    tour: FocusPanelCardKey;
+    documents: FocusPanelCardKey;
+    employment: FocusPanelCardKey;
 } = {
     children: "children",
     household: "household",
     /** "Assignments" in the operator's vocabulary — placement / schedule work. */
     assignment: "scheduling",
-    /** "What's Next" — where process participation is worked. */
+    /**
+     * "What's Next" — where process participation is worked, and where the per-child Decision
+     * paths and Close family live. A gesture that means "act on this work" names this card.
+     */
     currentWork: "current_work",
+    /** Tour state and its scheduling actions. */
+    tour: "tour_summary",
+    /** Uploaded documents — the packet a review action acts on. */
+    documents: "documents",
+    /**
+     * Whether this person works here, and in what capacity. The card a STAFF gesture names —
+     * a roster or attendance surface pointing at a staff member means "show me this person's
+     * standing here", which is the employment answer, not the family's enrollment work.
+     */
+    employment: "employment",
 };

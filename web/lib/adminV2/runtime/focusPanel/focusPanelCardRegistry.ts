@@ -69,6 +69,8 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
     { key: "household", title: "Household", ownsOperationalTruth: true },
     { key: "children", title: "Children", ownsOperationalTruth: true },
+    // Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
+    { key: "employment", title: "Employment" },
     { key: "milestones", title: "Milestones" },
     { key: "readiness_kpi", title: "Readiness" },
     { key: "health", title: "Enrollment Health" },

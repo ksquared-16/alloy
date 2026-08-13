@@ -38,6 +38,21 @@ export const assignmentCreateAction: RegisteredAction = {
                 blockers: [{ code: "invalid_start_date", message: "Start date must be YYYY-MM-DD", field: "start_date" }],
             };
         }
+        const endDate = t(src.end_date);
+        if (endDate && !isValidIsoDateString(endDate)) {
+            return {
+                ok: false,
+                blockers: [{ code: "invalid_end_date", message: "End date must be YYYY-MM-DD", field: "end_date" }],
+            };
+        }
+        if (startDate && endDate && endDate < startDate) {
+            return {
+                ok: false,
+                blockers: [
+                    { code: "invalid_end_date", message: "End date must be on or after the start date", field: "end_date" },
+                ],
+            };
+        }
         return { ok: true, value: src };
     },
 
@@ -116,6 +131,7 @@ export const assignmentCreateAction: RegisteredAction = {
                           },
                 schedulePatternId: t(payload.schedule_pattern_id),
                 startDate: t(payload.start_date),
+                endDate: t(payload.end_date) || null,
                 roomLocationId: t(payload.room_location_id) || null,
                 programCategoryId: t(payload.program_category_id) || null,
                 assignmentTypeId: t(payload.assignment_type_id) || null,

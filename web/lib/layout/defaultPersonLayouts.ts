@@ -27,15 +27,18 @@ import {
     LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY,
 } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
 
+// `open_drawer` is RETIRED. The platform defaults are ours, so they stop teaching a value no
+// runtime executes: the icon stays, the inert action does not. Tenant-authored layouts are NOT
+// rewritten — the stored value carries an entity + idPath, and the canonical replacement is an
+// ASPECT on a host record's panel whose host comes from that record's own work_unit_id at runtime.
+// A migration would have to guess, so the parser keeps accepting it and nothing executes it.
 const PERSON_LINK: LayoutFieldAdornment = {
     position: "left",
-    icon: "person",
-    action: { type: "open_drawer", entity: "person", idPath: "person.id" },
+    icon: "person"
 };
 const CHILD_LINK: LayoutFieldAdornment = {
     position: "left",
-    icon: "child",
-    action: { type: "open_drawer", entity: "child", idPath: "child.id" },
+    icon: "child"
 };
 const HOME_ICON: LayoutFieldAdornment = { position: "left", icon: "home" };
 const PHONE_ICON: LayoutFieldAdornment = { position: "left", icon: "phone" };
@@ -166,7 +169,7 @@ export function buildPersonDrawerDefaultDoc(): LayoutDoc {
                 label: "Child",
                 refKey: "child.name",
                 width: "medium",
-                adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } },
+                adornment: { position: "left", icon: "child" },
             },
             { label: "Date of birth", refKey: "child.date_of_birth", width: "medium", renderHint: "date" },
             { label: "Age", refKey: "child.age_band", width: "medium" },

@@ -37,6 +37,7 @@ import {
     assignmentDateRangesOverlap,
     windowCoversDate,
 } from "@/lib/operationalAssignments/primaryOverlap";
+import { assertStaffPersonEligibleForAssignment } from "@/lib/operationalAssignments/staffAssignmentEligibility";
 
 export const ASSIGNMENT_SET_PRIMARY_ACTION_KEY = "assignment.set_primary";
 
@@ -112,7 +113,9 @@ function samePrimaryIdentity(a: ScheduleAssignmentRow, b: PrimaryCandidate): boo
 async function resolveSubject(
     supabase: SupabaseClient,
     orgId: string,
-    subject: OperationalAssignmentSubject
+    subject: OperationalAssignmentSubject,
+    /** Effective date of the primary being set — employment is answered at that date. */
+    onDate: string
 ): Promise<ResolvedSubject> {
     if (subject.type === "child") {
         const enrollmentAgreementId = trimOrNull(subject.enrollmentAgreementId);
@@ -147,25 +150,9 @@ async function resolveSubject(
             "personId and siteLocationId are required for staff subjects"
         );
     }
-    const { data, error } = await supabase
-        .from("persons")
-        .select("id, org_id, is_employee, archived_at")
-        .eq("org_id", orgId)
-        .eq("id", personId)
-        .maybeSingle();
-    if (error) throw new OperationalEnrollmentServiceError("db_error", error.message);
-    const person = data as {
-        id: string;
-        is_employee: boolean | null;
-        archived_at: string | null;
-    } | null;
-    if (!person || person.is_employee !== true || person.archived_at != null) {
-        throw new OperationalEnrollmentServiceError(
-            "validation_failed",
-            "Staff assignments require an active employee person",
-            { person_id: personId }
-        );
-    }
+    // Eligibility is canonical EMPLOYMENT, never persons.is_employee (a waitlist
+    // household-priority flag). Same authority the database trigger enforces.
+    await assertStaffPersonEligibleForAssignment(supabase, orgId, personId, onDate);
     return {
         subjectType: "staff",
         siteLocationId,
@@ -321,7 +308,7 @@ export async function setPrimaryOperationalAssignment(
         );
     }
 
-    const subject = await resolveSubject(supabase, input.orgId, input.subject);
+    const subject = await resolveSubject(supabase, input.orgId, input.subject, input.effectiveDate);
     const idempotencyKey = trimOrNull(input.idempotencyKey);
     const actorUserId = trimOrNull(input.actorUserId);
     const sourceKey = trimOrNull(input.sourceKey) ?? "operator";

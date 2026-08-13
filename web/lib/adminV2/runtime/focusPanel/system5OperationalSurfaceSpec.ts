@@ -27,6 +27,7 @@ export type FocusPanelCardFootprint = "narrow" | "medium" | "wide" | "full";
 export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPanelCardFootprint>> = {
     household: "wide",
     children: "wide",
+    employment: "wide",
     scheduling: "wide",
     current_work: "narrow",
     readiness_kpi: "medium",
@@ -75,6 +76,7 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     tour_summary: "Calendar",
     household: "Home",
     children: "Baby",
+    employment: "Users",
     milestones: "Flag",
     scheduling: "CalendarDays",
     communications: "MessageSquare",

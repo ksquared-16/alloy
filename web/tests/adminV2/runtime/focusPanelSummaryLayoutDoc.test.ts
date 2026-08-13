@@ -23,7 +23,8 @@ describe("buildFocusPanelSummaryDefaultDoc", () => {
 
     it("creates one section per default enrollment card seed (Visible + Linked)", () => {
         const doc = buildFocusPanelSummaryDefaultDoc();
-        expect(doc.sections).toHaveLength(8);
+        // 9 since Employment joined the composition (5 Visible + 3 Linked + Employment).
+        expect(doc.sections).toHaveLength(9);
         for (const section of doc.sections) {
             expect(readFocusPanelCardSectionMeta(section)).not.toBeNull();
         }

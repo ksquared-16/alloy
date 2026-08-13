@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { attachPersonDrawerVisibility } from "@/lib/admin/person/attachPersonDrawerVisibility";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import { buildPersonEmploymentComposition } from "@/lib/employment/buildPersonEmploymentComposition";
 import {
     personDrawerRecordComposeDepthMarker,
     visibilityScopeForComposeDepth,
@@ -48,7 +49,7 @@ export async function buildPersonDrawerEntityPayloadForViewModel(
     const psk = (personRow as { status_key?: string | null }).status_key ?? null;
     out._status_display = await resolveStatusLabel(supabase, orgId, "persons", psk);
 
-    const [cpResult, relResult, cmResult, locResult, oppResult] = await Promise.all([
+    const [cpResult, relResult, cmResult, locResult, oppResult, employmentResult] = await Promise.all([
         (async () => {
             const { data: cpRows } = await supabase
                 .from("customer_persons")
@@ -135,6 +136,10 @@ export async function buildPersonDrawerEntityPayloadForViewModel(
                 .limit(PERSON_LIMIT);
             return oppRows ?? [];
         })(),
+        // Employment composes onto the canonical Person record — there is no
+        // Staff entity and no Staff view model. A person with no employment
+        // resolves to `never_employed`, never to an empty Staff card.
+        buildPersonEmploymentComposition(supabase, orgId, id).catch(() => null),
     ]);
 
     out._customer_persons = cpResult;
@@ -143,6 +148,7 @@ export async function buildPersonDrawerEntityPayloadForViewModel(
     out._compatibility_members = cmResult.members;
     out._linked_locations = locResult;
     out._linked_opportunities = oppResult;
+    out._employment = employmentResult;
 
     out._person_drawer_vm_compose_depth = personDrawerRecordComposeDepthMarker(composeDepth);
 

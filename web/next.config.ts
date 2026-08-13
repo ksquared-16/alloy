@@ -264,6 +264,12 @@ const nextConfig: NextConfig = {
         source: "/organization/communications/:path*",
         destination: "/adminV2/settings/organization/communications/:path*",
       },
+      /**
+       * Organization Staff — employment, deliberately a sibling of Access rather
+       * than a section inside it. Must precede the exact `/organization` rewrite.
+       */
+      { source: "/organization/staff", destination: "/adminV2/settings/organization/staff" },
+      { source: "/organization/staff/:path*", destination: "/adminV2/settings/organization/staff/:path*" },
       { source: "/organization/access", destination: "/adminV2/settings/organization/access" },
       { source: "/organization/access/:path*", destination: "/adminV2/settings/organization/access/:path*" },
       { source: "/organization/processes", destination: "/adminV2/settings/organization/processes" },

@@ -3,6 +3,7 @@ import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import type { RecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
 import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { PersonEmploymentComposition } from "@/lib/employment/buildPersonEmploymentComposition";
 
 /**
  * Operational Context — the forward-facing runtime boundary for cards.
@@ -140,6 +141,45 @@ export const NULL_BILLING_SIGNAL: OperationalBillingSignal = {
     feeBalanceCents: null,
 };
 
+/**
+ * Employment signal — the employment held by the case's linked contacts.
+ *
+ * PERSON-OWNED TRUTH, PROJECTED. `PersonEmploymentComposition` is produced by
+ * `lib/employment` and carried here verbatim; the case contributes only "which of my
+ * people" and their order. Nothing about employment is decided at case grain, and no
+ * employment fact is persisted on the opportunity.
+ *
+ * It lives on the context because a Person attention gesture resolves through the
+ * household to its case (`resolveOperatorFocusTarget` types the host as the literal
+ * `"opportunities"`), so the case panel is the only surface that composes for that
+ * person. @see lib/employment/buildCaseEmploymentProjection.ts
+ */
+export type OperationalEmploymentPerson = {
+    personId: string;
+    personLabel: string | null;
+    /** Verbatim person-owned composition. */
+    employment: PersonEmploymentComposition;
+};
+
+export type OperationalEmploymentSignal = {
+    /** The case's primary person when they hold employment here, else null. */
+    primary: OperationalEmploymentPerson | null;
+    /** Every linked contact with an employment period, primary first. */
+    people: OperationalEmploymentPerson[];
+    /**
+     * True when at least one linked contact works (or worked) here. False is a real
+     * answer — "nobody linked to this case is staff" — never a loading state.
+     */
+    hasEmployment: boolean;
+};
+
+/** Null-state employment signal for fixtures and cases with no projection. */
+export const NULL_EMPLOYMENT_SIGNAL: OperationalEmploymentSignal = {
+    primary: null,
+    people: [],
+    hasEmployment: false,
+};
+
 export type OperationalContextSignals = {
     work: OperationalWorkSignal;
     attention: OperationalAttentionSignal;
@@ -211,6 +251,16 @@ export type OperationalContext = {
      */
     lifecycleRail?: RecordLifecycleRailModel | null;
     communicationsPreview?: FamilyCommunicationWorkspacePreviewVM | null;
+    /**
+     * Employment of the case's linked contacts. A SETTLEMENT projection in the same class as
+     * the two above: the opportunity payload composes it during enrichment, so the
+     * commit-critical producer leaves it null and the card reserves geometry until it fills.
+     *
+     * Null therefore means "not composed yet", which is why the card must read
+     * {@link NULL_EMPLOYMENT_SIGNAL} for it rather than concluding "nobody is staff" — an
+     * absent projection and an empty one are different facts, and only the latter is an answer.
+     */
+    employment?: OperationalEmploymentSignal | null;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
 };

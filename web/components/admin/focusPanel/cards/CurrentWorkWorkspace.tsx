@@ -52,6 +52,14 @@ type Props = {
     stageLabel?: string | null;
     ownerLabel?: string | null;
     actionPanel?: ReactNode;
+    /**
+     * Per-child paths for a work template that configures `participant_decisions`.
+     *
+     * Rendered ABOVE the completion controls on purpose: `completeStageWorkWithOutcome` refuses to
+     * complete such a template while any child is undecided, so the operator must meet the paths
+     * before the outcome picker, not after being told no.
+     */
+    participantDecisions?: ReactNode;
 };
 
 /**
@@ -85,6 +93,7 @@ export default function CurrentWorkWorkspace({
     stageLabel,
     ownerLabel,
     actionPanel,
+    participantDecisions,
 }: Props) {
     const headingRef = useRef<HTMLHeadingElement>(null);
     const activityTriggerRef = useRef<HTMLButtonElement>(null);
@@ -451,6 +460,7 @@ export default function CurrentWorkWorkspace({
                             {error}
                         </p>
                     :   null}
+                    {participantDecisions}
                     {actionPanel}
                 </div>
 

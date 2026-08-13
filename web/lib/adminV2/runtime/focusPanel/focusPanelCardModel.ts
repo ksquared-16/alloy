@@ -100,6 +100,14 @@ export const FOCUS_PANEL_CARD_KEYS = [
     "household",
     /** @grain case — children roster (read-only; child facts are case-grain display) */
     "children",
+    /**
+     * @grain case — employment held by the case's linked contacts (read-only).
+     *
+     * Person-owned truth displayed at case grain for the same reason `children` is: a person
+     * has no host Work Unit of its own, so the case panel is the only surface that composes
+     * for them. Employment facts are never authored here.
+     */
+    "employment",
     /** @grain case — meaningful completed/committed outcomes (not Activity history) */
     "milestones",
     /** @grain case — per-child scheduling state (room · weekly pattern · dates); Create/Change via configured command */

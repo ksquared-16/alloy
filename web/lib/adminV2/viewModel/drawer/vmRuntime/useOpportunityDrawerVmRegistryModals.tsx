@@ -21,6 +21,13 @@ const OpportunityEnrollmentPacketModal = dynamic(
     { ssr: false },
 );
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
+import { OpportunityPacketReviewModal } from "@/components/admin/opportunity/OpportunityPacketReviewModal";
+import { ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW } from "@/lib/admin/actions/enrollmentActionClient";
+import {
+    fetchPacketReviewSessions,
+    resolvePendingPacketReviewSession,
+    type PacketReviewSession,
+} from "@/lib/adminV2/runtime/focusPanel/packetReview/resolvePendingPacketReviewSession";
 import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
@@ -211,6 +218,20 @@ export function useOpportunityDrawerVmRegistryModals({
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     } | null>(null);
     const [changeLeadLocationOpen, setChangeLeadLocationOpen] = useState(false);
+    /**
+     * PACKET REVIEW — the action existed, the modal existed, the listener did not.
+     *
+     * `review_enrollment_packet` is server-gated to appear only when a completed session awaits
+     * review, and `applyRegistryResolvedActionClient` dispatches the open event for it. Its only
+     * listener lived in the legacy overview body, so for as long as that body has been unreachable
+     * the operator has clicked this at exactly the moment it mattered and got nothing — not even an
+     * error, because the success toast is deliberately suppressed for this key on the assumption
+     * that a modal owns the feedback.
+     *
+     * It belongs here and nowhere else: it is transient action chrome, like every other modal in
+     * this registry, not a record surface.
+     */
+    const [packetReviewSession, setPacketReviewSession] = useState<PacketReviewSession | null>(null);
     const pendingTourScheduleRef = useRef<{ id: string; action_key?: string } | null>(null);
     const prevOidRef = useRef<string | null>(null);
 
@@ -273,6 +294,26 @@ export function useOpportunityDrawerVmRegistryModals({
         (input: { opportunityId: string }) => {
             if (input.opportunityId.trim() !== oid) return;
             setChangeLeadLocationOpen(true);
+        },
+        [oid],
+    );
+
+    const openPacketReview = useCallback(
+        (requestedOpportunityId: string) => {
+            const id = requestedOpportunityId.trim();
+            if (!id || id !== oid) return;
+            // Read at open time rather than holding a list: the gate that made the action visible
+            // ran server-side against a different read, and an operator may sit on this panel for a
+            // while. Opening on a stale session would review the wrong packet.
+            void fetchPacketReviewSessions(id)
+                .then((sessions) => {
+                    const pending = resolvePendingPacketReviewSession(sessions);
+                    if (pending) setPacketReviewSession(pending);
+                })
+                .catch(() => {
+                    // The action's own failure path owns operator messaging; opening an empty modal
+                    // would claim there is something to review.
+                });
         },
         [oid],
     );
@@ -440,6 +481,13 @@ export function useOpportunityDrawerVmRegistryModals({
             openChangeLeadLocation({ opportunityId: detail.opportunity_id });
         };
 
+        const onOpenPacketReview = (ev: Event) => {
+            const detail = (ev as CustomEvent<{ opportunity_id?: string }>).detail;
+            const id = typeof detail?.opportunity_id === "string" ? detail.opportunity_id.trim() : "";
+            if (!id || !matchesDrawer(id)) return;
+            openPacketReview(id);
+        };
+
         window.addEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
@@ -450,6 +498,7 @@ export function useOpportunityDrawerVmRegistryModals({
         window.addEventListener(ADMINV2_OPEN_RELATIONSHIP_ACTION_MODAL, onOpenRelationshipAction as EventListener);
         window.addEventListener(ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL, onOpenEnrollmentStatus as EventListener);
         window.addEventListener(ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL, onOpenChangeLeadLocation as EventListener);
+        window.addEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenPacketReview as EventListener);
 
         return () => {
             window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
@@ -462,8 +511,9 @@ export function useOpportunityDrawerVmRegistryModals({
             window.removeEventListener(ADMINV2_OPEN_RELATIONSHIP_ACTION_MODAL, onOpenRelationshipAction as EventListener);
             window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_STATUS_MODAL, onOpenEnrollmentStatus as EventListener);
             window.removeEventListener(ADMINV2_OPEN_CHANGE_LEAD_LOCATION_MODAL, onOpenChangeLeadLocation as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_ENROLLMENT_PACKET_REVIEW, onOpenPacketReview as EventListener);
         };
-    }, [oid, openAddInquiryChild, openAddPerson, openCreateWorkFromEvent, openRelationshipAction, openEnrollmentStatus, openChangeLeadLocation]);
+    }, [oid, openAddInquiryChild, openAddPerson, openCreateWorkFromEvent, openRelationshipAction, openEnrollmentStatus, openChangeLeadLocation, openPacketReview]);
 
     useEffect(() => {
         const pending = pendingTourScheduleRef.current;
@@ -498,6 +548,7 @@ export function useOpportunityDrawerVmRegistryModals({
             setAddPersonState(null);
             setRelationshipActionState(null);
             setEnrollmentStatusState(null);
+            setPacketReviewSession(null);
             setChangeLeadLocationOpen(false);
         }
     }, [oid]);
@@ -840,9 +891,28 @@ export function useOpportunityDrawerVmRegistryModals({
                         }}
                     />
                 :   null}
+                <OpportunityPacketReviewModal
+                    open={packetReviewSession != null}
+                    session={packetReviewSession}
+                    canMutate={canMutate}
+                    onClose={() => setPacketReviewSession(null)}
+                    onReviewApplied={() => {
+                        setPacketReviewSession(null);
+                        // Reviewing a packet changes what the operator is looking at in three
+                        // places: the action's own eligibility (the gate re-runs and may withdraw
+                        // it), readiness, and the record's activity.
+                        dispatchOpportunityDrawerScopedUpdate(oid, "review_enrollment_packet", [
+                            "header_actions",
+                            "documents",
+                            "activity",
+                        ]);
+                        void reloadOpportunityDisplayVm?.();
+                    }}
+                />
             </>
         );
     }, [
+        packetReviewSession,
         actionFormState,
         addInquiryChildState,
         addPersonState,
