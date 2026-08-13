@@ -1,16 +1,11 @@
 /**
  * Vacilando Runtime — compose.
  *
- * Collect authoritative sources ONCE (all through alloy-ro, except read-only
- * git), enrich each occupied slot into a per-sprint context, then run the six
- * pure projection modules and assemble the single Command Center snapshot.
- *
- * Read economy: exactly ONE git-heavy alloy-ro call (agent-status computes
- * ahead/behind for every worktree). Worker detail and sprint manifests are read
- * in one "all" call each. Initiatives are read once (project-wide). Evidence is
- * a cheap per-slot count. base_sha is a single cheap `git rev-parse`. Snapshots
- * are served from a single-flight cache in the server, so bursts never restart
- * this work concurrently.
+ * Collect authoritative sources ONCE via sources.collectRaw (Node workspace
+ * snapshot + singleflight TTL), enrich each occupied slot, then run the six
+ * pure projection modules. Evidence counts come from the snapshot (readdir);
+ * git activity uses a slower TTL cache — never six parallel alloy-ro evidence
+ * shells on the hot path.
  *
  * Time is INJECTED (nowMs) so a snapshot is a deterministic function of state
  * plus one clock reading — replayable, testable, cacheable.
@@ -38,7 +33,8 @@ async function enrichSlot(agent, ctx) {
   const initiativeKey = manifest.initiative_key || null;
   const initiative = initiativeKey ? ctx.initiativeByKey.get(initiativeKey) || null : null;
   const path = agent.path || (worktree ? join(ctx.worktreeRoot, worktree) : null);
-  const [evidenceCount, git_recent] = await Promise.all([S.evidenceCount(worktree), S.gitRecent(path)]);
+  const evidenceCount = ctx.evidence?.get?.(worktree) ?? 0;
+  const git_recent = await S.gitRecent(path);
 
   return {
     slot: Number(agent.slot),
@@ -66,7 +62,7 @@ async function enrichSlot(agent, ctx) {
 /** Build the full Command Center snapshot. `opts.nowMs` injects the clock. */
 export async function composeSnapshot(opts = {}) {
   const nowMs = opts.nowMs ?? Date.now();
-  const raw = await S.collectRaw();
+  const raw = await S.collectRaw({ force: opts.forceSources === true });
 
   const occupied = (raw.agents.agents || []).filter((a) => a.worktree);
   const initiativeByKey = new Map((raw.initiatives || []).map((i) => [i.key, i]));
@@ -74,7 +70,7 @@ export async function composeSnapshot(opts = {}) {
   const firstPath = occupied[0]?.path || null;
   const base = { ref: "origin/staging", sha: await S.baseSha(firstPath) };
 
-  const enrichCtx = { worktreeRoot, initiativeByKey, details: raw.details, manifests: raw.manifests };
+  const enrichCtx = { worktreeRoot, initiativeByKey, details: raw.details, manifests: raw.manifests, evidence: raw.evidence };
   const sprintsCtx = await Promise.all(occupied.map((a) => enrichSlot(a, enrichCtx)));
 
   const slotByInitiative = new Map(

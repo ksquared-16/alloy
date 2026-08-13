@@ -33,7 +33,8 @@ import { composeSnapshot } from "./vacilando/compose.mjs";
 import { runCommand } from "./vacilando/commands/executor.mjs";
 import { listCommands } from "./vacilando/commands/registry.mjs";
 import { readAuditEvents } from "./vacilando/commands/audit.mjs";
-import { collectResources } from "./vacilando/resources.mjs";
+import { collectResources, collectWorktreeDiskSizes, peekWorktreeDiskCache } from "./vacilando/resources.mjs";
+import { getOrchestrationMetrics, invalidateRawCache, noteStatusRequest, RAW_TTL_MS as SOURCE_RAW_TTL_MS } from "./vacilando/sources.mjs";
 import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
 import { readDirectorLog, recordAsk } from "./vacilando/commands/director.mjs";
 import { createRequest, updateRequest, readRequests, pendingCount, recoverInterrupted, REQUEST_TYPES } from "./vacilando/commands/director-requests.mjs";
@@ -80,11 +81,13 @@ const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.
 export const LOOPBACK_HOST = "127.0.0.1";
 const PUBLIC_DIR = resolve(HERE, "..", "apps", "vacilando", "public");
 const DEFAULT_PORT = 3020;
-// A full projection costs ~6–8s (dominated by git ahead/behind across worktrees).
-// Serve from a single-flight cache with a matching TTL and background tick so
-// requests are instant and the machine never runs overlapping composes.
-const TICK_MS = 10000;
+// Board projection: Node workspace snapshot + cached git facts. Serve from a
+// single-flight cache aligned with SOURCE_RAW_TTL so polls never re-fan-out.
+// SSE tick is human-visible Director cadence — not sub-second filesystem scan.
+const TICK_MS = 20000;
 const MEMORY_TICK_MS = 45000; // memory measure + idle-server auto-reclaim cadence
+const RESOURCES_TTL_MS = 60000;
+const WORKTREE_DISK_TICK_MS = 15 * 60 * 1000;
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -150,29 +153,23 @@ function serveStatic(res, urlPath) {
 }
 
 /**
- * Single-flight snapshot cache. A full projection spawns ~11 short-lived child
- * processes (alloy-ro ×4 + git log ×6); letting every request and every SSE
- * tick launch its own compose concurrently starves the machine and trips the
- * exec timeout. So: at most ONE compose runs at a time, its result is shared by
- * all waiters, and a short TTL collapses bursts into a single recompute.
+ * Single-flight snapshot cache. Compose uses sources.collectRaw (also
+ * singleflight). At most ONE compose runs at a time; TTL collapses bursts.
  */
-const CACHE_TTL_MS = 8000;
+const CACHE_TTL_MS = Math.max(SOURCE_RAW_TTL_MS, 30_000);
 const cache = { at: 0, snap: null, inflight: null };
 
-async function getSnapshot({ maxAgeMs = CACHE_TTL_MS, allowStale = true } = {}) {
+async function getSnapshot({ maxAgeMs = CACHE_TTL_MS, allowStale = true, forceSources = false } = {}) {
   const now = Date.now();
   if (cache.snap && now - cache.at < maxAgeMs) return cache.snap;
   // STALE-WHILE-REVALIDATE: once we have ANY snapshot, never make the operator
-  // wait on a recompose (measured 12s). Serve the last-good frame instantly and
-  // refresh behind them. Only a cold start blocks.
+  // wait on a recompose. Serve the last-good frame instantly and refresh behind.
   if (cache.snap && allowStale) {
     if (!cache.inflight) { getSnapshot({ maxAgeMs: 0, allowStale: false }).catch(() => {}); }
     return cache.snap;
   }
-  // COLD START: a full compose costs 8–24s on a loaded host. Never hold the
-  // operator for it — start it, wait briefly, then answer a `pending` frame the
-  // UI renders as a loading state. The SSE tick delivers the real snapshot the
-  // moment it lands.
+  // COLD START: never hold the operator — start compose, wait briefly, then
+  // answer a `pending` frame. The SSE tick delivers the real snapshot.
   if (!cache.snap && allowStale) {
     if (!cache.inflight) { getSnapshot({ maxAgeMs: 0, allowStale: false }).catch(() => {}); }
     const raced = await Promise.race([cache.inflight, new Promise((r) => setTimeout(() => r(undefined), COLD_WAIT_MS))]);
@@ -180,12 +177,9 @@ async function getSnapshot({ maxAgeMs = CACHE_TTL_MS, allowStale = true } = {}) 
     return { schema_version: "vacilando.snapshot.v1", pending: true, headline: null, sprints: [], workers: [], approvals: { total: 0, counts: {} }, activity: [], gaps: [], project: {}, pending_note: "Composing the runtime projection — this view refreshes automatically." };
   }
   if (cache.inflight) return cache.inflight;
-  cache.inflight = composeSnapshot()
+  cache.inflight = composeSnapshot({ forceSources })
     .then((s) => {
       cache.inflight = null;
-      // Resilience: a memory-starved host can make alloy-ro time out, yielding a
-      // 0-sprint projection. Never let that transient empty frame blank a board we
-      // just had — keep the last-good snapshot and mark it degraded instead.
       if ((!s.sprints || s.sprints.length === 0) && cache.snap?.sprints?.length > 0) {
         return { ...cache.snap, degraded: true, degraded_note: "Projection timed out (host under memory pressure) — showing last known workers." };
       }
@@ -193,14 +187,17 @@ async function getSnapshot({ maxAgeMs = CACHE_TTL_MS, allowStale = true } = {}) 
     })
     .catch((e) => {
       cache.inflight = null;
-      if (cache.snap) return cache.snap; // serve last-good rather than an empty frame
+      if (cache.snap) return cache.snap;
       return { schema_version: "vacilando.snapshot.v1", error: `projection failed: ${String(e.message || e)}`, headline: null, sprints: [], workers: [], approvals: { total: 0, counts: {} }, activity: [], gaps: [], project: {} };
     });
   return cache.inflight;
 }
 const snapshotSafe = () => getSnapshot();
 /** Force a fresh projection (bypass TTL) and update the cache. Used after a command. */
-const forceSnapshot = () => getSnapshot({ maxAgeMs: 0 });
+const forceSnapshot = () => {
+  invalidateRawCache();
+  return getSnapshot({ maxAgeMs: 0, allowStale: false, forceSources: true });
+};
 
 /**
  * Stale-while-revalidate cache — the fix for head-of-line blocking.
@@ -494,7 +491,7 @@ function providerRuntimeInputs(snap, usage) {
   return { usageByProvider, workersByProvider };
 }
 
-/** Resources are OS reads (incl. a bounded `du`); cache briefly so the board is snappy. */
+/** Resources are OS reads (no hot-path du); cache so the board stays snappy. */
 const resCache = { at: 0, data: null, inflight: null };
 async function resourcesCached() {
   const now = Date.now();
@@ -1075,7 +1072,18 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { ok: true, ...getControlPlaneHealth(), startup: getStartupTimings() });
     }
     if (path === "/api/state" || path === "/api/snapshot") {
+      noteStatusRequest();
       return sendJson(res, 200, await boardSnapshot());
+    }
+    if (path === "/api/orchestration-metrics") {
+      return sendJson(res, 200, {
+        ok: true,
+        ...getOrchestrationMetrics(),
+        snapshot_cache: { age_ms: cache.at ? Date.now() - cache.at : null, ttl_ms: CACHE_TTL_MS, inflight: Boolean(cache.inflight) },
+        tick_ms: TICK_MS,
+        resources_ttl_ms: RESOURCES_TTL_MS,
+        worktree_disk: peekWorktreeDiskCache(),
+      });
     }
     if (path === "/api/commands") {
       return sendJson(res, 200, { commands: listCommands() });
@@ -1084,8 +1092,13 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { events: readAuditEvents(50) });
     }
     if (path === "/api/resources") {
-      const r = await swr("resources", () => collectResources(), { ttlMs: 15000 });
+      const r = await swr("resources", () => collectResources(), { ttlMs: RESOURCES_TTL_MS });
       return sendJson(res, 200, { ...(r.data || { workers: [], overall: {} }), _cache: { fresh: r.fresh, age_ms: r.age_ms, pending: r.pending } });
+    }
+    if (path === "/api/resources/worktree-disk") {
+      const force = url.searchParams.get("refresh") === "1";
+      const sizes = await collectWorktreeDiskSizes({ force, trigger: force ? "api-refresh" : "api" });
+      return sendJson(res, 200, { ok: true, ...sizes, ttl_ms: WORKTREE_DISK_TICK_MS });
     }
     if (path === "/api/usage") {
       return sendJson(res, 200, collectUsage());
@@ -1124,7 +1137,7 @@ export function createVacilandoServer() {
     }
     if (path === "/api/dashboard") {
       // Dashboard must never block on the provider probe or the resource scan.
-      const [snap, resrcC] = await Promise.all([snapshotSafe(), swr("resources", () => collectResources(), { ttlMs: 15000 })]);
+      const [snap, resrcC] = await Promise.all([snapshotSafe(), swr("resources", () => collectResources(), { ttlMs: RESOURCES_TTL_MS })]);
       const resrc = resrcC.data || { workers: [], overall: {} };
       const usage = collectUsage();
       const provider_runtime = (await swr("providers", async () => getProviderRuntime(providerRuntimeInputs(await snapshotSafe(), collectUsage())), { ttlMs: 25000 })).data
@@ -1449,6 +1462,12 @@ export function createVacilandoServer() {
   // Disk hygiene changes slowly — measure + (opt-in) reactively reclaim every 10 min.
   const diskTimer = setInterval(() => { refreshDisk({ act: true }).catch(() => {}); }, 10 * 60 * 1000);
   diskTimer.unref?.();
+  // Worktree size (`du`) is deliberately off the status/resources hot path.
+  // Refresh sequentially on a slow cadence (≥15 min). First fire matches TTL —
+  // never a 2-minute surprise scan that looks like a status-path storm.
+  const worktreeDiskTimer = setInterval(() => { collectWorktreeDiskSizes({ force: false, trigger: "timer" }).catch(() => {}); }, WORKTREE_DISK_TICK_MS);
+  worktreeDiskTimer.unref?.();
+  setTimeout(() => { collectWorktreeDiskSizes({ force: false, trigger: "timer-first" }).catch(() => {}); }, WORKTREE_DISK_TICK_MS).unref?.();
   // Engineering Health: observe/evaluate only (never executes cleanup).
   // Heavy sync `du`/`ps` collectors — do NOT run on cold open (starves HTTP).
   const engHealthTick = () => {
@@ -1556,6 +1575,7 @@ export function createVacilandoServer() {
       clearInterval(timer);
       clearInterval(memTimer);
       clearInterval(diskTimer);
+      clearInterval(worktreeDiskTimer);
       clearInterval(engHealthTimer);
       clearInterval(condTimer);
       for (const t of backgroundTimers) clearInterval(t);
