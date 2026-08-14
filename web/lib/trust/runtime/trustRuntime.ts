@@ -305,6 +305,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             pii_mode: eligible.pii_mode as ReasoningContextV1["pii_mode"],
             transformations: eligible.transformations,
             text_minimizations: eligible.text_minimizations,
+            participant_redactions: eligible.participant_redactions,
         };
     } else {
         const classification = classifyElements(
@@ -376,6 +377,11 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             detector_key: m.detector_key,
             redaction_kind: m.redaction_kind,
             replaced_count: m.replaced_count,
+        })),
+        participant_redactions: baseContext.participant_redactions.map((p) => ({
+            redaction_kind: p.redaction_kind,
+            replaced_count: p.replaced_count,
+            roster_token_count: p.roster_token_count,
         })),
     };
 

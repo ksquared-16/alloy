@@ -96,6 +96,20 @@ export type DecisionPackagePrivacyReport = {
         readonly redaction_kind: string;
         readonly replaced_count: number;
     }[];
+    /**
+     * What known-participant redaction removed.
+     *
+     * Counts only — never a matched span and never a roster entry, which are the
+     * identities being removed. Absent when the policy required no participant
+     * redaction; a present entry with `replaced_count: 0` means the pass ran
+     * against a real roster and found no occurrence, which is evidence rather
+     * than an absence of it.
+     */
+    readonly participant_redactions?: readonly {
+        readonly redaction_kind: string;
+        readonly replaced_count: number;
+        readonly roster_token_count: number;
+    }[];
 };
 
 export type DecisionPackageV1 = {

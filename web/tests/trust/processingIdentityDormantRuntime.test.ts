@@ -250,7 +250,7 @@ describe("P14-B — trust_threshold 0 is inert, not 'automatically trusted'", ()
     it("the evaluation is identical whether the threshold is 0 or 1", () => {
         const cls = resolveDecisionClass(PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CLASS_KEY)!;
         const common = {
-            context: { transformed: {}, knowledge: [], redaction_steps: [], classes_present: [], pii_mode: "strict" as const, transformations: [], text_minimizations: [] },
+            context: { transformed: {}, knowledge: [], redaction_steps: [], classes_present: [], pii_mode: "strict" as const, transformations: [], text_minimizations: [], participant_redactions: [] },
             proposal: { recommendation: {}, confidence: null, evidence: [], explanation: "x", remaining_uncertainty: [] },
             validation: { policy_key: "p", policy_version: "1", results: [], passed: true },
             strategyKind: "deterministic",

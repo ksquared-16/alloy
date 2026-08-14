@@ -51,6 +51,7 @@ import type { PrivacyPolicyV1 } from "@/lib/trust/privacy/privacyEngine";
 import { transformForReasoning } from "@/lib/trust/privacy/privacyEngine";
 import type { TransformationRecord } from "@/lib/trust/privacy/transformationDispatch";
 import type { TextMinimizationRecord } from "@/lib/privacy/minimizeTextContent";
+import type { ParticipantRedactionRecord } from "@/lib/privacy/redactKnownParticipants";
 
 /** Values a reasoning element may hold. Deliberately closed — see {@link isAdmissibleValue}. */
 export type InformationElementValue = string | number | boolean | null | readonly (string | number | boolean | null)[];
@@ -310,6 +311,12 @@ export type EligibleReasoningInputV1 = {
     readonly transformations: readonly TransformationRecord[];
     readonly text_minimizations: readonly TextMinimizationRecord[];
     /**
+     * What known-participant redaction removed. Empty when the policy required
+     * no participant redaction; a present record with `replaced_count: 0` means
+     * the pass ran and the roster matched nothing, which is a different fact.
+     */
+    readonly participant_redactions: readonly ParticipantRedactionRecord[];
+    /**
      * Structural redaction steps, carried so a Decision Package built from this
      * input reports the SAME privacy evidence as one built the compatibility
      * way. Without it a governed package would understate what minimization
@@ -349,9 +356,21 @@ export type EligibleReasoningInputResult =
 export function buildEligibleReasoningInput(input: {
     readonly package: TrustInformationPackageV1;
     readonly policy: PrivacyPolicyV1;
+    /**
+     * Known participant names, forwarded verbatim to the privacy engine. The
+     * POLICY decides whether they are used; passing them here does not opt a
+     * package into redaction, and omitting them from a policy that requires
+     * redaction refuses the transform rather than skipping it.
+     */
+    readonly participants?: readonly string[];
 }): EligibleReasoningInputResult {
     const classification = classifyElements(input.package.elements, input.package.semantic_map);
-    const transformed = transformForReasoning({ classification, policy: input.policy, knowledge: [] });
+    const transformed = transformForReasoning({
+        classification,
+        policy: input.policy,
+        knowledge: [],
+        participants: input.participants,
+    });
 
     if (!transformed.ok) {
         return { ok: false, refusal_code: transformed.refusal_code, detail: transformed.detail };
@@ -381,6 +400,7 @@ export function buildEligibleReasoningInput(input: {
             pii_mode: context.pii_mode,
             transformations: context.transformations,
             text_minimizations: context.text_minimizations,
+            participant_redactions: context.participant_redactions,
             redaction_steps: context.redaction_steps,
             provenance: input.package.provenance,
             content_hash: `${ELIGIBLE_REASONING_INPUT_HASH_PREFIX}:${oneShotHash("sha256", stableStringify(material), "hex")}`,
