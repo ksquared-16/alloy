@@ -115,11 +115,51 @@ Two writers remain outside it **by decision**, not oversight:
 `web/tests/records/childMemberWriteAuthority.test.ts` reads the source and fails when a new
 operator-facing insert site appears. It compares the **set** of sites, never the count.
 
-## Process boundary — Start Enrollment from Records is deferred
+## The enrollment boundary — three layers, not one
 
-Records does not offer Start Enrollment. The current Enrollment creation authority
-(`createEnrollmentProcessInstance`) requires an **Opportunity** as its process context, so offering
-it from a durable Child record would mean creating an Opportunity there — which is Create Lead, and
-exactly the boundary this product holds.
+| Layer | What it is | Owner |
+| --- | --- | --- |
+| Opportunity | an **optional** acquisition/enrolment episode, family-grain | opportunity domain |
+| `process_instances` | the **governed child journey** | `createEnrollmentProcessInstance` |
+| Agreement · Placement · Schedule | the **durable care relationship** | `applyChildEnrollmentMaterialization` |
 
-This is a recorded deferral with a named cause. The resolution is not designed here.
+These do not collapse into each other. A child can be in care with no journey running; a journey
+can run about a child not yet in care; and both are possible with no Opportunity at all —
+`child_enrollment_agreements.opportunity_id` is nullable precisely so durable truth outlives the
+episode that produced it.
+
+### Start Enrollment may run context-free
+
+`enrollment.start` begins the journey for a child who already exists. It creates **no Opportunity**.
+`process_instances.context_id` is nullable and its own column comment calls the context "generic,
+optional" — an earlier slice mistook the helper's requirement for a platform rule and deferred this
+action on that basis.
+
+Context is resolved, never fabricated. A household episode counts as **live** only when a journey is
+actually running inside it, and an inactive Work Unit disqualifies one outright. When no live
+episode exists the journey runs context-free.
+
+### Closed Opportunities are not reopened for siblings
+
+A 2025 enrolment that completed stays completed. Attaching a 2026 sibling to it would reopen
+finished history, put a settled family back into acquisition work views, and make the sibling's
+journey a continuation of an enrolment that already ended. The sibling gets their own journey.
+
+Uniqueness for context-free journeys comes from `ux_process_instances_open_context_free`, a partial
+index covering only journeys that have **not** concluded — so a retry cannot open a second journey,
+while re-enrollment a year later stays legal.
+
+### Direct Enroll bypasses the journey, not the facts
+
+`enrollment.direct` skips lead qualification, contact attempts, tour and stage progression. It does
+not skip the information: site, start date, placement and a resolvable schedule are all required,
+and a preflight refuses the write when any is missing.
+
+That preflight exists because the materialization core is deliberately forgiving — absent placement
+fields SKIP the placement and an unresolvable schedule degrades to a warning. Tolerable for a
+journey that gathered facts over weeks; unacceptable for a one-shot command, where it would report
+success while leaving a child no roster can see.
+
+It writes **no `process_instances` row**. Recording a journey nobody ran, or stamping its stages
+complete, would be inventing history. The absence of a journey *is* the truthful record of a direct
+enrollment.

@@ -18,6 +18,7 @@ import {
     isProcessRunningState,
     CHILD_RECORD_STATE_LABEL,
 } from "@/lib/adminV2/records/childEnrollmentState";
+import { childNextActions } from "@/lib/adminV2/records/childNextActions";
 
 describe("durable care truth outranks the journey", () => {
     it("a directly enrolled child is Enrolled — an active agreement with no process at all", () => {
@@ -120,5 +121,29 @@ describe("cohort membership uses the same derivation the row does", () => {
             expect(CHILD_RECORD_STATE_LABEL[state]).toBeTruthy();
         }
         expect(CHILD_RECORD_STATE_LABEL.starting).toBe("Starting");
+    });
+});
+
+describe("Records offers only actions the command would accept", () => {
+    it("offers both paths to a child who is only on record", () => {
+        const { actions } = childNextActions(null);
+        expect(actions).toEqual(["start_enrollment", "enroll_directly"]);
+    });
+
+    it("offers nothing while a journey is already running", () => {
+        // Starting a second is what the partial unique index exists to prevent; enrolling directly
+        // alongside a live journey would strand it.
+        const offer = childNextActions("in_process");
+        expect(offer.actions).toEqual([]);
+        expect(offer.reason).toMatch(/already in process/i);
+    });
+
+    it("offers nothing to a child already in care, or about to be", () => {
+        expect(childNextActions("enrolled").actions).toEqual([]);
+        expect(childNextActions("starting").actions).toEqual([]);
+    });
+
+    it("reopens both paths after everything ended — re-enrollment is legitimate", () => {
+        expect(childNextActions("closed").actions).toEqual(["start_enrollment", "enroll_directly"]);
     });
 });
