@@ -318,6 +318,33 @@ Household and person subjects own no stage and keep their case's canonical conte
 inherit a child's Work View. See
 `docs/platform/runtime/stage-work-view-queue-canonical-model.md` §9.
 
+The stage-bound answer above is a **ranking and fallback signal**, not proof of eligibility — see
+below.
+
+## Operational destinations come from actual membership
+
+Work Views are overlapping configured **cohorts**, not stages. Search offers one **only when the
+subject is a permission-safe member of it and it can actually compose** for that operator:
+
+```
+membership == true  AND  operational == true
+```
+
+Membership is evaluated through the canonical Work View machinery — Search holds no second
+interpretation of a lens, so Search and the view itself cannot disagree about who is in it. It
+additionally requires `recordWorkViewMembership(...).fullySupported`, because the evaluator's
+fail-open behaviour is right for a count and wrong for navigation: an unevaluated predicate is not
+evidence that someone belongs somewhere.
+
+**Grain is authoritative.** A child is offered only child-grain lenses, a household only family-grain
+ones, and a family host never grants a child membership. **Stage alignment may rank a destination; it
+may never establish one.**
+
+Worked example — **Lennon Kurzman → Waitlist**; **Kurzman Family → All + Tours**. The sets are
+disjoint, because Waitlist is child-grain while All and Tours are family-grain.
+
+Full doctrine: `docs/platform/runtime/stage-work-view-queue-canonical-model.md` §10.
+
 ## Related doctrine
 
 - Entity Model · Record System · Relationship Model — subject identity

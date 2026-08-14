@@ -455,3 +455,93 @@ Work Views remains deferred: it requires a Business Process configuration supply
 child stages, and the current certification tenant has exactly one (`enrolling`). Stage
 `primary_action` must not be changed merely to satisfy a fixture — that would alter what the process
 asserts an operator can do. The participant-grain rule above is proven deterministically instead.
+
+# 10. Work View membership — cohorts, not stages
+
+## 10.1 The distinction
+
+A **Process stage** answers *where is this participant in the Process*.
+A **Work View** answers *which configured operational cohort does this subject currently belong to*.
+
+They are different questions, and they come apart in ordinary configuration.
+
+> **Work Views are overlapping configured cohorts. A subject may belong to several at once, and stage
+> position neither establishes nor limits that membership.**
+
+Live evidence, from the published Firefly configuration:
+
+```
+Tours   row_grain_v1: family
+        has_active_tour = true  AND  tour_date = next:7:days
+        (deliberately NO stage predicate — that kept Waitlist families out)
+```
+
+The Kurzman Family sits at stage `waitlist` and is simultaneously in **All** and **Tours**. No
+stage→view mapping can express that, and one that tried would have to invent it.
+
+## 10.2 Membership is evaluated, never inferred
+
+```
+subject
+  → canonical operational row at the correct grain
+  → configured Work View evaluation
+  → fully-supported membership
+  → access
+  → operational availability
+  → destination
+```
+
+Not `stage → one guessed Work View`, and not `family Work Unit → child destination`.
+
+The evaluation reuses the runtime's own machinery — `resolveLensRowGrain`, `lensStageKeys`,
+`childMatchesLens`, the shared predicate evaluator, EPP mission resolution. **Any surface offering a
+Work View as a destination must consume the same membership truth the view itself uses**, or the two
+will disagree about who is in it.
+
+## 10.3 Grain is a membership rule
+
+> **A family-grain lens is not a place a child can be, so it is not a destination to offer.**
+
+The row in a family lens is the case. Offering it for a child would land the operator on a family row
+and present it as the child. The consequence is deliberately symmetric: a household does not inherit
+its children's lenses, and children do not inherit their household's.
+
+## 10.4 Two guards a destination needs that a count does not
+
+**Fully-supported evaluation.** The predicate evaluator is deliberately fail-open — an unsupported
+field or operator passes the row through under AND, because a count would rather over-include than
+hide work from an operator. A *destination* cannot inherit that generosity: an unevaluated predicate
+is not evidence of membership, and acting on it offers a view that does not contain the subject.
+Callers that must prove membership read `recordWorkViewMembership(...).fullySupported`.
+
+**Operational availability.** Membership and enterability are separate facts. A view whose answer
+would be `no_truthful_primary_action` on arrival must not be offered as a normal destination, and must
+not be silently rerouted to another view. The rule lives once, in
+`workViewDestinationOperability.ts`, and the provisioning answer itself calls it — so a destination
+cannot be offered that the answer would refuse.
+
+The rule is legitimately **grain-specific**: a family surface claiming operational on identity alone
+is not operational, while a child surface must stay enterable where the tenant configures no child
+actions at all. Reading them as one rule hides Waitlist from a waitlisted child — the one destination
+that is actually true.
+
+## 10.5 Stage alignment ranks; it never establishes
+
+Stage remains a useful signal: it orders destinations and is the fallback host when nothing better
+can be proven. It is no longer proof of eligibility. Binding through `compat_queue_key` cannot express
+a booking-predicated or catch-all lens, and the runtime authority declines to read that key as
+identity — *"a lane binding assigned by array position"*.
+
+> **Ranking may reorder truthful destinations. It may never create one.**
+
+## 10.6 The worked example
+
+| Subject | Grain | Truthful operational memberships |
+|---------|-------|----------------------------------|
+| Lennon Kurzman | child | **Waitlist** |
+| Wrigley Kurzman | child | resolved independently at child grain |
+| Kurzman Family | family | **All**, and **Tours** while the booking predicates hold |
+
+Lennon does **not** inherit All or Tours: both are family-grain. The household does **not** inherit
+Waitlist: it is child-grain. The two sets are disjoint, and a union in either direction is a
+fabrication.
