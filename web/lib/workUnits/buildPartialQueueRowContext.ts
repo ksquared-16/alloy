@@ -344,35 +344,52 @@ function resolveProcessStageLabel(
     queue: PartialQueueRowContextQueueMeta,
 ): string {
     const eppRollup = trimOrNull(row._effective_stage_rollup_label);
+    let base: string;
     if (eppRollup) {
         // Title-case snake tokens inside "waitlist · lead" / keep "N active stages".
-        if (/\d+\s+active stages/i.test(eppRollup)) return eppRollup;
-        return eppRollup
-            .split(" · ")
-            .map((part) => {
-                const t = part.trim();
-                if (!t) return t;
-                if (/^[a-z0-9_]+$/i.test(t)) return humanizeSnakeCaseToken(t);
-                return t;
-            })
-            .filter(Boolean)
-            .join(" · ");
+        if (/\d+\s+active stages/i.test(eppRollup)) {
+            base = eppRollup;
+        } else {
+            base = eppRollup
+                .split(" · ")
+                .map((part) => {
+                    const t = part.trim();
+                    if (!t) return t;
+                    if (/^[a-z0-9_]+$/i.test(t)) return humanizeSnakeCaseToken(t);
+                    return t;
+                })
+                .filter(Boolean)
+                .join(" · ");
+        }
+    } else {
+        const fromRow =
+            trimOrNull(row._lifecycle_stage_title)
+            ?? trimOrNull(row.stage_label)
+            ?? trimOrNull(row._stage_label)
+            ?? trimOrNull(row.enrollment_track_stage_label);
+        if (fromRow) {
+            base = fromRow;
+        } else {
+            const stageKey =
+                trimOrNull(row.stage_key)
+                ?? trimOrNull(queue.stage_key);
+            if (stageKey) {
+                base = humanizeSnakeCaseToken(stageKey);
+            } else {
+                // Legacy lanes without a stage_key — last resort only.
+                base = queue.label.trim() || queue.key;
+            }
+        }
     }
 
-    const fromRow =
-        trimOrNull(row._lifecycle_stage_title)
-        ?? trimOrNull(row.stage_label)
-        ?? trimOrNull(row._stage_label)
-        ?? trimOrNull(row.enrollment_track_stage_label);
-    if (fromRow) return fromRow;
-
-    const stageKey =
-        trimOrNull(row.stage_key)
-        ?? trimOrNull(queue.stage_key);
-    if (stageKey) return humanizeSnakeCaseToken(stageKey);
-
-    // Legacy lanes without a stage_key — last resort only.
-    return queue.label.trim() || queue.key;
+    // Overlapping operational Tour is not a stage move — surface it on the Stage slot when the
+    // published Surface asks for `queue_row.stage_label` and booking truth says a Tour is active.
+    const hasActiveTour = row._has_active_tour === true || row.has_active_tour === true;
+    if (hasActiveTour && base && !/tour/i.test(base)) {
+        return `${base} · Tour Scheduled`;
+    }
+    if (hasActiveTour && !base) return "Tour Scheduled";
+    return base;
 }
 
 /**

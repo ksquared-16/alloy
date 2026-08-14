@@ -98,4 +98,59 @@ describe("resolveQueueRowVariant", () => {
         expect(resolveQueueRowVariant([ENROLLING], { stageKey: "enrolling", statusKey: "enrolling" })?.id).toBe("enrolling");
         expect(resolveQueueRowVariant([ENROLLING], { stageKey: "enrolling", statusKey: "open" })).toBeNull();
     });
+
+    it("does not let stage-only Waitlist (candidate subjectFocus) override family/case Default", () => {
+        // Firefly footgun: Waitlist appliesWhen was only stage_key=waitlist + placement_candidate_child.
+        // Family-grain All/Tours rows must keep published Default (Household name + Stage).
+        const fireflyWaitlist = variant({
+            id: "variant-32",
+            priority: 10,
+            subjectFocus: "placement_candidate_child",
+            appliesWhen: { stage_key: ["waitlist"] },
+            columns: [
+                {
+                    id: "col-1",
+                    label: "",
+                    width: "identity",
+                    rowIndex: 0,
+                    builderSlot: "identity",
+                    scope: { type: "main_record" },
+                    blocks: [
+                        {
+                            id: "b1",
+                            type: "field_group",
+                            layout: "stack",
+                            fields: [{ id: "f1", label: "Child", display: "link", fieldKey: "child.name" }],
+                        },
+                    ],
+                },
+            ],
+        });
+        expect(
+            resolveQueueRowVariant([fireflyWaitlist], {
+                stageKey: "waitlist",
+                grain: "case",
+                workViewId: "new_work_view_6",
+            }),
+        ).toBeNull();
+        expect(
+            resolveQueueRowVariant([fireflyWaitlist], {
+                stageKey: "waitlist",
+                grain: "candidate",
+                workViewId: "new_work_view_4",
+            })?.id,
+        ).toBe("variant-32");
+    });
+
+    it("allows candidate-primary variants on family grain only when grain clause is explicit", () => {
+        const explicit = variant({
+            id: "family-waitlist",
+            priority: 10,
+            subjectFocus: "placement_candidate_child",
+            appliesWhen: { stage_key: ["waitlist"], grain: ["case"] },
+        });
+        expect(
+            resolveQueueRowVariant([explicit], { stageKey: "waitlist", grain: "case" })?.id,
+        ).toBe("family-waitlist");
+    });
 });

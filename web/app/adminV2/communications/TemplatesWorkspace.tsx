@@ -49,6 +49,7 @@ import {
 } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import TourTemplateDeliveryAutomationCard from "@/app/adminV2/communications/TourTemplateDeliveryAutomationCard";
+import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
 import {
     extractTourCommsMetadataRoot,
     mergeTourCommsConfig,
@@ -59,6 +60,7 @@ import {
     isTourSystemTemplateSystemKey,
     serializeTourCommsStudioDraftToFragment,
     tourSystemTemplateEventKey,
+    tourTemplateShowsReminderControls,
     type TourCommsStudioDraft,
     validateTourCommsStudioDraft,
 } from "@/lib/tours/comms/tourCommsStudioPolicy";
@@ -217,6 +219,8 @@ export default function TemplatesWorkspace() {
     const [tourCommsBaselineJson, setTourCommsBaselineJson] = useState<string | null>(null);
     const [tourCommsLoading, setTourCommsLoading] = useState(false);
     const [tourCommsLoaded, setTourCommsLoaded] = useState(false);
+    const [automationModalOpen, setAutomationModalOpen] = useState(false);
+    const [automationSaving, setAutomationSaving] = useState(false);
 
     const didInitialOccupancyRef = useRef(false);
 
@@ -417,23 +421,6 @@ export default function TemplatesWorkspace() {
         setSaving(true);
         setError(null);
 
-        const tourEventKey = tourSystemTemplateEventKey(selectedSystemKey);
-        const showTourDelivery = isTourSystemTemplateSystemKey(selectedSystemKey);
-        const tourCommsDirty =
-            showTourDelivery && tourCommsDraft != null && tourCommsBaselineJson !== JSON.stringify(tourCommsDraft);
-
-        if (tourCommsDirty && tourCommsDraft) {
-            const validation = validateTourCommsStudioDraft(tourCommsDraft, {
-                eventKey: tourEventKey,
-                editingReminderControls: tourCommsDraft.reminderEnabled,
-            });
-            if (!validation.ok) {
-                setError(validation.error);
-                setSaving(false);
-                return;
-            }
-        }
-
         // For non-email channels, subject is not editable and must be omitted/empty.
         const payload = {
             name: draft.name,
@@ -445,10 +432,6 @@ export default function TemplatesWorkspace() {
             body: draft.body,
         };
         try {
-            if (tourCommsDirty && tourCommsDraft) {
-                await persistTourCommsPolicy(tourCommsDraft);
-            }
-
             let res: Response;
             if (creating || !selectedId) {
                 res = await fetch(TEMPLATES_API, {
@@ -475,17 +458,37 @@ export default function TemplatesWorkspace() {
         } finally {
             setSaving(false);
         }
-    }, [
-        creating,
-        selectedId,
-        draft,
-        loadList,
-        selectTemplate,
-        selectedSystemKey,
-        tourCommsDraft,
-        tourCommsBaselineJson,
-        persistTourCommsPolicy,
-    ]);
+    }, [creating, selectedId, draft, loadList, selectTemplate]);
+
+    const saveAutomationRule = useCallback(async () => {
+        if (!tourCommsDraft) return;
+        const tourEventKey = tourSystemTemplateEventKey(selectedSystemKey);
+        const validation = validateTourCommsStudioDraft(tourCommsDraft, {
+            eventKey: tourEventKey,
+            editingReminderControls: tourCommsDraft.reminderEnabled,
+        });
+        if (!validation.ok) {
+            setError(validation.error);
+            return;
+        }
+        setAutomationSaving(true);
+        setError(null);
+        try {
+            await persistTourCommsPolicy(tourCommsDraft);
+            setAutomationModalOpen(false);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to save automation");
+        } finally {
+            setAutomationSaving(false);
+        }
+    }, [tourCommsDraft, selectedSystemKey, persistTourCommsPolicy]);
+
+    const openAutomationModal = useCallback(() => {
+        if (!tourCommsLoaded && !tourCommsLoading) {
+            void loadTourCommsPolicy();
+        }
+        setAutomationModalOpen(true);
+    }, [tourCommsLoaded, tourCommsLoading, loadTourCommsPolicy]);
 
     const archive = useCallback(async () => {
         if (!selectedId) return;
@@ -614,6 +617,12 @@ export default function TemplatesWorkspace() {
     const advancedFilterCount = [categoryFilter, channelFilter, statusFilter].filter(Boolean).length;
     const showTourDeliverySection = isTourSystemTemplateSystemKey(selectedSystemKey);
     const tourDeliveryEventKey = tourSystemTemplateEventKey(selectedSystemKey);
+    const tourAutomationRuleCount =
+        tourCommsDraft && tourDeliveryEventKey && tourTemplateShowsReminderControls(tourDeliveryEventKey)
+            ? tourCommsDraft.reminderEnabled
+                ? 1
+                : 0
+            : 0;
 
     return (
         <div
@@ -862,21 +871,42 @@ export default function TemplatesWorkspace() {
                             </label>
                         </CommsSectionCard>
 
-                        {showTourDeliverySection && tourDeliveryEventKey && tourCommsDraft ? (
-                            <TourTemplateDeliveryAutomationCard
-                                eventKey={tourDeliveryEventKey}
-                                draft={tourCommsDraft}
-                                disabled={saving || tourCommsLoading}
-                                onChange={setTourCommsDraft}
-                            />
-                        ) : showTourDeliverySection && tourCommsLoading ? (
+                        {showTourDeliverySection ? (
                             <CommsSectionCard
-                                title="Delivery & automation"
+                                title="Automations"
                                 dense
                                 className="shrink-0 !p-2.5"
-                                data-tour-delivery-automation-loading="true"
+                                data-template-automations-strip="true"
                             >
-                                <span className="text-[11px] text-alloy-midnight/50">Loading Tour delivery policy…</span>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-[12px] text-alloy-midnight/70">
+                                        {tourCommsLoading
+                                            ? "Loading automation rules…"
+                                            : tourAutomationRuleCount > 0
+                                              ? `${tourAutomationRuleCount} rule${tourAutomationRuleCount === 1 ? "" : "s"} use this template`
+                                              : "No automation rules use this template yet"}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        <button
+                                            type="button"
+                                            data-template-view-automations="true"
+                                            className={COMMS_SECONDARY_BTN_CLASS}
+                                            disabled={tourCommsLoading || !tourCommsDraft}
+                                            onClick={openAutomationModal}
+                                        >
+                                            {tourAutomationRuleCount > 0 ? "View automations" : "View"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            data-template-create-automation="true"
+                                            className={COMMS_PRIMARY_BTN_CLASS}
+                                            disabled={tourCommsLoading}
+                                            onClick={openAutomationModal}
+                                        >
+                                            Create automation
+                                        </button>
+                                    </div>
+                                </div>
                             </CommsSectionCard>
                         ) : null}
 
@@ -1009,6 +1039,77 @@ export default function TemplatesWorkspace() {
                 onRename={renameCategory}
                 onRemove={removeCategory}
             />
+
+            <ActionModalOverlayShell
+                open={automationModalOpen && showTourDeliverySection}
+                onClose={() => {
+                    if (!automationSaving && tourCommsBaselineJson && tourCommsDraft) {
+                        // Discard unsaved modal edits — restore last persisted baseline.
+                        try {
+                            setTourCommsDraft(JSON.parse(tourCommsBaselineJson) as TourCommsStudioDraft);
+                        } catch {
+                            /* keep draft */
+                        }
+                    }
+                    if (!automationSaving) setAutomationModalOpen(false);
+                }}
+                busy={automationSaving}
+                panelClassName="w-full max-w-xl overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-xl"
+                data-testid="template-automation-rule-modal"
+            >
+                <div className="flex max-h-[min(85vh,40rem)] flex-col">
+                    <header className="border-b border-alloy-stone/15 px-5 py-3">
+                        <h2 className="text-sm font-semibold text-alloy-midnight">
+                            {tourAutomationRuleCount > 0 ? "Edit automation" : "Create automation"}
+                        </h2>
+                        <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
+                            Rules decide when and to whom this template is sent. Template content stays separate.
+                        </p>
+                    </header>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                        {tourDeliveryEventKey && tourCommsDraft ? (
+                            <TourTemplateDeliveryAutomationCard
+                                eventKey={tourDeliveryEventKey}
+                                draft={tourCommsDraft}
+                                disabled={automationSaving || tourCommsLoading}
+                                onChange={setTourCommsDraft}
+                                presentation="modal"
+                                templateName={draft.name}
+                            />
+                        ) : (
+                            <p className="text-[12px] text-alloy-midnight/55">Loading automation policy…</p>
+                        )}
+                    </div>
+                    <footer className="flex items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-3">
+                        <button
+                            type="button"
+                            className={COMMS_SECONDARY_BTN_CLASS}
+                            disabled={automationSaving}
+                            onClick={() => {
+                                if (tourCommsBaselineJson) {
+                                    try {
+                                        setTourCommsDraft(JSON.parse(tourCommsBaselineJson) as TourCommsStudioDraft);
+                                    } catch {
+                                        /* keep */
+                                    }
+                                }
+                                setAutomationModalOpen(false);
+                            }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            data-template-save-automation="true"
+                            className={COMMS_PRIMARY_BTN_CLASS}
+                            disabled={automationSaving || !tourCommsDraft}
+                            onClick={() => void saveAutomationRule()}
+                        >
+                            {automationSaving ? "Saving…" : "Save automation"}
+                        </button>
+                    </footer>
+                </div>
+            </ActionModalOverlayShell>
         </div>
     );
 }

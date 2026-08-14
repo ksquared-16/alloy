@@ -25,7 +25,16 @@ type Props = {
     draft: TourCommsStudioDraft;
     disabled?: boolean;
     onChange: (next: TourCommsStudioDraft) => void;
+    /** embedded = legacy section card; modal = body-only for centered automation pop-out */
+    presentation?: "embedded" | "modal";
+    templateName?: string | null;
 };
+
+/**
+ * Registered relative-time anchors currently resolvable for Tour communications.
+ * Do not invent Billing/Payment anchors here — only surfaces that already resolve at runtime.
+ */
+const TOUR_TEMPORAL_ANCHORS = [{ key: "tour.start", label: "Tour start" }] as const;
 
 function ChannelToggle({
     channel,
@@ -55,7 +64,13 @@ function ChannelToggle({
     );
 }
 
-export default function TourTemplateDeliveryAutomationCard({ eventKey, draft, disabled = false, onChange }: Props) {
+function AutomationRuleFields({
+    eventKey,
+    draft,
+    disabled = false,
+    onChange,
+    templateName,
+}: Omit<Props, "presentation">) {
     const showReminder = tourTemplateShowsReminderControls(eventKey);
     const showInternal = tourTemplateShowsInternalRecipients(eventKey);
 
@@ -69,18 +84,15 @@ export default function TourTemplateDeliveryAutomationCard({ eventKey, draft, di
     };
 
     return (
-        <CommsSectionCard
-            title="Delivery & automation"
-            helper="Org-wide Tour scheduling policy — not stored in template content."
-            data-tour-delivery-automation="true"
-            dense
-            className="shrink-0 !p-2.5"
-        >
+        <div className="flex flex-col gap-3" data-tour-delivery-automation="true">
+            {templateName ? (
+                <p className="text-[12px] text-alloy-midnight/65" data-automation-template-preselect="true">
+                    Template: <span className="font-semibold text-alloy-midnight">{templateName}</span>
+                </p>
+            ) : null}
+
             {showReminder ? (
-                <div
-                    className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
-                    data-tour-delivery-reminder="true"
-                >
+                <div className="flex flex-col gap-2" data-tour-delivery-reminder="true">
                     <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-alloy-midnight/75">
                         <input
                             type="checkbox"
@@ -94,8 +106,9 @@ export default function TourTemplateDeliveryAutomationCard({ eventKey, draft, di
                     </label>
 
                     <div className="flex flex-wrap items-end gap-1.5">
+                        <span className="pb-1.5 text-[11px] font-medium text-alloy-midnight/55">Send</span>
                         <label className={COMMS_FIELD_STACK_CLASS}>
-                            <span className={COMMS_FIELD_LABEL_CLASS}>Send</span>
+                            <span className={COMMS_FIELD_LABEL_CLASS}>Amount</span>
                             <input
                                 type="number"
                                 min={1}
@@ -119,10 +132,35 @@ export default function TourTemplateDeliveryAutomationCard({ eventKey, draft, di
                                 <option value="hours">hours</option>
                             </select>
                         </label>
-                        <span className="pb-1.5 text-[11px] text-alloy-midnight/55">before tour</span>
+                        <label className={COMMS_FIELD_STACK_CLASS}>
+                            <span className={COMMS_FIELD_LABEL_CLASS}>Relation</span>
+                            <select
+                                data-tour-reminder-relation="true"
+                                value="before"
+                                disabled={disabled || !draft.reminderEnabled}
+                                className={`${COMMS_INPUT_CLASS} !w-[5.5rem]`}
+                            >
+                                <option value="before">before</option>
+                            </select>
+                        </label>
+                        <label className={COMMS_FIELD_STACK_CLASS}>
+                            <span className={COMMS_FIELD_LABEL_CLASS}>When</span>
+                            <select
+                                data-tour-reminder-anchor="true"
+                                value={TOUR_TEMPORAL_ANCHORS[0].key}
+                                disabled={disabled || !draft.reminderEnabled}
+                                className={`${COMMS_INPUT_CLASS} !min-w-[7.5rem]`}
+                            >
+                                {TOUR_TEMPORAL_ANCHORS.map((a) => (
+                                    <option key={a.key} value={a.key}>
+                                        {a.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                     </div>
 
-                    <div className="flex flex-col gap-1 sm:items-end">
+                    <div className="flex flex-col gap-1">
                         <span className={COMMS_FIELD_LABEL_CLASS}>Channels</span>
                         <div className="flex flex-wrap gap-1">
                             {TOUR_COMMS_CHANNELS.map((ch) => (
@@ -142,7 +180,7 @@ export default function TourTemplateDeliveryAutomationCard({ eventKey, draft, di
             {showReminder ? (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <label className={COMMS_FIELD_STACK_CLASS}>
-                        <span className={COMMS_FIELD_LABEL_CLASS}>Parent recipients</span>
+                        <span className={COMMS_FIELD_LABEL_CLASS}>Recipients</span>
                         <input
                             data-tour-parent-recipient-policy="true"
                             value={TOUR_COMMS_STUDIO_PARENT_RECIPIENT_LABEL}
@@ -190,10 +228,49 @@ export default function TourTemplateDeliveryAutomationCard({ eventKey, draft, di
 
             {!showReminder && !showInternal ? (
                 <p className="text-[11px] text-alloy-midnight/55">
-                    Delivery for this template follows org Tour communications policy. Edit Confirmation, Reminder,
-                    Reschedule, or Cancel templates to configure automation.
+                    Delivery for this template follows org Tour communications policy. Configure Reminder,
+                    Confirmation, Reschedule, or Cancel automations from those templates.
                 </p>
             ) : null}
+        </div>
+    );
+}
+
+/**
+ * Tour automation rule fields — content lives in TourCommsConfig (org policy), not the template body.
+ * Prefer modal presentation from the Template editor; embedded section is compatibility only.
+ */
+export default function TourTemplateDeliveryAutomationCard({
+    eventKey,
+    draft,
+    disabled = false,
+    onChange,
+    presentation = "embedded",
+    templateName = null,
+}: Props) {
+    const body = (
+        <AutomationRuleFields
+            eventKey={eventKey}
+            draft={draft}
+            disabled={disabled}
+            onChange={onChange}
+            templateName={templateName}
+        />
+    );
+
+    if (presentation === "modal") {
+        return body;
+    }
+
+    return (
+        <CommsSectionCard
+            title="Delivery & automation"
+            helper="Org-wide Tour scheduling policy — not stored in template content."
+            data-tour-delivery-automation-section="true"
+            dense
+            className="shrink-0 !p-2.5"
+        >
+            {body}
         </CommsSectionCard>
     );
 }

@@ -40,7 +40,7 @@ import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { resolveSelectWorkViewAction } from "@/lib/presentation/runtime/workUnitPillSwitching";
 import type { WorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
-import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
+import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 
 /**
  * Warm a subject's COMPLETE commit-critical answer for a row selection: the K2 provisioning answer
@@ -160,11 +160,15 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // `isOperationallyResolved` asks nothing of any fetch. Certification: operational at first sight,
     // 0 hollow frames. Do not reintroduce a subject read from the drawer store.
 
+    // THE one work-unit entry adapter — a second navigation path is what left these pills dead.
+    const moveToWorkUnitEntry = useWorkUnitEntryMovement();
+
     const selectWorkView = useCallback(
         (workViewId: string) => {
             // Same-host: LENS attention move (Excel-tab swap, no remount).
-            // Cross-host: navigate to the view's canonical host so pill count + queue rows share
-            // one cohort (All Family Leads must not show host-A count over host-B empty rows).
+            // Cross-host: SURFACE movement via the shared work-unit entry adapter (never router.push —
+            // `/workspace/work-unit/:slug` is seed-only and a push changes the address without moving
+            // attention).
             const id = workViewId.trim();
             if (!id) return;
             // Read Focus at click time — do not trust a stale React closure for settlement/lensSet.
@@ -203,29 +207,22 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 targetInputs,
             });
             if (action.kind === "noop") return;
+
+            // Active-runtime Work View selection never ends in a route push. Cross-host uses the
+            // shared entry adapter; same-host is always a LENS move. The former pathname "safety net"
+            // compared view href slugs to the current work-unit path and falsely treated ordinary
+            // same-host tab switches as navigation — URL changed, attention never moved (wt4 cert).
             if (action.kind === "navigate") {
-                router.push(action.href);
-                return;
+                if (moveToWorkUnitEntry(action.href, null, null, null)) return;
             }
-            // Pathname safety net: even if settlement locators are unavailable/mis-classified as
-            // same-host, a label-derived href that leaves this work-unit path must navigate so
-            // count host + row host stay one cohort.
-            const href = resolveWorkViewTargetHref(id, targetInputs);
-            if (typeof window !== "undefined" && href) {
-                const currentPath = window.location.pathname.replace(/\/$/, "");
-                const hrefPath = href.split("?")[0]!.replace(/\/$/, "");
-                if (hrefPath && hrefPath !== currentPath) {
-                    router.push(href);
-                    return;
-                }
-            }
+
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.LENS,
                 lens: id,
                 source: "work_view_selection",
             });
         },
-        [kernel, focus, router, selectedSiteId],
+        [kernel, focus, selectedSiteId, moveToWorkUnitEntry],
     );
 
     const openRecord = useCallback(
@@ -291,17 +288,10 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 router.prefetch(action.href);
                 return;
             }
-            const href = resolveWorkViewTargetHref(id, targetInputs);
-            if (typeof window !== "undefined" && href) {
-                const currentPath = window.location.pathname.replace(/\/$/, "");
-                const hrefPath = href.split("?")[0]!.replace(/\/$/, "");
-                if (hrefPath && hrefPath !== currentPath) {
-                    router.prefetch(href);
-                    return;
-                }
-            }
             // Same-host: prepare the sibling view's provisioning answer AND its default subject's
             // complete VM — so a pill switch commits a complete Focus Panel, not just a warm queue.
+            // Do not pathname-compare against label-derived hrefs (same false cross-host trap as
+            // selectWorkView) — that skipped K2 warm for ordinary same-host pills.
             void prepareOperationalDestination(kernel, {
                 ...current,
                 lens: id,

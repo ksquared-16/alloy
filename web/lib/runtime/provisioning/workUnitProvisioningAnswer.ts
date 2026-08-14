@@ -1419,10 +1419,15 @@ export async function composeWorkUnitProvisioningAnswer(
     const primaryContactName = strOrNull(identityContactSource.display_name);
     const primaryContactPhone = strOrNull(identityContactSource.phone);
     const primaryContactEmail = strOrNull(identityContactSource.email);
-    // The committed Children card's roster. Prefer enriched queue-row children (Create Lead never
-    // writes legacy `metadata.inquiry_children`). Primary source = `related_subjects_summary` —
-    // same compact child projection as the queue children band. Fall back to `_household_children`
-    // from enrichment, then the legacy intake snapshot for older records.
+    // The committed Children card's roster must come from authoritative child enrichment
+    // (`_inquiry_children` / `_household_children`), NOT the thin queue `related_subjects_summary`
+    // projection (names-only). Preferring the summary first blanked DOB/gender/program when the
+    // family was opened from All/Tours vs Waitlist — same children, divergent Focus Panel truth.
+    const chosenEnrichedRow = (familyEnrichedForChild ??
+        (enriched.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
+            {})) as Record<string, unknown>;
+    const householdChildren = chosenEnrichedRow._household_children;
+    const enrichedInquiryChildren = chosenEnrichedRow._inquiry_children;
     const relatedSubjectsSummary = Array.isArray(
         familyContextForChild?.related_subjects_summary ?? chosenRowContext.related_subjects_summary,
     )
@@ -1442,13 +1447,12 @@ export async function composeWorkUnitProvisioningAnswer(
                 ? { focused: true }
                 : {}),
         }));
-    const chosenEnrichedRow = (familyEnrichedForChild ??
-        (enriched.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
-            {})) as Record<string, unknown>;
-    const householdChildren = chosenEnrichedRow._household_children;
     const inquiryChildren =
-        (childrenFromContext.length ? childrenFromContext : null)
+        (Array.isArray(enrichedInquiryChildren) && enrichedInquiryChildren.length
+            ? enrichedInquiryChildren
+            : null)
         ?? (Array.isArray(householdChildren) && householdChildren.length ? householdChildren : null)
+        ?? (childrenFromContext.length ? childrenFromContext : null)
         ?? subjectMetadata?.inquiry_children
         ?? null;
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {
