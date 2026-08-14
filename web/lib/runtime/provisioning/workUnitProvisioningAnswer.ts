@@ -891,6 +891,14 @@ export async function composeWorkUnitProvisioningAnswer(
     const tProj = now();
     let page: OperationalProjectionRow[];
     let childRows: ChildProvisioningRow[] | null = null;
+    /**
+     * The lens's COMPLETE evaluated membership at family grain, before the display cap.
+     *
+     * `page` is what this answer PUBLISHES; membership is what the lens CONTAINS. They were the same
+     * object, so "is this record in the Work View" was silently answered as "is it in the first 100
+     * rows" — see the targeted resolution below.
+     */
+    let familyMembership: OperationalProjectionRow[] = [];
 
     if (subjectGrain.grain === "child") {
         // MEMBERSHIP FOLLOWS THE LENS'S OWN SHAPE. A stage-scoped child lens (Registration, Waitlist)
@@ -950,6 +958,7 @@ export async function composeWorkUnitProvisioningAnswer(
         });
         const admitted = projection.byViewId[activeView.id]?.rows ?? [];
         const ordered = applyCanonicalWorkViewSort(admitted, activeView);
+        familyMembership = ordered;
         page = ordered.slice(0, PROVISIONING_ROW_PAGE_CAP);
     }
     timings.projection_ms = now() - tProj;
@@ -1092,8 +1101,44 @@ export async function composeWorkUnitProvisioningAnswer(
               entityType: "opportunity",
               sortIndex: i,
           }));
+    /**
+     * TARGETED MEMBER RESOLUTION — membership decides, not the display page.
+     *
+     * `subjectRows` is the published page, capped at `PROVISIONING_ROW_PAGE_CAP`. Resolving a named
+     * subject only against it answered "is this record in the Work View?" with "is it in the first
+     * 100 rows?" — two different questions. A truthful member sorted past the cap was refused as
+     * `subject_unavailable`, so direct navigation to it was impossible and the operator was told the
+     * record was not in a view that does contain it.
+     *
+     * The complete membership is ALREADY in memory for both grains (`childRows` is the lens's full
+     * member set; `familyMembership` is the full ordered projection), so this costs no query and no
+     * larger page — it reads what the lens already evaluated. The published page is unchanged: only
+     * the SELECTABILITY of a named member widens to the truth.
+     *
+     * This is not a weakening of the guard. An id that names no member of this lens still fails, and
+     * nothing is ever substituted — the refusal below is untouched for genuine non-members.
+     */
+    const resolveTargetedMember = (subjectId: string): OperationalSubjectQueueRow | null => {
+        if (childRows) {
+            const index = childRows.findIndex((r) => String(r.participationId ?? "") === subjectId);
+            if (index < 0) return null;
+            return {
+                id: subjectId,
+                entityId: subjectId,
+                entityType: "child",
+                sortIndex: index,
+            };
+        }
+        const index = familyMembership.findIndex(
+            (r) => String((r as Record<string, unknown>).id) === subjectId,
+        );
+        if (index < 0) return null;
+        return { id: subjectId, entityId: subjectId, entityType: "opportunity", sortIndex: index };
+    };
+
     const requested = req.requestedSubjectId
-        ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ?? null
+        ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ??
+          resolveTargetedMember(req.requestedSubjectId)
         : null;
     if (req.requestedSubjectId && !requested) {
         // SUBJECT AUTHORITY. A caller that NAMES a subject is stating intent, not offering a hint.
@@ -1128,7 +1173,13 @@ export async function composeWorkUnitProvisioningAnswer(
     }
     // ── U-P5/U-O4 current business state + U-O5 truthful primary action. ──
     const childSubjectRow = childRows?.find((r) => String(r.participationId ?? "") === chosen.entityId) ?? null;
-    const subjectRow = childSubjectRow ?? page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
+    // The chosen member may sit BEYOND the published page (targeted resolution above), so composition
+    // reads the full membership. Searching only `page` here returned `undefined` behind a non-null
+    // assertion — the off-page path would have crashed rather than composed.
+    const subjectRow =
+        childSubjectRow ??
+        page.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId) ??
+        familyMembership.find((r) => String((r as Record<string, unknown>).id) === chosen.entityId)!;
 
     // The FAMILY NAMES the child page can honestly cite. `baseRows` are the in-scope opportunities the
     // answer already fetched (for the child grain they ARE the scope), so this is a pure lookup — no
