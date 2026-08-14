@@ -1,0 +1,90 @@
+{
+  "terminal": "operational",
+  "rowGrain": "family",
+  "subjectGrain": {
+    "grain": "case",
+    "subjectType": "opportunity"
+  },
+  "active": {
+    "id": "new_work_view_5",
+    "label": "Tours"
+  },
+  "settlement": {
+    "status": "resolved",
+    "workViewCountTargets": [
+      {
+        "workViewId": "new_leads",
+        "hostWorkUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "baseQueueKey": "lifecycle_lead"
+      },
+      {
+        "workViewId": "new_work_view_2",
+        "hostWorkUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+        "baseQueueKey": "lifecycle_qualification"
+      },
+      {
+        "workViewId": "new_work_view_3",
+        "hostWorkUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+        "baseQueueKey": "lifecycle_tour"
+      },
+      {
+        "workViewId": "new_work_view_4",
+        "hostWorkUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+        "baseQueueKey": "lifecycle_waitlist"
+      },
+      {
+        "workViewId": "new_work_view_5",
+        "hostWorkUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "baseQueueKey": "lifecycle_lead"
+      },
+      {
+        "workViewId": "new_work_view_6",
+        "hostWorkUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "baseQueueKey": "lifecycle_lead"
+      }
+    ],
+    "queueTotalTarget": {
+      "workViewId": "new_work_view_5",
+      "hostWorkUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+      "baseQueueKey": "lifecycle_lead"
+    },
+    "rightRailTarget": {
+      "departmentId": "3933ac47-077a-4de8-aaac-8aed48d80413",
+      "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37"
+    }
+  },
+  "lensSet": [
+    {
+      "id": "new_leads",
+      "label": "New"
+    },
+    {
+      "id": "new_work_view_2",
+      "label": "Active Pipeline"
+    },
+    {
+      "id": "new_work_view_3",
+      "label": "Registration"
+    },
+    {
+      "id": "new_work_view_4",
+      "label": "Waitlist"
+    },
+    {
+      "id": "new_work_view_5",
+      "label": "Tours"
+    },
+    {
+      "id": "new_work_view_6",
+      "label": "All"
+    }
+  ],
+  "row0": {
+    "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+    "title": "Kurzman Family",
+    "keys": [
+      "stageKey",
+      "title"
+    ]
+  }
+}

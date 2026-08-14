@@ -5,6 +5,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+    collapseTourActivityDuplicates,
+    OPPORTUNITY_RELATED_TOUR_ACTIVITY_EVENT_TYPES,
+} from "@/lib/admin/opportunityTourActivityEvents";
+
 export type QueueActivityTimelineEventRow = {
     id: string;
     occurred_at: string | null;
@@ -58,6 +63,19 @@ export function collapseTopEventsPerEntity(
     return byEntity;
 }
 
+function remapRelatedRowsToOpportunityEntity(
+    rows: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+    return rows.map((row) => {
+        const payload = row.payload;
+        const oppId =
+            payload && typeof payload === "object" && !Array.isArray(payload)
+                ? String((payload as Record<string, unknown>).opportunity_id ?? "").trim()
+                : "";
+        return { ...row, entity_id: oppId || row.entity_id };
+    });
+}
+
 /** Batch-load recent opportunity workflow_events grouped by entity_id (newest first per row). */
 export async function fetchQueueActivityTimelineEventsByOpportunityId(
     supabase: SupabaseClient,
@@ -75,7 +93,7 @@ export async function fetchQueueActivityTimelineEventsByOpportunityId(
     for (let i = 0; i < unique.length; i += chunkSize) {
         const chunk = unique.slice(i, i + chunkSize);
         const limit = Math.min(6000, Math.max(200, chunk.length * maxPerEntity * 4));
-        const [directRes, relatedChildRes] = await Promise.all([
+        const [directRes, relatedChildRes, relatedTourRes] = await Promise.all([
             supabase
                 .from("workflow_events")
                 .select("id, occurred_at, event_type, entity_id, payload")
@@ -93,6 +111,14 @@ export async function fetchQueueActivityTimelineEventsByOpportunityId(
                 .in("payload->>opportunity_id", chunk)
                 .order("occurred_at", { ascending: false })
                 .limit(limit),
+            supabase
+                .from("workflow_events")
+                .select("id, occurred_at, event_type, entity_id, payload")
+                .eq("org_id", orgId)
+                .in("event_type", [...OPPORTUNITY_RELATED_TOUR_ACTIVITY_EVENT_TYPES])
+                .in("payload->>opportunity_id", chunk)
+                .order("occurred_at", { ascending: false })
+                .limit(limit),
         ]);
 
         if (directRes.error) {
@@ -101,22 +127,21 @@ export async function fetchQueueActivityTimelineEventsByOpportunityId(
         if (relatedChildRes.error) {
             throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${relatedChildRes.error.message}`);
         }
+        if (relatedTourRes.error) {
+            throw new Error(`fetchQueueActivityTimelineEventsByOpportunityId: ${relatedTourRes.error.message}`);
+        }
 
-        const relatedAsOpportunity = ((relatedChildRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
-            const payload = row.payload;
-            const oppId =
-                payload && typeof payload === "object" && !Array.isArray(payload)
-                    ? String((payload as Record<string, unknown>).opportunity_id ?? "").trim()
-                    : "";
-            return { ...row, entity_id: oppId || row.entity_id };
-        });
+        const relatedAsOpportunity = [
+            ...remapRelatedRowsToOpportunityEntity((relatedChildRes.data ?? []) as Array<Record<string, unknown>>),
+            ...remapRelatedRowsToOpportunityEntity((relatedTourRes.data ?? []) as Array<Record<string, unknown>>),
+        ];
 
         const grouped = collapseTopEventsPerEntity(
             [...(directRes.data ?? []), ...relatedAsOpportunity],
-            maxPerEntity,
+            maxPerEntity * 2,
         );
         for (const [entityId, events] of grouped) {
-            out.set(entityId, events);
+            out.set(entityId, collapseTourActivityDuplicates(events).slice(0, maxPerEntity));
         }
     }
 

@@ -347,6 +347,7 @@ export async function applyStageOutcomeRuleTarget(
                         actorUserId: userId,
                         source: "stage_operating_plan_v1",
                         rowGrain: "child",
+                        childDisplayName: subject.participant_label ?? null,
                     });
                 } catch (e) {
                     // Declared downstream effect: the state transition stands, but the operator
@@ -702,6 +703,7 @@ export async function applyStageOutcomeRuleTarget(
                             actorUserId: userId,
                             source: "stage_operating_plan_v1",
                             rowGrain: "child",
+                            childDisplayName: subject.participant_label ?? null,
                         });
                         emitted = Boolean(row);
                     }
@@ -725,6 +727,9 @@ export async function applyStageOutcomeRuleTarget(
                                 row_grain: subject.journey_segment,
                                 ...(stageMoveChildId ? { customer_member_id: stageMoveChildId } : {}),
                                 ...(ocmBridgeId ? { opportunity_customer_member_id: ocmBridgeId } : {}),
+                                ...(subject.journey_segment === "child" && subject.participant_label
+                                    ? { child_display_name: subject.participant_label }
+                                    : {}),
                                 ...(userId ? { actor_user_id: userId } : {}),
                             },
                         });

@@ -212,7 +212,9 @@ describe("Current Work Focus workspace composition", () => {
         expect(html).toContain("More actions");
         expect(html).toContain("Other transitions");
         expect(html).toContain("Recent activity");
-        expect(html).toContain("Schedule Tour");
+        // Tour actions are grouped under the shared DropdownMenu trigger (items portal on open).
+        expect(html).toContain('data-work-tour-menu-trigger="true"');
+        expect(html).toContain("Tour ▾");
         expect(html).toContain("Send Form");
         expect(html).not.toMatch(/>CURRENT WORK</i);
         expect(html).not.toContain("data-work-summary");

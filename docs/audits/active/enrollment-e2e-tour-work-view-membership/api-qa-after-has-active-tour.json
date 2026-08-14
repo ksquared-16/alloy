@@ -1,0 +1,77 @@
+{
+  "at": "2026-08-13T19:55:50.844Z",
+  "totals": {
+    "generatedAt": "2026-08-13T19:55:45.058Z",
+    "totals": [
+      {
+        "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "queueKey": "lifecycle_lead",
+        "workViewId": "new_work_view_5",
+        "count": 1,
+        "known": true
+      },
+      {
+        "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "queueKey": "lifecycle_lead",
+        "workViewId": "new_work_view_6",
+        "count": 1,
+        "known": true
+      },
+      {
+        "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "queueKey": "lifecycle_lead",
+        "workViewId": "new_leads",
+        "count": 0,
+        "known": true
+      },
+      {
+        "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+        "queueKey": "lifecycle_waitlist",
+        "workViewId": "new_work_view_4",
+        "count": 2,
+        "known": true
+      },
+      {
+        "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+        "queueKey": "lifecycle_tour",
+        "workViewId": "new_work_view_5",
+        "count": 0,
+        "known": true
+      }
+    ]
+  },
+  "provStatus": 200,
+  "terminal": "operational",
+  "page": [
+    {
+      "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+    }
+  ],
+  "keys": [
+    "terminal",
+    "orgId",
+    "workUnit",
+    "businessProcess",
+    "activeWorkView",
+    "lensSet",
+    "rowGrain",
+    "subjectGrain",
+    "rows",
+    "recordOfAttention",
+    "recordOfTruth",
+    "contextFrame",
+    "focusPanelScopeState",
+    "focusPanelOutOfView",
+    "currentBusinessState",
+    "primaryAction",
+    "primaryActionAbsence",
+    "childIdentity",
+    "focusPanelStageWork",
+    "subjectIdentityTruth",
+    "focusPanelSummaryDoc",
+    "presentation",
+    "settlement",
+    "actionsProjection",
+    "timings"
+  ]
+}

@@ -64,7 +64,16 @@ export type WhatsNextActivityItem = {
  * this DTO does not duplicate action definitions.
  */
 export type WhatsNextCardPresentation = {
+    /**
+     * Operator headline — prefers stage position (where the subject is now)
+     * over open work labels so Current Work is not painted as a lifecycle stage.
+     */
     title: string;
+    /**
+     * Open Current Work label when it differs from the stage-led title
+     * (operational detail, not process position).
+     */
+    currentWorkLabel: string | null;
     /**
      * One-line operational summary under the title.
      * Deterministic (config description / purpose) today.

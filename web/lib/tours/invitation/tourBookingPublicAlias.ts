@@ -40,6 +40,8 @@ export async function aliasTourBookingUrl(params: {
     orgId: string;
     invitationId: string;
     longUrl: string;
+    /** Public origin for absolute `/a/{code}` URLs (email/SMS must not be origin-relative). */
+    baseUrl?: string | null;
     /** Inherit invitation expiry when known; default 21 days. */
     expiresInMinutes?: number;
 }): Promise<string> {
@@ -55,5 +57,9 @@ export async function aliasTourBookingUrl(params: {
         metadata: { redirect_path: path },
     });
     if (!created?.short_code) return params.longUrl;
-    return buildShortActionLinkUrl(created.short_code) || params.longUrl;
+    const short = buildShortActionLinkUrl(created.short_code, params.baseUrl);
+    if (!short) return params.longUrl;
+    // Last resort: if env origin is unset and caller forgot baseUrl, keep the long absolute URL.
+    if (short.startsWith("/")) return params.longUrl;
+    return short;
 }

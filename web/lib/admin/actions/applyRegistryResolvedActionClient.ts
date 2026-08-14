@@ -448,29 +448,15 @@ export async function applyRegistryResolvedActionClient(
                         confirmation: { confirmed: true },
                     }),
                 });
-                const json = (await res.json().catch(() => ({}))) as {
-                    ok?: boolean;
-                    data?: {
-                        execution_result?: {
-                            detail?: {
-                                draft?: {
-                                    emailBody?: string | null;
-                                    emailSubject?: string | null;
-                                    smsBody?: string | null;
-                                    invitationId?: string | null;
-                                } | null;
-                                invitation_id?: string;
-                            };
-                        };
-                    };
-                };
-                const detail = json.data?.execution_result?.detail;
-                const draft = detail?.draft ?? null;
-                invitationId =
-                    String(detail?.invitation_id ?? "").trim()
-                    || String(draft?.invitationId ?? "").trim();
-                draftBody = String(draft?.emailBody ?? "").trim();
-                draftSubject = String(draft?.emailSubject ?? "").trim();
+                const json = await res.json().catch(() => ({}));
+                const { tourInvitationDetailFromExecutePayload, tourInvitationDraftFromDetail } =
+                    await import("@/lib/tours/tourInvitationPrepareWarmCache");
+                const prepared = tourInvitationDraftFromDetail(
+                    tourInvitationDetailFromExecutePayload(json),
+                );
+                invitationId = prepared?.invitationId ?? "";
+                draftBody = prepared?.emailBody ?? "";
+                draftSubject = prepared?.emailSubject ?? "";
             } catch {
                 // Compose still opens; operator can write manually if prepare fails.
             }

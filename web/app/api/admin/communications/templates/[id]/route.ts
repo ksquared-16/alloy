@@ -22,7 +22,7 @@ import {
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 const TEMPLATE_COLS =
-    "id, org_id, name, description, category, channel, status, current_version_id, created_by, updated_by, created_at, updated_at";
+    "id, org_id, name, description, category, channel, status, current_version_id, system_key, created_by, updated_by, created_at, updated_at";
 const VERSION_COLS = "id, template_id, version_number, subject, body, token_paths, created_at";
 
 /** GET /api/admin/communications/templates/[id] — template + current version + all versions. */
@@ -141,6 +141,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     let newVersion: Record<string, unknown> | null = null;
     if (makeVersion) {
         const merged = mergeContent(currentContent, content);
+        const systemKey =
+            typeof (template as Record<string, unknown>).system_key === "string"
+                ? String((template as Record<string, unknown>).system_key)
+                : null;
+        const { validateTourSystemTemplateRequiredPlaceholders } = await import(
+            "@/lib/tours/comms/tourSystemTemplates"
+        );
+        const requiredCheck = validateTourSystemTemplateRequiredPlaceholders({
+            systemKey,
+            subject: merged.subject,
+            body: merged.body,
+        });
+        if (!requiredCheck.ok) {
+            return NextResponse.json({ error: requiredCheck.error }, { status: 400 });
+        }
         // Determine next version number from current max (org + template scoped).
         const { data: maxRow, error: maxErr } = await supabase
             .from("communication_template_versions")

@@ -240,13 +240,15 @@ describe("the provisioned command is wired to the canonical runtime", () => {
         expect(client).toContain('actionKey === "send_tour_invitation"');
     });
 
-    it("opens canonical QuickMessage compose instead of confirm/execute/alert", () => {
+    it("opens canonical QuickMessage compose after prepare (never confirm/alert auto-send)", () => {
         const branch = branchSource();
         expect(branch).toContain("launchContextualQuickMessage");
         expect(branch).toContain('defaultChannel: "email"');
+        expect(branch).toContain('mode: "prepare"');
+        expect(branch).toContain("/api/admin/actions/execute");
         expect(branch).not.toContain("window.confirm");
         expect(branch).not.toContain("window.alert");
-        expect(branch).not.toContain("/api/admin/actions/execute");
+        expect(branch).not.toContain("Invitation sent");
     });
 
     it("does not claim a generic Invitation sent success", () => {

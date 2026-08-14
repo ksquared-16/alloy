@@ -181,6 +181,15 @@ describe("renderer — channel behavior", () => {
         expect(toPlainText("a\n\n\n\n b   c ")).toBe("a\n\nb c");
         expect(smsSegments("short")).toBe(1);
     });
+
+    it("preserves anchor href URLs in plain text (Tour friendly-link safety)", () => {
+        const html =
+            'Choose a tour time:<br><a href="http://127.0.0.1:3015/a/abc123" style="color:#1f4d3a;">Choose a tour time</a>';
+        const plain = toPlainText(html);
+        expect(plain).toContain("Choose a tour time");
+        expect(plain).toContain("http://127.0.0.1:3015/a/abc123");
+        expect(plain).not.toContain("<a");
+    });
 });
 
 describe("renderer — preview/send parity", () => {

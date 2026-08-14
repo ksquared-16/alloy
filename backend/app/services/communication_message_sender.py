@@ -33,6 +33,122 @@ logger = logging.getLogger("alloy-dispatcher")
 ERROR_TRUNCATE = 500
 
 
+def _html_from_rendered_snapshot(row: Dict[str, Any]) -> Optional[str]:
+    snap = row.get("rendered_snapshot")
+    if isinstance(snap, str):
+        try:
+            import json
+
+            snap = json.loads(snap)
+        except Exception:
+            return None
+    if not isinstance(snap, dict):
+        return None
+    html = snap.get("html")
+    if html is None:
+        return None
+    text = str(html).strip()
+    return text or None
+
+
+def _text_from_rendered_snapshot(row: Dict[str, Any]) -> Optional[str]:
+    snap = row.get("rendered_snapshot")
+    if isinstance(snap, str):
+        try:
+            import json
+
+            snap = json.loads(snap)
+        except Exception:
+            return None
+    if not isinstance(snap, dict):
+        return None
+    text = snap.get("text")
+    if text is None:
+        return None
+    out = str(text).strip()
+    return out or None
+
+
+def _polish_plain_email_action_links(text: str) -> str:
+    """Parent-facing labels for Tour action URLs when only plain text was stored."""
+    import html as html_lib
+    import re
+
+    escaped = html_lib.escape(text or "")
+    with_breaks = escaped.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
+    # Labels may sit on the line above the URL (`Label:<br>https://…`).
+    gap = r"(?:\s|<br\s*/?>)*"
+    patterns = [
+        (
+            rf"Choose a tour time:?{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Choose a tour time</a>',
+        ),
+        (
+            rf"Add to calendar:{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;">Add to calendar</a>',
+        ),
+        (
+            rf"Need to reschedule\?{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;">Reschedule tour</a>',
+        ),
+        (
+            rf"Manage or cancel your tour:{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;">Manage or cancel tour</a>',
+        ),
+        (
+            rf"Manage or cancel tour:{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;">Manage or cancel tour</a>',
+        ),
+        (
+            rf"Book a new time:{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;">Choose a tour time</a>',
+        ),
+        (
+            rf"Book your tour:{gap}(https?://[^\s<]+)",
+            r'<a href="\1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Choose a tour time</a>',
+        ),
+    ]
+    out = with_breaks
+    for pattern, repl in patterns:
+        out = re.sub(pattern, repl, out, flags=re.IGNORECASE)
+    return f"<p>{out}</p>"
+
+
+def _resolve_outbound_email_html(row: Dict[str, Any], cfg: Dict[str, Any], text_body: str) -> Optional[str]:
+    """Prefer immutable render snapshot HTML; fall back to binding cfg or polished plain text."""
+    from_snap = _html_from_rendered_snapshot(row)
+    if from_snap:
+        return from_snap
+    cfg_html = cfg.get("html")
+    if cfg_html:
+        s = str(cfg_html).strip()
+        if s:
+            return s
+    # Prefer snapshot text (retains href URLs after renderer plain-text extraction)
+    # when the row body was stored without destinations.
+    polish_source = text_body
+    snap_text = _text_from_rendered_snapshot(row)
+    if snap_text and ("http://" in snap_text or "https://" in snap_text):
+        if "http://" not in (text_body or "") and "https://" not in (text_body or ""):
+            polish_source = snap_text
+    # Tour / action emails often store plain text with labeled URLs — polish for parents.
+    if re_search_action_url_label(polish_source):
+        return _polish_plain_email_action_links(polish_source)
+    return None
+
+
+def re_search_action_url_label(text: str) -> bool:
+    import re
+
+    return bool(
+        re.search(
+            r"(Choose a tour time|Add to calendar|Need to reschedule|Manage or cancel|Book a new time|Book your tour).{0,40}https?://",
+            text or "",
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    )
+
+
 def _tail_str(s: str, n: int = 8) -> str:
     t = (s or "").strip()
     if not t:
@@ -411,11 +527,32 @@ def process_communication_messages(
                     org_id=str(row.get("org_id") or ""),
                     thread_id=str(row.get("thread_id") or ""),
                 )
+                html_body = _resolve_outbound_email_html(row, cfg, body)
+                # Prefer snapshot text when it retains destinations the body column lost.
+                text_for_provider = body
+                snap_text = _text_from_rendered_snapshot(row)
+                if snap_text and (("http://" in snap_text or "https://" in snap_text) and "http://" not in body and "https://" not in body):
+                    text_for_provider = snap_text
+                attachments = None
+                meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+                cal = meta.get("calendar_invite") if isinstance(meta, dict) else None
+                if isinstance(cal, dict):
+                    filename = str(cal.get("filename") or "").strip() or "invite.ics"
+                    content_b64 = str(cal.get("content_base64") or cal.get("content") or "").strip()
+                    ctype = str(cal.get("content_type") or "text/calendar").strip()
+                    if content_b64:
+                        attachments = [
+                            {
+                                "filename": filename,
+                                "content": content_b64,
+                                "content_type": ctype,
+                            }
+                        ]
                 res = send_resend_email(
                     to_email=to_addr,
                     subject=subject,
-                    html_body=str(cfg.get("html")) if cfg.get("html") else None,
-                    text_body=body,
+                    html_body=html_body,
+                    text_body=text_for_provider,
                     from_email=from_email,
                     api_key=api_key_plain,
                     message_id=outbound_message_id,
@@ -424,6 +561,7 @@ def process_communication_messages(
                         in_reply_to=thread_headers.get("in_reply_to"),
                         references=thread_headers.get("references"),
                     ),
+                    attachments=attachments,
                 )
                 rid = res.get("id", "")
                 _patch_comm_message(

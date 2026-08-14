@@ -47,7 +47,7 @@ describe("the parent-safe action model", () => {
         "offers nothing once the booking is %s",
         (statusKey) => {
             const m = buildTourParentActionModel({ actions, baseUrl: BASE, bookingStatusKey: statusKey });
-            expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null });
+            expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null });
         }
     );
 
@@ -61,7 +61,7 @@ describe("the parent-safe action model", () => {
 
     it("degrades to no actions rather than emitting a broken origin", () => {
         const m = buildTourParentActionModel({ actions, baseUrl: "  ", bookingStatusKey: "confirmed" });
-        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null });
+        expect(m).toEqual({ rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null });
     });
 });
 

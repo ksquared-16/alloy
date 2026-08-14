@@ -376,7 +376,13 @@ export function childSubjectIdentityTruthBindings(
     const bindings: Record<string, unknown> = {};
     if (childDisplayName) bindings["child.display_name"] = childDisplayName;
     if (composition.family?.name) bindings["child.family_name"] = composition.family.name;
-    if (composition.family?.opportunityId) bindings["child.family_opportunity_id"] = composition.family.opportunityId;
+    // Prefer family context; fall back to participation identity.contextId so Settlement
+    // can always key the opportunity VM when Attention is the child.
+    const familyOpportunityId =
+        composition.family?.opportunityId?.trim()
+        || composition.identity.contextId?.trim()
+        || null;
+    if (familyOpportunityId) bindings["child.family_opportunity_id"] = familyOpportunityId;
     if (composition.identity.subjectId) bindings["child.customer_member_id"] = composition.identity.subjectId;
     if (composition.identity.participationId) {
         bindings["child.process_instance_id"] = composition.identity.participationId;

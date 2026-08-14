@@ -26,6 +26,8 @@ export const TOUR_ACTION_KINDS = [
     "reschedule_tour",
     "confirm_tour",
     "cancel_tour",
+    /** Parent attendance affirmation — does not change booking lifecycle status. */
+    "confirm_attendance",
 ] as const;
 
 export type TourActionKind = (typeof TOUR_ACTION_KINDS)[number];
@@ -36,15 +38,24 @@ export type TourActionKind = (typeof TOUR_ACTION_KINDS)[number];
  */
 export const TOUR_ACTION_CAPABILITY: Record<
     TourActionKind,
-    { readsAvailability: boolean; books: boolean; declines: boolean; confirms: boolean; reschedules: boolean; cancels: boolean }
+    {
+        readsAvailability: boolean;
+        books: boolean;
+        declines: boolean;
+        confirms: boolean;
+        reschedules: boolean;
+        cancels: boolean;
+        confirmsAttendance: boolean;
+    }
 > = {
-    view_tour_slots: { readsAvailability: true, books: false, declines: false, confirms: false, reschedules: false, cancels: false },
-    select_tour_slot: { readsAvailability: true, books: true, declines: false, confirms: false, reschedules: false, cancels: false },
-    decline_tour: { readsAvailability: false, books: false, declines: true, confirms: false, reschedules: false, cancels: false },
-    view_tour_details: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: false },
-    reschedule_tour: { readsAvailability: true, books: false, declines: false, confirms: false, reschedules: true, cancels: false },
-    confirm_tour: { readsAvailability: false, books: false, declines: false, confirms: true, reschedules: false, cancels: false },
-    cancel_tour: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: true },
+    view_tour_slots: { readsAvailability: true, books: false, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: false },
+    select_tour_slot: { readsAvailability: true, books: true, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: false },
+    decline_tour: { readsAvailability: false, books: false, declines: true, confirms: false, reschedules: false, cancels: false, confirmsAttendance: false },
+    view_tour_details: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: false },
+    reschedule_tour: { readsAvailability: true, books: false, declines: false, confirms: false, reschedules: true, cancels: false, confirmsAttendance: false },
+    confirm_tour: { readsAvailability: false, books: false, declines: false, confirms: true, reschedules: false, cancels: false, confirmsAttendance: false },
+    cancel_tour: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: true, confirmsAttendance: false },
+    confirm_attendance: { readsAvailability: false, books: false, declines: false, confirms: false, reschedules: false, cancels: false, confirmsAttendance: true },
 };
 
 /** Reuse policy. Idempotent retries are NOT treated as malicious replay. */
@@ -58,6 +69,8 @@ export const TOUR_ACTION_REUSE: Record<TourActionKind, "single_use" | "reusable"
     reschedule_tour: "reusable",
     confirm_tour: "single_use",
     cancel_tour: "single_use",
+    // Idempotent attendance affirmation — safe to click twice.
+    confirm_attendance: "reusable",
 };
 
 export type TourAuthFailureCode =
@@ -305,4 +318,95 @@ export async function invalidateIncompatibleTourActions(args: {
 
     if (args.keepLinkId) q = q.neq("id", args.keepLinkId);
     await q;
+}
+
+/**
+ * Action kinds still usable on an invitation (for parent resolve).
+ *
+ * A view credential alone cannot book, but the invitation mints a sibling
+ * `select_tour_slot` that can — resolve must surface that so Confirm Tour appears
+ * even when the parent opened a browse-only short link.
+ */
+export async function listActiveTourInvitationActionKinds(args: {
+    supabase: SupabaseClient;
+    invitationId: string;
+    orgId: string;
+}): Promise<TourActionKind[]> {
+    const { data, error } = await args.supabase
+        .from("tour_public_booking_links")
+        .select("action_kind, consumed_at, revoked_at, is_active, expires_at")
+        .eq("invitation_id", args.invitationId)
+        .eq("org_id", args.orgId);
+
+    if (error || !data) return [];
+
+    const kinds: TourActionKind[] = [];
+    for (const row of data as Array<{
+        action_kind?: string | null;
+        consumed_at?: string | null;
+        revoked_at?: string | null;
+        is_active?: boolean | null;
+        expires_at?: string | null;
+    }>) {
+        const kind = row.action_kind as TourActionKind | null;
+        if (!kind || !(kind in TOUR_ACTION_CAPABILITY)) continue;
+        if (row.revoked_at || row.is_active === false) continue;
+        if (isPast(row.expires_at ?? null)) continue;
+        if (TOUR_ACTION_REUSE[kind] === "single_use" && row.consumed_at) continue;
+        if (!kinds.includes(kind)) kinds.push(kind);
+    }
+    return kinds;
+}
+
+export type TourSelectLinkForBooking = {
+    id: string;
+    booking_id: string | null;
+    consumed_at: string | null;
+};
+
+/**
+ * Resolve the invitation's select credential for a public book.
+ *
+ * Prefer an unconsumed select (first commit). Fall back to a consumed select
+ * already bound to a booking (idempotent replay after double-click).
+ */
+export async function findTourSelectLinkForBooking(args: {
+    supabase: SupabaseClient;
+    invitationId: string;
+    orgId: string;
+}): Promise<TourSelectLinkForBooking | null> {
+    const { data, error } = await args.supabase
+        .from("tour_public_booking_links")
+        .select("id, booking_id, consumed_at, revoked_at, is_active, expires_at")
+        .eq("invitation_id", args.invitationId)
+        .eq("org_id", args.orgId)
+        .eq("action_kind", "select_tour_slot");
+
+    if (error || !data?.length) return null;
+
+    const rows = data as Array<{
+        id: string;
+        booking_id?: string | null;
+        consumed_at?: string | null;
+        revoked_at?: string | null;
+        is_active?: boolean | null;
+        expires_at?: string | null;
+    }>;
+
+    const open = rows.find(
+        (r) => !r.revoked_at && r.is_active !== false && !isPast(r.expires_at ?? null) && !r.consumed_at
+    );
+    if (open) {
+        return { id: open.id, booking_id: open.booking_id ?? null, consumed_at: open.consumed_at ?? null };
+    }
+
+    const replay = rows.find((r) => r.consumed_at && r.booking_id);
+    if (replay) {
+        return {
+            id: replay.id,
+            booking_id: replay.booking_id ?? null,
+            consumed_at: replay.consumed_at ?? null,
+        };
+    }
+    return null;
 }

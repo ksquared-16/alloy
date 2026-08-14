@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useState } from "react";
 
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 import { partitionTourGroupedActions } from "@/lib/adminV2/runtime/focusPanel/currentWork/groupTourPresentationActions";
 
@@ -14,8 +20,21 @@ type Props = {
     variant?: "summary" | "workspace";
 };
 
+const TOUR_MENU_LABELS: Record<string, string> = {
+    send_tour_invitation: "Send Tour Invitation",
+    schedule_tour: "Schedule Tour",
+    reschedule_tour: "Reschedule Tour",
+    cancel_tour: "Cancel Tour",
+};
+
+function tourMenuLabel(action: CurrentWorkActionVM): string {
+    const key = (action.handlerKey ?? action.key).trim();
+    return TOUR_MENU_LABELS[key] ?? TOUR_MENU_LABELS[action.key] ?? action.label;
+}
+
 /**
  * Presentation-only Tour ▾ grouping for What's Next helpful / more-actions lists.
+ * Uses the shared Alloy DropdownMenu primitive (not a one-off menu skin).
  */
 export default function CurrentWorkTourGroupedActions({
     actions,
@@ -25,28 +44,6 @@ export default function CurrentWorkTourGroupedActions({
 }: Props) {
     const { tour, rest } = partitionTourGroupedActions(actions);
     const [open, setOpen] = useState(false);
-    const menuId = useId();
-    // Shared click-outside root for both `<li>` (workspace) and `<div>` (summary) hosts.
-    const rootRef = useRef<HTMLElement | null>(null);
-    const setRootEl = (el: HTMLElement | null) => {
-        rootRef.current = el;
-    };
-
-    useEffect(() => {
-        if (!open) return;
-        const onDoc = (event: MouseEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-        };
-        const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
-        };
-        document.addEventListener("mousedown", onDoc);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("mousedown", onDoc);
-            document.removeEventListener("keydown", onKey);
-        };
-    }, [open]);
 
     if (variant === "workspace") {
         return (
@@ -66,44 +63,38 @@ export default function CurrentWorkTourGroupedActions({
                     </li>
                 ))}
                 {tour.length > 0 ?
-                    <li className="relative" ref={setRootEl}>
-                        <button
-                            type="button"
-                            className="alloy-os-currentwork-workspace__action-row"
-                            data-work-tour-menu-trigger="true"
-                            aria-expanded={open}
-                            aria-controls={menuId}
-                            onClick={() => setOpen((v) => !v)}
-                        >
-                            Tour ▾
-                        </button>
-                        {open ?
-                            <ul
-                                id={menuId}
-                                role="menu"
+                    <li className="relative w-full" data-work-tour-grouped="true">
+                        <DropdownMenu open={open} onOpenChange={setOpen}>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="alloy-os-currentwork-workspace__action-row w-full"
+                                    data-work-tour-menu-trigger="true"
+                                    aria-expanded={open}
+                                >
+                                    Tour ▾
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="start"
+                                sideOffset={4}
                                 data-work-tour-menu="true"
-                                className="absolute left-0 z-20 mt-1 min-w-[12rem] rounded-md border border-alloy-stone/20 bg-white py-1 shadow-md"
+                                className="alloy-os-currentwork__tour-menu"
                             >
                                 {tour.map((action) => (
-                                    <li key={action.key} role="none">
-                                        <button
-                                            type="button"
-                                            role="menuitem"
-                                            className="block w-full px-3 py-1.5 text-left text-sm text-alloy-midnight hover:bg-alloy-stone/10 disabled:opacity-40"
-                                            data-work-supporting-action={action.key}
-                                            disabled={action.disabled}
-                                            title={action.disabledReason ?? undefined}
-                                            onClick={() => {
-                                                setOpen(false);
-                                                onAction(action);
-                                            }}
-                                        >
-                                            {action.label}
-                                        </button>
-                                    </li>
+                                    <DropdownMenuItem
+                                        key={action.key}
+                                        disabled={action.disabled}
+                                        title={action.disabledReason ?? undefined}
+                                        data-work-supporting-action={action.key}
+                                        className="alloy-os-currentwork__tour-menu-item"
+                                        onSelect={() => onAction(action)}
+                                    >
+                                        {tourMenuLabel(action)}
+                                    </DropdownMenuItem>
                                 ))}
-                            </ul>
-                        :   null}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </li>
                 :   null}
             </ul>
@@ -128,46 +119,45 @@ export default function CurrentWorkTourGroupedActions({
                 </button>
             ))}
             {tour.length > 0 ?
-                <div className="relative inline-flex" ref={setRootEl} data-work-tour-grouped="true">
-                    <button
-                        type="button"
-                        className="alloy-os-currentwork__helpful-action"
-                        data-work-tour-menu-trigger="true"
-                        aria-expanded={open}
-                        aria-controls={menuId}
-                        onClick={() => setOpen((v) => !v)}
-                    >
-                        Tour ▾
-                    </button>
-                    {open ?
-                        <ul
-                            id={menuId}
-                            role="menu"
+                <div className="relative w-full min-w-0" data-work-tour-grouped="true">
+                    <DropdownMenu open={open} onOpenChange={setOpen}>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="alloy-os-currentwork__helpful-action"
+                                data-work-tour-menu-trigger="true"
+                                aria-expanded={open}
+                                onMouseEnter={() => {
+                                    for (const action of tour) onWarm?.(action);
+                                }}
+                                onFocus={() => {
+                                    for (const action of tour) onWarm?.(action);
+                                }}
+                            >
+                                Tour ▾
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="start"
+                            sideOffset={4}
                             data-work-tour-menu="true"
-                            className="absolute left-0 top-full z-20 mt-1 min-w-[12rem] rounded-md border border-alloy-stone/20 bg-white py-1 shadow-md"
+                            className="alloy-os-currentwork__tour-menu"
                         >
                             {tour.map((action) => (
-                                <li key={action.key} role="none">
-                                    <button
-                                        type="button"
-                                        role="menuitem"
-                                        className="block w-full px-3 py-1.5 text-left text-sm text-alloy-midnight hover:bg-alloy-stone/10 disabled:opacity-40"
-                                        data-work-supporting-action={action.key}
-                                        disabled={action.disabled}
-                                        title={action.disabledReason ?? undefined}
-                                        onClick={() => {
-                                            setOpen(false);
-                                            onAction(action);
-                                        }}
-                                        onMouseEnter={() => onWarm?.(action)}
-                                        onFocus={() => onWarm?.(action)}
-                                    >
-                                        {action.label}
-                                    </button>
-                                </li>
+                                <DropdownMenuItem
+                                    key={action.key}
+                                    disabled={action.disabled}
+                                    title={action.disabledReason ?? undefined}
+                                    data-work-supporting-action={action.key}
+                                    className="alloy-os-currentwork__tour-menu-item"
+                                    onSelect={() => onAction(action)}
+                                    onFocus={() => onWarm?.(action)}
+                                >
+                                    {tourMenuLabel(action)}
+                                </DropdownMenuItem>
                             ))}
-                        </ul>
-                    :   null}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             :   null}
         </>

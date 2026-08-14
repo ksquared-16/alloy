@@ -1,0 +1,60 @@
+[
+  {
+    "t": "2026-08-13T20:06:56.672Z",
+    "step": "totals_net",
+    "interesting": [
+      {
+        "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "queueKey": "lifecycle_lead",
+        "workViewId": "new_leads",
+        "count": 0,
+        "known": true
+      },
+      {
+        "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "queueKey": "lifecycle_lead",
+        "workViewId": "new_work_view_5",
+        "count": 1,
+        "known": true
+      },
+      {
+        "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+        "queueKey": "lifecycle_lead",
+        "workViewId": "new_work_view_6",
+        "count": 1,
+        "known": true
+      },
+      {
+        "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+        "queueKey": "lifecycle_waitlist",
+        "workViewId": "new_work_view_4",
+        "count": 2,
+        "known": true
+      }
+    ]
+  },
+  {
+    "t": "2026-08-13T20:06:56.713Z",
+    "step": "tours",
+    "hasKurzman": true,
+    "matches": [
+      "New 0",
+      "Waitlist 2",
+      "Tours 1",
+      "All 1"
+    ],
+    "url": "http://127.0.0.1:3015/workspace/work-unit/new-leads?work_view_id=new_work_view_5"
+  },
+  {
+    "t": "2026-08-13T20:07:18.509Z",
+    "step": "studio_reminder",
+    "delivery": 1,
+    "text": "Delivery & automation\n\nOrg-wide Tour scheduling policy — not stored in template content.\n\nReminder enabled\nSend\nUnit\nhours\nbefore tour\nChannels\nEmail\nSMS\nParent recipients\nAsk parent to confirm attendance\n\nInherited from Tour communications policy — changes apply to all Tour lifecycle notifications.\n\nSend internal calendar notifications\nInternal recipients\nLoading staff…\nOptional — leave empty for no internal notifications."
+  },
+  {
+    "t": "2026-08-13T20:07:20.699Z",
+    "step": "studio_confirmation",
+    "delivery": 1,
+    "text": "Delivery & automation\n\nOrg-wide Tour scheduling policy — not stored in template content.\n\nReminder enabled\nSend\nUnit\nhours\nbefore tour\nChannels\nEmail\nSMS\nParent recipients\nAsk parent to confirm attendance\n\nInherited from Tour communications policy — changes apply to all Tour lifecycle notifications.\n\nSend internal calendar notifications\nInternal recipients\nLoading staff…\nOptional — leave empty for no internal notifications."
+  }
+]

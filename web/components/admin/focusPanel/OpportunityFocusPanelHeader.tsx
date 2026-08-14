@@ -11,7 +11,6 @@ import {
     resolveFocusPanelLocationChip,
     resolveFocusPanelProcessLabel,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
-import { FOCUS_PANEL_HEADER_BOS_LABEL } from "@/lib/adminV2/runtime/focusPanel/focusPanelHeaderActions";
 import { buildSubjectManageMenuFromResolvedActions } from "@/lib/admin/recordManage/buildSubjectManageMenuFromResolvedActions";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -90,16 +89,32 @@ export default function OpportunityFocusPanelHeader({
 
     const locationLabel = useMemo(() => resolveFocusPanelLocationChip(record), [record]);
 
-    const contextChips = useMemo(
-        () =>
-            buildFocusPanelContextChips({
-                statusLabel: effectiveStageLabel ?? readOnlyStatusLabel,
-                statusKey: currentStatusKey,
-                processLabel,
-                locationLabel,
-            }),
-        [currentStatusKey, effectiveStageLabel, locationLabel, processLabel, readOnlyStatusLabel],
-    );
+    const hasActiveTour = (displayVm.summaries.active_tour_bookings?.length ?? 0) > 0;
+
+    const contextChips = useMemo(() => {
+        const stageOrStatus = effectiveStageLabel ?? readOnlyStatusLabel;
+        // Booked Tour is overlapping operational context — not a stage move. Surface it beside
+        // Waitlist/EPP rollup so All / family Focus does not flatten to one stage alone.
+        const statusWithTour =
+            hasActiveTour && stageOrStatus && !/tour/i.test(stageOrStatus)
+                ? `${stageOrStatus} · Tour Scheduled`
+                : hasActiveTour && !stageOrStatus
+                  ? "Tour Scheduled"
+                  : stageOrStatus;
+        return buildFocusPanelContextChips({
+            statusLabel: statusWithTour,
+            statusKey: currentStatusKey,
+            processLabel,
+            locationLabel,
+        });
+    }, [
+        currentStatusKey,
+        effectiveStageLabel,
+        hasActiveTour,
+        locationLabel,
+        processLabel,
+        readOnlyStatusLabel,
+    ]);
 
     const secondaryActions = (
         <OpportunityDrawerHeaderControls
@@ -114,8 +129,7 @@ export default function OpportunityFocusPanelHeader({
             canMutate={manageCanMutate}
             layout="modal-actions"
             proofLayoutActions
-            bosActionVariant="default"
-            bosAssistLabel={FOCUS_PANEL_HEADER_BOS_LABEL}
+            hideBos
             actionPreflightBlocked={actionPreflightBlocked}
             onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
             registryActionFeedback={registryActionFeedback}

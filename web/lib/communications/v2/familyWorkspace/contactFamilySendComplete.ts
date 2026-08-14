@@ -1,7 +1,8 @@
 /**
  * Contact Family / Current Work send-complete signal.
- * Fired after a confirmed family-send from the Current Work composer entry so
- * What's Next can acknowledge success, close the composer, and refresh work.
+ * Fired after the operator dismisses the shared success acknowledgement (Done)
+ * following a confirmed family-send from Current Work. Closes the elevated
+ * command surface and returns to the Focus Panel — refreshes already ran on confirm.
  */
 
 export const ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE = "adminv2:contact-family-send-complete" as const;

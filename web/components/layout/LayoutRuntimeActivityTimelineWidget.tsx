@@ -2,6 +2,7 @@
 
 import { Activity, Calendar, CheckSquare2, MessageSquare, StickyNote } from "lucide-react";
 import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { ActivityTimelineDisplayMode } from "@/lib/layout/layoutEditorActivityTimelineConfig";
 import type { ActivityTimelineEntry } from "@/lib/layout/runtime/resolveLayoutRuntimeActivityTimeline";
 import {
@@ -33,13 +34,15 @@ function EntryIcon({ eventType }: { eventType: ActivityTimelineEntry["eventType"
     }
 }
 
-function formatAt(raw: string | null): string | null {
+function formatAt(raw: string | null, timeZone: string): string | null {
     if (!raw) return null;
-    return formatActivityTimestamp(raw) || raw;
+    // Already formatted by resolver when timezone was provided; still safe to re-run —
+    // non-parseable display strings pass through unchanged.
+    return formatActivityTimestamp(raw, { timeZone }) || raw;
 }
 
-function TimelineEntryBody({ entry }: { entry: ActivityTimelineEntry }) {
-    const at = formatAt(entry.at);
+function TimelineEntryBody({ entry, timeZone }: { entry: ActivityTimelineEntry; timeZone: string }) {
+    const at = formatAt(entry.at, timeZone);
     return (
         <>
             <div className="flex items-baseline justify-between gap-2">
@@ -49,7 +52,7 @@ function TimelineEntryBody({ entry }: { entry: ActivityTimelineEntry }) {
                 :   null}
             </div>
             {entry.detail ?
-                <p className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-alloy-midnight/82">
+                <p className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-alloy-midnight/82 whitespace-pre-line">
                     {entry.detail}
                 </p>
             :   null}
@@ -69,6 +72,8 @@ export default function LayoutRuntimeActivityTimelineWidget({
     displayMode,
     onViewAll,
 }: Props) {
+    const timeZone = useAdminViewerTimezone();
+
     if (entries.length === 0) {
         return (
             <div
@@ -115,7 +120,7 @@ export default function LayoutRuntimeActivityTimelineWidget({
                             <span className="mb-1 text-alloy-juniper/70">
                                 <EntryIcon eventType={entry.eventType} />
                             </span>
-                            <TimelineEntryBody entry={entry} />
+                            <TimelineEntryBody entry={entry} timeZone={timeZone} />
                         </li>
                     ))}
                 </ol>
@@ -152,7 +157,7 @@ export default function LayoutRuntimeActivityTimelineWidget({
                                 <EntryIcon eventType={entry.eventType} />
                             </span>
                             <div className="min-w-0 flex-1">
-                                <TimelineEntryBody entry={entry} />
+                                <TimelineEntryBody entry={entry} timeZone={timeZone} />
                             </div>
                         </li>
                     ))}
@@ -192,7 +197,7 @@ export default function LayoutRuntimeActivityTimelineWidget({
                                     <EntryIcon eventType={entry.eventType} />
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                    <TimelineEntryBody entry={entry} />
+                                    <TimelineEntryBody entry={entry} timeZone={timeZone} />
                                 </div>
                             </div>
                         </div>

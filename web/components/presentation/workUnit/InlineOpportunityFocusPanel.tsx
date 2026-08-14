@@ -74,6 +74,7 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelDisplayLabels";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { prewarmFocusPanelActivityMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelActivityPrewarm";
+import { resolveFocusPanelMutationOpportunityId } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import { markDrawerFamilyWorkspaceTiming } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchTiming";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
@@ -114,19 +115,26 @@ export function InlineOpportunityFocusPanel() {
     // Product model: Record of Truth = family opportunity; Record of Attention = focused child.
     // `useRecordWorkRuntime` loads the OPPORTUNITY VM — key it on the family opportunity id
     // (`child.family_opportunity_id` / drawer_open.entity_id), never on the process_instance id.
-    const isChildSubject = operational.entityType === "child";
+    const isChildSubject =
+        operational.entityType === "child"
+        || operational.subjectGrain?.grain === "child"
+        || operational.subjectGrain?.subjectType === "child";
     const familyOpportunityIdFromTruth = (() => {
         const raw = operational.subjectIdentityTruth?.["child.family_opportunity_id"];
         return typeof raw === "string" && raw.trim() ? raw.trim() : null;
     })();
-    const settlementSubjectId = isChildSubject
-        ? familyOpportunityIdFromTruth
-        : operationalSubjectId;
+    // Queue seed carries drawer_open.entity_id when identity truth omitted the family case id.
+    const familyOpportunityIdFromSeed = (() => {
+        const raw = operational.identitySeed?.familyOpportunityId;
+        return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+    })();
+    const familyOpportunityId = familyOpportunityIdFromTruth ?? familyOpportunityIdFromSeed;
+    // Never key Settlement on the child Attention id (process_instance / participation).
+    const settlementSubjectId = isChildSubject ? familyOpportunityId : operationalSubjectId;
     const drawer = {
-        id: settlementSubjectId ?? operationalSubjectId,
-        type: (settlementSubjectId ?? (!isChildSubject && operationalSubjectId))
-            ? ("opportunities" as const)
-            : null,
+        // Settlement / opportunity VM identity — family case only.
+        id: settlementSubjectId,
+        type: settlementSubjectId ? ("opportunities" as const) : null,
         opportunityQueuePreviewSeed: operational.identitySeed as OpportunityDrawerQueuePreviewSeed | null,
     };
     const {
@@ -136,6 +144,32 @@ export function InlineOpportunityFocusPanel() {
         patchDisplayRecord,
         reloadDisplayVm,
     } = useRecordWorkRuntime(settlementSubjectId);
+    if (typeof window !== "undefined") {
+        (window as Window & { __ALLOY_FOCUS_SETTLEMENT_DIAG__?: Record<string, unknown> }).__ALLOY_FOCUS_SETTLEMENT_DIAG__ = {
+            isChildSubject,
+            entityType: operational.entityType,
+            subjectGrain: operational.subjectGrain,
+            operationalSubjectId,
+            familyOpportunityIdFromTruth,
+            familyOpportunityIdFromSeed,
+            settlementSubjectId,
+            identitySeed: operational.identitySeed,
+            truthFamily: operational.subjectIdentityTruth?.["child.family_opportunity_id"] ?? null,
+            displayVmId: displayVm?.entity?.id ?? null,
+            structureSettled: displayVm?.structureSettled ?? null,
+            runtimeError: error,
+            bookingCount: displayVm?.summaries?.active_tour_bookings?.length ?? null,
+            activityCount: Array.isArray(
+                (displayVm?.above_fold?.record as { _activity_timeline_events?: unknown } | undefined)
+                    ?._activity_timeline_events,
+            )
+                ? (
+                      (displayVm?.above_fold?.record as { _activity_timeline_events: unknown[] })
+                          ._activity_timeline_events
+                  ).length
+                : null,
+        };
+    }
 
     const bodyScrollRef = useRef<HTMLDivElement | null>(null);
     const { mode: focusPanelMode, setMode: setFocusPanelModeState, selectFromDrawerTab } =
@@ -173,7 +207,16 @@ export function InlineOpportunityFocusPanel() {
     // Activity-mode background prewarm (sanctioned idle prefetch — never a reveal gate).
     // Whenever the Focus Panel is open, warm Activity metadata (comms, documents, timeline;
     // notes ship on VM) on idle so Work → Activity switches feel instant.
-    const prewarmSubjectId = drawer.type === "opportunities" && drawer.id != null ? String(drawer.id) : null;
+    // Waitlist child rows use process-instance Attention ids — resolve to the family
+    // opportunity so drawer-recipients / family-workspace prewarm does not 404.
+    const prewarmSubjectId = useMemo(() => {
+        if (drawer.type !== "opportunities" || drawer.id == null) return null;
+        return resolveFocusPanelMutationOpportunityId({
+            subjectId: String(drawer.id),
+            grain: null,
+            truth: (record as Record<string, unknown> | null) ?? null,
+        });
+    }, [drawer.id, drawer.type, record]);
 
     useEffect(() => {
         if (!prewarmSubjectId) return;
@@ -331,8 +374,11 @@ export function InlineOpportunityFocusPanel() {
         void reloadDisplayVm();
     }, [reloadDisplayVm]);
 
-    // Nothing selected → no panel (FocusPanelSurface also gates; belt and braces).
-    if (drawer.type !== "opportunities" || drawer.id == null) return null;
+    // Nothing selected → no panel. Child Attention may render commit-critical before the family
+    // Settlement locator is known — do not require drawer.type === opportunities in that case, and
+    // never treat the child Attention id as an opportunity Settlement key.
+    if (!operationalSubjectId) return null;
+    if (!isChildSubject && (drawer.type !== "opportunities" || drawer.id == null)) return null;
 
     // Narrowed payload — full header/body/save-bar render ONLY when the displayed payload
     // matches the selected subject AND the atomic render commit (committedVisible).

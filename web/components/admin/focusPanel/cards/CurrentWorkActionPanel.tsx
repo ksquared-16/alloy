@@ -12,7 +12,17 @@ import CurrentWorkSubjectSelectorPanel from "@/components/admin/focusPanel/cards
 // Load them dynamically so their subtrees leave the Work Unit initial-path graph.
 const CommunicationsDrawerSection = dynamic(
     () => import("@/components/admin/communications/CommunicationsDrawerSection"),
-    { ssr: false },
+    {
+        ssr: false,
+        loading: () => (
+            <div
+                className="flex min-h-[16rem] flex-1 items-center justify-center px-4 text-[12px] text-alloy-midnight/55"
+                data-work-composer-loading="true"
+            >
+                Opening message…
+            </div>
+        ),
+    },
 );
 const FormDeliverySurface = dynamic(
     () => import("@/components/admin/focusPanel/cards/FormDeliverySurface"),
@@ -23,10 +33,6 @@ const OpportunityTourScheduleActionModal = dynamic(
         import("@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal").then(
             (m) => m.OpportunityTourScheduleActionModal,
         ),
-    { ssr: false },
-);
-const CurrentWorkTourInvitationPanel = dynamic(
-    () => import("@/components/admin/focusPanel/cards/CurrentWorkTourInvitationPanel"),
     { ssr: false },
 );
 const CurrentWorkAddChildPanel = dynamic(
@@ -41,11 +47,15 @@ import {
 import type { CurrentWorkActionVM } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkSurfaceTypes";
 import type { FocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/focusPanelMutation";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { FamilyComposeDraftSeed } from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import { submitTourScheduleLegacyFromPanel } from "@/lib/tours/actions/submitTourScheduleLegacyFromPanel";
+import { useTourInvitationComposeSeed } from "@/lib/tours/useTourInvitationComposeSeed";
 
 type Props = {
     action: CurrentWorkActionVM;
     context: OperationalContext;
+    /** Canonical opportunity id (not child process-instance id). */
+    opportunityId: string;
     mutation?: FocusPanelMutation;
     onClose: () => void;
     onComplete: () => void;
@@ -68,9 +78,110 @@ function UnsupportedPanelBody({ action, surface }: { action: CurrentWorkActionVM
     );
 }
 
-export default function CurrentWorkActionPanel({ action, context, mutation, onClose, onComplete }: Props) {
+/** Canonical Current Work New Message host — Contact Family, Send Message, Tour Invitation. */
+function CurrentWorkNewMessageComposerHost({
+    actionKey,
+    actionLabel,
+    opportunityId,
+    draftSeed,
+}: {
+    actionKey: string;
+    actionLabel: string;
+    opportunityId: string;
+    draftSeed?: FamilyComposeDraftSeed | null;
+}) {
+    return (
+        <div
+            className="alloy-os-currentwork__composer-host"
+            data-work-action-panel="true"
+            data-work-action-panel-key={actionKey}
+            data-work-action-surface="communications_composer"
+            data-work-compose-intent="new_message"
+            aria-label={`${actionLabel} composer`}
+        >
+            <div className="alloy-os-activity-cockpit__comms">
+                <div className="alloy-os-activity-workspace__embed" data-activity-cockpit-embed="true">
+                    <CommunicationsDrawerSection
+                        apiEntityType="opportunities"
+                        entityId={opportunityId}
+                        embedded
+                        embeddedHeaderMode="description_only"
+                        surfaceVariant="activity_embed"
+                        entryContext="current_work"
+                        composeIntent="new_message"
+                        draftSeed={draftSeed ?? null}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function CurrentWorkTourInvitationComposerHost({
+    action,
+    opportunityId,
+}: {
+    action: CurrentWorkActionVM;
+    opportunityId: string;
+}) {
+    const actionKey = (action.handlerKey ?? action.actionRef ?? action.key).trim();
+    const seedState = useTourInvitationComposeSeed(opportunityId, true);
+
+    if (seedState.phase === "preparing") {
+        return (
+            <div
+                className="alloy-os-currentwork__composer-host"
+                data-work-action-panel="true"
+                data-work-action-panel-key={actionKey}
+                data-work-action-surface="communications_composer"
+                data-work-compose-intent="new_message"
+                data-tour-invitation-prepare="true"
+                aria-label={`${action.label} composer`}
+            >
+                <div className="flex min-h-[16rem] flex-1 items-center justify-center px-4 text-[12px] text-alloy-midnight/55">
+                    Preparing tour invitation…
+                </div>
+            </div>
+        );
+    }
+
+    if (seedState.phase === "error") {
+        return (
+            <div
+                className="alloy-os-currentwork__composer-host"
+                data-work-action-panel="true"
+                data-work-action-panel-key={actionKey}
+                data-work-action-surface="communications_composer"
+                data-tour-invitation-prepare="error"
+                aria-label={`${action.label} composer`}
+            >
+                <div className="flex min-h-[16rem] flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+                    <p className="text-[13px] font-semibold text-alloy-ember">{seedState.message}</p>
+                    <p className="text-[12px] text-alloy-midnight/55">Close and try Send Tour Invitation again.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <CurrentWorkNewMessageComposerHost
+            actionKey={actionKey}
+            actionLabel={action.label}
+            opportunityId={opportunityId}
+            draftSeed={seedState.seed}
+        />
+    );
+}
+
+export default function CurrentWorkActionPanel({
+    action,
+    context,
+    opportunityId,
+    mutation,
+    onClose,
+    onComplete,
+}: Props) {
     const surface = resolveCurrentWorkActionSurface(action);
-    const opportunityId = context.subject.id;
     const tourFields = resolveOpportunityTourScheduleFromTruth(context.truth);
     const actionKey = (action.handlerKey ?? action.actionRef ?? action.key).trim();
 
@@ -140,46 +251,18 @@ export default function CurrentWorkActionPanel({ action, context, mutation, onCl
     }
 
     if (surface === "communications_composer") {
-        const isTourInvitation =
-            (action.handlerKey ?? action.actionRef ?? action.key).trim() === "send_tour_invitation";
+        const isTourInvitation = actionKey === "send_tour_invitation";
+        // One canonical New Message host for Contact Family, Send Message, and Tour Invitation.
+        // Tour prepares draft content (subject/body/link) then hands it to the shared composer.
         if (isTourInvitation) {
-            return (
-                <CurrentWorkTourInvitationPanel
-                    action={action}
-                    opportunityId={opportunityId}
-                    onClose={onClose}
-                    onComplete={onComplete}
-                />
-            );
+            return <CurrentWorkTourInvitationComposerHost action={action} opportunityId={opportunityId} />;
         }
-        // #1: the communication host renders the REAL communications runtime inline in the centered
-        // surface — reusing the SAME embedded section + fill/scroll/pinned-footer layout contract the
-        // Focus Panel Activity uses (`.alloy-os-activity-cockpit__comms` → `.alloy-os-activity-
-        // workspace__embed` → activity_embed variant). The composer fills the host height with an
-        // internal-scroll thread and its Send / Send later / BOS footer stays visible.
-        // Close lives on the What's Next card header (capability-active) so the compose body
-        // gets full vertical room — no Communication chip / Message sub-header here.
         return (
-            <div
-                className="alloy-os-currentwork__composer-host"
-                data-work-action-panel="true"
-                data-work-action-panel-key={action.key}
-                data-work-action-surface="communications_composer"
-                aria-label={`${action.label} composer`}
-            >
-                <div className="alloy-os-activity-cockpit__comms">
-                    <div className="alloy-os-activity-workspace__embed" data-activity-cockpit-embed="true">
-                        <CommunicationsDrawerSection
-                            apiEntityType="opportunities"
-                            entityId={opportunityId}
-                            embedded
-                            embeddedHeaderMode="description_only"
-                            surfaceVariant="activity_embed"
-                            entryContext="current_work"
-                        />
-                    </div>
-                </div>
-            </div>
+            <CurrentWorkNewMessageComposerHost
+                actionKey={actionKey}
+                actionLabel={action.label}
+                opportunityId={opportunityId}
+            />
         );
     }
 

@@ -1,0 +1,223 @@
+[
+  {
+    "t": "2026-08-12T21:01:41.621Z",
+    "step": "warm"
+  },
+  {
+    "t": "2026-08-12T21:01:42.403Z",
+    "step": "health",
+    "status": 200
+  },
+  {
+    "t": "2026-08-12T21:01:50.700Z",
+    "step": "phase-A-activity-bookings",
+    "activity": {
+      "status": 200,
+      "types": [
+        "tour_invitation_activated",
+        "tour_rescheduled",
+        "tour_confirmed",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_canceled",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_confirmed",
+        "opportunity_status_changed"
+      ],
+      "raw": [
+        {
+          "type": "tour_invitation_activated",
+          "title": null,
+          "at": "2026-08-12T21:01:26.950996+00:00"
+        },
+        {
+          "type": "tour_rescheduled",
+          "title": null,
+          "at": "2026-08-12T21:01:26.139+00:00"
+        },
+        {
+          "type": "tour_confirmed",
+          "title": null,
+          "at": "2026-08-12T20:59:45.559+00:00"
+        },
+        {
+          "type": "tour_invitation_activated",
+          "title": null,
+          "at": "2026-08-12T20:59:41.971566+00:00"
+        },
+        {
+          "type": "tour_invitation_activated",
+          "title": null,
+          "at": "2026-08-12T20:59:26.591737+00:00"
+        },
+        {
+          "type": "tour_canceled",
+          "title": null,
+          "at": "2026-08-12T20:57:58.466+00:00"
+        },
+        {
+          "type": "tour_invitation_activated",
+          "title": null,
+          "at": "2026-08-12T20:48:13.682982+00:00"
+        },
+        {
+          "type": "tour_invitation_activated",
+          "title": null,
+          "at": "2026-08-12T20:47:03.240685+00:00"
+        }
+      ]
+    },
+    "drawer": {
+      "status": 200,
+      "bookingCount": 1,
+      "bookings": [
+        {
+          "id": "34dd9d9d-8800-401b-968c-e1472c9730c3",
+          "status": "confirmed",
+          "start": "2026-08-14T17:00:00+00:00"
+        }
+      ],
+      "activityTypes": [
+        "tour_invitation_activated",
+        "tour_rescheduled",
+        "tour_confirmed",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_canceled",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_confirmed",
+        "opportunity_status_changed",
+        "tour_invitation_activated",
+        "tour_invitation_activated",
+        "tour_invitation_activated"
+      ]
+    },
+    "pass": {
+      "invite": true,
+      "scheduled": true,
+      "booking": true,
+      "hydrated": true
+    }
+  },
+  {
+    "t": "2026-08-12T21:01:50.700Z",
+    "step": "phase-B-ui-start"
+  },
+  {
+    "t": "W Wrigley Kurzman 1 / 1 Adjust 3/15/2026 (4m) 2d",
+    "step": "row",
+    "i": 0
+  },
+  {
+    "t": "2026-08-12T21:02:05.596Z",
+    "step": "ui-whats-next",
+    "hasRecentActivity": false,
+    "hasInviteCopy": false,
+    "hasScheduledCopy": false,
+    "cardSlice": "What's NextIn progressWaitlistManage waitlist candidates and spot offers.Current work · Review waitlist positionMessageSend formTour ▾View all activity",
+    "tourButton": "Tours0"
+  },
+  {
+    "t": "2026-08-12T21:02:05.597Z",
+    "step": "tour-menu-click",
+    "found": true,
+    "label": "Tour ▾"
+  },
+  {
+    "t": "2026-08-12T21:02:06.448Z",
+    "step": "tour-menu-items",
+    "menuItems": [],
+    "pass": false
+  },
+  {
+    "t": "2026-08-12T21:02:06.455Z",
+    "step": "activity-mode-click",
+    "clicked": true
+  },
+  {
+    "t": "2026-08-12T21:02:09.367Z",
+    "step": "activity-mode-copy",
+    "hasInvite": false,
+    "hasScheduled": false,
+    "slice": []
+  },
+  {
+    "t": "2026-08-12T21:02:11.484Z",
+    "step": "reschedule-api",
+    "status": 400,
+    "error": "tour_bookings: selected slot is not available (overlap, capacity, or rules)"
+  },
+  {
+    "t": "2026-08-12T21:02:20.728Z",
+    "step": "after-reschedule",
+    "hasRescheduledEvent": true,
+    "bookingStart": "2026-08-14T17:00:00+00:00",
+    "bookingCount": 1,
+    "typesHead": [
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_rescheduled",
+      "tour_confirmed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_canceled",
+      "tour_invitation_activated"
+    ]
+  },
+  {
+    "t": "2026-08-12T21:02:30.154Z",
+    "step": "cancel-api",
+    "status": 200,
+    "bookingStatus": "canceled",
+    "error": null
+  },
+  {
+    "t": "2026-08-12T21:02:41.385Z",
+    "step": "after-cancel",
+    "hasCancelEvent": true,
+    "bookingCount": 0,
+    "bookingRow": {
+      "id": "34dd9d9d-8800-401b-968c-e1472c9730c3",
+      "status_key": "canceled",
+      "start_at": "2026-08-14T17:00:00+00:00",
+      "canceled_at": "2026-08-12T21:02:22.526+00:00"
+    },
+    "typesHead": [
+      "tour_canceled",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_rescheduled",
+      "tour_confirmed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_canceled"
+    ]
+  },
+  {
+    "t": "2026-08-12T21:03:00.048Z",
+    "step": "tour-menu-after-cancel",
+    "menuItems": [],
+    "pass": false
+  },
+  {
+    "t": "2026-08-12T21:03:00.049Z",
+    "step": "SUMMARY",
+    "activityProjectionPass": true,
+    "tourMenuActivePass": false,
+    "reschedulePass": true,
+    "cancelPass": true,
+    "uiActivityHints": {
+      "whatsNextInvite": false,
+      "whatsNextScheduled": false,
+      "activityModeInvite": false,
+      "activityModeScheduled": false
+    },
+    "note": "UI copy hints may lag if Whats Next still waitlist-scoped; API/VM are authoritative for this cert slice."
+  }
+]

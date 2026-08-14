@@ -7,6 +7,7 @@ import {
     type TourCommsChannel,
     type TourCommsConfig,
 } from "@/lib/tours/comms/tourCommsConfig";
+import type { TourAutomationConditionFacts } from "@/lib/tours/comms/tourCommsAutomationConditions";
 import {
     buildTourReminderSchedulePlans,
     isTourBookingEligibleForReminders,
@@ -308,6 +309,8 @@ export type ScheduleTourSchedulingRemindersForBookingInput = {
     orgTimezoneIana?: string | null;
     now?: Date;
     snapshots?: Partial<Record<TourCommsChannel, TourSchedulingReminderSnapshot>>;
+    /** Facts for automation_conditions_v1 AND evaluation. */
+    conditionFacts?: TourAutomationConditionFacts | null;
 };
 
 export async function scheduleTourSchedulingRemindersForBooking(
@@ -328,6 +331,11 @@ export async function scheduleTourSchedulingRemindersForBooking(
         config: input.config,
         orgTimezoneIana: input.orgTimezoneIana,
         now,
+        conditionFacts: input.conditionFacts ?? {
+            location_id: input.booking.location_id,
+            site_id: input.booking.location_id,
+            has_active_tour: true,
+        },
     });
 
     const scheduled: CommunicationScheduledSendRow[] = [];

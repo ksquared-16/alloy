@@ -24,6 +24,8 @@ export const TOUR_LIFECYCLE_EVENT_TYPES = [
     "tour_canceled",
     "tour_no_show",
     "tour_completed",
+    "tour_attendance_confirmed",
+    "tour_reminder_sent",
 ] as const;
 
 export type TourLifecycleEventType = (typeof TOUR_LIFECYCLE_EVENT_TYPES)[number];

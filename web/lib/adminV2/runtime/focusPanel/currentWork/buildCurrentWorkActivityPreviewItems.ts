@@ -15,32 +15,66 @@ import type { CurrentWorkActivityPreviewItem } from "@/components/admin/focusPan
 
 export type CanonicalActivityItemVM = LeadActivityPreviewEntry;
 
+/**
+ * Secondary category only when the item has no operator detail line.
+ * Never use category as a substitute for what happened (headline stays the event title).
+ */
 const KIND_CATEGORY: Record<LeadActivityPreviewKind, string> = {
-    note: "Record update",
+    note: "Note",
     communication: "Communication",
-    task: "Scheduled actions",
-    activity: "Process progression",
-    created: "Record update",
-    updated: "Record update",
+    task: "Work",
+    activity: "Enrollment",
+    created: "Record",
+    updated: "Record",
 };
 
 function timelineEventToPreviewKind(eventType: ActivityTimelineEntry["eventType"]): LeadActivityPreviewKind {
-    if (eventType === "communications") return "communication";
+    if (eventType === "communications" || eventType === "appointments_tours") return "communication";
     if (eventType === "notes") return "note";
     if (eventType === "tasks_work") return "task";
     if (eventType === "created") return "created";
     if (eventType === "updated") return "updated";
+    if (eventType === "lifecycle" || eventType === "status_change") return "activity";
     return "activity";
 }
 
+/**
+ * Headline = what happened (timeline title). Detail = supporting fact.
+ * Never promote detail/work-template copy into the headline.
+ */
 function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPreviewItem {
+    const detail = entry.detail?.trim() || null;
     return {
-        label: entry.detail ?? entry.label,
-        detail: entry.detail && entry.label !== entry.detail ? entry.label : null,
-        category: KIND_CATEGORY[entry.kind] ?? "Record update",
+        label: entry.label,
+        detail,
+        category: detail ? null : (KIND_CATEGORY[entry.kind] ?? null),
         kind: entry.kind,
         occurredAt: entry.at,
     };
+}
+
+function preferTourScheduledTimelineEntries(
+    entries: ActivityTimelineEntry[],
+    limit: number,
+): ActivityTimelineEntry[] {
+    if (limit <= 0 || entries.length <= limit) return entries.slice(0, Math.max(0, limit));
+    const head = entries.slice(0, limit);
+    const isScheduled = (e: ActivityTimelineEntry) =>
+        e.eventType === "appointments_tours"
+        && /tour scheduled/i.test(e.title);
+    if (head.some(isScheduled)) return head;
+    const scheduled = entries.find(isScheduled);
+    if (!scheduled) return head;
+    const out = [...head];
+    let replaceAt = out.length - 1;
+    for (let i = out.length - 1; i >= 0; i -= 1) {
+        if (/tour invitation sent/i.test(out[i]?.title ?? "")) {
+            replaceAt = i;
+            break;
+        }
+    }
+    out[replaceAt] = scheduled;
+    return out;
 }
 
 /**
@@ -63,12 +97,22 @@ export function resolveCanonicalCurrentWorkActivityEntries(
         record,
         surfaceKey: "opportunity_drawer",
         config,
+        timeZone: options?.timeZone,
     });
-    return timeline.slice(0, limit).map((entry) => ({
+    // Newest-first compact subset — keep Tour scheduled visible when invitation spam would starve it.
+    return preferTourScheduledTimelineEntries(timeline, limit).map((entry) => ({
         kind: timelineEventToPreviewKind(entry.eventType),
         label: entry.title,
         detail: entry.detail,
-        at: entry.at,
+        at: entry.at
+            ? (
+                // Already formatted when timeZone was provided to the timeline resolver.
+                options?.timeZone
+                    ? entry.at
+                    : formatActivityTimestamp(entry.at, options?.timeZone ? { timeZone: options.timeZone } : undefined)
+                        || entry.at
+            )
+            : null,
         atSortKey: entry.atSortKey,
     }));
 }

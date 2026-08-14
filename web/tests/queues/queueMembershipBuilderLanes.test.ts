@@ -128,7 +128,15 @@ describe("resolveOpportunityQueueLaneRouting — full lane coverage", () => {
         const routing = routingForStage("tour", "tours");
         expect(routing.routingSource).toBe("builder");
         expect(routing.builderMembership?.subject_type).toBe("case");
+        expect(routing.builderMembership?.stage_key).toBe("tour");
         expect(routing.ocmTrackLaneCtx).toBeNull();
+    });
+
+    it("routes Tour lifecycle_tour executable key via case membership", () => {
+        const routing = routingForStage("tour", "lifecycle_tour");
+        expect(routing.routingSource).toBe("builder");
+        expect(routing.builderMembership?.stage_key).toBe("tour");
+        expect(routing.builderMembership?.subject_type).toBe("case");
     });
 
     it("routes Waitlist via candidate builder", () => {

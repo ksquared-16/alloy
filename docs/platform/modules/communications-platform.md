@@ -90,6 +90,10 @@ QA: `../../sprints/archive/08_2026/work-items-v3-platform/qa/slice-6/`.
 
 Communications has **one canonical runtime** with multiple presentation surfaces. Activity (`activity_embed`) is the compact presentation; Workspace Inbox (`workspace_inbox`) is the operational presentation. Both consume the same runtime contract for Preview VM hydration, thread selection, composer state, recipient state, send preflight/confirm, stale request protection, post-send refresh, reply collapse, and cache ownership.
 
+**Send confirmation (operator):** Compose → **Send** opens a shared centered confirmation (`FamilySendConfirmationDialog`) that previews the **exact current draft** (subject/body, including any Tour Invitation Link already in the body). **Back to edit** dismisses without sending. **Confirm send** invokes canonical `family-send` once. Success shows a centered acknowledgement (**Message sent** / **Tour invitation sent**); **Done** closes the Current Work command surface and returns to the Focus Panel (no redundant post-send What's Next summary card). Activity/work refreshes fire on confirm; the acknowledgement is presentation-only.
+
+**Operator Activity projection (Enrollment Focus Panel):** What's Next Recent Activity and Focus Panel → Activity share one normalized timeline (`resolveLayoutRuntimeActivityTimeline` / `formatOpportunityActivityTimelineEvent`). Headlines answer *what happened* (e.g. **Tour invitation sent**, **Email sent**, **Wrigley Kurzman moved to Waitlist**, **Lead created**) — not which work template was open (`Contact Family`). Technical duplicates from one send (message_queued/sent + work-template `action_executed`) collapse behind the richer fact; contact-attempt outcomes may remain as a distinct secondary row when they carry separate operational meaning. Child-grain stage moves must name the child; family/case moves must not invent one.
+
 Canonical contract: [`communications-runtime-contract.md`](communications-runtime-contract.md).
 
 Workspace Inbox owns only the operational queue and surrounding context controls. It must not maintain a separate family-workspace load/send/thread lifecycle.
@@ -109,14 +113,16 @@ Workspace Inbox owns only the operational queue and surrounding context controls
 | **Announcements** | `announcements.template_id` FK + picker; apply-on-select copies `current_version` into draft fields | Schedule snapshots `announcements.subject` / `announcements.body` at schedule time — not a live re-resolve from `template_id` |
 | **Inbox reply / drawer compose** | Not integrated | Free-text compose |
 | **Workflow `create_message` / `send_message`** | Inline `body` / `template` strings with payload path tokens | Separate from Template Library — no `communication_template_id` yet |
-| **Tour comms / Workflow Assist / BOS copy** | Parallel template/config systems | Do not duplicate bodies into shared modules without migration |
+| **Tour Invitation / confirmation / reschedule / cancel / reminder / no-show** | System templates (`system_key`, e.g. `tour_invitation:email`) seeded into Template Library; org-editable versions | Immediate Tour sends resolve **current** library version at send time; Send Tour Invitation seeds New Message from Tour Invitation template; **reminders snapshot at schedule time** |
 
 ### Doctrine
 
-1. **Templates are the reusable operator-authored asset** for modal Compose and Announcements.
+1. **Templates are the reusable operator-authored asset** for modal Compose, Announcements, and Tour lifecycle copy.
 2. **Copy-on-apply, edit freely** — selecting a template fetches `GET …/templates/[id]` → `current_version` and seeds the composer; operators may edit before send/save.
-3. **Do not duplicate message bodies** across features when a Template Library entry exists — reference `template_id` where persistence is needed (Announcements today).
+3. **Do not duplicate message bodies** across features when a Template Library entry exists — reference `template_id` / `system_key` where persistence is needed (Announcements + Tour).
 4. **Scheduled announcements use saved draft text** — updating a template in the library does not retroactively change already-saved announcement bodies; re-select the template in the picker to refresh from the latest version.
+5. **Tour system templates** always exist (`system_key`); orgs edit content/version history but cannot archive away the semantic identity. Code defaults in `tourCommsTemplates.ts` are seed/fallback only.
+6. **Email Tour links** render as friendly anchors (full secure href underneath); SMS keeps usable URLs.
 
 Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.ts` (`fetchCommunicationTemplateCurrentVersion`, `communicationTemplateDraftSeedFromPreview`).
 

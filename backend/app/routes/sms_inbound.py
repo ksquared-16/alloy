@@ -217,11 +217,22 @@ def _handle_inbound_with_optional_binding(
                     # immutable history and a STOP is still part of the
                     # conversation; a keyword failure must not lose it.
                     try:
-                        handle_inbound_keyword(
+                        kw_result = handle_inbound_keyword(
                             org_id=str(org_id_raw),
                             body=body,
                             message_row=row,
                         )
+                        # Operational reply seam: only when no compliance keyword matched.
+                        if not (kw_result or {}).get("keyword"):
+                            from ..services.tour_attendance_sms_reply import (
+                                handle_tour_attendance_sms_reply,
+                            )
+
+                            handle_tour_attendance_sms_reply(
+                                org_id=str(org_id_raw),
+                                body=body,
+                                message_row=row,
+                            )
                     except Exception as kw_err:  # noqa: BLE001
                         logger.error("sms_inbound: keyword handling failed %s", kw_err)
                 else:

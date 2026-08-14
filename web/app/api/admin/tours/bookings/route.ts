@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
     }
 
     const approvalRequired = Boolean(body.approval_required);
+
     const input: CreateTourBookingInput = {
         orgId: ctx.orgId,
         opportunityId,
@@ -111,7 +112,6 @@ export async function POST(request: NextRequest) {
         primaryContactId: oppRes.row.primary_contact_id,
         approvalRequired,
         initialStatus: body.initial_status,
-        metadata: {},
     };
 
     try {

@@ -25,6 +25,7 @@ def send_resend_email(
     api_key: str,
     message_id: str | None = None,
     extra_headers: Dict[str, Any] | None = None,
+    attachments: list[dict[str, str]] | None = None,
 ) -> Dict[str, Any]:
     if not api_key.strip():
         raise RuntimeError("Resend API key missing")
@@ -39,6 +40,12 @@ def send_resend_email(
     }
     if html_body:
         payload["html"] = html_body
+        # Always include a text alternative. Friendly HTML anchors put the booking
+        # URL in href only; clients/filters that drop localhost or HTML still need
+        # a usable destination in the text part.
+        text = (text_body or "").strip()
+        if text:
+            payload["text"] = text
     else:
         payload["text"] = text_body.strip()
 
@@ -55,6 +62,24 @@ def send_resend_email(
     # and not only inside Alloy. Server-owned: the UI constructs none of these.
     if extra_headers:
         payload["headers"] = {**(payload.get("headers") or {}), **extra_headers}
+
+    if attachments:
+        # Resend: [{ "filename", "content" (base64), "content_type"? }]
+        cleaned: list[dict[str, str]] = []
+        for att in attachments:
+            if not isinstance(att, dict):
+                continue
+            filename = str(att.get("filename") or "").strip()
+            content = str(att.get("content") or att.get("content_base64") or "").strip()
+            if not filename or not content:
+                continue
+            entry: dict[str, str] = {"filename": filename, "content": content}
+            ctype = str(att.get("content_type") or "").strip()
+            if ctype:
+                entry["content_type"] = ctype
+            cleaned.append(entry)
+        if cleaned:
+            payload["attachments"] = cleaned
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=20)

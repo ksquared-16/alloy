@@ -1,0 +1,25 @@
+{
+  "hasTourInvite": true,
+  "hasWaitlistChild": true,
+  "hasWaitlistAny": true,
+  "hasLeadCreated": true,
+  "noContactFamilyTitle": true,
+  "hasContactAttempt": true,
+  "hasTourScheduled": true,
+  "uniqueTitles": [
+    "Tour invitation sent",
+    "Tour scheduled",
+    "Tour cancelled",
+    "Tour rescheduled",
+    "Moved to Tour",
+    "Contact attempt recorded",
+    "Wrigley Kurzman moved to Waitlist",
+    "Lennon Kurzman moved to Waitlist",
+    "Lead created"
+  ],
+  "preview3": [
+    "Tour invitation sent",
+    "Tour invitation sent",
+    "Tour invitation sent"
+  ]
+}

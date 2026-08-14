@@ -24,6 +24,8 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= "test-service-role-key";
 
 type State = {
     link: Record<string, unknown> | null;
+    /** Sibling invitation links for listActiveTourInvitationActionKinds. */
+    links?: Record<string, unknown>[] | null;
     invitation: Record<string, unknown> | null;
     booking: Record<string, unknown> | null;
     opportunity: Record<string, unknown> | null;
@@ -51,8 +53,20 @@ vi.mock("@/lib/supabase/serverServiceClient", () => ({
                 eq: () => b,
                 is: () => b,
                 in: () => b,
+                not: () => b,
+                order: () => b,
                 limit: () => b,
                 update: () => b,
+                then: (resolve: (v: unknown) => unknown) => {
+                    if (table === "tour_public_booking_links") {
+                        const rows = state.links ?? (state.link ? [state.link] : []);
+                        return Promise.resolve({ data: rows, error: null }).then(resolve);
+                    }
+                    if (table === "tour_bookings") {
+                        return Promise.resolve({ data: state.booking ? [state.booking] : [], error: null }).then(resolve);
+                    }
+                    return Promise.resolve({ data: [], error: null }).then(resolve);
+                },
                 maybeSingle: async () => {
                     if (table === "tour_public_booking_links") return { data: state.link, error: null };
                     if (table === "tour_invitations") return { data: state.invitation, error: null };
@@ -82,6 +96,7 @@ async function call() {
 beforeEach(() => {
     state = {
         link: link(),
+        links: undefined,
         invitation: invitation(),
         booking: null,
         opportunity: { name: "Rowan Reyes", org_id: ORG },
@@ -180,8 +195,34 @@ describe("terminal and hostile states", () => {
         expect(json.view).toBeUndefined();
     });
 
-    // NOTE: cross-scope refusal is deliberately NOT asserted here. This suite's
-    // database double ignores query filters, so such a case would prove the double
-    // rather than the code. Recipient/org/invitation binding is certified against
-    // the real authorizer in authorizeTourAction.test.ts.
+    it("a consumed select bound to a booking resolves to confirmation, not a dead end", async () => {
+        state.link = link({
+            action_kind: "select_tour_slot",
+            consumed_at: "2026-08-01T00:00:00Z",
+            booking_id: BOOKING,
+        });
+        state.invitation = invitation({ status: "booked" });
+        state.booking = {
+            status_key: "confirmed",
+            start_at: "2026-08-10T16:00:00Z",
+            timezone: "America/Los_Angeles",
+        };
+        const { status, view } = await call();
+        expect(status).toBe(200);
+        expect(view!.state).toBe("booked_confirmed");
+        expect(view!.headline).toBe("Tour confirmed");
+        expect(view!.bookingLabel).toBe("Monday, August 10 · 9:00 AM");
+    });
+
+    it("a view link surfaces Confirm Tour when a sibling select action is still open", async () => {
+        const viewLink = link({ id: "link-view", action_kind: "view_tour_slots" });
+        const selectLink = link({ id: "link-select", action_kind: "select_tour_slot" });
+        state.link = viewLink;
+        state.links = [viewLink, selectLink];
+        const { status, view } = await call();
+        expect(status).toBe(200);
+        expect(view!.state).toBe("choose");
+        const actions = view!.actions as Array<{ intent: string; label: string }>;
+        expect(actions.some((a) => a.intent === "book" && a.label === "Confirm Tour")).toBe(true);
+    });
 });

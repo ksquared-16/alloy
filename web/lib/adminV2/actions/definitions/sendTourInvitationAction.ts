@@ -117,6 +117,9 @@ export const sendTourInvitationAction: RegisteredAction = {
                 opportunityId: invocation.entityId,
                 detail: {
                     channel: trimmed(src.channel) || "compose",
+                    ...(trimmed(src.recipient_display_name)
+                        ? { recipient_display_name: trimmed(src.recipient_display_name) }
+                        : {}),
                 },
             });
             return {

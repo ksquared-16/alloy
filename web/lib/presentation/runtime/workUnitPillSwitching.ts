@@ -1,8 +1,10 @@
 /**
  * Work Unit pill switching — pure decision helpers.
  *
- * Same-host views swap queue rows + focus panel in place (Excel tabs).
- * Cross-host views still navigate; Surface Hold minimizes shell remount.
+ * Doctrine: a Work View pill on an open Work Unit is a LENS, not a Work Unit change.
+ * Pill-strip views always swap queue + Focus in place (Excel tabs) — even when Settlement
+ * evaluates a view's COUNT on a different host. Workspace entry (not the pill strip) owns
+ * true host changes via `useWorkUnitEntryMovement`.
  */
 
 import { resolveWorkViewTargetHref, type WorkViewTargetInputs } from "@/lib/presentation/runtime/workViewTargetHref";
@@ -18,11 +20,30 @@ export function isSameHostWorkView(
     workViewId: string,
     currentWorkUnitId: string | null,
     canonicalLocationByViewId: ReadonlyMap<string, WorkViewCanonicalLocation>,
+    /** When set, also treat as same-host when the target shares the active view's settled host. */
+    currentWorkViewId?: string | null,
 ): boolean {
     const id = workViewId.trim();
-    if (!id || !currentWorkUnitId) return false;
+    if (!id) return false;
     const location = canonicalLocationByViewId.get(id);
-    return location?.workUnitId === currentWorkUnitId;
+    if (!location?.workUnitId) return false;
+    if (currentWorkUnitId && location.workUnitId === currentWorkUnitId) return true;
+    const activeId = currentWorkViewId?.trim() || "";
+    if (!activeId) return false;
+    const activeHost = canonicalLocationByViewId.get(activeId)?.workUnitId ?? null;
+    return Boolean(activeHost && activeHost === location.workUnitId);
+}
+
+export function hrefWithWorkViewId(href: string, workViewId: string): string {
+    const id = workViewId.trim();
+    if (!id || !href.trim()) return href;
+    try {
+        const u = new URL(href, "http://local");
+        u.searchParams.set("work_view_id", id);
+        return `${u.pathname}${u.search}${u.hash}`;
+    } catch {
+        return href;
+    }
 }
 
 export function resolveSelectWorkViewAction(args: {
@@ -31,28 +52,61 @@ export function resolveSelectWorkViewAction(args: {
     currentWorkUnitId: string | null;
     canonicalLocationByViewId: ReadonlyMap<string, WorkViewCanonicalLocation>;
     targetInputs: WorkViewTargetInputs;
+    /**
+     * Ids from the committed surface's `lensSet` (the pill strip). A view on this strip is a
+     * LENS of the open Work Unit — never a pathname / Work Unit exchange, even when Settlement
+     * evaluates its COUNT on a different host work unit.
+     */
+    surfaceLensIds?: ReadonlyArray<string> | ReadonlySet<string> | null;
 }): SelectWorkViewAction {
     const id = args.workViewId.trim();
     if (!id || id === args.currentWorkViewId?.trim()) {
         return { kind: "noop" };
     }
 
+    const onSurfacePillStrip = (() => {
+        const ids = args.surfaceLensIds;
+        if (!ids) return false;
+        if (Array.isArray(ids)) {
+            return (ids as readonly string[]).some((x) => x.trim() === id);
+        }
+        return (ids as ReadonlySet<string>).has(id);
+    })();
+
+    // Pill-strip contract: Work View = lens inside the open Work Unit. Never navigate to
+    // `/workspace/work-unit/tours` or `/waitlist` from a pill — that remounts the shell
+    // (`[workUnitSlug]` layout + `key={attention.target}`) and is how Tours count=1 / rows=0
+    // and "page refresh" appear.
+    if (onSurfacePillStrip) {
+        return { kind: "in-page", workViewId: id };
+    }
+
     if (
-        isSameHostWorkView(id, args.currentWorkUnitId, args.canonicalLocationByViewId)
+        isSameHostWorkView(
+            id,
+            args.currentWorkUnitId,
+            args.canonicalLocationByViewId,
+            args.currentWorkViewId,
+        )
     ) {
+        return { kind: "in-page", workViewId: id };
+    }
+
+    const location = args.canonicalLocationByViewId.get(id) ?? null;
+    // Unknown host while already on a Work Unit: NEVER invent a label-slug SURFACE navigation.
+    if (!location && args.currentWorkUnitId) {
         return { kind: "in-page", workViewId: id };
     }
 
     const href = resolveWorkViewTargetHref(id, args.targetInputs);
     if (!href) {
-        // Label-less / unresolvable cross-host edge — fall back to in-page if we're already here.
         if (args.currentWorkUnitId) {
             return { kind: "in-page", workViewId: id };
         }
         return { kind: "noop" };
     }
 
-    return { kind: "navigate", workViewId: id, href };
+    return { kind: "navigate", workViewId: id, href: hrefWithWorkViewId(href, id) };
 }
 
 /** Whether to auto-open the first queue row after a view's rows settle. */

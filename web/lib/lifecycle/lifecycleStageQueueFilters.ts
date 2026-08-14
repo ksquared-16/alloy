@@ -47,7 +47,7 @@ export function lifecycleStageQueueHasExecutableStatusFilters(
     return executableStatusKeysFromLifecycleQueueDefinition(workUnit, stageKey).length > 0;
 }
 
-type QueryOp = { kind: string; column?: string; values?: string[] };
+type QueryOp = { kind: string; column?: string; values?: string[]; value?: unknown };
 
 /** Block lifecycle_visibility queries that would return unfiltered org-wide rows. */
 export function assertLifecycleStageOpportunityQueryHasStatusFilters(params: {
@@ -69,6 +69,23 @@ export function assertLifecycleStageOpportunityQueryHasStatusFilters(params: {
             op.values.length > 0
     );
     if (hasStatusOp) return;
+
+    // Post status-collapse: case-grain builder membership filters by stage_key (not legacy status keys).
+    const hasStageEq = params.ops.some((op) => {
+        if (op.kind !== "eq" || op.column !== "stage_key") return false;
+        return typeof op.value === "string" ? op.value.trim().length > 0 : Boolean(op.value);
+    });
+    if (hasStageEq) return;
+
+    // Tour lane: membership is active tour_bookings → opportunity id IN (Waitlist ∩ Tours overlap).
+    const hasOpportunityIdIn = params.ops.some(
+        (op) =>
+            op.kind === "in" &&
+            op.column === "id" &&
+            Array.isArray(op.values) &&
+            op.values.length > 0
+    );
+    if (hasOpportunityIdIn) return;
 
     const stageKey =
         stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata) ??

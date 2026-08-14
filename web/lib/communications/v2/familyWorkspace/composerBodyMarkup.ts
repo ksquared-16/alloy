@@ -5,6 +5,7 @@
  */
 
 import { containsUnsafeMarkup, toPlainText } from "@/lib/communications/render/renderOutboundMessage";
+import { polishTourCommsEmailHtml } from "@/lib/tours/comms/tourCommsTemplates";
 
 const BOLD = /\*\*([^*]+)\*\*/g;
 const UNDERLINE = /__([^_]+)__/g;
@@ -13,25 +14,64 @@ const ITALIC = /(?<![\w*])_([^_]+)_(?![\w*])/g;
 /** Convert composer markers (or safe HTML) to email HTML. Rejects unsafe markup. */
 export function composerMarkupToEmailHtml(raw: string): { ok: true; html: string } | { ok: false; reason: string } {
     const trimmed = raw.trim();
-    if (/<(strong|em|u|br|p|div|span)\b/i.test(trimmed)) {
+    let html: string;
+    if (/<(strong|em|u|br|p|div|span|a)\b/i.test(trimmed)) {
         if (containsUnsafeMarkup(trimmed)) {
             return { ok: false, reason: "unsafe_markup" };
         }
-        return { ok: true, html: trimmed };
+        html = trimmed;
+    } else {
+        const escaped = raw
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        const withBreaks = escaped.replace(/\r\n|\r|\n/g, "<br>");
+        html = withBreaks
+            .replace(BOLD, "<strong>$1</strong>")
+            .replace(UNDERLINE, "<u>$1</u>")
+            .replace(ITALIC, "<em>$1</em>");
+        if (containsUnsafeMarkup(html)) {
+            return { ok: false, reason: "unsafe_markup" };
+        }
     }
-    const escaped = raw
+    // Parent-facing emails: action URLs become friendly anchors (href stays full/secure).
+    html = polishTourCommsEmailHtml(html);
+    return { ok: true, html };
+}
+
+/**
+ * Convert plain composer text (or markers) to email contentEditable HTML.
+ * Shared so draft seeds and Insert provisions paint the same visible body.
+ */
+export function plainComposerTextToEditableHtml(raw: string): string {
+    const converted = composerMarkupToEmailHtml(raw);
+    if (converted.ok) return converted.html;
+    return raw
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-    const withBreaks = escaped.replace(/\r\n|\r|\n/g, "<br>");
-    const html = withBreaks
-        .replace(BOLD, "<strong>$1</strong>")
-        .replace(UNDERLINE, "<u>$1</u>")
-        .replace(ITALIC, "<em>$1</em>");
-    if (containsUnsafeMarkup(html)) {
-        return { ok: false, reason: "unsafe_markup" };
+        .replace(/>/g, "&gt;")
+        .replace(/\r\n|\r|\n/g, "<br>");
+}
+
+/**
+ * Append a URL into an existing draft without duplicating it.
+ * Preserves plain-text drafts; HTML drafts get a break + escaped URL.
+ */
+export function appendUrlToComposerDraft(body: string, url: string): string {
+    const link = url.trim();
+    if (!link) return body;
+    const plain = composerMarkupToPlainText(body);
+    if (plain.includes(link)) return body;
+    const trimmed = body.trim();
+    if (!trimmed) return link;
+    if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+        const escaped = link
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        return `${trimmed}<br><br>${escaped}`;
     }
-    return { ok: true, html };
+    return `${trimmed}\n\n${link}`;
 }
 
 /** Strip composer markers (and any accidental HTML) for SMS. */

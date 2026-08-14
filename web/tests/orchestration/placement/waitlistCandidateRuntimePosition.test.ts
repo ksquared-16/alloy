@@ -87,7 +87,7 @@ describe("waitlistCandidateRuntimePosition", () => {
         expect(low.runtime_position).toBe(2);
         expect(high.runtime_position).toBe(1);
         expect(low.runtime_position_total).toBe(2);
-        expect(low.runtime_position_label).toBe("Preview #2/2");
+        expect(low.runtime_position_label).toBe("Preview 2/2");
         expect(low.runtime_position_mode).toBe("preview");
         expect(readWaitlistCandidateSectionKey(rows[0]!)).toBe("toddler");
     });
@@ -115,7 +115,7 @@ describe("waitlistCandidateRuntimePosition", () => {
             runtime_position_mode?: string;
         };
         expect(first.runtime_position).toBe(1);
-        expect(first.runtime_position_label).toBe("#1/2");
+        expect(first.runtime_position_label).toBe("1/2");
         expect(first.runtime_position_mode).toBe("live");
     });
 
@@ -184,8 +184,8 @@ describe("waitlistCandidateRuntimePosition", () => {
     });
 
     it("formats help copy for tooltip", () => {
-        expect(formatWaitlistRuntimePositionLabel("preview", 3, 10)).toBe("Preview #3/10");
-        expect(formatWaitlistRuntimePositionLabel("live", 3, 10)).toBe("#3/10");
+        expect(formatWaitlistRuntimePositionLabel("preview", 3, 10)).toBe("Preview 3/10");
+        expect(formatWaitlistRuntimePositionLabel("live", 3, 10)).toBe("3/10");
         expect(WAITLIST_RUNTIME_POSITION_HELP).toContain("not a permanent stored rank");
     });
 
@@ -268,7 +268,7 @@ describe("waitlistCandidateRuntimePosition", () => {
         };
         expect(employee.runtime_position).toBe(1);
         expect(employee.runtime_position_total).toBe(3);
-        expect(employee.runtime_position_label).toBe("Preview #1/3");
+        expect(employee.runtime_position_label).toBe("Preview 1/3");
     });
 });
 

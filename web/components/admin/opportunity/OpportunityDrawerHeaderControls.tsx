@@ -41,6 +41,8 @@ type Props = {
     bosActionVariant?: "default" | "juniper";
     /** Focus Panel header uses short "BOS" label; drawer default remains Work with BOS. */
     bosAssistLabel?: string;
+    /** Focus Panel: BOS lives in the floating chat — omit header BOS CTA. */
+    hideBos?: boolean;
 };
 
 function OpportunityDrawerHeaderManageRow({
@@ -60,6 +62,7 @@ function OpportunityDrawerHeaderManageRow({
     proofLayoutActions = false,
     bosActionVariant = "default",
     bosAssistLabel,
+    hideBos = false,
 }: Pick<
     Props,
     | "opportunityId"
@@ -77,6 +80,7 @@ function OpportunityDrawerHeaderManageRow({
     | "proofLayoutActions"
     | "bosActionVariant"
     | "bosAssistLabel"
+    | "hideBos"
 > & { disabledReason?: string | null }) {
     const registryMode = subjectManageActions !== undefined;
     const actionBusy = registryMode
@@ -88,17 +92,19 @@ function OpportunityDrawerHeaderManageRow({
             className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-start"
             data-opportunity-header-controls-row="actions"
         >
-            <BosDrawerAssistCta
-                bare
-                entityId={opportunityId}
-                overviewData={overviewData}
-                opportunitySingular={opportunitySingular}
-                queuePreviewSeed={queuePreviewSeed}
-                inquiryWorkflow={inquiryWorkflow}
-                proofLayoutActions={proofLayoutActions}
-                actionVariant={bosActionVariant}
-                label={bosAssistLabel}
-            />
+            {hideBos ? null : (
+                <BosDrawerAssistCta
+                    bare
+                    entityId={opportunityId}
+                    overviewData={overviewData}
+                    opportunitySingular={opportunitySingular}
+                    queuePreviewSeed={queuePreviewSeed}
+                    inquiryWorkflow={inquiryWorkflow}
+                    proofLayoutActions={proofLayoutActions}
+                    actionVariant={bosActionVariant}
+                    label={bosAssistLabel}
+                />
+            )}
             <RecordDrawerManageMenu
                 registryActions={registryMode ? subjectManageActions : undefined}
                 items={registryMode ? undefined : manageMenuItems}
@@ -140,6 +146,7 @@ export function OpportunityDrawerHeaderControls({
     proofLayoutActions = false,
     bosActionVariant = "default",
     bosAssistLabel,
+    hideBos = false,
 }: Props) {
     if (layout === "modal-attention") {
         return (
@@ -177,6 +184,7 @@ export function OpportunityDrawerHeaderControls({
                     proofLayoutActions={proofLayoutActions}
                     bosActionVariant={bosActionVariant}
                     bosAssistLabel={bosAssistLabel}
+                    hideBos={hideBos}
                 />
                 {actionPreflightBlocked ?
                     <ActionPreflightBlockedPanel
@@ -222,6 +230,7 @@ export function OpportunityDrawerHeaderControls({
                     proofLayoutActions={proofLayoutActions}
                     bosActionVariant={bosActionVariant}
                     bosAssistLabel={bosAssistLabel}
+                    hideBos={hideBos}
                 />
             </div>
             {actionPreflightBlocked ?

@@ -16,6 +16,7 @@ export type TourParentState =
     | "choose"
     | "booked_pending"
     | "booked_confirmed"
+    | "attendance_confirmed"
     | "declined"
     | "cancelled"
     | "expired"
@@ -35,7 +36,9 @@ export type TourParentIntent =
     | "confirm"
     | "reschedule"
     /** Opens the bounded cancellation flow. Does NOT cancel. */
-    | "cancel";
+    | "cancel"
+    /** Attendance affirmation — does not gate booking validity. */
+    | "confirm_attendance";
 
 export type TourParentAction = {
     intent: TourParentIntent;
@@ -64,6 +67,11 @@ export type TourParentView = {
     actions: TourParentAction[];
     /** Recovery guidance when the parent cannot continue. */
     notice: string | null;
+    /**
+     * When set, the client should invoke this intent automatically (e.g. opening
+     * a Confirm I'm coming email link).
+     */
+    autoIntent?: TourParentIntent | null;
 };
 
 /** Human time, in the tour's own timezone — never the viewer's. */
@@ -114,6 +122,8 @@ export function buildTourParentView(input: {
     availableActions: readonly TourActionKind[];
     /** True when the credential has already been spent. */
     consumed?: boolean;
+    /** Parent already affirmed attendance — show terminal success without re-posting. */
+    attendanceAlreadyConfirmed?: boolean;
 }): TourParentView {
     const location = input.locationLabel.trim() || "our center";
     const childLine = childLineFor(input.opportunityLabel);
@@ -178,7 +188,24 @@ export function buildTourParentView(input: {
 
     // A tour exists.
     if (input.bookingStatusKey) {
-        const confirmed = input.bookingStatusKey === "confirmed";
+        const confirmed = input.bookingStatusKey === "confirmed" || input.bookingStatusKey === "rescheduled";
+
+        // Confirm I'm coming link — auto-affirm attendance, then show terminal success.
+        if (can("confirm_attendance") && confirmed) {
+            return {
+                ...base,
+                headline: "You're confirmed",
+                bodyLine: bookingLabel
+                    ? `We look forward to seeing you ${bookingLabel} at ${location}.`
+                    : `We look forward to seeing you at ${location}.`,
+                state: "attendance_confirmed",
+                showsOptions: false,
+                actions: [],
+                notice: null,
+                autoIntent: input.attendanceAlreadyConfirmed ? null : "confirm_attendance",
+            };
+        }
+
         const actions: TourParentAction[] = [];
         if (!confirmed && can("confirm_tour")) {
             actions.push({ intent: "confirm", label: "Yes, I'll be there", tone: "primary" });
@@ -194,14 +221,15 @@ export function buildTourParentView(input: {
         }
         return {
             ...base,
-            headline: confirmed ? "You're all set" : "Your visit is booked",
+            headline: confirmed ? "Tour confirmed" : "Your visit is booked",
             bodyLine: bookingLabel
                 ? `We'll see you at ${location} on ${bookingLabel}.`
                 : `We'll see you at ${location}.`,
             state: confirmed ? "booked_confirmed" : "booked_pending",
             showsOptions: false,
             actions,
-            notice: confirmed ? null : "Let us know you're coming so we can have someone ready for you.",
+            notice: confirmed ? "We look forward to seeing you." : "Let us know you're coming so we can have someone ready for you.",
+            autoIntent: null,
         };
     }
 
@@ -222,7 +250,7 @@ export function buildTourParentView(input: {
     // The live invitation: choose a time.
     const actions: TourParentAction[] = [];
     if (can("select_tour_slot")) {
-        actions.push({ intent: "book", label: "Book this time", tone: "primary" });
+        actions.push({ intent: "book", label: "Confirm Tour", tone: "primary" });
     }
     if (can("decline_tour")) {
         actions.push({ intent: "decline", label: "Not right now", tone: "quiet" });

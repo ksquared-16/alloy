@@ -44,6 +44,7 @@ export const POST_BOOKING_ACTION_KINDS: readonly TourActionKind[] = [
     "view_tour_details",
     "confirm_tour",
     "reschedule_tour",
+    "confirm_attendance",
 ] as const;
 
 /** Bounded reuse budget for the actions that are reusable at all. */
@@ -51,6 +52,7 @@ const MAX_USES: Partial<Record<TourActionKind, number>> = {
     view_tour_slots: 50,
     view_tour_details: 50,
     reschedule_tour: 50,
+    confirm_attendance: 50,
 };
 
 export type MintedAction = {
@@ -88,6 +90,26 @@ export function invitationFingerprint(args: {
     return [args.recipientPersonId, args.opportunityId, args.locationId, [...args.optionIds].sort().join(",")].join("|");
 }
 
+function isPastExpiry(iso: string | null | undefined): boolean {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return !Number.isNaN(t) && t < Date.now();
+}
+
+/**
+ * Whether an existing invitation may be treated as an idempotent replay target.
+ * Expired / revoked / superseded rows must NOT block a new intentional mint.
+ */
+export function isReplayableTourInvitation(row: {
+    status: string;
+    expires_at?: string | null;
+    revoked_at?: string | null;
+}): boolean {
+    if (row.revoked_at) return false;
+    if (isPastExpiry(row.expires_at ?? null)) return false;
+    return row.status === "draft" || row.status === "active";
+}
+
 export async function mintTourInvitation(args: {
     supabase: SupabaseClient;
     orgId: string;
@@ -118,26 +140,49 @@ export async function mintTourInvitation(args: {
     });
 
     // ---- idempotent replay -------------------------------------------------
+    // Only draft/active rows can replay. Terminal rows (expired/revoked/superseded)
+    // stay terminal — a new intentional send mints a fresh invitation under the
+    // same key rather than resurrecting or blocking on the old one.
+    // Newest-first + limit(1) avoids maybeSingle errors when historical rows share
+    // a key (Strict Mode double-prepare races, prior resends).
     const { data: prior } = await args.supabase
         .from("tour_invitations")
-        .select("id, status, metadata")
+        .select("id, status, metadata, expires_at, revoked_at")
         .eq("org_id", args.orgId)
         .eq("metadata->>idempotency_key", args.idempotencyKey)
+        .in("status", ["draft", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
     if (prior) {
-        const row = prior as { id: string; status: string; metadata?: Record<string, unknown> | null };
-        if (String(row.metadata?.idempotency_fingerprint ?? "") !== fingerprint) {
-            return {
-                ok: false,
-                code: "idempotency_payload_changed",
-                message: "This invitation key was already used for a different recipient, location, or set of times.",
-            };
+        const row = prior as {
+            id: string;
+            status: string;
+            metadata?: Record<string, unknown> | null;
+            expires_at?: string | null;
+            revoked_at?: string | null;
+        };
+
+        if (!isReplayableTourInvitation(row)) {
+            // Not a replay target (e.g. expires_at elapsed while status still active).
+            // Leave the row as-is and fall through to mint a new invitation.
+        } else if (String(row.metadata?.idempotency_fingerprint ?? "") !== fingerprint) {
+            // Same operator key, different offer (recipient / location / times).
+            // Rejecting here is what blocked "Send Tour Invitation" after the prior
+            // offer aged out and availability moved — supersede and reissue instead.
+            await supersedeTourInvitation({
+                supabase: args.supabase,
+                invitationId: row.id,
+                orgId: args.orgId,
+            });
+            // Fall through to create the new offer under the same key.
+        } else {
+            // Raw tokens are NOT re-derivable — that is the point of hashing them.
+            // A replay returns the invitation without new credentials; the caller
+            // must reuse the URLs it already has, or supersede and reissue.
+            return { ok: true, invitationId: row.id, status: "active", actions: [], idempotentReplay: true };
         }
-        // Raw tokens are NOT re-derivable — that is the point of hashing them.
-        // A replay returns the invitation without new credentials; the caller
-        // must reuse the URLs it already has, or supersede and reissue.
-        return { ok: true, invitationId: row.id, status: "active", actions: [], idempotentReplay: true };
     }
 
     // ---- create the invitation in `draft` ---------------------------------

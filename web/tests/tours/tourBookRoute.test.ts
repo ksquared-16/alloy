@@ -60,6 +60,8 @@ function slot(over: Partial<AvailableTourSlot> = {}): AvailableTourSlot {
 
 type State = {
     link: Record<string, unknown> | null;
+    /** Sibling select rows for view-token booking. */
+    selectLinks?: Record<string, unknown>[] | null;
     invitation: Record<string, unknown> | null;
     booking: Record<string, unknown> | null;
     rule: Record<string, unknown> | null;
@@ -88,16 +90,32 @@ vi.mock("@/lib/supabase/serverServiceClient", () => ({
         from(table: string) {
             let patch: Record<string, unknown> | null = null;
             let isNullCol: string | null = null;
+            const filters: Record<string, unknown> = {};
             const b: Record<string, unknown> = {
                 select: () => b,
                 insert: () => b,
                 in: () => b,
                 limit: () => b,
                 neq: () => b,
-                eq: () => b,
-                update: (p: Record<string, unknown>) => { patch = p; return b; },
-                is: (c: string) => { isNullCol = c; return b; },
-                then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(resolve),
+                eq: (c: string, v: unknown) => {
+                    filters[c] = v;
+                    return b;
+                },
+                update: (p: Record<string, unknown>) => {
+                    patch = p;
+                    return b;
+                },
+                is: (c: string) => {
+                    isNullCol = c;
+                    return b;
+                },
+                then: (resolve: (v: unknown) => unknown) => {
+                    if (table === "tour_public_booking_links" && filters.action_kind === "select_tour_slot") {
+                        const rows = state.selectLinks ?? (state.link?.action_kind === "select_tour_slot" ? [state.link] : []);
+                        return Promise.resolve({ data: rows, error: null }).then(resolve);
+                    }
+                    return Promise.resolve({ data: null, error: null }).then(resolve);
+                },
                 maybeSingle: async () => {
                     if (patch) {
                         // consumeTourAction is a conditional UPDATE ... WHERE consumed_at IS NULL.
@@ -141,6 +159,7 @@ beforeEach(() => {
     availableSlots = [slot()];
     state = {
         link: link(),
+        selectLinks: null,
         invitation: invitation(),
         booking: null,
         rule: { id: RULE, org_id: ORG, location_id: LOC, approval_required: false, is_active: true },
@@ -238,8 +257,9 @@ describe("9. hostile and out-of-lifecycle credentials cannot book", () => {
 
     it("a slot that is not live books nothing, and the action stays retryable", async () => {
         availableSlots = [];
-        const { status } = await book();
+        const { status, json } = await book();
         expect(status).toBe(409);
+        expect(json.code).toBe("SLOT_UNAVAILABLE");
         expect(createMock).not.toHaveBeenCalled();
         expect(state.consumeAttempts.filter((a) => a.matched)).toHaveLength(0);
     });
@@ -248,5 +268,16 @@ describe("9. hostile and out-of-lifecycle credentials cannot book", () => {
         const { status } = await book({ ...validBody, start_at: "2026-12-25T09:00:00.000Z" });
         expect(status).toBe(409);
         expect(createMock).not.toHaveBeenCalled();
+    });
+
+    it("a view credential books through the sibling select action", async () => {
+        const selectRow = link({ id: "link-select", action_kind: "select_tour_slot" });
+        state.link = link({ id: "link-view", action_kind: "view_tour_slots" });
+        state.selectLinks = [selectRow];
+        const { status, json } = await book();
+        expect(status).toBe(201);
+        expect(json.ok).toBe(true);
+        expect(createMock).toHaveBeenCalledTimes(1);
+        expect(state.consumeAttempts.filter((a) => a.matched)).toHaveLength(1);
     });
 });

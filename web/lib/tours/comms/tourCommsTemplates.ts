@@ -64,7 +64,7 @@ export type RenderTourCommsTemplateInput = {
 const DEFAULT_EMAIL_SUBJECT: Partial<Record<TourCommsEventKey, string>> = {
     tour_invitation: "Come visit {{location_name}} — pick a time that works",
     tour_confirmation: "Your tour is scheduled — {{tour_display_label}}",
-    tour_reminder: "Reminder: tour on {{tour_display_label}}",
+    tour_reminder: "Your tour is tomorrow — {{tour_display_label}}",
     tour_reschedule: "Your tour has been rescheduled — {{tour_display_label}}",
     tour_cancel: "Tour canceled — {{location_name}}",
     tour_no_show_followup: "Following up on your tour visit",
@@ -104,11 +104,14 @@ const DEFAULT_EMAIL_BODY: Record<TourCommsEventKey, string> = {
     tour_reminder: [
         "Hello {{parent_name}},",
         "",
-        "This is a friendly reminder about your upcoming tour on {{tour_display_label}}.",
+        "Your tour is tomorrow.",
+        "",
+        "{{tour_display_label}}",
         "{{site_line}}",
         "",
-        "Add to calendar: {{add_to_calendar_url}}",
+        "Confirm I'm coming: {{confirm_attendance_url}}",
         "Need to reschedule? {{reschedule_url}}",
+        "Manage or cancel your tour: {{cancel_url}}",
         "",
         "See you soon,",
         "{{org_name}}",
@@ -160,7 +163,8 @@ const DEFAULT_SMS_BODY: Partial<Record<TourCommsEventKey, string>> = {
         "Hi {{parent_name}}, we'd love to show your family around {{location_name}}. Pick a tour time: {{invitation_action_url}}",
     tour_confirmation:
         "Hi {{parent_name}}, your tour is set for {{tour_display_label}} at {{location_name}}. Details: {{add_to_calendar_url}}",
-    tour_reminder: "Reminder: tour {{tour_display_label}} at {{location_name}}. Reply if you need to reschedule.",
+    tour_reminder:
+        "Reminder: Your {{location_name}} tour is tomorrow at {{tour_time_label}}.{{confirm_reply_instruction}} Reschedule or cancel: {{cancel_url}}",
     tour_reschedule: "Your tour was moved to {{tour_display_label}} at {{location_name}}.",
     tour_cancel: "Your tour on {{tour_display_label}} at {{location_name}} was canceled. Reply to rebook.",
     tour_no_show_followup: "We missed you at your tour. Reply or book here: {{public_booking_url}}",
@@ -211,6 +215,7 @@ export function omitEmptyOptionalTourCommsLines(text: string): string {
         if (!t) return true;
         if (/^Add to calendar:\s*$/i.test(t)) return false;
         if (/^Need to reschedule\?\s*$/i.test(t)) return false;
+        if (/^Confirm I'm coming:\s*$/i.test(t)) return false;
         if (/^Manage or cancel your tour:\s*$/i.test(t)) return false;
         if (/^Book a new time:\s*$/i.test(t)) return false;
         if (/^If you would like to book a new time:\s*$/i.test(t)) return false;
@@ -234,10 +239,10 @@ function plainTextToSimpleHtml(text: string): string {
 /** Turn plain merged lines into parent-friendly HTML CTAs (text body keeps raw URLs for SMS). */
 export function polishTourCommsEmailHtml(bodyHtml: string): string {
     let out = bodyHtml;
-    // Concise invitation CTA: lone booking URL after "Choose a tour time"
+    // Invitation CTA — prefer "Choose a tour time" as the visible label.
     out = out.replace(
         /(Choose a tour time:?\s*(?:<br\/?>)?)(?:\s*)(https?:\/\/[^\s<]+)/gi,
-        '$1<a href="$2" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Book your tour</a>',
+        '$1<a href="$2" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Choose a tour time</a>',
     );
     // Tour invitation option lines (legacy templates that still list times):
     // "Monday, August 10 · 9:00 AM — https://…"
@@ -262,29 +267,59 @@ export function polishTourCommsEmailHtml(bodyHtml: string): string {
     );
     out = out.replace(
         /Book your tour:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Book your tour</a>',
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Choose a tour time</a>',
     );
     out = out.replace(
         /Add to calendar:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Add to calendar</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Add to calendar</a>',
+    );
+    out = out.replace(
+        /Confirm I'm coming:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">Confirm I\'m coming</a>',
     );
     out = out.replace(
         /Need to reschedule\?\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Reschedule your tour</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Reschedule tour</a>',
+    );
+    out = out.replace(
+        /Manage or cancel your tour:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Manage or cancel tour</a>',
+    );
+    out = out.replace(
+        /Manage or cancel tour:\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Manage or cancel tour</a>',
     );
     out = out.replace(
         /If this time does not work, please contact us or reschedule here:\s*(https?:\/\/[^\s<]+)/gi,
-        'If this time does not work, please <a href="$1" style="color:#1f4d3a;text-decoration:underline;">reschedule here</a> or reply to this email.'
+        'If this time does not work, please <a href="$1" style="color:#1f4d3a;text-decoration:underline;">Reschedule tour</a> or reply to this email.',
     );
     out = out.replace(
         /If you would like to book a new time:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Book a new time</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Choose a tour time</a>',
     );
     out = out.replace(
         /Book a new time:\s*(https?:\/\/[^\s<]+)/gi,
-        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Book a new time</a>'
+        '<a href="$1" style="color:#1f4d3a;text-decoration:underline;">Choose a tour time</a>',
+    );
+    // Bare URL after a friendly label on its own line (composer HTML uses <br>).
+    out = out.replace(
+        /(Choose a tour time|Add to calendar|Reschedule tour|Manage or cancel tour)\s*(?:<br\s*\/?>)+\s*(https?:\/\/[^\s<]+)/gi,
+        '<a href="$2" style="color:#1f4d3a;text-decoration:underline;font-weight:600;">$1</a>',
     );
     return out;
+}
+
+/**
+ * Convert plain email text (or composer HTML) into parent-friendly HTML with
+ * action labels as anchors. Used by family-send and tour orchestrator.
+ */
+export function polishTourCommsPlainEmailToHtml(plainOrHtml: string): string {
+    const trimmed = String(plainOrHtml ?? "").trim();
+    if (!trimmed) return "";
+    if (/<(p|br|a|div|span)\b/i.test(trimmed)) {
+        return polishTourCommsEmailHtml(trimmed);
+    }
+    return polishTourCommsEmailHtml(plainTextToSimpleHtml(trimmed));
 }
 
 function resolveEffectiveTemplate(

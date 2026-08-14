@@ -53,6 +53,7 @@ import {
     resolveOpportunityDrawerFirstPaintDependencies,
     tourBookingsFromFirstPaintData,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveOpportunityDrawerFirstPaintDependencies";
+import { loadOpportunityActivityEvents } from "@/lib/admin/loadOpportunityRelatedActivityEvents";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
@@ -142,24 +143,48 @@ export async function buildInitialPanelResource(
     });
 
     const tDeps0 = Date.now();
-    const resolved = await resolveOpportunityDrawerFirstPaintDependencies({
-        supabase,
-        gate,
-        opportunityId,
-        departmentId,
-        workUnitId: workUnitId || null,
-        statusKey,
-        record,
-        dependencies: firstViewportPlan.dependencies,
-        queueDefinition,
-        statusDefs,
-        wuMetadata,
-        departmentMetadata: deptMetadata,
-        readiness: readiness ?? null,
-    });
+    const [resolved, activityRows] = await Promise.all([
+        resolveOpportunityDrawerFirstPaintDependencies({
+            supabase,
+            gate,
+            opportunityId,
+            departmentId,
+            workUnitId: workUnitId || null,
+            statusKey,
+            record,
+            dependencies: firstViewportPlan.dependencies,
+            queueDefinition,
+            statusDefs,
+            wuMetadata,
+            departmentMetadata: deptMetadata,
+            readiness: readiness ?? null,
+        }),
+        // Same canonical activity set as Focus Panel Activity / What's Next Recent Activity.
+        loadOpportunityActivityEvents({
+            supabase,
+            orgId: gate.orgId,
+            opportunityId,
+            limit: 24,
+        }).catch((err) => {
+            console.warn(
+                "[initialPanelResource] activity timeline hydrate failed",
+                err instanceof Error ? err.message : err,
+            );
+            return [] as Awaited<ReturnType<typeof loadOpportunityActivityEvents>>;
+        }),
+    ]);
     Object.assign(record, resolved.record_patches);
+    if (activityRows.length > 0) {
+        record._activity_timeline_events = activityRows.map((row) => ({
+            id: row.id,
+            occurred_at: row.occurred_at,
+            event_type: row.event_type,
+            payload: row.payload,
+        }));
+    }
     Object.assign(phases_ms, resolved.phases_ms);
     phases_ms.first_paint_resolve_ms = Date.now() - tDeps0;
+    phases_ms.activity_timeline_hydrate_ms = Date.now() - tDeps0;
 
     const reminders = remindersFromFirstPaintData(resolved.data) ?? EMPTY_REMINDERS;
     const resolvedActions = headerActionsFromFirstPaintData(resolved.data);

@@ -256,12 +256,14 @@ export default function CurrentWorkFocusedSurface({
                     {helpful.length > 0 || subordinateOutcome ?
                         <div className="alloy-os-currentwork__primary-stack" data-work-focused-actions="true" data-work-supporting-row="true">
                             {helpful.length > 0 ?
-                                <CurrentWorkTourGroupedActions
-                                    actions={helpful}
-                                    onAction={onActionButton}
-                                    onWarm={onWarm}
-                                    variant="summary"
-                                />
+                                <div className="alloy-os-currentwork__helpful-row" data-work-helpful-row="true">
+                                    <CurrentWorkTourGroupedActions
+                                        actions={helpful}
+                                        onAction={onActionButton}
+                                        onWarm={onWarm}
+                                        variant="summary"
+                                    />
+                                </div>
                             :   null}
                             {subordinateOutcome ?
                                 <button

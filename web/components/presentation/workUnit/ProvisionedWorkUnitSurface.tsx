@@ -11,7 +11,7 @@
  * already operational. `WorkUnitSurfaceBody` is the SAME canonical presentation tree the old runtime
  * used — the difference is where its model comes from, not what renders it.
  */
-import { useEffect, useMemo } from "react";
+import { useEffect, useId, useMemo } from "react";
 import { WorkUnitSurfaceBodyFromModel } from "@/components/presentation/workUnit/WorkUnitSurface";
 import { useCommittedWorkUnitSurfaceRuntime } from "@/lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime";
 import { usePublishedQueueRowSlotsOverlay } from "@/lib/presentation/runtime/usePublishedQueueRowSlotsOverlay";
@@ -30,10 +30,21 @@ declare global {
     interface Window {
         __ALLOY_QUEUE_ROW_SURFACE_DIAG__?: Record<string, unknown>;
         __ALLOY_FOCUS_CHILD_MISSION_DIAG__?: Record<string, unknown>;
+        /** Increments only when ProvisionedWorkUnitSurface mounts — lens switches must not change this. */
+        __ALLOY_WU_SHELL_MOUNT_COUNT__?: number;
     }
 }
 
 export function ProvisionedWorkUnitSurface() {
+    // Stable across Work View (lens) commits on the same Work Unit. `data-surface-instance` is
+    // `target::lens` and MUST change with the active view; do not use it as a remount signal.
+    // `useId` is SSR/client-stable (unlike Math.random in useRef/useState).
+    const shellMountId = `wu-shell${useId().replace(/:/g, "")}`;
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        window.__ALLOY_WU_SHELL_MOUNT_COUNT__ = (window.__ALLOY_WU_SHELL_MOUNT_COUNT__ ?? 0) + 1;
+    }, []);
+
     const { model, intents } = useCommittedWorkUnitSurfaceRuntime();
     const focus = useCommittedFocus();
     const committed = focus.current;
@@ -196,6 +207,9 @@ export function ProvisionedWorkUnitSurface() {
             {...runtimeLabelProps(PRESENTATION_RUNTIME_LABELS.workUnitSurface)}
             className="flex min-h-0 flex-1 flex-col"
             data-component="ProvisionedWorkUnitSurface"
+            data-shell-instance="work-unit-shell"
+            data-shell-mount-id={shellMountId}
+            data-shell-target={committed.ref.target}
             data-build-sha={BUILD_SHA}
             data-surface-ready="true"
             data-surface-mode="live"

@@ -32,6 +32,11 @@ export type TourParentActionModel = {
      * route for it exists.
      */
     confirmUrl: string | null;
+    /**
+     * Attendance affirmation ("Confirm I'm coming") for a confirmed Tour reminder.
+     * Does not gate booking validity.
+     */
+    confirmAttendanceUrl: string | null;
 };
 
 function actionUrl(baseUrl: string, rawToken: string): string {
@@ -50,7 +55,7 @@ export function buildTourParentActionModel(args: {
     bookingStatusKey: string;
 }): TourParentActionModel {
     const base = String(args.baseUrl ?? "").trim();
-    if (!base) return { rescheduleUrl: null, manageUrl: null, confirmUrl: null };
+    if (!base) return { rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null };
 
     const find = (kind: string) => args.actions.find((a) => a.actionKind === kind)?.rawToken ?? null;
 
@@ -58,17 +63,22 @@ export function buildTourParentActionModel(args: {
     if (terminal) {
         // Nothing is actionable on a tour that is over or called off. Offering a
         // reschedule link here would be an invitation to a dead end.
-        return { rescheduleUrl: null, manageUrl: null, confirmUrl: null };
+        return { rescheduleUrl: null, manageUrl: null, confirmUrl: null, confirmAttendanceUrl: null };
     }
 
     const reschedule = find("reschedule_tour");
     // `view_tour_details` is the Manage credential: reusable, and it can only READ.
     const manage = find("view_tour_details");
     const confirm = args.bookingStatusKey === "confirmed" ? null : find("confirm_tour");
+    const confirmAttendance =
+        args.bookingStatusKey === "confirmed" || args.bookingStatusKey === "rescheduled"
+            ? find("confirm_attendance")
+            : null;
 
     return {
         rescheduleUrl: reschedule ? actionUrl(base, reschedule) : null,
         manageUrl: manage ? actionUrl(base, manage) : null,
         confirmUrl: confirm ? actionUrl(base, confirm) : null,
+        confirmAttendanceUrl: confirmAttendance ? actionUrl(base, confirmAttendance) : null,
     };
 }
