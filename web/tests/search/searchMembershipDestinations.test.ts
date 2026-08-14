@@ -32,6 +32,9 @@ const membership = (
     row_grain: rowGrain,
     host_work_unit_key: FAMILY_UNIT,
     host_entity_id: CASE,
+    // The Work View ROW identity. A child lens rows at PARTICIPATIONS — never the case, never the
+    // durable child. A family lens rows at the case, where member and host genuinely coincide.
+    operational_member_id: rowGrain === "child" ? `pi-${id}` : CASE,
 });
 
 const enrollment = (memberships: SearchOperationalMembershipRef[]): SearchContext => ({

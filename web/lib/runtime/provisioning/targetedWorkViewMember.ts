@@ -36,7 +36,7 @@
 
 import type { OperationalProjectionRow } from "@/lib/lifecycle/operationalProjection";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
-import type { OperationalSubjectQueueRow } from "@/lib/workUnits/operationalSubject";
+import type { OperationalSubjectQueueRow } from "@/lib/adminV2/runtime/operationalSubject/resolveDefaultOperationalSubject";
 
 /**
  * Resolve a named subject against the lens's COMPLETE membership.

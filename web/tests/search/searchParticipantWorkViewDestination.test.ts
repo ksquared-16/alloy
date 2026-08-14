@@ -119,6 +119,8 @@ describe("a participant's destination carries their own Work View", () => {
                         row_grain: "child",
                         host_work_unit_key: FAMILY_UNIT,
                         host_entity_id: CASE,
+                        // A child lens selects the PARTICIPATION, not the case that hosts the panel.
+                        operational_member_id: "pi-lennon-enrollment",
                     },
                 ],
             },
