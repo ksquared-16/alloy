@@ -103,3 +103,54 @@ truthful operator address for it. Two options, and the repo does not decide betw
   an internal detail behind a view slug.
 
 Everything above is diagnosis. **No product code, tests, or navigation behaviour were changed.**
+
+---
+
+# Option A — Phase 1 answer: the runtime CANNOT host contextual focus without a Work View
+
+Decision A was taken. Phase 1 asked whether neutral host + subject + ASPECT attention already exists.
+**It does not.**
+
+`composeWorkUnitProvisioningAnswer` (`workUnitProvisioningAnswer.ts:695`):
+
+```ts
+const activeView =
+    findWorkViewById(workViews, req.requestedWorkViewId) ?? firstVisibleWorkView(workViews);
+if (!activeView) {
+    return fail("no_active_view", "no Work View is configured for this Business Process", workUnit);
+}
+```
+
+Two consequences, both fatal to a neutral destination today:
+
+1. **The fallback IS the defect.** A request naming no view silently adopts `firstVisibleWorkView` —
+   which is how `New` comes to be marked selected for Kelly. There is no "no lens chosen" input; the
+   absence of a lens is indistinguishable from choosing the first one.
+2. **Absence is an error, not a scope state.** With no configured view the answer returns
+   `no_active_view`, an `error` terminal — so nothing composes at all.
+
+Everything after that line is derived from `activeView`: `lensSet`, `contextFrame`, `navFrame`, the
+Operational Projection, the published rows, Settlement locators, and the Focus Panel. The kernel's
+LENS scope is nullable (`attention.ts`), so K1 can *express* neutral attention — but the answer that
+K2 prepares cannot currently *serve* it.
+
+## The gap, and the smallest canonical shape for closing it
+
+This is Runtime Kernel / Focus Panel ownership, not Search. The minimum is a **contextual (lens-free)
+answer**: host record + subject + ASPECT, composing the record's Focus Panel with
+
+- no active Work View, and no pill marked selected
+- no Operational Projection and no published rows (there is no cohort to page)
+- a URL projection that honestly represents contextual attention rather than borrowing a lens
+- the existing membership guard untouched — a contextual answer selects a *host record*, not a
+  cohort member, so `subject_unavailable` does not apply to it
+
+It is genuinely new terminal semantics alongside `operational` / `empty` / `error`, which is why it
+cannot be bolted on from the Search side: any Search-only workaround would have to pick a lens, and
+picking a lens is the defect.
+
+## Status
+
+**HOLD.** The reframing and this Phase 1 answer are diagnosis; no product code was changed. Option A
+is implementable, but it requires the runtime change above before Kelly's household destination can be
+truthful — selecting `All` or `Tours` for "Open Kelly" would violate the decision just taken.
