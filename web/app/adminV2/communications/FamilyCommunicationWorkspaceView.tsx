@@ -7,6 +7,7 @@ import CommunicationPreferencesEditor from "@/components/admin/communications/Co
 import type { PersonPreferenceProfile, RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import { TRIAGE_OPERATOR_ACTIONS, conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
+import { useOrgSendingIdentity } from "@/lib/communications/identity/useOrgSendingIdentity";
 import type { WorkspaceMode, WorkspaceModeAvailability } from "@/lib/communications/v2/workspaceModeAvailability";
 import type { RelatedTaskBrief } from "@/lib/communications/v2/familyWorkspace/types";
 import { isRecipientEligible, isRecipientSelected, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
@@ -248,6 +249,15 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
      */
     const isNewEmailComposition = workspaceMode !== "sms" && (!usesReplyLifecycle || isNewMessageMode);
     const subjectFieldVisible = isNewEmailComposition;
+    /**
+     * The organization's visible Email identity — what the operator is sending
+     * AS, and therefore the address the parent will see and reply to.
+     *
+     * Fetched only while composing email. Never a transport address: the hook
+     * projects through the visible-identity authority, so an ingress destination
+     * resolves to nothing rather than being displayed as somebody's address.
+     */
+    const { identity: sendingIdentity } = useOrgSendingIdentity(workspaceMode === "email");
     /** A new email with no Subject is refused by the server. Say so before the trip. */
     const subjectMissingForNewEmail = isNewEmailComposition && !subjectDraft.trim();
     const [replyComposerExpanded, setReplyComposerExpanded] = useState(false);
@@ -693,6 +703,31 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 {activeModeReason ? (
                     <div data-cc-mode-unavailable className={`mt-2 ${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/60`}>
                         {activeModeReason}
+                    </div>
+                ) : null}
+
+                {/* WHAT THE PARENT WILL SEE.
+                    The operator's own Email identity, stated rather than left to
+                    be inferred from a settings page. Without it there is no
+                    surface in the send path that answers "which address will this
+                    arrive from, and where will the reply go" — and under
+                    selective routing those are exactly the questions that need a
+                    visible, checkable answer. This is always the VISIBLE
+                    identity; the delivery destination is transport and does not
+                    appear in Communications at all. */}
+                {workspaceMode === "email" && sendingIdentity ? (
+                    <div
+                        data-cc-compose-from="true"
+                        className="mt-2 flex flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60"
+                    >
+                        <span className="font-medium text-alloy-midnight/45">From</span>
+                        {sendingIdentity.displayName ? (
+                            <span className="font-medium text-alloy-midnight/80">{sendingIdentity.displayName}</span>
+                        ) : null}
+                        <span data-cc-compose-from-address className="text-alloy-midnight/70">
+                            {sendingIdentity.displayName ? "· " : ""}
+                            {sendingIdentity.address}
+                        </span>
                     </div>
                 ) : null}
 
