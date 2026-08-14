@@ -43,6 +43,26 @@
  * When no active Work Unit holds the record — or the operator may not reach it — this returns false
  * and does nothing. It must never degrade to opening a modal: that is the product being removed, and
  * "the record is nowhere the operator can work it" is information, not a failure to route.
+ *
+ * ── TWO INTENTS, DECLARED BY THE CALLER ──
+ *
+ *   operational     (default) — "where do I WORK this?" Everything above. Still answers false when
+ *                               nothing does, and every pre-existing caller keeps that answer.
+ *   durable_record            — "OPEN this record." Goes to the record's own canonical address and
+ *                               does not require a queue to hold it.
+ *
+ * The caller declares which, because the same record has different right answers under the two and
+ * `false` is LEGITIMATE on the operational side — so an inferred intent would fail silently, which
+ * is the exact defect class this adapter exists to prevent. Callers still state only intent: the
+ * adapter owns household resolution, Work Unit keys, addresses and composition.
+ *
+ * ── WHY DURABLE PUSHES A ROUTE WHEN GATE A FORBIDS IT ──
+ *
+ * Gate A forbids pushing a WORK-UNIT route on an active runtime, because that route is SEED-ONLY:
+ * navigating instead of moving attention renders nothing. The durable record address is the opposite
+ * — it has no queue page to be a member of, so the address IS the intent, which is the one case the
+ * doctrine already permits a URL to establish attention (Art 2.4, cold entry). Same reasoning, other
+ * direction; not an exception to it.
  */
 
 import { useCallback, useRef } from "react";
@@ -56,6 +76,12 @@ import { useRuntimeKernelOptional } from "@/lib/runtime/kernel/RuntimeKernelCont
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import type { OperatorFocusTarget } from "@/lib/workUnits/operatorFocusTarget";
+import { durableRecordHref, durableSubjectTypeFor } from "@/lib/runtime/focus/durableRecordRoute";
+
+/**
+ * What the caller is asking for. Never inferred from subject type or caller location.
+ */
+export type OperatorRecordFocusIntent = "operational" | "durable_record";
 
 export type OperatorRecordFocusRequest = {
     /** The record the operator pointed at — `opportunities`, `persons`, `customers`. */
@@ -84,8 +110,15 @@ export type OperatorRecordFocusRequest = {
      *
      * Absent, the host remains the subject, which keeps every existing caller (and family grain)
      * behaving exactly as before.
+     *
+     * Operational only. A durable record has no Work View to be a row in.
      */
     operational_member_id?: string | null;
+    /**
+     * Which question this gesture is asking. Defaults to `operational`, so every caller written
+     * before durable records keeps its exact behaviour without being touched.
+     */
+    intent?: OperatorRecordFocusIntent;
 };
 
 /** Module-scoped so a repeated gesture on the same record does not re-ask. */
@@ -150,6 +183,25 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
 
             const gesture = ++gestureRef.current;
             const aspect = formatCardFocusAspect(request.card_focus ?? null);
+
+            // ── DURABLE RECORD ─────────────────────────────────────────────────────────────
+            //
+            // The record's own address. No host resolution, no household walk, no Work Unit — those
+            // answer "where is this worked", and this gesture is not asking that.
+            //
+            // An `opportunity` has no durable grain and falls through to the operational path on
+            // purpose: a case HAS an operational home, and routing it to a durable surface would
+            // route around the queue it belongs to.
+            if (request.intent === "durable_record") {
+                const grain = durableSubjectTypeFor(entityType);
+                if (grain) {
+                    // The ASPECT rides the address so a cold load lands on the same card. Absent, the
+                    // grain's default composition decides — durable attention never requires an aspect.
+                    const cardKey = request.card_focus?.card_key ?? null;
+                    router.push(durableRecordHref(grain, entityId, cardKey));
+                    return true;
+                }
+            }
 
             // ── FAST PATH: the record is already the Record of Attention ──
             //

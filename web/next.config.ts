@@ -323,6 +323,11 @@ const nextConfig: NextConfig = {
        */
       { source: "/workspace", destination: "/adminV2/workspace" },
       { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
+      /**
+       * Durable record attention — a record attended SUBJECT-FIRST, with no queue holding it.
+       * Must precede the base `/workspace` rewrite. @see lib/runtime/focus/durableRecordRoute.ts
+       */
+      { source: "/workspace/record/:subjectType/:subjectId", destination: "/adminV2/workspace/record/:subjectType/:subjectId" },
       // RA-2: the legacy `/:recordId` path form is retired — a selected record is the `?subject_id`
       // query, which rides along the base rewrite above. No path-recordId rewrite.
       /**

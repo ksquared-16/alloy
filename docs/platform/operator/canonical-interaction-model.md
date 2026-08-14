@@ -54,6 +54,59 @@ The operator learns this **once**. Adding Billing or Attendance feels like the s
 
 ---
 
+## Record attention resolves the subject first
+
+**Durable record attention resolves the SUBJECT first. Operational host/context is optional
+enrichment. Operational intent may legitimately have no destination; durable-record intent remains
+openable whenever the canonical record exists and access permits.**
+
+An active Work Unit says where a subject is **worked**. It never said whether the subject **exists** —
+but until August 2026 the contract made it the existence authority anyway, and the consequences were
+invisible for exactly as long as they lasted: a canonical staff member (Person + Employment, no
+household) had no representable destination at all, and an enrolled child whose case had left the
+active queue became unopenable while remaining fully enrolled. Both answered `null`, callers
+correctly withdrew the affordance, and nothing ever errored.
+
+### The subjects
+
+| Subject | Identity of record | Has an operational home of its own? |
+|---|---|---|
+| `opportunity` | `opportunities.id` | **Yes** — a case IS the operational home. It is not a durable-record subject; routing it to one would route around the queue it belongs to. |
+| `person` | `persons.id` | No. A staff member has no household and no case, and must still open. |
+| `child` | `customer_members.id` | No. ⚠ `customer_members.person_id` is NULLABLE — keying a child on its person loses every person-less child. |
+
+### The two intents — declared, never inferred
+
+| Intent | Question | Answer when no queue holds the record |
+|---|---|---|
+| `operational` (default) | "Where do I **work** this?" | `null` / `false` — **a valid answer**, not a failure |
+| `durable_record` | "**Open** this record." | Opens |
+
+The caller declares which. The same record has different right answers under the two, and because
+`null` is *legitimate* on the operational side, an inferred intent would fail silently — which is the
+defect class this whole model exists to remove. Callers state only intent; the adapter owns household
+resolution, Work Unit keys, addresses and composition.
+
+### Optional host semantics
+
+`operational_host` is the case a durable subject is ALSO being worked in, when one exists. It is
+typed `opportunities` because a *host* genuinely is always a case — what changed is that a host is no
+longer required for a subject to exist. It may add an affordance. It may never decide that a subject
+exists, change its identity, or supply its `businessProcess`, and it never participates in card
+selection — otherwise the same record would show different cards depending on someone else's
+workflow state.
+
+A host with no active Work Unit key is a case that exists but is not a destination
+(`hasOperationalDestination`).
+
+### One runtime, composition varies by subject
+
+There is one Focus Panel runtime, one grid and one card catalog. What varies is composition: a card
+**declares** the subject grains it can truthfully compose for, and a composer selects. An undeclared
+card is case-only — silence never widens applicability.
+
+@see `docs/runtime/DURABLE-RECORD-ATTENTION.md` for the implementation and its certification.
+
 ## Primitive definitions
 
 ### Workspace
