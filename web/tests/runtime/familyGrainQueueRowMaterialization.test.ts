@@ -145,6 +145,7 @@ describe("family-grain queue row materialization (All + Tours)", () => {
         ["new_work_view_5", "Tours"],
     ] as const)("%s family-grain answer → surface model rows=1", (viewId, label) => {
         const snapshot = familyOperationalAnswer(viewId, label);
+        if (snapshot.terminal !== "operational") throw new Error("expected operational answer");
         expect(snapshot.rows).toHaveLength(1);
         const surface = workUnitSurfaceModelFromSnapshot(snapshot);
         expect(surface.queue.rows).toHaveLength(1);

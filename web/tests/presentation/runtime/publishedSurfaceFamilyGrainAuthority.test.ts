@@ -71,7 +71,7 @@ const LAYOUT: QueueRecordLayoutConfigV3 = {
         {
             id: "col-default-status",
             label: "",
-            width: "status",
+            width: "status_band",
             rowIndex: 0,
             builderSlot: "status",
             scope: { type: "main_record" },

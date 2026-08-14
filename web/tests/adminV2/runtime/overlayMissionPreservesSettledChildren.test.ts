@@ -30,6 +30,8 @@ function baseContext(truth: Record<string, unknown>): OperationalContext {
             },
             billing: NULL_BILLING_SIGNAL,
         },
+        capabilities: { canMutate: true, maskedChannels: false },
+        status: "ready",
     };
 }
 
@@ -81,18 +83,13 @@ describe("overlayContextMissionOntoSettledFocusModel children authority", () => 
         };
         const commitCritical: FocusPanelCommitCriticalInput = {
             subjectId: "opp-1",
+            statusKey: "open",
             subjectGrain: { grain: "case", subjectType: "opportunity" },
             situation: { stageKey: "waitlist", stageLabel: "Waitlist", purpose: null },
-            stageWorkRuntime: {
-                stage_key: "waitlist",
-                stage_label: "Waitlist",
-                journey_segment: null,
-                template_keys: [],
-                primary: null,
-                additional: [],
-            } as FocusPanelCommitCriticalInput["stageWorkRuntime"],
+            stageWorkRuntime: null,
             publishedStageInputs: null,
             primaryAction: null,
+            actionAbsence: null,
             subjectIdentityTruth: {
                 _inquiry_children: [{ id: "c1", display_name: "Lennon Kurzman", dob: "2024-04-02" }],
             },
