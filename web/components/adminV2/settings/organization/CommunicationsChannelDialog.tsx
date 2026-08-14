@@ -71,6 +71,236 @@ type Props = {
  * Resend account CAN reach real families, and that is exactly the point of
  * connecting it — but it should never be a surprise.
  */
+
+/**
+ * Manage an existing provider connection.
+ *
+ * The lifecycle a Director could not perform: see what is connected, replace it,
+ * disconnect it, reconnect. Previously the only affordance was pasting a new key
+ * into the connect field, which is a replacement but not a lifecycle — there was
+ * no way to answer "how do I disconnect this?".
+ *
+ * DISCONNECT REVOKES THE CREDENTIAL AND NOTHING ELSE. Conversations and message
+ * history are not touched, and the copy says so before the operator commits:
+ * losing a provider must never look like losing the record of what was said.
+ */
+function ManageConnection({
+    card,
+    account,
+    onChanged,
+}: {
+    card: ChannelCard;
+    account: NonNullable<ChannelCard["providerAccount"]>;
+    onChanged: () => void;
+}) {
+    const [confirming, setConfirming] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const provider = card.channel === "email" ? "resend" : "twilio";
+
+    const disconnect = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/communications/provider-connection?provider=${provider}`, {
+                method: "DELETE",
+            });
+            if (!res.ok) {
+                const json = (await res.json()) as { error?: string };
+                setError(json.error ?? "Could not disconnect.");
+                return;
+            }
+            setConfirming(false);
+            onChanged();
+        } catch {
+            setError("Could not reach Alloy to disconnect.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div
+            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.05] px-2.5 py-2"
+            data-testid={`communications-manage-${card.channel}`}
+        >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-alloy-midnight/70">Connection</p>
+                    <p className="text-[12px] text-alloy-midnight/85" data-testid={`communications-manage-${card.channel}-account`}>
+                        {account.providerLabel}
+                        {account.label ? ` · ${account.label}` : ""}
+                    </p>
+                    <p className="text-[11px] text-alloy-midnight/55">
+                        {account.owner === "organization"
+                            ? "Connected by your organization. You can replace or disconnect it here."
+                            : "Managed by Alloy for this deployment. Connect your own account below to take ownership."}
+                    </p>
+                </div>
+                {account.owner === "organization" ? (
+                    <button
+                        type="button"
+                        onClick={() => setConfirming((v) => !v)}
+                        className="shrink-0 text-[11px] font-semibold text-alloy-ember hover:underline"
+                        data-testid={`communications-manage-${card.channel}-disconnect`}
+                    >
+                        Disconnect
+                    </button>
+                ) : null}
+            </div>
+
+            {confirming ? (
+                <div
+                    className="mt-2 rounded border border-alloy-ember/30 bg-alloy-ember/[0.05] px-2.5 py-2"
+                    data-testid={`communications-manage-${card.channel}-confirm`}
+                >
+                    <p className="text-[11px] font-semibold text-alloy-ember">Disconnect this connection?</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-alloy-midnight/75">
+                        <li>Sending will stop.</li>
+                        <li>Replies will no longer be received through this connection.</li>
+                        <li>
+                            <strong>Existing conversations and message history will be retained.</strong>
+                        </li>
+                    </ul>
+                    <div className="mt-1.5 flex gap-1.5">
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void disconnect()}
+                            className="rounded bg-alloy-ember px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
+                            data-testid={`communications-manage-${card.channel}-confirm-disconnect`}
+                        >
+                            {busy ? "Disconnecting…" : "Disconnect"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setConfirming(false)}
+                            className="rounded border border-alloy-stone/40 px-2.5 py-1 text-[11px] font-semibold text-alloy-midnight/70"
+                            data-testid={`communications-manage-${card.channel}-cancel`}
+                        >
+                            Keep it
+                        </button>
+                    </div>
+                    {error ? <p className="mt-1 text-[11px] text-alloy-ember">{error}</p> : null}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+
+/**
+ * Connect the organization's OWN Twilio account.
+ *
+ * Twilio Connect would have avoided storing a customer secret entirely, and is
+ * not used for one unresolved reason: Twilio signs inbound webhooks with "your
+ * account's auth token", and the documentation does not say whether that is
+ * Alloy's token or the Connect subaccount's. Alloy validates that signature and
+ * fails closed, so an unproven answer would risk silently refusing every inbound
+ * text. This uses the organization-owned credential authority instead.
+ *
+ * The Account SID and Messaging Service SID are NOT secrets — they appear in
+ * Twilio's own console — so they are ordinary fields. Only the Auth Token is
+ * write-once.
+ */
+function ConnectTwilioStep({ onConnected }: { onConnected: () => void }) {
+    const [accountSid, setAccountSid] = useState("");
+    const [authToken, setAuthToken] = useState("");
+    const [serviceSid, setServiceSid] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [done, setDone] = useState<string | null>(null);
+
+    const connect = async () => {
+        setBusy(true);
+        setError(null);
+        const token = authToken;
+        setAuthToken("");
+        try {
+            const res = await fetch("/api/admin/communications/provider-connection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider: "twilio",
+                    account_sid: accountSid.trim(),
+                    auth_token: token,
+                    messaging_service_sid: serviceSid.trim() || undefined,
+                }),
+            });
+            const json = (await res.json()) as { error?: string; connection?: { account_label?: string | null } };
+            if (!res.ok) {
+                setError(json.error ?? "Could not connect.");
+                return;
+            }
+            setDone(json.connection?.account_label ?? "Connected");
+            onConnected();
+        } catch {
+            setError("Could not reach Alloy to complete the connection.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div
+            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.05] px-2.5 py-2"
+            data-testid="communications-dialog-connect-twilio"
+        >
+            <p className="text-[11px] font-semibold text-alloy-midnight/70">Connect your Twilio account</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/60">
+                Paste the Account SID and Auth Token from your Twilio console. Alloy stores the token securely for your
+                organization and never shows it again.
+            </p>
+            <div className="mt-1.5 space-y-1.5">
+                <input
+                    value={accountSid}
+                    onChange={(e) => setAccountSid(e.target.value)}
+                    placeholder="Account SID (AC…)"
+                    autoComplete="off"
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-twilio-sid"
+                />
+                <input
+                    type="password"
+                    value={authToken}
+                    onChange={(e) => setAuthToken(e.target.value)}
+                    placeholder="Auth Token"
+                    autoComplete="off"
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-twilio-token"
+                />
+                <input
+                    value={serviceSid}
+                    onChange={(e) => setServiceSid(e.target.value)}
+                    placeholder="Messaging Service SID (optional)"
+                    autoComplete="off"
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-twilio-service"
+                />
+                <button
+                    type="button"
+                    disabled={busy || !accountSid.trim() || !authToken.trim()}
+                    onClick={() => void connect()}
+                    className="rounded bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40"
+                    data-testid="communications-dialog-twilio-connect"
+                >
+                    {busy ? "Verifying…" : "Connect Twilio"}
+                </button>
+            </div>
+            {error ? (
+                <p className="mt-1 text-[11px] text-alloy-ember" data-testid="communications-dialog-twilio-error">
+                    {error}
+                </p>
+            ) : null}
+            {done ? (
+                <p className="mt-1 text-[11px] text-emerald-800" data-testid="communications-dialog-twilio-connected">
+                    Connected{done && done !== "Connected" ? ` · ${done}` : ""}.
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
 function ConnectResendStep({
     onConnected,
     hasDeploymentOption,
@@ -514,7 +744,15 @@ export default function CommunicationsChannelDialog({
                                 that has since been rotated — reaches this screen through
                                 Configure, and previously had nowhere to put their own
                                 Resend key. */}
+                            {card.providerAccount ? (
+                                <ManageConnection
+                                    card={card}
+                                    account={card.providerAccount}
+                                    onChanged={() => void onSaved()}
+                                />
+                            ) : null}
                             {isEmail ? <ConnectResendStep onConnected={() => void onSaved()} hasDeploymentOption /> : null}
+                            {!isEmail ? <ConnectTwilioStep onConnected={() => void onSaved()} /> : null}
 
                             {scopedBindings.length > 1 ? (
                                 <Field label="Which one">

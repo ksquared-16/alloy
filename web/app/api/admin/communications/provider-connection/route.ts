@@ -8,6 +8,7 @@ import {
     revokeOrgProviderCredential,
 } from "@/lib/communications/orgProviderCredential";
 import { verifyResendApiKey } from "@/lib/communications/resendConnection";
+import { verifyTwilioCredentials } from "@/lib/communications/twilioConnection";
 
 /**
  * Connect, replace or revoke an organization's own provider account.
@@ -34,10 +35,17 @@ type ConnectBody = {
     provider?: unknown;
     api_key?: unknown;
     display_label?: unknown;
+    /** Twilio: NOT secrets. Identifiers visible in Twilio's own console. */
+    account_sid?: unknown;
+    auth_token?: unknown;
+    messaging_service_sid?: unknown;
 };
 
-/** Providers an organization can connect itself, today. */
-const SELF_SERVICE_PROVIDERS = new Set(["resend"]);
+/** Providers an organization can connect itself. */
+const SELF_SERVICE_PROVIDERS = new Set(["resend", "twilio"]);
+
+/** Which channel a provider serves. */
+const PROVIDER_CHANNEL: Record<string, string> = { resend: "email", twilio: "sms" };
 
 function badRequest(error: string, code?: string) {
     return NextResponse.json({ error, code: code ?? null }, { status: 400 });
@@ -80,7 +88,7 @@ async function findOrCreateOrgAccount(
         .insert({
             org_id: orgId,
             provider_type: provider,
-            display_label: displayLabel || "Resend",
+            display_label: displayLabel || (provider === "twilio" ? "Twilio" : "Resend"),
             status: "pending_verification",
             verification_state: "pending",
             secret_ref: "unconfigured",
@@ -109,19 +117,45 @@ export async function POST(request: Request) {
         return badRequest("That provider cannot be connected from here yet.", "unsupported_provider");
     }
 
-    const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
-    if (!apiKey) {
-        return badRequest("Enter the API key from your Resend account.", "missing_credential");
+    const env = process.env as Record<string, string | undefined>;
+    const isTwilio = provider === "twilio";
+
+    // The SECRET for each provider. Twilio also needs identifiers, which are not
+    // secrets and are handled as ordinary configuration below.
+    const secret = isTwilio
+        ? typeof body.auth_token === "string"
+            ? body.auth_token.trim()
+            : ""
+        : typeof body.api_key === "string"
+          ? body.api_key.trim()
+          : "";
+    const accountSid = typeof body.account_sid === "string" ? body.account_sid.trim() : "";
+    const messagingServiceSid =
+        typeof body.messaging_service_sid === "string" ? body.messaging_service_sid.trim() : "";
+
+    if (!secret) {
+        return badRequest(
+            isTwilio ? "Enter the Auth Token from your Twilio account." : "Enter the API key from your Resend account.",
+            "missing_credential",
+        );
+    }
+    if (isTwilio && !accountSid) {
+        return badRequest("Enter the Account SID from your Twilio account.", "missing_account_sid");
     }
 
     // VERIFY BEFORE STORING. "The vault write succeeded" is not provider
     // readiness, and calling it Connected on that basis is the exact class of lie
     // this surface exists to prevent.
-    const verification = await verifyResendApiKey(apiKey, { env: process.env as Record<string, string | undefined> });
+    const verification = isTwilio
+        ? await verifyTwilioCredentials(accountSid, secret, { env })
+        : await verifyResendApiKey(secret, { env });
+
     if (verification.outcome === "invalid_credential") {
         return NextResponse.json(
             {
-                error: "Resend did not accept that API key. Check it was copied in full and has not been revoked.",
+                error: isTwilio
+                    ? "Twilio did not accept those credentials. Check the Account SID and Auth Token."
+                    : "Resend did not accept that API key. Check it was copied in full and has not been revoked.",
                 code: "invalid_credential",
             },
             { status: 422 },
@@ -144,7 +178,10 @@ export async function POST(request: Request) {
         // Deliberately NOT 422: nothing is wrong with what the operator typed, so
         // the connection must not be recorded as rejected.
         return NextResponse.json(
-            { error: "Alloy could not reach Resend to confirm that key. Nothing was changed — try again.", code: "provider_unavailable" },
+            {
+                error: `Alloy could not reach ${isTwilio ? "Twilio" : "Resend"} to confirm those credentials. Nothing was changed — try again.`,
+                code: "provider_unavailable",
+            },
             { status: 503 },
         );
     }
@@ -164,7 +201,7 @@ export async function POST(request: Request) {
     const stored = await putOrgProviderCredential(supabase, {
         orgId: ctx.orgId,
         providerAccountId: accountId,
-        secret: apiKey,
+        secret,
         actorUserId: admin.userId ?? null,
     });
     if (!stored.ok) {
@@ -187,13 +224,22 @@ export async function POST(request: Request) {
     }
 
     // Verified above, so this is a fact rather than an assumption.
+    //
+    // The Account SID and Messaging Service SID are NOT secrets — they appear in
+    // Twilio's console and in webhook payloads — so they are stored as ordinary
+    // configuration an administrator can read and correct. Hiding a non-secret
+    // behind a write-once field would make the connection unmanageable for no
+    // security gain.
+    const providerLabel =
+        displayLabel || (verification.outcome === "ok" && isTwilio ? (verification.accountLabel ?? "") : "");
     await supabase
         .from("communication_provider_accounts")
         .update({
             status: "active",
             verification_state: "verified",
             health_status: "healthy",
-            ...(displayLabel ? { display_label: displayLabel } : {}),
+            ...(providerLabel ? { display_label: providerLabel } : {}),
+            ...(isTwilio ? { provider_account_ref: accountSid } : {}),
             updated_at: new Date().toISOString(),
         })
         .eq("id", accountId)
@@ -202,11 +248,12 @@ export async function POST(request: Request) {
     // Point this organization's email bindings at the account they now own. A
     // binding still naming the deployment credential would keep sending through
     // Alloy's account after the organization connected its own.
+    const channel = PROVIDER_CHANNEL[provider] ?? "email";
     await supabase
         .from("communication_provider_bindings")
         .update({ secret_ref: stored.secretRef, updated_at: new Date().toISOString() })
         .eq("org_id", ctx.orgId)
-        .eq("channel", "email")
+        .eq("channel", channel)
         .eq("provider", provider);
 
     return NextResponse.json({
@@ -215,7 +262,9 @@ export async function POST(request: Request) {
         connection: {
             state: "connected",
             /** What the account can send from today. Never a credential. */
-            verified_domains: verification.verifiedDomains,
+            verified_domains: verification.outcome === "ok" && !isTwilio ? verification.verifiedDomains : [],
+            account_label: verification.outcome === "ok" && isTwilio ? verification.accountLabel : null,
+            messaging_service_sid: messagingServiceSid || null,
         },
     });
 }
@@ -251,7 +300,7 @@ export async function DELETE(request: Request) {
         .from("communication_provider_bindings")
         .update({ secret_ref: "unconfigured", updated_at: new Date().toISOString() })
         .eq("org_id", ctx.orgId)
-        .eq("channel", "email")
+        .eq("channel", PROVIDER_CHANNEL[provider] ?? "email")
         .eq("provider", provider);
 
     return NextResponse.json({ ok: true, connection: { state: "not_connected" } });
