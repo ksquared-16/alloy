@@ -1,10 +1,10 @@
 ---
 owner: platform
-status: BLOCKED — architecture decision required
+status: sprint
 last_reviewed: 2026-08-14
 sprint: records-roster-completion-phase0
-base: origin/staging @ a38c1a260
-blocks: Records Workspace V1 (Phase 1), workstreams D and I
+base: origin/staging @ 7fe3a99af
+resolved_by: Durable Record Attention (this branch) — the gap this doc names is closed
 ---
 
 # Records V1 — record-open cannot be honest under the current attention host model

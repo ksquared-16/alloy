@@ -1,9 +1,9 @@
 ---
 owner: product
-status: phase-0 audit
+status: sprint
 last_reviewed: 2026-08-14
 sprint: records-roster-completion-phase0
-base: origin/staging @ a38c1a260
+base: origin/staging @ 7fe3a99af
 ---
 
 # Records + Roster Completion — Phase 0 Product/Truth Audit

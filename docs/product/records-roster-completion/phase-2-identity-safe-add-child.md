@@ -1,3 +1,11 @@
+---
+owner: product
+status: sprint
+last_reviewed: 2026-08-14
+sprint: records-roster-completion-phase0
+base: origin/staging @ 7fe3a99af
+---
+
 # Phase 2 — Identity-safe Add Child
 
 Records V1 shipped Children **without** Add Child. That was not an oversight and not a
