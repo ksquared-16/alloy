@@ -140,6 +140,32 @@ trigger via `triggerClassName` — the element it always described.
 
 ---
 
+### R-008 · "Unsaved changes" appears after read-only navigation
+
+| Field | Value |
+|---|---|
+| **Surface** | `/organization/processes` → Stages |
+| **Interaction** | Selecting stages; no edits |
+| **Expected** | A read gesture leaves the surface clean |
+| **Observed** | Sampled at three points with non-GET logging: clean at boot (`unsaved false`, Save disabled), **`unsaved true` + Save enabled after four stage selections**, with **zero requests behind it** |
+| **Root owner** | `StageEditorV2.tsx` — `isDirty = fieldDirty \|\| operatingPlanDirty \|\| v2Dirty`. `savedV2` rebaselines on stage switch; the two sub-editor flags do not |
+| **Classification** | K (UX correctness — not a durable write) |
+| **Severity** | Medium — teaches operators to distrust the save indicator |
+| **Status** | **Open.** Separated from R-007 deliberately: no server write is involved, and rebaselining the sub-editors is editor work |
+
+### R-009 · `saveActivation` rebuilds the whole bundle from component state
+
+| Field | Value |
+|---|---|
+| **Surface** | Lifecycle activation board |
+| **Expected** | Changing one field persists one field |
+| **Observed** | Every writer sends a full `LifecycleActivationV1` built from current state (`status_keys: patch.status_keys ?? statusKeys`, and eight more the same way) |
+| **Classification** | H |
+| **Severity** | Medium — no longer reachable from a read gesture (R-007 closed), but a legitimate writer firing before values resolve can still persist partial state |
+| **Status** | **Open.** Needs the endpoint to accept a partial patch — its own slice |
+
+---
+
 ## Select primitive — limitations still open
 
 Recorded so the mass migration is planned against what the primitive actually does.
@@ -148,7 +174,7 @@ Recorded so the mass migration is planned against what the primitive actually do
 |---|---|---|
 | L-1 | **No portal.** The menu is absolutely positioned inside its own root. The upward flip handles viewport edges; an ancestor with `overflow: hidden` would still clip. | **Deferred by rule** — no clipping failure reproduced in a supported surface. Build it when one is. |
 | L-2 | **Read-only is not distinct from disabled.** | **Deferred by rule** — all 7 adapter consumers use `disabled` only. |
-| L-3 | **No multi-select.** Every consumer today is single-value. | Open — needed before any multi-select call site migrates. |
+| L-3 | **No canonical multi-select.** Audited: 6 enforced files use native `multiple`, and two bespoke implementations exist (`LocationMultiSelect`, `CommsAudienceMultiSelect`) with **no shared owner**. | **Not a single-select blocker.** Registered as its own platform-input gap. Do NOT add multi-select to `AlloySelect` — the interaction and accessibility semantics differ materially. |
 | L-4 | **Typeahead has no visible feedback.** The buffer is invisible; the operator sees only the active option move, exactly like a native select. | Intentional. Revisit only if evidence shows it is insufficient. |
 
 ---
@@ -182,7 +208,7 @@ Recorded so the mass migration is planned against what the primitive actually do
 | **Classification** | H / K |
 | **Severity** | **Medium** |
 | **Shared vs local** | Local to the lifecycle activation board |
-| **Status** | **Investigated, not fixed** — see below |
+| **Status** | **CLOSED** `6cf3ee1ff` — the write is removed from the read path. Locked by `tests/lifecycle/lifecycleActivationWriteBoundaries.test.ts`. Browser-proven: 4 stage selections + 2 panel expansions = **0 durable requests** |
 
 **Causal chain.** `selectStage(stage)` is the stage-list click handler. Its last statement is
 `void saveActivation({ stage_key: stage.key, stage_label: stage.label })` — fire-and-forget,
@@ -213,7 +239,13 @@ like an edit in progress.
 **Test coverage.** None. No test asserts that stage selection saves, or bounds what it saves.
 `tests/lifecycle/lifecycleStatusStepSaveFix.test.ts` asserts the `selectStage` call shape only.
 
-**Recommended fix — NOT applied.** Send a true partial patch, or persist editor position
+**Residual debt — the full-bundle contract.** `saveActivation` still rebuilds the entire
+bundle from component state, so any *legitimate* writer can still persist unresolved sibling
+fields. The navigation trigger is gone, which removes the reachable path, but the contract
+hazard remains. Making the endpoint accept a partial patch changes its server handler and is
+the editor refactor this slice was bounded away from. **Registered as R-009.**
+
+**Superseded recommendation.** Send a true partial patch, or persist editor position
 separately from the activation bundle, so a read gesture cannot carry stale field values.
 That changes the endpoint contract and its server handler — the Business Process editor
 refactor this investigation was explicitly bounded away from. It needs its own slice.
@@ -253,15 +285,17 @@ parent-facing surface are exempt and enumerated in
 
 | Owner | Tags | Files |
 |---|--:|--:|
-| Settings / configuration | 217 | 100 |
+| Settings / configuration | 204 | 97 |
 | Other operator UI | 63 | 30 |
 | Operator record + action surfaces | 47 | 23 |
 | Focus Panel / presentation runtime | 31 | 9 |
 | Layout builder | 26 | 7 |
 | AdminV2 app routes | 25 | 15 |
 | Operational modules | 18 | 5 |
-| **Total** | **427** | **189** |
+| **Total** | **414** | **186** |
 
-Baseline at sprint start was 437 across 190 files. The Wave 1 proving slice converted
-`LifecycleStageOutcomeBehaviorEditor` (10 → 0). The ledger test fails if any enforced file
+Baseline at sprint start was 437 across 190 files. Wave 1 converted `LifecycleStageOutcomeBehaviorEditor` (10 → 0);
+Batch 1 converted Settings / organization calculations (13 → 0 across 3 files). **Note the ledger
+counts CALL SITES, not affected surfaces** — Wave 3A converted seven surfaces via the shared
+adapter and moved the number by zero. The ledger test fails if any enforced file
 introduces a raw `<select>`, if a listed file grows, or if a converted file is not lowered.
