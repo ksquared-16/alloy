@@ -3,30 +3,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
-    groupConversationsByQueue,
+    OPERATIONAL_QUEUES,
+    FALLBACK_QUEUE,
     computeCommandCenterMetrics,
     applyQueueFilters,
-    visibleCommandCenterQueues,
-    flattenVisibleConversationIds,
-    flattenLoadableConversationIds,
     resolveCommandCenterSelectionPreferringLoadable,
-    conversationDisplayTitle,
-    conversationDisplayTopic,
     conversationDisplayChildren,
     conversationDisplayRecipient,
-    conversationChannelLabel,
-    conversationUnreadCount,
     conversationQueueStatusPill,
     queueStatusPillClass,
     countDistinctQueueFamilies,
     isQueueRowLoadable,
     resolveQueueWorkspaceError,
     prepareCommandCenterQueue,
+    NEEDS_RESOLUTION_QUEUE,
     NEEDS_RESOLUTION_QUEUE_KEY,
     resolveCommandCenterHealthDisplay,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
+import {
+    buildCommunicationHubs,
+    findHubForConversation,
+    flattenHubPrimaryConversationIds,
+    groupHubsIntoSections,
+    type CommunicationHub,
+} from "@/lib/communications/v2/communicationHubProjection";
 import {
     getCommandCenterCacheSnapshot,
     getCommandCenterWarmSelectedConversationId,
@@ -404,10 +406,34 @@ export default function CommandCenterShell() {
     );
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
-    const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
-    const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
-    const visibleIds = useMemo(() => flattenVisibleConversationIds(queueSections), [queueSections]);
-    const loadableIds = useMemo(() => flattenLoadableConversationIds(queueSections), [queueSections]);
+    /*
+     * THE QUEUE'S GRAIN IS THE PARTY, NOT THE THREAD.
+     *
+     * A family holding three email subjects and an SMS thread used to render four
+     * rows, every one of them reading "Kurzman Family". They were not duplicates
+     * — they were four real threads shown at the wrong grain. `buildCommunicationHubs`
+     * rolls them into one row and keeps every canonical thread underneath it.
+     */
+    const hubs = useMemo(() => buildCommunicationHubs(filtered), [filtered]);
+    const hubSections = useMemo(
+        () =>
+            groupHubsIntoSections(hubs, [...OPERATIONAL_QUEUES, FALLBACK_QUEUE, NEEDS_RESOLUTION_QUEUE], {
+                unresolvedSectionKey: NEEDS_RESOLUTION_QUEUE_KEY,
+                fallbackSectionKey: FALLBACK_QUEUE.key,
+            }),
+        [hubs]
+    );
+    const selectedHub = useMemo(() => findHubForConversation(hubs, selectedId), [hubs, selectedId]);
+    // Selection still moves between CONVERSATIONS — a hub is a way of showing
+    // them, never a replacement for the canonical thread the workspace loads.
+    const visibleIds = useMemo(() => flattenHubPrimaryConversationIds(hubSections), [hubSections]);
+    const loadableIds = useMemo(
+        () => flattenHubPrimaryConversationIds(hubSections).filter((id) => {
+            const row = filtered.find((c) => c.id === id);
+            return row ? isQueueRowLoadable(row) : false;
+        }),
+        [hubSections, filtered]
+    );
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
 
     useEffect(() => {
@@ -518,8 +544,8 @@ export default function CommandCenterShell() {
                     <div className="min-h-0 flex-1 overflow-auto px-2.5 py-2.5">
                         {queueUnresolved ?
                             <CommsQueueListReserve />
-                        :   queueSections.map((q) => {
-                            const items = q.items;
+                        :   hubSections.map((q) => {
+                            const items = q.hubs;
                             const isReviewQueue = q.key === NEEDS_RESOLUTION_QUEUE_KEY;
                             const acc = isReviewQueue
                                 ? { dot: "bg-alloy-amber", rail: "border-l-alloy-amber", tint: "bg-alloy-amber/8" }
@@ -532,28 +558,52 @@ export default function CommandCenterShell() {
                                         <span className="ml-auto tabular-nums">{items.length}</span>
                                     </div>
                                     <ul className="space-y-1.5">
-                                        {items.map((c) => {
-                                            const d = FIXTURE_FAMILY_DETAILS[c.id];
-                                            const isSel = selectedId === c.id;
+                                        {items.map((hub) => {
+                                            /*
+                                             * ONE ROW PER PARTY. `hub.primaryConversationId` is what
+                                             * the row opens, and `hub.threadIds` is everything living
+                                             * underneath it — both deterministic, so the row does not
+                                             * move or open somewhere different between renders.
+                                             */
+                                            const primaryId = hub.primaryConversationId;
+                                            const primary =
+                                                hub.conversations.find((c) => c.id === primaryId) ?? hub.conversations[0];
+                                            if (!primary) return null;
+                                            const d = FIXTURE_FAMILY_DETAILS[primary.id];
+                                            const isSel = Boolean(selectedId && hub.threadIds.includes(selectedId));
                                             const rowAccent = isReviewQueue
                                                 ? { dot: "bg-alloy-amber", rail: "border-l-alloy-amber", tint: "bg-alloy-amber/8" }
-                                                : attnAccent(c.attention_state);
-                                            const familyName = d ? (c.family_label ?? "Household") : conversationDisplayTitle(c);
-                                            const topicLabel = d ? (c.topic_label ?? d.program) : conversationDisplayTopic(c);
-                                            const childrenLabel = d ? d.children : conversationDisplayChildren(c);
-                                            const contactLabel = d ? null : conversationDisplayRecipient(c);
-                                            const preview = d ? null : (c.last_message_preview ?? null);
-                                            const unread = conversationUnreadCount(c);
-                                            const statusPill = conversationQueueStatusPill(c);
-                                            const activityAt = c.last_activity_at ?? c.last_message_at;
-                                            const channelLabel = conversationChannelLabel(c.channel);
-                                            const attentionLabel = conversationAttentionLabel(c.attention_state);
+                                                : attnAccent(primary.attention_state);
+                                            const familyName = hub.label;
+                                            const childrenLabel = d ? d.children : conversationDisplayChildren(primary);
+                                            const contactLabel = d ? null : conversationDisplayRecipient(primary);
+                                            const preview = d ? null : (primary.last_message_preview ?? null);
+                                            const statusPill = conversationQueueStatusPill(primary);
+                                            const activityAt = hub.lastActivityAt;
+                                            // The hub's CHANNELS replace the single-thread topic line.
+                                            // A row standing for several threads cannot honestly show
+                                            // one of their subjects as though it were the row's own.
+                                            const channelSummary = hub.channels
+                                                .filter((ch) => ch !== "other")
+                                                .map((ch) => (ch === "email" ? "Email" : "SMS"))
+                                                .join(" · ");
+                                            const threadCountLabel =
+                                                hub.threadIds.length > 1 ? `${hub.threadIds.length} conversations` : null;
+                                            const needsReplyLabel =
+                                                hub.needsReplyCount > 0
+                                                    ? hub.needsReplyCount > 1
+                                                        ? `${hub.needsReplyCount} need replies`
+                                                        : "Needs reply"
+                                                    : null;
                                             return (
-                                                <li key={c.id}>
+                                                <li key={hub.key}>
                                                     <button
                                                         type="button"
-                                                        data-cc-conversation={c.id}
-                                                        onClick={() => openConversation(c.id)}
+                                                        data-cc-hub={hub.key}
+                                                        data-cc-hub-kind={hub.kind}
+                                                        data-cc-hub-threads={hub.threadIds.length}
+                                                        data-cc-conversation={primary.id}
+                                                        onClick={() => openConversation(primary.id)}
                                                         className={`w-full rounded-xl border border-l-[3px] px-2.5 py-2 text-left transition ${
                                                             isSel
                                                                 ? COMMS_LIST_ROW_SELECTED_CLASS
@@ -564,7 +614,6 @@ export default function CommandCenterShell() {
                                                             <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{familyName}</span>
                                                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${queueStatusPillClass(statusPill.tone)}`}>{statusPill.label}</span>
                                                         </div>
-                                                        <div className="mt-0.5 truncate text-[11px] font-medium text-alloy-midnight/70">{topicLabel}</div>
                                                         {childrenLabel ? (
                                                             <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{childrenLabel}</div>
                                                         ) : contactLabel ? (
@@ -576,11 +625,13 @@ export default function CommandCenterShell() {
                                                         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-alloy-midnight/45">
                                                             <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${rowAccent.dot}`} />
                                                             <span className="truncate">
-                                                                {[channelLabel, activityAt ? relTime(activityAt) : null, attentionLabel].filter(Boolean).join(" · ")}
+                                                                {[channelSummary, threadCountLabel, activityAt ? relTime(activityAt) : null, needsReplyLabel]
+                                                                    .filter(Boolean)
+                                                                    .join(" · ")}
                                                             </span>
                                                             <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                                                                {unread ? (
-                                                                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-alloy-juniper px-1 text-[9px] font-bold text-white shadow-sm">{unread}</span>
+                                                                {hub.unread ? (
+                                                                    <span data-cc-hub-unread className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-alloy-juniper px-1 text-[9px] font-bold text-white shadow-sm">{hub.unread}</span>
                                                                 ) : null}
                                                             </span>
                                                         </div>
@@ -662,6 +713,10 @@ export default function CommandCenterShell() {
                             LIVE_WORKSPACE={LIVE_WORKSPACE}
                             selectedThreadId={runtime.selectedThreadId}
                             selectedThread={runtime.selectedThread}
+                            // The hub's children. Email is a set of subject
+                            // threads, so the workspace needs the list, not just
+                            // the one currently open.
+                            threads={runtime.vm.threads}
                             messages={runtime.messages}
                             timelineMessages={runtime.timelineMessages}
                             liveRecipientGroups={runtime.vm.recipientGroups}

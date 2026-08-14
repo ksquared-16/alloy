@@ -372,6 +372,45 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         tasks: { available: false, reason: "No enrollment opportunity is linked to this family." },
     };
     const noteMessages = messages.filter((m) => m.kind === "note");
+    /*
+     * EMAIL SHOWS EMAIL. SMS SHOWS SMS.
+     *
+     * The aggregated "all messages" view returns every channel for the family, so
+     * selecting Email could show a text message sitting between two emails. That
+     * is not a filter preference — it misrepresents the medium. An operator
+     * reading an email thread and seeing an SMS inside it cannot tell what the
+     * parent actually received, or what a reply would be sent as.
+     *
+     * Done in PRESENTATION, on the `channel` each message already carries. The
+     * runtime's loading, the provider path and the live-certified SMS behaviour
+     * are untouched — this decides what is displayed, not what is fetched.
+     *
+     * Notes and system entries are channel-less by nature and belong to the
+     * family rather than to a transport, so they are kept in both views.
+     */
+    /*
+     * EMAIL IS A SET OF SUBJECT THREADS, NOT ONE RUNNING CHANNEL.
+     *
+     * SMS is a single chronological exchange with a person, so a flat timeline is
+     * the right shape for it. Email is not: "Tour availability" and "Tuition
+     * question" are separate conversations that happen to share a correspondent,
+     * and flattening them loses the only thing that tells an operator which
+     * discussion they are continuing — and which subject a reply will inherit.
+     */
+    const emailSubjectThreads = (threads ?? [])
+        .filter((t) => String(t.channel ?? "").trim().toLowerCase() === "email" && t.messageCount > 0)
+        .sort((a, b) => String(b.lastActivityAt ?? "").localeCompare(String(a.lastActivityAt ?? "")));
+
+    const channelScopedMessages =
+        workspaceMode === "email" || workspaceMode === "sms"
+            ? messages.filter((m) => {
+                  const kind = String(m.kind ?? "message");
+                  if (kind !== "message") return true;
+                  const channel = String(m.channel ?? "").trim().toLowerCase();
+                  if (!channel) return true;
+                  return channel === workspaceMode;
+              })
+            : messages;
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
     const activityPrimaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_PRIMARY_BTN_CLASS : `${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm`;
     const activitySecondaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_SECONDARY_BTN_CLASS : `${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`;
@@ -597,11 +636,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 </div>
     );
 
-    const messageListBody = messages.length === 0 ? (
-                        <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
+    const messageListBody = channelScopedMessages.length === 0 ? (
+                        <div className="text-[11px] text-alloy-midnight/45">
+                            {workspaceMode === "email"
+                                ? "No email yet."
+                                : workspaceMode === "sms"
+                                  ? "No text messages yet."
+                                  : "No communication yet."}
+                        </div>
                     ) : (
-                        <ol data-cc-timeline className="space-y-3">
-                            {messages.map((m, i) => {
+                        <ol data-cc-timeline data-cc-timeline-channel={workspaceMode} className="space-y-3">
+                            {channelScopedMessages.map((m, i) => {
                                 const isSystem = m.kind === "system";
                                 const isNote = m.kind === "note";
                                 const out = m.direction === "outbound";
@@ -1336,6 +1381,48 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2 py-1 text-[10px] text-alloy-juniper">
                             <span>Viewing one thread</span>
                             <button type="button" onClick={onAllMessages} className="font-semibold underline">All messages</button>
+                        </div>
+                    ) : null}
+                    {isWorkspaceInbox && workspaceMode === "email" && emailSubjectThreads.length > 0 ? (
+                        <div data-cc-email-subject-list className="mb-3 space-y-1">
+                            <div className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
+                                Email
+                            </div>
+                            {emailSubjectThreads.map((thread) => {
+                                const isActive = thread.id === selectedThreadId;
+                                const participants = resolveThreadRecipients(thread, timelineMessages, allLiveRecipients);
+                                const who = formatThreadParticipantNames(participants);
+                                return (
+                                    <button
+                                        key={thread.id}
+                                        type="button"
+                                        data-cc-email-subject={thread.id}
+                                        aria-pressed={isActive}
+                                        onClick={() => onOpenThread?.(thread.id)}
+                                        className={`w-full rounded-lg border px-2.5 py-1.5 text-left transition ${
+                                            isActive
+                                                ? "border-alloy-juniper/45 bg-alloy-juniper/[0.07]"
+                                                : "border-alloy-stone/18 bg-white hover:border-alloy-stone/30"
+                                        }`}
+                                    >
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-alloy-midnight">
+                                                {threadDisplayTitle(thread, timelineMessages)}
+                                            </span>
+                                            {thread.unread > 0 ? (
+                                                <span className="shrink-0 rounded-full bg-alloy-juniper px-1.5 text-[9px] font-bold text-white">
+                                                    {thread.unread}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">
+                                            {[thread.lastActivityAt ? relTime(thread.lastActivityAt) : null, who]
+                                                .filter(Boolean)
+                                                .join(" · ")}
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
                     ) : null}
                     {messageListBody}
