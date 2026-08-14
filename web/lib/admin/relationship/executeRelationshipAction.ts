@@ -37,6 +37,7 @@ import {
     resolveRelationshipRoleKeyForAction,
 } from "@/lib/admin/relationship/relationshipActionRoleResolution";
 import { relationshipActionRegistryEntry } from "@/lib/admin/relationship/relationshipActionRegistry";
+import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 import {
     resolveRelationshipScopeMemberIds,
     resolveRelationshipScopeTargets,
@@ -334,30 +335,22 @@ export async function executeRelationshipAction(
                     record_ids: participation.process_instance_id ? [participation.process_instance_id] : [],
                 });
             } else {
-                const { data: cm, error } = await supabase
-                    .from("customer_members")
-                    .insert({
-                        org_id: orgId,
-                        customer_id: customerId,
-                        person_id: childPersonId,
-                        display_name: identity.display_name,
-                        first_name: identity.first_name,
-                        last_name: identity.last_name,
-                        dob: identity.dob,
-                        relationship: "child",
-                        is_active: true,
-                        metadata: { source: "relationship_action" },
-                    })
-                    .select("id")
-                    .single();
-                if (error?.code === "23505") {
-                    memberId = await findCustomerMemberForChild(supabase, orgId, customerId, childPersonId);
-                } else if (error || !cm) {
-                    throw new Error(error?.message ?? "Could not create customer member for child.");
-                } else {
-                    memberId = String((cm as { id: string }).id);
-                    linksWritten += 1;
-                }
+                // ONE child-member write authority. This branch used to insert directly and
+                // rescue the unique violation afterwards; the authority asks first, so a child
+                // already on this household is reused rather than raced into existence.
+                // Identity is still resolved by THIS path — the authority never guesses one.
+                const { member, created } = await createHouseholdChildMember(supabase, {
+                    orgId,
+                    customerId,
+                    personId: childPersonId,
+                    displayName: identity.display_name,
+                    firstName: identity.first_name,
+                    lastName: identity.last_name,
+                    dob: identity.dob,
+                    source: "relationship_action",
+                });
+                memberId = member.id;
+                if (created) linksWritten += 1;
                 affectedPreview.push({ label: "Household child member", table: "customer_members", record_ids: memberId ? [memberId] : [] });
             }
         } else if (

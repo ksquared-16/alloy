@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { resolveProgramCategoryId } from "@/lib/locations/resolveOcmProgramCategoryFields";
 import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { createHouseholdChildMember } from "@/lib/records/childMemberAuthority";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -165,28 +166,19 @@ export async function applyCreateLeadChildParticipationFromIdentity(
         childPersonId = childPerson.person_id;
     }
 
-    const cmPayload: Record<string, unknown> = {
-        org_id: params.orgId,
-        customer_id: params.customerId,
-        person_id: childPersonId,
-        display_name: params.identity.display_name,
-        first_name: params.identity.first_name,
-        last_name: params.identity.last_name,
+    // ONE child-member write authority. Create Lead still resolves the child's IDENTITY its own
+    // way (from intake facts, above) — the authority owns the row, never who the child is.
+    const { member } = await createHouseholdChildMember(supabase, {
+        orgId: params.orgId,
+        customerId: params.customerId,
+        personId: childPersonId,
+        displayName: params.identity.display_name,
+        firstName: params.identity.first_name,
+        lastName: params.identity.last_name,
         dob: params.identity.dob,
-        relationship: "child",
-        is_active: true,
-        metadata: { source: "create_lead" },
-    };
-
-    const { data: cm, error: cmErr } = await supabase
-        .from("customer_members")
-        .insert(cmPayload)
-        .select("id")
-        .single();
-    if (cmErr || !cm) {
-        throw new Error(cmErr?.message ?? "Could not create child record for lead.");
-    }
-    const customerMemberId = String((cm as { id: string }).id);
+        source: "create_lead",
+    });
+    const customerMemberId = member.id;
 
     // FK-only program storage: resolve the intake program key against the child's site.
     const programCategoryId =

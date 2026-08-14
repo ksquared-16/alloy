@@ -43,6 +43,12 @@ import {
     resolvePersonCandidates,
     type ResolvedIdentityCandidate,
 } from "@/lib/identity/resolveIdentityCandidates";
+import {
+    CHILD_MEMBER_COLUMNS,
+    childMemberDisplayName,
+    createHouseholdChildMember,
+    type ChildMemberRow,
+} from "@/lib/records/childMemberAuthority";
 import { RecordCreationError } from "@/lib/records/recordCreationErrors";
 
 /** Raised when the operator must resolve identity before anything is written. */
@@ -111,27 +117,15 @@ function normalizeDob(value: unknown): string | null {
     return t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
 }
 
-type MemberRow = {
-    id: string;
-    customer_id: string | null;
-    person_id: string | null;
-    display_name: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    is_active: boolean | null;
-};
+type MemberRow = ChildMemberRow;
 
-const MEMBER_COLUMNS = "id, customer_id, person_id, display_name, first_name, last_name, is_active";
-
-function memberDisplayName(row: MemberRow): string {
-    return (
-        (row.display_name ?? "").trim() ||
-        [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
-        "Child"
-    );
-}
-
-/** The household must exist IN THIS ORG. Tenancy is proved here, not assumed from the caller. */
+/**
+ * The household must exist IN THIS ORG.
+ *
+ * This is a PLACEMENT concern, not a write-authority one: Records' household
+ * arrives from an operator picker, so it is untrusted input here in a way it is
+ * not on the Create Lead path, where the server derived it.
+ */
 async function requireHousehold(
     supabase: SupabaseClient,
     orgId: string,
@@ -154,7 +148,7 @@ async function loadMemberInOrg(
 ): Promise<MemberRow | null> {
     const { data, error } = await supabase
         .from("customer_members")
-        .select(MEMBER_COLUMNS)
+        .select(CHILD_MEMBER_COLUMNS)
         .eq("org_id", orgId)
         .eq("id", memberId)
         .maybeSingle();
@@ -162,28 +156,8 @@ async function loadMemberInOrg(
     return (data as MemberRow | null) ?? null;
 }
 
-/** An active child membership for this person in this household, if one already exists. */
-async function findMemberForPerson(
-    supabase: SupabaseClient,
-    orgId: string,
-    customerId: string,
-    personId: string
-): Promise<MemberRow | null> {
-    const { data, error } = await supabase
-        .from("customer_members")
-        .select(MEMBER_COLUMNS)
-        .eq("org_id", orgId)
-        .eq("customer_id", customerId)
-        .eq("person_id", personId)
-        .eq("relationship", "child")
-        .eq("is_active", true)
-        .limit(1);
-    if (error) throw new RecordCreationError("db_error", error.message);
-    const rows = (data ?? []) as MemberRow[];
-    return rows[0] ?? null;
-}
-
-async function insertChildMember(
+/** Every write below goes through the one child-member authority. @see childMemberAuthority.ts */
+async function writeChildMember(
     supabase: SupabaseClient,
     input: {
         orgId: string;
@@ -194,28 +168,19 @@ async function insertChildMember(
         dob: string | null;
         displayName: string;
     }
-): Promise<MemberRow> {
-    const { data, error } = await supabase
-        .from("customer_members")
-        .insert({
-            org_id: input.orgId,
-            customer_id: input.customerId,
-            person_id: input.personId,
-            display_name: input.displayName,
-            first_name: input.firstName,
-            last_name: input.lastName,
-            dob: input.dob,
-            relationship: "child",
-            is_active: true,
-            external_source: "child_add",
-            metadata: { source: "child_add" },
-        })
-        .select(MEMBER_COLUMNS)
-        .single();
-    if (error || !data) {
-        throw new RecordCreationError("db_error", error?.message ?? "Could not create the child record");
+): Promise<{ member: MemberRow; created: boolean }> {
+    try {
+        return await createHouseholdChildMember(supabase, {
+            ...input,
+            source: "child_add",
+            externalSource: "child_add",
+        });
+    } catch (e) {
+        throw new RecordCreationError(
+            "db_error",
+            e instanceof Error ? e.message : "Could not create the child record"
+        );
     }
-    return data as MemberRow;
 }
 
 export async function addChild(
@@ -254,7 +219,7 @@ export async function addChild(
             customerMemberId: member.id,
             personId: member.person_id,
             customerId,
-            displayName: memberDisplayName(member),
+            displayName: childMemberDisplayName(member),
             identityOutcome: "already_in_household",
             membersCreated: 0,
         };
@@ -280,21 +245,11 @@ export async function addChild(
             date_of_birth: string | null;
         };
 
-        const existing = await findMemberForPerson(supabase, orgId, customerId, p.id);
-        if (existing) {
-            return {
-                customerMemberId: existing.id,
-                personId: existing.person_id,
-                customerId,
-                displayName: memberDisplayName(existing),
-                identityOutcome: "already_in_household",
-                membersCreated: 0,
-            };
-        }
-
         const first = firstName ?? trimOrNull(p.first_name);
         const last = lastName ?? trimOrNull(p.last_name);
-        const created = await insertChildMember(supabase, {
+        // The authority answers "already a member here?" itself, so reuse and
+        // creation are one call rather than a check this service could forget.
+        const { member, created } = await writeChildMember(supabase, {
             orgId,
             customerId,
             personId: p.id,
@@ -304,12 +259,12 @@ export async function addChild(
             displayName: [first, last].filter(Boolean).join(" ").trim() || "Child",
         });
         return {
-            customerMemberId: created.id,
-            personId: created.person_id,
+            customerMemberId: member.id,
+            personId: member.person_id,
             customerId,
-            displayName: memberDisplayName(created),
-            identityOutcome: "linked_existing_person",
-            membersCreated: 1,
+            displayName: childMemberDisplayName(member),
+            identityOutcome: created ? "linked_existing_person" : "already_in_household",
+            membersCreated: created ? 1 : 0,
         };
     }
 
@@ -341,7 +296,7 @@ export async function addChild(
 
     // No person row. The member IS the child record, and `person_id` stays null
     // until something that actually needs a person creates one.
-    const created = await insertChildMember(supabase, {
+    const { member } = await writeChildMember(supabase, {
         orgId,
         customerId,
         personId: null,
@@ -352,10 +307,10 @@ export async function addChild(
     });
 
     return {
-        customerMemberId: created.id,
-        personId: created.person_id,
+        customerMemberId: member.id,
+        personId: member.person_id,
         customerId,
-        displayName: memberDisplayName(created),
+        displayName: childMemberDisplayName(member),
         identityOutcome: "created_new",
         membersCreated: 1,
     };
