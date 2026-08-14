@@ -73,6 +73,24 @@ export const SETTLEMENT_LOCATORS_UNAVAILABLE: SettlementLocators = {
     rightRailTarget: null,
 };
 
+/**
+ * Population host for Operational Commit rows — MUST match the active lens's Settlement count host.
+ *
+ * Pill-strip Work Views stay LENS on the open shell (no remount). Settlement still evaluates each
+ * view's COUNT on its canonical host. If Operational Commit kept reading the surface work unit's
+ * population, a Waitlist-mounted shell would paint All/Tours counts from New Leads (1) while the
+ * committed page projected Waitlist's population (0) — count=1 / rows=0 / empty Focus.
+ */
+export function resolveProvisioningPopulationWorkUnitId(args: {
+    surfaceWorkUnitId: string;
+    settlement: SettlementLocators;
+}): string {
+    const surface = args.surfaceWorkUnitId.trim();
+    if (args.settlement.status !== "resolved") return surface;
+    const host = args.settlement.queueTotalTarget?.hostWorkUnitId?.trim() || "";
+    return host || surface;
+}
+
 /** Pure resolution: configured Work Views + the department's units → canonical Settlement locators. */
 export function resolveSettlementLocators(input: {
     workViews: ReadonlyArray<WorkViewConfigV1Stored>;

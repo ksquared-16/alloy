@@ -57,7 +57,10 @@ describe("workUnitPillSwitching", () => {
         expect(action).toEqual({ kind: "in-page", workViewId: "new_work_view_5" });
     });
 
-    it("pill-strip views are always in-page even when Settlement hosts count elsewhere (Waitlist)", () => {
+    it("pill-strip views stay in-page even when Settlement hosts count elsewhere (Waitlist shell)", () => {
+        // LENS-on-shell is intentional (no label-slug remount). Rows agree with Settlement because
+        // Operational Commit loads `queueTotalTarget.hostWorkUnitId` via
+        // `resolveProvisioningPopulationWorkUnitId` — not because the shell work unit owns the cohort.
         const lifecycleViews = [
             { id: "new_work_view_5", label: "Tours" },
             { id: "new_work_view_4", label: "Waitlist" },

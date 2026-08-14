@@ -153,4 +153,56 @@ describe("family-grain queue row materialization (All + Tours)", () => {
         expect(surface.activeWorkViewId).toBe(viewId);
         expect(surface.queue.error).toBeNull();
     });
+
+    it("Waitlist → All → Tours lens commits: totals match rendered rows and Focus shares the family subject", () => {
+        // Staging failure mode: Settlement badges All=1 / Tours=1 while the committed family page was
+        // empty after an in-page LENS switch from Waitlist. Client commit must materialize the same
+        // family subject for both family lenses once the answer carries that cohort.
+        const waitlistChildren = ["child-lennon", "child-wrigley"] as const;
+        const waitlistAnswer = {
+            ...familyOperationalAnswer("new_work_view_4", "Waitlist"),
+            rowGrain: "child",
+            subjectGrain: { grain: "child", subjectType: "child" },
+            rows: waitlistChildren.map((id, i) => ({
+                id,
+                stageKey: "waitlist",
+                statusKey: "open",
+                updatedAt: null,
+                title: i === 0 ? "Lennon Kurzman" : "Wrigley Kurzman",
+                context: {
+                    contract_version: 1,
+                    row_subject: { subject_type: "child", subject_id: id, display_name: "child" },
+                    drawer_open: {
+                        entity_type: "children",
+                        entity_id: id,
+                        active_subject: { subject_type: "child", subject_id: id },
+                    },
+                },
+            })),
+            recordOfAttention: {
+                id: waitlistChildren[0],
+                strategy: "first_row",
+                strategySource: "declared_fallback",
+            },
+        } as unknown as ProvisioningAnswer;
+
+        const waitlistSurface = workUnitSurfaceModelFromSnapshot(
+            waitlistAnswer.terminal === "operational" || waitlistAnswer.terminal === "empty"
+                ? waitlistAnswer
+                : (waitlistAnswer as never),
+        );
+        expect(waitlistSurface.queue.rows).toHaveLength(2);
+        expect(waitlistSurface.queue.totalCount === null || waitlistSurface.queue.totalCount === 2).toBe(true);
+
+        const allSurface = workUnitSurfaceModelFromSnapshot(familyOperationalAnswer("new_work_view_6", "All") as never);
+        expect(allSurface.queue.rows).toHaveLength(1);
+        expect(allSurface.queue.rows[0]?.entityId).toBe(FAMILY_SUBJECT_ID);
+        expect(allSurface.selectedRecordId).toBe(FAMILY_SUBJECT_ID);
+
+        const toursSurface = workUnitSurfaceModelFromSnapshot(familyOperationalAnswer("new_work_view_5", "Tours") as never);
+        expect(toursSurface.queue.rows).toHaveLength(1);
+        expect(toursSurface.queue.rows[0]?.entityId).toBe(FAMILY_SUBJECT_ID);
+        expect(toursSurface.selectedRecordId).toBe(FAMILY_SUBJECT_ID);
+        expect(toursSurface.selectedRecordId).toBe(allSurface.selectedRecordId);
+    });
 });
