@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { ADMINV2_DRAWER_ACTION_MODAL_Z } from "@/components/admin/Drawer";
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import {
     COMMS_FILTER_INPUT_CLASS,
@@ -136,10 +136,21 @@ export default function ComposeNewCommunicationModal({
 
     const workspaceReady = Boolean(selectedPerson && runtime.vm);
 
+    /*
+     * Compose New is launched from INSIDE the Communications workspace, so it is
+     * a nested workspace overlay, not a drawer action modal.
+     *
+     * The drawer action-modal layer is 80 — deliberately *below* shell chrome
+     * (100), which is right for a modal raised from an entity drawer. It is wrong
+     * here: this modal portals to `document.body` and opens over a workspace whose
+     * own chrome sits at 100 and whose BOS layers sit at 96/97, so it rendered
+     * BEHIND the very workspace it was launched from. To an operator that is
+     * "Compose New does nothing."
+     */
     return createPortal(
         <div
             className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/35 p-4"
-            style={{ zIndex: ADMINV2_DRAWER_ACTION_MODAL_Z }}
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
             data-compose-new-modal="true"
             role="dialog"
             aria-modal="true"
