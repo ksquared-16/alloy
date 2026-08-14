@@ -548,7 +548,11 @@ describe("provider connection is observed, never assumed", () => {
         expect(r.providerConnection).toBe("unavailable");
         expect(r.send.state).toBe("setup_required");
         expect(r.receive.state).toBe("setup_required");
-        expect(r.send.detail).toMatch(/not available in this deployment/i);
+        // Says the connection is gone AND what to do about it. The two directions
+        // no longer share one sentence — `providerConnectionStates.test.ts` owns
+        // that guarantee, and the state that names a platform administrator.
+        expect(r.send.detail).toMatch(/no longer available in this deployment/i);
+        expect(r.send.detail).not.toBe(r.receive.detail);
     });
 
     it("no credential at all reads as not connected", () => {

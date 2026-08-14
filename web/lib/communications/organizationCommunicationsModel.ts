@@ -26,7 +26,8 @@
  * and the phrase "composer". Pure — values in, view model out.
  */
 
-import { readinessLabel, type ReadinessState } from "./bindingReadiness";
+import { readinessLabel, type ProviderConnectionState, type ReadinessState } from "./bindingReadiness";
+import type { LocationHierarchy } from "./locationHierarchy";
 
 export type ChannelKey = "email" | "sms";
 
@@ -53,6 +54,17 @@ export type ChannelCard = {
     /** "Resend" / "Twilio" — the provider as a person would name it, or null. */
     providerLabel: string | null;
     connected: boolean;
+    /**
+     * The provider connection, reported SEPARATELY from send and receive.
+     *
+     * Previously the card showed only two readiness rows, so "we have no account
+     * to send through" and "you have not set a From address" arrived looking like
+     * the same kind of problem. They are not: one is fixed here, the other is not
+     * fixable here at all.
+     */
+    providerConnection: ProviderConnectionState;
+    /** Product wording for the state above. Never storage vocabulary. */
+    providerConnectionLabel: string;
     sending: DirectionView;
     receiving: DirectionView;
     identity: IdentityLine[];
@@ -66,10 +78,21 @@ export type ChannelCard = {
     bindingIds: string[];
     /** More than one row behind this channel — the dialog says so, the card does not. */
     additionalCount: number;
-    /** Every active location, with its identity or its inheritance. */
+    /** Every active location, flat. Retained for consumers that index by id. */
     locations: LocationIdentityRow[];
     /** How many locations send as themselves. */
     overrideCount: number;
+    /**
+     * The same locations as the organization actually reads them: schools, each
+     * with its rooms nested underneath.
+     *
+     * Schools and rooms were previously one flat peer list, so a room sat beside
+     * its own school as though they were the same kind of thing. They are not: a
+     * school can have its own identity, a room inherits one.
+     */
+    schools: SchoolIdentityRow[];
+    /** Rooms whose school is missing or inactive. Shown, never dropped. */
+    unparentedRooms: RoomIdentityRow[];
 };
 
 /** The binding shape this model consumes — exactly what the bindings route emits. */
@@ -91,6 +114,31 @@ export type LocationIdentityRow = {
     bindingId: string | null;
 };
 
+/**
+ * A room, and what it sends as today.
+ *
+ * There is deliberately no `bindingId` and no action. A room cannot be given its
+ * own identity yet — see `ROOM_IDENTITY_FUTURE_GATE` in `locationHierarchy.ts`.
+ * The runtime cannot select one room truthfully for an outbound message, so a
+ * control here would be ignored on every send. The room is still SHOWN, with what
+ * it inherits, because hiding it would misrepresent the organization.
+ */
+export type RoomIdentityRow = {
+    roomId: string;
+    label: string;
+    /** The identity this room actually sends as, inherited. */
+    identity: string;
+    /** Which ancestor supplies it. Rooms are never `room`. */
+    source: "school" | "organization" | "none";
+    /** The school's label, when the identity comes from the school. */
+    inheritedFrom: string | null;
+};
+
+/** A school/centre row, with its rooms nested beneath it. */
+export type SchoolIdentityRow = LocationIdentityRow & {
+    rooms: RoomIdentityRow[];
+};
+
 export type BindingView = {
     id: string;
     channel: string;
@@ -109,6 +157,8 @@ export type BindingView = {
     readiness?: {
         send: { state: ReadinessState; detail: string };
         receive: { state: ReadinessState; detail: string };
+        /** Absent on payloads written before the connection state existed. */
+        providerConnection?: ProviderConnectionState;
     };
 };
 
@@ -208,7 +258,11 @@ function outstandingFor(b: BindingView | null, connected: boolean): string[] {
  * an administrator asking "what channels are connected?" is equally served by
  * learning that SMS is not, and an absent card answers nothing.
  */
-export function buildChannelCards(bindings: BindingView[], locations: OrgLocation[] = []): ChannelCard[] {
+export function buildChannelCards(
+    bindings: BindingView[],
+    locations: OrgLocation[] = [],
+    hierarchy?: LocationHierarchy,
+): ChannelCard[] {
     return (["email", "sms"] as const).map((channel) => {
         const rows = bindings.filter((b) => String(b.channel ?? "").trim().toLowerCase() === channel);
         // The card speaks for the ORGANIZATION default, so a location override
@@ -256,11 +310,47 @@ export function buildChannelCards(bindings: BindingView[], locations: OrgLocatio
             };
         });
 
+        // Nest the same rows the flat list already computed, so a school cannot
+        // read one way in the list and another in the hierarchy.
+        const byId = new Map(locationRows.map((r) => [r.locationId, r]));
+        const schools: SchoolIdentityRow[] = (hierarchy?.sites ?? []).flatMap((site) => {
+            const row = byId.get(site.id);
+            if (!row) return [];
+            // A room follows its SCHOOL when the school sends as itself, and the
+            // organization otherwise. That is the fallback the resolver performs,
+            // stated in the UI rather than a second, drifting copy of it.
+            const rooms: RoomIdentityRow[] = site.rooms.map((room) => {
+                const fromSchool = !row.inherits && Boolean(row.identity);
+                const identity = fromSchool ? row.identity : orgIdentity;
+                return {
+                    roomId: room.id,
+                    label: room.label,
+                    identity,
+                    source: identity ? (fromSchool ? "school" : "organization") : "none",
+                    inheritedFrom: fromSchool ? row.label : null,
+                };
+            });
+            return [{ ...row, rooms }];
+        });
+
+        const unparentedRooms: RoomIdentityRow[] = (hierarchy?.unparented ?? []).map((room) => ({
+            roomId: room.id,
+            label: room.label,
+            identity: orgIdentity,
+            source: orgIdentity ? "organization" : "none",
+            inheritedFrom: null,
+        }));
+
+        const providerConnection: ProviderConnectionState =
+            face?.readiness?.providerConnection ?? "not_connected";
+
         return {
             channel,
             channelLabel: CHANNEL_LABELS[channel],
             providerLabel: providerLabelFor(face?.provider),
             connected,
+            providerConnection,
+            providerConnectionLabel: providerConnectionLabelFor(providerConnection),
             sending: view(face?.readiness?.send),
             receiving: view(face?.readiness?.receive),
             identity: identityLinesFor(channel, face),
@@ -271,6 +361,8 @@ export function buildChannelCards(bindings: BindingView[], locations: OrgLocatio
             additionalCount: Math.max(0, orgRows.length - 1),
             locations: locationRows,
             overrideCount: locationRows.filter((l) => !l.inherits).length,
+            schools,
+            unparentedRooms,
         };
     });
 }
@@ -293,4 +385,23 @@ export function summarizeChannels(cards: ChannelCard[]): { label: string; needsA
         };
     }
     return { label: "Setup incomplete", needsAttention: true };
+}
+
+/**
+ * Product wording for a provider connection state.
+ *
+ * `none_approved` names the person who has to act. An administrator reading
+ * "Unavailable" would keep trying to fix it here; there is nothing here to fix.
+ */
+export function providerConnectionLabelFor(state: ProviderConnectionState): string {
+    switch (state) {
+        case "configured":
+            return "Connected";
+        case "unavailable":
+            return "Unavailable in this deployment";
+        case "none_approved":
+            return "Needs an Alloy administrator";
+        default:
+            return "Not connected";
+    }
 }

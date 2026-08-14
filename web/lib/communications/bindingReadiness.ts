@@ -44,17 +44,31 @@ export type DirectionReadiness = {
  * Whether the credential this channel names is actually present in the
  * deployment.
  *
- *   `configured`   — a credential is referenced AND the deployment holds it.
- *   `unavailable`  — a credential is referenced but the deployment does NOT hold
- *                    it, so every send will fail at dispatch.
- *   `not_connected`— no credential referenced yet.
+ *   `configured`    — a connection is chosen AND the deployment holds it.
+ *   `unavailable`   — a connection is chosen but the deployment does NOT hold it,
+ *                     while some OTHER approved connection is available to pick.
+ *   `not_connected` — no connection chosen yet, but one is available to pick.
+ *   `none_approved` — this deployment offers NO approved connection for this
+ *                     channel at all.
  *
- * This is deliberately the ONLY provider fact reported. Alloy can observe whether
- * it holds a key; it cannot observe, without asking the provider, whether a
- * sending domain is verified or MX records point anywhere. Those are reported as
- * "verification required" — an honest unknown — rather than invented.
+ * `none_approved` exists because the other three all imply an administrator can
+ * finish the job on this page, and that was false in the most common case. An
+ * admin could set a From address, a reply address and an SMS number and still be
+ * told only that "the credential is not available in this deployment" — with no
+ * approved connection to choose and no action inside Alloy that could produce
+ * one. Provisioning a provider connection is a PLATFORM administrator's act, not
+ * an organization administrator's, and it is now a named product state instead of
+ * an unexplained credential failure.
+ *
+ * It deliberately outranks `unavailable`: when nothing is available to pick,
+ * "choose a different connection" is not advice, it is a dead end.
+ *
+ * This is still the ONLY provider fact reported. Alloy can observe whether it
+ * holds a key; it cannot observe, without asking the provider, whether a sending
+ * domain is verified or MX records point anywhere. Those stay "verification
+ * required" — an honest unknown — rather than invented.
  */
-export type ProviderConnectionState = "configured" | "unavailable" | "not_connected";
+export type ProviderConnectionState = "configured" | "unavailable" | "not_connected" | "none_approved";
 
 export type BindingReadiness = {
     send: DirectionReadiness;
@@ -131,6 +145,19 @@ export function evaluateBindingReadiness(
          * is the one thing this model exists to prevent.
          */
         credentialAvailable?: boolean;
+        /**
+         * Whether this deployment offers ANY approved connection for this
+         * channel. `undefined` means "not checked" and is treated as yes, so
+         * callers that cannot observe the catalogue keep today's behaviour.
+         *
+         * Distinguishing this from `credentialAvailable` is the difference
+         * between "pick a different connection" and "nobody in your
+         * organization can finish this — a platform administrator must
+         * provision one." Only the second is true on a deployment that holds no
+         * provider credentials at all, which is the case an administrator was
+         * most likely to hit and least able to interpret.
+         */
+        approvedConnectionAvailable?: boolean;
     },
 ): BindingReadiness {
     const channel = channelOf(binding);
@@ -160,31 +187,71 @@ export function evaluateBindingReadiness(
 
     const referenced = hasBoundCredential(binding);
     const available = options?.credentialAvailable !== false;
+    const anyApproved = options?.approvedConnectionAvailable !== false;
     // A referenced-but-absent credential is NOT credentialed for readiness
     // purposes: dispatch would fail, so reporting otherwise would be a lie.
     const credentialed = referenced && available;
     const pending = status === "pending_verification";
 
-    const providerConnection: ProviderConnectionState = !referenced
-        ? "not_connected"
-        : available
-          ? "configured"
-          : "unavailable";
+    // `none_approved` first: when the deployment offers nothing to pick, that is
+    // the only actionable truth, and it is actionable by someone else.
+    const providerConnection: ProviderConnectionState = !anyApproved
+        ? "none_approved"
+        : !referenced
+          ? "not_connected"
+          : available
+            ? "configured"
+            : "unavailable";
 
-    const send = evaluateSend({ binding, channel, credentialed, pending });
-    const receive = evaluateReceive({ binding, channel, credentialed, pending });
-
-    if (providerConnection === "unavailable") {
-        const detail =
-            "The credential this channel uses is not available in this deployment, so nothing can be sent or received. Ask your administrator to restore it.";
-        return {
-            providerConnection,
-            send: { state: "setup_required", detail },
-            receive: { state: "setup_required", detail },
-        };
+    if (providerConnection === "none_approved" || providerConnection === "unavailable") {
+        return { providerConnection, ...providerBlockedReadiness(channel, providerConnection) };
     }
 
-    return { providerConnection, send, receive };
+    return {
+        providerConnection,
+        send: evaluateSend({ binding, channel, credentialed, pending }),
+        receive: evaluateReceive({ binding, channel, credentialed, pending }),
+    };
+}
+
+/**
+ * What each DIRECTION cannot do while the provider connection is blocked.
+ *
+ * Previously both directions were overwritten with one identical sentence, which
+ * told an operator nothing about which half was broken or why — the exact failure
+ * this module exists to prevent, reintroduced by the branch meant to report it.
+ * Sending and receiving fail here for genuinely different reasons: sending has no
+ * account to dispatch through, while receiving still ACCEPTS mail at the provider
+ * and cannot retrieve the body. An operator who does not know that cannot tell
+ * whether messages are being lost or merely delayed.
+ */
+function providerBlockedReadiness(
+    channel: string,
+    state: "none_approved" | "unavailable",
+): { send: DirectionReadiness; receive: DirectionReadiness } {
+    const email = channel === "email";
+    const providerName = email ? "Resend" : "Twilio";
+
+    // Who can act. This is the whole point of separating the two states.
+    const remedy =
+        state === "none_approved"
+            ? `No ${providerName} connection is available in this deployment. An Alloy administrator has to make one available — this cannot be completed from here.`
+            : `The ${providerName} connection this channel uses is no longer available in this deployment. Choose another approved connection, or ask an Alloy administrator to restore it.`;
+
+    return {
+        send: {
+            state: "setup_required",
+            detail: email
+                ? `Mail cannot be sent — there is no account to send it through. ${remedy}`
+                : `Texts cannot be sent — there is no account to send them through. ${remedy}`,
+        },
+        receive: {
+            state: "setup_required",
+            detail: email
+                ? `Replies cannot be retrieved. Mail addressed to this channel is not lost — it waits at the provider until a connection is available. ${remedy}`
+                : `Inbound texts cannot be verified, so they are not accepted into a conversation. ${remedy}`,
+        },
+    };
 }
 
 function evaluateSend(params: {
