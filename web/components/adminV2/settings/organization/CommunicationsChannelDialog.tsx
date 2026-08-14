@@ -44,6 +44,32 @@ type Props = {
     onSaved: () => void | Promise<void>;
 };
 
+/**
+ * What "Replies come back to" does NOT mean.
+ *
+ * The field takes an email address, so it reads like somewhere Alloy will go and
+ * read mail — and a reasonable administrator could type a teacher's work mailbox
+ * expecting exactly that. It would not work, and worse, the expectation itself is
+ * wrong about the product: Alloy never connects to a staff mailbox, and there is
+ * no Gmail or Outlook sign-in anywhere in this flow.
+ *
+ * Alloy receives only what is deliberately addressed or forwarded to an identity
+ * it controls. Saying so at the point of entry is cheaper than correcting the
+ * belief later, and the belief is a privacy one.
+ */
+function MailboxPrivacyNote() {
+    return (
+        <p
+            className="rounded border border-alloy-stone/25 bg-alloy-stone/[0.05] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65"
+            data-testid="communications-dialog-mailbox-privacy"
+        >
+            Alloy does not read anyone&apos;s mailbox. It never signs in to Gmail or Outlook and needs no access to
+            staff email. Only mail addressed or forwarded to a Communications address Alloy controls reaches Alloy —
+            so this must be an address you route to Alloy, not a personal or staff mailbox.
+        </p>
+    );
+}
+
 function fieldLabel(channel: string, key: "identity" | "receiving"): string {
     if (channel === "email") return key === "identity" ? "Send as" : "Replies come back to";
     return key === "identity" ? "Send from" : "Number families text";
@@ -327,7 +353,10 @@ export default function CommunicationsChannelDialog({
                                             className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
                                             data-testid="communications-dialog-from"
                                         />
-                                        <Hint>Leave blank to use the default sending address.</Hint>
+                                        <Hint>
+                                            Needs a sending domain verified with Resend. Leave blank to use the
+                                            deployment&apos;s default sending address.
+                                        </Hint>
                                     </Field>
                                     <Field label={fieldLabel("email", "receiving")}>
                                         <input
@@ -338,7 +367,10 @@ export default function CommunicationsChannelDialog({
                                             className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
                                             data-testid="communications-dialog-inbound"
                                         />
-                                        <Hint>This address needs its mail routed to Alloy&apos;s provider.</Hint>
+                                        <Hint>
+                                            Needs a domain whose mail is routed into Resend receiving — an address
+                                            Alloy controls, not a staff mailbox.
+                                        </Hint>
                                     </Field>
                                 </>
                             ) : (
@@ -353,6 +385,8 @@ export default function CommunicationsChannelDialog({
                                     />
                                 </Field>
                             )}
+
+                            {isEmail ? <MailboxPrivacyNote /> : null}
 
                             <p className="text-[11px] text-alloy-midnight/55">
                                 The channel is connected as <strong>not yet verified</strong> — nothing is sent or received until the
@@ -403,6 +437,7 @@ export default function CommunicationsChannelDialog({
                                             className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
                                             data-testid="communications-dialog-edit-from"
                                         />
+                                        <Hint>Needs a sending domain verified with Resend.</Hint>
                                     </Field>
                                     <Field label={fieldLabel("email", "receiving")}>
                                         <input
@@ -413,7 +448,12 @@ export default function CommunicationsChannelDialog({
                                             className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
                                             data-testid="communications-dialog-edit-inbound"
                                         />
+                                        <Hint>
+                                            Needs a domain whose mail is routed into Resend receiving — an address
+                                            Alloy controls, not a staff mailbox.
+                                        </Hint>
                                     </Field>
+                                    <MailboxPrivacyNote />
                                 </>
                             ) : (
                                 <Field label={fieldLabel("sms", "receiving")}>

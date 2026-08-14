@@ -34,6 +34,7 @@ import {
     validateInboundE164,
     validateStatus,
 } from "@/lib/communications/bindingConfigInput";
+import { buildLocationHierarchy, type LocationRow } from "@/lib/communications/locationHierarchy";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -64,13 +65,21 @@ function credentialAvailabilityFor(b: BindingRow, available: Set<string>): boole
     return available.has(key);
 }
 
-function sanitizeBindings(raw: BindingRow[], availableCredentialKeys: Set<string>): unknown[] {
+function sanitizeBindings(
+    raw: BindingRow[],
+    availableCredentialKeys: Set<string>,
+    approvedChannels?: Set<string>,
+): unknown[] {
     return raw.map((b) => {
         const cfg = b.config != null && typeof b.config === "object" ? b.config : null;
         const fromEmail =
             cfg && typeof cfg.from_email === "string" ? String(cfg.from_email).slice(0, 120) : null;
+        const channelKey = String(b.channel ?? "").trim().toLowerCase();
         const readiness = evaluateBindingReadiness(b, {
             credentialAvailable: credentialAvailabilityFor(b, availableCredentialKeys),
+            // Undefined when the caller did not compute it — readiness then keeps
+            // its previous behaviour rather than inventing `none_approved`.
+            approvedConnectionAvailable: approvedChannels ? approvedChannels.has(channelKey) : undefined,
         });
         return {
             id: b.id,
@@ -131,30 +140,52 @@ export async function GET() {
     if (list.length) await projectOrganizationBindings(supabase, ctx.orgId);
 
     // The location roster travels with the configuration payload so the surface
-    // can show inheritance — "Lakeside uses the organization default" is only
-    // sayable if Lakeside is known to exist. Label and id only; no address data.
+    // can show inheritance — "North Campus uses the organization default" is only
+    // sayable if North Campus is known to exist.
+    //
+    // `org_id` is filtered explicitly. This runs on the service-role client, which
+    // bypasses RLS, and the previous query filtered only on `is_active` — so every
+    // tenant's location labels were returned to every organization's
+    // Communications page. Nothing rendered them, which is why it went unnoticed;
+    // it was still a cross-tenant read.
+    //
+    // `location_type` and `parent_location_id` come along because the hierarchy is
+    // canonical, not inferred: `site` is a school/centre, `unit` is a room, and the
+    // parent link is the only authority on which room belongs to which school.
+    // Names are never parsed to guess structure.
     const { data: locationRows } = await supabase
         .from("locations")
-        .select("id, label, is_active")
+        .select("id, label, is_active, location_type, parent_location_id")
+        .eq("org_id", ctx.orgId)
         .eq("is_active", true)
         .order("label", { ascending: true });
 
     const credentialOptions = listCredentialOptions(process.env);
     const availableCredentialKeys = new Set(credentialOptions.filter((o) => o.available).map((o) => o.key));
+    // Whether this deployment offers ANY approved connection per channel. Drives
+    // the `none_approved` readiness state — the difference between "pick another
+    // connection" and "a platform administrator must provision one".
+    const approvedChannels = new Set(credentialOptions.filter((o) => o.available).map((o) => o.channel));
 
     const channels_available = availableComposerChannels(list);
 
     return NextResponse.json({
-        bindings: sanitizeBindings(list, availableCredentialKeys),
+        bindings: sanitizeBindings(list, availableCredentialKeys, approvedChannels),
         channels_available,
         selectable_by_channel: {
-            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys),
-            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys),
+            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys, approvedChannels),
+            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys, approvedChannels),
         },
+        /** Flat roster, kept for existing consumers that index by location id. */
         locations: (locationRows ?? []).map((l) => ({
             id: String((l as { id: string }).id),
             label: String((l as { label?: string }).label ?? "Location"),
         })),
+        /**
+         * The same locations as canonical structure: schools, each with its rooms.
+         * Rooms carry no identity controls — see `ROOM_IDENTITY_FUTURE_GATE`.
+         */
+        location_hierarchy: buildLocationHierarchy((locationRows ?? []) as LocationRow[]),
         /** What an operator may connect a channel to. Presence only, no values. */
         credential_options: credentialOptions,
         permission_stub: {

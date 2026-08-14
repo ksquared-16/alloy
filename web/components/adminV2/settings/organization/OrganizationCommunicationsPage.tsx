@@ -34,7 +34,8 @@ import {
     type ChannelKey,
     type OrgLocation,
 } from "@/lib/communications/organizationCommunicationsModel";
-import type { ReadinessState } from "@/lib/communications/bindingReadiness";
+import type { ProviderConnectionState, ReadinessState } from "@/lib/communications/bindingReadiness";
+import type { LocationHierarchy } from "@/lib/communications/locationHierarchy";
 import CommunicationsChannelDialog from "./CommunicationsChannelDialog";
 
 export type CredentialOption = {
@@ -68,6 +69,19 @@ function toneFor(state: ReadinessState): string {
     }
 }
 
+/** Only a working connection is affirmative. `none_approved` is amber, not red:
+ *  nothing is broken, something has not been provisioned yet — by someone else. */
+function connectionToneFor(state: ProviderConnectionState): string {
+    switch (state) {
+        case "configured":
+            return "bg-emerald-600/10 text-emerald-800";
+        case "none_approved":
+            return "bg-amber-500/12 text-amber-900";
+        default:
+            return "bg-alloy-ember/10 text-alloy-ember";
+    }
+}
+
 function ReadinessRow({
     label,
     state,
@@ -96,6 +110,7 @@ export default function OrganizationCommunicationsPage() {
     const [bindings, setBindings] = useState<BindingView[]>([]);
     const [credentialOptions, setCredentialOptions] = useState<CredentialOption[]>([]);
     const [locations, setLocations] = useState<OrgLocation[]>([]);
+    const [hierarchy, setHierarchy] = useState<LocationHierarchy | undefined>(undefined);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [dialogChannel, setDialogChannel] = useState<ChannelKey | null>(null);
@@ -114,6 +129,8 @@ export default function OrganizationCommunicationsPage() {
             setCredentialOptions(Array.isArray(creds) ? creds : []);
             const locs = (json as { locations?: OrgLocation[] }).locations;
             setLocations(Array.isArray(locs) ? locs : []);
+            const tree = (json as { location_hierarchy?: LocationHierarchy }).location_hierarchy;
+            setHierarchy(tree && Array.isArray(tree.sites) ? tree : undefined);
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Could not load communications settings");
             setBindings([]);
@@ -126,7 +143,10 @@ export default function OrganizationCommunicationsPage() {
         void load();
     }, [load]);
 
-    const cards = useMemo(() => buildChannelCards(bindings, locations), [bindings, locations]);
+    const cards = useMemo(
+        () => buildChannelCards(bindings, locations, hierarchy),
+        [bindings, locations, hierarchy],
+    );
     const summary = useMemo(() => summarizeChannels(cards), [cards]);
 
     const openDialog = (channel: ChannelKey, mode: "connect" | "configure", locationId: string | null = null) => {
@@ -227,6 +247,145 @@ export default function OrganizationCommunicationsPage() {
     );
 }
 
+/**
+ * Schools, with their rooms nested underneath.
+ *
+ * Rooms are collapsed by default and deliberately carry NO action. A room cannot
+ * be given its own identity yet — the runtime cannot select one room truthfully
+ * for an outbound message, and a control the runtime ignores is worse than no
+ * control. Rooms are still listed, showing what they inherit, because a tenant
+ * with twenty rooms and no way to see them cannot tell inheritance from absence.
+ *
+ * Collapsed-by-default is what keeps this compact for an organization with many
+ * rooms: the default view is one line per school, not one line per room.
+ */
+function SchoolHierarchy({
+    card,
+    onConfigureLocation,
+}: {
+    card: ChannelCard;
+    onConfigureLocation: (locationId: string, hasOwn: boolean) => void;
+}) {
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+    const roomTotal =
+        card.schools.reduce((n, s) => n + s.rooms.length, 0) + card.unparentedRooms.length;
+
+    return (
+        <div className="mt-3 border-t border-alloy-stone/25 pt-2.5" data-testid={`communications-${card.channel}-locations`}>
+            <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[11px] font-semibold text-alloy-midnight/62">Schools and rooms</p>
+                <p className="text-[10px] text-alloy-midnight/45" data-testid={`communications-${card.channel}-hierarchy-summary`}>
+                    {card.overrideCount === 0
+                        ? `All ${card.schools.length} schools use the organization identity`
+                        : `${card.overrideCount} of ${card.schools.length} schools send as themselves`}
+                    {roomTotal ? ` · ${roomTotal} rooms` : ""}
+                </p>
+            </div>
+
+            <ul className="mt-1 space-y-0.5">
+                {card.schools.map((school) => {
+                    const open = expanded[school.locationId] ?? false;
+                    return (
+                        <li key={school.locationId} data-testid={`communications-${card.channel}-school-${school.locationId}`}>
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                                <span className="flex min-w-0 items-baseline gap-1">
+                                    {school.rooms.length ? (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setExpanded((prev) => ({ ...prev, [school.locationId]: !open }))
+                                            }
+                                            aria-expanded={open}
+                                            className="shrink-0 rounded px-0.5 text-[10px] text-alloy-midnight/50 hover:text-alloy-midnight"
+                                            data-testid={`communications-${card.channel}-school-${school.locationId}-toggle`}
+                                        >
+                                            {open ? "▾" : "▸"} {school.rooms.length}
+                                        </button>
+                                    ) : (
+                                        <span className="w-[18px] shrink-0" aria-hidden />
+                                    )}
+                                    <span className="min-w-0 truncate text-[11px] font-medium text-alloy-midnight/80">
+                                        {school.label}
+                                    </span>
+                                </span>
+                                <span className="flex items-baseline gap-2">
+                                    <span
+                                        className={`text-[11px] ${school.inherits ? "italic text-alloy-midnight/45" : "font-medium text-alloy-midnight/85"}`}
+                                        data-testid={`communications-${card.channel}-location-${school.locationId}-identity`}
+                                    >
+                                        {school.inherits
+                                            ? school.identity
+                                                ? "Uses organization identity"
+                                                : "Nothing to inherit yet"
+                                            : school.identity}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => onConfigureLocation(school.locationId, !school.inherits)}
+                                        className="shrink-0 text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                                        data-testid={`communications-${card.channel}-location-${school.locationId}-action`}
+                                    >
+                                        {school.inherits ? "Give its own" : "Change"}
+                                    </button>
+                                </span>
+                            </div>
+
+                            {open && school.rooms.length ? (
+                                <ul
+                                    className="mb-1 ml-[22px] mt-0.5 space-y-0.5 border-l border-alloy-stone/30 pl-2"
+                                    data-testid={`communications-${card.channel}-school-${school.locationId}-rooms`}
+                                >
+                                    {school.rooms.map((room) => (
+                                        <li
+                                            key={room.roomId}
+                                            className="flex flex-wrap items-baseline justify-between gap-x-2"
+                                            data-testid={`communications-${card.channel}-room-${room.roomId}`}
+                                        >
+                                            <span className="min-w-0 truncate text-[11px] text-alloy-midnight/70">
+                                                {room.label}
+                                            </span>
+                                            <span
+                                                className="text-[11px] italic text-alloy-midnight/45"
+                                                data-testid={`communications-${card.channel}-room-${room.roomId}-identity`}
+                                            >
+                                                {room.source === "school"
+                                                    ? `Uses ${room.inheritedFrom} identity`
+                                                    : room.source === "organization"
+                                                      ? "Uses organization identity"
+                                                      : "Nothing to inherit yet"}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                        </li>
+                    );
+                })}
+            </ul>
+
+            {card.unparentedRooms.length ? (
+                <div className="mt-1.5" data-testid={`communications-${card.channel}-unparented-rooms`}>
+                    <p className="text-[10px] text-alloy-midnight/45">Not under a school</p>
+                    <ul className="mt-0.5 space-y-0.5">
+                        {card.unparentedRooms.map((room) => (
+                            <li
+                                key={room.roomId}
+                                className="flex flex-wrap items-baseline justify-between gap-x-2"
+                                data-testid={`communications-${card.channel}-room-${room.roomId}`}
+                            >
+                                <span className="min-w-0 truncate text-[11px] text-alloy-midnight/70">{room.label}</span>
+                                <span className="text-[11px] italic text-alloy-midnight/45">
+                                    {room.identity ? "Uses organization identity" : "Nothing to inherit yet"}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 function ChannelPanel({
     card,
     onConnect,
@@ -276,6 +435,25 @@ function ChannelPanel({
             {card.connected ? (
                 <>
                     <div className="mt-3 space-y-1.5">
+                        {/* The provider connection is its own fact. "No account to
+                            send through" and "no From address set" are different
+                            problems with different owners, and collapsing them into
+                            one readiness row is what made a missing deployment
+                            credential look like something an admin had misconfigured. */}
+                        <div
+                            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                            data-testid={`communications-${card.channel}-provider-connection`}
+                        >
+                            <span className="w-[68px] shrink-0 text-[11px] font-medium text-alloy-midnight/50">
+                                Connection
+                            </span>
+                            <span
+                                className={`inline-flex shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${connectionToneFor(card.providerConnection)}`}
+                                data-testid={`communications-${card.channel}-provider-connection-state`}
+                            >
+                                {card.providerConnectionLabel}
+                            </span>
+                        </div>
                         <ReadinessRow
                             label="Sending"
                             state={card.sending.state}
@@ -304,48 +482,8 @@ function ChannelPanel({
                         ))}
                     </dl>
 
-                    {card.locations.length ? (
-                        <div className="mt-3 border-t border-alloy-stone/25 pt-2.5" data-testid={`communications-${card.channel}-locations`}>
-                            <div className="flex items-baseline justify-between gap-2">
-                                <p className="text-[11px] font-semibold text-alloy-midnight/62">Locations</p>
-                                <p className="text-[10px] text-alloy-midnight/45">
-                                    {card.overrideCount === 0
-                                        ? "All use the organization identity"
-                                        : `${card.overrideCount} of ${card.locations.length} send as themselves`}
-                                </p>
-                            </div>
-                            <ul className="mt-1 space-y-0.5">
-                                {card.locations.map((loc) => (
-                                    <li
-                                        key={loc.locationId}
-                                        className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5"
-                                        data-testid={`communications-${card.channel}-location-${loc.locationId}`}
-                                    >
-                                        <span className="min-w-0 truncate text-[11px] text-alloy-midnight/75">{loc.label}</span>
-                                        <span className="flex items-baseline gap-2">
-                                            <span
-                                                className={`text-[11px] ${loc.inherits ? "italic text-alloy-midnight/45" : "font-medium text-alloy-midnight/85"}`}
-                                                data-testid={`communications-${card.channel}-location-${loc.locationId}-identity`}
-                                            >
-                                                {loc.inherits
-                                                    ? loc.identity
-                                                        ? "Uses organization identity"
-                                                        : "Nothing to inherit yet"
-                                                    : loc.identity}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => onConfigureLocation(loc.locationId, !loc.inherits)}
-                                                className="shrink-0 text-[11px] font-semibold text-alloy-bend-pine hover:underline"
-                                                data-testid={`communications-${card.channel}-location-${loc.locationId}-action`}
-                                            >
-                                                {loc.inherits ? "Give its own" : "Change"}
-                                            </button>
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+                    {card.schools.length || card.unparentedRooms.length ? (
+                        <SchoolHierarchy card={card} onConfigureLocation={onConfigureLocation} />
                     ) : null}
 
                     {card.outstanding.length ? (
