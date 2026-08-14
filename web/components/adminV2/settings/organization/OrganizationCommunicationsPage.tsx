@@ -36,6 +36,15 @@ import {
 } from "@/lib/communications/organizationCommunicationsModel";
 import type { ProviderConnectionState, ReadinessState } from "@/lib/communications/bindingReadiness";
 import type { LocationHierarchy } from "@/lib/communications/locationHierarchy";
+
+/** Exactly what the bindings route emits under `provider_accounts`. */
+type ProviderAccountRow = {
+    channel: string;
+    provider: string;
+    label: string | null;
+    owner: "organization" | "platform";
+    connected: boolean;
+};
 import CommunicationsChannelDialog from "./CommunicationsChannelDialog";
 
 export type CredentialOption = {
@@ -88,6 +97,7 @@ function ReadinessRow({
     text,
     testId,
     value,
+    valueNote,
     action,
 }: {
     label: string;
@@ -96,6 +106,9 @@ function ReadinessRow({
     testId: string;
     /** What this direction actually uses today — an address, a number. */
     value?: string | null;
+    /** What the value does NOT yet mean. Keeps a configured address from
+     *  reading as a working one. */
+    valueNote?: string | null;
     /** The one next step for this direction, when there is one. */
     action?: { label: string; onClick: () => void } | null;
 }) {
@@ -111,6 +124,11 @@ function ReadinessRow({
             {value ? (
                 <span className="min-w-0 break-all text-[12px] text-alloy-midnight/85" data-testid={`${testId}-value`}>
                     {value}
+                </span>
+            ) : null}
+            {value && valueNote ? (
+                <span className="shrink-0 text-[11px] italic text-alloy-midnight/50" data-testid={`${testId}-note`}>
+                    {valueNote}
                 </span>
             ) : null}
             {action ? (
@@ -144,6 +162,7 @@ export default function OrganizationCommunicationsPage() {
     const [credentialOptions, setCredentialOptions] = useState<CredentialOption[]>([]);
     const [locations, setLocations] = useState<OrgLocation[]>([]);
     const [hierarchy, setHierarchy] = useState<LocationHierarchy | undefined>(undefined);
+    const [providerAccounts, setProviderAccounts] = useState<ProviderAccountRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
     const [dialogChannel, setDialogChannel] = useState<ChannelKey | null>(null);
@@ -164,6 +183,8 @@ export default function OrganizationCommunicationsPage() {
             setLocations(Array.isArray(locs) ? locs : []);
             const tree = (json as { location_hierarchy?: LocationHierarchy }).location_hierarchy;
             setHierarchy(tree && Array.isArray(tree.sites) ? tree : undefined);
+            const accts = (json as { provider_accounts?: ProviderAccountRow[] }).provider_accounts;
+            setProviderAccounts(Array.isArray(accts) ? accts : []);
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Could not load communications settings");
             setBindings([]);
@@ -177,8 +198,8 @@ export default function OrganizationCommunicationsPage() {
     }, [load]);
 
     const cards = useMemo(
-        () => buildChannelCards(bindings, locations, hierarchy),
-        [bindings, locations, hierarchy],
+        () => buildChannelCards(bindings, locations, hierarchy, providerAccounts),
+        [bindings, locations, hierarchy, providerAccounts],
     );
     const summary = useMemo(() => summarizeChannels(cards), [cards]);
 
@@ -490,6 +511,16 @@ function ChannelPanel({
                             >
                                 {card.providerConnectionLabel}
                             </span>
+                            {card.providerAccount ? (
+                                <span
+                                    className="min-w-0 truncate text-[12px] text-alloy-midnight/85"
+                                    data-testid={`communications-${card.channel}-provider-account`}
+                                >
+                                    {card.providerAccount.providerLabel}
+                                    {card.providerAccount.label ? ` · ${card.providerAccount.label}` : ""}
+                                    {card.providerAccount.owner === "platform" ? " · managed by Alloy" : ""}
+                                </span>
+                            ) : null}
                         </div>
                         <ReadinessRow
                             label="Sending"
@@ -509,6 +540,15 @@ function ChannelPanel({
                             text={card.receiving.label}
                             testId={`communications-${card.channel}-receiving`}
                             value={card.identity.find((l) => l.label === "Replies")?.value || null}
+                            // An address on this row is NOT proof that mail reaches
+                            // Alloy. Showing "kelly@…" beside "Setup required" read
+                            // as though Alloy were already collecting that mailbox —
+                            // it is not, and it never reads a staff mailbox at all.
+                            valueNote={
+                                card.channel === "email" && card.receiving.state !== "ready"
+                                    ? "Not routed to Alloy"
+                                    : null
+                            }
                             action={
                                 nextActionLabel(card.channel, "receiving", card.receiving.state)
                                     ? { label: nextActionLabel(card.channel, "receiving", card.receiving.state)!, onClick: onConfigure }
