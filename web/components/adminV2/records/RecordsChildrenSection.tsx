@@ -20,17 +20,18 @@
  * the surface said "nobody is enrolled" when the truth was "we only looked at 500 of them". The
  * count on each tab is the cohort's true total for the same reason.
  *
- * ── ADD CHILD IS DELIBERATELY ABSENT ──
+ * ── ADD CHILD IS THE `child.add` COMMAND, NOT A BESPOKE MUTATION ──
  *
- * Phase 0 found the existing child-create path resolves ambiguous identity SILENTLY (an org-wide
- * name match with no operator gate), where Add Staff refuses to guess. Shipping the affordance would
- * make Records the surface that quietly merges two children. The product need is real, so it is
- * named in the empty state rather than hidden — and it is not wired to Create Lead, which answers a
- * different question.
+ * Phase 0 held this affordance back because the existing child-create path resolved ambiguous
+ * identity SILENTLY (an org-wide name match with no operator gate), where Add Staff refuses to
+ * guess. Phase 2 shipped the gate, so the affordance is here — routed through the registered
+ * `child.add` capability, which establishes the Child record and NOTHING else. It is still not
+ * wired to Create Lead, which answers a different question.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import AddChildModal from "@/components/adminV2/records/AddChildModal";
 import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
 import { buildChildCohorts } from "@/lib/adminV2/records/recordCohorts";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
@@ -94,6 +95,10 @@ export default function RecordsChildrenSection({
     const [total, setTotal] = useState(0);
     const [nextOffset, setNextOffset] = useState<number | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [addOpen, setAddOpen] = useState(false);
+    const [flash, setFlash] = useState<string | null>(null);
+    /** Bumped after a write so the cohort is re-asked rather than spliced client-side. */
+    const [reloadToken, setReloadToken] = useState(0);
 
     const focusRecord = useOperatorRecordFocus();
     const cohorts = useMemo(() => buildChildCohorts(), []);
@@ -115,7 +120,9 @@ export default function RecordsChildrenSection({
         [cohortKey, debouncedFilter, siteLocationId],
     );
 
-    // Cohort / site / search change → a new server request. Not a re-filter.
+    // Cohort / site / search change → a new server request. Not a re-filter. A write bumps
+    // `reloadToken` for the same reason: cohort membership is DERIVED, so the authoritative
+    // projection decides which cohorts a newly added child belongs to.
     useEffect(() => {
         let alive = true;
         setChildren(null);
@@ -146,7 +153,7 @@ export default function RecordsChildrenSection({
         return () => {
             alive = false;
         };
-    }, [buildUrl]);
+    }, [buildUrl, reloadToken]);
 
     const loadMore = useCallback(async () => {
         if (nextOffset == null || loadingMore) return;
@@ -170,6 +177,12 @@ export default function RecordsChildrenSection({
     }, [buildUrl, nextOffset, loadingMore]);
 
     const visible = children ?? [];
+    /**
+     * "No children yet" is only true of the WHOLE population. This page is a cohort answer, so
+     * an empty Enrolled tab must not claim the tenant has no children — the previous copy read
+     * a `rows` binding that did not exist in this component at all.
+     */
+    const isDefaultView = cohortKey === "all" && !debouncedFilter;
 
     /** The record gesture — the member id, durable intent, and the child identity aspect. */
     const openChild = useCallback(
@@ -199,8 +212,26 @@ export default function RecordsChildrenSection({
                 // beside the others would be the page length wearing a total's clothes, which is the
                 // defect this slice removed. @see RecordsCohortBar
                 activeCohortTotal={total}
+                trailing={
+                    <button
+                        type="button"
+                        className="shrink-0 rounded bg-alloy-blue px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-blue/90"
+                        onClick={() => setAddOpen(true)}
+                        data-child-add-open="true"
+                    >
+                        Add child
+                    </button>
+                }
             />
 
+            {flash ? (
+                <p
+                    className="mx-1 mb-2 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[12px] text-emerald-800"
+                    data-child-flash="true"
+                >
+                    {flash}
+                </p>
+            ) : null}
             {error ? (
                 <p className="mx-1 mb-2 rounded border border-red-200 bg-red-50 px-2.5 py-2 text-[12px] text-red-700">
                     {error}
@@ -213,11 +244,11 @@ export default function RecordsChildrenSection({
                 ) : visible.length === 0 ? (
                     <div className="rounded border border-dashed border-admin-border px-4 py-8 text-center">
                         <p className="text-[13px] font-medium text-alloy-midnight/75">
-                            {rows.length === 0 ? "No children yet" : "No children in this view"}
+                            {isDefaultView ? "No children yet" : "No children in this view"}
                         </p>
                         <p className="mt-1 mx-auto max-w-[54ch] text-[12px] text-alloy-midnight/55">
-                            {rows.length === 0
-                                ? "Children appear here from the household record. Adding a child directly from Records is coming next — it is held back until child identity resolution is as safe as Add Staff."
+                            {isDefaultView
+                                ? "Add a child to a household. Alloy reuses an existing record when one already matches, and adding a child starts no enrollment."
                                 : "This is a real answer for the cohort, not a filter problem."}
                         </p>
                     </div>
@@ -284,6 +315,25 @@ export default function RecordsChildrenSection({
                     </div>
                 ) : null}
             </div>
+
+            <AddChildModal
+                open={addOpen}
+                onClose={() => setAddOpen(false)}
+                onCreated={(r) => {
+                    setFlash(
+                        r.identityOutcome === "already_in_household"
+                            ? `${r.displayName} was already on that household — nothing was duplicated.`
+                            : r.identityOutcome === "linked_existing_person"
+                              ? `${r.displayName} was linked from an existing person — no duplicate identity.`
+                              : `${r.displayName} was added. No enrollment was started.`
+                    );
+                    setReloadToken((n) => n + 1);
+                }}
+                onOpenRecord={(customerMemberId) => {
+                    setAddOpen(false);
+                    openChild(customerMemberId);
+                }}
+            />
         </div>
     );
 }
