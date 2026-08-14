@@ -11,7 +11,9 @@ import {
     type TourCommsEventKey,
     type TourReminderOffset,
 } from "@/lib/tours/comms/tourCommsConfig";
+import { parseTourAutomationConditions } from "@/lib/tours/comms/tourCommsAutomationConditions";
 import { parseTourSystemTemplateKey, type TourSystemTemplateKey } from "@/lib/tours/comms/tourSystemTemplates";
+import type { WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
 
 export const TOUR_COMMS_STUDIO_INHERITANCE_HELPER =
     "Inherited from Tour communications policy — changes apply to all Tour lifecycle notifications.";
@@ -29,6 +31,8 @@ export type TourCommsStudioDraft = {
     askParentConfirmAttendance: boolean;
     internalRecipientsEnabled: boolean;
     internalRecipientUserIds: string[];
+    /** AND conditions (Work View filters_v1 shape). Empty = no gate. */
+    automationConditions: WorkViewFilterV1[];
 };
 
 export type TourCommsStudioValidationContext = {
@@ -93,6 +97,7 @@ export function buildTourCommsStudioDraftFromConfig(config: TourCommsConfig): To
         askParentConfirmAttendance: config.ask_parent_confirm_attendance,
         internalRecipientsEnabled: config.internal_recipients.enabled,
         internalRecipientUserIds: [...config.internal_recipients.user_ids],
+        automationConditions: parseTourAutomationConditions(config.automation_conditions_v1),
     };
 }
 
@@ -179,6 +184,7 @@ export function serializeTourCommsStudioDraftToFragment(
             enabled: draft.internalRecipientsEnabled,
             user_ids: [...draft.internalRecipientUserIds],
         },
+        automation_conditions_v1: parseTourAutomationConditions(draft.automationConditions),
     };
 }
 

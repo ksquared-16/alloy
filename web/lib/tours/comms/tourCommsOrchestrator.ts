@@ -12,6 +12,7 @@ import {
     type TourCommsEventKey,
 } from "@/lib/tours/comms/tourCommsConfig";
 import { loadTourCommsContext } from "@/lib/tours/comms/loadTourCommsContext";
+import type { TourAutomationConditionFacts } from "@/lib/tours/comms/tourCommsAutomationConditions";
 import { resolveTourCommsConfigWithLibrary } from "@/lib/tours/comms/resolveTourCommsConfigWithLibrary";
 import {
     resolveTourCommsParentRecipient,
@@ -372,6 +373,7 @@ async function runReminderAction(params: {
     reminderAction: "schedule" | "replace" | "cancel" | "none";
     scheduleGeneration: number;
     snapshots: Partial<Record<TourCommsChannel, TourSchedulingReminderSnapshot>>;
+    conditionFacts?: TourAutomationConditionFacts | null;
     deps: Required<
         Pick<TourCommsOrchestratorDeps, "scheduleReminders" | "replaceReminders" | "cancelReminders">
     >;
@@ -408,6 +410,11 @@ async function runReminderAction(params: {
         scheduleGeneration: params.scheduleGeneration,
         orgTimezoneIana: params.orgTimezoneIana,
         snapshots: params.snapshots,
+        conditionFacts: params.conditionFacts ?? {
+            location_id: params.booking.location_id,
+            site_id: params.booking.location_id,
+            has_active_tour: true,
+        },
     };
 
     if (params.reminderAction === "replace") {
@@ -578,6 +585,14 @@ export async function orchestrateTourCommsForBooking(input: TourCommsOrchestrate
                 reminderAction,
                 scheduleGeneration,
                 snapshots: reminderSnapshots,
+                conditionFacts: {
+                    lifecycle_stage_key: loaded.opportunity.stage_key,
+                    stage_key: loaded.opportunity.stage_key,
+                    site_id: loaded.opportunity.location_id ?? input.booking.location_id,
+                    location_id: loaded.opportunity.location_id ?? input.booking.location_id,
+                    status_key: loaded.opportunity.status_key,
+                    has_active_tour: true,
+                },
                 deps: {
                     scheduleReminders: deps.scheduleReminders,
                     replaceReminders: deps.replaceReminders,

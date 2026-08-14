@@ -23,6 +23,8 @@ export type LoadedTourCommsContext = {
         primary_person_id: string | null;
         primary_contact_id: string | null;
         location_id: string | null;
+        stage_key: string | null;
+        status_key: string | null;
     };
     orgName: string | null;
     orgTimezoneIana: string;
@@ -67,7 +69,7 @@ export async function loadTourCommsContext(input: LoadTourCommsContextInput): Pr
     const [oppRes, locRes, orgRes, orgSettingsRes, personRes] = await Promise.all([
         input.supabase
             .from("opportunities")
-            .select("id, name, primary_person_id, primary_contact_id, location_id")
+            .select("id, name, primary_person_id, primary_contact_id, location_id, stage_key, status_key")
             .eq("org_id", orgId)
             .eq("id", opportunityId)
             .maybeSingle(),
@@ -103,6 +105,8 @@ export async function loadTourCommsContext(input: LoadTourCommsContextInput): Pr
         primary_person_id: string | null;
         primary_contact_id: string | null;
         location_id: string | null;
+        stage_key?: string | null;
+        status_key?: string | null;
     };
     const location = locRes.data as Record<string, unknown> | null;
     const orgName =
@@ -145,7 +149,15 @@ export async function loadTourCommsContext(input: LoadTourCommsContextInput): Pr
 
     return {
         booking,
-        opportunity,
+        opportunity: {
+            id: opportunity.id,
+            name: opportunity.name,
+            primary_person_id: opportunity.primary_person_id,
+            primary_contact_id: opportunity.primary_contact_id,
+            location_id: opportunity.location_id,
+            stage_key: typeof opportunity.stage_key === "string" ? opportunity.stage_key.trim() || null : null,
+            status_key: typeof opportunity.status_key === "string" ? opportunity.status_key.trim() || null : null,
+        },
         orgName,
         orgTimezoneIana,
         templateContext,

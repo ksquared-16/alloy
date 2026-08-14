@@ -71,6 +71,8 @@ const loadedContext = (): LoadedTourCommsContext => ({
         primary_person_id: PERSON,
         primary_contact_id: null,
         location_id: LOCATION,
+        stage_key: "waitlist",
+        status_key: "open",
     },
     orgName: "Test Org",
     orgTimezoneIana: "UTC",

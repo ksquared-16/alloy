@@ -3,6 +3,9 @@
  * Org/location overrides live in metadata JSON — see resolveTourCommsConfig.
  */
 
+import type { WorkViewFilterV1 } from "@/lib/lifecycle/workViewsConfigV1";
+import { parseTourAutomationConditions } from "@/lib/tours/comms/tourCommsAutomationConditions";
+
 /** Allowed `communication_scheduled_sends.source` for tour reminder rows (Batch 1 migration). */
 export const TOUR_SCHEDULING_SCHEDULED_SEND_SOURCE = "tour_scheduling" as const;
 
@@ -153,6 +156,11 @@ export type TourCommsConfig = {
     templates: TourCommsTemplates;
     /** Do not schedule reminders closer than this many minutes before start (default 15). */
     min_reminder_lead_minutes: number;
+    /**
+     * Zero or more AND conditions gating automated Tour reminder scheduling.
+     * Same shape as Work View `filters_v1`; empty = no gate.
+     */
+    automation_conditions_v1: WorkViewFilterV1[];
 };
 
 /** JSON shape under `org_settings.metadata.tour_comms` or `locations.metadata.tour_comms`. */
@@ -202,6 +210,7 @@ export const DEFAULT_TOUR_COMMS_CONFIG: TourCommsConfig = {
     },
     templates: {},
     min_reminder_lead_minutes: 15,
+    automation_conditions_v1: [],
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -356,6 +365,9 @@ export function parseTourCommsConfigFragment(raw: unknown): TourCommsConfigMetad
     if (typeof raw.min_reminder_lead_minutes === "number" && Number.isFinite(raw.min_reminder_lead_minutes)) {
         fragment.min_reminder_lead_minutes = Math.max(0, Math.floor(raw.min_reminder_lead_minutes));
     }
+    if (raw.automation_conditions_v1 !== undefined) {
+        fragment.automation_conditions_v1 = parseTourAutomationConditions(raw.automation_conditions_v1);
+    }
     return fragment;
 }
 
@@ -433,5 +445,9 @@ export function mergeTourCommsConfig(
         },
         min_reminder_lead_minutes:
             locationFragment.min_reminder_lead_minutes ?? orgFragment.min_reminder_lead_minutes ?? base.min_reminder_lead_minutes,
+        automation_conditions_v1:
+            locationFragment.automation_conditions_v1
+            ?? orgFragment.automation_conditions_v1
+            ?? base.automation_conditions_v1,
     };
 }

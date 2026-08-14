@@ -10,6 +10,7 @@ import {
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import TourInternalRecipientsMultiSelect from "@/app/adminV2/communications/TourInternalRecipientsMultiSelect";
+import AutomationRuleConditionEditor from "@/app/adminV2/communications/AutomationRuleConditionEditor";
 import { AlloyCheckbox } from "@/app/adminV2/pos/ProcessingAlloyControls";
 import {
     TOUR_COMMS_STUDIO_INHERITANCE_HELPER,
@@ -103,6 +104,12 @@ function AutomationRuleFields({
                             onChange={(reminderEnabled) => patch({ reminderEnabled })}
                         />
                     </div>
+
+                    <AutomationRuleConditionEditor
+                        conditions={draft.automationConditions}
+                        disabled={disabled || !draft.reminderEnabled}
+                        onChange={(automationConditions) => patch({ automationConditions })}
+                    />
 
                     <div className="flex flex-wrap items-end gap-1.5">
                         <span className="pb-1.5 text-[11px] font-medium text-alloy-midnight/55">Send</span>
