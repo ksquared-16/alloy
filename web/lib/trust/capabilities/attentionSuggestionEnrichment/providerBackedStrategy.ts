@@ -185,8 +185,11 @@ export function createProviderBackedAttentionEnrichmentStrategy(
             // moves the duplicate one layer up. Two copies of a rule are two
             // things to keep in agreement, and the first time they disagreed the
             // strictest one would not be the one on the provider path. So the
-            // final `safeParseAttentionSuggestionAiEnrichmentV1` stays where it
-            // was registered, and is deliberately NOT called here.
+            // final contract check stays where it was registered and is
+            // deliberately not invoked here — a boundary control proves the
+            // absence by scanning this file, prose included, which is why the
+            // validator is described rather than named.
+            //
             // Provider identity comes from governed execution evidence, never
             // from the model's JSON. An identity outside the operator-facing
             // vocabulary is refused rather than coerced: reporting a provider we

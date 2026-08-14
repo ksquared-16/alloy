@@ -101,6 +101,10 @@ function validOutput() {
         version: 1,
         agent_key: NEEDS_ATTENTION_SUGGESTION_ENRICHMENT_AGENT_KEY,
         generated_at_iso: NOW,
+        // Required as of D-80: an enrichment with no overlay enriches nothing
+        // and the canonical contract refuses it. Without this the package fails
+        // validation and these telemetry assertions measure the wrong path.
+        suggested_draft_body_overlay: "A warmer follow-up note.",
         provider_report: { provider_key: "openai", execution_mode: "live" },
     };
 }
