@@ -35,7 +35,12 @@ def resolve_inbound_twilio_auth_token(
     if not ref or ref == "unconfigured":
         return global_tok
 
-    resolved = resolve_secret_plaintext(ref)
+    # The binding carries its own tenant, which is what scopes an
+    # organization-owned credential. When it cannot be resolved this falls back to
+    # the deployment token, which will NOT match a tenant's signature — so an
+    # unresolvable credential rejects the webhook rather than accepting it
+    # unverified. Fail-closed is the only safe direction for a signature check.
+    resolved = resolve_secret_plaintext(ref, str(binding.get("org_id") or "") or None)
     if resolved:
         return resolved.strip() or None
     return global_tok
