@@ -29,9 +29,13 @@ import {
     type AdminAccessScopeDimensions,
 } from "@/lib/admin/accessScope";
 import {
+    activeLifecycleProcess,
     activeStagesForProcess,
     lifecycleBuilderFromDepartmentMetadata,
+    type LifecycleBuilderStageRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { savedWorkViewsFromDepartmentMetadata } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
+import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 
 /** One configured Business Process, reduced to what Search needs. */
 export type SearchConfiguredProcess = {
@@ -44,6 +48,21 @@ export type SearchConfiguredProcess = {
     stage_labels: Record<string, string>;
     /** False when the operator cannot reach the owning department. */
     operator_has_access: boolean;
+    /**
+     * The process's configured Work Views — the operational cohorts a subject can BELONG to.
+     *
+     * Read through the canonical reader so Search sees exactly the lens set the runtime serves
+     * (display order normalized, orphaned lifecycle views dropped). Populated only for the
+     * department's ACTIVE process: a non-active process has no runtime surface to send anyone to, so
+     * offering its lenses would be offering a destination that cannot exist.
+     */
+    work_views: WorkViewConfigV1Stored[];
+    /**
+     * The process's active stages, carrying `grain` and `stage_operating_plan_v1` — needed to resolve
+     * a lens's Row Grain and to ask whether a subject can actually compose there. Same set, same
+     * order, as the runtime resolves.
+     */
+    stages: LifecycleBuilderStageRecord[];
 };
 
 export type SearchProcessConfiguration = {
@@ -122,13 +141,22 @@ async function readSearchProcessConfiguration(
         const config = lifecycleBuilderFromDepartmentMetadata(dept.metadata);
         const hasAccess = departmentIdAllowed(dimensions, String(dept.id));
 
+        // Work Views belong to the department's ACTIVE process — that is the only process the
+        // runtime composes a surface for. Resolved once per department, not once per process.
+        const activeProcess = activeLifecycleProcess(config);
+        const activeProcessKey = String(activeProcess?.key ?? "").trim();
+        const activeProcessWorkViews = activeProcess
+            ? savedWorkViewsFromDepartmentMetadata(dept.metadata)
+            : [];
+
         for (const process of config.processes) {
             if (!process.is_active) continue;
             const key = String(process.key ?? "").trim();
             if (!key) continue;
 
+            const stages = activeStagesForProcess(process);
             const stageLabels: Record<string, string> = {};
-            for (const stage of activeStagesForProcess(process)) {
+            for (const stage of stages) {
                 const stageKey = String(stage.key ?? "").trim();
                 const stageLabel = String(stage.label ?? "").trim();
                 if (stageKey && stageLabel) stageLabels[stageKey] = stageLabel;
@@ -143,6 +171,8 @@ async function readSearchProcessConfiguration(
                 department_id: String(dept.id),
                 stage_labels: stageLabels,
                 operator_has_access: hasAccess,
+                work_views: activeProcessKey && key === activeProcessKey ? activeProcessWorkViews : [],
+                stages,
             });
         }
     }
