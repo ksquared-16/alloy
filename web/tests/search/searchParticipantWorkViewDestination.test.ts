@@ -4,12 +4,24 @@ import { resolveSearchDestinations } from "@/lib/search/searchDestinations";
 import type { SearchContext, SearchSubject } from "@/lib/search/searchContracts";
 
 /**
- * SEARCH MUST CONSUME THE PARTICIPANT'S OWN POSITION.
+ * SEARCH MUST CONSUME THE PARTICIPANT'S OWN POSITION — as a FALLBACK SIGNAL.
  *
- * The resolver knows a child's stage-bound Work View; these prove the destination actually carries
- * it, and that the family/case unit cannot overwrite it. The live defect was exactly this gap: the
- * result correctly read "Enrollment — Waitlist" while the destination committed the family's Lead
- * unit, so a waitlisted child opened a queue that does not contain them and nothing composed.
+ * These still hold: a child's stage-bound Work View outranks the family/case unit, which is what the
+ * live defect got wrong (the result read "Enrollment — Waitlist" while the destination committed the
+ * family's Lead unit, so a waitlisted child opened a queue that does not contain them).
+ *
+ * ── DEMOTED ──
+ *
+ * Stage binding is NOT proof of Work View membership, and these tests no longer claim it is. A Work
+ * View is an overlapping configured COHORT; a stage is a position in the Process. Binding through
+ * `compat_queue_key` cannot express a booking-predicated lens (the live Tours) or a catch-all at all,
+ * and the runtime authority refuses to read that key as identity — "a lane binding assigned by array
+ * position".
+ *
+ * Eligibility now comes from `resolveOperationalMemberships`, proven in
+ * `searchOperationalMemberships.test.ts` and `searchMembershipDestinations.test.ts`. What survives
+ * here is the stage signal's remaining job: ranking, and the fallback host when nothing better can be
+ * proven. The final test pins the precedence between the two.
  */
 
 const CASE = "opp-kurzman";
@@ -91,6 +103,28 @@ describe("a participant's destination carries their own Work View", () => {
 
         expect(enrollment!.host_work_view_id).toBe("waitlist");
         expect(annual!.host_work_view_id).toBe("registration");
+    });
+
+    it("PRECEDENCE: a proven membership outranks the stage-bound answer", () => {
+        // The demotion, stated as behaviour. Stage binding says `waitlist`; evaluated membership says
+        // the subject is actually in `all_children`. Membership wins, because it is the only one of
+        // the two that was checked against the subject rather than inferred from where they stand.
+        const primary = resolve(child("cm-lennon"), [
+            {
+                ...participation(),
+                operational_memberships: [
+                    {
+                        work_view_id: "all_children",
+                        label: "All Children",
+                        row_grain: "child",
+                        host_work_unit_key: FAMILY_UNIT,
+                        host_entity_id: CASE,
+                    },
+                ],
+            },
+        ])[0];
+
+        expect(primary.host_work_view_id).toBe("all_children");
     });
 
     it("a HOUSEHOLD subject does not borrow a child's view", () => {

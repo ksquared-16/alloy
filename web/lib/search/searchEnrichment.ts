@@ -28,6 +28,8 @@ import {
     fetchStageWorkViewTargets,
     stageWorkViewCacheKey,
 } from "@/lib/workUnits/hostWorkUnitResolver";
+import { resolveOperationalMemberships } from "@/lib/search/searchOperationalMemberships";
+import { loadFamilyMembershipRows } from "@/lib/search/searchFamilyMembershipRows";
 import {
     LOCATION_DISPLAY_LABEL_SELECT,
     locationDisplayLabelFromRow,
@@ -147,7 +149,29 @@ export async function enrichSearchCandidates(args: {
         .map((r) => ({ opportunityId: (r.context_id ?? "").trim(), stageKey: (r.stage_key ?? "").trim() }))
         .filter((e) => e.opportunityId && e.stageKey);
 
-    const [hostWorkUnitKeys, householdCases, stageWorkViewTargets] = await Promise.all([
+    // …and the materialized rows a FAMILY-grain membership must be evaluated against. Family lens
+    // predicates read facts the queue attaches (`has_active_tour`, the tour wall date), not columns,
+    // so a raw row would answer "not a member" for a family that plainly is one.
+    //
+    // Paid ONLY when a family-grain subject is actually in the results: a child's membership needs
+    // nothing but its own stage, so the common child-only query adds no round trips at all.
+    const familyGrainSubjectIds = new Set(
+        candidates
+            .filter((c) => c.kind !== "child")
+            .flatMap((c) => [c.id, c.person_id])
+            .filter((id): id is string => Boolean(id)),
+    );
+    const familyMembershipOpportunityIds = uniq(
+        processRows
+            .filter(
+                (r) =>
+                    familyGrainSubjectIds.has(r.subject_id) &&
+                    (r.context_type ?? "").trim() === "opportunity",
+            )
+            .map((r) => r.context_id),
+    );
+
+    const [hostWorkUnitKeys, householdCases, stageWorkViewTargets, familyMembershipRows] = await Promise.all([
         hostOpportunityIds.length
             ? fetchHostWorkUnitKeys(supabase, orgId, hostOpportunityIds)
             : Promise.resolve(new Map<string, string>()),
@@ -157,6 +181,13 @@ export async function enrichSearchCandidates(args: {
         stageWorkViewInputs.length
             ? fetchStageWorkViewTargets(supabase, orgId, stageWorkViewInputs)
             : Promise.resolve(new Map<string, string>()),
+        familyMembershipOpportunityIds.length
+            ? loadFamilyMembershipRows({
+                  supabase,
+                  orgId,
+                  opportunityIds: familyMembershipOpportunityIds,
+              })
+            : Promise.resolve(new Map<string, Record<string, unknown>>()),
     ]);
 
     const locationIds = uniq([
@@ -254,6 +285,34 @@ export async function enrichSearchCandidates(args: {
                                   stageWorkViewCacheKey(row.context_id, row.stage_key),
                               ) ?? null
                             : null,
+                    // EVERY cohort this subject truthfully belongs to — evaluated at its own grain
+                    // through the canonical runtime machinery, never inferred from the stage above.
+                    // Zero queries: the configuration is already loaded and cached, and the row (for
+                    // family grain) was materialized in bulk with the wave.
+                    operational_memberships: configured
+                        ? resolveOperationalMemberships({
+                              process: configured,
+                              subject: {
+                                  grain: c.kind === "child" ? "child" : "family",
+                                  stageKey: row.stage_key,
+                                  row:
+                                      c.kind === "child" || !row.context_id
+                                          ? null
+                                          : familyMembershipRows.get(row.context_id) ?? null,
+                              },
+                          }).map((m) => ({
+                              work_view_id: m.workViewId,
+                              label: m.workViewLabel,
+                              row_grain: m.rowGrain,
+                              // The unit that holds the host RECORD. A view commits as a LENS on that
+                              // unit's surface — the live shape is
+                              // `/workspace/work-unit/new-leads?work_view_id=new_work_view_4`.
+                              host_work_unit_key: row.context_id
+                                  ? hostWorkUnitKeys.get(row.context_id) ?? null
+                                  : null,
+                              host_entity_id: row.context_id ?? null,
+                          }))
+                        : null,
                 });
             }
         }

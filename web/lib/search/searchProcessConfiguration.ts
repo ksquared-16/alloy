@@ -177,9 +177,24 @@ async function readSearchProcessConfiguration(
         }
     }
 
-    const vocabulary = [...byKey.values()]
-        .filter((p) => p.operator_has_access)
-        .map((p) => ({ key: p.key, label: p.label }));
+    // Vocabulary = the processes an operator can name, PLUS the Work Views they can name.
+    //
+    // "Lennon waitlist" should promote the Waitlist cohort, and a Work View label is the operator's
+    // own word for it. The promoted key is the DESTINATION key verbatim, so intent matching needs no
+    // new rule — `destinationMatchesPromotedKey` already compares keys exactly.
+    //
+    // Ranking only. A promoted key reorders destinations that membership evaluation already found
+    // truthful; naming a cohort in a query can never make someone a member of it.
+    const vocabulary: Array<{ key: string; label: string }> = [];
+    for (const p of byKey.values()) {
+        if (!p.operator_has_access) continue;
+        vocabulary.push({ key: p.key, label: p.label });
+        for (const view of p.work_views) {
+            if (view.visible_in_runtime === false) continue;
+            const label = String(view.label ?? "").trim();
+            if (label) vocabulary.push({ key: `work_view:${p.key}:${view.id}`, label });
+        }
+    }
 
     return { byKey, vocabulary };
 }

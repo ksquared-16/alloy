@@ -109,8 +109,21 @@ function resolveHostWorkViewId(
     contexts: readonly SearchContext[],
     preferred?: string | null,
 ): string | null {
+    /**
+     * A view that PROVABLY contains this subject outranks the stage-bound guess.
+     *
+     * This is what stops "Open Lennon" landing on `New` with zero records. The stage signal says
+     * where the participant is in the Process; it does not say which cohorts hold them, and when it
+     * resolves to nothing the caller falls back to the case's own unit — whose default lens was
+     * `New`, a real, operational, and entirely empty view.
+     *
+     * Choosing the subject's first truthful membership is not the operator claiming a Work View. It
+     * is the minimum host required to render them at all, and it is guaranteed to contain them.
+     */
     const viewOf = (context: SearchContext): string | null =>
-        (context.destination_work_view_id ?? "").trim() || null;
+        ((context.operational_memberships ?? [])[0]?.work_view_id ?? "").trim() ||
+        (context.destination_work_view_id ?? "").trim() ||
+        null;
 
     const wanted = (preferred ?? "").trim();
     if (wanted) {
@@ -119,6 +132,46 @@ function resolveHostWorkViewId(
     }
     const first = contexts.find((c) => c.kind === "process" && viewOf(c));
     return first ? viewOf(first) : null;
+}
+
+/**
+ * One destination per TRUTHFUL membership — the operational cohorts the operator may choose.
+ *
+ * These REPLACE the single per-process destination whenever memberships exist. "Enrollment" as a
+ * destination had to pick a host, and picking one it could not prove is how a waitlisted child was
+ * delivered to an empty `New`. When nothing can be proven the process destination remains, so a
+ * subject never loses its context entirely.
+ *
+ * Eligibility is NOT re-decided here. Every membership already passed grain, fully-supported
+ * evaluation, access and operability upstream; this only shapes them into destinations.
+ */
+function resolveMembershipDestinations(
+    context: SearchContext,
+    subject: SearchSubject,
+    host: { type: string; id: string } | null,
+): SearchDestination[] {
+    if (!host) return [];
+    const memberships = context.operational_memberships ?? [];
+    if (!memberships.length) return [];
+
+    return memberships.map((membership) => ({
+        // Keyed on the VIEW, so two cohorts of one process are two distinct operator intents and
+        // neither dedupes the other away.
+        key: `work_view:${context.key}:${membership.work_view_id}`,
+        label: membership.label,
+        target: "focus_panel" as const,
+        // A child is focused as an ITEM inside the Children card — the ASPECT the runtime already
+        // deep-links. A family subject is worked on Current Work, as it always was.
+        card_key: subject.kind === "child" ? SEARCH_CARD_KEYS.children : SEARCH_CARD_KEYS.currentWork,
+        item_id: subject.kind === "child" ? subject.id : null,
+        context_key: context.key,
+        host_entity_type: host.type,
+        host_entity_id: membership.host_entity_id ?? host.id,
+        host_work_unit_key: membership.host_work_unit_key,
+        // The lens to COMMIT. The runtime swaps it on the host unit's surface — the live shape is
+        // `/workspace/work-unit/new-leads?work_view_id=new_work_view_4`.
+        host_work_view_id: membership.work_view_id,
+    }));
 }
 
 function resolveHost(
@@ -323,6 +376,13 @@ export function resolveSearchDestinations(args: {
     const secondary: SearchDestination[] = [];
 
     for (const context of contexts) {
+        // Truthful cohorts first. They supersede the generic per-process destination, which had to
+        // guess a host and guessed `New`.
+        const memberships = resolveMembershipDestinations(context, subject, host);
+        if (memberships.length) {
+            secondary.push(...memberships);
+            continue;
+        }
         const resolved = CONTEXT_DESTINATION_RESOLVERS[context.kind]?.(context, subject, host, contexts) ?? null;
         if (resolved) secondary.push(resolved);
     }
