@@ -17,7 +17,6 @@ import {
     Users,
     type LucideIcon,
 } from "lucide-react";
-import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import { useOperationalPlacementOptions } from "@/lib/childcareOperational/useOperationalPlacementOptions";
@@ -174,21 +173,20 @@ function IdentityInlineEditInput({
         return commit();
     };
 
-    const useAlloySelect =
-        editControl.kind === "select" || editControl.kind === "placement_select"
-            ? cell.fieldRef === "child.gender"
-                || cell.fieldRef.endsWith(".gender")
-                || cell.fieldRef.includes("assignment")
-                || cell.fieldRef.includes("program")
-                || cell.fieldRef.includes("location")
-                || cell.fieldRef.includes("room")
-                || cell.fieldRef.includes("schedule")
-            : false;
-    // Only hide Save when we actually commit inside AlloySelect onChange.
+    /**
+     * Placement and program picks commit on selection, so the operator is not left needing a
+     * separate Save click after a lagged options load. Only then may Save hide itself.
+     *
+     * This used to additionally require a hardcoded field-NAME allowlist (`.gender`,
+     * `assignment`, `program`, `location`, `room`, `schedule`), because that same allowlist
+     * decided which of two select implementations rendered. With one implementation the
+     * allowlist is gone, and the condition can say what it actually means: this is a
+     * placement, or a program field. A placement select whose fieldRef happens not to
+     * contain one of those words now auto-commits too — which is what it should always
+     * have done.
+     */
     const autoCommitOnPick =
-        !shared
-        && useAlloySelect
-        && (editControl.kind === "placement_select" || cell.fieldRef.includes("program"));
+        !shared && (editControl.kind === "placement_select" || cell.fieldRef.includes("program"));
 
     let control: ReactNode;
     if (editControl.kind === "select" || editControl.kind === "placement_select") {
@@ -197,13 +195,11 @@ function IdentityInlineEditInput({
             || (editControl.kind === "placement_select"
                 && editControl.placement === "program"
                 && programDisabled);
-        control = useAlloySelect ? (
+        control = (
             <AlloySelect
                 value={selectValue}
                 onChange={(next) => {
                     onDraftChange(next);
-                    // Program / placement selects: commit on pick so operators are not
-                    // stuck needing a separate Save click after a lagged options load.
                     if (autoCommitOnPick) {
                         const label = resolvedSelectOptions.find((o) => o.value === next)?.label ?? null;
                         void commit({
@@ -216,23 +212,17 @@ function IdentityInlineEditInput({
                 disabled={selectDisabled}
                 valueLabelHint={
                     // Edit draft is often the program_category UUID; keep showing the
-                    // authored label (Infant) until options resolve.
+                    // authored label (Infant) until options resolve. Previously only the
+                    // allowlisted fields got this, so every other select could flash a UUID.
                     cell.value && cell.value.trim() !== selectValue.trim()
                         ? cell.value
                         : null
                 }
+                // The identity card's own field chrome, shared with its text inputs — so
+                // every control on the card reads as one set.
+                triggerClassName="identity-field-value__input identity-field-value__select"
                 aria-label={cell.label}
                 testId="identity-field-select"
-            />
-        ) : (
-            <SelectFieldControl
-                value={selectValue}
-                onChange={onDraftChange}
-                options={resolvedSelectOptions}
-                disabled={selectDisabled}
-                className="identity-field-value__input identity-field-value__select"
-                aria-label={cell.label}
-                data-testid="identity-field-select"
             />
         );
     } else if (editControl.kind === "date") {

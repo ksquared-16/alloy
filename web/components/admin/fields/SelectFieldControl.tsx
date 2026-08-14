@@ -1,5 +1,6 @@
 "use client";
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import type { SelectOptionChoice } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 
 const SELECT_CLASS =
@@ -16,7 +17,24 @@ type Props = {
     "aria-label"?: string;
 };
 
-/** Shared native `<select>` for field_definitions-backed option sets. */
+/**
+ * Field-system ADAPTER for `field_definitions`-backed option sets — not a second select.
+ *
+ * This was a shared wrapper around a native `<select>`, which meant the Universal Field
+ * System shipped its own input runtime beside `AlloySelect`. A native option popup ignores
+ * CSS on macOS, so every field routed through here rendered the OS menu however the trigger
+ * was styled. The two primitives also lived side by side in the same forms:
+ * `IdentityFieldValue` chose between them with a hardcoded field-name allowlist, so two
+ * fields could present two different design systems depending on what they were called.
+ *
+ * Behaviour now delegates entirely to the platform primitive. What survives is the part
+ * worth keeping — the field-system CONTRACT: `SelectOptionChoice` options, the form-input
+ * chrome its callers already lay out around, and the prop names those call sites use. It
+ * owns no value semantics, no keyboard model, and no menu.
+ *
+ * `className` keeps its original meaning — REPLACE the control's chrome — and lands on the
+ * trigger, which is the element it was always describing.
+ */
 export default function SelectFieldControl({
     value,
     onChange,
@@ -28,20 +46,17 @@ export default function SelectFieldControl({
     "aria-label": ariaLabel,
 }: Props) {
     return (
-        <select
+        <AlloySelect
             value={value}
+            onChange={onChange}
+            options={options}
             disabled={disabled}
-            onChange={(e) => onChange(e.target.value)}
-            className={className ?? SELECT_CLASS}
-            data-testid={dataTestId}
+            // The empty entry stays selectable: every consumer rendered
+            // `<option value="">{placeholder}</option>` as a real choice.
+            placeholder={placeholder}
+            triggerClassName={className ?? SELECT_CLASS}
+            testId={dataTestId}
             aria-label={ariaLabel}
-        >
-            <option value="">{placeholder}</option>
-            {options.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                </option>
-            ))}
-        </select>
+        />
     );
 }

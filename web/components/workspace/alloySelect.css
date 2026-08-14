@@ -118,6 +118,14 @@
   outline: none;
 }
 
+/* Present but not a destination — pointer, arrows and typeahead all pass it by. */
+.alloy-select__option--disabled,
+.alloy-select__option--disabled:hover {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  background: transparent;
+  cursor: not-allowed;
+}
+
 .alloy-select__option--selected {
   background: rgba(0, 162, 131, 0.12);
   font-weight: 600;
