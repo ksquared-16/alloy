@@ -134,6 +134,21 @@ export type SearchContext = {
      * destination naming a unit anyway would be a fabricated route.
      */
     destination_work_unit_key?: string | null;
+    /**
+     * The configured Work View that holds THIS PARTICIPANT's current stage.
+     *
+     * `destination_work_unit_key` above answers "which unit holds the host RECORD" — and for a case
+     * that is family grain. A child in the same case can sit in a different stage entirely, so the
+     * family answer is wrong for them: a waitlisted child sent to the family's Lead unit lands in a
+     * queue that does not contain them, and nothing composes.
+     *
+     * Resolved by CONFIGURED BINDING (`compat_queue_key` === `primaryQueueKeyForLifecycleStage`),
+     * never by label, so renamed or reordered views cannot move the answer.
+     *
+     * Null when this participation's stage has no stage-bound view. The caller then falls back to
+     * the host record's unit — the family answer is a fallback, never an override.
+     */
+    destination_work_view_id?: string | null;
 };
 
 /**
@@ -187,6 +202,13 @@ export type SearchDestination = {
      * which is the overlay this work exists to remove.
      */
     host_work_unit_key?: string | null;
+    /**
+     * The configured Work View that holds this participant's own stage. OUTRANKS
+     * `host_work_unit_key` when present, because that field answers at case grain and a child in the
+     * same case can sit in a different stage. Both occupy the same slug position on
+     * `/workspace/work-unit/:slug`, which resolves work-unit keys AND Work View slugs.
+     */
+    host_work_view_id?: string | null;
     /** Canonical route when `target === "route"`. */
     href?: string | null;
     /**

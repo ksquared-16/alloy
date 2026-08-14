@@ -30,6 +30,14 @@ export type OperatorFocusSelectionDetail = {
     entity_id: string;
     /** Configured work-unit host to move to. Without one there is no operational surface. */
     host_work_unit_key?: string | null;
+    /**
+     * The configured Work View holding THIS PARTICIPANT's stage. Preferred over
+     * `host_work_unit_key`, which answers at case grain — a child in the same case can sit in a
+     * different stage, and the family answer sends them to a queue that does not contain them.
+     * Both occupy the same slug position: `/workspace/work-unit/:slug` resolves work-unit keys and
+     * Work View slugs alike.
+     */
+    host_work_view_id?: string | null;
     /** Card + item to land on inside that panel, carried as the kernel's ASPECT. */
     card_focus?: CardFocusInput | null;
 };

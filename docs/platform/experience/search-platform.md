@@ -307,6 +307,17 @@ External dependencies remain open and do NOT hold Search open:
 - no canonical operator Schedule destination (Scheduling domain)
 - no canonical staff/employment model (Identity/HR domain)
 
+## Participant-grain destinations
+
+A subject's destination resolves from **that subject's** operational position. For a child that is
+their process participation's stage → the configured stage-bound Work View; the family case's Work
+Unit is a fallback, never an override. Siblings in one case routinely sit in different stages, so no
+single family-level answer can serve both.
+
+Household and person subjects own no stage and keep their case's canonical context — they must not
+inherit a child's Work View. See
+`docs/platform/runtime/stage-work-view-queue-canonical-model.md` §9.
+
 ## Related doctrine
 
 - Entity Model · Record System · Relationship Model — subject identity

@@ -25,6 +25,8 @@ import { globalSearchAgeLabelFromDob } from "@/lib/admin/globalSearch/globalReco
 import {
     fetchHostWorkUnitKeys,
     fetchHouseholdCaseHosts,
+    fetchStageWorkViewTargets,
+    stageWorkViewCacheKey,
 } from "@/lib/workUnits/hostWorkUnitResolver";
 import {
     LOCATION_DISPLAY_LABEL_SELECT,
@@ -137,13 +139,24 @@ export async function enrichSearchCandidates(args: {
     );
     // …and the household's own case, for the subjects that have no process of their own. Runs
     // alongside, not after: its id set (households) was known in wave 1.
-    const [hostWorkUnitKeys, householdCases] = await Promise.all([
+    // …and the configured Work View that holds each PARTICIPATION's own stage. Same wave: its inputs
+    // (case id + stage key) are on the process rows already in hand, and it must not serialize behind
+    // the family answer it is allowed to override.
+    const stageWorkViewInputs = processRows
+        .filter((r) => (r.context_type ?? "").trim() === "opportunity")
+        .map((r) => ({ opportunityId: (r.context_id ?? "").trim(), stageKey: (r.stage_key ?? "").trim() }))
+        .filter((e) => e.opportunityId && e.stageKey);
+
+    const [hostWorkUnitKeys, householdCases, stageWorkViewTargets] = await Promise.all([
         hostOpportunityIds.length
             ? fetchHostWorkUnitKeys(supabase, orgId, hostOpportunityIds)
             : Promise.resolve(new Map<string, string>()),
         householdIds.length
             ? fetchHouseholdCaseHosts(supabase, orgId, householdIds)
             : Promise.resolve(new Map<string, { opportunityId: string; workUnitKey: string | null }>()),
+        stageWorkViewInputs.length
+            ? fetchStageWorkViewTargets(supabase, orgId, stageWorkViewInputs)
+            : Promise.resolve(new Map<string, string>()),
     ]);
 
     const locationIds = uniq([
@@ -233,6 +246,14 @@ export async function enrichSearchCandidates(args: {
                     destination_work_unit_key: row.context_id
                         ? hostWorkUnitKeys.get(row.context_id) ?? null
                         : null,
+                    // …and where THIS PARTICIPANT is worked. A sibling in the same case can sit in
+                    // a different stage, so the family answer above cannot be right for both.
+                    destination_work_view_id:
+                        row.context_id && row.stage_key
+                            ? stageWorkViewTargets.get(
+                                  stageWorkViewCacheKey(row.context_id, row.stage_key),
+                              ) ?? null
+                            : null,
                 });
             }
         }

@@ -394,3 +394,64 @@ tier, and the Kernel already keys preparation by lens. Nothing needs inventing. 
 **deletion**: the lane must stop being a second predicate system.
 
 The single decision that unblocks everything is **G1**.
+
+---
+
+# 9 — Participant position owns participant navigation
+
+Three rules, each learned from a defect that shipped.
+
+## 9.1 A participant's destination resolves from the participant's own position
+
+A case's `work_unit_id` answers at **family grain**. A child in that case can sit in a different
+stage entirely, so the family answer cannot be right for both siblings — and one of them is sent to a
+queue that does not contain them, where nothing composes.
+
+> **Participant-specific navigation resolves from the participant's configured operational position.
+> Family/case Work Unit context is a FALLBACK and must never overwrite a known participant Work View.**
+
+Search displayed the child's own stage correctly (`Enrollment — Waitlist`, read from
+`process_instances.stage_key`) while committing the family case's `lifecycle_wu_lead`. The label and
+the destination were computed at two different grains, and only the family one reached attention.
+
+`fetchStageWorkViewTargets` resolves participant stage → stage-bound Work View. Null is an answer: a
+stage with no such view falls back to the case's unit rather than inventing a destination. A household
+or a parent owns no stage of its own and keeps its case's canonical context — it must not inherit
+whichever child was enumerated first.
+
+## 9.2 Stage binding is by configured identity, never by label
+
+A view holds a stage when its `compat_queue_key` equals `primaryQueueKeyForLifecycleStage(stage)`.
+Labels are operator-editable and reorderable; resolving through them means a rename silently moves
+where a participant lands, and a tenant that reuses a word resolves the wrong view.
+
+> **Filterless Work Views are process-wide CATCH-ALLS and are not stage-bound lanes.**
+
+`normalizeCatchAllWorkViewCompatBinding` strips `compat_queue_key` from any view without
+`filters_v1`, because binding a catch-all to one stage's lane would make "All" report that stage
+instead of everything. "Has a stage lane" and "is a catch-all" are therefore mutually exclusive, and a
+catch-all can never satisfy a stage-specific lookup — which matters because it is exactly the view a
+loose lookup would fall into for *every* stage, making a broken participant-grain resolution look
+like it worked.
+
+## 9.3 A Work View is certified by its terminal and its composition
+
+`aria-selected` and the projected `?work_view_id=` both move for a view whose answer is an ERROR
+terminal: the pill lights up, the address updates, and nothing composes. A certification asserting
+only those two reported a view as passing while its Focus Panel collapsed to zero cells.
+
+> **Operational success requires an operational runtime terminal AND useful composition. Selected pill
+> and URL projection alone are not proof.**
+
+A view the tenant's configuration cannot make operational must report its actual terminal and reason
+(e.g. `no_truthful_primary_action`) rather than masquerading as a successful navigation — and must be
+classified from the runtime's own answer, not a hardcoded list, so repairing the configuration moves
+it into the operational set with no test edit.
+
+## 9.4 Deferred
+
+Browser certification of two siblings simultaneously occupying two *distinct operational* stage-bound
+Work Views remains deferred: it requires a Business Process configuration supplying two operational
+child stages, and the current certification tenant has exactly one (`enrolling`). Stage
+`primary_action` must not be changed merely to satisfy a fixture — that would alter what the process
+asserts an operator can do. The participant-grain rule above is proven deterministically instead.
