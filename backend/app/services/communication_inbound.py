@@ -48,15 +48,44 @@ def recipient_key_normalize_sms(raw: str) -> str:
     return n or ""
 
 
+def canonical_phone_identity(value: str) -> str:
+    """
+    The canonical form Person lookup matches on: the last ten digits.
+
+    Mirrors `persons.phone_canonical`, which the DATABASE generates, and the
+    `phoneDigitsNanp` semantics the TypeScript identity authority already uses.
+    This is not a second normalization algorithm — it is the same question asked
+    on the query side, and the column is what actually decides a match.
+
+    Below ten digits returns "", so a short or malformed value can never match:
+    a false match here would file one family's message on another family's
+    record.
+    """
+    digits = re.sub(r"\D", "", value or "")
+    return digits[-10:] if len(digits) >= 10 else ""
+
+
 def _persons_by_phone_org(
     base_url: str, headers: Dict[str, str], org_id: str, phone_normalized: str
 ) -> List[Dict[str, Any]]:
-    if not phone_normalized:
+    """
+    Resolve by CANONICAL phone, not by stored formatting.
+
+    The defect this closes: a live inbound SMS from a number a Person already
+    owned resolved to `unknown_sender`, because `persons.phone` held
+    `6022904816`, the inbound number normalized to `+16022904816`, and the two
+    were compared with string equality. Formatting decided identity.
+
+    Org-scoped, and the zero / one / many semantics above are unchanged — this
+    widens what counts as the SAME number, never what counts as a match.
+    """
+    canonical = canonical_phone_identity(phone_normalized)
+    if not canonical:
         return []
     url = f"{base_url}/persons"
     params = {
         "org_id": f"eq.{org_id}",
-        "phone": f"eq.{phone_normalized}",
+        "phone_canonical": f"eq.{canonical}",
         "select": "id",
         "limit": str(_MAX_PERSON_LOOKUP),
     }
