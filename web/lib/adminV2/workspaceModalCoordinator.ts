@@ -7,6 +7,10 @@ import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentatio
  * actuality mode, Attendance. `scheduling` is Assignments: the durable commitment
  * ledger those expectations are derived from. They lived under one noun and
  * answered two different questions.
+ *
+ * `records` is the durable record-management home: who the people are, independent of whether any
+ * queue is currently working them. It is a peer of the operational workspaces, not a chapter of
+ * Organization — Organization configures the business, Records is where you find a human.
  */
 export type AdminV2WorkspaceModalKey =
     | "inbox"
@@ -15,7 +19,8 @@ export type AdminV2WorkspaceModalKey =
     | "analytics"
     | "processing"
     | "scheduling"
-    | "roster";
+    | "roster"
+    | "records";
 
 export type AdminV2WorkspaceModalSnapshot = {
     active: AdminV2WorkspaceModalKey | null;

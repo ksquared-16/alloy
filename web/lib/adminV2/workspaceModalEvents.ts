@@ -154,3 +154,30 @@ export function dispatchAdminV2OpenAnalyticsModal(): void {
 export function dispatchAdminV2CloseWorkspaceModals(): void {
     closeAllWorkspaceModals();
 }
+
+/** Which Records section a deep link asked for. */
+export type OpenRecordsModalDetail = { section?: "staff" | "children" };
+
+export const ADMIN_V2_OPEN_RECORDS_MODAL = "adminv2:open-records-modal";
+export const RECORDS_WORKSPACE_DEEPLINK_KEY = "adminv2:records-deeplink";
+
+/**
+ * Open Records, optionally at a section.
+ *
+ * The detail rides BOTH a CustomEvent (for an already-mounted workspace) and sessionStorage (for a
+ * mount that has not happened yet) — the same two-channel handoff Roster uses, because a workspace
+ * that is not yet mounted cannot hear an event.
+ */
+export function dispatchAdminV2OpenRecordsModal(detail?: OpenRecordsModalDetail): void {
+    if (typeof window !== "undefined") {
+        if (detail) {
+            try {
+                sessionStorage.setItem(RECORDS_WORKSPACE_DEEPLINK_KEY, JSON.stringify(detail));
+            } catch {
+                // A blocked sessionStorage costs the deep link, never the workspace.
+            }
+        }
+        window.dispatchEvent(new CustomEvent<OpenRecordsModalDetail>(ADMIN_V2_OPEN_RECORDS_MODAL, { detail: detail ?? {} }));
+    }
+    openWorkspaceModal("records");
+}

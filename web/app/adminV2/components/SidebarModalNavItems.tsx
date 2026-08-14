@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
 // Scheduling (CalendarRange) is a staging improvement kept during reconciliation.
-import { Inbox, ListChecks, BarChart3, Layers, CalendarRange, CalendarClock } from "lucide-react";
+import { Inbox, ListChecks, BarChart3, Layers, CalendarRange, CalendarClock, Contact } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -22,6 +22,7 @@ import {
     dispatchAdminV2OpenProcessingModal,
     dispatchAdminV2OpenSchedulingModal,
     dispatchAdminV2OpenRosterModal,
+    dispatchAdminV2OpenRecordsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -270,6 +271,31 @@ export function SidebarRosterNavItem({ collapsed }: { collapsed: boolean }) {
             dataAttr="roster"
             onClick={() => {
                 dispatchAdminV2OpenRosterModal();
+            }}
+        />
+    );
+}
+
+/**
+ * Records — the durable record-management home; opens as a workspace modal.
+ *
+ * A peer of the operational workspaces rather than a chapter of Organization: Organization
+ * configures the business, Records is where an operator finds a human. It is deliberately last in
+ * the operational group — you reach for it when the queues are not the answer.
+ */
+export function SidebarRecordsNavItem({ collapsed }: { collapsed: boolean }) {
+    const activeModal = useActiveAdminV2WorkspaceModal();
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Records — staff and children, whether or not they are in a queue"
+            label="Records"
+            icon={<Contact size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            active={activeModal === "records"}
+            dataAttr="records"
+            onClick={() => {
+                dispatchAdminV2OpenRecordsModal();
             }}
         />
     );
