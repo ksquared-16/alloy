@@ -1,0 +1,194 @@
+{
+  "tip": "b4bc5d682",
+  "pass": {
+    "waitlistRows": true,
+    "allFamily": true,
+    "toursFamily": true,
+    "sameShell": true,
+    "focusOnFamily": true
+  },
+  "steps": [
+    {
+      "label": "land-waitlist",
+      "href": "/workspace/work-unit/waitlist",
+      "wv": null,
+      "active": "new_work_view_4",
+      "terminal": "operational",
+      "shell": "wu-shell_r_1_",
+      "noRecords": false,
+      "family": true,
+      "infant": true,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "sample": "Filters"
+    },
+    {
+      "label": "click-All",
+      "href": "/workspace/work-unit/waitlist?work_view_id=new_work_view_6",
+      "wv": "new_work_view_6",
+      "active": "new_work_view_6",
+      "terminal": "operational",
+      "shell": "wu-shell_r_1_",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "sample": "Filters",
+      "clicked": "All",
+      "answers": [],
+      "sameShell": true
+    },
+    {
+      "label": "click-Tours",
+      "href": "/workspace/work-unit/waitlist?work_view_id=new_work_view_5",
+      "wv": "new_work_view_5",
+      "active": "new_work_view_5",
+      "terminal": "operational",
+      "shell": "wu-shell_r_1_",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "sample": "Filters",
+      "clicked": "Tours",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_4",
+          "terminal": "operational",
+          "rows": 2,
+          "grain": "child",
+          "subjects": [
+            "Wrigley Kurzman",
+            "Lennon Kurzman"
+          ]
+        }
+      ],
+      "sameShell": true
+    },
+    {
+      "label": "click-Waitlist",
+      "href": "/workspace/work-unit/waitlist?work_view_id=new_work_view_4",
+      "wv": "new_work_view_4",
+      "active": "new_work_view_4",
+      "terminal": "operational",
+      "shell": "wu-shell_r_1_",
+      "noRecords": false,
+      "family": true,
+      "infant": true,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "sample": "Filters",
+      "clicked": "Waitlist",
+      "answers": [],
+      "sameShell": true
+    },
+    {
+      "label": "click-All",
+      "href": "/workspace/work-unit/waitlist?work_view_id=new_work_view_6",
+      "wv": "new_work_view_6",
+      "active": "new_work_view_6",
+      "terminal": "operational",
+      "shell": "wu-shell_r_1_",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "sample": "Filters",
+      "clicked": "All",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_4&subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+          "terminal": "operational",
+          "rows": 2,
+          "grain": "child",
+          "subjects": [
+            "Wrigley Kurzman",
+            "Lennon Kurzman"
+          ]
+        }
+      ],
+      "sameShell": true
+    },
+    {
+      "label": "click-Tours",
+      "href": "/workspace/work-unit/waitlist?work_view_id=new_work_view_5",
+      "wv": "new_work_view_5",
+      "active": "new_work_view_5",
+      "terminal": "operational",
+      "shell": "wu-shell_r_1_",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "sample": "Filters",
+      "clicked": "Tours",
+      "answers": [],
+      "sameShell": true
+    }
+  ],
+  "answers": [
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_2",
+      "terminal": "empty",
+      "rows": 0,
+      "grain": "family",
+      "subjects": []
+    },
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_3",
+      "terminal": "empty",
+      "rows": 0,
+      "grain": "child",
+      "subjects": []
+    },
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_leads",
+      "terminal": "empty",
+      "rows": 0,
+      "grain": "family",
+      "subjects": []
+    },
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_6",
+      "terminal": "operational",
+      "rows": 1,
+      "grain": "family",
+      "subjects": [
+        "Kurzman Family"
+      ]
+    },
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_5",
+      "terminal": "operational",
+      "rows": 1,
+      "grain": "family",
+      "subjects": [
+        "Kurzman Family"
+      ]
+    },
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_4",
+      "terminal": "operational",
+      "rows": 2,
+      "grain": "child",
+      "subjects": [
+        "Wrigley Kurzman",
+        "Lennon Kurzman"
+      ]
+    },
+    {
+      "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_4&subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+      "terminal": "operational",
+      "rows": 2,
+      "grain": "child",
+      "subjects": [
+        "Wrigley Kurzman",
+        "Lennon Kurzman"
+      ]
+    }
+  ]
+}
